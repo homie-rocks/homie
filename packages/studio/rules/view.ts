@@ -519,7 +519,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   }
 
   net.on('snapshot', onSnapshot);
-  net.on('role', (e) => { delivery.reset(); if (e.snap) onSnapshot(e.snap); if (net.offline && !net.rulesHosting) setStatus(net.closedWhy ? 'closed' : 'offline'); });
+  net.on('role', (e) => { if (e.snap) onSnapshot(e.snap); if (net.offline && !net.rulesHosting) setStatus(net.closedWhy ? 'closed' : 'offline'); });
   net.on('link', (e) => {
     if (e.state === 'online') { base = null; if (status !== 'playing') setStatus('connecting'); } else if (e.state === 'closed') setStatus('closed'); else if (e.state === 'alone' || e.state === 'offline') setStatus('offline');
   });

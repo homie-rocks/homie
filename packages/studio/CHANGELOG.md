@@ -19,7 +19,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [0.44.0] - 2026-10-10
 
-**Plugin 0.44.0**
+**Plugin 0.44.0** · [#83](https://github.com/homie-rocks/homie/pull/83)
 
 Send each player the part of the room near their character.
 

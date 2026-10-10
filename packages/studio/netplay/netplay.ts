@@ -2628,6 +2628,9 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       setRole(next, wasOffline && roleKnown ? 'reconnected' : String(m['why'] ?? 'welcome'), { ckpt, snap, round: roundInfo, roster: slots });
       if (next === 'host' && snap) tick = Math.max(tick, snap.k);
     }
+    // A reconnect to the same role emits no role event, but its welcome is a new
+    // connection's keyframe. Rules views must adopt it before the first delta.
+    if (rulesGame && snap && next !== 'host') emit('snapshot', snap);
     if (continuing) { rulesHost?.sync(rulesPeers()); reannounce(); catchUp(had, hadSeat); }
     if (link === 'online') paintLink(); else setLink('online', 'welcome');
     // A build older than the live one, let in to its own room (section 23).

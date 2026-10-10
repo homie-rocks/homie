@@ -1492,6 +1492,7 @@ test('spatial snapshots reach real views, preserve prediction, recover a lost ke
   });
   t.after(() => r.stop());
   const a = openRoom({ net: { config: cfg('Ada'), WebSocketImpl: r.socket(), post: null } });
+  const prediction = globalThis.__homieNet.probe.prediction;
   const b = openRoom({ net: { config: cfg('Bo'), WebSocketImpl: r.socket(), post: null } });
   t.after(() => { a.close(); b.close(); });
   await clock.wait(600);
@@ -1506,8 +1507,21 @@ test('spatial snapshots reach real views, preserve prediction, recover a lost ke
   assert.deepEqual(visible(), [a.me.id]);
   const seat = a.seat;
   r.sockets[0].cut();
-  await clock.wait(3000);
-  assert.equal(a.net.connected, true); assert.equal(a.seat, seat); assert.equal(a.status, 'playing');
+  for (let i = 0; i < 60 && !a.net.connected; i++) await clock.wait(50);
+  assert.equal(a.net.connected, true);
+  // Drop the next periodic keyframe: the welcome alone must seed the new socket.
+  const nextSocket = r.sockets.at(-1);
+  const incoming = nextSocket.onmessage;
+  nextSocket.onmessage = event => {
+    const m = JSON.parse(event.data);
+    if (m.t === 'snap' && Array.isArray(m.d)) return;
+    incoming?.(event);
+  };
+  await clock.wait(150);
+  assert.ok(r.host.tick - prediction().serverTick <= 1, 'new socket deltas advance the view immediately');
+  const own = r.host.core.snapshot()[1].find(e => e[9] === seat);
+  assert.ok(Math.abs(a.me.pos.x - own[3][0]) < 1, 'welcome baseline reconciles immediately, before another keyframe');
+  assert.equal(a.seat, seat); assert.equal(a.status, 'playing');
   assert.deepEqual(visible(), [a.me.id]);
   assert.equal(r.host.core.stats.errors, 0);
 });

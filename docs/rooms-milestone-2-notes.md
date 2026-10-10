@@ -122,7 +122,11 @@ connections.
 - Plugin validation, packed Desktop server and release preflight passed;
   preflight lists studio 0.44.0 as the sole new npm version.
 - Template and history generation, changelog sync/check completed.
-- Root `npm test` and the six PR checks: results will be appended after they finish.
+- Root `npm test` runs with `CHROME_PATH` pointing to local Chrome. Final root
+  results and all six CI checks are tracked on [PR #83](https://github.com/homie-rocks/homie/pull/83).
+- A same-role reconnect now delivers its welcome snapshot to the rules view,
+  even though no role-change event fires. The regression blocks later periodic
+  keyframes and verifies that welcome-based deltas advance the view immediately.
 
 ## Remaining slices, in order
 
