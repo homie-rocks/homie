@@ -88,7 +88,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
             const context=services(env,cat,origin,fresh,tool.namespace??tool.name,tool);
             if(tool.price) {const result=await selling.paidTool(env,cat,origin,tool,args,context,extra);outcome=result.isError?'error':'ok';return result;}
             if(tool.protocol) {const result=await tool.handler(args,{...context,paymentExtra:extra});outcome=result.isError?'error':'ok';return result;}
-            const value=await tool.handler(args,context);
+            const value=await tool.handler(args,{...context,request});
             const text=JSON.stringify({kind:'untrusted-tool-data',tool:tool.name,data:value});
             outcome='ok';return {content:[{type:'text',text}]};
           }catch(error){if(error?.code===-32042)throw error;return {isError:true,content:[{type:'text',text:outcome==='denied'||outcome==='limited'?error.message:'Tool failed. Check the office audit and the tool definition.'}]};}

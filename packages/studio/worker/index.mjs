@@ -601,14 +601,17 @@ function finish(res, path) {
 
 export default {
   async scheduled(event, env, ctx) {
-    ctx.waitUntil((async () => {
+    const maintenance=(async () => {
       const cat = await catalogue(env, 'https://studio.invalid');
       await reconcileOrders(env, shopOf(cat));
       await (await import('./functions.mjs')).scheduleFunctions(event,env,cat,cat.studio?.url??'https://studio.invalid');
-    })());
+    })();
+    ctx.waitUntil(maintenance);
+    await maintenance;
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    await (await import('./functions.mjs')).syncFunctions(env);
     // A standalone copy's Lobby call (worker/standalone.mjs): every answer to it can be read by the app's page, an
     // unknown game's 404 and a failure included, so the app can say why it plays offline. No other address is opened.
     const appRecords = isAppOrigin(request) && /^\/[^/]+\/api\/app\/records\//.test(url.pathname);
@@ -1686,18 +1689,22 @@ export class Table {
 
   queueFunctionEvent(type,data) {
     if(!this.env.DB || this.env.HOMIE_PREVIEW==='1' || !this.ctx.storage.sql) return;
-    const sql=this.ctx.storage.sql;
-    sql.exec('CREATE TABLE IF NOT EXISTS function_outbox(id TEXT PRIMARY KEY,type TEXT,data TEXT,at INTEGER)');
-    sql.exec('INSERT INTO function_outbox VALUES(?,?,?,?)',crypto.randomUUID(),type,JSON.stringify(data),Date.now());
-    this.armRoom(Date.now()+60000);
-    this.ctx.waitUntil(this.flushFunctionEvents());
+    this.ctx.waitUntil((async()=>{
+      if(!await (await import('./functions.mjs')).hasFunctionType(type))return;
+      const sql=this.ctx.storage.sql;
+      sql.exec('CREATE TABLE IF NOT EXISTS function_outbox(id TEXT PRIMARY KEY,type TEXT,data TEXT,at INTEGER)');
+      sql.exec('INSERT INTO function_outbox VALUES(?,?,?,?)',crypto.randomUUID(),type,JSON.stringify(data),Date.now());
+      this.armRoom(Date.now()+60000);
+      await this.flushFunctionEvents();
+    })());
   }
+
   async flushFunctionEvents() {
     const sql=this.ctx.storage.sql;
     if(!sql || !this.env.DB)return;
     if(!sql.exec("SELECT name FROM sqlite_master WHERE name='function_outbox'").toArray().length)return;
     const {emitEvent}=await import('./functions.mjs');
-    for(const row of sql.exec('SELECT * FROM function_outbox').toArray()) {
+    for(const row of sql.exec('SELECT * FROM function_outbox LIMIT 100').toArray()) {
       try {await emitEvent(this.env,row.type,JSON.parse(row.data),{id:row.id,at:row.at});sql.exec('DELETE FROM function_outbox WHERE id=?',row.id);}
       catch {this.armRoom(Date.now()+60000);await this.alarmWrite;return;}
     }

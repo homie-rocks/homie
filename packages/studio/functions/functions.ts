@@ -5,6 +5,8 @@ export interface StudioFunction<Data = unknown> {
   event: string;
   /** Cloudflare cron expression; scheduled events are named by this function. */
   schedule?: string;
+  /** Permit an explicit owner replay command to consume retained history. */
+  replay?: boolean;
   events?: StudioTool['events'];
   handler(event: StudioEvent<Data>, context: ToolContext): unknown | Promise<unknown>;
 }

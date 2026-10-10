@@ -52,5 +52,6 @@ export async function buildTools(root,esbuild) {
     let text=readFileSync(worker,'utf8');
     if(!text.includes('useTools(')){text += "\nimport { useTools } from '@homie-rocks/studio/worker';\nuseTools(async () => (await import('./tools/index.mjs')).default);\n";writeFileSync(worker,text);}
   }
+  writeFileSync(join(dir,'declarations.json'),JSON.stringify({paid:defs.some(t=>t.price)})+'\n');
   return defs.map(t=>t.name);
 }

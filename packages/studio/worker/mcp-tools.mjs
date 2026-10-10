@@ -79,6 +79,10 @@ export function services(env, cat, origin, caller, namespace, definition = {}) {
 export function builtins(env,cat,origin) {
   const tool=(name,description,audience,inputSchema,handler)=>({name,description,audience,inputSchema,handler});
   const tools=[
+    tool('studio_function_replay','Replay retained events for a declaration with replay: true.','owner',object({name:str},['name']),async({name})=>{
+      const {replayFunction,runFunctions}=await import('./functions.mjs');
+      await replayFunction(env,name);await runFunctions(env,cat,origin);return {ok:true};
+    }),
     tool('studio_function_fire','Fire an event locally through the durable function dispatcher.','owner',object({event:str,id:str,data:{type:'object'}},['event']),async(args)=>{
       if(!['localhost','127.0.0.1','[::1]'].includes(new URL(origin).hostname))throw new Error('Local testing only');
       const {emitEvent,runFunctions}=await import('./functions.mjs');

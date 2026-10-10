@@ -707,6 +707,18 @@ function refundableNow(order, owns, shop, now = Date.now()) {
   return shop.policy.refundUsedItems || !owns.some((o) => o.item === order.item && o.used);
 }
 
+/** Shared authorization for web and claim refunds, using persisted grants and line snapshots. */
+export async function refundableShopOrder(env, order, shop, lines = null) {
+  if (!order || !shop) return false;
+  lines ??= await orderLines(env, order.id);
+  if (!lines.length) return false;
+  for (const line of lines) {
+    const used = await lineWasUsed(env, order.id, line);
+    if (!refundableNow({ ...lineView(line), paidAt: order.paid_at }, used ? [{ item: line.item, used: true }] : [], shop)) return false;
+  }
+  return true;
+}
+
 /** A player's own refund follows the studio window and used-item setting, excluding tips. */
 async function selfRefundRoute(request, env, shop, ready) {
   const b = await bodyOf(request, requestSize(shop));
@@ -717,10 +729,7 @@ async function selfRefundRoute(request, env, shop, ready) {
   if (!o || o.player !== p.id) return fail(404, 'order', 'no such order on this account');
   const lines = (await orderLines(env, o.id)).filter((l) => !b.body.line || l.id === b.body.line);
   if (!lines.length) return fail(404, 'line', 'no such line on this order');
-  for (const line of lines) {
-    const used = await lineWasUsed(env, o.id, line);
-    if (!refundableNow({ ...lineView(line), paidAt: o.paid_at }, used ? [{ item: line.item, used: true }] : [], shop)) return fail(403, 'not-refundable', 'Ask the studio for this refund. Tips are not refundable by the player; items follow the studio refund settings.');
-  }
+  if (!await refundableShopOrder(env, o, shop, lines)) return fail(403, 'not-refundable', 'Ask the studio for this refund. Tips are not refundable by the player; items follow the studio refund settings.');
   if (Number(o.amount) !== 0 && !hasStripeKey(env)) return fail(409, 'ask-studio', 'Ask the studio to refund this payment in Stripe.');
   const r = await refundOrder(env, o, { reason: 'requested_by_customer', by: 'player', line: b.body.line });
   if (r.held) return json({ ...r, error: r.error === 'pending' ? 'pending' : 'held', message: r.error === 'pending' ? r.message : 'The studio approves this refund in Stripe first. Your money comes back once they do, and the item leaves your account then.' }, 202);

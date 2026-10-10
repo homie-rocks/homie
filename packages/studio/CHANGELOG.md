@@ -35,11 +35,14 @@ Customers and other businesses can use a studio's tools, buy its goods and servi
 
 ### Fixed
 
-- Repeat deployment preserves committed Worker configuration and studio custom bindings.
+- Claim refunds use the same tip, used-item and window policy as the web shop. Guest carts create usable accounts before payment.
+- Builds fully regenerate Worker configuration, remove stale generated bindings and the old default purchase limiter, and keep explicit additions in `wrangler.custom.json`.
+- New functions skip history unless explicitly replayed; indexed subscriptions and cursors avoid unused events and prune completed delivery pages.
+- Paid tools renew execution leases, return saved results on retries and automatically refund failed handlers. Unpaid quotes expire and are pruned.
 
 ### Upgrade notes
 
-- Run the toolkit upgrade and build, then commit the generated Worker configuration before deploying. Apply migration 0018 with the other studio migrations. Functions add a Cloudflare cron for retries only when declared.
+- Run the toolkit upgrade and build, then commit the generated Worker configuration before deploying. Move hand-added Wrangler settings to root `wrangler.custom.json`; apply migrations 0018 and 0019 with the other studio migrations. Functions add a Cloudflare cron for retries only when declared.
 
 ## [0.40.0] - 2026-10-09
 

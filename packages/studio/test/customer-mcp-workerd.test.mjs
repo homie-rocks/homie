@@ -17,7 +17,7 @@ const secret = () => randomBytes(32).toString('hex');
 async function runtime(w,{keyless=false,quantity=1,handlers=new Map()}={}) {
   let mf;try {
   const bundled=await build({bundle:true,write:false,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*'],stdin:{resolveDir:new URL('../worker/',import.meta.url).pathname,contents:`import worker, { useTools, useFunctions } from './selling/index.mjs';
-    useTools(async()=>[{name:'translate',description:'Translate a word',audience:'public',price:{amount:250,currency:'usd'},inputSchema:{type:'object',properties:{word:{type:'string'}},required:['word'],additionalProperties:false},handler:async({word},ctx)=>{await ctx.database.put('last',ctx.purchase.id);return {word:word.toUpperCase()};}}]);
+    useTools(async()=>[{name:'translate',description:'Translate a word',audience:'public',price:{amount:250,currency:'usd'},inputSchema:{type:'object',properties:{word:{type:'string'}},required:['word'],additionalProperties:false},handler:async({word},ctx)=>{if(word==='fail')throw Error('private failure');await ctx.database.put('last',ctx.purchase.id);return {word:word.toUpperCase()};}}]);
     useFunctions(async()=>[{name:'paid-order',event:'order.paid',handler:async(event,ctx)=>ctx.database.put(event.id,event.data)}]);
     export default {async fetch(request,env,ctx){env.ASSETS={fetch:async(request)=>{const object=await env.STATIC.get(new URL(request.url).pathname);return object?new Response(object.body):new Response('',{status:404});}};if(new URL(request.url).pathname==='/__functions'){await (await import('./functions.mjs')).runFunctions(env,{games:[]},'https://seller.example');return Response.json({ok:true});}return worker.fetch(request,env,ctx);}};`}});
   const bindings={DB:{type:'d1',id:'purchases'},PURCHASE_MEDIA:{type:'r2',name:'paid'},STATIC:{type:'r2',name:'static'},PURCHASE_RATE_LIMITER:{type:'rate-limit',namespace:'purchases',simple:{limit:1000,period:60}}};
@@ -57,7 +57,9 @@ test('outside customer uses /mcp for catalogue, cart, standard payment, priced t
   await r.fetcher(origin+'/__functions');
   const fired=await r.db.prepare("SELECT value FROM tool_data WHERE namespace='function:paid-order' AND key=?1").bind('purchase_orders:'+result.order+':paid').first();assert.equal(JSON.parse(fired.value).order,result.order);
   const cart=await client.callTool({name:'studio_cart',arguments:{lines:[{item:'coffee',quantity:2}]}});assert.equal(cart.isError,undefined,JSON.stringify(cart));const offer=JSON.parse(cart.content[0].text).data;
-  const bought=await client.callTool({name:'studio_purchase',arguments:{...offer,buyer:'c'.repeat(64),claim:'d'.repeat(64)}});assert.equal(bought.isError,undefined,JSON.stringify(bought));
+  const bought=await client.callTool({name:'studio_purchase',arguments:{kind:offer.kind,resource:offer.resource,version:offer.version,offerVersion:offer.offerVersion,buyer:'c'.repeat(64),claim:'d'.repeat(64)}});assert.equal(bought.isError,undefined,JSON.stringify(bought));
+  const cookie=offer.account.cookies[0].split(';')[0];
+  const mine=await r.fetcher(origin+'/api/shop/mine',{headers:{cookie}});assert.equal(mine.status,200);assert.match(await mine.text(),/coffee/);
   const order=JSON.parse(bought.content[0].text).order;assert.ok(order);assert.equal((await r.db.prepare('SELECT status FROM shop_orders WHERE id=?1').bind(order).first()).status,'paid');
   assert.equal((await r.db.prepare('SELECT quantity FROM shop_entitlement_lines WHERE order_id=?1').bind(order).first()).quantity,2);
   assert.equal(charges,2);
@@ -65,7 +67,7 @@ test('outside customer uses /mcp for catalogue, cart, standard payment, priced t
   const refund=w.st.refund(payment);const webhook=await r.event('charge.refunded',refund);assert.equal(webhook.status,200,await webhook.clone().text());
   assert.equal((await r.db.prepare('SELECT status FROM shop_orders WHERE id=?1').bind(order).first()).status,'refunded');
   assert.equal((await r.db.prepare('SELECT state FROM shop_entitlement_lines WHERE order_id=?1').bind(order).first()).state,'revoked');
-  assert.ok(await r.db.prepare("SELECT id FROM studio_events WHERE type='order.refunded' AND json_extract(data,'$.order')=?1").bind(order).first());
+  assert.equal(await r.db.prepare("SELECT id FROM studio_events WHERE type='order.refunded' AND json_extract(data,'$.order')=?1").bind(order).first(),null,'undeclared event types are not retained');
   assert.ok(r.hosts.every(h=>h===new URL(w.st.base).hostname),'No Homie payment dependency');
  }finally{await client.close();await r.mf.dispose();await w.close();}
 });
@@ -81,5 +83,50 @@ test('a person approves a priced service on the studio Stripe checkout and the A
   const session=[...w.st.sessions.values()].at(-1);assert.ok(session);await r.event('checkout.session.completed',w.st.complete(session.id));
   args._payment.checkout=false;const executed=await client.callTool({name:'translate',arguments:args});assert.equal(executed.isError,undefined,JSON.stringify(executed));const result=JSON.parse(executed.content[0].text);assert.deepEqual(result.data,{word:'APPROVED'});assert.equal(result.order,intent.order);
   assert.equal(w.st.pis.size,1);assert.equal((await r.db.prepare('SELECT COUNT(*) n FROM purchase_orders').first()).n,1);
+ }finally{await client.close();await r.mf.dispose();await w.close();}
+});
+
+test('claim and web refunds share tip and used-item policy; guest quotes return usable sessions before charging',{timeout:120000},async()=>{
+ const w=await world('customer-refund-policy',{key:LIVE_KEY,shop:{v:1,till:'stripe',currency:'usd',refundDays:14,guestBuyersPerAddressPerHour:3,policy:{refundUsedItems:false},items:[{id:'coins',name:'Coins',kind:'supporter',price:400,gives:['coins']},{id:'tip',name:'Tip',kind:'tip',price:100}]}});
+ await configureMachine(w,{profile:'profile_test'});const r=await runtime(w),client=new Client({name:'refund-test',version:'1'});
+ try{
+  await client.connect(new StreamableHTTPClientTransport(new URL(origin+'/mcp'),{fetch:r.fetcher}));let charges=0;
+  McpClient.wrap(client,{methods:[stripe.charge({paymentMethod:'pm_card',createToken:async()=>{const token='spt_refund_'+ ++charges;w.st.spts.set(token,{max:10000,currency:'usd'});return token;}})]});
+  for(const [i,item] of ['tip','coins','coins'].entries()){
+    const quoted=await client.callTool({name:'studio_cart',arguments:{lines:[{item}]}});assert.equal(quoted.isError,undefined,JSON.stringify(quoted));const offer=JSON.parse(quoted.content[0].text).data;
+    assert.ok(offer.account.cookies.length);assert.ok(await r.db.prepare('SELECT id FROM players WHERE id=?1').bind(offer.account.player.id).first());
+    const claim=String(i+1).repeat(64),buyer=String(i+4).repeat(64);
+    const result=await client.callTool({name:'studio_purchase',arguments:{kind:offer.kind,resource:offer.resource,version:offer.version,offerVersion:offer.offerVersion,claim,buyer}});assert.equal(result.isError,undefined,JSON.stringify(result));const order=JSON.parse(result.content[0].text).order;
+    const cookie=offer.account.cookies[0].split(';')[0];const mine=await r.fetcher(origin+'/api/shop/mine',{headers:{cookie}});assert.equal(mine.status,200);assert.match(await mine.text(),new RegExp(order));
+    if(i===1)await r.db.prepare('UPDATE entitlements SET used_at=?2 WHERE order_id=?1').bind(order,Date.now()).run();
+    if(i<2){const web=await r.fetcher(origin+'/api/shop/refund',{method:'POST',headers:{origin,cookie,'content-type':'application/json'},body:JSON.stringify({order})});assert.equal(web.status,403,await web.clone().text());const claimRefund=await r.post('/api/purchases/refund',{},claim);assert.equal(claimRefund.status,403,await claimRefund.clone().text());if(i===1){w.cat.shop.policy={...w.cat.shop.policy,refundUsedItems:true};await (await r.mf.getR2Bucket('STATIC')).put('/games.json',JSON.stringify(w.cat));const allowed=await r.post('/api/purchases/refund',{},claim);assert.equal(allowed.status,200,await allowed.clone().text());assert.equal((await allowed.json()).ok,true,'studio explicitly allows used-item refunds');}}
+    else {const refund=await r.post('/api/purchases/refund',{},claim);assert.equal(refund.status,200,await refund.clone().text());assert.equal((await refund.json()).ok,true);}
+  }
+  const blocked=await client.callTool({name:'studio_cart',arguments:{lines:[{item:'coins'}]}});assert.equal(blocked.isError,true);assert.equal(charges,3,'opted-in guest refusal happens before any payment');
+ }finally{await client.close();await r.mf.dispose();await w.close();}
+});
+
+test('paid MCP handler failure refunds at Stripe and claim retry reports the same refund',{timeout:120000},async()=>{
+ const w=await world('customer-service-refund',{key:LIVE_KEY});await configureMachine(w,{profile:'profile_test'});const r=await runtime(w),client=new Client({name:'service-failure',version:'1'});
+ try{
+  await client.connect(new StreamableHTTPClientTransport(new URL(origin+'/mcp'),{fetch:r.fetcher}));let charges=0;
+  const quote=JSON.parse((await client.callTool({name:'translate',arguments:{word:'fail'}})).content[0].text).quote;
+  McpClient.wrap(client,{methods:[stripe.charge({paymentMethod:'pm_card',createToken:async()=>{const token='spt_failure_'+ ++charges;w.st.spts.set(token,{max:10000,currency:'usd'});return token;}})]});
+  const args={word:'fail',_payment:{buyer:'f'.repeat(64),claim:'e'.repeat(64),offerVersion:quote.offerVersion}};
+  const failed=await client.callTool({name:'translate',arguments:args});assert.equal(failed.isError,true);const data=JSON.parse(failed.content[0].text);assert.equal(data.state,'refunded',JSON.stringify(data));assert.match(data.message,/automatically refunded/);
+  const again=await client.callTool({name:'translate',arguments:args});assert.deepEqual(JSON.parse(again.content[0].text),data);assert.equal(charges,1);assert.equal(w.st.refunds.length,1);
+ }finally{await client.close();await r.mf.dispose();await w.close();}
+});
+
+test('hosted cart checkout binds the account from the quote and returns grants to that session',{timeout:120000},async()=>{
+ const w=await world('customer-hosted-cart',{key:LIVE_KEY,shop:{v:1,till:'stripe',currency:'usd',items:[{id:'coffee',name:'Coffee',kind:'supporter',price:400,gives:['coffee']}]}});delete w.env.TURNSTILE_SECRET;
+ const r=await runtime(w),client=new Client({name:'hosted-cart',version:'1'});
+ try{
+  await client.connect(new StreamableHTTPClientTransport(new URL(origin+'/mcp'),{fetch:r.fetcher}));
+  const quoted=await client.callTool({name:'studio_cart',arguments:{lines:[{item:'coffee'}]}});assert.equal(quoted.isError,undefined,JSON.stringify(quoted));const offer=JSON.parse(quoted.content[0].text).data;
+  const checkout=await client.callTool({name:'studio_purchase',arguments:{kind:offer.kind,resource:offer.resource,version:offer.version,offerVersion:offer.offerVersion,buyer:'a'.repeat(64),claim:'b'.repeat(64),checkout:true}});assert.equal(checkout.isError,undefined,JSON.stringify(checkout));
+  const row=await r.db.prepare('SELECT player FROM shop_orders').first();assert.equal(row.player,offer.account.player.id);assert.equal((await r.db.prepare('SELECT COUNT(*) n FROM players').first()).n,1);
+  const session=[...w.st.sessions.values()].at(-1);const hook=await r.event('checkout.session.completed',w.st.complete(session.id));assert.equal(hook.status,200,await hook.clone().text());
+  const mine=await r.fetcher(origin+'/api/shop/mine',{headers:{cookie:offer.account.cookies[0].split(';')[0]}});assert.match(await mine.text(),/coffee/);
  }finally{await client.close();await r.mf.dispose();await w.close();}
 });

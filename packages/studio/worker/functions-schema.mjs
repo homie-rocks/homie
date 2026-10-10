@@ -37,3 +37,19 @@ CREATE TRIGGER mcp_function_call AFTER INSERT ON mcp_audit WHEN NEW.outcome = 'o
  INSERT INTO studio_events VALUES('tool:' || NEW.id,'tool.called',json_object('tool',NEW.tool,'person',NEW.person,'client',NEW.client),NEW.at);
 END;
 `;
+
+export const FUNCTIONS_CURSOR_MIGRATION_FILE = '0019_function_cursors.sql';
+export const FUNCTIONS_CURSOR_MIGRATION = `
+CREATE TABLE function_subscriptions(name TEXT PRIMARY KEY,type TEXT NOT NULL,cursor INTEGER NOT NULL DEFAULT 0,started INTEGER NOT NULL,last_tick INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX function_subscriptions_type ON function_subscriptions(type,cursor);
+${[...FUNCTIONS_MIGRATION.matchAll(/CREATE TRIGGER (\w+)/g)].map(m=>`DROP TRIGGER IF EXISTS ${m[1]};`).join('\n')}
+CREATE TABLE studio_events_next(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL UNIQUE,type TEXT NOT NULL,data TEXT NOT NULL,at INTEGER NOT NULL);
+INSERT INTO studio_events_next(id,type,data,at) SELECT id,type,data,at FROM studio_events ORDER BY at,id;
+DROP TABLE studio_events;
+ALTER TABLE studio_events_next RENAME TO studio_events;
+CREATE INDEX studio_events_type_seq ON studio_events(type,seq);
+CREATE INDEX function_deliveries_function_due ON function_deliveries(function,due) WHERE state IN ('pending','failed','running');
+ALTER TABLE customer_offers ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX customer_offers_expiry ON customer_offers(expires_at);
+${FUNCTIONS_MIGRATION.slice(FUNCTIONS_MIGRATION.indexOf('CREATE TRIGGER')).replace(/CREATE TRIGGER (\w+)/g, 'DROP TRIGGER IF EXISTS $1; CREATE TRIGGER $1').replace(/ON (shop_orders|purchase_orders|meta|mcp_audit)\n?WHEN /g, 'ON $1 WHEN ').replace(/WHEN OLD.paid_at/g, "WHEN EXISTS (SELECT 1 FROM function_subscriptions WHERE type='order.paid') AND OLD.paid_at").replace(/WHEN OLD.status/g, "WHEN EXISTS (SELECT 1 FROM function_subscriptions WHERE type='order.refunded') AND OLD.status").replace(/ON app_records BEGIN/g, "ON app_records WHEN EXISTS (SELECT 1 FROM function_subscriptions WHERE type='record.changed') BEGIN").replace(/WHEN NEW.key/g, "WHEN EXISTS (SELECT 1 FROM function_subscriptions WHERE type='payment.refunded') AND NEW.key").replace(/WHEN NEW.outcome/g, "WHEN EXISTS (SELECT 1 FROM function_subscriptions WHERE type='tool.called') AND NEW.outcome").replace(/INTO studio_events(?= VALUES|\n SELECT)/g,'INTO studio_events(id,type,data,at)')}
+`;

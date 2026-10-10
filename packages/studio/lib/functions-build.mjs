@@ -2,7 +2,6 @@ import {existsSync,readdirSync,mkdirSync,writeFileSync,readFileSync} from 'node:
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createRequire} from 'node:module';
-import {configPath} from './studio.mjs';
 const require=createRequire(import.meta.url);
 export function functionFiles(root) { const dir=join(root,'functions');return existsSync(dir)?readdirSync(dir).filter(f=>/^[a-z][a-z0-9-]*\.ts$/.test(f)).sort().map(f=>join(dir,f)):[]; }
 export async function buildFunctions(root,esbuild) {
@@ -24,11 +23,14 @@ export async function buildFunctions(root,esbuild) {
   }
   const worker=join(root,'site/src/worker.mjs');
   if(existsSync(worker)) {let text=readFileSync(worker,'utf8');if(!text.includes('useFunctions(')){text+="\nimport { useFunctions } from '@homie-rocks/studio/worker';\nuseFunctions(async () => (await import('./functions/index.mjs')).default);\n";writeFileSync(worker,text);}}
-  const config=configPath(root);
-  if(definitions.length && existsSync(config)) {
-    const original=readFileSync(config,'utf8'),c=JSON.parse(original.replace(/^\s*\/\/.*$/gm,''));
-    c.triggers={...c.triggers,crons:[...new Set([...(c.triggers?.crons??[]),'* * * * *',...definitions.map(f=>f.schedule).filter(Boolean)])].sort()};
-    if(JSON.stringify(c)!==JSON.stringify(JSON.parse(original.replace(/^\s*\/\/.*$/gm,''))))writeFileSync(config,(original.match(/^(?:\s*\/\/[^\n]*\n)*/)?.[0]??'')+JSON.stringify(c,null,2)+'\n');
-  }
+  writeFileSync(join(dir,'declarations.json'),JSON.stringify(definitions.map(({name,event,schedule,replay})=>({name,event,schedule,replay})),null,2)+'\n');
+  (await import('./worker-config.mjs')).refreshWorkerConfig(root);
   return definitions;
+}
+/** Install subscriptions before the new Worker can produce its first event. */
+export function functionDeploymentSQL(root) {
+  const file=join(root,'site/src/functions/declarations.json');
+  const definitions=existsSync(file)?JSON.parse(readFileSync(file,'utf8')):[];
+  const literal=value=>"'"+String(value).replaceAll("'","''")+"'";
+  return [...definitions.map(fn=>`INSERT INTO function_subscriptions(name,type,cursor,started) VALUES(${literal(fn.name)},${literal(fn.event)},(SELECT COALESCE(MAX(seq),0) FROM studio_events),unixepoch()*1000) ON CONFLICT(name) DO UPDATE SET type=excluded.type,cursor=excluded.cursor,started=excluded.started WHERE type!=excluded.type;`),`DELETE FROM function_subscriptions WHERE name NOT IN (${definitions.map(fn=>literal(fn.name)).join(',')||"''"});`,"INSERT INTO meta(key,value) VALUES('function-registry-deployed','1') ON CONFLICT(key) DO UPDATE SET value='1';"].join(' ');
 }

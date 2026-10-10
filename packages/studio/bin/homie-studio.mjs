@@ -156,6 +156,7 @@
  *                                        [--kids] [--door open|accounts|invite] [--level 1-5] [--level-max 1-5]
  *                                        [--speech game|lines|off] [--bots fill|off] [--rooms <n>] [--listed on|off]
  *   homie-studio function new <name> [--event order.paid]
+ *   homie-studio function replay <name> --replay [--url <studio-site>]
  *   homie-studio function fire <event> [--input <JSON>] [--id <event-id>] [--url <local-site>]
  *   homie-studio tool new <name> [--app <id>]
  *   homie-studio tool call <name> --input <JSON> [--url <site>] [--public]
@@ -495,6 +496,7 @@ function print(result) {
     case 'tool new':
       lines.push(result.file, result.next);
       break;
+    case 'function replay':
     case 'function fire':
     case 'tool call':
     case 'tool list':
@@ -837,7 +839,7 @@ const OUTWARD_FLAGS = {
   'shop connect': ['url', 'managed', 'live', 'manual', 'renew', 'from-clipboard'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note', 'manual-transaction'], 'shop statements': ['url', 'period', 'send', 'cursor'],
   'agents pass': ['url', 'label', 'server', 'hands', 'role', 'days'], 'agents revoke': ['url'], 'agents brain': ['url', 'budget', 'remove'],
   'agents sit': ['url', 'server', 'pass', 'label', 'brain'],
-  'function new': ['event'], 'function fire': ['url','input','id'],
+  'function replay': ['url','replay'], 'function new': ['event'], 'function fire': ['url','input','id'],
   'tool new': ['app'], 'tool call': ['url', 'input', 'public'], 'tool list': ['url', 'public'],
   // With --device it adds a phone to the person's Apple team and installs on it: a flag it does not know stops it.
   'standalone run': ['for', 'device', 'site'],

@@ -6,7 +6,7 @@ import {customerOffer,serviceTerms} from './customer-resources.mjs';
 import {byId} from './purchase-store.mjs';
 import {orderById} from './shop-store.mjs';
 /** Reuse web-shop policy evaluation before creating an immutable cart offer. */
-export async function quoteCart(env,cat,origin,caller,input) {
+export async function quoteCart(env,cat,origin,caller,input,request) {
   const shop=shopOf(cat);if(!shop)throw new Error('Shop unavailable');
   const lines=[];let amount=0;
   for(const line of input.lines??[]) {
@@ -24,15 +24,24 @@ export async function quoteCart(env,cat,origin,caller,input) {
   if(!lines.length)throw new Error('Cart is empty');
   // An opted-in monthly cap is reserved by the normal web checkout; machine carts use that path until a reservation is available.
   if(shop.capPerPlayerMonth!==null)throw new Error('This studio uses a spending allowance; use studio_checkout');
-  return customerOffer(env,'cart',{name:lines.map(l=>`${l.item.name} × ${l.quantity}`).join(', '),lines,player:caller.id??null,shop, sale:serviceTerms({scope:'cart',amount,currency:shop.currency,automaticTax:shop.automaticTax===true,taxBehavior:shop.taxBehavior,refundWindowDays:shop.refundDays,refund:`Studio refund window: ${shop.refundDays} days.`})});
+  let session;
+  if (!caller.id) {
+    if (!request) throw new Error('A buyer request is required before payment');
+    const guest = await players.shopGuest(request,env,new URL(origin),shop.guestBuyersPerAddressPerHour);
+    if (guest.error) throw new Error('Guest account unavailable; no payment was taken');
+    session = guest.session;
+    caller = {...caller,id:session.player.id};
+  }
+  const quote = await customerOffer(env,'cart',{name:lines.map(l=>`${l.item.name} × ${l.quantity}`).join(', '),lines,player:caller.id??null,shop, sale:serviceTerms({scope:'cart',amount,currency:shop.currency,automaticTax:shop.automaticTax===true,taxBehavior:shop.taxBehavior,refundWindowDays:shop.refundDays,refund:`Studio refund window: ${shop.refundDays} days.`})});
+  return {...quote,...(session?{account:{player:session.player,cookies:session.cookies}}:{})};
 }
 export async function fulfillCart(env,origin,order) {
   const manifest=JSON.parse(order.manifest),shop=manifest.shop;
   let existing=await orderById(env,order.id);
   if(existing&&['refunded','lost'].includes(existing.status))throw new Error('Cart refunded');
   if(!existing) {
-    let player=manifest.player;
-    if(!player){const guest=await players.shopGuest(new Request(origin),env,new URL(origin),shop.guestBuyersPerAddressPerHour);if(guest.error)throw new Error('Guest account unavailable');player=guest.session.player.id;}
+    const player=manifest.player;
+    if(!player)throw new Error('Cart has no pre-payment account');
     const session='cs_machine_'+order.id;
     await env.DB.batch([
       env.DB.prepare(`INSERT OR IGNORE INTO shop_orders(id,player,item,amount,currency,till,mode,status,session,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,'started',?8,?9,?9)`).bind(order.id,player,manifest.lines[0].item.id,order.amount,order.currency,order.till,order.mode,session,order.created_at),

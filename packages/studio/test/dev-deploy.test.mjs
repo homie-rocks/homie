@@ -33,6 +33,7 @@ import { beforeLine, isPublishCap, listedHere, publish, publishBefore, publishes
 import { reachSite, whyFailed } from '../lib/net.mjs';
 import { NODE_MIN, nodeProblem } from '../lib/node-version.mjs';
 import { exactRouteFor, keptRoutes, readConfig, readZoneRoutes, routeCovers, routeKind, shadowedDomain, sortRoutes, wideRouteRefusal, zoneCandidates, zoneFinding } from '../lib/routes.mjs';
+import {refreshWorkerConfig} from '../lib/worker-config.mjs';
 import { wranglerConfig } from '../lib/scaffold.mjs';
 import { readLocal, readStudio, writeLocal, writeStudio } from '../lib/studio.mjs';
 
@@ -95,10 +96,13 @@ esac
 
 /** wrangler.jsonc with something added by the studio's owner (the file stays the toolkit's, comment and all). */
 function editConfig(dir, change) {
-  const file = join(dir, 'wrangler.jsonc');
-  const json = readConfig(dir);
+  const json=readConfig(dir),before=structuredClone(json);
   change(json);
-  writeFileSync(file, `// edited by the studio's owner\n${JSON.stringify(json, null, 2)}\n`);
+  const file=join(dir,'wrangler.custom.json');
+  const custom=existsSync(file)?JSON.parse(readFileSync(file,'utf8')):{};
+  for(const key of Object.keys(json))if(JSON.stringify(json[key])!==JSON.stringify(before[key]))custom[key]=json[key];
+  writeFileSync(file,JSON.stringify(custom,null,2)+'\n');
+  refreshWorkerConfig(dir);
 }
 
 /**
@@ -327,11 +331,20 @@ test('deploy keeps the studio\'s custom-domain and exact-host routes: the rewrit
   let committedConfig;
   writeStudio(dir, { ...readStudio(dir), cloudflare: { ...readStudio(dir).cloudflare, domain: 'play.example.com' } });
   for (const n of [1, 2]) {
-    if(n===2)committedConfig=readFileSync(join(dir,'wrangler.jsonc'),'utf8');
+    if(n===2){
+      committedConfig=readFileSync(join(dir,'wrangler.jsonc'),'utf8');
+      assert.equal(spawnSync('git',['init'],{cwd:dir}).status,0);
+      const exclude=join(dir,'.git/info/exclude');writeFileSync(exclude,readFileSync(exclude,'utf8')+'\n.fake-cf/\n');
+      assert.equal(spawnSync('git',['add','-A'],{cwd:dir}).status,0);
+    }
     const done = out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir));
     assert.equal(done.ok, true, JSON.stringify(done));
     assert.equal(done.url, 'https://play.example.com');
-    if(n===2)assert.equal(readFileSync(join(dir,'wrangler.jsonc'),'utf8'),committedConfig,'a repeat deploy leaves the committed config byte-for-byte unchanged');
+    if(n===2){
+      assert.equal(readFileSync(join(dir,'wrangler.jsonc'),'utf8'),committedConfig,'a repeat deploy leaves the committed config byte-for-byte unchanged');
+      const diff=spawnSync('git',['diff','--exit-code'],{cwd:dir,encoding:'utf8'});assert.equal(diff.status,0,diff.stdout);
+      assert.equal(spawnSync('git',['ls-files','--others','--exclude-standard'],{cwd:dir,encoding:'utf8'}).stdout,'','deploy leaves no new untracked studio files');
+    }
     assert.deepEqual(done.routes, ['play.example.com', 'play.example.com/*']);
     assert.deepEqual(readConfig(dir).routes, routes, `deploy ${n}: the routes are in wrangler.jsonc exactly as written`);
     assert.deepEqual(JSON.parse(readFileSync(join(cf.state, 'deployed-config'), 'utf8').replace(/^\s*\/\/.*$/gm, '')).routes, routes, 'and in the config Wrangler deployed');
@@ -714,7 +727,7 @@ test('a command that changes something outside this computer stops at a flag it 
   });
   // Each command with the words it would need to run for real, and one invented flag.
   const commands = {
-    'function new': ['example'], 'function fire': ['order.paid'],
+    'function new': ['example'], 'function fire': ['order.paid'], 'function replay':['example'],
     'tool new': ['example'], 'tool list': [], 'tool call': ['example'],
     publish: [], deploy: [], 'storage add': [], 'media put': ['notes.txt'], 'media move': [], 'setup attach': ['hs_made_up'], handoff: ['hb_made_up'],
     'players owner': [], 'stats key': [], 'stats link': [], 'stats revoke': [], 'stats share': ['off'],
@@ -824,6 +837,7 @@ test('local dev with a custom-domain route in wrangler.jsonc: the route never re
   // The studio is live on its own domain: a custom domain and the exact-host route its zone needed.
   const routes = [{ pattern: 'play.example.com', custom_domain: true }, { pattern: 'play.example.com/*', zone_name: 'example.com' }];
   editConfig(dir, (c) => { c.routes = routes; });
+  assert.equal(out(run(['build'],dir)).ok,true);
   const before = readFileSync(join(dir, 'wrangler.jsonc'), 'utf8');
   const local = devConfig(dir, false);
   assert.deepEqual(local.stripped, ['play.example.com', 'play.example.com/*']);

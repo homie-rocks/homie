@@ -1,4 +1,4 @@
-import '../customer-resources.mjs';
+import {pruneOffers} from '../customer-resources.mjs';
 import { customerTools, paidTool } from '../customer-mcp.mjs';
 import { productDescription, entryDescription, discoveryRoutes } from '../parts-purchase-catalogue.mjs';
 import { officeScript } from '../purchase-office-script.mjs';
@@ -33,6 +33,7 @@ useSelling({ enabled: true, customerTools, paidTool, productDescription, entryDe
 export default { ...worker,
   async scheduled(controller, env, ctx) {
     await worker.scheduled(controller, env, ctx);
+    if(env.DB)await pruneOffers(env);
     if (!env.PURCHASE_MACHINE_PAYMENTS || !env.DB) return;
     const { refreshMachineCapabilities } = await import('../payment-capabilities.mjs');
     const errors = [];

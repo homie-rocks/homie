@@ -17,14 +17,17 @@ export async function customerShop(env,cat,origin,caller,path,args) {
   const url=new URL(path,origin),post=args!==undefined;
   const request=withToolIdentity(new Request(url,{method:post?'POST':'GET',headers:{origin,'content-type':'application/json'},...(post?{body:JSON.stringify(args)}:{})}),caller);
   const response=await shopRoutes(request,env,{},url,{catalogueOf:async()=>cat});
-  return response?response.json():{ok:false,error:'Shop unavailable'};
+  if(!response)return {ok:false,error:'Shop unavailable'};
+  const data=await response.json();
+  const cookies=response.headers.getSetCookie?.()??[response.headers.get('set-cookie')].filter(Boolean);
+  return {...data,...(cookies.length?{account:{cookies}}:{})};
 }
 export function customerTools(env,cat,origin) {
   return [
     {name:'studio_catalogue',description:'Browse the public shop, paid parts and app goods. Prices use the studio’s currency minor units.',audience:'public',inputSchema:object(),handler:async(_args,ctx)=>({shop:await customerShop(env,cat,origin,ctx.caller,'/api/shop'),resources:await listOffers(env,origin)})},
-    {name:'studio_cart',description:'Quote a cart for agent payment. Approve this immutable offerVersion before purchase.',audience:'public',inputSchema:cartSchema,handler:(args,ctx)=>quoteCart(env,cat,origin,ctx.caller,args)},
+    {name:'studio_cart',description:'Quote a cart for agent payment. Retain the returned private account cookies to use guest purchases. Approve this immutable offerVersion before purchase.',audience:'public',inputSchema:cartSchema,handler:(args,ctx)=>quoteCart(env,cat,origin,ctx.caller,args,ctx.request)},
     {name:'studio_checkout',description:'Open the studio’s Stripe checkout for a person to approve. Uses the same cart, account, order and refund as the website.',audience:'public',inputSchema:cartSchema,handler:(args,ctx)=>customerShop(env,cat,origin,ctx.caller,'/api/shop/buy',args)},
-    {name:'studio_purchase',description:'Buy an approved offer with the MCP payment binding. Generate private random 32-byte hex buyer and claim values; retain the claim for retries. For x402 use the returned HTTP resource address.',audience:'public',inputSchema:{...purchaseSchema,properties:{...purchaseSchema.properties,checkout:{type:'boolean'}}},protocol:true,handler:async(args,ctx)=>{if(args.checkout&&args.kind==='cart'){const resource=await resourceKind('cart').get(env,args.resource,args.version);if(!resource)throw new Error('Cart unavailable');const result=await customerShop(env,cat,origin,ctx.caller,'/api/shop/buy',{lines:resource.lines.map(l=>({item:l.item.id,quantity:l.quantity,amount:l.amount}))});return {content:[{type:'text',text:JSON.stringify(result)}],...(result.ok?{}:{isError:true})};}return buy(env,cat,origin,args,ctx.paymentExtra);}},
+    {name:'studio_purchase',description:'Buy an approved offer with the MCP payment binding. Generate private random 32-byte hex buyer and claim values; retain the claim for retries. For x402 use the returned HTTP resource address.',audience:'public',inputSchema:{...purchaseSchema,properties:{...purchaseSchema.properties,checkout:{type:'boolean'}}},protocol:true,handler:async(args,ctx)=>{if(args.checkout&&args.kind==='cart'){const resource=await resourceKind('cart').get(env,args.resource,args.version);if(!resource)throw new Error('Cart unavailable');const result=await customerShop(env,cat,origin,{...ctx.caller,id:resource.player},'/api/shop/buy',{lines:resource.lines.map(l=>({item:l.item.id,quantity:l.quantity,amount:l.amount}))});return {content:[{type:'text',text:JSON.stringify(result)}],...(result.ok?{}:{isError:true})};}return buy(env,cat,origin,args,ctx.paymentExtra);}},
     {name:'studio_customer_refund',description:'Request a refund for your shop order under the studio refund policy.',audience:'signed-in',inputSchema:object({order:str,line:str},['order']),handler:(args,ctx)=>customerShop(env,cat,origin,ctx.caller,'/api/shop/refund',args)},
     {name:'studio_purchase_refund',description:'Request a resource or service refund with the original private purchase claim.',audience:'public',inputSchema:object({claim:{type:'string',pattern:'^[a-f0-9]{64}$'}},['claim']),handler:async({claim})=>{const url=new URL('/api/purchases/refund',origin);const response=await purchaseRoutes(new Request(url,{method:'POST',headers:{authorization:'Bearer '+claim,'content-type':'application/json'},body:'{}'}),env,url,cat);return response.json();}},
     {name:'studio_my_orders',description:'Your web-shop orders and grants.',audience:'signed-in',inputSchema:object(),handler:(_args,ctx)=>customerShop(env,cat,origin,ctx.caller,'/api/shop/mine')},
@@ -47,6 +50,15 @@ export async function paidTool(env,cat,origin,tool,input,context,extra) {
   const {_payment:payment,...args}=input;
   let quote;
   const previous=payment?.claim && /^[a-f0-9]{64}$/.test(payment.claim)?await byClaim(env,await digest(payment.claim)):null;
+  if(previous) {
+    const saved=await env.DB.prepare('SELECT state FROM service_results WHERE order_id=?1').bind(previous.id).first();
+    if(saved && ['refunded','refund-pending'].includes(saved.state)) {
+      const {serviceResult}=await import('./service-run.mjs');
+      const {refundOrder}=await import('./purchase-office.mjs');
+      const data=await serviceResult(env,previous.id,()=>{throw new Error('Already failed');},()=>refundOrder(env,previous,{by:'service-failure'}));
+      return {isError:true,content:[{type:'text',text:JSON.stringify(data)}]};
+    }
+  }
   if(previous && ['paid','fulfilled','disputed'].includes(previous.status)) {
     const manifest=JSON.parse(previous.manifest);
     if(previous.resource_kind!=='service'||manifest.tool!==tool.name||canonicalJson(manifest.args)!==canonicalJson(args))throw new Error('Request differs from paid service');
@@ -58,15 +70,8 @@ export async function paidTool(env,cat,origin,tool,input,context,extra) {
   if(result.isError||payment.checkout)return result;
   const grant=JSON.parse(result.content[0].text),id=grant.order;
   if(!id)throw new Error('Payment has no order');
-  const lease=crypto.randomUUID(),now=Date.now();
-  await env.DB.prepare(`INSERT OR IGNORE INTO service_results(order_id,state,due) VALUES(?1,'pending',0)`).bind(id).run();
-  const claimed=await env.DB.prepare(`UPDATE service_results SET state='running',lease=?2,due=?3 WHERE order_id=?1 AND state!='complete' AND due<=?4`).bind(id,lease,now+60000,now).run();
-  if(claimed.meta.changes) {
-    try {
-      const value=await tool.handler(args,Object.freeze({...context,purchase:Object.freeze({id})}));
-      await env.DB.prepare(`UPDATE service_results SET state='complete',result=?3 WHERE order_id=?1 AND lease=?2`).bind(id,lease,JSON.stringify(value??null)).run();
-    }catch(error){await env.DB.prepare(`UPDATE service_results SET state='pending',due=0 WHERE order_id=?1 AND lease=?2`).bind(id,lease).run();throw error;}
-  }
-  const saved=await env.DB.prepare('SELECT state,result FROM service_results WHERE order_id=?1').bind(id).first();
-  return {...result,content:[{type:'text',text:JSON.stringify({order:id,state:saved.state,...(saved.state==='complete'?{data:JSON.parse(saved.result)}:{retry:'Retry this same claim; the service is running.'})})}]};
+  const {serviceResult}=await import('./service-run.mjs');
+  const {refundOrder}=await import('./purchase-office.mjs');
+  const data=await serviceResult(env,id,()=>tool.handler(args,Object.freeze({...context,purchase:Object.freeze({id})})),async()=>refundOrder(env,await byClaim(env,await digest(payment.claim)),{by:'service-failure'}));
+  return {...result,...(['refunded','refund-pending'].includes(data.state)?{isError:true}:{}),content:[{type:'text',text:JSON.stringify(data)}]};
 }

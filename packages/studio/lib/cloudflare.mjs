@@ -1,4 +1,4 @@
-import { updateWorkerConfig } from './worker-config.mjs';
+import { refreshWorkerConfig } from './worker-config.mjs';
 import { paidReleases, uploadPaidParts } from './parts-upload.mjs';
 /**
  * `homie-studio deploy` — the studio's site on the studio's OWN Cloudflare
@@ -42,7 +42,7 @@ import { MAX_ASSET_BYTES, R2_COST, mediaPlan, r2OverOf, recordMove, sha256File, 
 import { whyFailed } from './net.mjs';
 import { repoOf } from './repo.mjs';
 import { keptRoutes, readConfig, readZoneRoutes, routesOf, shadowedDomain, wideRouteRefusal, zoneFinding } from './routes.mjs';
-import { ensureLocalIgnored, ensureMigrations, migrationWord, wranglerConfig } from './scaffold.mjs';
+import { ensureLocalIgnored, ensureMigrations, migrationWord } from './scaffold.mjs';
 import { LOCAL_STATE, configPath, domainOrigin, isRulesGame, isWorkersDev, layoutOf, listExperiences as listGames, readLocal, readStudio, siteUrl, workerDir, writeLocal, writeStudio } from './studio.mjs';
 import { projectsCloudflareEnv } from './projects-env.mjs';
 
@@ -241,7 +241,6 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   const wide = wideRouteRefusal(readConfig(root), studio);
   if (wide) return { ok: false, command: 'deploy', ...wide };
   let routes = keptRoutes(root, studio);
-  const triggers = readConfig(root)?.triggers;
   const who = whoami(root);
   if (!who) {
     if (cf.auth === 'stripe-projects') {
@@ -278,6 +277,9 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   if (zone) {
     if (ownRoute && zone.state === 'foreign') {
       routes = [...(routes ?? []), zone.route];
+      const customFile=join(root,'wrangler.custom.json');
+      const custom=existsSync(customFile)?JSON.parse(readFileSync(customFile,'utf8')):{};
+      writeFileSync(customFile,JSON.stringify({...custom,routes},null,2)+'\n');
       step(`added the studio's own exact-host route to "routes" in wrangler.jsonc: ${zone.line}. It covers ${zone.host} only, and every deploy keeps it; the other site's route was not touched.`, { route: zone.route });
       const config = readConfig(root) ?? {};
       zone = await zoneCheck(root, { studio, accountId, fetchFn, config: { ...config, routes: [...routesOf(config), zone.route] } });
@@ -369,17 +371,14 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   const r2 = storage;
   if (!r2) step('no storage (R2): the studio needs none to run; `homie-studio storage add` adds it for large media');
 
-  updateWorkerConfig(root, wranglerConfig({ partsRateLimit: readConfig(root)?.ratelimits?.find((binding) => binding.name === 'PURCHASE_RATE_LIMITER'), paidParts: paidReleases(root).length > 0 || readConfig(root)?.alias?.['@homie-rocks/studio/worker'] === '@homie-rocks/studio/worker/selling', worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), routes, triggers }));
+  refreshWorkerConfig(root, {d1Id: db.uuid});
   if (routes) step(`kept the studio's own route${routes.length === 1 ? '' : 's'} in wrangler.jsonc: ${routes.map((r) => r.pattern).join(', ')}`);
   for (const added of ensureMigrations(root)) step(`added ${added} (${migrationWord(added)})`);
   const migrate = w(['d1', 'migrations', 'apply', cf.d1, '--remote']);
   if (migrate.code !== 0) return refuse(`D1 migrations failed: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
   step('D1 migrations applied');
-  // Workers AI (0.17.0): bound only when a server's AI guides think with it.
-  if (needsWorkersAi(root, w, cf.d1)) {
-    updateWorkerConfig(root, wranglerConfig({ partsRateLimit: readConfig(root)?.ratelimits?.find((binding) => binding.name === 'PURCHASE_RATE_LIMITER'), paidParts: paidReleases(root).length > 0 || readConfig(root)?.alias?.['@homie-rocks/studio/worker'] === '@homie-rocks/studio/worker/selling', worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), ai: true, routes, triggers }));
-    step('Workers AI bound (AI): a server\'s AI guides think with it and typed room chat is reviewed with it, each within its day\'s budget (free allocation: 10,000 neurons a day)');
-  }
+  const subscriptions=w(['d1','execute',cf.d1,'--remote','--command',(await import('./functions-build.mjs')).functionDeploymentSQL(root)]);
+  if(subscriptions.code!==0)return refuse('Could not register studio functions',subscriptions.out);
 
   const started = Date.now();
   let dep = w(['deploy', ...repoVar(root)]);
@@ -681,7 +680,7 @@ export async function storageAdd(root, { log = () => {} } = {}) {
   writeStudio(root, next);
   if (next.cloudflare.d1Id) {
     // The studio's own routes stay through this rewrite too (lib/routes.mjs).
-    updateWorkerConfig(root, wranglerConfig({ partsRateLimit: readConfig(root)?.ratelimits?.find((binding) => binding.name === 'PURCHASE_RATE_LIMITER'), paidParts: paidReleases(root).length > 0 || readConfig(root)?.alias?.['@homie-rocks/studio/worker'] === '@homie-rocks/studio/worker/selling', worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: next.cloudflare.d1Id, r2: bucket, layout: layoutOf(root), routes: keptRoutes(root, studio) }));
+    refreshWorkerConfig(root);
   }
   log(`created R2 ${bucket}`);
   return { ok: true, command: 'storage add', bucket, account: accountId, cost: R2_COST, next: ['npx --no-install homie-studio media move --dry-run   (which songs and videos go to R2: over 1 MiB, or left out of git)', 'npm run deploy   (binds the bucket as MEDIA, moves them, checks each by SHA-256, and serves them from R2 at the same addresses; the files stay in this folder)'] };

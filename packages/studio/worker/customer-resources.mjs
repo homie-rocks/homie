@@ -1,4 +1,5 @@
 /** Carts and services are resource adapters over the existing purchase lifecycle. */
+import {hasStripeKey} from './shop-links.mjs';
 import {registerResourceKind} from './resource-kinds.mjs';
 import {quoteHash,legalTerms} from './parts-sale.mjs';
 import {digest,manifestHash} from './purchase-crypto.mjs';
@@ -6,19 +7,29 @@ import {offerVersion} from './purchase-core.mjs';
 import {canonicalJson} from './referrals.mjs';
 import {serviceTerms} from './service-terms.mjs';
 export {serviceTerms} from './service-terms.mjs';
+export async function pruneOffers(env,now=Date.now()) {
+  try {
+    await env.DB.prepare('DELETE FROM customer_offers WHERE id IN (SELECT id FROM customer_offers WHERE expires_at<=?1 ORDER BY expires_at LIMIT 100)').bind(now).run();
+  } catch(error) {
+    // Rolling upgrades may run the purchase reconciler before the offer migration.
+    if(!/no such (?:table: customer_offers|column: expires_at)/i.test(error.message))throw error;
+  }
+}
 export async function customerOffer(env,kind,resource) {
   const id=(await digest(canonicalJson(resource))).slice(0,48);
   const manifest={...resource,id,version:'1.0.0',files:[],license:'Studio terms'};
-  await env.DB.prepare('INSERT OR IGNORE INTO customer_offers(id,kind,manifest) VALUES(?1,?2,?3)').bind(id,kind,JSON.stringify(manifest)).run();
+  await pruneOffers(env);
+  await env.DB.prepare('INSERT INTO customer_offers(id,kind,manifest,expires_at) VALUES(?1,?2,?3,?4) ON CONFLICT(id) DO UPDATE SET expires_at=excluded.expires_at').bind(id,kind,JSON.stringify(manifest),Date.now()+86400000).run();
   const offer=await offerVersion({kind,id,release:manifest.version,manifest:await manifestHash(manifest)},manifest.sale);
   return {kind,resource:id,version:manifest.version,offerVersion:offer.version,offer:manifest.sale};
 }
 for(const kind of ['cart','service']) registerResourceKind(kind,{
   list:async()=>[],
-  async get(env,id,version){if(version!=='1.0.0')return null;const row=await env.DB.prepare('SELECT manifest FROM customer_offers WHERE id=?1 AND kind=?2').bind(id,kind).first();return row?JSON.parse(row.manifest):null;},
+  async get(env,id,version){if(version!=='1.0.0')return null;const row=await env.DB.prepare('SELECT manifest FROM customer_offers WHERE id=?1 AND kind=?2 AND expires_at>?3').bind(id,kind,Date.now()).first();return row?JSON.parse(row.manifest):null;},
   async listed(env,id,version,origin){
     const resource=await this.get(env,id,version);if(!resource)return null;
     if(kind==='service'){
+      if(!hasStripeKey(env))return null;
       const tools=await (await import('./index.mjs')).getStudioTools();
       const tool=tools.find(t=>t.name===resource.tool);
       if(!tool?.price||canonicalJson(serviceTerms(tool.price))!==canonicalJson(resource.sale))return null;
