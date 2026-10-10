@@ -758,7 +758,7 @@ Web Workers, a live server) and what a game must do for its sound to be in the f
 ```sh
 npx homie-studio perf crown-thief --url http://127.0.0.1:8787 [--device computer,phone] [--runs 3] [--profile]
 npx homie-studio perf sizes crown-thief                     # every built file, raw and gzipped; with build --maps, the bundle's modules
-npx homie-studio perf compare .perf/crown-thief/<before> .perf/crown-thief/<after> --goal phone.host.frame.p95
+npx homie-studio perf compare .perf/crown-thief/<before> .perf/crown-thief/<after> --goal phone.replica.frame.p95
 ```
 
 One run is two headless Chromes on this computer's GPU in a fresh room of their own (`?room=perf-…`): two replicas for server rules, or a host and replica for older browser-hosted games, both a computer (1280x800 at 2x) or both an emulated phone (390x844 at
