@@ -155,6 +155,8 @@
  *   homie-studio servers new <game> "<Name>" --policy open|humans-only|hybrid|beginner [--ai <n>] [--guides <n>]
  *                                        [--kids] [--door open|accounts|invite] [--level 1-5] [--level-max 1-5]
  *                                        [--speech game|lines|off] [--bots fill|off] [--rooms <n>] [--listed on|off]
+ *   homie-studio function new <name> [--event order.paid]
+ *   homie-studio function fire <event> [--input <JSON>] [--id <event-id>] [--url <local-site>]
  *   homie-studio tool new <name> [--app <id>]
  *   homie-studio tool call <name> --input <JSON> [--url <site>] [--public]
  *   homie-studio servers set <game> <server> [the same flags]
