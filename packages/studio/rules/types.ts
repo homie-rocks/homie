@@ -19,7 +19,8 @@ export type Self<F, M, I, K extends string, P extends boolean, G = Goal> = F & {
 export interface Hit { readonly entity?: string; readonly part?: string; readonly at: Point; readonly normal: Vec3; readonly dist?: number }
 export interface RayOptions { atTick?: number; profile?: string; radius?: number; shape?: 'sphere' | 'box'; geometryOnly?: boolean; entitiesOnly?: boolean; ignoreSelf?: boolean; ignore?: readonly string[]; kind?: string; tag?: string; layer?: string; where?: Readonly<Record<string, number | boolean | string | {gt?: number; gte?: number; lt?: number; lte?: number; eq?: number | boolean | string}>> }
 export type RayHit = Hit & { readonly dist: number };
-export interface RayQueries { ray(from: Point, direction: Point, max: number, options?: RayOptions): RayHit | undefined; rayAll(from: Point, direction: Point, max: number, options?: RayOptions): readonly RayHit[] }
+export interface RaySnapshot {ray(from:Point,direction:Point,max:number):RayHit|undefined;rayAll(from:Point,direction:Point,max:number):readonly RayHit[]}
+export interface RayQueries { rays(options?:RayOptions):RaySnapshot; ray(from: Point, direction: Point, max: number, options?: RayOptions): RayHit | undefined; rayAll(from: Point, direction: Point, max: number, options?: RayOptions): readonly RayHit[] }
 export type Area = { sphere: { at: Point; r: number } } | { box: { min: Point; max: Point } } | { cone: { at: Point; dir: Point; r: number; angle: number } };
 export interface MapView { readonly name: string; spot(name: string): Vec3 | undefined; spots(name: string): readonly Vec3[] }
 export interface Clock { readonly tick: number; readonly dt: number; ticks(seconds: number): number; readonly math: typeof math }
@@ -41,6 +42,7 @@ export type World<E, F, S, V, C, A, T, Room extends boolean = false> = Clock & {
   inBox<K extends keyof V>(box: { min: Point; max: Point }, kind: K): readonly Query<V[K]>[];
   inBox(box: { min: Point; max: Point }): readonly Query<V[keyof V]>[];
   ray(from: Point, direction: Point, max: number, options?: RayOptions): RayHit | undefined;
+  rays(options?:RayOptions):RaySnapshot;
   rayAll(from: Point, direction: Point, max: number, options?: RayOptions): readonly RayHit[];
   ask<K extends keyof A>(name: K, state: WriteState<A[K]>): boolean;
 } & (Room extends true ? { announce<K extends keyof E>(event: K, ...data: Payload<E[K]>): void; finish(): void } : {

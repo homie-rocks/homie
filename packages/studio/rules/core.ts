@@ -1,4 +1,4 @@
-import { rayQuery, type QueryTarget } from './query.ts';
+import { rayQuery, raySnapshot, type QueryTarget } from './query.ts';
 import { colliderSolid, castCollider2, colliderRow, collisionMap, collisionQueries, type CollisionRevision } from './live.ts';
 /*
  * core.ts — one room's world, stepped a tick at a time from a compiled rules module.
@@ -484,8 +484,10 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
   const historyTicks = Math.ceil((c.historySeconds ?? 0) * tickHz);
   let poseHistory: [number, [string, number, number, number, number][]][] = [];
   function rayTargets(options?: unknown): QueryTarget[] {
-    charge(64 * ents.size);
+    charge(8 * ents.size);
     const targets: QueryTarget[] = [];
+    const filterKind=own(options,'kind'),filterLayer=own(options,'layer'),filterTag=own(options,'tag'),geometryOnly=own(options,'geometryOnly')===true;
+
     const requested = own(options,'atTick');
     if (requested !== undefined && (typeof requested !== 'number' || !Number.isFinite(requested))) throw new Error('ray.atTick is a finite simulation tick');
     if (requested !== undefined && !historyTicks) throw new Error('ray.atTick needs room.historySeconds');
@@ -494,7 +496,8 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
     if(wanted<tick)for(const frame of poseHistory){charge(2);if(frame[0]<=wanted)before=frame;if(frame[0]>=wanted){after=frame;break;}}
     before ??= poseHistory[0];after ??= poseHistory[poseHistory.length-1];
     for(const e of ents.values()) {
-      if(e.dead || !e.kind.body)continue;
+      if(e.dead || !e.kind.body || typeof filterKind==='string'&&e.kind.name!==filterKind || geometryOnly&&!e.kind.collider || typeof filterLayer==='string'&&filterLayer!==(e.kind.query?.layer??(e.kind.collider?'geometry':'body')) || typeof filterTag==='string'&&!e.kind.query?.tags?.includes(filterTag))continue;
+      charge(64);
       const row=e.kind.collider?colliderRow(e.id,e.pos,e.kind.body,e.kind.collider,e.f):null;
       if(e.kind.collider&&!row)continue;
       let at=e.pos;
@@ -651,6 +654,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       return Object.freeze(found.map(viewOf));
     },
     ray: (from: unknown, direction: unknown, max: unknown, options?: unknown): unknown => rayQuery(c.map, rayTargets(options), dims, from, direction, max, options, cx.ent?.id)[0],
+    rays: (options?: unknown): unknown => raySnapshot(c.map,rayTargets(options),dims,options,cx.ent?.id),
     rayAll: (from: unknown, direction: unknown, max: unknown, options?: unknown): unknown => rayQuery(c.map, rayTargets(options), dims, from, direction, max, options, cx.ent?.id, true),
     sweep: (self: unknown, delta: unknown, o?: unknown): unknown => {
       const e = mine(self, 'world.sweep');

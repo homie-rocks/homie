@@ -1,4 +1,4 @@
-import { rayQuery, type QueryTarget } from './query.ts';
+import { rayQuery, raySnapshot, type QueryTarget } from './query.ts';
 import { overlapsTerrain } from './terrain.ts';
 import { nearbyMap } from './map-index.ts';
 /** Declared collision geometry, shared by authority and prediction. Entity fields
@@ -62,6 +62,7 @@ export function collisionQueries(map: () => MapShapes, shape: () => BodyShape, d
   };
   return {
     ray: (from: unknown, direction: unknown, max: unknown, options?: unknown) => {const m=map();return rayQuery(m.staticMap??m,collisionTargets(m),dims,from,direction,max,options,self())[0];},
+    rays: (options?: unknown) => {const m=map();return raySnapshot(m.staticMap??m,collisionTargets(m),dims,options,self());},
     rayAll: (from: unknown, direction: unknown, max: unknown, options?: unknown) => {const m=map();return rayQuery(m.staticMap??m,collisionTargets(m),dims,from,direction,max,options,self(),true);},
     sweep: (body: unknown, delta: unknown) => sweepMap(map(), body, delta, shape().radius, dims, shape()),
     support: (body: unknown, distance: unknown = 0.002) => {
