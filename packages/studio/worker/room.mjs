@@ -491,6 +491,12 @@ export class NetRoom {
   /** The same per-player delivery role will run in Gates. Keyframes belong to sockets, not saved seats. */
   playerSnapshot(client, snap, welcome = false) {
     if (!snap || !this.hasViewSchedule()) return snap;
+    // Relayed clients get a complete welcome, then Gates own their delivery
+    // baselines. Retaining a welcome-only encoder here pins a second set of
+    // per-player rows for the lifetime of every seat, without ever using it.
+    if (welcome && client.conn.snapshot) {
+      return scheduledView(this.server.viewSettings ?? { radiusM: this.server.viewRadiusM }, this.tickHz)(snap, client.seat);
+    }
     client.viewSchedule ??= scheduledView(this.server.viewSettings ?? { radiusM: this.server.viewRadiusM }, this.tickHz);
     const selected = client.viewSchedule(snap, client.seat);
     client.snapEncoder ??= snapshotEncoder(this.tickHz, true);

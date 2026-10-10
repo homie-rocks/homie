@@ -135,6 +135,28 @@ test('malformed snapshots do not throw in the view or overwrite a valid keyframe
   assert.deepEqual(decoder.decode(encoder.encode(next)), next);
 });
 
+test('a thousand relayed welcomes leave view and encoder ownership in Gates', async () => {
+  const { NetRoom } = await import('../worker/room.mjs');
+  const room = new NetRoom({ code:'r', rules:true, maxPlayers:1000, tickHz:20 });
+  room.setServerHost({ viewRadiusM:5, viewSettings:{radiusM:5,precisionM:0.1}, frame(){}, facts(){return {};} });
+  const snap = snapshot(1, Array.from({length:1000},(_,i)=>entity(i,i*2,i)));
+  const clients = Array.from({length:1000},(_,seat)=>({seat,conn:{snapshot(){}}}));
+  for (const client of clients) {
+    const welcome = room.playerSnapshot(client,snap,true);
+    assert.ok(Array.isArray(welcome.d));
+    assert.ok(welcome.d[1].some(row=>row[9]===client.seat));
+  }
+  assert.equal(clients.filter(c=>c.viewSchedule || c.snapEncoder).length,0,
+    'the Table must not retain unused per-player baselines after relayed welcomes');
+  const direct = {seat:0,conn:{}};
+  const decoder = snapshotDecoder();
+  decoder.decode(room.playerSnapshot(direct,snap,true));
+  assert.equal(typeof direct.viewSchedule,'function');
+  assert.ok(direct.snapEncoder);
+  const next = snapshot(2,snap.d[1].map((row,i)=>i===0?entity(0,0.2,0):row));
+  assert.equal(decoder.decode(room.playerSnapshot(direct,next)).d[1][0][3][0],0.2);
+});
+
 test('relay backpressure does not advance a client baseline; welcome and watcher overview use the delivery role', async () => {
   const { NetRoom } = await import('../worker/room.mjs');
   const room = new NetRoom({ code:'r', rules:true, maxPlayers:2, tickHz:20, now:()=>1000 });

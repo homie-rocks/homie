@@ -228,6 +228,21 @@ Local reports are preserved under
 artifacts under `storage-probe/` and Linux run 38074964451 under `isolated-caches/`.
 No tarball has been produced: both required capacity cases have not passed.
 
+## Welcome-cache ownership follow-up
+
+Review of the delegated-view path found another issue introduced by the patch:
+`playerSnapshot(..., welcome=true)` still left an encoder and scheduled-view map
+on every Table client. Subsequent snapshots went to Gates, so the Table never
+used those welcome baselines again. Relayed welcomes now produce a standalone
+keyframe without retaining per-player delivery caches. Direct connections keep
+their existing encoder and view ownership.
+
+A deterministic thousand-client test failed with 1,000 retained cache owners
+before the change and passes with zero after it. It also checks complete welcome
+snapshots, controlled-body visibility and direct-client chained decoding. All
+40 focused interest, relay and real-workerd tests pass. This is a demonstrated
+retention fix; its effect on the failed capacity cases requires a fresh run.
+
 ## Diagnostics and approval
 
 Room and office telemetry expose bounded per-stage samples, per-Gate view/encode/
