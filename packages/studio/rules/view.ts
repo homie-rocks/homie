@@ -261,7 +261,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (revision !== cachedCollision) { geometry = collisionMap(map, revision?.[2] ?? []); cachedCollision = revision; }
     return geometry;
   };
-  const moveCtx = moveContext({ tick: () => moveTick, tickHz, tune, map, geometry: geometryAt, name: game.map.name ?? 'main', spots, radius: () => myKind()?.radius ?? 0, shape: () => ({ shape: myKind()?.shape ?? 'sphere', radius: myKind()?.radius ?? 0, height: myKind()?.height ?? 0 }), dims });
+  const moveCtx = moveContext({ tick: () => moveTick, tickHz, tune, map, geometry: geometryAt, self: () => mine?.id, name: game.map.name ?? 'main', spots, radius: () => myKind()?.radius ?? 0, shape: () => ({ shape: myKind()?.shape ?? 'sphere', radius: myKind()?.radius ?? 0, height: myKind()?.height ?? 0 }), dims });
   function authorityRtt(): number {
     // The helper's ping ends at the relay. A browser host adds another network leg in both directions.
     // Snapshot stamps use the relay clock, so their observed age measures the complete downstream path.

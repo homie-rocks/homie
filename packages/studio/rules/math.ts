@@ -297,9 +297,9 @@ export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: 
  * map. One function, so that the browser (view.ts) and the person the build check plays hold the same one. The
  * server's own (core.ts `moveCtx`) is made beside the rest of its world, and charges as that does.
  */
-export function moveContext(o: { tick: () => number; tickHz: number; tune: unknown; map: MapShapes; name: string; spots: Readonly<Record<string, readonly unknown[]>>; radius: () => number; shape?: () => BodyShape; dims: number; geometry?: () => MapShapes }): unknown {
+export function moveContext(o: { tick: () => number; tickHz: number; tune: unknown; map: MapShapes; name: string; spots: Readonly<Record<string, readonly unknown[]>>; radius: () => number; shape?: () => BodyShape; dims: number; geometry?: () => MapShapes; self?: () => string | undefined }): unknown {
   const none = Object.freeze([]);
-  const queries = collisionQueries(() => o.geometry?.() ?? o.map, () => o.shape?.() ?? {shape: 'sphere', radius: o.radius(), height: 2 * o.radius()}, o.dims);
+  const queries = collisionQueries(() => o.geometry?.() ?? o.map, () => o.shape?.() ?? {shape: 'sphere', radius: o.radius(), height: 2 * o.radius()}, o.dims, o.self);
   return brand(Object.freeze({
     get tick() { return o.tick(); }, dt: 1 / o.tickHz, tune: o.tune, math,
     // As the server's `ctx.ticks` reads it: a plain number, or nothing.

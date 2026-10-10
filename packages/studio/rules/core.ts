@@ -180,7 +180,7 @@ export interface Core {
  * `noted`: told, as it happens, of a value the rules wrote that the runtime changed to make it fit, or dropped (pack.ts
  * `Adjusted`; also `effect`, `think` and `decision`): the handler, what was done, the field's name and what was written.
  */
-export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
+export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes, id: string) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
   const dims = c.dims;
   const tickHz = c.settings.tickHz;
   const dt = 1 / tickHz;
@@ -686,7 +686,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
     return row ? [row] : [];
   })];
   let moveGeometry = c.map as import('./math.ts').MapShapes;
-  const queries = collisionQueries(() => moveGeometry, () => moveShape, dims);
+  const queries = collisionQueries(() => moveGeometry, () => moveShape, dims, () => cx.ent?.id);
   const moveWorld = brand(Object.freeze(queries));
   const moveMap = brand(Object.freeze({ name: c.map.name, spot: mapApi.spot, spots: mapApi.spots, ...queries }));
   let moveShape = { shape: 'sphere', radius: 0, height: 0 };
@@ -1060,7 +1060,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
         naming('body', 'pos'); e.pos = clampIn(V(own(b, 'pos')), body.radius, body.height || 2 * body.radius); naming('body', 'vel'); e.vel = V(own(b, 'vel')); naming('body', 'heading'); e.heading = dir(own(b, 'heading'), dims); naming();
         G.note = null;
         e.grounded = own(b, 'grounded') === true;
-        if (beforeMove) opts.moved!(k.name, tick, e.input, beforeMove, { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: { ...e.m } }, moveGeometry);
+        if (beforeMove) opts.moved!(k.name, tick, e.input, beforeMove, { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: { ...e.m } }, moveGeometry, e.id);
       }
       // Phase 2: for every entity, its commands and then its tick, starting from a different entity each tick.
       const list = [...ents.values()];
