@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { pathToFileURL } from 'node:url';
-import { viewPlugin } from '../lib/rules-build.mjs';
+import { prepareRules, viewPlugin } from '../lib/rules-build.mjs';
 import { NetRoom } from '../worker/room.mjs';
 import { COIN_DASH, PKG, esbuildOf, loadGame } from './rules-kit.mjs';
 import { virtualTime } from './virtual-time.mjs';
@@ -37,7 +37,40 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
   if (runaway) {
     dir = join(scratch, `variant-${runaway}`); cpSync(COIN_DASH, dir, { recursive: true });
     const file = join(dir, 'src/rules.ts');
-    if (runaway === 'cover' || runaway === 'cover2' || runaway === 'terrain') {
+    if (runaway === 'pulses') {
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
+export default defineRules({contract:2,space:{dims:2},move,map:'./map',entities:{runner:{player:true,input:{select:f.pulse()},fields:{actions:f.list(f.u8(),64),secret:f.text(20,{init:'brain-secret',visibility:'server'}),ammo:f.u8({init:24,visibility:'owner'}),damage:f.u16({init:52,visibility:'results'})},body:{shape:'circle',radius:.4,maxSpeed:0},tick(w,s){if(s.input.select)s.actions=[...s.actions,s.input.select];}}},room:{rounds:{seconds:60,breakSeconds:1},bots:{keep:0},join(c,p){return{kind:'runner',at:{x:p.seat*2,y:0,z:0}};}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(){}});`);
+    } else if (runaway === 'history') {
+      writeFileSync(join(dir,'src/view.ts'),`import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.command('shoot',{at:room.viewTick,y:0});`);
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-100,-100,0],max:[100,100,20]}}));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';export default defineRules({contract:2,space:{dims:3},move,map:'./map',shapes:{commands:{shoot:{at:f.fix(),y:f.fix()},block:{}},events:{block:{}}},entities:{runner:{player:true,fields:{hit:f.ref(),current:f.ref()},body:{shape:'capsule',radius:.4,height:1.8,maxSpeed:0},commands:{shoot(w,s,e){const from={x:0,y:e.y,z:1},d={x:1,y:0,z:0};s.hit=w.ray(from,d,18,{atTick:e.at,where:{hp:{gt:0}}})?.entity??'';s.current=w.ray(from,d,18,{where:{hp:{gt:0}}})?.entity??'';},block(w,s){for(const c of w.near(s.pos,64,'cover'))w.dispatch(c.id,'block');}}},target:{fields:{hp:f.u8({init:100})},body:{shape:'box',radius:.15,height:2,maxSpeed:2}},cover:{fields:{solid:f.bit(),hp:f.u8({init:100}),size:f.vec3({init:{x:1,y:100,z:3}})},collider:{enabled:'solid',size:'size'},body:{shape:'box',radius:.5,height:3,maxSpeed:0},on:{block(w,s){s.solid=true;}}}},room:{historySeconds:1,bots:{keep:0},join(c,p){return{kind:'runner',at:{x:-2,y:p.seat*4,z:0}};},start(w){w.spawn('target',{x:8,y:0,z:0});w.spawn('cover',{x:4,y:0,z:0});}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(){},target(b,i,c){b.pos={x:8,y:c.tick*.1,z:0};}});`);
+    } else if (runaway === 'sequence') {
+      writeFileSync(join(dir,'src/view.ts'),`import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.command('shoot');`);
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-20,-20,0],max:[20,20,20]}}));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
+export default defineRules({contract:2,space:{dims:3},move,map:'./map',shapes:{commands:{shoot:{},snapshot:{},retry:{}},events:{retry:{},damage:{amount:f.u8(),owner:f.ref()},credit:{}}},entities:{runner:{player:true,fields:{label:f.text(40),hits:f.list(f.ref(),8),credit:f.u8()},body:{shape:'capsule',radius:.4,height:1.8,maxSpeed:0},on:{credit(w,s){s.credit++;}},commands:{retry(w,s){w.sendRoom('retry');},snapshot(w,s){s.label=w.label(s.id);const scene=w.rays({where:{hp:{gt:0}}}),from={x:0,y:0,z:1},d={x:1,y:0,z:0},first=scene.ray(from,d,18);if(first?.entity)w.dispatch(first.entity,'damage',{amount:20,owner:s.id});s.hits=[scene.ray(from,d,18)?.entity??'',w.ray(from,d,18,{where:{hp:{gt:0}}})?.entity??''];},shoot(w,s){s.hits=[];for(let i=0;i<8;i++){const hit=w.ray({x:0,y:0,z:1},{x:1,y:0,z:0},18,{where:{hp:{gt:0}}});if(hit?.entity){s.hits=[...s.hits,hit.entity];w.dispatch(hit.entity,'damage',{amount:10,owner:s.id});}}}}},target:{body:{shape:'box',radius:.5,height:2,maxSpeed:0},collider:{enabled:'solid'},fields:{hp:f.u8({init:20}),solid:f.bit({init:true})},on:{damage(w,s,e){s.hp=Math.max(0,s.hp-e.amount);s.solid=s.hp>0;w.dispatch(e.owner,'credit');}}}},room:{on:{retry(w){w.round.restart();}},bots:{keep:0},join(c,p){return{kind:'runner',at:{x:-2,y:p.seat*4,z:0}};},start(w){w.spawn('target',{x:4,y:0,z:0});w.spawn('target',{x:8,y:0,z:0});w.spawn('target',{x:12,y:0,z:0});}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(){}});`);
+    } else if (runaway === 'admission') {
+      writeFileSync(join(dir,'src/view.ts'),`import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.command('accept');`);
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-100,-100],max:[100,100]}}));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
+export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{accept:{}}},entities:{runner:{player:{away:'think',leave:'bot',control:'accepted',takeover:'fitness'},fields:{fitness:f.fix(),hp:f.u8({init:73}),ammo:f.u8({init:7})},motion:{accepted:f.bit({init:true})},input:{ax:f.i8()},body:{shape:'circle',radius:.4,maxSpeed:4},think(){return {ax:1};},on:{takeover(w,s){s.motion.accepted=false;}},commands:{accept(w,s){s.motion.accepted=true;}}}},room:{bots:{keep:6},rounds:{seconds:12,breakSeconds:1},join(c,p){return{kind:'runner',at:{x:0,y:p.seat*2,z:0},fields:{fitness:10-p.seat}};}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.pos={x:b.pos.x+i.ax*c.dt,y:b.pos.y,z:0};}});`);
+    } else if (runaway === 'queries') {
+      writeFileSync(join(dir,'src/view.ts'), `import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.ray({x:0,y:0,z:1},{x:1,y:0,z:0},18,{geometryOnly:true});room.rayAll({x:0,y:0,z:1},{x:1,y:0,z:0},18,{where:{hp:{gt:0}}});`);
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-20,-20,0],max:[20,20,20]},boxes:[{min:[12,-2,0],max:[13,2,3]}]}));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
+export default defineRules({contract:2,space:{dims:3},move,map:'./map',
+shapes:{commands:{shoot:{mode:f.u8()}},events:{}},
+entities:{runner:{player:true,body:{shape:'capsule',radius:.42,height:1.8,maxSpeed:4},motion:{ray:f.fix()},fields:{dist:f.fix(),part:f.text(16),count:f.u8(),deadTargets:f.u8()},
+commands:{shoot(w,s,e){s.deadTargets=0;for(const target of w.near(s.pos,18)){if(target.kind==='target'&&target.hp===0)s.deadTargets++;}const origin={x:e.mode===8?10:0,y:e.mode>=10?.3:0,z:e.mode===1||e.mode>=10?1.85:e.mode===6?1.95:1};const opts=e.mode===10?{profile:'projectile',where:{hp:{gt:0}}}:e.mode===8?{geometryOnly:true}:e.mode===9?{geometryOnly:true,radius:.3,shape:'box' as const}:e.mode===7?{layer:'absent'}:e.mode===2?{geometryOnly:true}:e.mode===3?{entitiesOnly:true,kind:'target',tag:'fighter',layer:'actors',where:{hp:{gt:0}}}:e.mode===4?{geometryOnly:true,ignore:w.near(origin,20,'cover').map(e=>e.id)}:e.mode===5?{ignoreSelf:false,entitiesOnly:true,kind:'runner'}:{where:{hp:{gt:0}}};const hit=w.ray(origin,{x:1,y:0,z:0},e.mode===12?100:18,opts);s.dist=hit?hit.dist:-1;s.part=hit&&hit.part?hit.part:'';s.count=w.rayAll(origin,{x:1,y:0,z:0},18,opts).length;} }},
+target:{body:{shape:'capsule',radius:.42,height:1.8,maxSpeed:0},query:{layer:'actors',tags:['fighter'],profiles:{projectile:{body:{shape:'box',radius:.42,height:1.9}}},parts:{body:{shape:'box',radius:.42,height:1.5},head:{shape:'box',radius:.24,height:.4,offset:{x:0,y:0,z:1.5}}}},fields:{hp:f.fix({init:100})}},
+cover:{body:{shape:'box',radius:.5,height:3,maxSpeed:0},collider:true,motion:{ray:f.fix(),selfRay:f.fix()},fields:{hp:f.fix({init:100})}}},
+room:{bots:{keep:0},join(c,p){return{kind:'runner',at:{x:1,y:p.seat*5,z:0}};},start(w){w.spawn('target',{x:4,y:0,z:0},{hp:0});w.spawn('target',{x:8,y:0,z:0});w.spawn('cover',{x:10,y:0,z:0});}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){const h=c.world.ray({x:0,y:0,z:1},{x:1,y:0,z:0},18,{geometryOnly:true});b.motion.ray=h?h.dist:-1;},cover(b,i,c){const from={x:b.pos.x,y:b.pos.y,z:b.pos.z+1},d={x:1,y:0,z:0};b.motion.ray=c.world.ray(from,d,8)?.dist??-1;b.motion.selfRay=c.world.rayAll(from,d,8,{ignoreSelf:false})[0]?.dist??-1;}});`);
+    } else if (runaway === 'cover' || runaway === 'cover2' || runaway === 'terrain') {
       const dims = runaway === 'cover2' ? 2 : 3;
       const terrainMap=JSON.parse(readFileSync(join(PKG,'test/fixtures/stormbreak-terrain/map.json'),'utf8'));
       if(runaway==='terrain')terrainMap.heightTiles=terrainMap.heightTiles.map(t=>({...t,base:0}));
@@ -45,12 +78,13 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
 export default defineRules({contract:2,space:{dims:${dims}},move,
 shapes:{commands:{shoot:{direction:f.i8()},edit:{mode:f.u8()},place:{at:f.vec3()}},events:{edit:{mode:f.u8()}}},
-entities:{runner:{player:true,fields:{ray:f.fix({init:-1})},input:{ax:f.i8(),ay:f.i8(),jump:f.press(),dash:f.bit(),dive:f.press(),launch:f.press(),hover:f.bit()},motion:{support:f.fix(),blocked:f.bit()},body:{shape:'${dims===3?'capsule':'circle'}',radius:.4,height:1.8,maxSpeed:26},
+entities:{runner:{player:true,fields:{ray:f.fix({init:-1})},input:{ax:f.i8(),ay:f.i8(),jump:f.press(),dash:f.bit(),dive:f.press(),launch:f.press(),hover:f.bit(),camera:f.bit()},motion:{difference:f.fix(),camera:f.fix(),support:f.fix(),blocked:f.bit()},body:{shape:'${dims===3?'capsule':'circle'}',radius:.4,height:1.8,maxSpeed:26,terrain:'exact'},
 commands:{shoot(w,s,e){const hit=w.ray({x:s.pos.x,y:s.pos.y,z:s.pos.z+1},{x:e.direction,y:0,z:0},8);s.ray=hit?hit.dist:-1;},place(w,s,e){w.place(s,e.at);},edit(w,s,e){for(const c of w.near(s.pos,64,'cover'))w.send(c.id,'edit',e);if(e.mode===4)w.spawn('cover',{x:0,y:0,z:0});}}},
 cover:{fields:{solid:f.bit({init:true}),size:f.vec3({init:{x:1,y:4,z:2.6}})},body:{shape:'${dims===3?'box':'circle'}',radius:.5,height:2.6,maxSpeed:0},collider:{size:'size',enabled:'solid'},
 on:{edit(w,s,e){if(e.mode===0)s.solid=false;if(e.mode===1)s.solid=true;if(e.mode===2)s.size={x:2,y:4,z:2.6};if(e.mode===3)w.despawn(s);if(e.mode===5)w.place(s,{x:0,y:0,z:1});if(e.mode===6)w.place(s,{x:32,y:0,z:0});}}}},
-room:{bots:{keep:0},join(c,p){return{kind:'runner',at:{x:-2,y:p.seat,z:0}};},start(w){w.spawn('cover',{x:0,y:0,z:0});}},map:'./map'});`);
+room:{bots:{keep:0},join(c,p){return{kind:'runner',at:{x:-2,y:p.seat,z:0}};},start(w){w.spawn('cover',{x:0,y:0,z:0});${runaway==='terrain'?"for(let i=0;i<16;i++)w.spawn('cover',{x:40,y:20+i,z:0});":''}}},map:'./map'});`);
       writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){
+if(i.camera){const shape=c.world.rays({geometryOnly:true,radius:.4,height:1.8,shape:'capsule',terrain:'exact'}),scratch={pos:{...b.pos},grounded:b.grounded},reference={pos:{...b.pos},grounded:b.grounded};shape.sweep(scratch,{x:.1,y:.1,z:-.2});c.world.sweep(reference,{x:.1,y:.1,z:-.2});b.motion.difference=c.math.len(c.math.sub(scratch.pos,reference.pos));const scene=c.world.rays({geometryOnly:true,radius:.3,shape:'box'});b.motion.camera=6;for(const hit of scene.rayAll({x:b.pos.x,y:b.pos.y,z:b.pos.z+1.45},{x:-1,y:-1,z:-.2},6))b.motion.camera=Math.min(b.motion.camera,hit.dist);return;}
 const support=c.world.support(b,20);b.motion.support=support?support.dist:20;b.motion.blocked=c.world.overlaps(b);
 b.grounded=Boolean(c.world.support(b));if(i.hover)return;let vz=b.vel.z;
 if(i.jump&&b.grounded)vz=12;
@@ -1626,6 +1660,12 @@ for(const delayed of [false,true]) test(`solid Stormbreak terrain: six bodies, t
  a.input({ay:4});await clock.wait(1500);assert.ok(a.me.pos.z<.2,'walk down ramp');
  await place({x:-3.2,y:14,z:0});a.input({ax:3,jump:true});await clock.wait(550);a.input({ax:0});await clock.wait(1200);assert.ok(a.me.pos.z>.4,'jump onto ramp');
  a.input({jump:true});await clock.wait(200);assert.ok(a.me.pos.z>1.5,'jump off ramp');a.input({ax:0});
+ // Dense hill rims from real-game movement failures, under the same network clock.
+ for(const at of [{x:-10.89543,y:26.09822,z:.129555},{x:-19.84526,y:20.9344,z:.511}]){
+  await place(at);a.input({ax:1,ay:3,camera:true});await clock.wait(700);a.input({ax:0,ay:0,camera:false});
+  assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+  assert.ok(Number.isFinite(a.me.pos.z));assert.ok(a.me.motion.difference<.002,'scratch capsule sweep matches movement');
+ }
  await place({x:-4,y:7,z:0});
  a.close();a=open('Rejoined');await clock.wait(2200);await place({x:-4,y:7,z:0});a.input({ax:1,dash:true});await clock.wait(1200);assert.ok(a.me.pos.x<=-2.899,'rejoined side');a.input({ax:0});
  assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
@@ -1638,4 +1678,102 @@ for(const delayed of [false,true]) test(`solid Stormbreak terrain: six bodies, t
  fresh.command('place',{at:{x:0,y:18,z:0}});await clock.wait(1100);fresh.input({ay:-4});await clock.wait(1500);assert.ok(fresh.me.pos.z>1,'restored ascent');fresh.input({ay:4});await clock.wait(1500);assert.ok(fresh.me.pos.z<.2,'restored descent');
  assert.equal(revived.host.core.stats.errors,0,revived.host.core.stats.lastError);
  console.log('Stormbreak 4058 shapes, six clients, max tick units:',r.host.core.stats.maxTickUnits);
+});
+
+for(const delayed of [false,true]) test(`filtered rays and hit regions on authority and prediction${delayed?' at 300 ms with loss':''}`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'queries');
+ const clock=virtualTime(t),shape=predictionShaper({delay:delayed?300:0,loss:delayed?.05:0,seed:451});
+ const r=rig(L,compiled,false,shape,shape);const a=openRoom({net:{config:cfg('Shooter'),WebSocketImpl:r.socket(),post:null}});const b=openRoom({net:{config:cfg('Neighbour'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();b.close();r.stop();});await clock.wait(2200);
+ for(const [mode,dist,part,count] of [[0,7.58,'body',3],[1,7.76,'head',3],[2,9.5,'',2],[3,7.58,'body',1],[4,12,'',1],[5,.58,'',1],[6,9.5,'',2],[7,-1,'',0],[8,0,'',3],[9,9.2,'',2],[10,7.58,'body',3],[11,9.5,'',2],[12,9.5,'',2]]){
+   a.command('shoot',{mode});await clock.wait(1300);assert.ok(Math.abs(a.me.dist-dist)<.001,`${mode}: ${a.me.dist}`);assert.equal(a.me.part,part);assert.equal(a.me.count,count);assert.equal(a.me.deadTargets,1);
+ }
+ assert.ok(Math.abs(a.me.motion.ray-9.5)<.001,'movement predicts the geometry ray');
+ let movingCover; a.each('cover',e=>{movingCover=e;});assert.ok(movingCover);assert.equal(movingCover.motion.ray,2,'a live collider movement query ignores itself');assert.equal(movingCover.motion.selfRay,0,'movement can explicitly include its own collider');
+ const opts={entitiesOnly:true,kind:'target',tag:'fighter',layer:'actors',where:{hp:{gt:0}}};
+ const hit=a.ray({x:0,y:0,z:1.85},{x:1,y:0,z:0},18,opts);assert.equal(hit.part,'head');assert.ok(Math.abs(hit.dist-7.76)<.001);assert.equal(a.rayAll({x:0,y:0,z:1},{x:1,y:0,z:0},18,opts).length,1);
+ const saved=r.host.core.save();const restored=L.C.createCore(compiled,{restore:saved});assert.deepEqual(restored.save(),saved);for(let i=0;i<8;i++){r.host.core.step();restored.step();assert.deepEqual(restored.save(),r.host.core.save());}assert.equal(r.host.core.stats.errors,0);
+});
+
+test('filtered ray declarations and API pass the strict author build',async()=>{
+ await coinDashKit('server',false,20,'queries');
+ const esbuild=await esbuildOf();
+ await prepareRules(esbuild,scratch,{id:'queries',dir:join(scratch,'variant-queries'),players:{max:8},room:{host:'server'}});
+});
+
+for(const delayed of [false,true]) test(`ranked bot admission retains entity resources and gates player control${delayed?' with 300 ms and loss':''}`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'admission');
+ const clock=virtualTime(t),shape=predictionShaper({delay:delayed?300:0,loss:delayed?.05:0,seed:4511});
+ const r=rig(L,compiled,false,shape,shape),a=openRoom({net:{config:cfg('First'),WebSocketImpl:r.socket(),post:null}});
+ let b;t.after(()=>{a.close();b?.close();r.stop();});await clock.wait(2200);
+ const bots=[];a.each('runner',e=>{if(e.driver==='bot')bots.push(e);});bots.sort((a,b)=>b.fitness-a.fitness);const chosen=bots[0];assert.ok(chosen);
+ b=openRoom({net:{config:cfg('Late'),WebSocketImpl:r.socket(),post:null}});await clock.wait(2200);
+ assert.equal(b.me.id,chosen.id);assert.equal(b.me.hp,73);assert.equal(b.me.ammo,7);assert.equal(b.me.motion.accepted,false);
+ const before=b.me.pos.x;b.input({ax:-4});await clock.wait(1000);assert.ok(b.me.pos.x>before,'think keeps driving until consent');
+ b.command('accept');await clock.wait(1300);assert.equal(b.me.motion.accepted,true);
+ const accepted=b.me.pos.x;await clock.wait(500);assert.ok(b.me.pos.x<accepted,'player input drives after consent');
+ const saved=r.host.core.save(),restored=L.C.createCore(compiled,{restore:saved});assert.deepEqual(restored.save(),saved);
+ for(let i=0;i<8;i++){r.host.core.step();restored.step();assert.deepEqual(restored.save(),r.host.core.save());}
+ assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+});
+
+test('admission declarations pass the strict author build',async()=>{
+ await coinDashKit('server',false,20,'admission');
+ await prepareRules(await esbuildOf(),scratch,{id:'admission',dir:join(scratch,'variant-admission'),players:{max:8},room:{host:'server'}});
+});
+
+for(const delayed of [false,true]) test(`synchronous events preserve ordered pellet destruction and actor ownership${delayed?' with delay/loss':''}`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'sequence');
+ const clock=virtualTime(t),shape=predictionShaper({delay:delayed?300:0,loss:delayed?.05:0,seed:4512}),r=rig(L,compiled,false,shape,shape);
+ const a=openRoom({net:{config:cfg('Shooter'),WebSocketImpl:r.socket(),post:null}}),b=openRoom({net:{config:cfg('Viewer'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();b.close();r.stop();});await clock.wait(2200);a.command('shoot');await clock.wait(1500);
+ assert.equal(a.me.hits.length,6);assert.equal(a.me.credit,6);assert.equal(new Set(a.me.hits).size,3);
+ for(let i=0;i<6;i+=2)assert.equal(a.me.hits[i],a.me.hits[i+1]);
+ b.each('target',e=>{assert.equal(e.hp,0);assert.equal(e.solid,false);});
+ const saved=r.host.core.save(),restored=L.C.createCore(compiled,{restore:saved});for(let i=0;i<8;i++){r.host.core.step();restored.step();assert.deepEqual(restored.save(),r.host.core.save());}assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+});
+test('synchronous event declaration passes the strict author build',async()=>{await coinDashKit('server',false,20,'sequence');await prepareRules(await esbuildOf(),scratch,{id:'sequence',dir:join(scratch,'variant-sequence'),players:{max:8},room:{host:'server'}});});
+
+test('historical actor queries hit the rendered pose with 300 ms/loss and restore exactly',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'history');
+ const clock=virtualTime(t),shape=predictionShaper({delay:300,loss:.05,seed:4513}),r=rig(L,compiled,false,shape,shape);
+ const a=openRoom({net:{config:cfg('Shooter'),WebSocketImpl:r.socket(),post:null}}),b=openRoom({net:{config:cfg('Viewer'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();b.close();r.stop();});await clock.wait(2200);let target;a.each('target',e=>target=e);assert.ok(target);assert.ok(a.viewTick<r.host.core.tick);
+ a.command('shoot',{at:a.viewTick,y:target.pos.y});await clock.wait(1500);assert.equal(a.me.hit,target.id);assert.equal(a.me.current,'','uncompensated query misses the moving actor');
+ a.command('block');await clock.wait(1000);a.each('target',e=>target=e);a.command('shoot',{at:a.viewTick,y:target.pos.y});await clock.wait(1200);let cover;a.each('cover',e=>cover=e);assert.equal(a.me.hit,cover.id,'new cover stays authoritative during actor rewind');assert.equal(a.me.current,cover.id);
+ const saved=r.host.core.save(),restored=L.C.createCore(compiled,{restore:saved});assert.deepEqual(restored.save(),saved);for(let i=0;i<8;i++){r.host.core.step();restored.step();assert.deepEqual(restored.save(),r.host.core.save());}assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+ const invalid=structuredClone(saved);invalid.history[0][1][0][1]=Infinity;assert.throws(()=>L.C.createCore(compiled,{restore:invalid}),/history/);
+});
+test('history query declaration passes the strict author build',async()=>{await coinDashKit('server',false,20,'history');await prepareRules(await esbuildOf(),scratch,{id:'history',dir:join(scratch,'variant-history'),players:{max:8},room:{host:'server'}});});
+
+for(const delayed of [false,true]) test(`query snapshots preserve captured geometry and fields across dispatch${delayed?' with delay/loss':''}`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'sequence');const clock=virtualTime(t),shaper=predictionShaper({delay:delayed?300:0,loss:delayed?.05:0,seed:4517}),r=rig(L,compiled,false,shaper,shaper);
+ const a=openRoom({net:{config:cfg('Snapshot'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();r.stop();});await clock.wait(2500);a.command('snapshot');await clock.wait(1800);
+ assert.equal(a.me.label,'Snapshot');assert.equal(a.me.hits.length,2);assert.notEqual(a.me.hits[0],a.me.hits[1]);assert.ok(a.me.hits.every(Boolean));assert.equal(a.me.credit,1);assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+ const saved=r.host.save();assert.ok(saved);r.host.core.step();assert.equal(r.host.core.stats.errors,0);
+});
+
+ test('round retry skips results and intermission, preserves seats and restores pending intent',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'sequence'),clock=virtualTime(t),shape=predictionShaper({delay:300,loss:.05,seed:4521}),r=rig(L,compiled,false,shape,shape);
+ const a=openRoom({net:{config:cfg('Retry'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();r.stop();});await clock.wait(2500);const id=a.me.id,n=a.round.n;const phases=[];a.net.on('round',round=>phases.push(round));a.command('retry');await clock.wait(1500);assert.equal(a.round.n,n+1);assert.equal(a.round.phase,'live');assert.equal(a.me.id,id);assert.ok(phases.every(p=>p.phase!=='over'&&!p.results));
+ const saved=r.host.core.save();saved.intent=[0,0,1];const x=L.C.createCore(compiled,{restore:saved}),y=L.C.createCore(compiled,{restore:saved});x.step();y.step();assert.equal(x.save().round[0],n+2);assert.deepEqual(x.save(),y.save());assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+ });
+
+for(const delayed of [false,true])test(`valued one-frame input survives sampling and private fields stay off every recipient wire${delayed?' under seeded latency/loss':''}`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'pulses'),clock=virtualTime(t),shape=predictionShaper({delay:delayed?600:0,loss:delayed?.2:0,seed:4527}),r=rig(L,compiled,false,shape,shape);
+ const a=openRoom({net:{config:cfg('One'),WebSocketImpl:r.socket(),post:null}}),b=openRoom({net:{config:cfg('Two'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();b.close();r.stop();});await clock.wait(2500);
+ for(let i=0;i<20;i++){a.input({select:i%3+1});await clock.wait(1);a.input({select:0});await clock.wait(120);}
+ await clock.wait(1200);assert.deepEqual([...a.me.actions],Array.from({length:20},(_,i)=>i%3+1));
+ assert.equal(a.me.ammo,24);assert.equal(b.get(a.me.id).ammo,0);assert.equal(a.me.secret,'');assert.equal(a.get(b.me.id).secret,'');
+ assert(!JSON.stringify(L.R.schemaOf(compiled)).includes('brain-secret'));
+ const raw=r.host.core.snapshot(),round=raw[0],snap={e:r.host.epoch,k:r.host.tick,d:raw,c:[]};
+ for(const seat of [null,0,1,7]){const filtered=r.host.projectSnapshot(snap,seat);assert(!JSON.stringify(filtered).includes('brain-secret'));for(const row of filtered.d[1]){assert.equal(row[7][1],null);if(row[9]!==seat)assert.equal(row[7][2],null);assert.equal(row[7][3],null);}}
+ const over=r.host.projectSnapshot({...snap,d:[[round[0],0,round[2]],...raw.slice(1)]},null);assert(over.d[1].every(row=>row[7][3]===52));
+ const saved=r.host.save(),restored=L.H.createHost({game:'test',compiled,restore:saved,clock:r.host.clock??{now:()=>Date.now(),setTimer:()=>0,clearTimer(){}},send(){}});assert.deepEqual(restored.core.save(),r.host.core.save());restored.stop();
+});
+test('low-latency player cannot request a one-second-old target pose, seed 4520',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'history'),clock=virtualTime(t),shape=predictionShaper({delay:0,loss:0,seed:4520}),r=rig(L,compiled,false,shape,shape),a=openRoom({net:{config:cfg('Shooter'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(2500);const tick=r.host.core.tick;
+ a.command('shoot',{at:tick-18,y:(tick-18)*.1});await clock.wait(300);assert.equal(a.me.hit,'','forged 900 ms rewind must be clamped to measured latency and presentation margin');assert.equal(r.host.core.stats.errors,0);
 });

@@ -78,7 +78,7 @@ type W = World<${parameters}>;
 type RW = World<${parameters}, true>;
 type Definition = Omit<RulesDef, 'entities' | 'room' | 'move' | 'asks'> & {
   entities: ${entities}; move?: Moves;
-  room?: { rounds?: { seconds: number; breakSeconds: number }; bots?: { keep: number };
+  room?: { records?: {key:string;identity:string;eligible?:string;fields:Readonly<Record<string,string>>}; rounds?: { seconds: number; breakSeconds: number }; bots?: { keep: number }; historySeconds?: number;
     start?: (world: RW) => void;
     join?: (ctx: Pick<W, 'map' | 'shared' | 'tune' | 'math' | 'round'>, player: { seat: number; driver: 'person' | 'bot' | 'ai'; owner: string }) => ${joins};
     on?: { [K in keyof (Omit<Events, keyof GameRoomEvents> & GameRoomEvents)]?: (world: RW, event: EventData<(Omit<Events, keyof GameRoomEvents> & GameRoomEvents)[K]>) => void };

@@ -1030,6 +1030,11 @@ async function route(request, env, ctx) {
         return serversPage(cat, meta, { origin: url.origin, servers: await serverLive(env, meta, servers, url.origin, lobby), hidden: true, pick: true });
       }
       if (!d.ok) return doorPage(cat, meta, srv, { why: d.why, days: d.days, origin: url.origin, next: `${url.pathname}${url.search}`, code: url.searchParams.get('invite') ?? '' });
+      let recordsGuest=null;
+      if(meta.room?.records&&!embed&&!screen&&!d.acct&&env.DB){
+        const made=await playerAccounts.recordsGuest(request,env,url);if(made.error)return made.error;
+        recordsGuest=made.session;d.acct='p-'+recordsGuest.player.id;d.holder=joinHolders(d.holder,d.acct);
+      }
       if (d.acct?.startsWith('p-') && srv.id !== 'public') ctx?.waitUntil?.(noteMember(env, game, srv.id, d.acct.slice(2)));
       const ticket = d.holder ? await ticketFor(env, game, d.holder) : null;
       const pol = policyFor(srv, named);
@@ -1054,7 +1059,8 @@ async function route(request, env, ctx) {
       }
       await countVisit(request, env, ctx, game, 'play');
       shareDaily(cat, url, ctx);
-      return playPage(cat, meta, { origin: url.origin, embed, preview: env.HOMIE_EMBED_PREVIEW === '1', ticket: embed ? null : ticket, owner: !embed && d.owner, launch, server, ...(embed ? {} : await chatWho(env, game, srv, d.acct)), shop: await availableShellShop(env, cat, game, { kids: pol.kids }) });
+      const page=playPage(cat, meta, { origin: url.origin, embed, preview: env.HOMIE_EMBED_PREVIEW === '1', ticket: embed ? null : ticket, owner: !embed && d.owner, launch, server, ...(embed ? {} : await chatWho(env, game, srv, d.acct)), shop: await availableShellShop(env, cat, game, { kids: pol.kids }) });
+      for(const cookie of recordsGuest?.cookies??[])page.headers.append('set-cookie',cookie);return page;
     }
     if (sub === 'watch') {
       // The same door as Play: a game that is private or an invite-only beta is watched only by whoever may play it.
@@ -1422,6 +1428,7 @@ export class Table {
       let ticks = 0;
       this.hostRt = startHost(this.game, {
         ...(saved ? { restore: new TextEncoder().encode((saved.hostText ?? JSON.stringify(saved.host))), restoreEpoch: epoch, startDelayMs: boot.count === 1 ? restoreDelay(`${this.game}/${this.code}`) : 0 } : {}),
+        record: (owner,key,value) => this.queueRoundRecord(owner,key,value),
         store: { save: (bytes) => this.saveRoom(bytes) },
         onTick: () => {
           if (!saved) return;
@@ -1683,12 +1690,32 @@ export class Table {
    * a failure goes to the error stream, everything else to the log (and not at all with HOMIE_ROOM_LOG=0).
    */
   say(line) {
+    if(line?.ev==='hello'&&line.seat!==null&&this.ctx.storage.sql){const c=this.room?.clients.get(line.id),owner='p'+this.room?.seats.get(line.seat)?.occ;if(c?.player){this.ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS round_players(owner TEXT PRIMARY KEY,player TEXT)');this.ctx.storage.sql.exec('INSERT OR REPLACE INTO round_players VALUES(?,?)',owner,c.player);}}
     if(line?.ev==='hello'&&!line.resumed&&line.seat!==null) this.queueFunctionEvent('player.joined',{game:this.game,room:line.room,player:this.room?.clients.get(line.id)?.conn?.player??null,seat:line.seat});
     const bad = line?.ev === 'failed' || line?.ev === 'socket-error' || line?.ev === 'tick-failed' || line?.ev === 'persist-failed';
     if (!bad && this.env.HOMIE_ROOM_LOG === '0') return;
     try { console[bad ? 'error' : 'log'](JSON.stringify({ at: new Date().toISOString(), ...line, game: this.game ?? null, room: line?.room ?? this.code ?? null })); } catch { /* no console */ }
   }
 
+  queueRoundRecord(owner,key,value) {
+    const sql=this.ctx.storage.sql;if(!sql||!this.env.DB)return;
+    sql.exec('CREATE TABLE IF NOT EXISTS round_players(owner TEXT PRIMARY KEY,player TEXT)');
+    const client=[...this.room.clients.values()].find(c=>c.seat!==null&&'p'+this.room.seats.get(c.seat)?.occ===owner);
+    const player=client?.player??sql.exec('SELECT player FROM round_players WHERE owner=?',owner).toArray()[0]?.player;
+    if(!player)return;
+    sql.exec('CREATE TABLE IF NOT EXISTS round_outbox(id TEXT PRIMARY KEY,player TEXT,key TEXT,value TEXT)');
+    sql.exec('INSERT OR IGNORE INTO round_outbox VALUES(?,?,?,?)',player+':'+key+':'+value.id,player,key,JSON.stringify(value));
+    this.ctx.waitUntil(this.flushRoundRecords());
+  }
+  async flushRoundRecords(){
+    const sql=this.ctx.storage.sql;if(!sql||!this.env.DB)return;
+    if(!sql.exec("SELECT name FROM sqlite_master WHERE name='round_outbox'").toArray().length)return;
+    const {appendServerRecord}=await import('./saves.mjs');
+    for(const row of sql.exec('SELECT * FROM round_outbox LIMIT 100').toArray()){
+      try{await appendServerRecord(this.env,row.player,this.game,row.key,JSON.parse(row.value));sql.exec('DELETE FROM round_outbox WHERE id=?',row.id);}
+      catch(error){this.say({ev:'record-retry',error:String(error)});this.armRoom(Date.now()+60000);return;}
+    }
+  }
   queueFunctionEvent(type,data) {
     if(!this.env.DB || this.env.HOMIE_PREVIEW==='1' || !this.ctx.storage.sql) return;
     this.ctx.waitUntil((async()=>{
@@ -1928,6 +1955,7 @@ export class Table {
 
   /** The alarm: the house guides' brains decide (worker/agents.mjs), then the day's usage is written. */
   async alarm() {
+    await this.flushRoundRecords();
     await this.flushFunctionEvents();
     // A brain that throws never takes the room with it: the alarm is not retried, the guides answer from the floor.
     try { if (this.house) await this.house.onAlarm(); } catch (error) { try { console.log(JSON.stringify({ ev: 'brain-alarm-failed', room: this.code, error: String(error?.stack ?? error).slice(0, 400) })); } catch { /* no console */ } }

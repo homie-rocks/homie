@@ -602,7 +602,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
   // studio.json site.order: the catalogue's order is every listing's order.
   const shown = orderGames(all.filter((g) => existsSync(join(dist, 'games', g.id, 'index.html'))), s.order, log);
   // Server-hosted games: what this build made, and for a one-game build what the catalogue before it said of the others.
-  const rulesOf = new Map(ruled.map((r) => [r.id, { host: r.settings.host, offline: r.settings.offline, tickHz: r.settings.tickHz, inputHz: r.settings.inputHz, contract: r.schema.contract, build: r.build, stateHash: r.stateHash, rounds: r.rounds }]));
+  const rulesOf = new Map(ruled.map((r) => [r.id, { host: r.settings.host, offline: r.settings.offline, tickHz: r.settings.tickHz, inputHz: r.settings.inputHz, contract: r.schema.contract, build: r.build, stateHash: r.stateHash, rounds: r.rounds, ...(r.schema.records?{records:true}:{}) }]));
   if (only) for (const row of readJson(join(dist, 'games.json'))?.games ?? []) if (row?.room?.contract && row.id !== only && !rulesOf.has(row.id)) rulesOf.set(row.id, row.room);
   // What each game's build is (its landing's own pictures are not part of it): the digest the manifest names.
   const builds = {};

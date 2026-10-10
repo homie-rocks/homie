@@ -85,6 +85,7 @@ export async function writeSaves(env, player, game, { set = [], del = [] } = {})
   const at = Date.now();
   for (const item of items) {
     const key = String(item?.key ?? '');
+    if(key.startsWith('server:')){results.push({key,ok:false,error:'authority',message:'This record is written by the game server'});continue;}
     if (!SAVE_KEY.test(key)) { results.push({ key, ok: false, error: 'key', message: 'a save key is 1 to 64 letters, digits, _ . : or -' }); continue; }
     const base = item.base === undefined || item.base === null ? null : Math.floor(Number(item.base));
     if (base !== null && !(base >= 0)) { results.push({ key, ok: false, error: 'base', message: 'base is the version the change was made from (0 when the key is new)' }); continue; }
@@ -148,7 +149,7 @@ export async function writeSaves(env, player, game, { set = [], del = [] } = {})
 export function wipeStatements(env, player, game, keep = []) {
   const kept = (Array.isArray(keep) ? keep : []).filter((k) => SAVE_KEY.test(String(k))).slice(0, SAVE_LIMITS.keys);
   const marks = kept.map((_, i) => `?${i + 3}`).join(', ');
-  return env.DB.prepare(`DELETE FROM saves WHERE player = ?1 AND game = ?2${kept.length ? ` AND key NOT IN (${marks})` : ''} RETURNING key, value, blob`).bind(player, game, ...kept);
+  return env.DB.prepare(`DELETE FROM saves WHERE player = ?1 AND game = ?2 AND key NOT LIKE 'server:%'${kept.length ? ` AND key NOT IN (${marks})` : ''} RETURNING key, value, blob`).bind(player, game, ...kept);
 }
 
 export async function wipeSaves(env, player, game, { keep = [] } = {}) {
@@ -288,4 +289,21 @@ export async function adoptStatements(env, from, to) {
     ],
     after: () => dropBlobs(env, clash.map(blobKey)),
   };
+}
+
+/** Server-only, idempotent bounded round receipts. Optimistic versions also
+ * serialize simultaneous rooms without dropping either room's result. */
+export async function appendServerRecord(env,player,game,key,record){
+ if(!key.startsWith('server:')||!SAVE_KEY.test(key)||typeof record.id!=='string')throw new Error('invalid server record');
+ for(let attempt=0;attempt<16;attempt++){
+  const old=await getSave(env,player,game,key),matches=Array.isArray(old.value?.matches)?old.value.matches:[];
+  if(matches.some(r=>r.id===record.id))return;
+  const kept=[record,...matches].sort((a,b)=>b.endedAt-a.endedAt||a.id.localeCompare(b.id)).slice(0,100);
+  let value=JSON.stringify({v:1,matches:kept}),bytes=bytesOf(value);
+  while(bytes>SAVE_LIMITS.valueBytes&&kept.length>1){kept.pop();value=JSON.stringify({v:1,matches:kept});bytes=bytesOf(value);}
+  if(bytes>SAVE_LIMITS.valueBytes)throw new Error('server record size');
+  const result=old.version?await env.DB.prepare('UPDATE saves SET value=?4,bytes=?5,version=version+1,updated_at=?6 WHERE player=?1 AND game=?2 AND key=?3 AND version=?7 RETURNING version').bind(player,game,key,value,bytes,Date.now(),old.version).first():await env.DB.prepare('INSERT INTO saves(player,game,key,value,bytes,version,updated_at,blob) VALUES(?1,?2,?3,?4,?5,1,?6,0) ON CONFLICT(player,game,key) DO NOTHING RETURNING version').bind(player,game,key,value,bytes,Date.now()).first();
+  if(result)return;
+ }
+ throw new Error('server record conflict; retry the durable outbox');
 }

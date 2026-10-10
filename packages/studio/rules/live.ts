@@ -1,22 +1,25 @@
+import { rayQuery, raySnapshot, type QueryTarget } from './query.ts';
 import { overlapsTerrain } from './terrain.ts';
 import { nearbyMap } from './map-index.ts';
 /** Declared collision geometry, shared by authority and prediction. Entity fields
  * own its lifetime and dimensions; this projection contains no gameplay state. */
-import type { Vec3, ColliderDef } from './rules.ts';
+import type { Vec3, ColliderDef, QueryDef } from './rules.ts';
 import type { MapShapes } from './math.ts';
 import { charge, own } from './guard.ts';
 import { castMap3, solidAt, type BodyShape } from './collision.ts';
 import { sweepMap, rayBox, rayCircle } from './math.ts';
 
-export type ColliderRow = [string, string, number, number, number, number, number, number];
+export type ColliderRow = [string, string, number, number, number, number, number, number, {kind: string; query?: QueryDef; fields: Record<string, number | string | boolean>}?];
 export type CollisionRevision = [number, number, ColliderRow[]];
-export function colliderRow(id: string, at: Vec3, body: BodyShape, def: ColliderDef, fields: Record<string, unknown>): ColliderRow | null {
+export function colliderRow(id: string, at: Vec3, body: BodyShape, def: ColliderDef, fields: Record<string, unknown>, kind?: string, query?: QueryDef): ColliderRow | null {
   const opts = def === true ? {} : def;
   if (opts.enabled && fields[opts.enabled] !== true) return null;
   const size = opts.size ? fields[opts.size] as Vec3 : null;
   const x = size ? size.x : body.radius * 2, y = size ? size.y : body.radius * 2, z = size ? size.z : body.height || body.radius * 2;
   if (![x, y, z].every(Number.isFinite) || x <= 0 || y <= 0 || z < 0) return null;
-  return [id, size ? 'box' : body.shape, at.x, at.y, at.z, x, y, z];
+  const row: ColliderRow = [id, size ? 'box' : body.shape, at.x, at.y, at.z, x, y, z];
+  if(kind) row.push({kind, ...(query?{query}:{}), fields:Object.fromEntries((opts.fields ?? []).filter(name=>['number','string','boolean'].includes(typeof fields[name])).map(name=>[name,fields[name]])) as Record<string,number|string|boolean>});
+  return row;
 }
 export function colliderSolid(row: ColliderRow): ReturnType<typeof solidAt> {
   const [, shape, x, y, z, w, d, h] = row;
@@ -26,6 +29,10 @@ export function colliderSolid(row: ColliderRow): ReturnType<typeof solidAt> {
 export function castCollider2(row: ColliderRow, p: Vec3, d: Vec3, radius: number) {
   const solid = colliderSolid(row);
   return row[1] === 'box' ? rayBox(p.x,p.y,d.x,d.y,solid.min,solid.max,radius) : rayCircle(p.x,p.y,d.x,d.y,row[2],row[3],row[5]/2+radius);
+}
+const rowsOf = new WeakMap<object, readonly ColliderRow[]>();
+export function collisionTargets(map: MapShapes): QueryTarget[] {
+  return (rowsOf.get(map) ?? []).map(row=>({id:row[0],kind:row[8]?.kind??'',query:row[8]?.query,fields:row[8]?.fields??{},geometry:true,solid:colliderSolid(row),at:{x:row[2],y:row[3],z:row[4]}}));
 }
 export function collisionMap(map: MapShapes, rows: readonly ColliderRow[]): MapShapes {
   if (!rows.length) return map;
@@ -37,7 +44,9 @@ export function collisionMap(map: MapShapes, rows: readonly ColliderRow[]): MapS
     else if (shape === 'sphere') spheres.push({ at: { x, y, z: z + w / 2 }, r: w / 2, id } as any);
     else capsules.push({ at, r: w / 2, height: h, id } as any);
   }
-  return { bounds: map.bounds, staticMap: map, boxes, circles, spheres, capsules };
+  const combined = { bounds: map.bounds, staticMap: map, boxes, circles, spheres, capsules };
+  rowsOf.set(combined, rows);
+  return combined;
 }
 /** Latest known revision at the requested tick. Unknown future edits are never
  * guessed: a later snapshot rebases the body and replays its pending inputs. */
@@ -45,14 +54,17 @@ export function revisionAt(history: readonly CollisionRevision[], tick: number):
   for (let i = history.length - 1; i >= 0; i--) if (history[i][1] <= tick) return history[i];
   return undefined;
 }
-export function collisionQueries(map: () => MapShapes, shape: () => BodyShape, dims: number): object {
+export function collisionQueries(map: () => MapShapes, shape: () => BodyShape, dims: number, self: () => string | undefined = () => undefined): object {
   const position = (body: unknown): Vec3 => {
     const p = own(body, 'pos');
     const n = (k: string): number => { const v = own(p, k); return typeof v === 'number' && Number.isFinite(v) ? Math.fround(v) : 0; };
     return { x: n('x'), y: n('y'), z: n('z') };
   };
   return {
-    sweep: (body: unknown, delta: unknown) => sweepMap(map(), body, delta, shape().radius, dims, shape()),
+    ray: (from: unknown, direction: unknown, max: unknown, options?: unknown) => {const m=map();return rayQuery(m.staticMap??m,collisionTargets(m),dims,from,direction,max,options,self())[0];},
+    rays: (options?: unknown) => {const m=map();return raySnapshot(m.staticMap??m,collisionTargets(m),dims,options,self());},
+    rayAll: (from: unknown, direction: unknown, max: unknown, options?: unknown) => {const m=map();return rayQuery(m.staticMap??m,collisionTargets(m),dims,from,direction,max,options,self(),true);},
+    sweep: (body: unknown, delta: unknown, options?: unknown) => sweepMap(map(), body, delta, shape().radius, dims, shape(), options),
     support: (body: unknown, distance: unknown = 0.002) => {
       charge(20);
       const p = position(body), m = map();

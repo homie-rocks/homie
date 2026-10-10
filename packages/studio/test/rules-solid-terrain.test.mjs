@@ -68,3 +68,13 @@ test('the reference discrete rejection policy stops at -3.000 m using the same c
  for(let tick=0;tick<20;tick++){const before=b.pos;if(L.M.sweepMap(map,b,{x:.2,y:0,z:0},.42,3,capsule))b.pos=before;}
  close(b.pos.x,-3,.000001);
 });
+
+test('vertical capsule support agrees with the general rounded cast at seeded rims and overlaps',async()=>{
+ const L=await kit();let seed=4511;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+ for(let n=0;n<300;n++){
+  const map=L.R.compileMap({bounds,heightTiles:[{at:[0,0,0],size:[.25+random()*4,.25+random()*4],heights:[random()*4,random()*4,random()*4,random()*4],base:0,diagonal:n%2?'00-11':'10-01'}]});
+  const pos={x:-.5+random()*5,y:-.5+random()*5,z:-2+random()*8},z=-.01-random()*10;
+  const vertical=sweep(L,map,{...pos},{x:0,y:0,z}),general=sweep(L,map,{...pos},{x:1e-13,y:0,z});
+  close(vertical.pos.z,general.pos.z,1e-5);assert.equal(!!vertical.hit,!!general.hit);
+ }
+});
