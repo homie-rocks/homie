@@ -134,7 +134,7 @@ function errorText(error: unknown): string {
 export interface SavedCore {
   v: number; tick: number; epoch: number; rng: number; nextId: number; seq: number;
   round: [number, number, number, number]; overAt: number; match: [number, number]; trips: number;
-  shared: unknown[]; policy: CorePolicy; intent?: [number, number];
+  shared: unknown[]; policy: CorePolicy; intent?: [number, number, number?];
   history?: [number, [string, number, number, number, number][]][];
   asks: PendingAsk[];
   guideViews: [number, Record<string, unknown>][];
@@ -1181,7 +1181,7 @@ export function createCore(c: Compiled, opts: { label?: (seat:number,driver:Driv
     return {
       v: SAVE_REVISION, tick, epoch, rng, nextId, seq, round: [round.n, round.phase === 'live' ? 1 : 0, round.endsAt, round.startedAt], overAt, match: [playing, restartAt], trips,
       ...(historyTicks?{history:poseHistory.map(([at,rows])=>[at,rows.map(row=>[...row])] as SavedCore['history'])}:{}),
-      shared: packFields(c.shared, shared, dims), policy: { ...policy }, intent: [endAsked ? 1 : 0, finishing ? 1 : 0, ...(restartAsked ? [1] : [])], asks: pendingAsks, guideViews: [...guideViews],
+      shared: packFields(c.shared, shared, dims), policy: { ...policy }, intent: restartAsked ? [endAsked ? 1 : 0, finishing ? 1 : 0, 1] : [endAsked ? 1 : 0, finishing ? 1 : 0], asks: pendingAsks, guideViews: [...guideViews],
       ents: [...ents.values()].map(saveEnt), spawns: spawns.map(saveEnt),
       seats: [...seats.values()].map((s) => [s.seat, s.driver, s.owner, s.id, s.away ? 1 : 0]),
       queue: queue.map((q) => [q.due, q.from, q.fromId, q.seq, q.to, q.kind, q.ev, q.data, q.at, q.builtIn ? 1 : 0]),
