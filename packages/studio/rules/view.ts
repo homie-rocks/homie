@@ -309,7 +309,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   /** The game's guarded `move` for one tick, counted as the server counts it, with the result rounded as the server rounds it. */
   function runMove(kindName: string, body: { pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean; motion: Record<string, unknown> }, input: Readonly<Record<string, unknown>>, t: number): typeof body {
     const fn = moves[kindName];
-    if (!fn) return body;
+    if (!fn || (kindOf.get(kindName)?.control && !body.motion[kindOf.get(kindName)!.control!])) return body;
     moveTick = t;
     // Like snapshot unpacking, prepare the bounded geometry outside the handler
     // quota. Authority debits projection once per tick, not once per mover.
@@ -584,6 +584,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const server = latest.ents.get(mine.id);
     if (!server) return null;
     const kind = kindOf.get(mine.kind);
+    if (kind?.control && !server.motion[kind.control]) return entityOf(server, true);
     let pos = mine.pos;
     let heading = mine.heading;
     let velocity = mine.vel, grounded = mine.grounded, motion = mine.motion;

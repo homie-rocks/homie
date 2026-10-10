@@ -834,3 +834,19 @@ and scalar fields accompany collision revisions, including outside visual
 interest, so a predicted geometry filter has the same data as authority.
 Movement cannot query fighters or award damage. These APIs do not implement lag
 compensation: they query the current authoritative or presented world.
+
+### Consent before driving an inherited bot
+
+A player's declaration may set `control: 'accepted'`, naming a declared bit in
+`motion`. When false, authority calls `think` even for a present person, and the
+view draws the authoritative body without predicting that person's movement.
+Commands remain available: validate an explicit consent command and set the bit
+true. Initialize it on arrival and reset it in `on.takeover` when appropriate.
+The server still owns driver/seat identity; this flag only controls input.
+
+Set `takeover: 'fitness'` to name a numeric field used when selecting a fill bot.
+The highest value wins (equal values use the highest seat). Update it in rules
+from health, position or whatever makes a body suitable. Reserved companions
+never yield. The selected entity keeps its ID, inventory and all state; only its
+seat and driver change. A displaced bot retains its own state at the donor's old
+seat. Without this declaration, existing seat-based selection is unchanged.

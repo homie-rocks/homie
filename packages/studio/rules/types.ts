@@ -55,7 +55,7 @@ export type RoomEvents<E = Record<string, never>> = RoundEvents & { seatJoined: 
 export type RoundEvents = { roundStart: { n: number }; roundOver: { n: number; results: readonly { seat: number; id: string; driver: 'person' | 'bot' | 'ai'; score: number; place: number }[] } };
 type GuideWorld<W> = Pick<W, Extract<keyof W, 'tick' | 'dt' | 'ticks' | 'math' | 'map' | 'tune' | 'stage' | 'level' | 'levelMax' | 'guideLevel' | 'guideSeats' | 'kids' | 'levelSet' | 'round' | 'shared' | 'near' | 'inBox' | 'ray'>>;
 export type Entity<W, S, I, E, C, V, Answer = BuiltIns['answer'], G = Goal, A = GuideRequest, D = GuideDecision> = {
-  player?: true | { away?: 'neutral' | 'think'; leave?: 'despawn' | 'bot' }; fields?: Fields; motion?: Fields; input?: Fields; body?: BodyDef; collider?: ColliderDef; query?: QueryDef;
+  player?: true | { away?: 'neutral' | 'think'; leave?: 'despawn' | 'bot'; control?: string; takeover?: string }; fields?: Fields; motion?: Fields; input?: Fields; body?: BodyDef; collider?: ColliderDef; query?: QueryDef;
   tick?: (world: W, self: S) => void;
   think?: (world: W, self: S) => Partial<I>;
   on?: { [K in keyof (Omit<E, keyof BuiltIns> & Omit<BuiltIns<E>, 'answer'> & { answer: Answer })]?: (world: W, self: S, event: EventData<(Omit<E, keyof BuiltIns> & Omit<BuiltIns<E>, 'answer'> & { answer: Answer })[K]>) => void };
