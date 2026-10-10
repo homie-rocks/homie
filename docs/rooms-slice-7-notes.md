@@ -4,7 +4,75 @@ Slice 7 moves the remaining starters to server-run rules and adds the third
 dimension to the shared movement runtime. The milestone design is the authority;
 the game skill belongs to slice 8 and is not changed here.
 
-## Final verification
+## 0.40.0 release-gate repair
+
+Rebased onto main's #81 (`39f2cd9`), retaining its prediction history-boundary,
+clock-recalibration and carried-offset fixes and virtual-time test matrix.
+Studio and all plugin manifests now name 0.40.0. PR #78 owns 0.39.0; its
+changelog section is not on this base, so 0.40.0 sits directly above 0.38.0.
+The earlier measurements below describe earlier commits, not this final gate.
+The root test command is restored to main's normal parallel runner; the old
+serial/heap-cap workaround for real-time matrices is no longer needed. The
+in-progress serial validation was stopped to test this actual release command.
+
+The shipped starter matrix now runs 54 deterministic cases: three starters,
+50/150/300 ms RTT, 2%/10% loss, and seeds 417/1/2026. Each opens two fresh
+views and a real host/relay implementation on virtual time, with independent
+packet streams per connection, direction and message kind. Drawing intervals
+cycle through 16/16/33/5 ms. It checks initial response, continuous position,
+unit facing, remote poses, jump/landing, stable clocks and no correction snaps.
+Per-case pose digests make repeated runs comparable. Later direction changes
+can legitimately hit a wall or a knockback hit-stop; initial response is checked
+in clear space, and continued movement is checked across the whole path.
+
+Three Chrome release smokes (one per starter at 90 ms without loss) retain real
+WebSockets, rAF response, actual canvas pixel checks, remote poses and Hero's
+jump/landing. Exact numerical correction and clock invariants belong to the
+virtual matrix. The original eighteen wall-clock delay/loss cases remain in
+`npm run test:rules:extended`, now using the same independent seeded shaper.
+The existing Chrome/Node 2,400-tick replay comparisons retain their virtual
+clocks in the gate: they check agreement across JavaScript runtimes.
+
+The previous [Node 24 CI failure](https://github.com/homie-rocks/homie/actions/runs/38003994918/job/114068469637)
+was Hero at 50 ms/10%: one correction snap versus the asserted zero, while its
+maximum drawn step was 0.154 m, all recorded inputs responded on the first frame,
+and there were no rebases. That count invariant is now tested on virtual time.
+The same job also hit the touch-receipt race already fixed by main's #81;
+that fix is retained. The new deterministic faults below are separate findings,
+not a claim to have reconstructed the old wall-clock packet ordering.
+
+The matrix found two real faults:
+
+- Gem Rush 3D and Hero Rush 3D chased an absolute knock endpoint after collision.
+  Blocked travel accumulated, then burst around the obstacle. Each tick now
+  spends only its incremental eased travel. The focused obstacle regressions
+  fail on the old moves (Gem tick 248: 0.489 m versus 0.446 m available; Hero
+  tick 249: 0.826 m versus 0.220 m available) and pass with the fix.
+- A fresh jump/turn replaced the fractional preview using time already elapsed
+  in that tick. Hero seed 1 at 150 ms/2% moved 0.318 m in a 5 ms drawing frame.
+  Input now preserves the pose at the instant of change through the bounded
+  blend, then advances with elapsed time. Four tick-phase regressions require
+  no instantaneous displacement and response within the next 5 ms. Carried
+  blends are coalesced so changing analogue input cannot grow a queue per frame.
+
+Local repeat verification: **3 × 54 = 162 deterministic cases passed**, with
+identical pose digests and complete probe receipts across all three runs.
+They took 134.1, 72.2 and 95.4 seconds under varying concurrent machine load.
+A further Node 24.21.0 pass also passed all 54 cases with identical receipts
+to Node 22.23.3. The [matrix receipt](rooms-slice-7-release-matrix.json) records
+all 54 digests.
+The final three Chrome canvas smokes passed in 80.0 seconds. The existing
+182-case view suite and all four new tick-phase regressions passed; the nine
+focused crossing/score/obstacle/input checks and TypeScript build passed too.
+
+Final root `npm test` with main's parallel command: **2,318 passed, 12 skipped,
+0 failed**, 2,330 tests, in **975.7 seconds (16.3 minutes)**. The skips require
+optional local Wrangler, stripe-mock or the Miniflare environment setting; CI
+starts stripe-mock. In that loaded full run the three starter Chrome smokes took
+92.1 seconds and main's four shared prediction smokes took 121.8 seconds.
+Changelog validation against `origin/main` and `git diff --check` also passed.
+
+## Earlier verification (before the release-gate repair)
 
 Rebased onto merged Slice 6, `origin/main` at `91be345`; final fetch confirmed
 that base was still current. Studio 0.39.0 / plugin 0.40.0 are the next releases.

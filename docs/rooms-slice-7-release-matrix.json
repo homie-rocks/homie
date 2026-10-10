@@ -1,0 +1,396 @@
+{
+  "base": "39f2cd9d030376b68835caab6508b995b5c5480b",
+  "casesPerRun": 54,
+  "runs": 3,
+  "identicalReceipts": true,
+  "durationSeconds": [
+    134.089432417,
+    72.209909541,
+    95.439676917
+  ],
+  "cases": [
+    {
+      "id": "gem-rush-3d",
+      "delay": 50,
+      "loss": 0.02,
+      "seed": 417,
+      "digest": "948668e95de25dc9232165af7638d259b04e3dab42aeb14fad1ccb87614e8fa9"
+    },
+    {
+      "id": "gem-rush-3d",
+      "delay": 50,
+      "loss": 0.02,
+      "seed": 1,
+      "digest": "5dbd87139eb615ca08a7ea7e68f0f11beb464dea945d4ffe43dee0f94fac130a"
+    },
+    {
+      "id": "gem-rush-3d",
+      "delay": 50,
+      "loss": 0.02,
+      "seed": 2026,
+      "digest": "30446bd67a78e7208007b4eaf51c7ff202d808a3459bd86bbb8015037b1a4453"
+    },
+    {
+      "id": "gem-rush-3d",
+      "delay": 50,
+      "loss": 0.1,
+      "seed": 417,
+      "digest": "6d3dda2764ea30e4b2e306b933df719e05fc84f7193734d595d06fda1baf0b90"
+    },
+    {
+      "id": "gem-rush-3d",
+      "delay": 50,
+      "loss": 0.1,
+      "seed": 1,
+      "digest": "2882023478addaf2fd8442b256ba04eef3b159c13be8bbea678170c007102c40"
+    },
+    {
+      "id": "gem-rush-3d",
+      "delay": 50,
+      "loss": 0.1,
+      "seed": 2026,
+      "digest": "943f597cefaa432ae4da8728973137acbadf77406b6aa7c02477fa06b43c7dbb"
+    },
+    {
+      "id": "gem-rush-3d",
+      "delay": 150,
+      "loss": 0.02,
+      "seed": 417,
+      "digest": "a743608ec2d1e052b21142b86a7a26ba42276547262bb2c5b9f4c2825f17a340"
+    },
+    {
+      "id": "gem-rush-3d",
+      "delay": 150,
+      "loss": 0.02,
+      "seed": 1,
+      "digest": "73771c9a3e5e01ff7f8089e2e1304b49dd575ff2e993044e2c3f36efc9761ae8"
+    },
+    {
+      "id": "gem-rush-3d",
+      "delay": 150,
+      "loss": 0.02,
+      "seed": 2026,
+      "digest": "4631fbe2ef27ba80a7a5b5f89c6f9b51728cbc996f0d816f2c902b8da860fd79"
+    },
+    {
+      "id": "gem-rush-3d",
+      "delay": 150,
+      "loss": 0.1,
+      "seed": 417,
+      "digest": "f5665c679b89a3322877fa7d266d9cab871fcdeddaadf517f01b35f2744a27ad"
+    },
+    {
+      "id": "gem-rush-3d",
+      "delay": 150,
+      "loss": 0.1,
+      "seed": 1,
+      "digest": "7ecbafa13be3bc8c9ab40cea2497dd7ffa35edf16da715229548afce408423ac"
+    },
+    {
+      "id": "gem-rush-3d",
+      "delay": 150,
+      "loss": 0.1,
+      "seed": 2026,
+      "digest": "12189df80e7dcadc05b8a07513495886b2ca2d0e7e5b274d8771f2cf99d261b4"
+    },
+    {
+      "id": "gem-rush-3d",
+      "delay": 300,
+      "loss": 0.02,
+      "seed": 417,
+      "digest": "566a87cdf715374051902e06d1f99733c7ca02b8afc6544569895537a6a5b7c8"
+    },
+    {
+      "id": "gem-rush-3d",
+      "delay": 300,
+      "loss": 0.02,
+      "seed": 1,
+      "digest": "fdf93fa68dcc5abac8b74e501fd0391b22410cc367f0b4561a9b5e5933f5c92c"
+    },
+    {
+      "id": "gem-rush-3d",
+      "delay": 300,
+      "loss": 0.02,
+      "seed": 2026,
+      "digest": "40fb81e56b8001c7b64f77dc0125bd5d32127bc9e7d826526f42e4a2a31eed97"
+    },
+    {
+      "id": "gem-rush-3d",
+      "delay": 300,
+      "loss": 0.1,
+      "seed": 417,
+      "digest": "488fa0d3b84ecfceb87531e0aa56059621d00d5e2f24929ed7c516849eb15b6e"
+    },
+    {
+      "id": "gem-rush-3d",
+      "delay": 300,
+      "loss": 0.1,
+      "seed": 1,
+      "digest": "e449a65d3b074965ff7a6dfb4e0bb8d46844f1f20f199454751bc6f30dbacab1"
+    },
+    {
+      "id": "gem-rush-3d",
+      "delay": 300,
+      "loss": 0.1,
+      "seed": 2026,
+      "digest": "8b7ae97a624a23157bafac88170ee9b631a5994db4eea2722640c35919983464"
+    },
+    {
+      "id": "hero-rush-3d",
+      "delay": 50,
+      "loss": 0.02,
+      "seed": 417,
+      "digest": "0e8778e84ad70376037a693bbb8f302c59a031e40ac3bca150205a683df0720c"
+    },
+    {
+      "id": "hero-rush-3d",
+      "delay": 50,
+      "loss": 0.02,
+      "seed": 1,
+      "digest": "990842cdf5ff021d0112612c686560991bd4f1a24011948106f2afccf0dbee27"
+    },
+    {
+      "id": "hero-rush-3d",
+      "delay": 50,
+      "loss": 0.02,
+      "seed": 2026,
+      "digest": "82270e03a792e0372c57ec4f11c2ca0818049f14c76bf753e93ea0b710f20338"
+    },
+    {
+      "id": "hero-rush-3d",
+      "delay": 50,
+      "loss": 0.1,
+      "seed": 417,
+      "digest": "73a08c2d366266cc188a5592189adf8899499726b583d2211b33399a477d253c"
+    },
+    {
+      "id": "hero-rush-3d",
+      "delay": 50,
+      "loss": 0.1,
+      "seed": 1,
+      "digest": "4dead1bb815e64f8c49265bb4b377c7fc7979482b7c25b2ab6292a258b5b7d8d"
+    },
+    {
+      "id": "hero-rush-3d",
+      "delay": 50,
+      "loss": 0.1,
+      "seed": 2026,
+      "digest": "44a557b2e029bb74c45e7053954d26aa7ccb88212bb1c833cbac8373244998ee"
+    },
+    {
+      "id": "hero-rush-3d",
+      "delay": 150,
+      "loss": 0.02,
+      "seed": 417,
+      "digest": "7ad5fd665047cac2b0a3304734688200cac171afa6a6627043981756f96b8adf"
+    },
+    {
+      "id": "hero-rush-3d",
+      "delay": 150,
+      "loss": 0.02,
+      "seed": 1,
+      "digest": "82f99cf1ad2550e140820732bd0de331257e3b6f00d7dc20805b2940464f5738"
+    },
+    {
+      "id": "hero-rush-3d",
+      "delay": 150,
+      "loss": 0.02,
+      "seed": 2026,
+      "digest": "aa56e781974043ee726a1d5ec8fde7722a8cccb11c8f3d9d27f1324c6dc2aee9"
+    },
+    {
+      "id": "hero-rush-3d",
+      "delay": 150,
+      "loss": 0.1,
+      "seed": 417,
+      "digest": "3a661c73750b65a993d53c89b39069ddb9cfc5b49101db5e596ec7deae733019"
+    },
+    {
+      "id": "hero-rush-3d",
+      "delay": 150,
+      "loss": 0.1,
+      "seed": 1,
+      "digest": "d0b80dba21dee41a8bec98fef2c910c7bf745f27f706aaa8e1f0ed57c453f246"
+    },
+    {
+      "id": "hero-rush-3d",
+      "delay": 150,
+      "loss": 0.1,
+      "seed": 2026,
+      "digest": "849fe54aeb3a15c618f976179a020ed36dee19dd125fe5aecc6a29cd99f9b632"
+    },
+    {
+      "id": "hero-rush-3d",
+      "delay": 300,
+      "loss": 0.02,
+      "seed": 417,
+      "digest": "98be51445158fb51f32eba18d4ad3fa706c0f5eaf6b7e2016f7cfe591f44bd3b"
+    },
+    {
+      "id": "hero-rush-3d",
+      "delay": 300,
+      "loss": 0.02,
+      "seed": 1,
+      "digest": "78b0de7030878cdb89cfe4389885d0d44889eef971d56231e89e7e127ab66753"
+    },
+    {
+      "id": "hero-rush-3d",
+      "delay": 300,
+      "loss": 0.02,
+      "seed": 2026,
+      "digest": "6da4cedb5e2b9367d584e3e623325e43d312f1e9e89be158d8370fa1cd6ccfc2"
+    },
+    {
+      "id": "hero-rush-3d",
+      "delay": 300,
+      "loss": 0.1,
+      "seed": 417,
+      "digest": "5a424563f1336f8b3ebe1ffd33aac2e6a916c5b6a1117d8c30020db23363a922"
+    },
+    {
+      "id": "hero-rush-3d",
+      "delay": 300,
+      "loss": 0.1,
+      "seed": 1,
+      "digest": "68640b48586d107b8c6e7ac7bc01d62ef99f636ea92e79b66b5722c63898fa95"
+    },
+    {
+      "id": "hero-rush-3d",
+      "delay": 300,
+      "loss": 0.1,
+      "seed": 2026,
+      "digest": "2ed3fc6fc12d11f4864a39e58c55096947265be314319a8097221d47c1c5cd8a"
+    },
+    {
+      "id": "ember-vale",
+      "delay": 50,
+      "loss": 0.02,
+      "seed": 417,
+      "digest": "a6681e069f6c1f07d6a35624f7b32e275301531a48f88de143aaa93cda747954"
+    },
+    {
+      "id": "ember-vale",
+      "delay": 50,
+      "loss": 0.02,
+      "seed": 1,
+      "digest": "639f07a4861511aa8033428908e7dfdc54ab651dd872c8fb8f251f81fa265922"
+    },
+    {
+      "id": "ember-vale",
+      "delay": 50,
+      "loss": 0.02,
+      "seed": 2026,
+      "digest": "81387bc22815e64bc04196cb9dfe979cc7ff0d16b7613f8e72c9641df548e008"
+    },
+    {
+      "id": "ember-vale",
+      "delay": 50,
+      "loss": 0.1,
+      "seed": 417,
+      "digest": "161044936ac52e28b00a426a27e4f55a411bd4b1bb0091098bf82f30c34c57f0"
+    },
+    {
+      "id": "ember-vale",
+      "delay": 50,
+      "loss": 0.1,
+      "seed": 1,
+      "digest": "50075091c2e61d619e8b6eebb6072068e58a441d1bd93c220f02c93e5cf23a1c"
+    },
+    {
+      "id": "ember-vale",
+      "delay": 50,
+      "loss": 0.1,
+      "seed": 2026,
+      "digest": "a7ba3b37c266580e308613ded022f6450d637762c9066cf2abca257863a8a471"
+    },
+    {
+      "id": "ember-vale",
+      "delay": 150,
+      "loss": 0.02,
+      "seed": 417,
+      "digest": "11bc3486a57b8dd4ae590c90ed8cb3a40720113be792ede82c3e5906562b3947"
+    },
+    {
+      "id": "ember-vale",
+      "delay": 150,
+      "loss": 0.02,
+      "seed": 1,
+      "digest": "1484a5fcf29349a899996198070cf6cce9f1529e37183c8227457da1dcb496e8"
+    },
+    {
+      "id": "ember-vale",
+      "delay": 150,
+      "loss": 0.02,
+      "seed": 2026,
+      "digest": "bd3460fb7d15c9c1dfc5ad7c40fe63e330b7af4668fad641eb1fa445e400f126"
+    },
+    {
+      "id": "ember-vale",
+      "delay": 150,
+      "loss": 0.1,
+      "seed": 417,
+      "digest": "d2d6b40c2898fd697bc2cd060bff84610e3bed02bf009e5235b5624c0537f050"
+    },
+    {
+      "id": "ember-vale",
+      "delay": 150,
+      "loss": 0.1,
+      "seed": 1,
+      "digest": "7dd9edfe2ee10bd9cca04c32b42541b7aa11825606910a85896ea9181554f5ac"
+    },
+    {
+      "id": "ember-vale",
+      "delay": 150,
+      "loss": 0.1,
+      "seed": 2026,
+      "digest": "d18b3ad4107c860a6b5641a7d355677d02251a469cf3dbdf7a22fedca104e311"
+    },
+    {
+      "id": "ember-vale",
+      "delay": 300,
+      "loss": 0.02,
+      "seed": 417,
+      "digest": "f58e4bfd2fd3997db66424aaabd466f06a712b07978dda38846a31820d9d77f3"
+    },
+    {
+      "id": "ember-vale",
+      "delay": 300,
+      "loss": 0.02,
+      "seed": 1,
+      "digest": "df59604f1b4b5011f583404ae28687edda1e6d3ad3b5f28f9af255a28e7641c2"
+    },
+    {
+      "id": "ember-vale",
+      "delay": 300,
+      "loss": 0.02,
+      "seed": 2026,
+      "digest": "ae85d899b00795b94605a1de4c732237ab58bfedcb272693df6bedac258ae493"
+    },
+    {
+      "id": "ember-vale",
+      "delay": 300,
+      "loss": 0.1,
+      "seed": 417,
+      "digest": "2e5b1da5fe43f923b67e12d085ffb57527e57d84218e8a4e695e535be19f3af6"
+    },
+    {
+      "id": "ember-vale",
+      "delay": 300,
+      "loss": 0.1,
+      "seed": 1,
+      "digest": "5331ae758b451385b87bf65c9b5aed8a5e6085fb7c6332c54525bc3f832dc12b"
+    },
+    {
+      "id": "ember-vale",
+      "delay": 300,
+      "loss": 0.1,
+      "seed": 2026,
+      "digest": "0b923b85199366ce4be32f842efd5a4e645f25df171b90f383b89b384dd4779c"
+    }
+  ],
+  "node24": {
+    "version": "24.21.0",
+    "cases": 54,
+    "identicalToNode22": true
+  }
+}

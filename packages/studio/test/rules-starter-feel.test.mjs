@@ -67,3 +67,25 @@ for (const id of ['gem-rush-3d', 'hero-rush-3d', 'ember-vale']) test(`${id}: kid
     assert.equal(result.self.noticed, 100, 'kids preset never reacts faster than level three');
   }
 });
+
+for (const id of ['gem-rush-3d', 'hero-rush-3d']) test(`${id}: a blocked knock spends its travel instead of bursting around the obstacle`, async () => {
+  const dir = join(PKG, 'starters', id), L = await loadGame(scratch, dir, id + '-blocked-knock');
+  const read = p => JSON.parse(readFileSync(join(dir, p), 'utf8'));
+  const c = L.R.compileRules(L.def, { map: L.R.compileMap(read('map/main.json')), tune: read('tunables.json'), seats: 8 }), k = c.kinds[0];
+  let tick = 244;
+  const ctx = L.M.moveContext({ tick: () => tick, tickHz: 20, tune: c.publicTune, map: c.map, name: 'main', spots: c.map.spots, radius: () => k.body.radius, shape: () => k.body, dims: c.dims });
+  const start = { x: 18.4553566, y: 11.7305613, z: 0 };
+  let body = { pos: start, vel: { x: 0, y: 0, z: 0 }, heading: { x: 1, y: 0, z: 0 }, grounded: true,
+    motion: { ...L.P.initFields(k.motion, c.dims), knockAt: 244.4, knockUntil: 252.8, knockFrom: start, knockDir: { x: .9567462, y: .2909238, z: 0 } } };
+  const eased = n => 1 - Math.pow(1 - Math.max(0, Math.min(1, (n - 244.4) / 8.4)), c.publicTune.knockEase);
+  let total = 0;
+  for (tick = 245; tick <= 252; tick++) {
+    const before = body.pos;
+    body = L.P.stepMove(k.move, body, { ax: 0, ay: 0 }, ctx, 125000, k.motion, c.dims, e => { throw e; });
+    const moved = Math.hypot(body.pos.x - before.x, body.pos.y - before.y);
+    const available = c.publicTune.knockDistance * ((tick === 252 ? 1 : eased(tick)) - eased(tick - 1));
+    assert.ok(moved <= available + .002, `tick ${tick}: moved ${moved} with only ${available} travel left in this step`);
+    total += moved;
+  }
+  assert.ok(total > .1 && total < c.publicTune.knockDistance - .1, 'the obstacle absorbs some of the knock');
+});

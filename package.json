@@ -33,9 +33,9 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "test": "npm run build && node --max-old-space-size=1536 --test --test-concurrency=1 packages/*/test/*.test.mjs scripts/*.test.mjs",
+    "test": "npm run build && node --test packages/*/test/*.test.mjs scripts/*.test.mjs",
     "test:plugin": "node --test plugins/homie/test/*.test.mjs",
-    "test:rules:extended": "RULES_EXTENDED=1 node --test packages/studio/test/rules-corpus.test.mjs packages/studio/test/rules-protocol-corpus.test.mjs packages/studio/test/rules-author-requests.test.mjs packages/studio/test/rules-boundaries.test.mjs packages/studio/test/rules-repeatability.test.mjs packages/studio/test/rules-prediction-chrome.test.mjs",
+    "test:rules:extended": "RULES_EXTENDED=1 node --test packages/studio/test/rules-corpus.test.mjs packages/studio/test/rules-protocol-corpus.test.mjs packages/studio/test/rules-author-requests.test.mjs packages/studio/test/rules-boundaries.test.mjs packages/studio/test/rules-repeatability.test.mjs packages/studio/test/rules-prediction-chrome.test.mjs packages/studio/test/rules-3d-prediction-chrome.test.mjs",
     "test:mod": "claude plugin test plugins/homie",
     "validate": "claude plugin validate . && claude plugin validate plugins/homie",
     "release:check": "node scripts/publish.mjs --check"

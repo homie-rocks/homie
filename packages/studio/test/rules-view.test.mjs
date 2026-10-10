@@ -1448,3 +1448,17 @@ test('a late fast knock does not double its drawn speed while a large correction
   assert.ok(Math.abs(a.me.pos.x - authoritative) < .001, 'the correction converges after the knock ends');
   assert.equal(globalThis.__homieNet.probe.prediction().snaps, 0);
 });
+
+for (const phase of [5, 17, 33, 45]) test(`fresh 3D input preserves the pose at a ${phase} ms tick phase`, async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, 20, 'pose');
+  const clock = virtualTime(t), r = rig(L, compiled);
+  const a = openRoom({ net: { config: cfg('Player'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(12000 + phase);
+  const before = a.me.pos;
+  a.input({ az: 127 });
+  assert.deepEqual(a.me.pos, before, 'changing the preview cannot apply new input to time already elapsed');
+  await clock.wait(5);
+  assert.ok(a.me.pos.z > before.z, 'the new input still moves on the first drawing frame');
+  assert.ok(a.me.pos.z - before.z <= .15, 'five milliseconds cannot draw most of a fifty-millisecond step');
+});

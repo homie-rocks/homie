@@ -17,7 +17,7 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
-## [0.39.0] - 2026-10-09
+## [0.40.0] - 2026-10-09
 
 **Plugin 0.40.0**
 
@@ -35,6 +35,7 @@ New 3D games keep their matches on the server and answer your controls immediate
 ### Fixed
 
 - Predicted movement respects the server's floor and ceiling, and catch-up animation follows the pose being drawn.
+- Knockback no longer stores blocked travel and bursts around obstacles. A jump or direction change partway through a tick preserves the current drawn position before advancing.
 
 ### Upgrade notes
 

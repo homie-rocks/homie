@@ -1,4 +1,5 @@
-/** The shipped rules/move, real Chrome paints and real WebSocket timers. Delay is added RTT; loss drops application frames. */
+/** Three release smokes prove rAF, real sockets and canvas pixels for the shipped moves.
+ * RULES_EXTENDED=1 runs the original 18-case wall-clock soak; the seeded virtual matrix owns correctness. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createServer } from 'node:http';
@@ -12,6 +13,8 @@ import { findChrome, chromeArgs } from '../lib/chrome.mjs';
 import { viewPlugin } from '../lib/rules-build.mjs';
 import { NetRoom } from '../worker/room.mjs';
 import { PKG, esbuildOf, loadGame, prepareRuntimeFixture } from './rules-kit.mjs';
+import { predictionShaper } from './prediction-shaper.mjs';
+const extended = process.env.RULES_EXTENDED === '1';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const quantile = (values, p) => [...values].sort((a,b)=>a-b)[Math.floor((values.length-1)*p)] ?? 0;
 
@@ -29,14 +32,15 @@ test('shipped starters: predicted 3D pose through delay and loss in two Chrome c
       writeFileSync(entry,`export {openRoom} from ${JSON.stringify(join(PKG,'rules/view.ts'))};`);
       await esbuild.build({stdin:{contents:`import 'homie:game';export {openRoom} from ${JSON.stringify(entry)};`,resolveDir:scratch},bundle:true,format:'esm',outfile:output,plugins:[viewPlugin(game,rules,entry)],logLevel:'silent'});
       const bundle=readFileSync(output);
-      for(const delay of [50,150,300]) for(const loss of [.02,.10]) await t.test(`${id} ${delay}ms ${loss*100}%`,async()=>{
+      for(const delay of extended ? [50,150,300] : [90]) for(const loss of extended ? [.02,.10] : [0]) await t.test(`${id} ${delay}ms ${loss*100}%`,async()=>{
         if(process.env.ROOMS_3D_FEEL_DELAY && delay!==Number(process.env.ROOMS_3D_FEEL_DELAY))return;
-        let rng=417;const random=()=>{rng=(Math.imul(rng,1664525)+1013904223)>>>0;return rng/4294967296;};
+        const packetDelay = predictionShaper({ delay, loss, seed: 417, jitter: extended });
         const timers=new Set(), contexts=[];
-        function shape(text,send){const m=JSON.parse(text), shaped=['in','snap'].includes(m.t);if(shaped&&random()<loss)return;const timer=setTimeout(()=>{timers.delete(timer);send(text)},delay/2*(.75+random()*.5));timers.add(timer);}
+        function shape(text,link,send){const ms=packetDelay(JSON.parse(text),link);if(ms===null)return;const timer=setTimeout(()=>{timers.delete(timer);send(text)},ms);timers.add(timer);}
         const server=createServer((req,res)=>{res.setHeader('content-type',req.url==='/view.js'?'text/javascript':'text/html');res.end(req.url==='/view.js'?bundle:'<canvas width="800" height="600"></canvas><script type="module">import {openRoom} from "/view.js";window.openRoom=openRoom;</script>')});
         const sockets=new WebSocketServer({server}), relay=new NetRoom({code:'r',rules:true,maxPlayers:8,tickHz:20});
-        sockets.on('connection',socket=>{const wire=relay.attach({send:text=>shape(text,x=>{if(socket.readyState===1)socket.send(x)}),close:(c,w)=>socket.close(c,w),buffered:()=>socket.bufferedAmount});socket.on('message',text=>shape(String(text),x=>wire.onMessage(x)));socket.on('close',()=>wire.onClose());});
+        let linkCount=0;
+        sockets.on('connection',socket=>{const link=linkCount++;const wire=relay.attach({send:text=>shape(text,`${link}:down`,x=>{if(socket.readyState===1)socket.send(x)}),close:(c,w)=>socket.close(c,w),buffered:()=>socket.bufferedAmount});socket.on('message',text=>shape(String(text),`${link}:up`,x=>wire.onMessage(x)));socket.on('close',()=>wire.onClose());});
         const host=L.H.createHost({game:id,compiled,send:m=>relay.hostFrame(m),random:()=>.37,clock:{now:Date.now,setTimer:setTimeout,clearTimer:clearTimeout}});relay.setServerHost(host);
         const beat=setInterval(()=>relay.tick(),250);server.listen(0,'127.0.0.1');await once(server,'listening');
         try {
@@ -53,8 +57,9 @@ test('shipped starters: predicted 3D pose through delay and loss in two Chrome c
                 const me=room.me;if(me){
                   if(pending){pending.frames++;if(Math.hypot(me.pos.x-pending.x,me.pos.y-pending.y,me.pos.z-pending.z)>.000001){responses.push({frames:pending.frames,ms:performance.now()-pending.at});pending=null;}}
                   let other=null;room.each(id==='ember-vale'?'hero':'runner',e=>{if(e.driver==='person'&&!e.mine)other={pos:e.pos,heading:e.heading,grounded:e.grounded};});
-                  if(started)samples.push({t,at:performance.now(),pos:me.pos,heading:me.heading,grounded:me.grounded,other});
-                  ctx.clearRect(0,0,800,600);ctx.fillStyle='#3b9061';ctx.fillRect(me.pos.x*25,me.pos.y*25-me.pos.z*30,12,12);
+                  const x=me.pos.x*25,y=me.pos.y*25-me.pos.z*30+50;
+                  ctx.clearRect(0,0,800,600);ctx.fillStyle='#3b9061';ctx.fillRect(x,y,12,12);
+                  if(started){const pixel=Array.from(ctx.getImageData(Math.floor(x)+6,Math.floor(y)+6,1,1).data);samples.push({t,at:performance.now(),pos:me.pos,heading:me.heading,grounded:me.grounded,other,pixel});}
                 }requestAnimationFrame(frame);
               }requestAnimationFrame(frame);
               window.begin=()=>{
@@ -75,8 +80,10 @@ test('shipped starters: predicted 3D pose through delay and loss in two Chrome c
           const heights=r.samples.map(s=>s.pos.z), remote=r.samples.filter(s=>s.other), landings=r.samples.slice(1).filter((s,i)=>s.grounded&&!r.samples[i].grounded).length;
           const row={id,delay,loss:loss*100,responses:r.responses,inputFrames:quantile(r.responses.map(x=>x.frames),.95),inputMs:quantile(r.responses.map(x=>x.ms),.95),frameP95Ms:quantile(gaps,.95),fps:1000/quantile(gaps,.5),corrections:r.prediction.count,maxCorrectionM:r.prediction.max,snaps:r.prediction.snaps,rebases:r.prediction.rebases-startup.rebases,maxStepM:Math.max(...steps.map(s=>s.distance)),peakM:Math.max(...heights),landings,remoteSamples:remote.length,remotePeakM:Math.max(...remote.map(s=>s.other.pos.z)),host:host.facts()};
           receipts.push(row);t.diagnostic(JSON.stringify(row));if(process.env.ROOMS_3D_FEEL_RECEIPT)writeFileSync(process.env.ROOMS_3D_FEEL_RECEIPT,JSON.stringify(receipts,null,2));
-          assert.ok(r.responses.length>=10);assert.equal(row.inputFrames,1,'first drawing frame responds');assert.equal(row.snaps,0,'ordinary corrections are eased');assert.equal(row.rebases,0,'steady calibrated clock');
-          assert.ok(steps.every(s=>s.distance<=32*s.ms/1000+.10),'continuous position through movement, knockback and landing: '+JSON.stringify(row));
+          assert.ok(r.responses.length>=10);assert.equal(row.inputFrames,1,'first drawing frame responds');// Exact correction/clock assertions live in the virtual matrix.
+          if(extended){assert.equal(row.snaps,0,'ordinary corrections are eased');assert.equal(row.rebases,0,'steady calibrated clock');}
+          if(extended) assert.ok(steps.every(s=>s.distance<=32*s.ms/1000+.10),'continuous position through movement, knockback and landing: '+JSON.stringify(row));
+          assert.ok(r.samples.length>100 && r.samples.every(s=>s.pixel.join(',')==='59,144,97,255'),'rAF paints the sampled pose into real canvas pixels');
           assert.ok(remote.length>100,'other person has interpolated poses');
           for(const s of r.samples)assert.ok(Math.abs(Math.hypot(s.heading.x,s.heading.y,s.heading.z)-1)<.001,'facing remains a unit direction');
           if(id==='hero-rush-3d'){assert.ok(row.peakM>.8);assert.ok(landings>=5);assert.ok(row.remotePeakM>.5);}

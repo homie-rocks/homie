@@ -227,9 +227,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         else {
           const length = Math.hypot(o.delta.x, o.delta.y, o.delta.z);
           const elapsed = Math.max(0, now - o.last);
-          const travel = Math.max(1, myKind()?.maxSpeed ?? 0) * elapsed / 1000;
-          const release = settled && catchTick === null ? Math.min(elapsed / predict.blendMs, length ? travel / length : 1) : 0;
-          const progress = length ? Math.min(distance(path, o.path), travel) * 0.8 / length : 1;
+          // A knock may travel faster than normal movement, and catch-up already accelerates it.
+          // Fading the offset must not add another fraction of that accelerated speed.
+          const allowance = length ? (myKind()?.maxSpeed ?? 0) * elapsed / 1000 / length : 1;
+          const release = settled && catchTick === null ? Math.min(allowance, elapsed / predict.blendMs) : 0;
+          const progress = length ? Math.min(allowance, distance(path, o.path) * 0.8 / length) : 1;
           const nominal = Math.max(0, Math.min(1, 1 - (now - o.at) / predict.blendMs));
           o.fade = Math.max(nominal, o.fade - Math.max(release, progress));
         }
@@ -698,8 +700,27 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       if (solo) { solo.input(s); return; }
       const kind = myKind() ?? schema.kinds.find((k) => k.player) ?? null;
       const next: Record<string, unknown> = {};
-      for (const [name, fd] of kind?.input ?? []) { if (fd.t === 'press') { if (s[name] === true || s[name] === 1) pressed.add(name); } else if (s[name] !== undefined) next[name] = s[name]; }
+      let changed = false;
+      for (const [name, fd] of kind?.input ?? []) {
+        if (fd.t === 'press') { if ((s[name] === true || s[name] === 1) && !pressed.has(name)) changed = true; }
+        else { if (s[name] !== undefined) next[name] = s[name]; if ((next[name] ?? fd.init) !== (sample[name] ?? fd.init)) changed = true; }
+      }
+      // A fresh control can replace a preview partway through a tick (especially
+      // a jump). Keep the pose at the instant of the press; only subsequent time
+      // may advance the new path, rather than drawing elapsed time with new input.
+      if (changed) pump();
+      const shown = changed ? meNow()?.pos : null;
+      for (const [name, fd] of kind?.input ?? []) if (fd.t === 'press' && (s[name] === true || s[name] === 1)) pressed.add(name);
       sample = next;
+      if (shown) {
+        const now = clock(), nextShown = meNow()?.pos;
+        if (nextShown && distance(shown, nextShown) > 0.00001) {
+          const carried = visualOffset(now);
+          // Coalesce the carried blend: analogue controls may change every frame.
+          offsets = [{ delta: { x: carried.x + shown.x - nextShown.x, y: carried.y + shown.y - nextShown.y, z: carried.z + shown.z - nextShown.z },
+            at: now, last: now, fade: 1, path: { x: nextShown.x - carried.x, y: nextShown.y - carried.y, z: nextShown.z - carried.z } }];
+        }
+      }
     },
     command(name, data = {}) { if (solo) { solo.command(name, data); return; } if (schema.commands[name]) net.send('cmd', [name, data]); else console.warn(`[room] no command "${name}" is declared in shapes.commands`); },
     get round() { return roundNow(); },

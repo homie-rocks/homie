@@ -34,7 +34,11 @@ Before you open one:
 - never put a key, token or password in an issue, a pull request or a test.
 
 The rules prediction release gate includes the full delay/loss/host matrix on virtual
-time and four real-Chrome smoke cases (about two minutes). Run
+time and four real-Chrome smoke cases (about two minutes). The three moved starters
+add 54 virtual delay/loss/seed cases and three real-Chrome canvas smokes (about
+80 seconds). Their original eighteen real-time network cases run only in the
+extended suite. Chrome/Node tick-for-tick replay comparisons remain in the gate
+with virtual clocks, since they check cross-runtime agreement. Run
 `CHROME_PATH=/path/to/chrome npm run test:rules:extended` for the full real-time
 Chrome soak as well as the extended rules corpus. A focused repeated measurement is:
 

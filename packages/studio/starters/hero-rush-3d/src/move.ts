@@ -28,8 +28,12 @@ export const move = defineMove({
       const last = ctx.tick + 1 >= m.knockUntil;
       const u = M.clamp((ctx.tick - m.knockAt) / (m.knockUntil - m.knockAt), 0, 1);
       const ease = last ? 1 : 1 - M.pow(1 - u, T.knockEase);
-      const to = M.add(m.knockFrom, M.scale(m.knockDir, T.knockDistance * ease));
-      delta = { x: to.x - body.pos.x, y: to.y - body.pos.y, z: dz };
+      // A wall consumes blocked travel. Chasing the absolute endpoint stores up
+      // that travel and releases it as a burst when the body slides clear.
+      const previous = M.clamp((ctx.tick - 1 - m.knockAt) / (m.knockUntil - m.knockAt), 0, 1);
+      const before = 1 - M.pow(1 - previous, T.knockEase);
+      const travel = M.scale(m.knockDir, T.knockDistance * (ease - before));
+      delta = { x: travel.x, y: travel.y, z: dz };
       if (last) m.knockAt = 0;
     } else {
       const want = M.scale(M.clampLen({ x: input.ax / 127, y: input.ay / 127, z: 0 }, 1), m.speed);
