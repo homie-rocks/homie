@@ -2529,6 +2529,9 @@ for (const tag of rollingFrom) test(`${ROLLING} (from ${tag})`, async () => {
   assert.equal(archive.status, 0);
   assert.equal(spawnSync('tar', ['-x', '-C', released], { input: archive.stdout }).status, 0);
   symlinkSync(REPO_NM, join(released, 'node_modules'), 'dir');
+  // An archive has no install lifecycle: prepare generated workspace sources just as npm ci does.
+  const prepare = spawnSync('npm', ['run', 'prepare', '--workspaces', '--if-present'], { cwd: released, encoding: 'utf8' });
+  assert.equal(prepare.status, 0, prepare.stdout + prepare.stderr);
   const build = spawnSync('npm', ['run', 'build'], { cwd: released, encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=1536' } });
   assert.equal(build.status, 0, build.stdout + build.stderr);
   const { default: old } = await import(join(released, 'packages/studio/worker/index.mjs'));

@@ -59,7 +59,7 @@ function typeOnly(dts) {
     || ts.isImportDeclaration(s) || (ts.isExportDeclaration(s) && (s.isTypeOnly || !s.exportClause || (ts.isNamedExports(s.exportClause) && s.exportClause.elements.length === 0))));
 }
 
-export function testEnginePackage(packageUrl) {
+export function testEnginePackage(packageUrl, { noticeAppendix = '', extraExports = {}, typeOnlyDevDependencies = [], privateUntilPublished = false } = {}) {
   const dir = fileURLToPath(packageUrl);
   const folder = basename(dir.replace(/\/$/, ''));
   const pj = json(join(dir, 'package.json'));
@@ -71,13 +71,25 @@ export function testEnginePackage(packageUrl) {
     assert.equal(pj.license, 'Apache-2.0');
     assert.equal(pj.type, 'module');
     assert.match(pj.version, /^\d+\.\d+\.\d+$/);
-    assert.equal(pj.private, undefined, 'an engine package is published');
-    assert.deepEqual(pj.exports, { './package.json': './package.json', './*.js': { types: './dist/*.d.ts', default: './dist/*.js' } });
+    assert.equal(pj.private, privateUntilPublished ? true : undefined, 'publication status matches the package contract');
+    const moduleExports = { ...pj.exports };
+    // Exceptional assets and private modules are declared by the individual package's test.
+    for (const [key, target] of Object.entries(extraExports)) {
+      assert.deepEqual(moduleExports[key], target, `${key}: declared package export`);
+      if (target !== null) {
+        assert.ok(target.default?.startsWith('./dist/'), `${key}: asset is built`);
+        assert.ok(target.types?.endsWith('.d.ts'), `${key}: asset has a declaration`);
+        assert.ok(existsSync(join(dir, target.default)), `${key}: asset exists`);
+        assert.ok(existsSync(join(dir, target.types)), `${key}: declaration exists`);
+      }
+      delete moduleExports[key];
+    }
+    assert.deepEqual(moduleExports, { './package.json': './package.json', './*.js': { types: './dist/*.d.ts', default: './dist/*.js' } });
     assert.deepEqual(pj.files, ['dist', 'src/**/*.ts', 'README.md', 'LICENSE', 'NOTICE']);
     assert.equal(pj.repository?.url, 'git+https://github.com/homie-rocks/homie.git');
     assert.equal(pj.repository?.directory, `packages/${folder}`);
     assert.equal(read(join(dir, 'LICENSE')), read(join(ROOT, 'LICENSE')), 'LICENSE is the repository\'s Apache-2.0 text');
-    assert.equal(read(join(dir, 'NOTICE')), read(join(ROOT, 'NOTICE')), 'NOTICE is the repository\'s');
+    assert.equal(read(join(dir, 'NOTICE')), read(join(ROOT, 'NOTICE')) + noticeAppendix, 'NOTICE preserves the repository text and declared third-party attribution');
     const readme = read(join(dir, 'README.md'));
     assert.ok(readme.includes(name), 'README.md names the package');
     assert.ok(src.length > 0, 'src/ has modules');
@@ -94,7 +106,10 @@ export function testEnginePackage(packageUrl) {
       assert.ok(existsSync(js), `dist/${mod}.js was built from src/${file}`);
       assert.ok(existsSync(dts), `dist/${mod}.d.ts was built from src/${file}`);
       assert.ok(statSync(js).mtimeMs >= statSync(join(dir, 'src', file)).mtimeMs - 1000, `dist/${mod}.js is older than src/${file}: rebuild`);
-      const exports = await import(`${name}/${mod}.js`);
+      const hidden = Object.entries(pj.exports).some(([key,target]) => target === null &&
+        (key.endsWith('*') ? `./${mod}.js`.startsWith(key.slice(0,-1)) : key === `./${mod}.js`));
+      const exports = await import(hidden
+        ? new URL(`file://${js}`).href : `${name}/${mod}.js`);
       if (Object.keys(exports).length === 0) assert.ok(typeOnly(read(dts)), `${name}/${mod}.js has no runtime exports, so its .d.ts must declare only types`);
       loaded++;
     }
@@ -104,6 +119,7 @@ export function testEnginePackage(packageUrl) {
   test(`${name}: every import is declared, internal pins are exact, and tsconfig references them`, () => {
     const versions = workspaceVersions();
     const declared = { ...pj.peerDependencies, ...pj.dependencies };
+    const buildOnly = pj.devDependencies ?? {};
     const missing = new Set();
     const used = new Set();
     for (const file of src) {
@@ -112,7 +128,7 @@ export function testEnginePackage(packageUrl) {
         const pkg = packageOf(fileName);
         if (!pkg || pkg === name) continue;
         used.add(pkg);
-        if (!(pkg in declared)) missing.add(`${pkg} (src/${file})`);
+        if (!(pkg in declared) && !(typeOnlyDevDependencies.includes(pkg) && pkg in buildOnly && new RegExp('import type[^;]*[\\"\']' + pkg).test(text))) missing.add(`${pkg} (src/${file})`);
       }
     }
     assert.deepEqual([...missing], [], 'imported but not in dependencies or peerDependencies');

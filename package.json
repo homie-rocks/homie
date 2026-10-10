@@ -20,6 +20,7 @@
     "packages/loop",
     "packages/nav",
     "packages/noise",
+    "packages/physics",
     "packages/postfx",
     "packages/props",
     "packages/render",
@@ -40,7 +41,8 @@
     "test:mod": "claude plugin test plugins/homie",
     "validate": "claude plugin validate . && claude plugin validate plugins/homie",
     "release:check": "node scripts/publish.mjs --check",
-    "test:rooms:updates": "HOMIE_ROOMS_PAGE_SOAK=1 node --test packages/studio/test/rooms-pages.test.mjs"
+    "test:rooms:updates": "HOMIE_ROOMS_PAGE_SOAK=1 node --test packages/studio/test/rooms-pages.test.mjs",
+    "test:physics:full": "npm run build && PHYSICS_FULL=1 node --max-old-space-size=1536 --test --test-concurrency=1 packages/physics/test/*.test.mjs"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

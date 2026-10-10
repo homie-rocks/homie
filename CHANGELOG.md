@@ -17,6 +17,30 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.45.2] - 2026-10-10
+
+**Plugin 0.45.2** · [#76](https://github.com/homie-rocks/homie/pull/76)
+
+Give a game or app solid bodies, characters that climb steps, and a complete physics save.
+
+### Added
+
+- **Deterministic 3D physics.** `@homie-rocks/physics` 0.1.0 brings rigid bodies, joints, collision and trigger events, spatial queries, triangle meshes and heightfields to browsers, Node and Workers. A world can use Y-up or Z-up, and a complete save resumes the same commands exactly.
+- **Characters that share the world with moving bodies.** Capsules walk up and down stairs, follow slopes and platforms, push eligible props, and report the floors they touch. Small residual moves stop before reaching the engine. Large floors use nearby geometry, and terrain queries retain the engine's spatial index.
+
+### Fixed
+
+- Crowds walking into walls no longer report being crushed. A moving body must leave no room to resolve the character for more than one substep. Crowd correction uses a fixed pass limit.
+- Body, character and joint edits no longer serialize the world. Pending solver edits are included when a save is requested and resume at the same substep.
+
+### Upgrade notes
+
+- Next release after merged [#75](https://github.com/homie-rocks/homie/pull/75). This branch is based on main 0.45.1 alone; paid parts and navigation are inherited from main. Rebase and run `node scripts/renumber-release.mjs` if main advances again. Physics is optional; existing studios gain no dependency.
+- Physics remains private and studio does not depend on it, so releases skip it safely. After merge, run `node scripts/first-publish-private.mjs physics`, then remove the private flag and update the lockfile and package contract test in a follow-up after trusted publishing is registered.
+
+- Initialize the owned WebAssembly engine before creating a world; the package README includes browser and Worker setup, impulses and walking on a heightfield. Physics does not automatically replace `@homie-rocks/walk` or its gait and biped parts.
+- The README reports CPU measurements with machine load: 100 terrain walkers plus 500 awake bodies used 20.08 ms median and 24.88 ms p95 per 50 ms tick on an M4; adding and removing a body added 3.1% median CPU time. Dense rigid-body piles can still exceed that budget.
+
 ## [0.45.1] - 2026-10-09
 
 **Plugin 0.45.1** · [#75](https://github.com/homie-rocks/homie/pull/75)
