@@ -98,7 +98,10 @@ function capsulePrism(prism:Prism,length:number):Prism {
 /** Downward vertical support only meets the upper triangle or its rounded rim.
  * The capsule's upper centre trails its lower centre, so no extrusion is needed. */
 function downCast(prism:Prism,a:Solid,d:Vec3):Hit3|null {
-  charge(24);const p=a.min,r=a.r,top=prism.vertices.slice(0,3),plane=prism.planes.find(q=>q.n.z>0);
+  charge(24);const p=a.min,r=a.r,top=prism.vertices.slice(0,3);
+  // Reject the rounded top bounds before doing any face/edge root solving.
+  if(p.x+r<Math.min(...top.map(v=>v.x))||p.x-r>Math.max(...top.map(v=>v.x))||p.y+r<Math.min(...top.map(v=>v.y))||p.y-r>Math.max(...top.map(v=>v.y))||p.z+d.z-r>Math.max(...top.map(v=>v.z)))return null;
+  const plane=prism.planes.find(q=>q.n.z>0);
   if(!plane)return null;
   let best:Hit3|null=null;
   const take=(t:number,n:Vec3)=>{if(t<0||t>1||best&&t>=best.t||n.z<=1e-12)return;const len=Math.sqrt(dot(n,n));best={t,nx:n.x/len,ny:n.y/len,nz:n.z/len};};
@@ -106,7 +109,10 @@ function downCast(prism:Prism,a:Solid,d:Vec3):Hit3|null {
   if(t>=0&&t<=1){const q=add(add(p,d,t),plane.n,-r),near=triangle(q,top[0],top[1],top[2]),delta=sub(q,near);if(dot(delta,delta)<1e-14)return {t,nx:plane.n.x,ny:plane.n.y,nz:plane.n.z};}
   const speed2=d.z*d.z;
   for(let i=0;i<3;i++){
-    charge(48);const from=top[i],to=top[(i+1)%3],ba=sub(to,from),oa=sub(p,from),ba2=dot(ba,ba),bard=ba.z*d.z,baoa=dot(ba,oa);
+    const from=top[i],to=top[(i+1)%3],ba=sub(to,from),oa=sub(p,from);
+    charge(8);const xy=ba.x*ba.x+ba.y*ba.y,u=xy?clamp((oa.x*ba.x+oa.y*ba.y)/xy):0;
+    if((oa.x-ba.x*u)**2+(oa.y-ba.y*u)**2>r*r+1e-12)continue;
+    charge(40);const ba2=dot(ba,ba),bard=ba.z*d.z,baoa=dot(ba,oa);
     const k2=ba2*speed2-bard*bard,k1=ba2*oa.z*d.z-baoa*bard,k0=ba2*dot(oa,oa)-baoa*baoa-r*r*ba2,h=k1*k1-k2*k0;
     if(k2>1e-16&&h>=0){const t=(-k1-Math.sqrt(h))/k2,y=baoa+t*bard;if(y>=0&&y<=ba2)take(t,sub(add(p,d,t),add(from,ba,y/ba2)));}
     const horizontal=oa.x*oa.x+oa.y*oa.y;if(horizontal<=r*r){const height=Math.sqrt(r*r-horizontal),t=(from.z+height-p.z)/d.z;take(t,{x:oa.x,y:oa.y,z:height});}
@@ -136,12 +142,14 @@ function roundedCast(source:Prism,a:Solid,d:Vec3):Hit3|null {
     charge(40);const speed=dot(plane.n,d);
     if(speed< -1e-12){const t=(plane.c+r-dot(plane.n,p))/speed;if(t>=-1e-9&&t<=1&&(!best||t<best.t)){const hit=add(add(p,d,t),plane.n,-r);if(prism.planes.every(q=>dot(q.n,hit)<=q.c+1e-10))take(t,plane.n);}}
   }
+  const sweptMin={x:Math.min(p.x,p.x+d.x)-r,y:Math.min(p.y,p.y+d.y)-r,z:Math.min(p.z,p.z+d.z)-r},sweptMax={x:Math.max(p.x,p.x+d.x)+r,y:Math.max(p.y,p.y+d.y)+r,z:Math.max(p.z,p.z+d.z)+r};
   for(const [from,to] of prism.segments){
+      charge(8);if(Math.max(from.x,to.x)<sweptMin.x||Math.min(from.x,to.x)>sweptMax.x||Math.max(from.y,to.y)<sweptMin.y||Math.min(from.y,to.y)>sweptMax.y||Math.max(from.z,to.z)<sweptMin.z||Math.min(from.z,to.z)>sweptMax.z)continue;
       charge(48);const ba=sub(to,from),oa=sub(p,from),ba2=dot(ba,ba),bard=dot(ba,d),baoa=dot(ba,oa);
       const k2=ba2*speed2-bard*bard,k1=ba2*dot(oa,d)-baoa*bard,k0=ba2*dot(oa,oa)-baoa*baoa-r*r*ba2,h=k1*k1-k2*k0;
       if(k2>1e-16&&h>=0){const t=(-k1-Math.sqrt(h))/k2,y=baoa+t*bard;if(y>=0&&y<=ba2)take(t,sub(add(p,d,t),add(from,ba,y/ba2)));}
   }
-  for(const v of prism.vertices){charge(24);sphere(v);}
+  for(const v of prism.vertices){charge(4);if(v.x<sweptMin.x||v.x>sweptMax.x||v.y<sweptMin.y||v.y>sweptMax.y||v.z<sweptMin.z||v.z>sweptMax.z)continue;charge(24);sphere(v);}
   if(best&&entry===0){const initial=distance(prism,p,p);if(dot(initial,initial)<r*r-1e-9)return null;}
   return best;
 }

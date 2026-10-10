@@ -4,7 +4,7 @@ import { openRoom } from '@homie-rocks/studio/rules/view';
 export function inspectWorld(w: GameWorld, s: GameSelf<'pawn'>, g: GameGoal, a: GameRequest) {
   const members: Record<keyof GameWorld, true> = {
     tick:true,dt:true,ticks:true,math:true,tune:true,map:true,stage:true,level:true,levelMax:true,guideLevel:true,guideSeats:true,kids:true,levelSet:true,shared:true,round:true,
-    random:true,label:true,send:true,dispatch:true,sendRoom:true,sendArea:true,after:true,emit:true,spawn:true,near:true,inBox:true,ray:true,rayAll:true,rays:true,ask:true,
+    random:true,label:true,route:true,send:true,dispatch:true,sendRoom:true,sendArea:true,after:true,emit:true,spawn:true,near:true,inBox:true,ray:true,rayAll:true,rays:true,ask:true,
     goalDone:true,despawn:true,place:true,sweep:true,
   };
   const time:number=w.tick+w.dt+w.ticks(1)+w.random()+w.level+w.levelMax+w.round.n+w.round.endsAt;
@@ -21,6 +21,7 @@ export function inspectWorld(w: GameWorld, s: GameSelf<'pawn'>, g: GameGoal, a: 
   w.near(s.pos,2,'pawn').map(p=>p.goal?.goal);w.near(s.pos,2).map(p=>p.id);
   w.inBox({min:s.pos,max:s.pos},'pawn').map(p=>p.seat);w.inBox({min:s.pos,max:s.pos}).map(p=>p.kind);
   const hit=w.ray(s.pos,s.heading,3);if(hit){const d:number=hit.dist;hit.entity?.toUpperCase();hit.at.x;hit.normal.y;}
+  w.route([[0,0,0,[1]],[1,0,0,[]]],0,1,{radius:.4,height:1.8}).map(id=>id+1);
   w.rays({kind:'pawn'}).ray(s.pos,s.heading,3)?.entity;
   w.rayAll(s.pos,s.heading,3,{kind:'pawn',tag:'living',layer:'body',where:{hp:{gt:0}},ignore:[s.id]}).map(hit=>hit.part?.toUpperCase());
   w.ask('director',{danger:1});w.goalDone(true);w.place(s,{x:0,y:0},{vel:s.vel,heading:s.heading});

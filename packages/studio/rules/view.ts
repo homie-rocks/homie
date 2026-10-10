@@ -197,7 +197,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const hostAges: number[] = [];
   /** What the player holds, the presses since the last step, what the server was last told, and the entries of this send period. */
   let sample: Record<string, unknown> = {};
-  let pressed = new Set<string>();
+  let pressed = new Map<string, number | boolean>();
   let lastSent = '';
   let lastSendAt = 0;
   let entries: { t: number; row: number[] }[] = [];
@@ -237,7 +237,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
           // A knock may travel faster than normal movement, and catch-up already accelerates it.
           // Fading the offset must not add another fraction of that accelerated speed.
           const allowance = length ? (myKind()?.maxSpeed ?? 0) * elapsed / 1000 / length : 1;
-          const release = settled && catchTick === null ? Math.min(allowance, elapsed / predict.blendMs) : 0;
+          const release = settled && !predict.idleHold && catchTick === null ? Math.min(allowance, elapsed / predict.blendMs) : 0;
           const progress = length ? Math.min(allowance, distance(path, o.path) * 0.8 / length) : 1;
           const nominal = Math.max(0, Math.min(1, 1 - (now - o.at) / predict.blendMs));
           o.fade = Math.max(nominal, o.fade - Math.max(release, progress));
@@ -262,7 +262,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (revision !== cachedCollision) { geometry = collisionMap(map, revision?.[2] ?? []); cachedCollision = revision; }
     return geometry;
   };
-  const moveCtx = moveContext({ tick: () => moveTick, tickHz, tune, map, geometry: geometryAt, self: () => mine?.id, name: game.map.name ?? 'main', spots, radius: () => myKind()?.radius ?? 0, shape: () => ({ shape: myKind()?.shape ?? 'sphere', radius: myKind()?.radius ?? 0, height: myKind()?.height ?? 0 }), dims });
+  const moveCtx = moveContext({ tick: () => moveTick, tickHz, tune, map, geometry: geometryAt, self: () => mine?.id, name: game.map.name ?? 'main', spots, radius: () => myKind()?.radius ?? 0, shape: () => ({ terrain: myKind()?.terrain, shape: myKind()?.shape ?? 'sphere', radius: myKind()?.radius ?? 0, height: myKind()?.height ?? 0 }), dims });
   function authorityRtt(): number {
     // The helper's ping ends at the relay. A browser host adds another network leg in both directions.
     // Snapshot stamps use the relay clock, so their observed age measures the complete downstream path.
@@ -294,7 +294,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     leadAfter = clock() + 2 * rtt + period;
     base = { tick: k + Math.ceil(rtt / period + target) + sendEvery - 1, at: clock() };
     stepped = Math.floor(base.tick) - 1;
-    entries = []; pending = []; history.clear(); replayHeld = {}; held = {}; lastSent = ''; leads.length = 0; pressed = new Set();
+    entries = []; pending = []; history.clear(); replayHeld = {}; held = {}; lastSent = ''; leads.length = 0; pressed = new Map();
     speed = 1; phases.length = 0; phases.push({ ...base, rate: 1 }); catchTick = null; offsets = []; headingBlend = null; correction.rebases += 1;
     const u = mine && latest?.ents.get(mine.id); if (u) adopt(u);
     if (mine) {
@@ -331,9 +331,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const input: Record<string, unknown> = {};
     let press = false;
     for (const [name, fd] of kind.input) {
-      if (fd.t === 'press') { const on = fresh && pressed.has(name); input[name] = on; values.push(on ? 1 : 0); if (on) press = true; } else { const v = coerce(fd, (fresh ? sample[name] : held[name]) ?? fd.init, dims); input[name] = v; values.push(v === true ? 1 : v === false ? 0 : v as number); }
+      if (fd.t === 'press' || fd.t === 'pulse') { const on = fresh ? (pressed.get(name) ?? (fd.t === 'press' ? false : 0)) : (fd.t === 'press' ? false : 0); input[name] = on; values.push(fd.t === 'pulse' ? 0 : Number(on)); if (on) press = true; } else { const v = coerce(fd, (fresh ? sample[name] : held[name]) ?? fd.init, dims); input[name] = v; values.push(v === true ? 1 : v === false ? 0 : v as number); }
     }
-    if (fresh) pressed = new Set();
+    if (fresh) pressed = new Map();
     held = Object.freeze({ ...input });
     {
       const body = runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: mine.motion }, held, t);
@@ -363,7 +363,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   function keepalive(t: number): void {
     const kind = myKind();
     if (!mine || !kind) return;
-    const values = kind.input.map(([name, fd]) => (fd.t === 'press' ? 0 : Number(coerce(fd, sample[name] ?? fd.init, dims))));
+    const values = kind.input.map(([name, fd]) => ((fd.t === 'press' || fd.t === 'pulse') ? 0 : Number(coerce(fd, sample[name] ?? fd.init, dims))));
     const claim = kind.owner ? [mine.pos.x, mine.pos.y, mine.pos.z, mine.vel.x, mine.vel.y, mine.vel.z, mine.heading.x, mine.heading.y, mine.heading.z] : [];
     entries = [{ t, row: [...values, ...claim] }]; pending.push({ t, input: Object.fromEntries(kind.input.map(([name, fd], i) => [name, fd.t === 'press' ? false : values[i]])) }); lastSent = JSON.stringify([values, claim]);
   }
@@ -379,7 +379,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (hidden) {
       // A hidden tab's timers are too slow to keep input alive, and a body must not run on without its player:
       // one neutral entry at once (every field at its init, no press), then no more steps until the tab shows again.
-      if (!hiddenSent) { hiddenSent = true; sample = {}; pressed = new Set(); const t = Math.floor(tickAt(now)) + 1; keepalive(t); lastSendAt = 0; flush(now, t); }
+      if (!hiddenSent) { hiddenSent = true; sample = {}; pressed = new Map(); const t = Math.floor(tickAt(now)) + 1; keepalive(t); lastSendAt = 0; flush(now, t); }
       base = null;
       return;
     }
@@ -434,21 +434,21 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         adopt(me);
         history.set(f.k, copyMine(mine!));
         const ack = row?.[2] ?? 0;
-        const late = new Set<string>();
+        const late = new Map<string, unknown>();
         for (const entry of pending) if (entry.t <= f.k) {
           replayHeld = entry.input;
           if (entry.t > ack && f.k + 1 - entry.t <= Math.ceil(tickHz / 4))
-            for (const [name, fd] of myKind()!.input) if (fd.t === 'press' && entry.input[name]) late.add(name);
+            for (const [name, fd] of myKind()!.input) if ((fd.t === 'press' || fd.t === 'pulse') && entry.input[name]) late.set(name, entry.input[name]);
         }
         let input = replayHeld;
         for (let t = f.k + 1; t <= stepped; t++) {
-          const presses = new Set(t === f.k + 1 ? late : []);
+          const presses = new Map(t === f.k + 1 ? late : []);
           for (const entry of pending) if (entry.t === t) {
             input = entry.input;
-            for (const [name, fd] of myKind()!.input) if (fd.t === 'press' && entry.input[name]) presses.add(name);
+            for (const [name, fd] of myKind()!.input) if ((fd.t === 'press' || fd.t === 'pulse') && entry.input[name]) presses.set(name, entry.input[name]);
           }
           const stepInput = { ...input };
-          for (const [name, fd] of myKind()!.input) if (fd.t === 'press') stepInput[name] = presses.has(name);
+          for (const [name, fd] of myKind()!.input) if (fd.t === 'press' || fd.t === 'pulse') stepInput[name] = presses.get(name) ?? (fd.t === 'press' ? false : 0);
           Object.assign(mine!, runMove(me.kind, mine!, Object.freeze(stepInput), t));
           history.set(t, copyMine(mine!));
         }
@@ -594,7 +594,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (kind && base) {
       const a = Math.max(0, Math.min(1, tickAt(clock()) - stepped));
       const now: Record<string, unknown> = {};
-      for (const [name, fd] of kind.input) now[name] = fd.t === 'press' ? pressed.has(name) : coerce(fd, sample[name] ?? fd.init, dims);
+      for (const [name, fd] of kind.input) now[name] = (fd.t === 'press' || fd.t === 'pulse') ? (pressed.get(name) ?? (fd.t === 'press' ? false : 0)) : coerce(fd, sample[name] ?? fd.init, dims);
       const next = runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: motionOf(mine.kind, mine.motion) }, Object.freeze(now), stepped + 1);
       pos = vec3({ x: lerp(mine.pos.x, next.pos.x, a), y: lerp(mine.pos.y, next.pos.y, a), z: lerp(mine.pos.z, next.pos.z, a) }, dims);
       heading = blendHeading(mine.heading, next.heading, a, dims);
@@ -742,7 +742,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       const next: Record<string, unknown> = {};
       let changed = false;
       for (const [name, fd] of kind?.input ?? []) {
-        if (fd.t === 'press') { if ((s[name] === true || s[name] === 1) && !pressed.has(name)) changed = true; }
+        if (fd.t === 'press' || fd.t === 'pulse') { if (coerce(fd,s[name],dims) && !pressed.has(name)) changed = true; }
         else { if (s[name] !== undefined) next[name] = s[name]; if ((next[name] ?? fd.init) !== (sample[name] ?? fd.init)) changed = true; }
       }
       // A fresh control can replace a preview partway through a tick (especially
@@ -750,7 +750,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       // may advance the new path, rather than drawing elapsed time with new input.
       if (changed) pump();
       const shown = changed ? meNow()?.pos : null;
-      for (const [name, fd] of kind?.input ?? []) if (fd.t === 'press' && (s[name] === true || s[name] === 1)) pressed.add(name);
+      for (const [name, fd] of kind?.input ?? []) if ((fd.t === 'press' || fd.t === 'pulse') && coerce(fd,s[name],dims)) { const value=coerce(fd,s[name],dims) as number | boolean; if(fd.t==='pulse'&&!pressed.has(name))net.send('pulse',[epoch,name,value]); pressed.set(name,value); }
       sample = next;
       if (shown) {
         const now = clock(), nextShown = meNow()?.pos;

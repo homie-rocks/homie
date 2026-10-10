@@ -47,7 +47,7 @@ import { AGENT_RULES, useAgents, type Agents, type AgentsSaved, type Vocabulary 
 import { DEFAULT_POLICY, type Netplay, type Peer, type Policy, type Slot } from '../netplay/netplay.ts';
 import { createCore } from './core.ts';
 import type { Core, CoreOut, Driver, SavedCore, StepInput } from './core.ts';
-import { coerce, coerceFields, num, own, fromBytes, initFields, toBytes, unpackVec } from './pack.ts';
+import { coerce, coerceFields, num, own, fromBytes, initFields, toBytes, unpackVec, unpackFields } from './pack.ts';
 import type { Compiled, KindTable, Vec3 } from './rules.ts';
 
 export interface HostClock {
@@ -58,6 +58,7 @@ export interface HostClock {
 }
 export interface HostOptions {
   game: string;
+  record?(owner:string,key:string,value:Record<string,unknown>):void;
   /** The build check compares a movement step before any tick handler can change it. */
   moved?: NonNullable<Parameters<typeof createCore>[1]>['moved'];
   /** Told of every handler as it ends, and what it threw if it threw (core.ts `observe`): the build check listens. */
@@ -100,6 +101,8 @@ export interface Host {
   readonly paused: boolean;
   readonly people: number;
   readonly viewRadiusM: number | null;
+  readonly privateDelivery: boolean;
+  projectSnapshot(snap: any, seat: number | null): any;
   readonly viewSettings: Compiled['settings']['view'];
   frame(m: Record<string, unknown>): void;
   /** Start the tick loop (the first person has joined). */
@@ -118,8 +121,9 @@ export interface Host {
   readonly core: Core;
 }
 
-interface Entry { at: number; values: Record<string, unknown>; presses: string[]; claim: StepInput['claim'] }
+interface Entry { at: number; values: Record<string, unknown>; presses: (string | [string, number])[]; claim: StepInput['claim'] }
 interface SeatIn {
+  pulses?: [string,number][];
   held: Record<string, unknown>; claim: StepInput['claim']; entries: Entry[];
   /** The newest stamp this seat has sent, the stamps not yet acknowledged, and the newest acknowledged. */
   newest: number; stamps: number[]; ack: number;
@@ -225,12 +229,14 @@ export function createHost(o: HostOptions): Host {
       for (const [seat, q] of saved.inputs) {
         check(uint(seat) && seat < c.seats && q && valuesOk(seat, q.held) && claimOk(q.claim) && uint(q.newest) && uint(q.ack) && uint(q.lastFrameTick) && Number.isInteger(q.lead) && q.lead >= -127 && q.lead <= 127);
         check(Array.isArray(q.stamps) && q.stamps.length <= 256 && q.stamps.every(uint) && Array.isArray(q.entries) && q.entries.length <= c.settings.tickHz + 1);
-        for (const e of q.entries) check(uint(e.at) && valuesOk(seat, e.values) && claimOk(e.claim) && Array.isArray(e.presses) && e.presses.every((p) => c.kinds.some((k) => k.input.some(([name, fd]) => name === p && fd.t === 'press'))));
+        if(q.pulses!==undefined)check(Array.isArray(q.pulses)&&q.pulses.length<=16&&q.pulses.every(p=>Array.isArray(p)&&p.length===2&&c.kinds.some(k=>k.input.some(([n,f])=>n===p[0]&&f.t==='pulse'))&&Number.isInteger(p[1])&&p[1]>0&&p[1]<=255));
+        for (const e of q.entries) check(uint(e.at) && valuesOk(seat, e.values) && claimOk(e.claim) && Array.isArray(e.presses) && e.presses.every((p) => c.kinds.some((k) => k.input.some(([name, fd]) => (typeof p === 'string' ? name === p && fd.t === 'press' : Array.isArray(p) && p.length === 2 && name === p[0] && fd.t === 'pulse' && Number.isInteger(p[1]) && p[1] > 0 && p[1] <= 255)))));
       }
     }
   }
   if (saved && saved.v !== 1) throw new Error('this save was written by another version of the runtime');
-  const core = createCore(c, { label: (seat,driver)=>nameOf(seat,driver), moved: o.moved, observe: o.observe, noted: o.noted, seed: Math.floor(random() * 4294967296) >>> 0, epoch: saved ? undefined : (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
+  const measuredRtt = new Map<number, number>();
+  const core = createCore(c, { rewindTicks: seat => Math.ceil(((measuredRtt.get(seat) ?? 0) + 150 + period) / period), label: (seat,driver)=>nameOf(seat,driver), moved: o.moved, observe: o.observe, noted: o.noted, seed: Math.floor(random() * 4294967296) >>> 0, epoch: saved ? undefined : (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
   let epoch = core.epoch;
   if (saved && (o.startPaused ?? o.restoreEpoch !== undefined)) for (const body of core.bodies()) if (body.driver !== 'bot' && body.owner !== 'reserved') core.seatAway(body.seat, true);
   let lastSaveAt = o.clock.now();
@@ -367,7 +373,7 @@ export function createHost(o: HostOptions): Host {
   // A restored room keeps each seat's held input, its newest stamp and its acknowledgement.
   for (const [seat, held, claim, newest, ack] of saved?.queues ?? []) queues.set(seat, { held, claim, entries: [], newest, stamps: [], ack, lead: 127, lastFrameTick: core.tick });
   for (const [seat, q] of saved?.inputs ?? []) queues.set(seat, q);
-  const neutral = (kind: KindTable): Record<string, unknown> => { const v = initFields(kind.input, c.dims); for (const [name, fd] of kind.input) if (fd.t === 'press') v[name] = false; return v; };
+  const neutral = (kind: KindTable): Record<string, unknown> => { const v = initFields(kind.input, c.dims); for (const [name, fd] of kind.input) if (fd.t === 'press' || fd.t === 'pulse') v[name] = fd.t === 'press' ? false : 0; return v; };
   function queueOf(seat: number, kind: KindTable): SeatIn {
     let q = queues.get(seat);
     if (!q) { q = { held: neutral(kind), claim: null, entries: [], newest: 0, stamps: [], ack: 0, lead: 127, lastFrameTick: core.tick }; queues.set(seat, q); }
@@ -405,11 +411,11 @@ export function createHost(o: HostOptions): Host {
       if (j > K + tickHz) { stats.dropped += 1; break; }
       q.newest = j;
       const values: Record<string, unknown> = {};
-      const presses: string[] = [];
+      const presses: (string | [string, number])[] = [];
       let i = 1;
       for (const [name, fd] of kind.input) {
         // Input values are held to their declared types, whatever was sent.
-        if (fd.t === 'press') { values[name] = false; if (raw[i] === 1) presses.push(name); } else values[name] = coerce(fd, raw[i], c.dims);
+        if (fd.t === 'press') { values[name] = false; if (raw[i] === 1) presses.push(name); } else if (fd.t === 'pulse') { values[name] = 0;  } else values[name] = coerce(fd, raw[i], c.dims);
         i += 1;
       }
       const claim = kind.body?.owner && raw.length >= i + 9 ? { pos: unpackVec([raw[i], raw[i + 1], raw[i + 2]], c.dims), vel: unpackVec([raw[i + 3], raw[i + 4], raw[i + 5]], c.dims), heading: unpackVec([raw[i + 6], raw[i + 7], raw[i + 8]], c.dims), r } : null;
@@ -437,6 +443,7 @@ export function createHost(o: HostOptions): Host {
   }
   function onFrame(m: Record<string, unknown>): void {
     switch (m.t) {
+      case 'latency': if(Number.isInteger(m.seat) && typeof m.ms==='number' && Number.isFinite(m.ms) && m.ms>=0) measuredRtt.set(m.seat as number,Math.min(m.ms,2000)); return;
       case 'vocabulary': setAgents((m.vocab ?? null) as Vocabulary | null); return;
       case 'decided': core.answer(String(m.n ?? ''), m); return;
       case 'in': return onIn(m);
@@ -486,6 +493,12 @@ export function createHost(o: HostOptions): Host {
           return;
         }
         if (agents && (kind === 'agent:do' || /^ask:/.test(kind) || (SPEECH.test(kind) && present.get(m.from as number) === false))) { if (agentInbox.length < 128) agentInbox.push(m); return; }
+        if(kind === 'pulse') {
+          const data=m.d,body=core.bodyOf(m.from as number);
+          if(!body || !hasHands(m.from as number,body.driver) || !Array.isArray(data) || data.length!==3 || data[0]!==epoch || typeof data[1]!=='string' || !body.kind.input.some(([name,fd])=>name===data[1]&&fd.t==='pulse'))return;
+          const value=coerce({t:'pulse'},data[2],c.dims) as number,q=queueOf(m.from as number,body.kind);q.pulses??=[];
+          if(value && q.pulses.length<16)q.pulses.push([data[1],value]);return;
+        }
         if (kind === 'cmd') { const d = m.d as unknown[]; if (Array.isArray(d) && typeof d[0] === 'string') core.command(m.from as number, d[0], d[1]); return; }
         // Speech keeps its payload, except the identity fields only the host may attach.
         if (SPEECH.test(kind)) o.send({ t: 'ev', from: m.from, k: kind, d: cleanSpeech(m.d) });
@@ -528,6 +541,14 @@ export function createHost(o: HostOptions): Host {
     for (const x of out) {
       if (x.t === 'round') {
         if (x.phase === 'over') forceSave = true;
+        if(!retime && x.results && c.records && o.record){
+          const declaration=c.records, shared=unpackFields(c.shared,core.shared(),c.dims), snapshot=core.snapshot();
+          for(const result of x.results){if(result.driver!=='person')continue;const row=(snapshot[1] as any[]).find(e=>e[0]===result.id);if(!row)continue;const kind=c.kinds[row[1]],fields=unpackFields(kind.fields,row[7],c.dims);if(declaration.eligible&&!fields[declaration.eligible])continue;
+            const value:Record<string,unknown>={id:String(shared[declaration.identity]),endedAt:Math.round(now),place:result.place,won:result.place===1&&x.results.filter(r=>r.place===1).length===1};
+            for(const [name,source] of Object.entries(declaration.fields))value[name]=Math.round(Number(fields[source]));
+            o.record(String(row[12]),declaration.key,value);
+          }
+        }
         const ms = (t: number): number => Math.round(now + (t - core.tick) * period);
         const drivers = new Map(core.bodies().map((b) => [b.seat, b.driver]));
         o.send({ t: 'round', ...(retime ? { retime: true } : {}), round: {
@@ -556,7 +577,7 @@ export function createHost(o: HostOptions): Host {
     for (const [seat, q] of queues) {
       const body = core.bodyOf(seat);
       if (!body) continue;
-      const presses: string[] = [];
+      const presses: (string | [string, number])[] = [];
       while (q.entries.length && q.entries[0].at <= t) {
         const e = q.entries.shift() as Entry;
         q.held = e.values; q.claim = e.claim;
@@ -566,7 +587,8 @@ export function createHost(o: HostOptions): Host {
       if (t - q.lastFrameTick > tickHz && !q.entries.length) { q.held = neutral(body.kind); q.claim = null; }
       while (q.stamps.length && q.stamps[0] <= t) q.ack = q.stamps.shift() as number;
       const values = { ...q.held };
-      for (const p of presses) values[p] = true;
+      for (const p of presses) { if (typeof p === 'string') values[p] = true; else values[p[0]] = p[1]; }
+      const pulse=q.pulses?.shift();if(pulse)values[pulse[0]]=pulse[1];
       inputs.set(seat, { values, claim: q.claim });
     }
     if (roundRebasePending) publishRebase(now);
@@ -769,6 +791,15 @@ export function createHost(o: HostOptions): Host {
   }
 
   return {
+    get privateDelivery() { return c.kinds.some(k => k.collider || k.fields.some(([,f]) => f.visibility)); },
+    projectSnapshot(snap, seat) {
+      return {...snap,d:[snap.d[0],snap.d[1].map((row: any[]) => {
+        const k=c.kinds[row[1]], own=seat!==null && row[9]===seat && row[10]!==1;
+        if(!k.fields.some(([,f])=>f.visibility))return row;
+        const fields=row[7].map((v: unknown,i: number)=>{const visibility=k.fields[i][1].visibility;return !visibility || visibility==='owner'&&own || visibility==='results'&&snap.d[0][1]===0 ? v : null;});
+        return [...row.slice(0,7),fields,...row.slice(8)];
+      }),...snap.d.slice(2)]};
+    },
     get viewSettings() { return c.settings.view; },
     get viewRadiusM() { return c.settings.view?.radiusM ?? null; },
     get tick() { return core.tick; },

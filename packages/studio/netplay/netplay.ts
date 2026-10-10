@@ -2395,6 +2395,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         return;
       }
       case 'state': if (typeof m['k'] === 'string') applyState(m['k'], m['d']); return;
+      case 'probe': if (typeof m.n === 'string') raw({t:'probeAck',n:m.n}); return;
       case 'pong': return onPong(m);
       case 'announce': {
         if (typeof m['id'] !== 'string') return;

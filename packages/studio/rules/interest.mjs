@@ -69,7 +69,7 @@ export function snapshotEncoder(keyframeTicks, chained = false) {
         for (let i = 1; i < entity.length; i++) if (rowText(entity)[i] !== before[i]) { mask |= 1 << i; values.push(entity[i]); }
         if (mask) changed.push([id, mask, values]);
       }
-      const out = { ...snap, d: { base: base.k, round: snap.d[0], ...(snap.d.length > 2 ? { collision: snap.d[2] } : {}), changed, removed: [...rows.keys()].filter(id => !present.has(id)), ...(chained ? { chain: true } : {}), ...(own ? { own } : {}) } };
+      const out = { ...snap, d: { base: base.k, round: snap.d[0], ...(snap.d.length > 2 && JSON.stringify(snap.d[2]) !== JSON.stringify(base.d[2]) ? { collision: snap.d[2] } : {}), changed, removed: [...rows.keys()].filter(id => !present.has(id)), ...(chained ? { chain: true } : {}), ...(own ? { own } : {}) } };
       if (chained) { base = snap; rows = new Map(snap.d[1].map(e => [e[0], rowText(e)])); }
       return out;
     },
@@ -103,7 +103,7 @@ export function snapshotDecoder() {
         const visible = new Map(rows);
         for (const id of d.removed) visible.delete(id);
         for (const e of d.own) visible.set(e[0], e);
-        return { ...snap, d: [d.round, [...visible.values()], ...(d.collision === undefined ? [] : [d.collision])] };
+        return { ...snap, d: [d.round, [...visible.values()], ...(d.collision === undefined ? base.d.slice(2) : [d.collision])] };
       }
       const next = new Map(rows);
       for (const id of d.removed) next.delete(id);
@@ -122,7 +122,7 @@ export function snapshotDecoder() {
         next.set(entity[0], entity);
       }
       for (const e of d.own ?? []) next.set(e[0], e);
-      const decoded = { ...snap, d: [d.round, [...next.values()], ...(d.collision === undefined ? [] : [d.collision])] };
+      const decoded = { ...snap, d: [d.round, [...next.values()], ...(d.collision === undefined ? base.d.slice(2) : [d.collision])] };
       if (d.chain) { base = decoded; rows = next; }
       return decoded;
     },

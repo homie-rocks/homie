@@ -1,4 +1,6 @@
-import { prepareTile } from './terrain.ts';
+import { prepareTile as prepareExactTile } from './terrain.ts';
+import { prepareTile as prepareLegacyTile } from './terrain-legacy.ts';
+const prepareTile = (tile: MapHeightTile) => { prepareExactTile(tile); prepareLegacyTile(tile); };
 import { indexMap } from './map-index.ts';
 /*
  * rules.ts — the rules contract, version 2: what a rules module declares, and how the runtime reads it.
@@ -51,13 +53,14 @@ export const QUEUE_MAX = 16_384;
 
 /* ------------------------------------------------------------------ field types */
 
-export type FieldKind = 'u8' | 'u16' | 'u32' | 'i8' | 'i16' | 'i32' | 'bit' | 'fix' | 'vec3' | 'dir' | 'tick' | 'ticks' | 'ref' | 'text' | 'list' | 'map' | 'struct' | 'press';
+export type FieldKind = 'u8' | 'u16' | 'u32' | 'i8' | 'i16' | 'i32' | 'bit' | 'fix' | 'vec3' | 'dir' | 'tick' | 'ticks' | 'ref' | 'text' | 'list' | 'map' | 'struct' | 'press' | 'pulse';
 export interface Field {
   readonly t: FieldKind;
   /** The value a new entity starts with. */
   readonly init?: unknown;
   /** On one integer field of a player's body: this is the score a round's results rank by. */
   readonly score?: true;
+  readonly visibility?: 'owner' | 'server' | 'results';
   /** `text`: the most characters. `list` and `map`: the most entries. */
   readonly max?: number;
   /** `list` and `map`: what each entry is. */
@@ -65,11 +68,11 @@ export interface Field {
   /** `struct`: its fields, in order. */
   readonly fields?: Readonly<Record<string, Field>>;
 }
-export interface FieldOptions { init?: unknown; score?: boolean }
+export interface FieldOptions { init?: unknown; score?: boolean; visibility?: 'owner' | 'server' | 'results' }
 export type Fields = Readonly<Record<string, Field>>;
 
 const made = (t: FieldKind, o: FieldOptions | undefined, extra: Partial<Field> = {}): Field =>
-  Object.freeze({ t, ...extra, ...(o && o.init !== undefined ? { init: o.init } : {}), ...(o && o.score === true ? { score: true as const } : {}) });
+  Object.freeze({ t, ...extra, ...(o?.visibility ? {visibility:o.visibility} : {}), ...(o && o.init !== undefined ? { init: o.init } : {}), ...(o && o.score === true ? { score: true as const } : {}) });
 const plain = (t: FieldKind) => (o?: FieldOptions): Field => made(t, o);
 
 /**
@@ -87,6 +90,7 @@ export const f = brand(Object.freeze({
   map: (of: Field, max: number, o?: FieldOptions): Field => made('map', o, { of, max }),
   struct: (fields: Fields, o?: FieldOptions): Field => made('struct', o, { fields: Object.freeze({ ...fields }) }),
   press: (): Field => made('press', undefined),
+  pulse: (): Field => made('pulse', undefined),
 }));
 
 /**
@@ -127,11 +131,12 @@ export type Handler = (world: RuntimeWorld, self: RuntimeSelf, e?: any) => void;
 export type RoomHandler = (world: RuntimeWorld, e?: any) => void;
 export type MoveFn = (body: any, input: any, ctx: any) => void;
 
-export type ColliderDef = true | { size?: string; enabled?: string };
+export type ColliderDef = true | { size?: string; enabled?: string; fields?: readonly string[] };
 export interface HitRegion { shape: 'sphere' | 'capsule' | 'box'; radius: number; height?: number; offset?: Vec3 }
 export interface QueryDef { layer?: string; tags?: readonly string[]; parts?: Record<string, HitRegion>; profiles?: Record<string, Record<string, HitRegion>> }
-export interface BodyDef { shape: 'circle' | 'sphere' | 'capsule' | 'box'; radius: number; height?: number; maxSpeed: number; sweep?: boolean; move?: 'owner' }
+export interface BodyDef { shape: 'circle' | 'sphere' | 'capsule' | 'box'; radius: number; height?: number; maxSpeed: number; sweep?: boolean; move?: 'owner'; terrain?: 'exact' }
 export interface GuideDef { view: (world: RuntimeWorld, self: RuntimeSelf) => unknown; floor?: (world: RuntimeWorld, self: RuntimeSelf, view: any) => unknown }
+export interface RoundRecords {key:string; identity:string; eligible?:string; fields:Readonly<Record<string,string>>}
 export interface EntityDef {
   player?: true | { away?: 'neutral' | 'think'; leave?: 'despawn' | 'bot'; control?: string; takeover?: string };
   fields?: Fields;
@@ -158,6 +163,7 @@ export interface RulesDef {
   room?: {
     rounds?: { seconds: number; breakSeconds: number };
     bots?: { keep: number };
+    records?: RoundRecords;
     historySeconds?: number;
     start?: RoomHandler;
     join?: (ctx: any, player: { seat: number; driver: 'person' | 'bot' | 'ai'; owner: string }) => { kind: string; at: Vec3; heading?: Vec3; fields?: Record<string, unknown>; motion?: Record<string, unknown> };
@@ -190,7 +196,7 @@ export interface RoomSettings {
   view: { radiusM: number | null; precisionM?: number; nearM?: number | null; farHz?: number | null };
   durability: { movementSeconds: number };
   budget: { tick: number };
-  predict: { catchM: number | null; catchUp: number; snapM: number | null; blendMs: number; interpMs: number | null };
+  predict: { idleHold?: boolean; catchM: number | null; catchUp: number; snapM: number | null; blendMs: number; interpMs: number | null };
 }
 /**
  * The default `budget.tick`: 500,000 units at 20 ticks a second or fewer, and less at a faster rate, so a second of
@@ -244,7 +250,7 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
       view: { radiusM: r.view?.radiusM === null ? null : num('view.radiusM', r.view?.radiusM, null), ...(r.view?.precisionM !== undefined ? { precisionM: num('view.precisionM', r.view.precisionM, 0) as number } : {}), ...(r.view?.nearM !== undefined ? { nearM: num('view.nearM', r.view.nearM, null) } : {}), ...(r.view?.farHz !== undefined ? { farHz: whole('view.farHz', r.view.farHz, 1, tickHz, tickHz) } : {}) },
       durability: { movementSeconds: whole('durability.movementSeconds', r.durability?.movementSeconds, 1, 60, 1) },
       budget: { tick: Math.max(1, Math.floor(num('budget.tick', r.budget?.tick, budgetFor(tickHz)) as number)) },
-      predict: { catchM: num('predict.catchM', p.catchM, null), catchUp: num('predict.catchUp', p.catchUp, 1.25) as number, snapM: num('predict.snapM', p.snapM, null), blendMs: num('predict.blendMs', p.blendMs, 100) as number, interpMs: num('predict.interpMs', p.interpMs, null) },
+      predict: { ...(p.idleHold === true ? {idleHold:true} : {}), catchM: num('predict.catchM', p.catchM, null), catchUp: num('predict.catchUp', p.catchUp, 1.25) as number, snapM: num('predict.snapM', p.snapM, null), blendMs: num('predict.blendMs', p.blendMs, 100) as number, interpMs: num('predict.interpMs', p.interpMs, null) },
     },
     problems,
   };
@@ -333,7 +339,7 @@ export interface KindTable {
   input: FieldList;
   collider?: ColliderDef;
   query?: QueryDef;
-  body: null | { shape: string; radius: number; height: number; maxSpeed: number; sweep: boolean; owner: boolean };
+  body: null | { shape: string; radius: number; height: number; maxSpeed: number; sweep: boolean; owner: boolean; terrain?: 'exact' };
   score: string | null;
   tick: Handler | null;
   think: EntityDef['think'] | null;
@@ -356,6 +362,7 @@ export interface Compiled {
   effectNames: string[];
   shared: FieldList;
   view: FieldList;
+  records?: RoundRecords;
   historySeconds?: number;
   rounds: { seconds: number; breakSeconds: number } | null;
   bots: number;
@@ -379,7 +386,7 @@ export const BUILT_IN_FIELDS = Object.freeze(['id', 'kind', 'pos', 'vel', 'headi
 
 const NAME = /^[a-z][A-Za-z0-9_]{0,31}$/;
 const INTS = new Set(['u8', 'u16', 'u32', 'i8', 'i16', 'i32']);
-const TYPES = new Set(['u8', 'u16', 'u32', 'i8', 'i16', 'i32', 'bit', 'fix', 'vec3', 'dir', 'tick', 'ticks', 'ref', 'text', 'list', 'map', 'struct', 'press']);
+const TYPES = new Set(['u8', 'u16', 'u32', 'i8', 'i16', 'i32', 'bit', 'fix', 'vec3', 'dir', 'tick', 'ticks', 'ref', 'text', 'list', 'map', 'struct', 'press', 'pulse']);
 
 /**
  * One declared field, checked, and made again as the runtime's own: a frozen record of its type, its sizes and its
@@ -393,6 +400,7 @@ function cleanField(fd: unknown, where: string, inInput: boolean): Field {
   const init = own(x, 'init');
   return Object.freeze({
     t: x.t,
+    ...(x.visibility ? {visibility:x.visibility} : {}),
     ...(x.t === 'text' || x.t === 'list' || x.t === 'map' ? { max: x.max } : {}),
     ...(x.t === 'list' || x.t === 'map' ? { of: cleanField(x.of, `${where} (its entries)`, false) } : {}),
     ...(x.t === 'struct' ? { fields: Object.freeze(Object.fromEntries(Object.entries(x.fields ?? {}).map(([key, sub]) => [key, cleanField(sub, `${where}.${key}`, false)]))) } : {}),
@@ -403,8 +411,10 @@ function cleanField(fd: unknown, where: string, inInput: boolean): Field {
 function checkField(fd: unknown, where: string, inInput: boolean): void {
   const x = fd as Field;
   if (!x || typeof x !== 'object' || typeof x.t !== 'string' || !TYPES.has(x.t)) throw new Error(`${where} is not a field type: declare it with f (f.u16(), f.vec3(), f.list(f.ref(), 8)…)`);
-  if (x.t === 'press' && !inInput) throw new Error(`${where}: f.press() is for input only (a button that fires once)`);
-  if (inInput && !(INTS.has(x.t) || x.t === 'bit' || x.t === 'press' || x.t === 'fix')) throw new Error(`${where}: an input field is a whole number, f.fix(), f.bit() or f.press()`);
+  if ((x.t === 'press' || x.t === 'pulse') && !inInput) throw new Error(`${where}: f.press() is for input only (a button that fires once)`);
+  if (inInput && !(INTS.has(x.t) || x.t === 'bit' || x.t === 'press' || x.t === 'pulse' || x.t === 'fix')) throw new Error(`${where}: an input field is a whole number, f.fix(), f.bit() or f.press()`);
+  if (x.visibility !== undefined && !/^entities\.[^.]+\.fields\.[^.]+$/.test(where)) throw new Error(`${where}: visibility belongs on a top-level entity field`);
+  if (x.visibility !== undefined && (!['owner','server','results'].includes(x.visibility) || inInput)) throw new Error(`${where}: visibility is owner, server or results on state fields only`);
   if (x.t === 'text' && !(Number.isInteger(x.max) && (x.max as number) >= 1 && (x.max as number) <= 4096)) throw new Error(`${where}: f.text(max) needs its largest length, 1 to 4096 characters`);
   if (x.t === 'list' || x.t === 'map') {
     if (!(Number.isInteger(x.max) && (x.max as number) >= 1 && (x.max as number) <= 1024)) throw new Error(`${where}: a list or a map declares its largest size, 1 to 1024 entries`);
@@ -528,9 +538,10 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
       const shapes = dims === 2 ? ['circle'] : ['sphere', 'capsule', 'box'];
       if (!b || !shapes.includes(b.shape)) throw new Error(`${at}.body.shape is ${shapes.map((s) => `'${s}'`).join(' or ')} when space.dims is ${dims}`);
       if (typeof b.radius !== 'number' || typeof b.maxSpeed !== 'number' || !Number.isFinite(b.radius) || !Number.isFinite(b.maxSpeed) || !(b.radius > 0) || !(b.maxSpeed >= 0)) throw new Error(`${at}.body needs radius (metres) and maxSpeed (metres a second)`);
+      if (b.terrain !== undefined && b.terrain !== 'exact') throw new Error(`${at}.body.terrain is 'exact', or omitted for legacy casts`);
       if (b.move !== undefined && b.move !== 'owner') throw new Error(`${at}.body.move is 'owner', or left out`);
       if (dims === 3 && b.height !== undefined && (!Number.isFinite(b.height) || b.height <= 0 || b.shape === 'capsule' && b.height < b.radius * 2)) throw new Error(`${at}.body.height must be finite, positive and at least twice the radius for a capsule`);
-      body = { shape: b.shape, radius: b.radius, height: dims === 3 && b.shape === 'sphere' ? 2 * b.radius : typeof b.height === 'number' && b.height > 0 ? b.height : 0, maxSpeed: b.maxSpeed, sweep: b.sweep === true, owner: b.move === 'owner' };
+      body = { shape: b.shape, radius: b.radius, height: dims === 3 && b.shape === 'sphere' ? 2 * b.radius : typeof b.height === 'number' && b.height > 0 ? b.height : 0, maxSpeed: b.maxSpeed, sweep: b.sweep === true, owner: b.move === 'owner', ...(b.terrain === 'exact' ? {terrain: 'exact' as const} : {}) };
     }
     if (player && !body) throw new Error(`${at}: a player's kind needs a body`);
     const moveFn = move && typeof move[name] === 'function' ? move[name] as MoveFn : null;
@@ -546,7 +557,8 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
     if (e.collider !== undefined) {
       if (!body || player || body.owner) throw new Error(`${at}.collider needs a non-player body`);
       if (e.collider !== true) {
-        if (!e.collider || typeof e.collider !== 'object' || Object.keys(e.collider).some(k => !['size', 'enabled'].includes(k))) throw new Error(`${at}.collider is true or {size, enabled}`);
+        if (!e.collider || typeof e.collider !== 'object' || Object.keys(e.collider).some(k => !['size', 'enabled', 'fields'].includes(k))) throw new Error(`${at}.collider is true or {size, enabled}`);
+        if (e.collider.fields !== undefined && (!Array.isArray(e.collider.fields) || e.collider.fields.length > 16 || !e.collider.fields.every(name => fields.some(([n,f]) => n === name && !f.visibility && !['struct','map','list','vec3','dir'].includes(f.t))))) throw new Error(`${at}.collider.fields names at most 16 scalar fields`);
         for (const [key, type] of [['size', 'vec3'], ['enabled', 'bit']]) {
           const name = (e.collider as Record<string, unknown>)[key];
           if (name !== undefined && (typeof name !== 'string' || !fields.some(([n, f]) => n === name && f.t === type))) throw new Error(`${at}.collider.${key} must name a ${type} field`);
@@ -600,11 +612,18 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
     if (!a.questions || typeof a.questions !== 'object') throw new Error(`asks.${key}.questions is required; for example { advance: { type: 'noul', instructions: 'Should the party advance?' } }`);
     asks[key] = { ...a, stateFields: fieldList(a.state, `asks.${key}.state`) };
   }
+  if(room.records){const rec=room.records;
+    if(!/^server:[A-Za-z0-9_.:-]{1,57}$/.test(rec.key)||!fieldList(d.shared,'shared').some(([n,f])=>n===rec.identity&&f.t==='text')||Object.keys(rec.fields).length>16)throw new Error('room.records needs a server: key, shared text identity and at most 16 fields');
+    for(const k of kinds.filter(k=>k.player)){
+      if(rec.eligible&&!k.fields.some(([n,f])=>n===rec.eligible&&f.t==='bit'))throw new Error('room.records.eligible names a player bit field');
+      for(const [name,source] of Object.entries(rec.fields))if(!/^[a-z][A-Za-z0-9_]{0,31}$/.test(name)||['id','endedAt','place','won'].includes(name)||!k.fields.some(([n,f])=>n===source&&['u8','u16','u32','i8','i16','i32','fix'].includes(f.t)))throw new Error('room.records.fields maps result names to numeric player fields');
+    }
+  }
   if (room.historySeconds !== undefined && (typeof room.historySeconds !== 'number' || !Number.isFinite(room.historySeconds) || room.historySeconds < 0 || room.historySeconds > 2)) throw new Error('room.historySeconds is from 0 to 2');
   const seats = Math.max(1, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(Number(env.seats)) || 8));
   return {
     contract: RULES_CONTRACT, save: SAVE_REVISION, dims, kinds, kindOf, events, commands, effects, effectNames: Object.keys(effects),
-    shared: fieldList(d.shared, 'shared'), view, ...(room.historySeconds ? {historySeconds:room.historySeconds}:{}), rounds, bots: Math.min(keep, seats), start: room.start ?? null, join: room.join ?? null, roomOn, asks,
+    shared: fieldList(d.shared, 'shared'), view, ...(room.records?{records:room.records}:{}), ...(room.historySeconds ? {historySeconds:room.historySeconds}:{}), rounds, bots: Math.min(keep, seats), start: room.start ?? null, join: room.join ?? null, roomOn, asks,
     tune, publicTune, map, settings, seats,
   };
 }
@@ -616,10 +635,11 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
  * bundle, so none of the rules' handlers reach a browser with it.
  */
 export interface Schema {
+  records?: true;
   contract: 2;
   dims: 2 | 3;
   seats: number;
-  kinds: { query?: QueryDef; collider?: ColliderDef; name: string; player: boolean; control?: string; owner: boolean; radius: number; shape?: string; height?: number; maxSpeed: number; score: string | null; fields: FieldList; motion: FieldList; input: FieldList }[];
+  kinds: { query?: QueryDef; collider?: ColliderDef; name: string; player: boolean; control?: string; owner: boolean; radius: number; shape?: string; height?: number; terrain?: 'exact'; maxSpeed: number; score: string | null; fields: FieldList; motion: FieldList; input: FieldList }[];
   effects: Record<string, FieldList>;
   effectNames: string[];
   commands: Record<string, FieldList>;
@@ -628,10 +648,18 @@ export interface Schema {
   rounds: { seconds: number; breakSeconds: number } | null;
   settings: RoomSettings;
 }
+function publicField(field: Field, hidden=false): Field {
+  hidden=hidden||!!field.visibility;
+  if(!hidden)return field;
+  const {init,...clean}=field;
+  if(clean.fields)clean.fields=Object.fromEntries(Object.entries(clean.fields).map(([key,value])=>[key,publicField(value,true)]));
+  if(clean.of)clean.of=publicField(clean.of,true);
+  return clean as Field;
+}
 export function schemaOf(c: Compiled): Schema {
   return {
-    contract: RULES_CONTRACT, dims: c.dims, seats: c.seats,
-    kinds: c.kinds.map((k) => ({ ...(k.query?{query:k.query}:{}), ...(k.collider?{collider:k.collider}:{}), name: k.name, player: Boolean(k.player), ...(k.player?.control ? {control:k.player.control}:{}), owner: Boolean(k.body?.owner), radius: k.body?.radius ?? 0, ...(c.dims === 3 && k.body ? { shape: k.body.shape, height: k.body.height || 2 * k.body.radius } : {}), maxSpeed: k.body?.maxSpeed ?? 0, score: k.score, fields: k.fields, motion: k.motion, input: k.input })),
+    contract: RULES_CONTRACT, dims: c.dims, seats: c.seats, ...(c.records?{records:true as const}:{}),
+    kinds: c.kinds.map((k) => ({ ...(k.query?{query:k.query}:{}), ...(k.collider?{collider:k.collider}:{}), ...(k.body?.terrain ? {terrain:k.body.terrain} : {}), name: k.name, player: Boolean(k.player), ...(k.player?.control ? {control:k.player.control}:{}), owner: Boolean(k.body?.owner), radius: k.body?.radius ?? 0, ...(c.dims === 3 && k.body ? { shape: k.body.shape, height: k.body.height || 2 * k.body.radius } : {}), maxSpeed: k.body?.maxSpeed ?? 0, score: k.score, fields: k.fields.map(([name,field])=>[name,publicField(field)]), motion: k.motion, input: k.input })),
     effects: c.effects, effectNames: c.effectNames, commands: c.commands, shared: c.shared, rounds: c.rounds, settings: c.settings,
   };
 }

@@ -98,11 +98,15 @@ export const SAVES_SHELL_JS = `${PASSKEY_JS}
           if (late) loaded.then(function () { tell('player', { player: me(), cache: snapshot(), same: true }); });
         });
       }
-      if (op === 'get') return loaded.then(function () { reply({ ok: true, value: valueOf(String(m.key)), version: versionOf(String(m.key)) }); });
+      if (op === 'get') return loaded.then(function () {
+        var key=String(m.key);if(key.indexOf('server:')===0&&KEY.test(key))return api('GET','/api/player/saves/'+GAME+'/'+encodeURIComponent(key)).then(function(r){if(r.ok){S.cache[key]={v:r.value,ver:r.version,at:r.updatedAt};persist();}reply(r);},function(){reply({ok:false,error:'offline',value:valueOf(key)});});
+        reply({ ok: true, value: valueOf(key), version: versionOf(key) });
+      });
       if (op === 'list') return loaded.then(function () { var keys = {}; Object.keys(S.cache).forEach(function (k) { keys[k] = 1; }); Object.keys(S.pending).forEach(function (k) { keys[k] = 1; });
         reply({ ok: true, keys: Object.keys(keys).filter(function (k) { return valueOf(k) !== null; }).sort().map(function (k) { var c = S.cache[k]; return { key: k, version: c ? c.ver : 0, updatedAt: c ? c.at : null, pending: !!S.pending[k] }; }) }); });
       if (op === 'set' || op === 'del') {
         var key = String(m.key || '');
+        if(key.indexOf('server:')===0)return reply({ok:false,error:'authority',message:'This record is written by the game server'});
         if (!KEY.test(key)) return reply({ ok: false, error: 'key', message: 'a save key is 1 to 64 letters, digits, _ . : or -' });
         if (op === 'set') {
           var text; try { text = JSON.stringify(m.value); } catch (e) { return reply({ ok: false, error: 'value', message: 'a save is JSON' }); }

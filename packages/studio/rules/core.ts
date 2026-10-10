@@ -1,3 +1,4 @@
+import {routeGraph} from './navigation.ts';
 import { rayQuery, raySnapshot, type QueryTarget } from './query.ts';
 import { colliderSolid, castCollider2, colliderRow, collisionMap, collisionQueries, type CollisionRevision } from './live.ts';
 /*
@@ -135,6 +136,7 @@ export interface SavedCore {
   v: number; tick: number; epoch: number; rng: number; nextId: number; seq: number;
   round: [number, number, number, number]; overAt: number; match: [number, number]; trips: number;
   shared: unknown[]; policy: CorePolicy; intent?: [number, number, number?];
+  collision?: [number,number];
   history?: [number, [string, number, number, number, number][]][];
   asks: PendingAsk[];
   guideViews: [number, Record<string, unknown>][];
@@ -181,7 +183,7 @@ export interface Core {
  * `noted`: told, as it happens, of a value the rules wrote that the runtime changed to make it fit, or dropped (pack.ts
  * `Adjusted`; also `effect`, `think` and `decision`): the handler, what was done, the field's name and what was written.
  */
-export function createCore(c: Compiled, opts: { label?: (seat:number,driver:Driver)=>string; moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes, id: string) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
+export function createCore(c: Compiled, opts: { rewindTicks?: (seat: number)=>number; label?: (seat:number,driver:Driver)=>string; moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes, id: string) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
   const dims = c.dims;
   const tickHz = c.settings.tickHz;
   const dt = 1 / tickHz;
@@ -391,7 +393,7 @@ export function createCore(c: Compiled, opts: { label?: (seat:number,driver:Driv
     const E = Error as unknown as { stackTraceLimit?: number };
     const limit = E.stackTraceLimit;
     E.stackTraceLimit = 0;
-    G.left = quota;
+    G.queryEpoch++; G.left = quota;
     // The build check is told of every written value that had to be changed to fit (pack.ts), with the handler it was in.
     if (noted) G.note = (what, at, written) => noted(kind, handler, what, at, written);
     let bad = false; let thrown: unknown;
@@ -492,7 +494,8 @@ export function createCore(c: Compiled, opts: { label?: (seat:number,driver:Driv
     const requested = own(options,'atTick');
     if (requested !== undefined && (typeof requested !== 'number' || !Number.isFinite(requested))) throw new Error('ray.atTick is a finite simulation tick');
     if (requested !== undefined && !historyTicks) throw new Error('ray.atTick needs room.historySeconds');
-    const wanted = typeof requested === 'number' ? Math.max(tick-historyTicks,Math.min(tick,requested)) : tick;
+    const allowance = cx.ent?.driver === 'person' ? Math.min(historyTicks,Math.max(0,opts.rewindTicks?.(cx.ent.seat) ?? 0)) : historyTicks;
+    const wanted = typeof requested === 'number' ? Math.max(tick-allowance,Math.min(tick,requested)) : tick;
     let before: typeof poseHistory[number] | undefined, after: typeof poseHistory[number] | undefined;
     if(wanted<tick)for(const frame of poseHistory){charge(2);if(frame[0]<=wanted)before=frame;if(frame[0]>=wanted){after=frame;break;}}
     before ??= poseHistory[0];after ??= poseHistory[poseHistory.length-1];
@@ -654,7 +657,34 @@ export function createCore(c: Compiled, opts: { label?: (seat:number,driver:Driv
       charge(cost);
       return Object.freeze(found.map(viewOf));
     },
-    ray: (from: unknown, direction: unknown, max: unknown, options?: unknown): unknown => rayQuery(c.map, rayTargets(options), dims, from, direction, max, options, cx.ent?.id)[0],
+    ray: (from: unknown, direction: unknown, max: unknown, options?: unknown): unknown => {
+      if (options !== undefined) return rayQuery(c.map, rayTargets(options), dims, from, direction, max, options, cx.ent?.id)[0];
+      // Charged before the cast, for every shape it may test: the map's, and every entity in the room.
+      charge(20 + 4 * ents.size);
+      const p = V(from); const d = dir(direction, dims); const far = reach(max, 'world.ray');
+      if (dims === 3) {
+        const delta = { x: d.x * far, y: d.y * far, z: d.z * far };
+        const hit = cast3(p, delta, { shape: 'sphere', radius: 0, height: 0 }, new Set(cx.ent ? [cx.ent.id] : []));
+        return hit ? Object.freeze({ ...(hit.id ? { entity: hit.id } : {}), at: V({ x: p.x + delta.x * hit.t, y: p.y + delta.y * hit.t, z: p.z + delta.z * hit.t }), normal: V({ x: hit.nx, y: hit.ny, z: hit.nz }), dist: far * hit.t }) : undefined;
+      }
+      const cast = castMap(c.map, p.x, p.y, d.x * far, d.y * far, 0);
+      let best: Hit | null = cast.hit;
+      for (const e of ents.values()) {
+        if (!e.kind.body || e === cx.ent) continue;
+        if (e.kind.collider) charge(48);
+        const row = e.kind.collider ? colliderRow(e.id, e.pos, e.kind.body, e.kind.collider, e.f) : null;
+        if (e.dead || e.kind.collider && !row) continue;
+        const h = row ? castCollider2(row, p, {x:d.x*far,y:d.y*far,z:0}, 0) : rayCircle(p.x, p.y, d.x * far, d.y * far, e.pos.x, e.pos.y, e.kind.body.radius);
+        if (h && (!best || h.t < best.t)) best = { ...h, id: e.id };
+      }
+      if (!best) return undefined;
+      return Object.freeze({ ...(best.id ? { entity: best.id } : {}), at: V({ x: p.x + d.x * far * best.t, y: p.y + d.y * far * best.t, z: 0 }), normal: V({ x: best.nx, y: best.ny, z: 0 }), dist: far * best.t });
+    },
+    route: (graph: unknown, from: unknown, to: unknown, options?: unknown) => {
+      const radius=own(options,'radius')??.5,height=own(options,'height')??1.8;
+      if(typeof radius!=='number'||!Number.isFinite(radius)||radius<0||radius>100||typeof height!=='number'||!Number.isFinite(height)||height<0||height>200)throw new Error('route radius/height are finite body dimensions');
+      return routeGraph(graph,from,to,rayTargets({geometryOnly:true}).map(t=>t.solid),radius,height);
+    },
     label: (id: unknown): string => {charge(20);const e=typeof id==='string'?ents.get(id):undefined;if(!e?.kind.player)return '';return String(opts.label?.(e.seat,e.driver)??`Player ${e.seat+1}`).slice(0,40);},
     rays: (options?: unknown): unknown => raySnapshot(c.map,rayTargets(options),dims,options,cx.ent?.id),
     rayAll: (from: unknown, direction: unknown, max: unknown, options?: unknown): unknown => rayQuery(c.map, rayTargets(options), dims, from, direction, max, options, cx.ent?.id, true),
@@ -716,11 +746,17 @@ export function createCore(c: Compiled, opts: { label?: (seat:number,driver:Driv
   Object.freeze(world);
 
   const hasColliders = c.kinds.some(k => k.collider);
-  const collisionState = (): CollisionRevision => [tick, tick + 1, [...ents.values()].flatMap(e => {
-    if (e.dead || !e.kind.collider || !e.kind.body) return [];
-    const row = colliderRow(e.id, e.pos, e.kind.body, e.kind.collider, e.f, e.kind.name, e.kind.query);
-    return row ? [row] : [];
-  })];
+  let collisionPrevious: CollisionRevision | null = null, collisionText = '';
+  const collisionState = (): CollisionRevision => {
+    const rows = [...ents.values()].flatMap(e => {
+      if (e.dead || !e.kind.collider || !e.kind.body) return [];
+      const row = colliderRow(e.id,e.pos,e.kind.body,e.kind.collider,e.f,e.kind.name,e.kind.query);
+      return row ? [row] : [];
+    });
+    const text = JSON.stringify(rows);
+    if (!collisionPrevious || text !== collisionText) {collisionText=text;collisionPrevious=[...(collisionPrevious ? [tick,tick+1] : opts.restore?.collision ?? [tick,tick+1]) as [number,number],rows];}
+    return collisionPrevious;
+  };
   let moveGeometry = c.map as import('./math.ts').MapShapes;
   const queries = collisionQueries(() => moveGeometry, () => moveShape, dims, () => cx.ent?.id);
   const moveWorld = brand(Object.freeze(queries));
@@ -1180,6 +1216,7 @@ export function createCore(c: Compiled, opts: { label?: (seat:number,driver:Driv
   function save(): SavedCore {
     return {
       v: SAVE_REVISION, tick, epoch, rng, nextId, seq, round: [round.n, round.phase === 'live' ? 1 : 0, round.endsAt, round.startedAt], overAt, match: [playing, restartAt], trips,
+      ...(hasColliders?{collision:collisionState().slice(0,2) as [number,number]}:{}),
       ...(historyTicks?{history:poseHistory.map(([at,rows])=>[at,rows.map(row=>[...row])] as SavedCore['history'])}:{}),
       shared: packFields(c.shared, shared, dims), policy: { ...policy }, intent: restartAsked ? [endAsked ? 1 : 0, finishing ? 1 : 0, 1] : [endAsked ? 1 : 0, finishing ? 1 : 0], asks: pendingAsks, guideViews: [...guideViews],
       ents: [...ents.values()].map(saveEnt), spawns: spawns.map(saveEnt),
@@ -1198,7 +1235,8 @@ export function createCore(c: Compiled, opts: { label?: (seat:number,driver:Driv
       check(Array.isArray(value) && JSON.stringify(value) === JSON.stringify(packFields(list, unpackFields(list, value, dims), dims)));
     };
     check(r.v === SAVE_REVISION);
-    check(Object.keys(r).every(k => ['v', 'tick', 'epoch', 'rng', 'nextId', 'seq', 'round', 'overAt', 'match', 'trips', 'shared', 'policy', 'intent', 'asks', 'guideViews', 'ents', 'spawns', 'seats', 'queue', 'areas', 'ops', 'history'].includes(k)));
+    if(r.collision!==undefined)check(Array.isArray(r.collision)&&r.collision.length===2&&uint(r.collision[0])&&uint(r.collision[1])&&r.collision[0]<=r.tick&&r.collision[1]===r.collision[0]+1);
+    check(Object.keys(r).every(k => ['v', 'tick', 'epoch', 'rng', 'nextId', 'seq', 'round', 'overAt', 'match', 'trips', 'shared', 'policy', 'intent', 'asks', 'guideViews', 'ents', 'spawns', 'seats', 'queue', 'areas', 'ops', 'history', 'collision'].includes(k)));
     const askNames = new Set();
     check(Array.isArray(r.asks));
     for (const a of r.asks) {
@@ -1349,6 +1387,7 @@ export function createCore(c: Compiled, opts: { label?: (seat:number,driver:Driv
     });
     areas = r.areas.map((a: any[]) => ({ from: a[0], fromId: a[1], seq: a[2], shape: a[3], ev: a[4], data: deepFreeze(coerceFields(c.events[a[4]] ?? [], a[5], dims)) }));
     ops = r.ops as typeof ops;
+    if(hasColliders)collisionState();
   } else startMatch();
 
   function decisionResult(value: unknown): Record<string, unknown> {

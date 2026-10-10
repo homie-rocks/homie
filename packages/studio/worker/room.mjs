@@ -484,15 +484,16 @@ export class NetRoom {
 
   hasViewSchedule() {
     const view = this.server?.viewSettings;
-    return this.server?.viewRadiusM != null || Boolean(view?.precisionM > 0 || view?.nearM != null && view?.farHz != null);
+    return this.server?.privateDelivery || this.server?.viewRadiusM != null || Boolean(view?.precisionM > 0 || view?.nearM != null && view?.farHz != null);
   }
 
   /** The same per-player delivery role will run in Gates. Keyframes belong to sockets, not saved seats. */
   playerSnapshot(client, snap, welcome = false) {
     if (!snap || !this.hasViewSchedule()) return snap;
     client.viewSchedule ??= scheduledView(this.server.viewSettings ?? { radiusM: this.server.viewRadiusM }, this.tickHz);
-    const selected = client.viewSchedule(snap, client.seat);
-    client.snapEncoder ??= snapshotEncoder(this.tickHz, true);
+    let selected = client.viewSchedule(snap, client.seat);
+    if(this.server?.projectSnapshot) selected=this.server.projectSnapshot(selected,client.seat);
+    client.snapEncoder ??= snapshotEncoder(this.tickHz, !this.server?.privateDelivery);
     if (welcome) client.snapEncoder.reset();
     return client.snapEncoder.encode(selected, client.seat);
   }
@@ -918,11 +919,19 @@ export class NetRoom {
         this.onChat({ client: c }, m);
         return;
       }
+      case 'probeAck': {
+        if (c.probe && m.n === c.probe.n) {
+          const ms = now - c.probe.at; c.probe = null;
+          if(ms>=0 && ms<=10000){ c.measuredRtt=Math.min(c.measuredRtt??Infinity,ms); if(c.seat!==null)this.toServer({t:'latency',seat:c.seat,ms:c.measuredRtt}); }
+        }
+        return;
+      }
       case 'ping': {
         if (this.rules && c.rules && Number.isFinite(m.readySpeed)) { c.readySpeed = Math.max(0, Math.min(1, m.readySpeed)); c.readyAt = now; }
         const wasHidden = c.hidden;
         c.hidden = m.hid === true;
         this.send(c, { t: 'pong', c: m.c, st: now });
+        if(this.server && (!c.probe || now-c.probe.at>10000)){c.probe={n:crypto.randomUUID(),at:now};this.send(c,{t:'probe',n:c.probe.n});}
         // A host whose tab went to the background will stop ticking: hand the round on now.
         if (c.id === this.hostId && c.hidden && !wasHidden) this.yieldHost(c, 'host-hidden');
         return;

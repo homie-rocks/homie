@@ -21,7 +21,7 @@ import { cellsOf } from './rules.ts';
 import type { Field, FieldList, Vec3 } from './rules.ts';
 import { G, charge, keyCount, own, refusedName } from './guard.ts';
 
-const RANGE: Record<string, [number, number]> = { u8: [0, 255], u16: [0, 65535], u32: [0, 4294967295], i8: [-128, 127], i16: [-32768, 32767], i32: [-2147483648, 2147483647], tick: [0, 4294967295], ticks: [0, 4294967295] };
+const RANGE: Record<string, [number, number]> = { pulse: [0, 255], u8: [0, 255], u16: [0, 65535], u32: [0, 4294967295], i8: [-128, 127], i16: [-32768, 32767], i32: [-2147483648, 2147483647], tick: [0, 4294967295], ticks: [0, 4294967295] };
 /** `f.fix`: steps of 1/4096, to plus or minus 2^31 (a tick count with a fraction fits for the life of any room). */
 export const FIX_STEP = 4096;
 const FIX_MAX = 2147483648;
@@ -262,7 +262,7 @@ export interface MoveBody { pos: Vec3; vel: Vec3; heading: Vec3; grounded: boole
  * `used` is the units it took. What it throws goes to `failed` (the budget's own stop too) and the body is still read.
  */
 export function stepMove(fn: (body: MoveBody, input: unknown, ctx: unknown) => void, body: MoveBody, input: Readonly<Record<string, unknown>>, ctx: unknown, quota: number, motion: FieldList, dims: number, failed: (error: unknown) => void): MoveBody & { used: number } {
-  G.left = quota;
+  G.queryEpoch++; G.left = quota;
   const bag = coerceFields(motion, body.motion, dims);
   const target: Record<string, unknown> = {};
   const work: Record<string, unknown> = {};

@@ -17,7 +17,9 @@ export function rayQuery(map: MapShapes, targets: readonly QueryTarget[], dims: 
   if(shapeOption!==undefined && !['sphere','box','capsule'].includes(shapeOption as string))throw new Error('ray.shape is sphere, box or capsule');
   const heightOption=own(options,'height'),height=heightOption===undefined?2*radius:heightOption;
   if(typeof height!=='number'||!Number.isFinite(height)||height<2*radius||height>200)throw new Error('ray.height is at least twice its radius and at most 200 metres');
-  const shape={shape:shapeOption==='box'?'box':shapeOption==='capsule'?'capsule':'sphere',radius,height:shapeOption==='sphere'||shapeOption===undefined?2*radius:height};
+  const terrainOption=own(options,'terrain');
+  if(terrainOption!==undefined && terrainOption!=='exact')throw new Error("ray.terrain is 'exact' or omitted");
+  const shape={terrain:terrainOption as 'exact' | undefined,shape:shapeOption==='box'?'box':shapeOption==='capsule'?'capsule':'sphere',radius,height:shapeOption==='sphere'||shapeOption===undefined?2*radius:height};
   const start={x:p.x,y:p.y,z:p.z-shape.height/2};
   const ignore = own(options,'ignore');
   if (ignore !== undefined && (!Array.isArray(ignore) || ignore.length > 16)) throw new Error('ray.ignore holds at most 16 entity refs');
@@ -95,7 +97,7 @@ export function raySnapshot(map:MapShapes,targets:readonly QueryTarget[],dims:nu
  const radius=typeof own(policy,'radius')==='number'?own(policy,'radius') as number:0,height=own(policy,'shape')==='box'||own(policy,'shape')==='capsule'?Number(own(policy,'height')??radius*2):radius*2;
  const position=(body:unknown)=>{const at=own(body,'pos');if(!at||typeof at!=='object')throw new Error('scene sweep/support takes a scratch body with a plain pos');return vec3(at,dims);};
  const support=(body:unknown,distance:unknown=.002)=>{const p=position(body);if(dims===2)return Object.freeze({at:p,normal:Object.freeze({x:0,y:0,z:1}),dist:0});if(typeof distance!=='number'||!Number.isFinite(distance)||distance<0)throw new Error('support distance is finite and nonnegative');const h=rayQuery(map,scene,dims,{x:p.x,y:p.y,z:p.z+height/2},{x:0,y:0,z:-1},distance,policy,self,false,false)[0];return h&&h.normal.z>.5?Object.freeze({...h,at:vec3({x:h.at.x,y:h.at.y,z:(h.at.z??0)-height/2},dims)}):undefined;};
- const sweep=(body:unknown,delta:unknown)=>{const p=position(body),d=vec3(delta,dims),length=Math.sqrt(d.x*d.x+d.y*d.y+d.z*d.z),h=length?rayQuery(map,scene,dims,{x:p.x,y:p.y,z:p.z+height/2},d,length,policy,self,false,false)[0]:undefined;
-   const fraction=h?Math.max(0,(h.dist-.001)/length):1;put(body as object,'pos',vec3({x:p.x+d.x*fraction,y:p.y+d.y*fraction,z:p.z+d.z*fraction},dims));put(body as object,'grounded',dims===2||Boolean(support(body)));return h?Object.freeze({...h,at:vec3(own(body,'pos'),dims)}):undefined;};
+ const sweep=(body:unknown,delta:unknown,options?:unknown)=>{const p=position(body),d=vec3(delta,dims),length=Math.sqrt(d.x*d.x+d.y*d.y+d.z*d.z),h=length?rayQuery(map,scene,dims,{x:p.x,y:p.y,z:p.z+height/2},d,length,policy,self,false,false)[0]:undefined;
+   const fraction=h?Math.max(0,(h.dist-.001)/length):1;put(body as object,'pos',vec3({x:p.x+d.x*fraction,y:p.y+d.y*fraction,z:p.z+d.z*fraction},dims));if(own(options,'ground')!==false)put(body as object,'grounded',dims===2||Boolean(support(body)));return h?Object.freeze({...h,at:vec3(own(body,'pos'),dims)}):undefined;};
  return brand(Object.freeze({ray,rayAll:(from:unknown,direction:unknown,max:unknown)=>rayQuery(map,scene,dims,from,direction,max,policy,self,true),sweep,support}));
 }

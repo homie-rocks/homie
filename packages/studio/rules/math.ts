@@ -263,7 +263,7 @@ export function castMap(map: MapShapes, px: number, py: number, dx: number, dy: 
  * and a browser both move a body with this, so they agree to the last bit. Returns nothing, or `{ at, normal }`.
  * The 2D path charges 20 units and 4 per shape; 3D also charges each convex cast and terrain tile. With `dims` 2 a body always rests on the ground.
  */
-export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: number, dims: number, shape: BodyShape = { shape: 'sphere', radius, height: 2 * radius }): unknown {
+export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: number, dims: number, shape: BodyShape = { shape: 'sphere', radius, height: 2 * radius }, options?: unknown): unknown {
   // Charged before the cast, for every shape of the map it may test.
   charge(20);
   const fr = Math.fround;
@@ -279,7 +279,7 @@ export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: 
     const length = Math.sqrt(dx * dx + dy * dy + d.z * d.z);
     const t = h ? Math.max(0, h.t - (length > 0 ? SKIN / length : 0)) : 1;
     const at = v(fr(px + dx * t), fr(py + dy * t), fr(p.z + d.z * t));
-    put(body, 'pos', at); put(body, 'grounded', restsOnMap(map, at, shape));
+    put(body, 'pos', at); if (own(options, 'ground') !== false) put(body, 'grounded', restsOnMap(map, at, shape));
     return h ? Object.freeze({ at, normal: v(h.nx, h.ny, h.nz), ...(h.id ? { entity: h.id } : {}) }) : undefined;
   }
   const { hit: h } = castMap(map, px, py, dx, dy, radius);

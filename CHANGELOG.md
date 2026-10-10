@@ -25,22 +25,26 @@ Run richer server-authoritative combat, admission and bots with shared collision
 
 ### Added
 
-- Budgeted `ray` options and ordered `rayAll` results: entity kind, tag, layer, scalar field comparisons, bounded ignore lists, ignore-self control and geometry-only occlusion.
-- Named query hit regions and projectile profiles, plus sphere, box and capsule casts for camera clearance and movement planning.
-- Bounded pose history for lag-compensated hits, synchronous ordered interaction dispatch for sequential pellets, and immutable query snapshots with scratch sweep/support for bot route rehearsal.
-- Result-free round restart for authorized retries, preserving seats and skipping the intermission.
-- Ranked bot takeover with explicit player control consent, and server-owned player labels for historical game events.
-- Matching view aiming and movement geometry rays. Collision revisions carry collider filter metadata outside visual interest and across rejoin.
+- Opt-in ray options, ordered `rayAll` hits, named hit regions, projectile profiles, immutable query scenes and scratch movement queries.
+- `f.pulse()` carries a nonzero byte action once over the reliable input-event channel. Use it for weapon selection; ordinary sampled fields must not carry one-frame actions.
+- Entity field visibility: `owner`, `server` and `results`. Per-recipient projections also apply to welcome, watching and reconnect snapshots. Private-delivery deltas refer to a keyframe so packet loss cannot leave moving actors at stale poses.
+- Authenticated room round records, with a durable retry outbox and idempotent player-history append. Browser saves cannot overwrite server records.
+- Budgeted routes over baked walking graphs, ordered same-tick dispatch, player labels, ranked takeover and result-free retries.
 
 ### Fixed
 
-- Terrain and live-geometry broad phases keep detailed arenas and repeated camera queries within rules budgets.
-- Point queries starting inside solid boxes, spheres, capsules or solid terrain report an immediate hit; movement still permits escape from existing overlap.
+- **Ray compatibility:** the earlier PR revision changed all rays to hit inside solids and charged more. Three-argument calls now retain their existing results and cost. Supplying the new options explicitly opts into inside-solid hits and the new query cost.
+- **Collider delivery:** the earlier PR revision copied every primitive field. Collider rows now carry only explicitly declared public `collider.fields`, and geometry revisions are sent only when changed relative to the snapshot baseline.
+- **Build compatibility:** `label`, `dispatch`, `rayAll`, `rays` and `restart` remain legal ordinary property and destructuring names. Guarding capability calls does not reserve these data names.
+- **Terrain compatibility:** the earlier PR revision changed terrain casting globally. Existing casts retain the 0.45.0 implementation; `body.terrain: 'exact'` and ray option `terrain: 'exact'` opt into the new algorithm and cost. Seeded compatibility tests pin old results and costs.
+- Client-requested actor rewind is bounded by server-measured round-trip latency plus presentation and scheduling margins, within the declared history limit. A client cannot simply choose any point in the history window.
+- Optional `sweep(body, delta, {ground:false})` skips redundant support work when the mover explicitly computes grounding. Default sweep behavior is unchanged. Exact terrain casts reject irrelevant support features early and reuse identical immutable queries within a handler. These savings do not enlarge handler budgets.
 
 ### Upgrade notes
 
-- Existing three-argument rays remain supported. Query parts change shot geometry only. Filters and local feedback do not grant client damage authority or implement lag compensation.
-- This capability work does not constitute a completed Stormbreak server-rules migration or a gameplay parity claim.
+- New ray and terrain policies are opt-in. Query filters and locally predicted feedback do not grant damage authority.
+- `server:` save keys are reserved for declared room records; player-owned saves use other keys. Records retain at most 100 completed rounds.
+- This capability work does not itself constitute a Stormbreak gameplay parity claim.
 
 ## [0.45.1] - 2026-10-09
 
