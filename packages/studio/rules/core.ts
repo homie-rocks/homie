@@ -135,6 +135,7 @@ export interface SavedCore {
   v: number; tick: number; epoch: number; rng: number; nextId: number; seq: number;
   round: [number, number, number, number]; overAt: number; match: [number, number]; trips: number;
   shared: unknown[]; policy: CorePolicy; intent?: [number, number];
+  history?: [number, [string, number, number, number, number][]][];
   asks: PendingAsk[];
   guideViews: [number, Record<string, unknown>][];
   ents: unknown[][]; spawns: unknown[][]; seats: [number, string, string, string | null, number][]; queue: unknown[][]; areas: unknown[][]; ops: unknown[];
@@ -480,14 +481,25 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
     return sharedRO;
   };
 
-  function rayTargets(): QueryTarget[] {
+  const historyTicks = Math.ceil((c.historySeconds ?? 0) * tickHz);
+  let poseHistory: [number, [string, number, number, number, number][]][] = [];
+  function rayTargets(options?: unknown): QueryTarget[] {
     charge(64 * ents.size);
     const targets: QueryTarget[] = [];
+    const requested = own(options,'atTick');
+    if (requested !== undefined && (typeof requested !== 'number' || !Number.isFinite(requested))) throw new Error('ray.atTick is a finite simulation tick');
+    if (requested !== undefined && !historyTicks) throw new Error('ray.atTick needs room.historySeconds');
+    const wanted = typeof requested === 'number' ? Math.max(tick-historyTicks,Math.min(tick,requested)) : tick;
+    let before: typeof poseHistory[number] | undefined, after: typeof poseHistory[number] | undefined;
+    if(wanted<tick)for(const frame of poseHistory){charge(2);if(frame[0]<=wanted)before=frame;if(frame[0]>=wanted){after=frame;break;}}
+    before ??= poseHistory[0];after ??= poseHistory[poseHistory.length-1];
     for(const e of ents.values()) {
       if(e.dead || !e.kind.body)continue;
       const row=e.kind.collider?colliderRow(e.id,e.pos,e.kind.body,e.kind.collider,e.f):null;
       if(e.kind.collider&&!row)continue;
-      targets.push({id:e.id,kind:e.kind.name,query:e.kind.query,fields:e.f,geometry:Boolean(row),solid:row?colliderSolid(row):solidAt(e.pos,e.kind.body),at:e.pos});
+      let at=e.pos;
+      if(!e.kind.collider && wanted<tick && before && after){charge(4*(before[1].length+after[1].length));const a=before[1].find(p=>p[0]===e.id&&p[4]===e.r),b=after[1].find(p=>p[0]===e.id&&p[4]===e.r);if(a&&b){const mix=after[0]===before[0]?0:Math.max(0,Math.min(1,(wanted-before[0])/(after[0]-before[0])));at={x:a[1]+(b[1]-a[1])*mix,y:a[2]+(b[2]-a[2])*mix,z:a[3]+(b[3]-a[3])*mix};}}
+      targets.push({id:e.id,kind:e.kind.name,query:e.kind.query,fields:e.f,geometry:Boolean(row),solid:row?colliderSolid(row):solidAt(at,e.kind.body),at});
     }
     return targets;
   }
@@ -638,8 +650,8 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       charge(cost);
       return Object.freeze(found.map(viewOf));
     },
-    ray: (from: unknown, direction: unknown, max: unknown, options?: unknown): unknown => rayQuery(c.map, rayTargets(), dims, from, direction, max, options, cx.ent?.id)[0],
-    rayAll: (from: unknown, direction: unknown, max: unknown, options?: unknown): unknown => rayQuery(c.map, rayTargets(), dims, from, direction, max, options, cx.ent?.id, true),
+    ray: (from: unknown, direction: unknown, max: unknown, options?: unknown): unknown => rayQuery(c.map, rayTargets(options), dims, from, direction, max, options, cx.ent?.id)[0],
+    rayAll: (from: unknown, direction: unknown, max: unknown, options?: unknown): unknown => rayQuery(c.map, rayTargets(options), dims, from, direction, max, options, cx.ent?.id, true),
     sweep: (self: unknown, delta: unknown, o?: unknown): unknown => {
       const e = mine(self, 'world.sweep');
       charge(20 + 4 * ents.size);
@@ -898,6 +910,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       const seat = seats.get(e.seat);
       if (seat) leaveBody(seat);
     }
+    poseHistory = [];
     round = { n: round.n + 1, phase: 'live', endsAt: c.rounds && c.rounds.seconds > 0 ? tick + ticks(c.rounds.seconds) : 0, startedAt: tick };
     overAt = 0;
     refreshRound();
@@ -1126,6 +1139,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       areas = [];
       if (finishing) finishMatch();
     }
+    if(historyTicks){const rows:[string,number,number,number,number][]=[];for(const e of ents.values())if(e.kind.body&&!e.kind.collider&&!e.dead)rows.push([e.id,e.pos.x,e.pos.y,e.pos.z,e.r]);left-=16*rows.length;poseHistory.push([tick,rows]);while(poseHistory.length>historyTicks+1)poseHistory.shift();}
     if (fx.length) { out.push({ t: 'fx', tick, list: fx }); fx = []; }
     if (sharedDirty) { sharedDirty = false; out.push({ t: 'shared' }); }
     stats.tickUnits = c.settings.budget.tick - left;
@@ -1159,6 +1173,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
   function save(): SavedCore {
     return {
       v: SAVE_REVISION, tick, epoch, rng, nextId, seq, round: [round.n, round.phase === 'live' ? 1 : 0, round.endsAt, round.startedAt], overAt, match: [playing, restartAt], trips,
+      ...(historyTicks?{history:poseHistory.map(([at,rows])=>[at,rows.map(row=>[...row])] as SavedCore['history'])}:{}),
       shared: packFields(c.shared, shared, dims), policy: { ...policy }, intent: [endAsked ? 1 : 0, finishing ? 1 : 0], asks: pendingAsks, guideViews: [...guideViews],
       ents: [...ents.values()].map(saveEnt), spawns: spawns.map(saveEnt),
       seats: [...seats.values()].map((s) => [s.seat, s.driver, s.owner, s.id, s.away ? 1 : 0]),
@@ -1176,7 +1191,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       check(Array.isArray(value) && JSON.stringify(value) === JSON.stringify(packFields(list, unpackFields(list, value, dims), dims)));
     };
     check(r.v === SAVE_REVISION);
-    check(Object.keys(r).every(k => ['v', 'tick', 'epoch', 'rng', 'nextId', 'seq', 'round', 'overAt', 'match', 'trips', 'shared', 'policy', 'intent', 'asks', 'guideViews', 'ents', 'spawns', 'seats', 'queue', 'areas', 'ops'].includes(k)));
+    check(Object.keys(r).every(k => ['v', 'tick', 'epoch', 'rng', 'nextId', 'seq', 'round', 'overAt', 'match', 'trips', 'shared', 'policy', 'intent', 'asks', 'guideViews', 'ents', 'spawns', 'seats', 'queue', 'areas', 'ops', 'history'].includes(k)));
     const askNames = new Set();
     check(Array.isArray(r.asks));
     for (const a of r.asks) {
@@ -1301,6 +1316,12 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
   if (r) {
     if (r.v !== SAVE_REVISION) throw new Error('this save was written by another version of the runtime');
     validateSave(r);
+    if(historyTicks){
+      if(!Array.isArray(r.history)||r.history.length>historyTicks+1)throw new Error('saved query history is invalid');
+      let previous=-1;
+      for(const frame of r.history){if(!Array.isArray(frame)||frame.length!==2||!Number.isInteger(frame[0])||frame[0]<=previous||frame[0]>r.tick||frame[0]<r.tick-historyTicks||!Array.isArray(frame[1])||frame[1].length>ENTITY_MAX)throw new Error('saved query history is invalid');previous=frame[0];const ids=new Set<string>();for(const p of frame[1]){if(!Array.isArray(p)||p.length!==5||typeof p[0]!=='string'||p[0].length>24||ids.has(p[0])||!p.slice(1,4).every(v=>typeof v==='number'&&Number.isFinite(v))||!Number.isInteger(p[4])||p[4]<0||p[4]>65535)throw new Error('saved query history is invalid');ids.add(p[0]);}}
+      poseHistory=r.history.map(([at,rows])=>[at,rows.map(row=>[...row])]);
+    }
     pendingAsks = r.asks.map(a => ({ ...a, state: deepFreeze(a.state) }));
     if ([opts.restoreEpoch].some((e) => e !== undefined && (!Number.isSafeInteger(e) || e <= 0))) throw new Error('restored epoch is invalid');
     tick = r.tick; epoch = opts.restoreEpoch ?? r.epoch; rng = r.rng; nextId = r.nextId; seq = r.seq; overAt = r.overAt; playing = r.match[0]; restartAt = r.match[1]; trips = r.trips;

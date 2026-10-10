@@ -114,7 +114,16 @@ export function castMap3(map: Map3, p: Vec3, d: Vec3, body: BodyShape, hits?: Hi
     const n = point(0, 0, 0); n[axis] = d[axis] > 0 ? -1 : 1;
     take({ t: ((d[axis] > 0 ? high : low) - p[axis]) / d[axis], nx: n.x, ny: n.y, nz: n.z });
   }
-  for (const tile of map.heightTiles ?? []) take(tile.base === undefined ? castHeightTile(tile, p, d) : castTerrain(tile, a, d));
+  const terrain = [...(map.heightTiles ?? [])];
+  if(d.z<0){charge(terrain.length*Math.ceil(Math.log2(terrain.length+1)));terrain.sort((a,b)=>(b.at.z+Math.max(...b.heights))-(a.at.z+Math.max(...a.heights)));}
+  for (const tile of terrain) {
+    // Once a nearer surface is known, later solids only need to beat that time.
+    // This also bounds work on densely tessellated terrain behind the first hit.
+    const limit = !hits && best ? best.t : 1;
+    const delta = limit < 1 ? point(d.x * limit, d.y * limit, d.z * limit) : d;
+    const hit = tile.base === undefined ? castHeightTile(tile, p, delta) : castTerrain(tile, a, delta);
+    if (hit) take({...hit, t: hit.t * limit});
+  }
   for (const b of map.boxes) take(castSolid(a, d, { ...b, r: 0 }, includeInside), (b as any).id);
   // Legacy map circles are vertical columns in a 3D map.
   for (const c of map.circles) take(castSolid(a, d, { min: point(c.at.x, c.at.y, map.bounds.min.z - r), max: point(c.at.x, c.at.y, map.bounds.max.z + r), r: c.r }, includeInside), (c as any).id);
