@@ -2498,7 +2498,9 @@ test('failed Stripe refunds can be retried without repeating a pending refund', 
 const ROLLING_REPO = join(PKG, '..', '..');
 const RELEASE_TAG = /^release-\d{4}-\d\d-\d\d-studio-(\d+)\.(\d+)\.(\d+)$/;
 const releaseTags = (() => {
-  const r = spawnSync('git', ['tag', '--list', 'release-*-studio-*'], { cwd: ROLLING_REPO, encoding: 'utf8' });
+  // Tags are shared by worktrees. An unrelated branch's release or temporary tag
+  // is not an upgrade baseline for this checkout.
+  const r = spawnSync('git', ['tag', '--merged', 'HEAD', '--list', 'release-*-studio-*'], { cwd: ROLLING_REPO, encoding: 'utf8' });
   const inRepo = spawnSync('git', ['rev-parse', '--show-cdup'], { cwd: ROLLING_REPO, encoding: 'utf8' });
   if (r.status !== 0 || inRepo.status !== 0 || inRepo.stdout.trim()) return [];
   const version = (t) => RELEASE_TAG.exec(t).slice(1).map(Number);

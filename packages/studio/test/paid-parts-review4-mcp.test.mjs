@@ -11,10 +11,10 @@ const say = (...a) => console.log('#', ...a);
 const MCP = 'https://seller.example/api/purchases/mcp';
 
 test('P1 MCP SDK client: initialize, tools/list, unpaid call, paid call through mppx McpClient.wrap', async () => {
-  const w = await seller('p1'); try {
+  const w = await seller('p1'); let client; try {
     const part = await (await fetch('https://seller.example/parts/camera/0.1.0/part.json')).json();
     const args = { kind: 'part', resource: 'camera', version: '0.1.0', buyer: 'e'.repeat(64), claim: 'f'.repeat(64), quote: await sale$.quoteHash(part) };
-    const client = new Client({ name: 'review-agent', version: '1.0.0' });
+    client = new Client({ name: 'review-agent', version: '1.0.0' });
     const transport = new StreamableHTTPClientTransport(new URL(MCP), { fetch: (u, i) => fetch(u, i) });
     let connected = 'ok'; try { await client.connect(transport); } catch (e) { connected = `THREW ${e.message}`; }
     say('P1 connect:', connected, '| negotiated', client.getServerVersion?.() && JSON.stringify(client.getServerVersion()), '| capabilities', JSON.stringify(client.getServerCapabilities?.()));
@@ -42,15 +42,14 @@ test('P1 MCP SDK client: initialize, tools/list, unpaid call, paid call through 
     assert.equal(approved, 1);
     const paths = JSON.parse(paid.content[0].text).manifest.files.map((f) => f.path);
     say('P1 do the resource blobs say which file they are?', JSON.stringify(paid.content.slice(1, 3).map((c) => Object.keys(c.resource))), 'manifest paths', paths.length);
-    await client.close().catch(() => {});
-  } finally { await w.close(); }
+  } finally { try { await client?.close(); } finally { await w.close(); } }
 });
 
 test('P2 MCP: recurring, non-USD and missing settings answer inside the protocol', async () => {
-  const w = await seller('p2', { saleOpts: { billing: 'month' } }); try {
+  const w = await seller('p2', { saleOpts: { billing: 'month' } }); let client; try {
     const part = await (await fetch('https://seller.example/parts/camera/0.1.0/part.json')).json();
     const args = { kind: 'part', resource: 'camera', version: '0.1.0', buyer: 'e'.repeat(64), claim: 'f'.repeat(64), quote: await sale$.quoteHash(part) };
-    const client = new Client({ name: 'review-agent', version: '1.0.0' });
+    client = new Client({ name: 'review-agent', version: '1.0.0' });
     await client.connect(new StreamableHTTPClientTransport(new URL(MCP), { fetch: (u, i) => fetch(u, i) }));
     const r = await client.callTool({ name: 'purchase', arguments: args }).catch((e) => `THREW ${e.constructor.name} code=${e.code} ${e.message.slice(0, 200)}`);
     say('P2 recurring part over MCP:', typeof r === 'string' ? r : JSON.stringify(r).slice(0, 200));
@@ -61,6 +60,5 @@ test('P2 MCP: recurring, non-USD and missing settings answer inside the protocol
     assert.deepEqual(init.result.capabilities.experimental.payment.methods.stripe, { intents: ['charge'] });
     assert.equal(init.result.protocolVersion, '2025-03-26');
     say('P2 initialize asking for 2025-03-26 ->', init.result.protocolVersion, '| capabilities', JSON.stringify(init.result.capabilities));
-    await client.close().catch(() => {});
-  } finally { await w.close(); }
+  } finally { try { await client?.close(); } finally { await w.close(); } }
 });

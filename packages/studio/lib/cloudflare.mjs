@@ -466,7 +466,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   const next = { ...kept, ...(cf.url && !isWorkersDev(cf.url) ? { url: cf.url } : {}), accountId, d1Id: db.uuid, r2: cf.r2 ?? null, created: [...created].sort() };
   writeStudio(root, { ...readStudio(root), cloudflare: next });
   return {
-    ok: true, command: 'deploy', url, ...(workersDev ? { workersDev, local: LOCAL_STATE } : {}), worker: cf.worker, d1: cf.d1, r2, account: accountId, announced, steps,
+    ok: true, command: 'deploy', url, mcp: url ? `${url}/mcp` : null, connectAI: url ? `${url}/_studio/office/connections` : null, ...(workersDev ? { workersDev, local: LOCAL_STATE } : {}), worker: cf.worker, d1: cf.d1, r2, account: accountId, announced, steps,
     ...(media ? { media: { moved: media.moved ?? [], failed: media.failed ?? [], inR2: media.inR2 ?? null } } : {}),
     games: b.catalogue.map((id) => { const g = delta.games.find((x) => x.id === id); return { id, page: url ? `${url}/${id}/` : null, play: url ? `${url}/${id}/play` : null, hash: g?.hash ?? null, change: delta.first ? 'first deploy from this computer' : g?.change ?? null }; }),
     ...(delta.removed.length ? { removed: delta.removed } : {}),
@@ -628,7 +628,7 @@ export async function ciDeploy(root, { log = () => {} } = {}) {
   const hashes = builtGames(root, games);
   for (const id of games) if (hashes[id]?.hash) step(`${id}: ${deployWords(hashes[id])}`);
   return {
-    ok: true, command: 'deploy', ci: true, url, worker: names.worker, d1: names.d1, r2: null, steps, announced: [],
+    ok: true, command: 'deploy', ci: true, url, mcp: url ? `${url}/mcp` : null, connectAI: url ? `${url}/_studio/office/connections` : null, worker: names.worker, d1: names.d1, r2: null, steps, announced: [],
     commit: process.env.WORKERS_CI_COMMIT_SHA ?? null, branch: process.env.WORKERS_CI_BRANCH ?? null,
     // A CI checkout has no earlier deploy to compare with: each game's content hash only (lib/deploy-state.mjs).
     games: games.map((id) => ({ id, page: url ? `${url}/${id}/` : null, play: url ? `${url}/${id}/play` : null, hash: hashes[id]?.hash ?? null })), songs: [], videos: [],

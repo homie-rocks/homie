@@ -71,9 +71,9 @@ test('G3 MCP: official SDK client + mppx McpClient, standards only', async () =>
   const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
   const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
   const { McpClient } = await import('mppx/mcp-sdk/client');
-  const s = await card('g3'); try {
+  const s = await card('g3'); let client; try {
     const d = await discover((...a) => say('G3', ...a));
-    const client = new Client({ name: 'stranger', version: '1' }); await client.connect(new StreamableHTTPClientTransport(new URL(`${O}/api/purchases/mcp`)));
+    client = new Client({ name: 'stranger', version: '1' }); await client.connect(new StreamableHTTPClientTransport(new URL(`${O}/api/purchases/mcp`)));
     say('G3 server', JSON.stringify(client.getServerVersion()), 'capabilities', JSON.stringify(client.getServerCapabilities()));
     const tools = await client.listTools(); say('G3 tools', tools.tools.map((t) => `${t.name} required=${t.inputSchema.required}`));
     const unknown = await client.callTool({ name: 'nope', arguments: {} }).then((r) => `isError=${r.isError}`, (e) => `THREW ${e.code}`);
@@ -88,7 +88,7 @@ test('G3 MCP: official SDK client + mppx McpClient, standards only', async () =>
     say('G3 same call again (no payment): receipt', JSON.stringify(again._meta?.['org.paymentauth/receipt']), 'resources', again.content?.filter((c) => c.type === 'resource').length, '| charges', cardCharges(s.w).length);
     assert.equal(cardCharges(s.w).length, 1); assert.deepEqual(s.w.blocked, []);
     say('G3 hosts', JSON.stringify([...s.w.hosts]));
-  } finally { s.K.restore(); await s.w.close(); }
+  } finally { try { await client?.close(); } finally { s.K.restore(); await s.w.close(); } }
 });
 
 test('G4 what a stranger is told when no machine path is open (seller not configured; recurring; EUR; Managed Payments)', async () => {

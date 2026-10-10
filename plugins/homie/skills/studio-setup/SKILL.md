@@ -410,3 +410,7 @@ there (checked by SHA-256, at the same addresses); `homie-studio media move --dr
 - Never ask the person to type a command.
 - Never send a note to Homie (`homie_feedback`) the person has not seen word for word and said yes to, and never
   offer one more than once in a session.
+
+## Connect an AI to this studio
+
+Every studio serves its own MCP at `<site>/mcp`. Use the `tools` skill for studio-defined business actions, signed integrations and staff AI access. Reuse office and app-record built-ins first. After an authorized deploy, hand over the MCP address and `<site>/_studio/office/connections`: the person approves with the studio account they already have, with no key to copy. Staff connect their own account and retain only their app grants. Client connector setup is separate from the studio approval. Never deploy merely to set up a local tool test.

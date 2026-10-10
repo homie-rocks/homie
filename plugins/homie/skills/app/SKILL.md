@@ -38,3 +38,7 @@ The complete helper and limits are in `node_modules/@homie-rocks/studio/apps/APP
 3. Also prove the app's own role workflow with staff signed in, unauthorized writes refused, records after all screens close, and layout in phone portrait/landscape, tablet and wall. Use the `playtest` skill for visual and interaction review, adapting game-only criteria to the app's purpose.
 4. Customer store builds use the existing `standalone` skill/command with the app id. The same bundle and public records work through the wrapper; its existing account, billing and store-upload limitations still apply. Never promise store approval.
 5. Give the person `/<id>/open`, `/<id>/tv`, a real screenshot and the measured proof. Publish only within their authorization through the existing publish workflow. Do not turn a request for an app into an unwanted deployment or directory listing.
+
+## Connect an AI to this studio
+
+Every studio serves its own MCP at `<site>/mcp`. Use the `tools` skill for studio-defined business actions, signed integrations and staff AI access. Reuse office and app-record built-ins first. After an authorized deploy, hand over the MCP address and `<site>/_studio/office/connections`: the person approves with the studio account they already have, with no key to copy. Staff connect their own account and retain only their app grants. Client connector setup is separate from the studio approval. Never deploy merely to set up a local tool test.

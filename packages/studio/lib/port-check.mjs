@@ -44,7 +44,11 @@ const GPU = [
 const TAG = 'homie-studio-check';
 const ANDROID_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const T = (p, ms, v = null) => Promise.race([Promise.resolve(p).catch(() => v), sleep(ms).then(() => v)]);
+const T = async (p, ms, v = null) => {
+  let timer;
+  try { return await Promise.race([Promise.resolve(p).catch(() => v), new Promise(resolve => { timer = setTimeout(() => resolve(v), ms); })]); }
+  finally { clearTimeout(timer); }
+};
 const DIRV = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 const ALL = ['owner-desk', 'owner-phone', 'owner-iphone', 'round', 'life', 'tv'];
 
@@ -328,17 +332,36 @@ async function touchDrag(h, from, dir, reach, holdMs, ready) {
 /** Timestamp real input delivery, then keep it held until four frames can judge its direction.
  * The response limit stays 600 ms; slow automation delivery and the thumb's ramp are not game latency. */
 export async function measuredPress(h, how, code, from, dir) {
+  // CDP points use page coordinates; DOM touch receipts use frame coordinates.
+  let offset = { x: 0, y: 0 };
+  if (how !== 'keys') {
+    const element = await frameOf(h)?.frameElement();
+    if (element) {
+      try { offset = await element.boundingBox() ?? offset; }
+      finally { await element.dispose(); }
+    }
+  }
   await inFrame(h, `(() => {
     if (!window.__homieCheckInput) {
       const state = window.__homieCheckInput = {};
       addEventListener('keydown', e => { if (state.code === e.code && state.key === null) state.key = performance.now(); }, true);
-      addEventListener('touchmove', () => { state.touch = performance.now(); }, { capture: true, passive: true });
+      addEventListener('touchmove', e => {
+        const touch = e.touches[0];
+        if (state.touch === null && touch && touch.clientX === state.touchX && touch.clientY === state.touchY) state.touch = performance.now();
+      }, { capture: true, passive: true });
     }
-    Object.assign(window.__homieCheckInput, { code: ${JSON.stringify(code)}, key: null, touch: null });
+    Object.assign(window.__homieCheckInput, { code: ${JSON.stringify(code)}, key: null, touch: null, touchX: ${Math.round(from[0] + DIRV[dir][0] * 70) - offset.x}, touchY: ${Math.round(from[1] + DIRV[dir][1] * 70) - offset.y} });
   })()`);
   let a = null, b = null;
   const ready = async () => {
-    a = await inFrame(h, `window.__homieCheckInput.${how === 'keys' ? 'key' : 'touch'}`);
+    // CDP acknowledgement is not DOM delivery. Wait for the final ramp point,
+    // then latch that receipt so later/coalesced moves cannot change it.
+    const deliveryDeadline = Date.now() + 3000;
+    do {
+      a = await inFrame(h, `window.__homieCheckInput.${how === 'keys' ? 'key' : 'touch'}`);
+      if (Number.isFinite(a)) break;
+      await sleep(20);
+    } while (Date.now() < deliveryDeadline);
     if (!Number.isFinite(a)) throw new Error('the game frame did not receive the measured input');
     await sleep(420);
     const until = Date.now() + 3000;

@@ -783,6 +783,16 @@ export function toolDefs(ctx, avail = {}) {
       },
     },
     {
+      name: 'studio_connect_ai', title: 'Connect your AI to the studio',
+      description: 'Give the person this studio’s own remote MCP address and connection page. Their AI connects directly with browser approval and their existing studio account; no key or local server.',
+      inputSchema: { type: 'object', properties: { ...STUDIO_ARG } },
+      annotations: { title: 'Connect your AI', ...RO },
+      run: async (a) => {
+        const root = ctx.root(a.studio), site = siteUrl(root);
+        return site ? ok(`Connect your AI to ${site}/mcp. Approve with your studio account in the browser. Manage connections at ${site}/_studio/office/connections. Client setup varies; do not promise a one-click import a client does not support.`, { mcp: `${site}/mcp`, connections: `${site}/_studio/office/connections` }) : fail('This studio has no published address yet. Local tools can be tested with homie-studio dev.');
+      },
+    },
+    {
       name: 'studio_domain', title: 'Set the studio domain',
       description: 'Prepare a requested custom hostname for deployment. Cloudflare creates DNS and TLS using its existing browser sign-in. The AI handles configuration; never ask for an account id, zone id or DNS value. Does not deploy or change the domain registrar.',
       inputSchema: { type: 'object', properties: { hostname: str('Requested hostname, e.g. play.example.com'), ...STUDIO_ARG }, required: ['hostname'] },

@@ -25,7 +25,9 @@ for (const rail of ['base', 'tempo', 'card']) test(`${rail}: SIGKILL at each dur
   const directory = mkdtempSync(join(tmpdir(), 'settlement-crash-'));
   childEntry = join(directory, 'child.mjs');
   const { build } = await import('esbuild');
-  await build({ entryPoints: [new URL('./settlement-crash-child.mjs', import.meta.url).pathname], outfile: childEntry, bundle: true, platform: 'node', format: 'esm', packages: 'bundle' });
+  // Preserve the production lazy boundary: this Node settlement child never serves
+  // MCP, whose Cloudflare runtime imports are exercised by the workerd tests.
+  await build({ entryPoints: [new URL('./settlement-crash-child.mjs', import.meta.url).pathname], outfile: childEntry, bundle: true, platform: 'node', format: 'esm', packages: 'bundle', external: [new URL('../worker/mcp.mjs', import.meta.url).pathname] });
   const account = privateKeyToAccount(generatePrivateKey());
   const recipient = privateKeyToAccount(generatePrivateKey()).address;
   const w = await world(`crash-boundaries-${rail}`, { key: LIVE_KEY });

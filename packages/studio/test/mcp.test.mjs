@@ -162,8 +162,8 @@ test('a studio made, planned, made into a game, built and tracked, all through t
     while (built.structuredContent?.kind === 'job' && built.structuredContent.state === 'running' && Date.now() < deadline) {
       built = await s.call('studio_job', { job: built.structuredContent.job });
     }
-    if (built.structuredContent?.kind === 'job') assert.equal(built.structuredContent.state, 'done', built.content[0].text);
     assert.ok(!built.isError, built.content[0].text);
+    if (built.structuredContent?.kind === 'job') assert.equal(built.structuredContent.state, 'done', built.content[0].text);
     assert.match(built.content[0].text, /comet-crews/);
     const progress = await s.call('build_progress', {});
     assert.equal(progress.structuredContent.feed.stages.find((x) => x.id === 'build').state, 'done', 'build reported into the open feed');

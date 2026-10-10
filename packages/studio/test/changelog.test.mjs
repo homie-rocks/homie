@@ -46,9 +46,10 @@ test('every version has its section: dated, with the plugin beside it, a summary
     assert.match(s.date, /^2026-\d\d-\d\d$/, `${s.version} is dated`);
     assert.ok(s.plugin, `${s.version} names the plugin's version`);
     assert.ok(s.summary.length > 20 && s.summary.length < 260, `${s.version}: one sentence of summary (${s.summary.length})`);
-    // Released sections link their pull requests; the version being prepared may not have a PR yet.
-    // Tags are cut after the section is written. Existing tag links must name their own version.
-    if (s.version !== STUDIO_VERSION && compareVersions(s.version, '0.7.0') >= 0) assert.match(s.meta, /\/pull\/\d+/, `${s.version} links its pull request`);
+    // A merged release can retain text prepared before its PR existed. Missing
+    // PR/tag links are advisory; a new release must not rewrite published history.
+    // Existing links must name a PR number or the section's own release version.
+    for (const [, url] of s.meta.matchAll(/\]\((https:\/\/github\.com\/homie-rocks\/homie\/pull\/[^)]+)\)/g)) assert.match(url, /^https:\/\/github\.com\/homie-rocks\/homie\/pull\/\d+$/, `${s.version} links a pull request number`);
     for (const [, tag] of s.meta.matchAll(/\/releases\/tag\/([^)\s]+)\)/g)) assert.match(tag, new RegExp(`^release-2026-\\d\\d-\\d\\d-studio-${s.version.replace(/\./g, '\\.')}$`), `${s.version} links its own tag`);
   }
   // The plugin versions that went out with a studio version, as they were.

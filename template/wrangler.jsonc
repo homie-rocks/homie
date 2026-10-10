@@ -5,9 +5,21 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "my-studio",
-  "main": "site/src/worker.mjs",
+  "main": "site/src/runtime/worker.js",
   "compatibility_date": "2026-06-01",
+  "no_bundle": true,
+  "find_additional_modules": true,
+  "rules": [
+    {
+      "type": "ESModule",
+      "globs": [
+        "**/*.js"
+      ],
+      "fallthrough": true
+    }
+  ],
   "compatibility_flags": [
+    "nodejs_compat",
     "global_fetch_strictly_public",
     "disallow_eval_during_startup"
   ],

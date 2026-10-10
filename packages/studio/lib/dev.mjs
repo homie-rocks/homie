@@ -459,7 +459,18 @@ export async function dev(root, { lan = false, port: askedPort = 8787, remoteAi 
       return;
     }
   };
-  const timer = setInterval(() => { look().catch(() => {}); rulesLook().catch(() => {}); }, watchMs);
+  const { toolFiles } = await import('./tools-build.mjs');
+  const toolsStamp = () => toolFiles(root).map(file => `${file}:${statSync(file).mtimeMs}:${statSync(file).size}`).join('|');
+  let lastTools = toolsStamp();
+  const toolsLook = async () => {
+    if (rebuilding || ending) return;
+    const stamp = toolsStamp(); if (stamp === lastTools) return;
+    lastTools = stamp; rebuilding = true;
+    try { log('Studio tools changed: type-checking and rebuilding…'); await build(root, { log }); }
+    catch (error) { log(`Studio tools did not build: ${error.message}`); }
+    finally { rebuilding = false; }
+  };
+  const timer = setInterval(() => { look().catch(() => {}); rulesLook().catch(() => {}); toolsLook().catch(() => {}); }, watchMs);
   timer.unref?.();
 
   /** Wait for the local site, then hold it to its own address (socketOriginProblem); a mismatch ends dev. */

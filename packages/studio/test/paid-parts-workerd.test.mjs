@@ -15,13 +15,14 @@ import { signPayload } from '../worker/stripe.mjs';
 const origin = 'https://seller.example';
 const secret = () => randomBytes(32).toString('hex');
 async function runtime(w,{keyless=false,quantity=1,handlers=new Map()}={}) {
-  const bundled=await build({bundle:true,write:false,format:'esm',platform:'node',stdin:{resolveDir:new URL('../worker/',import.meta.url).pathname,contents:`import worker from './selling/index.mjs';
+  let mf;try {
+  const bundled=await build({bundle:true,write:false,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*'],stdin:{resolveDir:new URL('../worker/',import.meta.url).pathname,contents:`import worker from './selling/index.mjs';
     export default {async fetch(request,env,ctx){env.ASSETS={fetch:async(request)=>{const object=await env.STATIC.get(new URL(request.url).pathname);return object?new Response(object.body):new Response('',{status:404});}};return worker.fetch(request,env,ctx);}};`}});
   const bindings={DB:{type:'d1',id:'purchases'},PURCHASE_MEDIA:{type:'r2',name:'paid'},STATIC:{type:'r2',name:'static'},PURCHASE_RATE_LIMITER:{type:'rate-limit',namespace:'purchases',simple:{limit:1000,period:60}}};
   for(const [key,value] of Object.entries(w.env))if(typeof value==='string' && (!keyless || !['STRIPE_KEY','TURNSTILE_SECRET','TURNSTILE_SITE_KEY'].includes(key))) bindings[key]={type:'json',value};
   if(keyless){bindings.STRIPE_SHOP_LINKS={type:'json',value:JSON.stringify({v:1,mode:'live',items:[]})};const p=JSON.parse(readFileSync(join(w.dist,'parts/index.json'))).parts[0];bindings.PURCHASE_LINKS={type:'json',value:JSON.stringify({v:1,mode:'live',offers:[{quantity,kind:'part',resource:p.id,version:p.version,offer:(await import('../worker/referrals.mjs')).canonicalJson(p.sale),id:'plink_test',url:'https://buy.stripe.com/test',revision:'release1'}]})};}
   const hosts=[];
-  const mf=new Miniflare({telemetry:{enabled:false},workers:[{config:{name:'seller',compatibilityDate:'2026-06-01',compatibilityFlags:['nodejs_compat','global_fetch_strictly_public','disallow_eval_during_startup'],manifest:{mainModule:'worker.mjs',modules:{'worker.mjs':{type:'esm',contents:bundled.outputFiles[0].text}}},env:bindings},dev:{outboundService:{type:'fetcher',handler:async(req)=>{const url=new URL(req.url);hosts.push(url.hostname);if(handlers.has(url.hostname)) return handlers.get(url.hostname)(req);assert.equal(url.host,new URL(w.st.base).host,'only the seller provider may be contacted');return fetch(req.url,{method:req.method,headers:Object.fromEntries(req.headers),...(req.body?{body:await req.arrayBuffer()}:{} )});}}}}]});
+  mf=new Miniflare({telemetry:{enabled:false},workers:[{config:{name:'seller',compatibilityDate:'2026-06-01',compatibilityFlags:['nodejs_compat','global_fetch_strictly_public','disallow_eval_during_startup'],manifest:{mainModule:'worker.mjs',modules:{'worker.mjs':{type:'esm',contents:bundled.outputFiles[0].text}}},env:bindings},dev:{outboundService:{type:'fetcher',handler:async(req)=>{const url=new URL(req.url);hosts.push(url.hostname);if(handlers.has(url.hostname)) return handlers.get(url.hostname)(req);assert.equal(url.host,new URL(w.st.base).host,'only the seller provider may be contacted');return fetch(req.url,{method:req.method,headers:Object.fromEntries(req.headers),...(req.body?{body:await req.arrayBuffer()}:{} )});}}}}]});
   const db=await mf.getD1Database('DB');
   for(const file of readdirSync(new URL('../../../template/site/migrations/',import.meta.url)).filter(f=>f.endsWith('.sql')).sort())for(const sql of readFileSync(new URL(`../../../template/site/migrations/${file}`,import.meta.url),'utf8').replace(/^--.*$/gm,'').match(/\s*CREATE TRIGGER[\s\S]*?END;|[^;]+;/g)??[]) if(sql.trim())await db.prepare(sql).run();
   const media=await mf.getR2Bucket('PURCHASE_MEDIA');for(const [key,bytes]of w.objects)await media.put(key,bytes);
@@ -31,6 +32,7 @@ async function runtime(w,{keyless=false,quantity=1,handlers=new Map()}={}) {
   const post=(path,body,claim)=>fetcher(origin+path,{method:'POST',headers:{'content-type':'application/json',...(claim?{authorization:`Bearer ${claim}`}:{})},body:JSON.stringify(body)});
   const event=async(type,object)=>{const body=JSON.stringify({id:'evt_'+secret(),type,created:Math.floor(Date.now()/1000),livemode:true,data:{object}}),t=Math.floor(Date.now()/1000);return fetcher(origin+'/api/shop/hook',{method:'POST',headers:{'stripe-signature':`t=${t},v1=${await signPayload(body,w.env.STRIPE_WEBHOOK_SECRET,t)}`},body});};
   return{mf,db,fetcher,post,event,hosts};
+  }catch(error){await mf?.dispose();await w.close();throw error;}
 }
 
 test('workerd: a stranger discovers MPP and MCP, pays twice, installs, rejects forged claims and refunds',{timeout:60000},async()=>{

@@ -1,5 +1,6 @@
 import { selling } from './extensions.mjs';
 import { purchaseOrderIfPresent } from './shop.mjs';
+import { toolIdentity } from './tool-identity.mjs';
 /**
  * THE STUDIO'S BACK OFFICE (@homie-rocks/studio 0.13.0): the studio's owner, and the owner's AI, see and run the
  * studio's live games. Everything lives in the studio's own Worker and D1; homie.rocks stores none of it.
@@ -1196,7 +1197,7 @@ async function invitesApi(request, env, url, cat, body, who) {
 async function api(request, env, url, cat) {
   const path = url.pathname;
   // An office key, the owner's signed-in browser, or the owner's own player account (a passkey).
-  let who = await ownerAllowed(request, env, { kinds: ['office', 'session'] });
+  let who = toolIdentity(request)?.owner ? 'office' : await ownerAllowed(request, env, { kinds: ['office', 'session'] });
   if (!who && (await isOwner(request, env))) who = 'session';
   if (!who) {
     return json({ ok: false, error: 'owner-only', message: 'The back office is the studio owner\'s. In the studio folder, `npx --no-install homie-studio office key` gives the owner\'s AI a key; `npx --no-install homie-studio office link` signs the owner\'s browser in.' }, 401, { 'www-authenticate': 'Bearer' });
