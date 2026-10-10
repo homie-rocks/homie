@@ -14,6 +14,7 @@ const {rayQuery,compileMap,compileRules,defineRules,defineMove,G}=await import(p
 for(const dims of [2,3])test(`ray geometry ${dims}D: all entries, embedded origins and camera clearance`,()=>{
  const map=compileMap({bounds:{min:[-20,-20,-20],max:[20,20,20]},boxes:[{min:[3,-1,0],max:[4,1,2]},{min:[7,-1,0],max:[8,1,2]}],circles:[{at:[11,0,0],r:1}]});
  const cast=(p,o={})=>rayQuery(map,[],dims,p,{x:1,y:0,z:0},15,o,undefined,true);
+ assert.equal(rayQuery(map,[],dims,{x:0,y:0,z:1},{x:1,y:0,z:0},100)[0].dist,3);
  const hits=cast({x:0,y:0,z:1});assert.deepEqual(hits.map(h=>h.dist),[3,7,10]);
  assert.equal(cast({x:3.5,y:0,z:1})[0].dist,0);
  assert.equal(cast({x:11,y:0,z:1})[0].dist,0);

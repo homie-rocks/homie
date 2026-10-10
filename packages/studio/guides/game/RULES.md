@@ -779,8 +779,7 @@ position. Passenger carrying is explicit movement logic, not automatic physics.
 `world.rayAll` returns all entry hits in distance order (one per shape or named
 part, not exit faces). Static geometry wins equal-distance ties; entity and part
 insertion order break remaining ties. Both queries charge their scans, geometry,
-filtering and output to the normal handler budget. The maximum distance is the
-normal query reach; no query raises the game's budget.
+filtering and output to the normal handler budget. The maximum ray distance is 10,000 metres; radius queries keep their 64 m bound; no query raises the game's budget.
 
 ```ts
 runner: {

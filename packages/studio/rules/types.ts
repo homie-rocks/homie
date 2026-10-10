@@ -6,7 +6,7 @@ export type Point = { readonly x: number; readonly y: number; readonly z?: numbe
 export type ReadonlyState<T> = T extends object ? { readonly [K in keyof T]: ReadonlyState<T[K]> } : T;
 export type WriteState<T> = T extends Vec3 ? keyof T extends keyof Vec3 ? Point : { [K in keyof T]: WriteState<T[K]> } : T extends object ? { [K in keyof T]: WriteState<T[K]> } : T;
 type Payload<T> = {} extends T ? [data?: WriteState<T>] : [data: WriteState<T>];
-type Query<T> = ReadonlyState<Omit<T, 'input'>>;
+type Query<T> = T extends object ? ReadonlyState<Omit<T, 'input'>> : never;
 export interface Goal { readonly goal: string; readonly args: Readonly<Record<string, unknown>>; readonly from: 'brain' | 'floor'; readonly at: number; readonly asked: boolean; readonly state: 'active' | 'done' | 'failed' }
 export interface GuideDecision { goal?: string | null; args?: Record<string, unknown>; say?: string | null; sayArgs?: Record<string, unknown> }
 export interface GuideRequest { readonly k: string; readonly args: Readonly<Record<string, unknown>>; readonly from: number; readonly at: number }

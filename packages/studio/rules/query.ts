@@ -4,12 +4,12 @@ import { own, dir, vec3 } from './pack.ts';
 import { castMap } from './math.ts';
 import type { MapShapes } from './math.ts';
 import { castMap3, castSolid, solidAt, type Solid } from './collision.ts';
-import { REACH_M, type Vec3, type QueryDef } from './rules.ts';
+import { RAY_REACH_M, type Vec3, type QueryDef } from './rules.ts';
 import type { RayHit } from './types.ts';
 export interface QueryTarget { at?: Vec3; id: string; kind: string; query?: QueryDef; fields: Record<string, unknown>; geometry: boolean; solid: Solid; parts?: readonly {name: string; solid: Solid}[] }
 export function rayQuery(map: MapShapes, targets: readonly QueryTarget[], dims: number, from: unknown, direction: unknown, max: unknown, options?: unknown, self?: string, all = false): readonly RayHit[] {
   charge(32 + 8 * targets.length);
-  if (typeof max !== 'number' || !Number.isFinite(max) || max < 0 || max > REACH_M) throw new Error(`ray reaches 0 to ${REACH_M} metres`);
+  if (typeof max !== 'number' || !Number.isFinite(max) || max < 0 || max > RAY_REACH_M) throw new Error(`ray reaches 0 to ${RAY_REACH_M} metres`);
   const p = vec3(from, dims), d = dir(direction,dims), delta = {x:d.x*max,y:d.y*max,z:d.z*max};
   const radiusOption=own(options,'radius'), shapeOption=own(options,'shape');
   const radius=radiusOption===undefined?0:radiusOption;
