@@ -36,7 +36,7 @@ export default defineRules({
 
 The map must contain a nonempty `spots.start` list for that example:
 `{"bounds":{"min":[-12,-7],"max":[12,7]},"boxes":[],"spots":{"start":[[-5,0],[5,0]]}}`.
-Declare `players.max` in game.json (1–32); use `entry: "src/view.ts"` and
+Declare `players.max` in game.json (a positive integer, including hundreds); use `entry: "src/view.ts"` and
 `room: { host: "server" }`. Only public tunables are visible in move.ts.
 
 `index.html` is the browser entry document; include `<script type="module" src="./assets/main.js"></script>`. The manifest names the source, but HTML loads this relative built bundle. Never point HTML at /src/view.ts: that URL is not served. The build rewrites assets/main.js to its hashed bundle. A minimal manifest is:
@@ -134,7 +134,7 @@ with a real touchscreen tap in Chrome; calling `element.click()` does not test
 touch delivery.
 Use `rounds: { seconds: 0, breakSeconds: 0 }` for manual rounds, and no fill bots
 for an app. A wall/TV watches without taking a seat. Each interactive phone
-takes a seat (up to 32); shared state is replicated, public and transient. An app's
+takes one of the room's declared seats; shared state is replicated, public and transient. An app's
 lasting, authorized business data belongs in `createAppRecords`, not in room fields.
 
 ## State and field types
@@ -680,8 +680,7 @@ check green. Never rename rules.ts away or fall back to old-style hosting.
 `room.probe` adds truthful frame/mechanic/render counters to the built-in rules probe.
 Use the normal build, local dev and two-browser check, then play the requested mechanic
 for a minute with delay. Movement should respond before the authoritative response;
-score and other shared outcomes still arrive with the network. Milestone 1 supports
-up to 32 seats; neither frame rate nor feel is guaranteed by a passing build.
+score and other shared outcomes still arrive with the network. The studio chooses `players.max`; neither frame rate nor feel is guaranteed by a passing build.
 
 Room state is saved automatically (default movementSeconds: 1, plus round end,
 pause and finish). After 60 seconds with no person the room ends even if screens or
@@ -690,7 +689,7 @@ server-verified money. All replicated fields are public, including disguised rol
 Use a separate authorized records service for private or lasting app records.
 
 
-## Spatial delivery (0.44.0; milestone 2 slice 1)
+## Spatial delivery (0.45.0; milestone 2 slice 2)
 
 For a server game with a larger map, the studio's AI can set
 `"room": { "view": { "radiusM": 32 } }` in game.json to send each player only
@@ -708,12 +707,33 @@ may be absent from room.each while its geometry still blocks movement.
 Shared state, effects, rosters and watcher state are still public: this is not a
 hidden-information feature. Browser hosting sends the whole room.
 
-A request for hundreds of players also needs the next Gates release: 0.44.0's
-public build/join path still has the milestone 1 restriction of 32 seats. Do not
-silently clamp a requested bigger game or claim this setting raises admission.
-When Gates ship, `players.max` will choose the room's layout automatically; the
-studio will not create or find infrastructure by hand. The slice plan and local
-300-client measurements are in docs/rooms-milestone-2-notes.md in Homie's repo.
+Set the room size in `players.max`. The same setting feeds rules compilation,
+public admission and the automatic Gate layout; there is no 32-seat clamp.
+For example, in game.json:
+
+```json
+{
+  "players": { "min": 1, "max": 300 },
+  "room": {
+    "host": "server",
+    "view": { "radiusM": 12, "precisionM": 0.01, "nearM": 4, "farHz": 5 }
+  }
+}
+```
+
+These are example visual settings, not defaults. `precisionM` rounds remote
+positions and velocities in the delivered view; controlled bodies stay exact.
+Remote bodies outside `nearM` update at `farHz`; visibility exits are immediate.
+Rules, collision, saves and shared state stay authoritative and unchanged.
+Views must interpolate distant motion and dispose/recreate entities on view exit
+and entry. Omit the settings for full precision and the room's normal tick rate.
+
+A small room embeds delivery in its Table. Larger rooms open Gate connections;
+more than eight Gates use concentrators. The studio template supplies their exports, bindings and
+migration; upgrade the template before deploying an existing studio. No infrastructure naming or studio admission ceiling is required.
+Read the local measurements and their limitations in
+`docs/rooms-milestone-2-notes.md` before making a capacity claim.
+
 ## Live collision geometry (0.44.1)
 
 ```ts

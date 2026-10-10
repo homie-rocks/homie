@@ -40,13 +40,14 @@ test('workerd routes 20 Gates through concentrators, preserves order and reconne
 });
 
 test('public Worker, real Table storage and Gates admit above 32 and preserve seats across both object failures', async () => {
+  const capacity=process.env.RULES_EXTENDED==='1'?1000:300, count=process.env.RULES_EXTENDED==='1'?1000:40;
   const bundle = await build({stdin:{resolveDir:dirname(fileURLToPath(new URL('../worker/index.mjs',import.meta.url))),contents:`
     import worker,{Table as BaseTable,Lobby,Gate as BaseGate,Concentrator,hostRules} from './index.mjs';
     import {defineRules,defineMove,roomSettings} from '../rules/rules.ts';
     export {Lobby,Concentrator};
     const rules=defineRules({contract:2,space:{dims:2},move:defineMove({runner(){}}),entities:{runner:{player:true,body:{shape:'circle',radius:.4,maxSpeed:1}}},room:{rounds:{seconds:600,breakSeconds:1},join(c,p){return {kind:'runner',at:{x:p.seat*2,y:0,z:0}}}}});
-    hostRules({crowd:{rules,seats:300,build:'test-build',stateHash:'test-state',map:{bounds:{min:[-10,-10],max:[1000,10]}},settings:roomSettings({tickHz:1,view:{radiusM:4},budget:{tick:5000000}}).settings}});
-    const cat={studio:{name:'Local test'},games:[{id:'crowd',name:'Crowd',players:{min:1,max:300},netplay:{version:'test-build'},room:{host:'server',contract:2,tickHz:1}}]};
+    hostRules({crowd:{rules,seats:${capacity},build:'test-build',stateHash:'test-state',map:{bounds:{min:[-10,-10],max:[${capacity*3},10]}},settings:roomSettings({tickHz:1,view:{radiusM:4},budget:{tick:5000000}}).settings}});
+    const cat={studio:{name:'Local test'},games:[{id:'crowd',name:'Crowd',players:{min:1,max:${capacity}},netplay:{version:'test-build'},room:{host:'server',contract:2,tickHz:1}}]};
     const assets={fetch:async request=>new URL(request.url).pathname==='/games.json'?Response.json(cat):new Response('',{status:404})};
     const configured=env=>({...env,ASSETS:assets,HOMIE_ROOM_LOG:'0'});
     export class Table extends BaseTable {constructor(ctx,env){super(ctx,configured(env));}fetch(req){if(new URL(req.url).pathname==='/test-abort'){this.saveRoom(this.hostRt.save());setTimeout(()=>this.ctx.abort('test rules restart'),1);return new Response(null,{status:204});}return super.fetch(req);}}
@@ -56,6 +57,7 @@ test('public Worker, real Table storage and Gates admit above 32 and preserve se
   const classes=['Table','Lobby','Gate','Concentrator'];
   const mf=new Miniflare({telemetry:{enabled:false},workers:[{config:{name:'rooms',compatibilityDate:'2026-10-07',compatibilityFlags:['nodejs_compat'],manifest:{mainModule:'entry.mjs',modules:{'entry.mjs':{type:'esm',contents:bundle.outputFiles[0].text}}},exports:Object.fromEntries(classes.map(name=>[name,{type:'durable-object',storage:'sqlite'}])),env:Object.fromEntries(classes.map(name=>[name.toUpperCase(),{type:'durable-object',worker:'rooms',exportName:name}]))}}]});
   const peers=[];
+  const heartbeat=setInterval(()=>{for(const p of peers)try{p.send(JSON.stringify({t:'ping',c:Date.now()}));}catch{}},1000);
   const key='seeded_browser_0001';let hash=2166136261;for(const c of key)hash=Math.imul(hash^c.charCodeAt(0),16777619)>>>0;
   const open=async(token=null)=>{
     const response=await mf.dispatchFetch(`https://studio.test/crowd/__net?room=pub-1&b=${key}&gv=test-build`,{headers:{Upgrade:'websocket','cf-connecting-ip':'203.0.113.1'}});
@@ -64,13 +66,14 @@ test('public Worker, real Table storage and Gates admit above 32 and preserve se
     peers.push(result.ws);return result;
   };
   try {
-    let holders=[];for(let i=0;i<40;i++)holders.push(await open());
-    assert.equal(new Set(holders.map(p=>p.welcome.seat)).size,40);
-    assert.ok(holders.every(p=>p.welcome.max===300&&p.welcome.role==='replica'));
-    for(const failure of [`key=crowd/pub-1/${hash%5}`,'table=1']){
+    let holders=[];for(let i=0;i<count;i++)holders.push(await open());
+    assert.equal(new Set(holders.map(p=>p.welcome.seat)).size,count);
+    assert.ok(holders.every(p=>p.welcome.max===capacity&&p.welcome.role==='replica'));
+    for(const failure of [`key=crowd/pub-1/${hash%Math.ceil(capacity/64)}`,'table=1']){
       const closed=Promise.all(holders.map(p=>new Promise(resolve=>p.ws.addEventListener('close',resolve))));
       assert.equal((await mf.dispatchFetch(`https://studio.test/test-abort?${failure}`)).status,204);await closed;
       const back=[];for(const p of holders){const next=await open(p.welcome.token);assert.equal(next.welcome.seat,p.welcome.seat);back.push(next);}holders=back;
     }
-  } finally {for(const p of peers)try{p.close();}catch{}await mf.dispose();}
+      console.log(JSON.stringify({local:true,workerd:true,capacity,clients:count,gateRecovery:true,rulesRecovery:true}));
+  } finally {clearInterval(heartbeat);for(const p of peers)try{p.close();}catch{}await mf.dispose();}
 });
