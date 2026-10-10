@@ -1,6 +1,7 @@
 /** Per-connection state delivery. Pure data, shared by the relay and the view.
  * Deltas may name a periodic keyframe or the previous ordered frame. A missing
- * chained predecessor is ignored until the next keyframe (at most one second).
+ * chained predecessor is ignored until the next keyframe. Periodic encoders
+ * repair the chain; ordered transports reset it on connection or epoch change.
  * No history grows with time: one keyframe per connection, no per-frame queue.
  */
 const spatial = new WeakMap(), controls = new WeakMap();
