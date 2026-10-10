@@ -1,5 +1,5 @@
 /** The build specialises these faces from a game's declarations; the runtime still checks every write. */
-import type { Vec3, BodyDef, Fields } from './rules.ts';
+import type { Vec3, BodyDef, Fields, ColliderDef } from './rules.ts';
 import type { math } from './math.ts';
 
 export type Point = { readonly x: number; readonly y: number; readonly z?: number };
@@ -51,7 +51,7 @@ export type RoomEvents<E = Record<string, never>> = RoundEvents & { seatJoined: 
 export type RoundEvents = { roundStart: { n: number }; roundOver: { n: number; results: readonly { seat: number; id: string; driver: 'person' | 'bot' | 'ai'; score: number; place: number }[] } };
 type GuideWorld<W> = Pick<W, Extract<keyof W, 'tick' | 'dt' | 'ticks' | 'math' | 'map' | 'tune' | 'stage' | 'level' | 'levelMax' | 'guideLevel' | 'guideSeats' | 'kids' | 'levelSet' | 'round' | 'shared' | 'near' | 'inBox' | 'ray'>>;
 export type Entity<W, S, I, E, C, V, Answer = BuiltIns['answer'], G = Goal, A = GuideRequest, D = GuideDecision> = {
-  player?: true | { away?: 'neutral' | 'think'; leave?: 'despawn' | 'bot' }; fields?: Fields; motion?: Fields; input?: Fields; body?: BodyDef;
+  player?: true | { away?: 'neutral' | 'think'; leave?: 'despawn' | 'bot' }; fields?: Fields; motion?: Fields; input?: Fields; body?: BodyDef; collider?: ColliderDef;
   tick?: (world: W, self: S) => void;
   think?: (world: W, self: S) => Partial<I>;
   on?: { [K in keyof (Omit<E, keyof BuiltIns> & Omit<BuiltIns<E>, 'answer'> & { answer: Answer })]?: (world: W, self: S, event: EventData<(Omit<E, keyof BuiltIns> & Omit<BuiltIns<E>, 'answer'> & { answer: Answer })[K]>) => void };
@@ -60,4 +60,5 @@ export type Entity<W, S, I, E, C, V, Answer = BuiltIns['answer'], G = Goal, A = 
   guide?: { view: (world: GuideWorld<W>, self: ReadonlyState<Omit<S, 'input'>>) => V; floor?: (world: W, self: S, view: GuideView<V, G, A>) => D };
 };
 export interface MoveBody<M> { get pos(): Vec3; set pos(value: Point); get vel(): Vec3; set vel(value: Point); get heading(): Vec3; set heading(value: Point); grounded: boolean; readonly motion: M }
-export type MoveContext<T, M> = Clock & { readonly tune: ReadonlyState<T>; readonly map: MapView & { sweep(body: MoveBody<M>, delta: Point): Hit | undefined } };
+export interface MoveCollision<M> { sweep(body: MoveBody<M>, delta: Point): Hit | undefined; support(body: MoveBody<M>, distance?: number): (Hit & {dist: number}) | undefined; overlaps(body: MoveBody<M>): boolean }
+export type MoveContext<T, M> = Clock & { readonly tune: ReadonlyState<T>; readonly map: MapView & MoveCollision<M>; readonly world: MoveCollision<M> };

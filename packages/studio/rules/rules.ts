@@ -123,6 +123,7 @@ export type Handler = (world: RuntimeWorld, self: RuntimeSelf, e?: any) => void;
 export type RoomHandler = (world: RuntimeWorld, e?: any) => void;
 export type MoveFn = (body: any, input: any, ctx: any) => void;
 
+export type ColliderDef = true | { size?: string; enabled?: string };
 export interface BodyDef { shape: 'circle' | 'sphere' | 'capsule' | 'box'; radius: number; height?: number; maxSpeed: number; sweep?: boolean; move?: 'owner' }
 export interface GuideDef { view: (world: RuntimeWorld, self: RuntimeSelf) => unknown; floor?: (world: RuntimeWorld, self: RuntimeSelf, view: any) => unknown }
 export interface EntityDef {
@@ -131,6 +132,7 @@ export interface EntityDef {
   motion?: Fields;
   input?: Fields;
   body?: BodyDef;
+  collider?: ColliderDef;
   guide?: GuideDef;
   tick?: Handler;
   think?: (world: RuntimeWorld, self: RuntimeSelf) => Record<string, unknown>;
@@ -315,6 +317,7 @@ export interface KindTable {
   fields: FieldList;
   motion: FieldList;
   input: FieldList;
+  collider?: ColliderDef;
   body: null | { shape: string; radius: number; height: number; maxSpeed: number; sweep: boolean; owner: boolean };
   score: string | null;
   tick: Handler | null;
@@ -521,11 +524,22 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
     if (e.guide !== undefined && (typeof e.guide !== 'object' || typeof e.guide?.view !== 'function')) throw new Error(`${at}.guide needs view(world, self)`);
     const cells = cellsOfList(fields) + cellsOfList(motion);
     if (cells > KIND_CELLS_MAX) throw new Error(`${at}: its fields and motion may hold ${cells} values when they are full, and one entity holds ${KIND_CELLS_MAX} at most`);
-    const k: KindTable = { name, index: kinds.length, player, fields, motion, input, body, score: scores[0]?.[0] ?? null, tick: e.tick ?? null, think: e.think ?? null, on, commands: cmds, onRoom, guide: e.guide ?? null, move: moveFn };
+    if (e.collider !== undefined) {
+      if (!body || player || body.owner) throw new Error(`${at}.collider needs a non-player body`);
+      if (e.collider !== true) {
+        if (!e.collider || typeof e.collider !== 'object' || Object.keys(e.collider).some(k => !['size', 'enabled'].includes(k))) throw new Error(`${at}.collider is true or {size, enabled}`);
+        for (const [key, type] of [['size', 'vec3'], ['enabled', 'bit']]) {
+          const name = (e.collider as Record<string, unknown>)[key];
+          if (name !== undefined && (typeof name !== 'string' || !fields.some(([n, f]) => n === name && f.t === type))) throw new Error(`${at}.collider.${key} must name a ${type} field`);
+        }
+      }
+    }
+    const k: KindTable = { ...(e.collider ? { collider: e.collider } : {}), name, index: kinds.length, player, fields, motion, input, body, score: scores[0]?.[0] ?? null, tick: e.tick ?? null, think: e.think ?? null, on, commands: cmds, onRoom, guide: e.guide ?? null, move: moveFn };
     kinds.push(k);
     kindOf[name] = k;
   }
 
+  if (kinds.some(k => k.collider) && kinds.some(k => k.player && k.body?.owner)) throw new Error("live colliders need server movement: omit body.move: 'owner' on players");
   const room = d.room ?? {};
   const roomOn = handlers<RoomHandler>(room.on, 'room.on');
   for (const key of Object.keys(roomOn)) if (!events[key] && !ROOM_EVENTS.includes(key) && !SEAT_EVENTS.includes(key) && key !== 'answer' && key !== 'undeliverable') throw new Error(`room.on.${key}: no event "${key}" is declared in shapes.events`);

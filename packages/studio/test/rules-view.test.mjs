@@ -37,7 +37,27 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
   if (runaway) {
     dir = join(scratch, `variant-${runaway}`); cpSync(COIN_DASH, dir, { recursive: true });
     const file = join(dir, 'src/rules.ts');
-    if (runaway === 'pose') {
+    if (runaway === 'cover' || runaway === 'cover2') {
+      const dims = runaway === 'cover2' ? 2 : 3;
+      writeFileSync(join(dir, 'map/main.json'), JSON.stringify({bounds:{min:[-20,-20,0],max:[20,20,20]}}));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
+export default defineRules({contract:2,space:{dims:${dims}},move,
+shapes:{commands:{edit:{mode:f.u8()},place:{at:f.vec3()}},events:{edit:{mode:f.u8()}}},
+entities:{runner:{player:true,input:{ax:f.i8(),jump:f.press(),dash:f.bit(),dive:f.press(),launch:f.press(),hover:f.bit()},motion:{support:f.fix(),blocked:f.bit()},body:{shape:'${dims===3?'capsule':'circle'}',radius:.4,height:1.8,maxSpeed:26},
+commands:{place(w,s,e){w.place(s,e.at);},edit(w,s,e){for(const c of w.near(s.pos,64,'cover'))w.send(c.id,'edit',e);if(e.mode===4)w.spawn('cover',{x:0,y:0,z:0});}}},
+cover:{fields:{solid:f.bit({init:true}),size:f.vec3({init:{x:1,y:4,z:2.6}})},body:{shape:'${dims===3?'box':'circle'}',radius:.5,height:2.6,maxSpeed:0},collider:{size:'size',enabled:'solid'},
+on:{edit(w,s,e){if(e.mode===0)s.solid=false;if(e.mode===1)s.solid=true;if(e.mode===2)s.size={x:2,y:4,z:2.6};if(e.mode===3)w.despawn(s);if(e.mode===5)w.place(s,{x:0,y:0,z:1});}}}},
+room:{bots:{keep:0},join(c,p){return{kind:'runner',at:{x:-2,y:p.seat,z:0}};},start(w){w.spawn('cover',{x:0,y:0,z:0});}},map:'./map'});`);
+      writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){
+const support=c.world.support(b,20);b.motion.support=support?support.dist:20;b.motion.blocked=c.world.overlaps(b);
+b.grounded=Boolean(c.world.support(b));if(i.hover)return;let vz=b.vel.z;
+if(i.jump&&b.grounded)vz=12;
+if(i.launch&&b.grounded&&!b.motion.blocked)vz=17;
+if(i.dive&&!b.grounded&&b.motion.support>=1.8)vz=-26;
+vz=${dims===3?'vz-22*c.dt':'0'};b.vel={x:i.ax*(i.dash?22:1),y:0,z:vz};
+c.world.sweep(b,{x:b.vel.x*c.dt,y:0,z:0});c.world.sweep(b,{x:0,y:0,z:b.vel.z*c.dt});if(b.grounded)b.vel={x:b.vel.x,y:0,z:0};
+}});`);
+    } else if (runaway === 'pose') {
       writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-100, -100, 0], max: [100, 100, 3] } }));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules'; import {move} from './move';
 export default defineRules({contract:2,space:{dims:3},move,shapes:{commands:{launch:{}}},entities:{runner:{player:true,motion:{launch:f.tick(),phase:f.u8()},input:{az:f.i8()},body:{shape:'capsule',radius:.4,height:1.7,maxSpeed:6},commands:{launch(w,s){s.motion.launch=w.tick;}}}},room:{bots:{keep:0},join(){return {kind:'runner',at:{x:0,y:0,z:0}}}},map:'./map'});`);
@@ -1524,4 +1544,63 @@ test('spatial snapshots reach real views, preserve prediction, recover a lost ke
   assert.equal(a.seat, seat); assert.equal(a.status, 'playing');
   assert.deepEqual(visible(), [a.me.id]);
   assert.equal(r.host.core.stats.errors, 0);
+});
+
+for (const dims of [2,3]) for (const delayed of [false,true]) test(`live cover ${dims}D outside spatial interest: visible prediction, edits, rejoin and restore${delayed?' at 300 ms + 12% loss':''}`, async t=>{
+  const {L,compiled,openRoom}=await coinDashKit('server',false,20,dims===3?'cover':'cover2',{},.5);
+  const clock=virtualTime(t),shape=predictionShaper({delay:delayed?300:0,loss:delayed?.12:0,seed:743});
+  let inputSeed=743;const inputRandom=()=>{inputSeed=(Math.imul(inputSeed,1664525)+1013904223)>>>0;return inputSeed/4294967296;};
+  const r=rig(L,compiled,false,shape,shape);
+  const open=who=>openRoom({net:{config:cfg(who),WebSocketImpl:r.socket(),post:null}});
+  let a=open('Builder');const b=open('Neighbour');t.after(()=>{a.close();b.close();r.stop();});
+  await clock.wait(2000);
+  const visibleCover=[];a.each('cover',e=>visibleCover.push(e.id));
+  assert.deepEqual(visibleCover,[],'collider entity is outside visual interest');
+  const place=async(at,hover=false)=>{a.input({ax:0,hover});await clock.wait(700);a.command('place',{at});await clock.wait(1000);};
+  for(const [name,speed,dash] of [['walk',4,false],['sprint',9,false],['dash',1,true]]) {
+    await place({x:-2,y:0,z:0});a.input({ax:speed,dash});
+    for(let i=0;i<90;i++){if(i%3===0)a.input({ax:inputRandom()<.1?0:speed,dash});await clock.wait(16);assert.ok(a.me.pos.x<=-.899,`${name} predicted through wall: ${a.me.pos.x}`);}
+    assert.ok(Math.abs(a.me.pos.x+.901)<.003,`${name} stops at ${a.me.pos.x}`);
+  }
+  a.input({ax:0});a.command('edit',{mode:0});await clock.wait(1000);
+  a.input({ax:4});await clock.wait(900);assert.ok(a.me.pos.x>1,'disabled wall permits immediate movement');
+  a.command('edit',{mode:1});await clock.wait(1000);
+  await place({x:-2,y:0,z:0});assert.ok(a.me.pos.x< -1.5,`placed: ${a.me.pos.x} ${JSON.stringify(r.host.core.snapshot())}`);a.command('edit',{mode:2});await clock.wait(1000);
+  a.input({ax:4});await clock.wait(1000);assert.ok(Math.abs(a.me.pos.x+1.401)<.004,`changed rectangular dimensions: ${a.me.pos.x}; ${JSON.stringify(r.host.core.stats)}`);
+  a.command('edit',{mode:3});await clock.wait(1000);a.input({ax:4});await clock.wait(700);assert.ok(a.me.pos.x>0,'despawn removes collision');
+  a.input({ax:0});b.command('place',{at:{x:-3,y:1,z:0}});await clock.wait(700);
+  b.input({ax:1});a.command('edit',{mode:4});await clock.wait(2000);
+  assert.ok(b.me.pos.x<=-.899,'build near another moving player participates in prediction');b.input({ax:0});
+  if(dims===3){
+    await place({x:-1.5,y:0,z:0});a.input({jump:true,ax:2});await clock.wait(500);a.input({ax:0});await clock.wait(1000);
+    assert.ok(Math.abs(a.me.pos.z-2.601)<.02,'jump from the floor onto cover');
+    await place({x:0,y:0,z:0});a.input({launch:true});await clock.wait(200);assert.ok(a.me.pos.z<.01,'overlapping cover gates launch');
+    await place({x:0,y:0,z:2.601});assert.equal(a.me.grounded,true,'cover supports feet');
+    a.input({jump:true});await clock.wait(180);assert.ok(a.me.pos.z>3,'jump off live support');
+    a.input({ax:0});await clock.wait(1400);assert.ok(Math.abs(a.me.pos.z-2.601)<.02,'land on cover');
+    a.command('edit',{mode:3});await clock.wait(1600);assert.ok(a.me.pos.z<.01,'destroy supporting cover and fall');
+    a.command('edit',{mode:4});await clock.wait(800);
+    await place({x:0,y:0,z:5},true);assert.ok(Math.abs(a.me.motion.support-2.4)<.15,'dive height is measured to cover');
+    a.input({dive:true});await clock.wait(600);assert.ok(Math.abs(a.me.pos.z-2.601)<.02,'dive lands on cover');
+    await place({x:-2,y:0,z:0});a.input({launch:true,ax:4});await clock.wait(160);assert.ok(a.me.pos.z>1,'launch beside cover predicts');a.input({ax:0});
+    a.command('edit',{mode:5});await clock.wait(800);
+    await place({x:0,y:0,z:3.601});assert.equal(a.me.grounded,true,'moved platform supports at its new height');
+  }
+  await place({x:-2,y:0,z:0});
+  // A fresh view has no retained collision history; its first snapshot supplies it.
+  a.close();a=open('Reloaded');await clock.wait(2000);a.command('place',{at:{x:-2,y:0,z:dims===3?1:0}});await clock.wait(1000);
+  a.input({ax:4});await clock.wait(1200);assert.ok(a.me.pos.x<=-.899,'rejoin collision');
+  const saved=r.host.core.save(),restored=L.C.createCore(compiled,{restore:saved});
+  assert.deepEqual(restored.snapshot(),r.host.core.snapshot(),'saved room restores the identical collision revision');
+  for(let i=0;i<12;i++){const inputs=new Map([[a.seat,{values:{ax:4}}]]);restored.step(inputs);}
+  assert.equal(restored.stats.errors,0,restored.stats.lastError);
+  assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+  const revived=rig(L,compiled,{restore:r.host.save(),restoreEpoch:r.host.core.epoch+1},shape,shape);
+  const fresh=openRoom({net:{config:cfg('Restored'),WebSocketImpl:revived.socket(),post:null}});
+  t.after(()=>{fresh.close();revived.stop();});
+  await clock.wait(2000);
+  fresh.input({ax:0});fresh.command('place',{at:{x:-2,y:0,z:dims===3?1:0}});await clock.wait(1000);
+  fresh.input({ax:4});
+  for(let i=0;i<80;i++){await clock.wait(16);assert.ok(fresh.me.pos.x<=-.899,`restored prediction: ${fresh.me.pos.x}`);}
+  assert.equal(revived.host.core.stats.errors,0,revived.host.core.stats.lastError);
 });

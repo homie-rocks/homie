@@ -41,7 +41,8 @@ asks (`game new <id> --from gem-rush`, or `--from ember-vale` for a hero who las
 New games are rules plus view: `src/rules.ts` declares state and server decisions,
 `src/move.ts` supplies shared movement and local prediction, and `src/view.ts` draws
 and sends input through `openRoom`. All five starters declare `room.host: server`.
-Follow the game skill and `RULES.md`; `build` checks rules, movement and view types
+Read the installed [game skill](guides/game/SKILL.md), [rules guide](guides/game/RULES.md)
+and [rewrite guide](guides/game/REWRITE.md), generated from the matching plugin release; `build` checks rules, movement and view types
 and refuses a game with neither rules nor a browser-hosted netplay contract.
 The same rules support browser hosting for offline, local and private play.
 Existing browser-hosted games remain supported; rewriting one is an explicit task.

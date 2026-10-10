@@ -236,7 +236,8 @@ function play(c, companions, allow) {
   const ends = (fd) => (fd.t === 'bit' || fd.t === 'press' ? [false, true] : fd.t === 'fix' ? [-1, 1] : [L.P.coerce(fd, -Infinity, c.dims), L.P.coerce(fd, Infinity, c.dims)]);
   const steering = new Map();
   let moveTick = 0;
-  const moveCtx = new Map(c.kinds.filter((k) => k.move && k.body).map((k) => [k.name, L.M.moveContext({ tick: () => moveTick, tickHz, tune: c.publicTune, map: c.map, name: c.map.name, spots: c.map.spots, radius: () => k.body.radius, shape: () => k.body, dims: c.dims })]));
+  let moveGeometry = c.map;
+  const moveCtx = new Map(c.kinds.filter((k) => k.move && k.body).map((k) => [k.name, L.M.moveContext({ tick: () => moveTick, tickHz, tune: c.publicTune, map: c.map, geometry: () => moveGeometry, name: c.map.name, spots: c.map.spots, radius: () => k.body.radius, shape: () => k.body, dims: c.dims })]));
   /**
    * An owner-moved body's own browser, for one tick: the game's `move` from where the last snapshot has the body, by
    * the step a browser takes (pack.ts `stepMove`), and the claim of where that leaves it. Its units are the play's.
@@ -344,9 +345,9 @@ function play(c, companions, allow) {
     const stats = A.core.stats; const cut = stats.ticksCut; const held = stats.held;
     A.tickNow();
     units += A.core.stats.tickUnits;
-    for (const [name, tick, input, before, after] of movesToCheck.splice(0)) {
+    for (const [name, tick, input, before, after, geometry] of movesToCheck.splice(0)) {
       const kind = c.kinds.find(k => k.name === name);
-      moveTick = tick;
+      moveTick = tick; moveGeometry = geometry ?? c.map;
       const result = L.P.stepMove(kind.move, before, input, moveCtx.get(name), Math.max(1, Math.floor(budget / 4)), kind.motion, c.dims,
         error => { fault ??= `${siteOf(name, 'move')} ${name}.move: prediction failed: ${error.message}.${when()}`; });
       units += result.used;

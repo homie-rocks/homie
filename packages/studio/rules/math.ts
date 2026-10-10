@@ -1,3 +1,4 @@
+import { collisionQueries } from './live.ts';
 /*
  * math.ts — `world.math` and `ctx.math`: the maths rules may not take from `Math`, in plain arithmetic.
  * =============================================================================
@@ -204,7 +205,7 @@ export function rayCircle(px: number, py: number, dx: number, dy: number, cx: nu
   return { t, nx: hx / l, ny: hy / l };
 }
 /** The same point against a box grown by r with round corners (a circle of radius r against the box). */
-function rayBox(px: number, py: number, dx: number, dy: number, min: Vec3, max: Vec3, r: number): Hit | null {
+export function rayBox(px: number, py: number, dx: number, dy: number, min: Vec3, max: Vec3, r: number): Hit | null {
   let t0 = 0; let t1 = 1; let nx = 0; let ny = 0;
   const lo = [min.x - r, min.y - r]; const hi = [max.x + r, max.y + r];
   const p = [px, py]; const d = [dx, dy];
@@ -237,8 +238,8 @@ function rayBounds(px: number, py: number, dx: number, dy: number, b: { min: Vec
 /** A circle (or a point, r 0) moved along d against the static map: the first thing in the way, and how many shapes were tested. */
 export function castMap(map: MapShapes, px: number, py: number, dx: number, dy: number, r: number): { hit: Hit | null; tested: number } {
   let best: Hit | null = rayBounds(Math.max(map.bounds.min.x + r, Math.min(map.bounds.max.x - r, px)), Math.max(map.bounds.min.y + r, Math.min(map.bounds.max.y - r, py)), dx, dy, map.bounds, r);
-  for (const b of map.boxes) { const h = rayBox(px, py, dx, dy, b.min, b.max, r); if (h && (!best || h.t < best.t)) best = h; }
-  for (const c of map.circles) { const h = rayCircle(px, py, dx, dy, c.at.x, c.at.y, c.r + r); if (h && (!best || h.t < best.t)) best = h; }
+  for (const b of map.boxes) { const h = rayBox(px, py, dx, dy, b.min, b.max, r); if (h && (!best || h.t < best.t)) best = { ...h, id: (b as any).id }; }
+  for (const c of map.circles) { const h = rayCircle(px, py, dx, dy, c.at.x, c.at.y, c.r + r); if (h && (!best || h.t < best.t)) best = { ...h, id: (c as any).id }; }
   return { hit: best, tested: 4 + map.boxes.length + map.circles.length };
 }
 
@@ -264,7 +265,7 @@ export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: 
     const t = h ? Math.max(0, h.t - (length > 0 ? SKIN / length : 0)) : 1;
     const at = v(fr(px + dx * t), fr(py + dy * t), fr(p.z + d.z * t));
     put(body, 'pos', at); put(body, 'grounded', restsOnMap(map, at, shape));
-    return h ? Object.freeze({ at, normal: v(h.nx, h.ny, h.nz) }) : undefined;
+    return h ? Object.freeze({ at, normal: v(h.nx, h.ny, h.nz), ...(h.id ? { entity: h.id } : {}) }) : undefined;
   }
   const { hit: h } = castMap(map, px, py, dx, dy, radius);
   put(body, 'grounded', true);
@@ -273,7 +274,7 @@ export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: 
   const t = l > 0 ? Math.max(0, h.t - SKIN / l) : 0;
   const at = v(fr(px + dx * t), fr(py + dy * t), 0);
   put(body, 'pos', at);
-  return Object.freeze({ at, normal: v(h.nx, h.ny, 0) });
+  return Object.freeze({ at, normal: v(h.nx, h.ny, 0), ...(h.id ? { entity: h.id } : {}) });
 }
 
 /**
@@ -281,12 +282,14 @@ export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: 
  * map. One function, so that the browser (view.ts) and the person the build check plays hold the same one. The
  * server's own (core.ts `moveCtx`) is made beside the rest of its world, and charges as that does.
  */
-export function moveContext(o: { tick: () => number; tickHz: number; tune: unknown; map: MapShapes; name: string; spots: Readonly<Record<string, readonly unknown[]>>; radius: () => number; shape?: () => BodyShape; dims: number }): unknown {
+export function moveContext(o: { tick: () => number; tickHz: number; tune: unknown; map: MapShapes; name: string; spots: Readonly<Record<string, readonly unknown[]>>; radius: () => number; shape?: () => BodyShape; dims: number; geometry?: () => MapShapes }): unknown {
   const none = Object.freeze([]);
+  const queries = collisionQueries(() => o.geometry?.() ?? o.map, () => o.shape?.() ?? {shape: 'sphere', radius: o.radius(), height: 2 * o.radius()}, o.dims);
   return brand(Object.freeze({
     get tick() { return o.tick(); }, dt: 1 / o.tickHz, tune: o.tune, math,
     // As the server's `ctx.ticks` reads it: a plain number, or nothing.
     ticks: (seconds: unknown): number => { const s = num(seconds); const n = Math.round(s * o.tickHz); return s > 0 && Number.isFinite(n) ? Math.max(1, n) : 0; },
-    map: brand(Object.freeze({ name: o.name, spot: (name: string) => (own(o.spots, name) as readonly unknown[] | undefined)?.[0], spots: (name: string) => own(o.spots, name) ?? none, sweep: (body: unknown, delta: unknown) => sweepMap(o.map, body, delta, o.radius(), o.dims, o.shape?.()) })),
+    world: brand(Object.freeze(queries)),
+    map: brand(Object.freeze({ name: o.name, spot: (name: string) => (own(o.spots, name) as readonly unknown[] | undefined)?.[0], spots: (name: string) => own(o.spots, name) ?? none, ...queries })),
   }));
 }

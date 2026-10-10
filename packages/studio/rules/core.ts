@@ -1,3 +1,4 @@
+import { colliderSolid, castCollider2, colliderRow, collisionMap, collisionQueries, type CollisionRevision } from './live.ts';
 /*
  * core.ts — one room's world, stepped a tick at a time from a compiled rules module.
  * =============================================================================
@@ -41,7 +42,7 @@
 import { castMap3, castSolid, restsOnMap, solidAt, type BodyShape, type Hit3 } from './collision.ts';
 import { argsWhy, type Vocabulary } from '../agents/agents.ts';
 import { BudgetError, G, brand, charge, deepFreeze, plainData } from './guard.ts';
-import { SKIN, castMap, exact, math, rayCircle, sweepMap } from './math.ts';
+import { SKIN, castMap, exact, math, rayCircle } from './math.ts';
 import type { Hit } from './math.ts';
 import { AHEAD, ZERO, coerce, coerceFields, dir, est, estFields, initFields, mutable, num, own, packEntity, packFields, packVec, packed, said, thaw, naming, unpackFields, unpackVec, vec3 } from './pack.ts';
 import { ENTITY_MAX, QUEUE_MAX, REACH_M, SAVE_REVISION, cellsOf } from './rules.ts';
@@ -178,7 +179,7 @@ export interface Core {
  * `noted`: told, as it happens, of a value the rules wrote that the runtime changed to make it fit, or dropped (pack.ts
  * `Adjusted`; also `effect`, `think` and `decision`): the handler, what was done, the field's name and what was written.
  */
-export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
+export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
   const dims = c.dims;
   const tickHz = c.settings.tickHz;
   const dt = 1 / tickHz;
@@ -483,7 +484,10 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
     const solid = solidAt(p, shape);
     for (const other of ents.values()) {
       if (!other.kind.body || ignored.has(other.id)) continue;
-      const hit = castSolid(solid, d, solidAt(other.pos, other.kind.body));
+      if (other.kind.collider) charge(48);
+      const row = other.kind.collider ? colliderRow(other.id, other.pos, other.kind.body, other.kind.collider, other.f) : null;
+      if (other.dead || other.kind.collider && !row) continue;
+      const hit = castSolid(solid, d, row ? colliderSolid(row) : solidAt(other.pos, other.kind.body));
       if (hit && (!best || hit.t < best.t)) best = { ...hit, id: other.id };
     }
     return best;
@@ -618,7 +622,10 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       let best: Hit | null = cast.hit;
       for (const e of ents.values()) {
         if (!e.kind.body || e === cx.ent) continue;
-        const h = rayCircle(p.x, p.y, d.x * far, d.y * far, e.pos.x, e.pos.y, e.kind.body.radius);
+        if (e.kind.collider) charge(48);
+        const row = e.kind.collider ? colliderRow(e.id, e.pos, e.kind.body, e.kind.collider, e.f) : null;
+        if (e.dead || e.kind.collider && !row) continue;
+        const h = row ? castCollider2(row, p, {x:d.x*far,y:d.y*far,z:0}, 0) : rayCircle(p.x, p.y, d.x * far, d.y * far, e.pos.x, e.pos.y, e.kind.body.radius);
         if (h && (!best || h.t < best.t)) best = { ...h, id: e.id };
       }
       if (!best) return undefined;
@@ -648,7 +655,10 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       let best: Hit | null = cast.hit;
       for (const other of ents.values()) {
         if (other === e || !other.kind.body || ignore.has(other.id)) continue;
-        const h = rayCircle(e.pos.x, e.pos.y, d.x, d.y, other.pos.x, other.pos.y, other.kind.body.radius + radius);
+        if (other.kind.collider) charge(48);
+        const row = other.kind.collider ? colliderRow(other.id, other.pos, other.kind.body, other.kind.collider, other.f) : null;
+        if (other.dead || other.kind.collider && !row) continue;
+        const h = row ? castCollider2(row, e.pos, d, radius) : rayCircle(e.pos.x, e.pos.y, d.x, d.y, other.pos.x, other.pos.y, other.kind.body.radius + radius);
         if (h && (!best || h.t < best.t)) best = { ...h, id: other.id };
       }
       const l = Math.sqrt(d.x * d.x + d.y * d.y);
@@ -678,11 +688,19 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
   });
   Object.freeze(world);
 
-  const moveMap = brand(Object.freeze({ name: c.map.name, spot: mapApi.spot, spots: mapApi.spots, sweep: (body: unknown, delta: unknown): unknown => sweepMap(c.map, body, delta, moveRadius, dims, moveShape) }));
-  let moveRadius = 0;
+  const hasColliders = c.kinds.some(k => k.collider);
+  const collisionState = (): CollisionRevision => [tick, tick + 1, [...ents.values()].flatMap(e => {
+    if (e.dead || !e.kind.collider || !e.kind.body) return [];
+    const row = colliderRow(e.id, e.pos, e.kind.body, e.kind.collider, e.f);
+    return row ? [row] : [];
+  })];
+  let moveGeometry = c.map as import('./math.ts').MapShapes;
+  const queries = collisionQueries(() => moveGeometry, () => moveShape, dims);
+  const moveWorld = brand(Object.freeze(queries));
+  const moveMap = brand(Object.freeze({ name: c.map.name, spot: mapApi.spot, spots: mapApi.spots, ...queries }));
   let moveShape = { shape: 'sphere', radius: 0, height: 0 };
   const moveCtx = brand({} as Record<string, unknown>);
-  for (const [name, get] of Object.entries({ tick: () => tick, dt: () => dt, tune: () => c.publicTune, math: () => math, map: () => moveMap })) Object.defineProperty(moveCtx, name, { get, enumerable: true });
+  for (const [name, get] of Object.entries({ tick: () => tick, dt: () => dt, tune: () => c.publicTune, math: () => math, map: () => moveMap, world: () => moveWorld })) Object.defineProperty(moveCtx, name, { get, enumerable: true });
   Object.assign(moveCtx, { ticks: (seconds: unknown): number => { charge(1); return ticks(seconds); } });
   Object.freeze(moveCtx);
   const joinCtx = brand({} as Record<string, unknown>);
@@ -988,6 +1006,8 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
         }
       }
       guides?.();
+      // All movers see the same world, independent of entity iteration order.
+      if (hasColliders) { left -= 64 * ents.size + 4 * mapShapes; moveGeometry = collisionMap(c.map, collisionState()[2]); }
       // Phase 1: one input step and `move` for every body.
       for (const e of [...ents.values()]) {
         if (e.dead || !e.kind.body) continue;
@@ -1040,7 +1060,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
         if (!k.move) continue;
         const b = { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: e.mself };
         const beforeMove = opts.moved ? { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: { ...e.m } } : null;
-        moveRadius = body.radius; moveShape = body;
+        moveShape = body;
         run(k.name, 'move', e, 'move', () => (k.move as NonNullable<KindTable['move']>)(b, e.input, moveCtx), 'body');
         // The runtime rounds to 32-bit floats, here and in the browser, so both step from exactly the same numbers.
         // `b` is the runtime's own object: what `move` left in it is read by its own data properties and cannot throw.
@@ -1049,7 +1069,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
         naming('body', 'pos'); e.pos = clampIn(V(own(b, 'pos')), body.radius, body.height || 2 * body.radius); naming('body', 'vel'); e.vel = V(own(b, 'vel')); naming('body', 'heading'); e.heading = dir(own(b, 'heading'), dims); naming();
         G.note = null;
         e.grounded = own(b, 'grounded') === true;
-        if (beforeMove) opts.moved!(k.name, tick, e.input, beforeMove, { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: { ...e.m } });
+        if (beforeMove) opts.moved!(k.name, tick, e.input, beforeMove, { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: { ...e.m } }, moveGeometry);
       }
       // Phase 2: for every entity, its commands and then its tick, starting from a different entity each tick.
       const list = [...ents.values()];
@@ -1369,7 +1389,9 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       const list = [...ents.values()].map((e) => packEntity(e.kind, e, dims));
       // Include all three components of position, velocity and heading in a 3D snapshot.
       snapCells = packed.n + (dims === 3 ? 13 : 10) * list.length;
-      return [[round.n, round.phase === 'live' ? 1 : 0, round.endsAt], list];
+      const collision = hasColliders ? collisionState() : null;
+      if (collision) snapCells += 3 + collision[2].length * 8;
+      return [[round.n, round.phase === 'live' ? 1 : 0, round.endsAt], list, ...(collision ? [collision] : [])];
     },
     shared: () => packFields(c.shared, shared, dims),
     bodies: () => playerBodies().map((e) => ({ seat: e.seat, id: e.id, kind: e.kind.name, driver: e.driver, owner: e.owner, away: e.away, score: e.kind.score ? Number(e.f[e.kind.score]) || 0 : 0, r: e.r })),

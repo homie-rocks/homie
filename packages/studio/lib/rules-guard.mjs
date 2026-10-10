@@ -69,7 +69,8 @@ export const HOOK_NAMES = ['valueOf', 'toString', 'toJSON'];
 export const WORLD_METHODS = ['ticks', 'random', 'send', 'sendRoom', 'announce', 'sendArea', 'after', 'emit', 'spawn', 'despawn', 'place', 'near', 'inBox', 'ray', 'sweep', 'ask', 'goalDone', 'finish', 'end', 'spot', 'spots'];
 export const MATH_METHODS = ['sin', 'cos', 'tan', 'atan', 'atan2', 'asin', 'acos', 'exp', 'log', 'pow', 'hypot', 'rad', 'deg', 'clamp', 'lerp', 'vec', 'add', 'sub', 'scale', 'dot', 'cross', 'len', 'dist', 'norm', 'clampLen', 'lerpVec', 'dir', 'angle'];
 const VALUE_METHODS = new Set([...ARRAY_METHODS, ...STRING_METHODS, ...MAPSET_METHODS]);
-const CALLABLE = new Set([...VALUE_METHODS, ...WORLD_METHODS, ...MATH_METHODS]);
+export const MOVE_METHODS = ['support', 'overlaps'];
+const CALLABLE = new Set([...VALUE_METHODS, ...WORLD_METHODS, ...MOVE_METHODS, ...MATH_METHODS]);
 const refusedName = (k) => REFUSED_NAMES.includes(k) || k.startsWith('toLocale');
 /** Operators that turn each operand into a number or a text. (`+` is handled beside them; `==` and `!=` are refused.) */
 const CONVERTING = new Set(['-', '*', '/', '%', '&', '|', '^', '<<', '>>', '>>>', '<', '>', '<=', '>=']);

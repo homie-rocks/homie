@@ -1,4 +1,5 @@
 import { snapshotDecoder } from './interest.mjs';
+import { collisionMap, revisionAt, type CollisionRevision } from './live.ts';
 import { rulesOutput } from '../netplay/rules-output.mjs';
 import { rulesCaps, rulesRates } from '../worker/limits.mjs';
 /*
@@ -127,7 +128,7 @@ export interface Room<R = unknown> {
   readonly __rules?: R;
 }
 
-interface Frame { k: number; e: number; at: number; round: [number, number, number]; ents: Map<string, Unpacked>; rows: number[][] }
+interface Frame { k: number; e: number; at: number; round: [number, number, number]; ents: Map<string, Unpacked>; rows: number[][]; collision?: CollisionRevision }
 const frames = new WeakMap<object, Frame | null>();
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
@@ -168,11 +169,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (!s || typeof s !== 'object') return null;
     if (frames.has(s)) return frames.get(s) ?? null;
     let f: Frame | null = null;
-    const d = delivery.decode(s)?.d as [unknown, unknown] | null;
+    const d = delivery.decode(s)?.d as [unknown, unknown, CollisionRevision?] | null;
     if (Array.isArray(d) && Array.isArray(d[0]) && Array.isArray(d[1])) {
       const ents = new Map<string, Unpacked>();
       for (const w of d[1] as unknown[]) { const e = unpackEntity(schema.kinds, w, dims); if (e) ents.set(e.id, e); }
-      f = { k: s.k, e: Number(s.e) || 0, at: clock(), round: [Number(d[0][0]) || 0, Number(d[0][1]) || 0, Number(d[0][2]) || 0], ents, rows: (Array.isArray(s.c) ? s.c : []) as unknown as number[][] };
+      f = { collision: d[2], k: s.k, e: Number(s.e) || 0, at: clock(), round: [Number(d[0][0]) || 0, Number(d[0][1]) || 0, Number(d[0][2]) || 0], ents, rows: (Array.isArray(s.c) ? s.c : []) as unknown as number[][] };
     }
     frames.set(s, f);
     return f;
@@ -249,7 +250,15 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const tickAt = (now: number): number => (base ? base.tick + (now - base.at) / period * speed : 0);
   /** The tick `move` is being run for: the step just taken, or the one after it while the own body is drawn between ticks. */
   let moveTick = 0;
-  const moveCtx = moveContext({ tick: () => moveTick, tickHz, tune, map, name: game.map.name ?? 'main', spots, radius: () => myKind()?.radius ?? 0, shape: () => ({ shape: myKind()?.shape ?? 'sphere', radius: myKind()?.radius ?? 0, height: myKind()?.height ?? 0 }), dims });
+  let collisionHistory: CollisionRevision[] = [];
+  let cachedCollision: CollisionRevision | undefined;
+  let geometry = map as import('./math.ts').MapShapes;
+  const geometryAt = () => {
+    const revision = revisionAt(collisionHistory, moveTick);
+    if (revision !== cachedCollision) { geometry = collisionMap(map, revision?.[2] ?? []); cachedCollision = revision; }
+    return geometry;
+  };
+  const moveCtx = moveContext({ tick: () => moveTick, tickHz, tune, map, geometry: geometryAt, name: game.map.name ?? 'main', spots, radius: () => myKind()?.radius ?? 0, shape: () => ({ shape: myKind()?.shape ?? 'sphere', radius: myKind()?.radius ?? 0, height: myKind()?.height ?? 0 }), dims });
   function authorityRtt(): number {
     // The helper's ping ends at the relay. A browser host adds another network leg in both directions.
     // Snapshot stamps use the relay clock, so their observed age measures the complete downstream path.
@@ -299,6 +308,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const fn = moves[kindName];
     if (!fn) return body;
     moveTick = t;
+    // Like snapshot unpacking, prepare the bounded geometry outside the handler
+    // quota. Authority debits projection once per tick, not once per mover.
+    geometryAt();
     const out = stepMove(fn, body, input, moveCtx, Math.max(1, Math.floor(schema.settings.budget.tick / 4)), kindOf.get(kindName)?.motion ?? [], dims, (err) => { if (!(err instanceof BudgetError)) console.warn('[room] move', err); });
     const kind = kindOf.get(kindName), r = kind?.radius ?? 0;
     const height = kind?.height || 2 * r;
@@ -387,6 +399,12 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const before = latest;
     if (before && before.e === f.e && f.k <= before.k) return;
     latest = f;
+    if (!before || before.e !== f.e) collisionHistory = [];
+    const collision = f.collision;
+    if (collision) {
+      collisionHistory.push(collision);
+      if (collisionHistory.length > 128) collisionHistory.shift();
+    }
     if (before && before.e !== f.e) hostAges.length = 0;
     hostAges.push(Math.max(0, net.now() - s.st)); if (hostAges.length > 40) hostAges.shift();
     if (before && before.e !== f.e) fxQueue.length = 0;

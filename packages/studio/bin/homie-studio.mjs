@@ -901,6 +901,10 @@ async function main() {
   // The starter library and the optimiser work anywhere; the rest of style and assets inside a studio (lib/art-cli.mjs).
   if (cmd === 'assets' && ['find', 'optimise', 'optimize'].includes(sub)) return assetsCommand(null, sub, positional, flags, { log });
   const root = requireStudio();
+  // Keep guidance visible to AI callers using --json as well as human output.
+  if (['build', 'check', 'upgrade'].includes(cmd)) {
+    for (const line of (await import('../lib/authoring-guides.mjs')).authoringWords()) process.stderr.write(`${line}\n`);
+  }
   if (cmd === 'function') return (await import('../lib/functions-cli.mjs')).functionCommand(root, sub, positional, flags, { log });
   if (cmd === 'tool') return (await import('../lib/tools-cli.mjs')).toolCommand(root, sub, positional, flags, { log });
   // A trailer is the plugin's video skill; this hands the words after the id over to it (lib/trailer.mjs).
