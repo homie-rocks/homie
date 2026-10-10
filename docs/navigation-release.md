@@ -72,3 +72,6 @@ passes with the fix. The 600 ms response limit and negative controls are unchang
 A subsequent local matrix passed the earlier failed scenarios but found one
 1.24 cm backward step in the 300 ms / 10% loss / 60 Hz browser case (limit 1 cm).
 This intermittent prediction result is retained in the PR's gate evidence.
+
+
+Rebased again onto main 39f2cd9 after the prediction release-gate fix (#81), retaining studio 0.38.1/plugin 0.39.1. Main now owns the asynchronous MCP-build check. The touch regression retains both main’s delivered-event assertion and the delayed-final-delivery check. Fresh gate evidence is recorded in /tmp/homie-refresh-75-main81/ and the PR description.
