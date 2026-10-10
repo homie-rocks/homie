@@ -20,7 +20,7 @@ for (const [name, args, studio, plugin] of [
     for (const file of manifests) put(file, JSON.stringify({ version: '1.0.1' }));
     put('packages/studio/worker/version.mjs', "export const STUDIO_VERSION_TAG = '1.0.1';\n");
     const released = '\n## [0.9.0]\n\nPublished bytes mentioning 1.0.1 stay untouched.\n';
-    put('CHANGELOG.md', '# Changelog\n\n## [1.0.1]\n\n**Plugin 1.0.1**\n\nStudio 1.0.1 release.\n' + released);
+    put('CHANGELOG.md', '# Changelog\n\n## [1.0.1]\n\n**Plugin 1.0.1**\n\nBased on main studio 1.0.1.\n' + released);
     put('packages/studio/lib/template-history.json', JSON.stringify({ versions: { '0.9.0': { frozen: true }, '1.0.1': { pending: true } } }));
     for (const script of ['template.mjs', 'studio-template-history.mjs', 'changelog.mjs']) {
       put(`scripts/${script}`, `import { appendFileSync } from 'node:fs'; appendFileSync('generators', ${JSON.stringify(script + '\n')});`);
@@ -36,6 +36,7 @@ for (const [name, args, studio, plugin] of [
     assert.ok(changelog.includes(`## [${studio}]`));
     assert.ok(changelog.includes(`**Plugin ${plugin}**`));
     assert.ok(changelog.endsWith(released));
+    assert.ok(changelog.includes('Based on main studio 1.0.1.'), 'base version in upgrade notes must not be renumbered');
     assert.deepEqual(json('packages/studio/lib/template-history.json'), { versions: { '0.9.0': { frozen: true } } });
     assert.equal(readFileSync(join(root, 'generators'), 'utf8'), 'template.mjs\nstudio-template-history.mjs\nchangelog.mjs\n');
     assert.deepEqual(json('npm-args'), ['install', '--package-lock-only', '--ignore-scripts']);
