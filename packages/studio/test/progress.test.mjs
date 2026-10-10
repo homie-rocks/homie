@@ -1,4 +1,4 @@
-import { legacyGame } from './legacy-game.mjs';
+import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * The progress feed (lib/progress.mjs): a build the person can watch from the Claude app.
  *   - without an open feed, build and deploy are exactly what they were (no .studio/progress at all);
@@ -43,7 +43,7 @@ function studio(name) {
   mkdirSync(join(dir, 'node_modules', '@homie-rocks'), { recursive: true });
   symlinkSync(PKG, join(dir, 'node_modules', '@homie-rocks', 'studio'));
   symlinkSync(join(REPO_NM, 'esbuild'), join(dir, 'node_modules', 'esbuild'));
-  legacyGame(dir, 'crown-thief', 'Crown Thief');
+  browserRulesGame(dir, 'crown-thief', 'Crown Thief');
   return dir;
 }
 

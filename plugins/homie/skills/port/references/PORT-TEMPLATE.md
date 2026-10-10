@@ -16,7 +16,7 @@ Original: <where it came from>, licence <MIT/…> (<file>), <lines> lines, <engi
 
 ## Multiplayer design
 - A round: <length; what wins; what happens on death (respawn, never out)>.
-- Room: <max players, at most 32>; bots from the first frame: <how many>.
+- Room: <chosen players.max, tested at that size>; bots from the first frame: <how many>.
 - Server rules own: <rules, enemies, pickups, hits, the clock, the seed…>.
 - The preserved view draws: <predicted own body / shared board and local button feedback>.
 - Shared move: <movement, map collisions and motion fields; stationary anchors for a board>.

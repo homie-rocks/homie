@@ -1,13 +1,12 @@
-import { legacyGame } from './legacy-game.mjs';
+import { browserRulesGame } from './browser-rules-game.mjs';
 /**
- * `homie-studio build` for a game written as rules plus view, beside one written the old way
+ * `homie-studio build` for server and browser games using one rules-plus-view contract
  * (rooms-milestone-1-design.md sections 7 and 8).
  *
  *   - coin-dash builds: its view bundle holds the guarded move code and the rules' declarations as data, and none of
  *     the rules' own code; its rules go to site/src/rules/ as one module that imports only Homie's rules module and
  *     the guard, with a table the studio's Worker imports; the catalogue says its rules run on the server;
- *   - a game written before rules (gem-rush) builds exactly as it did, hosted by a player's browser, and the build
- *     says so in one line; it cannot ask for the server;
+ *   - browser/offline games use guarded rules too; old netplay-only builds are refused;
  *   - rules the wall refuses stop the build with the line named, and leave the site and site/src/rules as they were;
  *   - rules that fail when they run stop the build with the handler named;
  *   - a new studio's Worker imports an empty table, and its config turns off evaluation at startup.
@@ -56,12 +55,12 @@ test('a new studio\'s Worker imports the table of its server-hosted games, and i
 test('game hashes are reproducible, isolate unrelated builds, and distinguish code from state shape', () => {
   const dir = studio('hashes');
   assert.equal(run(['game', 'new', 'coin-dash', '--from', 'coin-dash'], dir).status, 0);
-  legacyGame(dir, 'gems');
+  browserRulesGame(dir, 'gems');
   const build = () => {
     const r = run(['build'], dir); assert.equal(r.status, 0, r.stdout + r.stderr);
     const trial = out(r).games.find(g => g.id === 'coin-dash').capacityTrial;
     assert.equal(trial.seats, 32); assert.equal(trial.host, 'Node'); assert.equal(trial.cloudflare, false);
-    assert.equal(out(r).games.find(g => g.id === 'gems').capacityTrial, undefined, 'legacy games make no rules capacity claim');
+    assert.equal(out(r).games.find(g => g.id === 'gems').capacityTrial.cloudflare, false, 'browser rules do not claim Cloudflare capacity');
     return JSON.parse(read(dir, 'site/dist/games.json')).games.find((g) => g.id === 'coin-dash');
   };
   const first = build();
@@ -91,17 +90,17 @@ test('game hashes are reproducible, isolate unrelated builds, and distinguish co
   const mapped = build(); assert.notEqual(mapped.room.stateHash, shaped.room.stateHash); assert.notEqual(mapped.room.build, shaped.room.build);
 });
 
-test('coin-dash builds as a view bundle and a rules module; the legacy Ember Vale fixture builds as it always did, and says so', async () => {
+test('server and browser games build the same rules-plus-view contract, and old netplay-only games are refused', async () => {
   const dir = studio('both');
   assert.equal(run(['game', 'new', 'coin-dash', '--from', 'coin-dash'], dir).status, 0);
-  legacyGame(dir, 'gems');
+  browserRulesGame(dir, 'gems');
   const built = spawnSync(process.execPath, [CLI, 'build'], { cwd: dir, encoding: 'utf8' });
   assert.equal(built.status, 0, built.stdout + built.stderr);
   const said = built.stdout + built.stderr;
   assert.doesNotMatch(said, /chunks? loaded later/);
   assert.match(said, /smoke-run largest snapshot \d+ B .*checkpoint \d+ B/);
   assert.match(said, /coin-dash: its rules run on the server \(checked and guarded, \d+ KB, build [0-9a-f]{32}; 18000 ticks played, the room rebuilt from its save \d+ times: the busiest tick used \d+ of 500000 budget units, \d+ of them in one handler; the largest save was \d+ bytes\)/);
-  assert.match(said, /hosted by a player's browser, as before \(no room object; nothing to do\): gems\n/);
+  assert.doesNotMatch(said, /no room object; nothing to do/);
   // The rules module: one file, importing only Homie's rules module and the guard.
   const rules = read(dir, 'site/src/rules/coin-dash.mjs');
   assert.deepEqual([...new Set([...rules.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) => m[1]))].sort(), ['@homie-rocks/studio/rules', '@homie-rocks/studio/rules/guard']);
@@ -141,9 +140,8 @@ test('coin-dash builds as a view bundle and a rules module; the legacy Ember Val
   assert.match(view, /"effectNames":\["ding"\]|effectNames:\["ding"\]/, 'and the declarations, as data');
   // ember-vale: the same catalogue row it always had, its own code the host, nothing about rules.
   const gems = cat.games.find((g) => g.id === 'gems');
-  assert.equal(gems.room, undefined);
-  assert.equal(gems.movement, 'owner');
-  assert.equal(gems.roundSeconds, 90);
+  assert.equal(gems.room.host, 'browser');
+  assert.equal(gems.room.contract, 2);
   assert.equal(gems.netplayRev, 12);
   assert.ok(existsSync(join(dir, 'site/dist/games/gems', gems.built.bundle)));
   assert.match(read(dir, `site/dist/games/gems/${gems.built.bundle}`), /homie-netplay-rev:12/);
@@ -153,22 +151,14 @@ test('coin-dash builds as a view bundle and a rules module; the legacy Ember Val
   assert.ok(existsSync(join(dir, 'site/src/rules/coin-dash.mjs')));
   assert.deepEqual(JSON.parse(read(dir, 'site/dist/games.json')).games.find((g) => g.id === 'coin-dash').room.host, 'server');
 
-  // A game written the old way cannot ask for the server: the build fails with the reason.
+  // Removing the rules contract has no browser-hosted fallback.
   const meta = JSON.parse(read(dir, 'games/gems/game.json'));
-  writeFileSync(join(dir, 'games/gems/game.json'), JSON.stringify({ ...meta, room: { host: 'server' } }));
+  const unruled = { ...meta }; delete unruled.room;
+  writeFileSync(join(dir, 'games/gems/game.json'), JSON.stringify(unruled));
   const no = run(['build'], dir);
   assert.notEqual(no.status, 0);
-  assert.match(no.stdout + no.stderr, /games\/gems\/game\.json asks for \\?"room\\?": \{ \\?"host\\?": \\?"server\\?" \}, but this game has no src\/rules\.ts: its rules are inside its own code and run in a player's browser\. Ask for it to be rewritten as rules plus view\./);
+  assert.match(no.stdout + no.stderr, /games use rules plus view/);
   writeFileSync(join(dir, 'games/gems/game.json'), JSON.stringify(meta));
-
-  // A game made before rules existed may have its own src/rules.ts, with anything in it. Without "room" in its
-  // game.json it is a browser-hosted game as before: the file is its own code, not checked and not run on the server.
-  writeFileSync(join(dir, 'games/gems/src/rules.ts'), 'export const distance = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);\nexport const roll = () => Math.random();\n');
-  const own = run(['build'], dir);
-  assert.equal(own.status, 0, own.stdout + own.stderr);
-  assert.ok(!existsSync(join(dir, 'site/src/rules/gems.mjs')), 'its file is not built as rules');
-  assert.equal(JSON.parse(read(dir, 'site/dist/games.json')).games.find((g) => g.id === 'gems').room, undefined);
-  rmSync(join(dir, 'games/gems/src/rules.ts'));
 
   // Rules the wall refuses stop the build with the line named, and nothing that was built is touched.
   const before = { rules, index: read(dir, 'site/src/rules/index.mjs'), games: read(dir, 'site/dist/games.json') };
@@ -318,16 +308,16 @@ test('rules HTML names the built view; a source URL fails before a browser opens
 // A successful bundle alone must not be reported as a multiplayer game.
 test('build refuses an unconnected game and preserves the prior site', () => {
   const dir = studio('neither');
-  legacyGame(dir, 'plain');
+  browserRulesGame(dir, 'plain');
   assert.equal(run(['build'], dir).status, 0);
   const previous = read(dir, 'site/dist/games.json');
   const manifest = JSON.parse(read(dir, 'games/plain/game.json'));
-  delete manifest.netplay;
+  delete manifest.netplay; delete manifest.room;
   writeFileSync(join(dir, 'games/plain/game.json'), JSON.stringify(manifest));
   writeFileSync(join(dir, 'games/plain/src/main.ts'), 'document.body.textContent = "No room";');
   const r = run(['build'], dir);
   assert.notEqual(r.status, 0);
-  assert.match(r.stdout + r.stderr, /neither rules plus view nor a browser-hosted netplay game/);
+  assert.match(r.stdout + r.stderr, /games use rules plus view/);
   assert.equal(read(dir, 'site/dist/games.json'), previous);
 });
 
@@ -338,6 +328,6 @@ test('an injected port toolkit alone does not turn a static page into a netplay 
   writeFileSync(join(game, 'index.html'), '<h1>No room</h1><script src="./homie-port.js"></script>');
   const g = { id: 'plain', dir: game, build: { mode: 'static' } };
   const esbuild = await esbuildOf(dir);
-  await assert.rejects(buildGameFiles(esbuild, dir, g, join(dir, 'out')), /neither rules plus view/);
-  await buildGameFiles(esbuild, dir, { ...g, netplay: { v: 1 } }, join(dir, 'out'));
+  await assert.rejects(buildGameFiles(esbuild, dir, g, join(dir, 'out')), /games use rules plus view/);
+  await assert.rejects(buildGameFiles(esbuild, dir, { ...g, netplay: { v: 1 } }, join(dir, 'out')), /games use rules plus view/);
 });

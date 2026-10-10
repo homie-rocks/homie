@@ -2447,14 +2447,24 @@
      "## Apps: one screen, roles and parts": "8596f2b25edda3e2",
      "## Commands (all through the pinned CLI in node_modules)": "159151b8861fc051",
      "## The site": "0cb8dd9a6f8a0096",
-     "## Making games": "9e44559de535d842",
+     "## Making games": [
+      "78950c6b4eb98ea6",
+      "796cc9389236c713",
+      "9e44559de535d842"
+     ],
      "## The Game Codex and progress": "0738ef719cef3a4c",
      "## Art direction and models": "a48fff7bf0a5f2fc",
      "## Running live games (the back office)": "51ebf2ab756f6e4d",
-     "## Servers and AI seats": "d0028361fe567add",
+     "## Servers and AI seats": [
+      "1ccfd549d2369a60",
+      "d0028361fe567add"
+     ],
      "## Selling things (the shop)": "9e020d69dd6a954e",
      "## Continuing a build from the Claude app": "0d68081e924ca419",
-     "## Rules": "2e6b29afb85dcf7e",
+     "## Rules": [
+      "2e6b29afb85dcf7e",
+      "c48971c1437414c2"
+     ],
      "## Telling Homie": "80b46fdd9e578db8",
      "## Beta": "9d02638207a26e73"
     }

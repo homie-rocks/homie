@@ -1,4 +1,4 @@
-import { legacyGame } from './legacy-game.mjs';
+import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * @homie-rocks/studio 0.7.0: a studio site has the hub's shape, and every game gets a landing.
  *
@@ -108,19 +108,20 @@ test('theme: a new studio gets a palette of its own in site/theme.json; unsafe v
 
 function arcadeLike(name) {
   const dir = studio(name);
-  legacyGame(dir, 'crown-thief', 'Crown Thief');
-  // A ported static game with its cover, credits.json, a licence file and its own hero footage.
+  browserRulesGame(dir, 'crown-thief', 'Crown Thief');
+  // A rewritten port keeps its cover, credits, licence and hero footage.
+  browserRulesGame(dir, 'rock-race');
   write(dir, 'games/rock-race/game.json', JSON.stringify({
     id: 'rock-race', name: 'Rock <Race>', blurb: 'Six ships, one rock field.', players: { min: 1, max: 6 }, roundSeconds: 120,
-    build: { mode: 'static' }, netplay: { v: 1, public: true, movement: 'owner' }, cover: 'cover.jpg',
+    entry: 'src/main.ts', room: { host: 'browser' }, cover: 'cover.jpg',
     landing: { pitch: 'Blast rocks, not friends.', about: 'A score race on one wrap-around field.', howToPlay: ['Steer with the stick', 'Fire at the edge'], hero: { alt: 'Ships trade fire' }, players: { one: 'pilot', many: 'pilots' }, credits: [{ role: 'Port', name: 'Night Owls' }] },
   }));
-  write(dir, 'games/rock-race/index.html', '<!doctype html><html><head><script src="./homie-port.js"></script><title>Rock Race</title></head><body><canvas></canvas></body></html>');
-  write(dir, 'games/rock-race/cover.jpg', 'jpeg-bytes');
+  write(dir, 'games/rock-race/index.html', '<!doctype html><html><head><script type="module" src="./assets/main.js"></script><title>Rock Race</title></head><body><canvas></canvas></body></html>');
+  write(dir, 'games/rock-race/public/cover.jpg', 'jpeg-bytes');
   write(dir, 'games/rock-race/hero/wide.mp4', 'wide-footage');
   write(dir, 'games/rock-race/hero/tall.mp4', 'tall-footage');
   write(dir, 'games/rock-race/hero/wide.jpg', 'still');
-  write(dir, 'games/rock-race/LICENSE', 'MIT License\n\nCopyright (c) the original authors');
+  write(dir, 'games/rock-race/public/LICENSE', 'MIT License\n\nCopyright (c) the original authors');
   write(dir, 'games/rock-race/credits.json', JSON.stringify({
     v: 1, id: 'rock-race', controls: { computer: 'Arrows and Space', phone: 'Stick left, FIRE right' },
     original: { title: 'Rocks', author: 'An Author', year: '2010', url: 'https://example.com/rocks', licence: 'MIT', licenceFile: 'LICENSE' },
@@ -147,9 +148,9 @@ test('build: the landing facts come from each game\'s own files; posts are dated
   assert.equal(b.landings.find((l) => l.id === 'crown-thief').hero, 'colours', 'a starter with no art gets the studio\'s colours');
   const cat = JSON.parse(readFileSync(join(dir, 'site/dist/games.json'), 'utf8'));
   const rock = cat.games.find((g) => g.id === 'rock-race');
-  assert.equal(rock.landing.hero.wide, '/games/rock-race/hero/wide.mp4', 'a static game\'s own copy is served, not a second one');
-  assert.equal(rock.landing.hero.tall, '/games/rock-race/hero/tall.mp4');
-  assert.equal(rock.landing.hero.wideImage, '/games/rock-race/hero/wide.jpg');
+  assert.equal(rock.landing.hero.wide, '/games/rock-race/_landing/wide.mp4', 'the rewritten port hero is copied into its bundled landing');
+  assert.equal(rock.landing.hero.tall, '/games/rock-race/_landing/tall.mp4');
+  assert.equal(rock.landing.hero.wideImage, '/games/rock-race/_landing/wide.jpg');
   assert.equal(existsSync(join(dir, 'site/dist/games/rock-race/_landing/wide.mp4')), false);
   assert.equal(rock.landing.cover, '/games/rock-race/cover.jpg');
   assert.deepEqual(rock.landing.controls, { phone: 'Stick left, FIRE right', computer: 'Arrows and Space' });
@@ -235,7 +236,7 @@ test('a game\'s landing: its footage, the pitch, Play into a public room, phone 
   assert.equal(res.headers.get('cache-control'), 'no-store, no-transform');
   const html = await res.text();
   assert.match(html, /<video autoplay muted loop playsinline preload="metadata"[^>]*aria-label="Ships trade fire">/, 'the game\'s own footage is the hero');
-  assert.match(html, /<source media="\(min-aspect-ratio: 3\/4\)" src="\/games\/rock-race\/hero\/wide\.mp4" type="video\/mp4"><source src="\/games\/rock-race\/hero\/tall\.mp4" type="video\/mp4">/);
+  assert.match(html, /<source media="\(min-aspect-ratio: 3\/4\)" src="\/games\/rock-race\/_landing\/wide\.mp4" type="video\/mp4"><source src="\/games\/rock-race\/_landing\/tall\.mp4" type="video\/mp4">/);
   assert.match(html, /<h1 class="title[^"]*" id="game-title">Rock &lt;Race&gt;<\/h1>/);
   assert.match(html, /<p class="line">Blast rocks, not friends\.<\/p>/);
   assert.match(html, /<a class="play" href="\/rock-race\/play" data-play>/);
@@ -266,7 +267,7 @@ test('a game\'s landing: its footage, the pitch, Play into a public room, phone 
   assert.equal(credits.status, 200);
   assert.match(await credits.text(), /MIT License\n\nCopyright \(c\) the original authors/);
   assert.equal((await site('/crown-thief/credits')).status, 404);
-  const footage = await site('/games/rock-race/hero/wide.mp4', { headers: { range: 'bytes=0-3' } });
+  const footage = await site('/games/rock-race/_landing/wide.mp4', { headers: { range: 'bytes=0-3' } });
   assert.equal(footage.status, 206, 'hero footage answers byte ranges (Safari needs them to play a video)');
   assert.equal(await footage.text(), 'wide');
 });
@@ -304,7 +305,7 @@ test('posts: the index, a post (its HTML safe, its links as cards), Atom and JSO
   assert.equal(feed.items[1]._homie.record.$type, 'rocks.homie.studio.post');
   // A studio with no posts has no Posts: no tab, no feed.
   const none = studio('no-posts');
-  legacyGame(none, 'crown-thief');
+  browserRulesGame(none, 'crown-thief');
   assert.equal(out(run(['build'], none)).ok, true);
   const bare = await siteOf(none);
   assert.equal((await bare('/posts/')).status, 404);

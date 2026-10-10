@@ -1,7 +1,7 @@
 // Presentation only: openRoom gives predicted own movement and interpolated other bodies.
 // Send intent; rules decide outcomes. Keep rendered obstacles aligned with room.map.
 /** Ember Vale: server-run hunts, with the hero save and memorials owned by its player. */
-import { AI_MARK, BUBBLE_FONT, createBubbles, createControls, createLabels, paintBubbles, type BubbleIn, type BubbleOut, createSaves, easeView, exposePort, fitView, stripAi, type BodyBase, type Fit, type LabelIn, type LabelOut, type NetEvent } from '@homie-rocks/studio/port';
+import { AI_MARK, BUBBLE_FONT, createBubbles, createControls, createLabels, paintBubbles, type BubbleIn, type BubbleOut, createSaves, easeView, exposePort, fitView, stripAi, type Slot, type Fit, type LabelIn, type LabelOut, type NetEvent } from '@homie-rocks/studio/port';
 // The Game Lab: tunables, phases, tracks and overlays (no-ops outside the lab).
 import { lab } from '@homie-rocks/studio/lab';
 import { openRoom, type Entity } from '@homie-rocks/studio/rules/view';
@@ -28,7 +28,7 @@ const clamp = (v: number, a: number, b: number): number => Math.max(a, Math.min(
 
 /** The hero: the one thing that lasts. Kept in the save key 'hero'. */
 interface Hero { v: 1; name: string; level: number; xp: number; gold: number; hardcore: boolean; kills: number; deaths: number; born: number }
-interface Body extends BodyBase { x: number; y: number; hp: number; maxHp: number; level: number; face: number; flags: number; downUntil: number; atkAt: number; strikeAt: number; tx: number; ty: number; seenAt?: number; ax?: number; ay?: number }
+interface Body { slot: number; seat: number | null; name: string; bot: boolean; score: number; agent?: Slot['agent']; x: number; y: number; hp: number; maxHp: number; level: number; face: number; flags: number; downUntil: number; atkAt: number; strikeAt: number; tx: number; ty: number; seenAt?: number; ax?: number; ay?: number }
 /** A slime; while it is struck: where its push starts (kx, ky), along (kdx, kdy), from when (kat, after the hit-stop). */
 interface Slime { id: number; x: number; y: number; hp: number; maxHp: number; size: number; hitAt: number; lastHit: number; kx?: number; ky?: number; kdx?: number; kdy?: number; kat?: number }
 type SlimeRow = [id: number, x: number, y: number, hp: number, size: number];

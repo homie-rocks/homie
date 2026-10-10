@@ -77,9 +77,8 @@ npx --no-install homie-studio port import <game folder> --id <id> [--name "<Name
 
 It copies the game to `games/<id>/` untouched except: the port toolkit loads first
 in `<head>` (sandbox shims, first-touch audio, `window.HomiePort`) and the viewport
-is phone-safe. `game.json` says how it builds: `static` (the folder as it is, for
-plain `<script>` games), `bundle` (an ES-module entry bundled by esbuild), or
-`command` (its own Vite/webpack build; set its base to `./`). The id is the
+is phone-safe. `game.json` declares the target rules/view entry. The copied source is a
+reference until its rules and view are rewritten; it is not a second build path. The id is the
 game's address: lowercase, digits, hyphens.
 
 ## 3. Port it
@@ -88,8 +87,8 @@ Read the game skill's [RULES.md](../game/RULES.md) and
 [REWRITE.md](../game/REWRITE.md), then extract truth from the existing loop step by step.
 This is a manual rewrite to rules plus view with `room.host: "server"`. Keep the art,
 renderer, controls, sound and feel. `port import` only copies files; it does not convert
-rules. The older `references/RECIPE.md` explains existing `createRoom` ports for maintenance,
-not the architecture for a new port. Never add a browser host to get past a rules error.
+rules. The `createRoom` host scaffold is retired. Follow `references/RECIPE.md` for the
+same rules/view contract used by the starters. Never add a browser host to get past a rules error.
 
 Use declared entities and events for hits, scores, spawns and turns, shared `defineMove`
 for local prediction, authored map data for collision, and `world.math`/the provided clocks

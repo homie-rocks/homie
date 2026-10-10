@@ -1,3 +1,4 @@
+import { declareRoom } from './browser-rules-game.mjs';
 /**
  * The Game Lab (lib/lab.mjs, lib/lab-check.mjs, lab/): the take format; the lab's server (New from the working tree,
  * Today from git's checkout of a commit with only the game's files, the harness first in the game's page, writes
@@ -178,6 +179,8 @@ test('game new copies the lab files and renames a take\'s saves to the new id', 
 
 const chrome = findChrome();
 const FIXTURE = (dice) => `import { lab } from '@homie-rocks/studio/lab';
+import {openRoom} from '@homie-rocks/studio/rules/view';
+openRoom();
 import tuning from '../tunables.json';
 const T = lab.tunables(tuning);
 let fired = 0; setTimeout(() => { fired = performance.now(); }, 100);
@@ -205,10 +208,11 @@ requestAnimationFrame(frame);
 function fixture(dir, id, dice) {
   const g = join(dir, 'games', id);
   mkdirSync(join(g, 'src'), { recursive: true });
-  writeFileSync(join(g, 'game.json'), JSON.stringify({ id, name: id, entry: 'src/main.ts', netplay: { v: 1 } }));
+  writeFileSync(join(g, 'game.json'), JSON.stringify({ id, name: id, entry: 'src/main.ts', room: { host: 'browser' } }));
   writeFileSync(join(g, 'index.html'), '<!doctype html><html><head><meta charset="utf-8"></head><body><canvas id="c" width="80" height="80"></canvas><script type="module" src="./assets/main.js"></script></body></html>');
   writeFileSync(join(g, 'tunables.json'), formatTunables({ speed: { value: 120, min: 0, max: 400 } }));
   writeFileSync(join(g, 'src', 'main.ts'), FIXTURE(dice));
+  declareRoom(g);
   writeFileSync(join(g, 'lab.json'), formatLabFile({ v: 1, default: 'go', takes: { go: { seconds: 1, seed: 3, stage: 'dummy', inputs: [{ at: 0.5, key: 'Space' }, { at: 0.2, key: 'ArrowRight', hold: 0.25 }] } } }));
 }
 

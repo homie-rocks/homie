@@ -36,7 +36,7 @@ export default defineRules({
 
 The map must contain a nonempty `spots.start` list for that example:
 `{"bounds":{"min":[-12,-7],"max":[12,7]},"boxes":[],"spots":{"start":[[-5,0],[5,0]]}}`.
-Declare `players.max` in game.json (1–32); use `entry: "src/view.ts"` and
+Declare `players.max` in game.json (a positive integer, including hundreds); use `entry: "src/view.ts"` and
 `room: { host: "server" }`. Only public tunables are visible in move.ts.
 
 `index.html` is the browser entry document; include `<script type="module" src="./assets/main.js"></script>`. The manifest names the source, but HTML loads this relative built bundle. Never point HTML at /src/view.ts: that URL is not served. The build rewrites assets/main.js to its hashed bundle. A minimal manifest is:
@@ -134,7 +134,7 @@ with a real touchscreen tap in Chrome; calling `element.click()` does not test
 touch delivery.
 Use `rounds: { seconds: 0, breakSeconds: 0 }` for manual rounds, and no fill bots
 for an app. A wall/TV watches without taking a seat. Each interactive phone
-takes a seat (up to 32); shared state is replicated, public and transient. An app's
+takes one of the room's declared seats; shared state is replicated, public and transient. An app's
 lasting, authorized business data belongs in `createAppRecords`, not in room fields.
 
 ## State and field types
@@ -689,7 +689,7 @@ server-verified money. All replicated fields are public, including disguised rol
 Use a separate authorized records service for private or lasting app records.
 
 
-## Spatial delivery (0.44.0; milestone 2 slice 1)
+## Spatial delivery (0.45.0; milestone 2 slice 2)
 
 For a server game with a larger map, the studio's AI can set
 `"room": { "view": { "radiusM": 32 } }` in game.json to send each player only

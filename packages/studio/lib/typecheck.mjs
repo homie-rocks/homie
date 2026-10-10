@@ -1,3 +1,5 @@
+import {listOwnParts, readOrigins, vendorDir} from './parts.mjs';
+import {resolvePartImport} from './parts-build.mjs';
 import { runRulesCompiler } from './rules-compiler.mjs';
 /**
  * `homie-studio build --types` — the games' TypeScript, checked before anything is built.
@@ -7,7 +9,7 @@ import { runRulesCompiler } from './rules-compiler.mjs';
  * of its own to run `npx tsc` with.
  *
  *   - The compiler is the STUDIO'S OWN (`typescript` in its node_modules, which a new studio's package.json asks
- *     for). This optional check for legacy games keeps using that compiler. Rules games use the toolkit's own
+ *     for). This optional check for local apps keeps using that compiler. Rules games use the toolkit's own
  *     pinned compiler through typecheckRules below, on every build.
  *   - A game with a tsconfig.json of its own is checked with it. Any other game is checked the way esbuild reads
  *     it: its entry and whatever that imports, as ES2022 for a browser, strictly, with the pictures, sounds and
@@ -15,7 +17,7 @@ import { runRulesCompiler } from './rules-compiler.mjs';
  *   - Only errors in the game's own files stop the build. A game imports the toolkit's helpers as TypeScript
  *     source, and a creator can do nothing about a line in node_modules; those are counted and said, never fatal.
  *
- * The legacy check runs only when asked with --types. The rules check is mandatory.
+ * The local-app check runs only when asked with --types. The rules check is mandatory.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -116,8 +118,17 @@ export async function typecheckRules(root, g, checked, tune, { log = () => {} } 
   writeFileSync(join(dir, 'rules.d.ts'), rulesTypes({ ...checked, answerScopes: await rulesAnswerScopes(join(g.dir, 'src/rules.ts')) }, tune));
   writeFileSync(join(dir, 'view.d.ts'), rulesViewTypes(checked));
   writeFileSync(join(dir, 'files.d.ts'), AMBIENT);
+  const partPaths = {};
+  const origins = readOrigins(root);
+  for (const ref of [...listOwnParts(root).map(p => p.id), ...Object.keys(origins.parts)]) {
+    const base = origins.parts[ref] ? vendorDir(root, ref) : join(root, 'parts', ref);
+    partPaths[`@parts/${ref}/*`] = [join(base, '*')];
+    const entry = resolvePartImport(root, `@parts/${ref}`, origins);
+    if (entry.path) partPaths[`@parts/${ref}`] = [entry.path];
+  }
   const project = join(dir, 'tsconfig.json');
   writeFileSync(project, `${JSON.stringify({ compilerOptions: { ...OPTIONS, checkJs: true, paths: {
+    ...partPaths,
     ...Object.fromEntries(Object.entries(JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')).exports)
       .filter(([, entry]) => entry?.types).map(([name, entry]) => [`@homie-rocks/studio/${name.slice(2)}`, [join(PACKAGE_ROOT, entry.types)]])),
     '@homie-rocks/studio/rules': [join(dir, 'rules.d.ts')],
@@ -131,6 +142,9 @@ export async function typecheckRules(root, g, checked, tune, { log = () => {} } 
     const at = /^(.+?)\((\d+),(\d+)\): error (TS\d+): (.*)$/.exec(line);
     if (at) {
       const file = resolve(at[1]);
+      const missingPart = /Cannot find module '(@parts\/[^']+)'/.exec(at[5]);
+      if (missingPart) { const result = resolvePartImport(root, missingPart[1]); if (result.error) at[5] = result.error; }
+
       // Imported game helpers count too. Only the toolkit's own implementation is outside the author's remit.
       if (!file.startsWith(`${PACKAGE_ROOT}${sep}`) && !file.includes(`${sep}node_modules${sep}`) || file.startsWith(`${g.dir}${sep}`)) {
         const sourceLine = readFileSync(file,'utf8').split(/\r?\n/)[Number(at[2])-1] ?? '';

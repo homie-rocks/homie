@@ -316,7 +316,7 @@ export class NetRoom {
     this.lastSnapText = null;
     this.lastCkpt = null;
     this.lastRound = null;
-    this.lastRoster = null;
+    this.lastRoster = null; this.rosterSent = null;
     /** key → { d, bytes } — slow world state, handed to every joiner and to a promoted host */
     this.state = new Map();
     this.stateBytes = 0;
@@ -461,7 +461,7 @@ export class NetRoom {
   hostSnap(c, m, now, text = null) {
     // The server's stamp is this relay's own clock; a browser's is its estimate of it, and is checked.
     const snap = { k: Number(m.k) || 0, st: c ? this.stamp(m.st) : Number(m.st) || now, d: m.d ?? null };
-    if (Array.isArray(m.c)) snap.c = m.c.slice(0, this.server ? this.seatCap : 64);
+    if (Array.isArray(m.c)) snap.c = m.c.slice(0, this.server || this.rules ? this.seatCap : 64);
     // Revision 10: a rules game's snapshot names the room's epoch.
     if ((!c || this.rules && c.rules) && Number.isFinite(m.e)) snap.e = m.e;
     this.lastSnap = snap;
@@ -478,13 +478,18 @@ export class NetRoom {
       if (this.lite(o)) continue; // an agent with no game client draws nothing
       // A congested socket skips a snapshot rather than queueing a stale one.
       if (o.conn.buffered && o.conn.buffered() > 256 * 1024) { this.stats.drops += 1; continue; }
-      this.sendText(o.conn, this.server?.viewRadiusM != null ? JSON.stringify({ t: 'snap', from: null, ...this.playerSnapshot(o, snap) }) : out);
+      this.sendText(o.conn, this.hasViewSchedule() ? JSON.stringify({ t: 'snap', from: null, ...this.playerSnapshot(o, snap) }) : out);
     }
+  }
+
+  hasViewSchedule() {
+    const view = this.server?.viewSettings;
+    return this.server?.viewRadiusM != null || Boolean(view?.precisionM > 0 || view?.nearM != null && view?.farHz != null);
   }
 
   /** The same per-player delivery role will run in Gates. Keyframes belong to sockets, not saved seats. */
   playerSnapshot(client, snap, welcome = false) {
-    if (!snap || this.server?.viewRadiusM == null) return snap;
+    if (!snap || !this.hasViewSchedule()) return snap;
     client.viewSchedule ??= scheduledView(this.server.viewSettings ?? { radiusM: this.server.viewRadiusM }, this.tickHz);
     const selected = client.viewSchedule(snap, client.seat);
     client.snapEncoder ??= snapshotEncoder(this.tickHz, true);
@@ -542,14 +547,15 @@ export class NetRoom {
     if (!Array.isArray(m.slots)) return;
     // A host cannot hide an AI: a seat an agent holds is named and marked so, a slot with no seat is a bot.
     const previous = this.rosterSent ?? new Map();
-    this.lastRoster = this.labelRoster(m.slots.slice(0, this.server ? this.seatCap : 64));
+    this.lastRoster = this.labelRoster(m.slots.slice(0, this.server || this.rules ? this.seatCap : 64));
     this.persistDirty = true;
     const present = new Set(this.lastRoster.map(row => row.slot));
     const changed = this.lastRoster.filter(row => previous.get(row.slot) !== JSON.stringify(row));
     this.rosterSent = new Map(this.lastRoster.map(row => [row.slot, JSON.stringify(row)]));
     const removed = [...previous.keys()].filter(slot => !present.has(slot));
     const frame = this.server && previous.size ? { t: 'roster', patch: true, slots: changed, removed } : { t: 'roster', slots: this.lastRoster };
-    for (const o of (c && this.rules && c.rules ? this.live() : this.others(c))) this.send(o, frame);
+    const text = JSON.stringify(frame);
+    for (const o of (c && this.rules && c.rules ? this.live() : this.others(c))) this.sendText(o.conn, text);
     this.tellWatchers();
   }
 
@@ -1128,7 +1134,8 @@ export class NetRoom {
       ...(this.vote ? { vote: this.voteView() } : {}),
       ...(c.agent ? { agent: { ...c.agent, name: c.name } } : {}),
     });
-    for (const o of this.others(c)) this.send(o, { t: 'join', peer: this.peer(c) });
+    const joinedText = JSON.stringify({ t: 'join', peer: this.peer(c) });
+    for (const o of this.others(c)) this.sendText(o.conn, joinedText);
     // The server host hears of every seat taken (a reconnect is the same stay: its body is back, not new).
     if (c.seat !== null) { this.syncServerSeats(); this.joinServer(c); }
     // A seat taken by a browser that also watches this room: its watching tab sees the overview from now on.
@@ -1218,7 +1225,8 @@ export class NetRoom {
       if (!this.seatClient(c, '')) return;
       this.stats.seated += 1;
       this.send(c, { t: 'seat', seat: c.seat, token: c.token, name: c.name, colour: c.colour, role: this.roleOf(c) });
-      for (const o of this.others(c)) this.send(o, { t: 'join', peer: this.peer(c) });
+      const joinedText = JSON.stringify({ t: 'join', peer: this.peer(c) });
+    for (const o of this.others(c)) this.sendText(o.conn, joinedText);
       this.syncServerSeats(); this.joinServer(c);
       this.log({ ev: 'seated', room: this.code, id: c.id, seat: c.seat });
       this.persist();
@@ -1595,7 +1603,8 @@ export class NetRoom {
       const s = this.seats.get(c.seat);
       if (s && s.token === c.token) { s.present = false; s.since = now; }
     }
-    for (const o of this.others(c)) this.send(o, { t: 'leave', id: c.id, seat: c.seat, why });
+    const leftText = JSON.stringify({ t: 'leave', id: c.id, seat: c.seat, why });
+    for (const o of this.others(c)) this.sendText(o.conn, leftText);
     // One line per departure, with what the room looked like. A `leave` is a departure (a closed tab, a lost network
     // arriving as the socket's error, a host that was replaced); a `failed` line (guard) is a room operation that threw.
     this.log({ ev: 'leave', room: this.code, id: c.id, seat: c.seat, why, ...(via ? { via } : {}), role: wasHost ? 'host' : c.seat === null ? 'screen' : 'replica', left: this.live().length });
@@ -1727,7 +1736,7 @@ export class NetRoom {
   forget() {
     this.hostId = null;
     for (const c of this.live()) this.kick(c, 'agents-alone', 4001);
-    this.lastSnap = null; this.lastSnapText = null; this.lastCkpt = null; this.lastRound = null; this.lastRoster = null;
+    this.lastSnap = null; this.lastSnapText = null; this.lastCkpt = null; this.lastRound = null; this.lastRoster = null; this.rosterSent = null;
     this.state.clear(); this.stateBytes = 0; this.seats.clear(); this.preferHost = null;
     this.emptySince = 0; this.openedAt = 0; this.askedMax = null;
     // The room is nobody's build again (section 23): the next visitor's is its build.
@@ -1820,7 +1829,7 @@ export class NetRoom {
 
   /** A round's results, labelled the same way (`agent: true` on every AI's row). */
   labelResults(rows) {
-    return rows.slice(0, this.server ? this.seatCap : 64).map((raw) => this.labelOne(raw, true)).filter(Boolean);
+    return rows.slice(0, this.server || this.rules ? this.seatCap : 64).map((raw) => this.labelOne(raw, true)).filter(Boolean);
   }
 
   labelOne(raw, result) {
@@ -2204,7 +2213,7 @@ export class NetRoom {
         }
         // Everything the room held goes, as when an empty room forgets (section 4).
         this.hostId = null;
-        this.lastSnap = null; this.lastSnapText = null; this.lastCkpt = null; this.lastRound = null; this.lastRoster = null;
+        this.lastSnap = null; this.lastSnapText = null; this.lastCkpt = null; this.lastRound = null; this.lastRoster = null; this.rosterSent = null;
         this.state.clear(); this.stateBytes = 0; this.seats.clear(); this.preferHost = null; this.openedAt = 0; this.askedMax = null;
         this.emptySince = now; this.seatsDirty = false; this.persistDirty = false;
         try { this.store?.clear?.(); } catch { /* best effort */ }
@@ -2310,7 +2319,7 @@ export class NetRoom {
    */
   forgetWorld(next) {
     this.log({ ev: 'build-changed', room: this.code, from: this.gameVer ?? null, to: next ?? null });
-    this.lastSnap = null; this.lastSnapText = null; this.lastCkpt = null; this.lastRound = null; this.lastRoster = null;
+    this.lastSnap = null; this.lastSnapText = null; this.lastCkpt = null; this.lastRound = null; this.lastRoster = null; this.rosterSent = null;
     this.state.clear(); this.stateBytes = 0; this.preferHost = null;
     this.persistDirty = true;
   }

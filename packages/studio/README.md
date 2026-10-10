@@ -202,30 +202,27 @@ game its studio chooses to share, each with its own licence ("Game parts", below
   RIGHTS.md has no "A remix" line. Whether a file may be handed on in a shared part is still its licence's.
 - `homie-studio game remix` answers with a sentence that points to parts; `office launch --remixable` is ignored.
 
-## Rooms of up to 32
+## Room size and delivery
 
-Every room of a game has the seats its netplay manifest names: game.json's `netplay`
-block (`maxPlayers`), or a `netplay.json` beside game.json or in the game's build
-(`maxPlayers` or `players.max`), else game.json's `players.max`, else 8; at most 32.
-Bots and a late joiner taking a bot's body work the same at 32 as at 4.
-Server rules keep running when a browser leaves; older browser-hosted games elect a new host. One address may hold every seat plus four sockets, so a party
-on one Wi-Fi (or strangers behind one carrier's address) fills a room with a TV beside it.
+`players.max` in game.json is the room's chosen positive integer capacity; omitted means 8.
+There is no 32-player ceiling or default per-address admission limit. Public games use
+rules plus view with `room.host: "server"`. Gates carry the browser connections and
+concentrators combine Gate links for larger rooms. Server rules survive browser departures.
+Browser/offline hosting uses the same rules contract; the old netplay-only build and port
+host scaffold have been retired.
 
-## A game's netplay manifest
+For example, a 300-player room can choose spatial delivery explicitly:
 
-For rules games the build derives the revision from the rules and view; do not bump
-`netplay.version` or tune browser host election. `room` sets hosting and tick rate.
-The version and stall settings below describe existing browser-hosted games.
+```json
+{"players":{"min":1,"max":300},"entry":"src/view.ts","room":{"host":"server","view":{"radiusM":12,"precisionM":0.01,"nearM":4,"farHz":5}}}
+```
 
-game.json `"netplay"` says more than the room's size. All of it is optional, and `homie-studio build`
-writes it to the catalogue for the site's rooms (`netplay/NETPLAY.md` sections 22 to 24):
-
-| Field | What it does |
-|---|---|
-| `maxPlayers` | Seats in a room, up to 32. |
-| `version` | The game's revision (a word or a number). Bump it when a change makes an already-open tab unable to play with a new one: a room then runs one build at a time, strangers are matched within the live build, and an old tab is told to reload at its round's break. |
-| `stallMs` | How long a host may send no snapshot before the room is handed to another browser: 1500 (the default) to 10000. A heavy 3D game whose frames hitch on a slow phone raises it; the helper also sends a heartbeat for up to 4 s while a host's frames are stuck. |
-| `params` | Names of the play page's query parameters to hand the game (`/<id>/play?seed=42`), beside `debug` and `q`, which always are. The game reads them as `net.params`. |
+The studio chooses the radius, precision and distant update rate for its game. The
+controlled body stays precise. Whole-room state remains the default. The build runs a
+local capacity trial; its numbers are not Cloudflare capacity guarantees. Test the actual
+mechanic at the chosen size. Rules builds derive their revision from rules and view;
+do not manually bump `netplay.version`. Optional `netplay.params` still selects play-page
+query parameters passed to the view, beside `debug` and `q`.
 
 The game's frame is sandboxed without `allow-same-origin` (it must never read the site's storage or
 the owner's session), so `localStorage` throws inside it: a setting or a personal best goes in
@@ -1238,8 +1235,8 @@ npx homie-studio port check my-game --url http://127.0.0.1:8787   # the owner te
 | `template/` (repository root), `scripts/template.mjs` | The public "Deploy to Cloudflare" template, generated from `new --template`. |
 | `lib/port.mjs` | `port plan` (reads a game and grades the port) and `port import`. |
 | `lib/port-check.mjs` | `port check`: held and alternating directions on keys, Android Chrome and iPhone WebKit touch, UI cover, two browsers finishing a round, a killed host, a late joiner, the big screen. |
-| `port/` | The port toolkit (`@homie-rocks/studio/port`, or `window.HomiePort` from `homie-port.js` in a static game): `createRoom`, the touch kit, keys, camera rules, bots, a HUD, sandbox shims, first-touch audio, `exposePort`; `fitView` and `createLabels` (`port/view.ts`): a flat world on every screen (the whole of it where it reads, else filling a phone held upright and following the player) and names that never pile up when bodies crowd (yours placed first, the rest moved or faded). |
-| `worker/index.mjs` | The site Worker and the `Table` (netplay relay, `room.mjs`) and `Lobby` Durable Objects; `/<game>/tv` is the big screen with a join QR (`qr.mjs`); `/<game>/watch` watches a live room from any player's view (NETPLAY.md section 16); `/music/<slug>/` and `/videos/<slug>/` are song and video pages (their files served with byte ranges, from the site's files or, once moved, from the studio's R2 at the same address; a loose file from `media put` at `/media/<key>`). `seats.mjs`: room sizes (up to 32). |
+| `port/` | The port toolkit (`@homie-rocks/studio/port`, or `window.HomiePort` from `homie-port.js` in a static game): the touch kit, keys, camera rules, bots, sandbox shims, first-touch audio, `exposePort`; `fitView` and `createLabels` (`port/view.ts`): a flat world on every screen (the whole of it where it reads, else filling a phone held upright and following the player) and names that never pile up when bodies crowd (yours placed first, the rest moved or faded). |
+| `worker/index.mjs` | The site Worker and the `Table` (netplay relay, `room.mjs`) and `Lobby` Durable Objects; `/<game>/tv` is the big screen with a join QR (`qr.mjs`); `/<game>/watch` watches a live room from any player's view (NETPLAY.md section 16); `/music/<slug>/` and `/videos/<slug>/` are song and video pages (their files served with byte ranges, from the site's files or, once moved, from the studio's R2 at the same address; a loose file from `media put` at `/media/<key>`). `seats.mjs`: studio-chosen room sizes. |
 | `worker/site.mjs`, `lib/site.mjs`, `lib/markdown.mjs`, `site/SITE.md` | The site: its sections, each game's landing, posts and their feeds, the look (theme tokens) and what the studio's `site/` folder overrides; the safe markdown posts are written in. `worker/pages.mjs`: the play page; `worker/arrival.mjs`: its arrival card. |
 | `worker/stats.mjs`, `worker/stats-page.mjs`, `lib/stats.mjs` | The studio's own stats: what is counted and how, the owner-only `/api/stats` and `/_studio/stats`, and `homie-studio stats`. |
 | `lib/media.mjs`, `media/MEDIA.md` | The `music/` and `videos/` manifests: which entries get a page, and where each file's bytes come from (the site itself up to 25 MiB a file, the studio's R2, or a link). `media list` shows it; `media move` puts the big ones in R2 and records each one's SHA-256; `media put` uploads a loose file to `/media/<key>`. |

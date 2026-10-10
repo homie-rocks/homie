@@ -1,3 +1,4 @@
+import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * @homie-rocks/studio 0.9.0: what the house studios found moving to 0.7.0, and what the hub asked for.
  *
@@ -34,9 +35,10 @@ function studio(name, { share = false, rooms = true } = {}) {
   symlinkSync(PKG, join(dir, 'node_modules', '@homie-rocks', 'studio'));
   symlinkSync(join(REPO_NM, 'esbuild'), join(dir, 'node_modules', 'esbuild'));
   const game = (id, extra = {}) => {
-    write(dir, `games/${id}/game.json`, JSON.stringify({ id, name: id.replace(/-/g, ' '), blurb: `${id}.`, players: { min: 1, max: 6 }, roundSeconds: 120, build: { mode: 'static' }, netplay: { v: 1 }, cover: 'cover.jpg', ...extra }));
-    write(dir, `games/${id}/index.html`, '<!doctype html><html><head><script src="./homie-port.js"></script></head><body></body></html>');
-    write(dir, `games/${id}/cover.jpg`, 'an old cover');
+    browserRulesGame(dir, id);
+    write(dir, `games/${id}/game.json`, JSON.stringify({ id, name: id.replace(/-/g, ' '), blurb: `${id}.`, players: { min: 1, max: 6 }, roundSeconds: 120, entry: 'src/main.ts', room: { host: 'browser' }, cover: 'cover.jpg', ...extra }));
+    write(dir, `games/${id}/index.html`, '<!doctype html><html><head><script type="module" src="./assets/main.js"></script></head><body></body></html>');
+    write(dir, `games/${id}/public/cover.jpg`, 'an old cover');
     write(dir, `games/${id}/hero/wide.jpg`, 'the landing still');
   };
   game('rock-race', { landing: { pitch: 'Blast rocks.' } });
@@ -112,14 +114,14 @@ test('cards, room rows and the directory show the landing\'s hero still, never t
   assert.equal(out(run(['build'], dir)).ok, true);
   const site = await siteOf(dir, { rooms: { 'rock-race': [{ name: 'pub-3', players: 2, at: 1 }] } });
   const games = await (await site('/games/')).text();
-  assert.match(games, /<a class="art" href="\/rock-race\/"[^>]*><img src="\/games\/rock-race\/hero\/wide\.jpg"/);
+  assert.match(games, /<a class="art" href="\/rock-race\/"[^>]*><img src="\/games\/rock-race\/_landing\/wide\.jpg"/);
   assert.doesNotMatch(games, /cover\.jpg/, 'no card shows the old cover');
   const home = await (await site('/')).text();
-  assert.match(home, /<span class="thumb"><img src="\/games\/rock-race\/hero\/wide\.jpg"/, 'the live room\'s row too');
+  assert.match(home, /<span class="thumb"><img src="\/games\/rock-race\/_landing\/wide\.jpg"/, 'the live room\'s row too');
   const rooms = await (await site('/api/rooms')).json();
-  assert.equal(rooms.rooms[0].cover, '/games/rock-race/hero/wide.jpg');
+  assert.equal(rooms.rooms[0].cover, '/games/rock-race/_landing/wide.jpg');
   const wk = await (await site('/.well-known/homie-studio.json')).json();
-  assert.deepEqual(wk.games.map((g) => g.cover), ['https://owls.example/games/rock-race/hero/wide.jpg', 'https://owls.example/games/white-field/hero/wide.jpg']);
+  assert.deepEqual(wk.games.map((g) => g.cover), ['https://owls.example/games/rock-race/_landing/wide.jpg', 'https://owls.example/games/white-field/hero/wide.jpg']);
   // A game with no still of its own: its cover still shows.
   rmSync(join(dir, 'games/rock-race/hero'), { recursive: true });
   assert.equal(out(run(['build'], dir)).ok, true);
@@ -201,7 +203,7 @@ test('song covers: a song\'s own, else the music manifest\'s, else its game\'s s
   writeFileSync(join(dir, 'music/manifest.json'), JSON.stringify(m));
   assert.equal(out(run(['build'], dir)).ok, true);
   const wk = await (await (await siteOf(dir))('/.well-known/homie-studio.json')).json();
-  assert.deepEqual(wk.songs.map((e) => [e.slug, e.cover]), [['theme', null], ['race-score', 'https://owls.example/games/rock-race/hero/wide.jpg']]);
+  assert.deepEqual(wk.songs.map((e) => [e.slug, e.cover]), [['theme', null], ['race-score', 'https://owls.example/games/rock-race/_landing/wide.jpg']]);
   const score = await (await (await siteOf(dir))('/music/race-score/')).text();
-  assert.match(score, /<img class="cover" src="\/games\/rock-race\/hero\/wide\.jpg" alt="">/);
+  assert.match(score, /<img class="cover" src="\/games\/rock-race\/_landing\/wide\.jpg" alt="">/);
 });

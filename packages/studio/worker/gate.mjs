@@ -23,13 +23,26 @@ export function gateFor(env, game, room, seats, key) {
   } };
 }
 
+export function* expandBatch(rows) {
+  for (const row of rows) {
+    if (row[0] === 'fan') { for (const id of row[1]) yield ['data', id, row[2]]; }
+    else yield row;
+  }
+}
 export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTimeout, delay = 5 } = {}) {
   let queue = [], timer = null, closed = false;
   const flush = () => {
     timer = null;
     if (closed || !queue.length) return;
-    const rows = queue; queue = [];
-    try { socket.send(JSON.stringify(rows)); } catch { close(); }
+    const rows = []; let last = null;
+    for (const row of queue) {
+      if (row[0] === 'data' && last && (last[0] === 'data' || last[0] === 'fan') && last[2] === row[2]) {
+        if (last[0] === 'data') { last[0] = 'fan'; last[1] = [last[1]]; }
+        last[1].push(row[1]);
+      } else { last = row.slice(); rows.push(last); }
+    }
+    queue = [];
+    try { socket.send(JSON.stringify(rows)); } catch { close(); try { socket.close(1011, 'room link send failed'); } catch {} }
   };
   const close = () => { closed = true; queue = []; if (timer !== null) clearTimer(timer); timer = null; };
   return { send(row) { if (closed) return; queue.push(row); if (queue.length >= 128) { if (timer !== null) clearTimer(timer); flush(); } else if (timer === null) timer = setTimer(flush, delay); }, flush, close, disconnect() { close(); socket.close(1012, 'room link restarted'); } };
@@ -50,7 +63,7 @@ export function multiplexSession(socket, connect) {
       if (closed) return;
       const rows = JSON.parse(event.data);
       if (!Array.isArray(rows)) throw new Error('invalid multiplex batch');
-      for (const [op, id, value, ip] of rows) {
+      for (const [op, id, value, ip, agent] of expandBatch(rows)) {
         if (op === 'open') {
           if (clients.has(id)) throw new Error('duplicate multiplex client');
           const handlers = new Map();
@@ -62,7 +75,7 @@ export function multiplexSession(socket, connect) {
             close(code, reason) { out.send(['close', id, code, reason]); clients.delete(id); client.emit('close', {}); },
           };
           clients.set(id, client);
-          await connect(new Request(value, { headers: { Upgrade: 'websocket', ...(ip ? { 'cf-connecting-ip': ip } : {}) } }), client);
+          await connect(new Request(value, { headers: { Upgrade: 'websocket', ...(ip ? { 'cf-connecting-ip': ip } : {}), ...(agent ? { 'user-agent': agent } : {}) } }), client);
         } else if (op === 'data') clients.get(id)?.emit('message', { data: value });
         else if (op === 'close') { clients.get(id)?.emit('close', {}); clients.delete(id); }
       }
@@ -101,10 +114,16 @@ export class Gate {
         this.clients.clear();
       };
       socket.addEventListener('message', event => {
-        try { for (const [op, id, value, reason] of JSON.parse(event.data)) {
+        try { for (const [op, id, value, reason] of expandBatch(JSON.parse(event.data))) {
           const client = this.clients.get(id);
-          if (op === 'data') client?.send(value);
-          else if (op === 'close') { this.clients.delete(id); client?.close(value, reason); }
+          if (op === 'data') {
+            try { client?.send(value); } catch {
+              this.clients.delete(id); link.send(['close', id]);
+              try { client?.close(1011, 'client connection ended'); } catch {}
+            }
+          } else if (op === 'close') {
+            this.clients.delete(id); try { client?.close(value, reason); } catch {}
+          }
         } } catch { lost(); try { socket.close(1011, 'room link failed'); } catch {} }
       });
       socket.addEventListener('close', lost); socket.addEventListener('error', lost);
@@ -116,7 +135,7 @@ export class Gate {
     const link = await this.upstream(new URL(request.url));
     const id = String(++this.sequence);
     this.clients.set(id, server);
-    link.send(['open', id, request.url, request.headers.get('cf-connecting-ip')]);
+    link.send(['open', id, request.url, request.headers.get('cf-connecting-ip'), request.headers.get('user-agent')]);
     server.addEventListener('message', event => { if (typeof event.data === 'string') link.send(['data', id, event.data]); });
     const left = () => { if (this.clients.delete(id)) link.send(['close', id]); };
     server.addEventListener('close', left); server.addEventListener('error', left);

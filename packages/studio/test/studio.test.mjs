@@ -1,4 +1,4 @@
-import { legacyGame } from './legacy-game.mjs';
+import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * @homie-rocks/studio: the scaffold touches only a new or empty folder and lists
  * what it writes; a game from a starter builds into the site; the Lobby puts
@@ -106,7 +106,7 @@ test('the Lobby: two strangers pressing Play together land in the same room; a f
 
 test('deploy: never a Worker, database or bucket this studio did not create; not signed in asks for one browser approval', () => {
   const dir = studio('deploys');
-  legacyGame(dir, 'crown-thief');
+  browserRulesGame(dir, 'crown-thief');
   const bin = join(dir, 'node_modules', '.bin');
   mkdirSync(bin, { recursive: true });
   const fake = (script) => { writeFileSync(join(bin, 'wrangler'), `#!/bin/sh\n${script}\n`); chmodSync(join(bin, 'wrangler'), 0o755); };
@@ -139,7 +139,7 @@ test('deploy: never a Worker, database or bucket this studio did not create; not
 
 test('deploy resumes after a cut: a resource it created is recorded the moment it exists', () => {
   const dir = studio('resumes');
-  legacyGame(dir, 'crown-thief');
+  browserRulesGame(dir, 'crown-thief');
   const bin = join(dir, 'node_modules', '.bin');
   mkdirSync(bin, { recursive: true });
   const state = join(dir, '.fake-cf');
@@ -204,7 +204,7 @@ esac
 
 test('NO CREDIT CARD: a free account without R2 deploys the whole studio, and deploy never asks R2 anything', () => {
   const dir = studio('nocard');
-  legacyGame(dir, 'crown-thief');
+  browserRulesGame(dir, 'crown-thief');
   const account = noCardAccount(dir);
   const plan = out(run(['deploy', '--plan'], dir));
   assert.equal(plan.ok, true, JSON.stringify(plan));
@@ -246,7 +246,7 @@ test('the workers.dev address never goes into studio.json (it names the account)
   const homie = `http://127.0.0.1:${directory.address().port}`;
   try {
     const dir = studio('address');
-    legacyGame(dir, 'crown-thief');
+    browserRulesGame(dir, 'crown-thief');
     noCardAccount(dir);
     const runAsync = (args) => new Promise((resolve) => {
       const p = spawn(process.execPath, [CLI, ...args, '--json'], { cwd: dir, env: { ...process.env, HOMIE_STUDIO_WARM: '0' } });
@@ -303,7 +303,7 @@ test('the workers.dev address never goes into studio.json (it names the account)
 
 test('storage add: refused with the dashboard link on an account without R2 (nothing created); on one with R2 it makes the bucket and deploy binds it', () => {
   const dir = studio('storage');
-  legacyGame(dir, 'crown-thief');
+  browserRulesGame(dir, 'crown-thief');
   noCardAccount(dir);
   assert.equal(out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir)).ok, true);
   const refused = out(run(['storage', 'add'], dir));
@@ -333,7 +333,7 @@ test('storage add: refused with the dashboard link on an account without R2 (not
 
 test('dev --stop stops exactly this studio\'s dev server (Wrangler with it), and nothing else', async () => {
   const dir = studio('devstop');
-  legacyGame(dir, 'crown-thief');
+  browserRulesGame(dir, 'crown-thief');
   const bin = join(dir, 'node_modules', '.bin');
   mkdirSync(bin, { recursive: true });
   // A stand-in Wrangler: `dev` runs until it is stopped, like the real one.
@@ -373,7 +373,7 @@ test('a new account\'s first deploy says the next step: verify the email (10034)
   assert.match(sub.why, /dash\.cloudflare\.com\/acc1\/workers\/onboarding/);
   assert.equal(explainCloudflare('some other failure'), null);
   const dir = studio('verify');
-  legacyGame(dir, 'crown-thief');
+  browserRulesGame(dir, 'crown-thief');
   const bin = join(dir, 'node_modules', '.bin');
   mkdirSync(bin, { recursive: true });
   writeFileSync(join(bin, 'wrangler'), `#!/bin/sh
@@ -390,7 +390,7 @@ esac
   assert.equal(r.needs, 'cloudflare-verify-email');
 });
 
-test('port: plan grades a single-player game and reads its risks; import brings it in as a static game with the toolkit first; build ships homie-port.js', () => {
+test('port: plan grades a single-player game and reads its risks; import retains the source and licence for a rules rewrite; build refuses the old host', () => {
   const fixture = join(PKG, 'test', 'fixtures', 'coin-dash');
   const plan = out(run(['port', 'plan', fixture], scratch));
   assert.equal(plan.ok, true, JSON.stringify(plan));
@@ -403,18 +403,17 @@ test('port: plan grades a single-player game and reads its risks; import brings 
   const imp = out(run(['port', 'import', fixture, '--id', 'coin-dash'], dir));
   assert.equal(imp.ok, true, JSON.stringify(imp));
   const meta = JSON.parse(readFileSync(join(dir, 'games/coin-dash/game.json'), 'utf8'));
-  assert.deepEqual([meta.build.mode, meta.netplay.movement, meta.port.licence], ['static', 'owner', 'Apache-2.0']);
+  assert.deepEqual([meta.entry, meta.room.host, meta.port.licence], ['src/view.ts', 'server', 'Apache-2.0']);
+  assert.equal(meta.build, undefined); assert.equal(meta.netplay, undefined);
   const html = readFileSync(join(dir, 'games/coin-dash/index.html'), 'utf8');
   assert.ok(html.indexOf('homie-port.js') > 0 && html.indexOf('homie-port.js') < html.indexOf('game.js'), 'the toolkit loads before the game');
   assert.match(html, /user-scalable=no/, 'a phone-safe viewport');
   assert.ok(existsSync(join(dir, 'games/coin-dash/LICENSE')), 'the licence travels with the game');
   assert.equal(out(run(['port', 'import', fixture, '--id', 'coin-dash'], dir)).ok, false, 'an existing id is refused');
   const b = out(run(['build'], dir));
-  assert.equal(b.ok, true, JSON.stringify(b));
-  const port = readFileSync(join(dir, 'site/dist/games/coin-dash/homie-port.js'), 'utf8');
-  assert.match(port, /HomiePort/, 'the toolkit as one classic script');
-  assert.ok(existsSync(join(dir, 'site/dist/games/coin-dash/game.js')), 'the game\'s own files are served as they are');
-  assert.ok(!existsSync(join(dir, 'site/dist/games/coin-dash/game.json')), 'game.json is not served');
+  assert.equal(b.ok, false);
+  assert.match(b.why, /games use rules plus view/);
+
 });
 
 test('port check judges motion on screen axes: a straight hold passes, a camera that turns or a curve fails, a wall is contact', async () => {

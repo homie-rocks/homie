@@ -1,4 +1,4 @@
-import { legacyGame } from './legacy-game.mjs';
+import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * @homie-rocks/studio 0.13.0: the studio's back office.
  *
@@ -326,8 +326,8 @@ let built = null;
 async function site() {
   if (!built) {
     const dir = studio('worker');
-    legacyGame(dir, 'owl-run', 'Owl Run');
-    legacyGame(dir, 'night-vault', 'Night Vault');
+    browserRulesGame(dir, 'owl-run', 'Owl Run');
+    browserRulesGame(dir, 'night-vault', 'Night Vault');
     const gj = join(dir, 'games', 'night-vault', 'game.json');
     writeFileSync(gj, JSON.stringify({ ...JSON.parse(readFileSync(gj, 'utf8')), launch: 'private' }, null, 2));
     const b = run(['build'], dir);

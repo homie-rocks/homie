@@ -1,5 +1,5 @@
 import {workerEntry} from '../lib/worker-build.mjs';
-import { legacyGame } from './legacy-game.mjs';
+import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * @homie-rocks/studio 0.10.0: a studio works from the Claude app, with Cloudflare's own CI doing the deploys.
  *   - the template: `new --template` (and the repository's template/ folder) is what Cloudflare's "Deploy to
@@ -99,7 +99,7 @@ test('the template: Deploy to Cloudflare and Workers Builds ready, and the repos
   assert.equal(config.d1_databases[0].migrations_dir, 'site/migrations');
   assert.equal(config.d1_databases[0].database_id, undefined, 'no account-specific id: Wrangler and the Deploy flow create the database');
   assert.equal(config.preview_urls, true, 'every branch gets a Preview URL');
-  assert.deepEqual(config.previews.durable_objects.bindings.map((b) => b.name), ['TABLE', 'LOBBY'], 'a Preview binds its own Table and Lobby namespaces');
+  assert.deepEqual(config.previews.durable_objects.bindings.map((b) => b.name), ['TABLE', 'LOBBY', 'GATE', 'CONCENTRATOR'], 'a Preview binds its own room namespaces');
   assert.equal(config.previews.vars.HOMIE_PREVIEW, '1');
   assert.equal(config.previews.d1_databases, undefined, 'a Preview counts nothing into the studio\'s stats and never claims');
   const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
@@ -144,7 +144,7 @@ esac
 
 test('Workers Builds: `npm run deploy` only migrates and deploys (by binding name); the first one makes the database as it deploys', () => {
   const dir = studio('builds');
-  legacyGame(dir, 'owl-run', 'Owl Run');
+  browserRulesGame(dir, 'owl-run', 'Owl Run');
   // Room chat's review (0.23.0) binds Workers AI for any game whose players may type; this game keeps chat to emoji
   // and quick lines, so only a server's AI guides decide the binding here (test/chat.test.mjs covers the review's).
   const gj = join(dir, 'games', 'owl-run', 'game.json');
@@ -254,7 +254,7 @@ test('the live site claims itself in the directory the first time it is read, ke
 
 test('a build the chat opened is attached once; its change and pull request go on the card, never its key', async () => {
   const dir = studio('attach');
-  legacyGame(dir, 'owl-run', 'Owl Run');
+  browserRulesGame(dir, 'owl-run', 'Owl Run');
   const hb = `hb_${'a'.repeat(32)}`;
   let attached = 0;
   const dirx = await directory({

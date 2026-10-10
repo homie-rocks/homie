@@ -274,3 +274,45 @@ path and migrate its fixtures/docs, finish real public-route/workerd recovery
 proofs, obtain both declared-round mixed receipts, and complete release gates.
 Slices 3–6 above remain after those requirements, with the visual scheduling
 and roster bandwidth work now brought forward into this slice.
+
+### Subsequent local recovery receipts (0.45.0 worktree)
+
+The authoring/build retirement is now implemented: netplay-only games are refused,
+port imports are references for a rules/view rewrite, the old port host/HUD and
+legacy starter fixture are removed, and starters/docs use the current contract.
+Migrating the fixtures exposed missing TypeScript resolution for shared parts;
+the guarded checker now resolves those same declared parts as the bundler.
+
+The public Worker test verifies its actual authorization and capacity selection
+for 300 and 1,000 against Gate bindings, including a private-door refusal and
+ignoring caller-supplied capacity/hosting. Real local workerd tests additionally
+prove 20 Gate binding links through concentrators and a Gate abort, and the full
+public Worker → Gate → Table/SQLite route: 40 seats in a declared 300-player room,
+then Gate death and Table death, with every token resuming its original seat.
+These are functional proofs; the measured full crowds below use in-memory
+internal binding links as described above, not a Cloudflare deployment.
+
+Both declared-round mixed receipts now pass:
+
+| Local mixed run | Bytes/player/s, all measured traffic | Tick p50 / p95 / max ms | Peak Node heap / RSS bytes | Churn |
+| --- | ---: | ---: | ---: | ---: |
+| 300 players, 4 Chrome pages, 32.43 s | 11,054 | 12.64 / 48.34 / 313.59 | 168,896,288 / 284,590,080 | 15 |
+| 1,000 players, 4 Chrome pages, 86.68 s | 8,619 | 34.05 / 59.89 / 152.62 | 293,937,432 / 489,537,536 | 50 |
+
+Each run recovered all players after both failures within the same live round;
+simulated clients retained their seats, and all four real pages delivered live
+snapshot receipts after recovery. The 300 run also verifies each simulated and
+real client's own body after recovery. Its initial steady 10-second window was
+8,648 bytes/player/s. Recovery-window averages include disconnected intervals,
+so the seeded virtual comparison above is the fair before/after bandwidth pair.
+Mixed tick timing is now one host tick through snapshot enqueue; earlier mixed
+numbers measured a host wake, potentially several ticks. Browser process memory
+is excluded from Node heap/RSS. The 300 run averaged 18.78 simulation ticks/s
+including failures. Concurrent local tests affected CPU; 1,000 p95 exceeds a
+50-ms tick period, so this is not a claim of guaranteed 20 Hz on Cloudflare.
+
+The earlier failed 1,000 run is superseded. Fixes isolated a single failed
+client send from its entire Gate, compacted identical fanout rows on internal
+links, and made the restart harness reconstruct both saved relay seats and the
+host (as a Table restart does) instead of rejoining every old connection just
+before disconnecting it. Final root/CI gates are still in progress.

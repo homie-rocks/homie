@@ -2,10 +2,20 @@
   "id": "coin-dash",
   "name": "Coin Dash",
   "blurb": "Run for the coins before the others do. Sixty-second rounds, and the score is kept on the server, where nobody can change it.",
-  "players": { "min": 1, "max": 8 },
+  "players": {
+    "min": 1,
+    "max": 8
+  },
   "entry": "src/view.ts",
   "example": true,
-  "netplay": { "v": 1, "public": true },
-  "room": { "host": "server" },
-  "landing": { "pitch": "Run for the coins. First one there takes it.", "controls": { "phone": "Drag to run.", "computer": "WASD or arrows to run." } }
+  "room": {
+    "host": "server"
+  },
+  "landing": {
+    "pitch": "Run for the coins. First one there takes it.",
+    "controls": {
+      "phone": "Drag to run.",
+      "computer": "WASD or arrows to run."
+    }
+  }
 }

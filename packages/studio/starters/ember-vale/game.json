@@ -8,10 +8,6 @@
   },
   "roundSeconds": 90,
   "entry": "src/view.ts",
-  "netplay": {
-    "v": 1,
-    "public": true
-  },
   "saves": true,
   "decide": false,
   "landing": {

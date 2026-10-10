@@ -1,4 +1,4 @@
-import { legacyGame } from './legacy-game.mjs';
+import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * @homie-rocks/studio 0.16.0: servers (worker/servers.mjs), agent passes and the sit route (worker/agents.mjs).
  *
@@ -149,8 +149,9 @@ let built = null;
 async function site() {
   if (!built) {
     const dir = studio('worker');
-    legacyGame(dir, 'owl-run', 'Owl Run');
-    legacyGame(dir, 'vale', 'Vale');
+    browserRulesGame(dir, 'owl-run', 'Owl Run');
+    browserRulesGame(dir, 'vale', 'Vale');
+    writeFileSync(join(dir, 'games/vale/agents.json'), readFileSync(join(PKG, 'starters/ember-vale/agents.json')));
     assert.equal(run(['game', 'new', 'rules-run', '--from', 'coin-dash', '--name', 'Rules Run'], dir).status, 0);
     writeFileSync(join(dir, 'games/rules-run/src/rules.ts'), source);
     writeFileSync(join(dir, 'games/rules-run/src/view.ts'), "import { openRoom } from '@homie-rocks/studio/rules/view'; openRoom();\n");
@@ -201,7 +202,7 @@ async function site() {
     const stub = env.TABLE.get(`${game}/${room}`);
     await stub.fetch(`https://table/__facts?game=${game}&room=${room}&max=8`);
     const table = env.TABLE.objs.get(`${game}/${room}`);
-    const conn = { sent: [], closed: null, ip: '203.0.113.5', browser, send(t) { this.sent.push(JSON.parse(t)); }, close(c, w) { this.closed = [c, w]; } };
+    const conn = { ver: JSON.parse(readFileSync(join(dir, 'site/dist/games.json'), 'utf8')).games.find(g => g.id === game).room.build, sent: [], closed: null, ip: '203.0.113.5', browser, send(t) { this.sent.push(JSON.parse(t)); }, close(c, w) { this.closed = [c, w]; } };
     const h = table.room.attach(conn);
     h.onMessage(JSON.stringify({ t: 'hello', v: 1, device: 'desk', want: 'play', canHost: true, caps, ...(name ? { name } : {}) }));
     table.report();
@@ -432,7 +433,7 @@ test('the Worker hands the Table the policy and the AI\'s facts: the room applie
   const ends = [];
   globalThis.WebSocketPair = class { constructor() { const c = new FakeSocket(); const s2 = new FakeSocket(); ends.push(s2); return { 0: c, 1: s2 }; } };
   try {
-    await fetchSite(`/owl-run/__net?room=${room}&t=${encodeURIComponent(sat.ticket)}`, { headers: { upgrade: 'websocket' } }).catch((e) => { if (!/status/.test(String(e))) throw e; });
+    await fetchSite(`/owl-run/__net?room=${room}&t=${encodeURIComponent(sat.ticket)}&gv=${table.room.gameVer}`, { headers: { upgrade: 'websocket' } }).catch((e) => { if (!/status/.test(String(e))) throw e; });
     assert.equal(table.room.policy.kind, 'hybrid', 'the Worker\'s policy for Night Shift reached the room');
     assert.equal(table.room.policy.aiSeats, 2);
     const end = ends.at(-1);
@@ -600,7 +601,8 @@ test('AI guides at the Table: consent, house guides, a Workers AI decision on th
 
 test('the build refuses an agents.json that is not a vocabulary, and serves a good one beside the game', async () => {
   const dir = studio('vocab');
-  legacyGame(dir, 'vale', 'Vale');
+  browserRulesGame(dir, 'vale', 'Vale');
+    writeFileSync(join(dir, 'games/vale/agents.json'), readFileSync(join(PKG, 'starters/ember-vale/agents.json')));
   let b = JSON.parse(run(['build'], dir).stdout);
   assert.equal(b.ok, true);
   assert.equal(JSON.parse(readFileSync(join(dir, 'site', 'dist', 'games', 'vale', 'agents.json'), 'utf8')).v, 1);

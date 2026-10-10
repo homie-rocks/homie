@@ -19,7 +19,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [0.45.0] - 2026-10-10
 
-**Plugin 0.45.0**
+**Plugin 0.45.0** · [#85](https://github.com/homie-rocks/homie/pull/85)
 
 Choose room sizes in the hundreds and reduce the state each phone downloads.
 
@@ -35,7 +35,8 @@ Choose room sizes in the hundreds and reduce the state each phone downloads.
 
 ### Upgrade notes
 
-- Rebuild the studio Worker to include the Gate and Concentrator bindings and SQLite migrations. The build generates these settings.
+- Upgrade the studio template to include the Gate and Concentrator exports, bindings and SQLite migration, then rebuild the Worker. Preserve custom Worker routes when applying the template changes.
+- Netplay-only builds and the port `createRoom`/HUD host scaffold are retired. Existing rules starters already use the one supported contract. Rewrite an older game as rules plus view before building; browser/offline play uses that same contract.
 
 ## [0.44.3] - 2026-10-10
 

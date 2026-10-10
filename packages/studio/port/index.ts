@@ -3,7 +3,6 @@
  * single-player web game multiplayer on the netplay contract.
  *
  *   early        sandbox shims + first-touch audio (import first)
- *   createRoom   the host scaffold: bots, join-in-progress, rounds, host migration, snapshots
  *   createControls / createTouchControls / createKeys / synthKey
  *                keys on computers, a floating stick and small buttons on phones
  *   groundBasis / screenToGround / PlayerYaw
@@ -12,7 +11,6 @@
  *                a flat world on every screen (the whole of it, or filling an upright phone and following the
  *                player), name labels that never pile up, and speech bubbles over characters (room chat)
  *   exposePort   what `homie-studio port check` reads (owner tests)
- *   createHud    a minimal clock / scores / results overlay
  *   BotBrain, seek, nearest, rubberBand
  *                bot scaffolds; `skill` makes a bot play at the room's dial (NETPLAY.md section 17)
  *   createPersonaBrain, PERSONAS, botStats
@@ -37,8 +35,6 @@ export { groundBasis, screenToGround, PlayerYaw, type GroundBasis, type CameraLi
 export { fitView, easeView, toScreen, createLabels, type Fit, type FitOptions, type LabelIn, type LabelOut, type LabelOptions, type LabelBox } from './view';
 export { createBubbles, paintBubbles, wrapText, BUBBLE_FONT, type Bubbles, type BubbleOptions, type BubbleIn, type BubbleOut, type BubbleStyle } from './view';
 export { exposePort, PORT_EXTRA_NAMES, type PortExtra, type PortProbeOptions, type View } from './probe';
-export { createRoom, type Room, type RoomOptions, type BodyBase, type RoomSnap, type RoomCkpt, type TakeoverInfo, type Fallback, type Standing } from './room';
-export { createHud, type HudOptions } from './hud';
 export { BotBrain, brainOf, seek, flee, wanderer, nearest, rubberBand, protectedNewcomer, type V2 } from './bots';
 export { jitter, engages, standoff } from './skill';
 export * from './personas';

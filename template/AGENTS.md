@@ -176,7 +176,7 @@ studio's pinned copy, never a registry lookup of the bare name.
   Start with coin-dash, gem-rush, ember-vale, gem-rush-3d or hero-rush-3d; all five follow this contract.
   In games/<id>/src/rules.ts, defineRules declares entities, fields, handlers, events, rounds and companions.
   The view calls openRoom and sends input/commands; it draws, plays sound and handles controls. It never
-  decides a hit, score, spawn, turn or result. Keep game.json room.host set to server, up to 32 seats.
+  decides a hit, score, spawn, turn or result. Keep game.json room.host set to server and players.max to the chosen room size.
 - **Movement feels immediate through prediction.** Put the shared defineMove callback in src/move.ts;
   it runs authoritatively on the server and immediately for your own view, then reconciles. Other bodies
   interpolate. Use the starter's sweep/slide and room.me/room.each poses; no second browser physics loop,
@@ -197,10 +197,10 @@ studio's pinned copy, never a registry lookup of the bare name.
   then check with two browsers and play the requested mechanic with network delay. Info is not a failure.
   Never remove rules, weaken checks, forge a probe or switch hosting to get past a message.
   Rules hashes and room saves are automatic; character saves are player-owned, untrusted input. Room state
-  is replicated, not secret. Bigger rooms and private state are not delivered by milestone 1.
+  is replicated, not secret. Rooms may have hundreds of seats; choose players.max and spatial delivery explicitly and measure. Private state is not delivered.
 - **Existing games:** change rules truth in rules and presentation in view. Browser hosting is for offline,
-  local development and private friends games. Untouched older createNetplay/createRoom games still work;
-  when asked to rewrite one, read the game skill's REWRITE.md and preserve its art, view and feel. There is
+  local development and private friends games. Old netplay-only builds and the port host scaffold are retired;
+  to rewrite one, read the game skill's REWRITE.md and preserve its art, view and feel. There is
   no automatic converter. NETPLAY.md section 29 is the rules contract; earlier sections describe older APIs.
 - Phones and computers: touch controls on phones only, keys on computers; keep the
   centre of the screen clear during play.
@@ -358,7 +358,7 @@ studio's pinned copy, never a registry lookup of the bare name.
   aimNoise, aggression, positioning }`. The party sets it by voting on a card in the play page (the middle vote
   wins, capped by the server's ceiling). Make a game's bots honour it: `net.skillOf(slot)` in their step (the
   snippet is in `NETPLAY.md` section 17; `BotBrain` from the port kit reads it with a rebuild), and declare
-  `caps: ['skill', 'agents']` in `createNetplay` (a game on `createRoom` has `agents` already). A build
+  `caps: ['skill', 'agents']` in `createNetplay` (rules rooms provide the agent runtime). A build
   from before 0.16.0 still plays on every server; the office says it predates servers until it is rebuilt.
 - **Agent passes:** `npx --no-install homie-studio agents pass <id> --label Claude [--server <server>]` gives an
   AI its way into a seat (shown once; `agents revoke <pass>` ends it). It sits with `POST /<id>/api/agent`
@@ -430,7 +430,7 @@ chat's card follows the work from then on) and, for a studio still being set up,
 - The site's workers.dev address names the Cloudflare account (often after its owner): `deploy` keeps it in
   `.studio/local.json`, which git ignores. Never copy it into a committed file. A custom domain goes in
   studio.json as `cloudflare.domain`.
-- A game's room size is its netplay manifest's `maxPlayers` (game.json `netplay`, or netplay.json), up to 32.
+- A game's room size is game.json `players.max`, a positive integer including hundreds; measure the chosen size.
 - Nothing in this studio needs `~/.homie` or a Homie box.
 - This studio is this folder. A studio in a folder beside it (another folder with its own `studio.json`) is
   somebody else's work: never read it or copy from it unless the person asks.

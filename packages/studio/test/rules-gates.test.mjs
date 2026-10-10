@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { batchLink, multiplexSession, roomLayout } from '../worker/gate.mjs';
+import { Gate, batchLink, multiplexSession, roomLayout } from '../worker/gate.mjs';
 import { fakeClock } from './rules-kit.mjs';
 import { seatCount, perAddress } from '../worker/seats.mjs';
 import { scheduledView, snapshotEncoder, snapshotDecoder } from '../rules/interest.mjs';
 
 function socket() {
   const events = new Map();
-  return { sent: [], addEventListener(t, fn) { const list = events.get(t) ?? []; list.push(fn); events.set(t, list); },
+  return { sent: [], accept() {}, addEventListener(t, fn) { const list = events.get(t) ?? []; list.push(fn); events.set(t, list); },
     emit(t, value) { for (const fn of events.get(t) ?? []) fn(value); }, send(text) { this.sent.push(JSON.parse(text)); }, close() { this.emit('close', {}); } };
 }
 test('room layouts scale without imposing an admission ceiling; carrier addresses have no default limit', () => {
@@ -62,4 +62,50 @@ test('ordered deltas reject a missing predecessor and recover at the periodic ke
   encoder.encode(snap(2));
   assert.equal(decoder.decode(encoder.encode(snap(3))), null);
   assert.deepEqual(decoder.decode(encoder.encode(snap(5))), snap(5));
+});
+
+test('a client send failure detaches only that client, not the Gate or its neighbours', async () => {
+  const upstream=socket(), received=[];
+  const gate=new Gate({}, {TABLE:{idFromName:n=>n,get:()=>({fetch:async()=>({webSocket:upstream})})}});
+  const broken={send(){throw new Error('closed client');},close(){},addEventListener(){}};
+  const good={send:text=>received.push(text),close(){},addEventListener(){}};
+  const request=()=>new Request('https://table/__net?game=g&room=r&gates=5&gate=0');
+  await gate.connect(request(),broken);await gate.connect(request(),good);
+  upstream.emit('message',{data:JSON.stringify([['data','1','gone'],['data','2','still here']])});
+  assert.deepEqual(received,['still here']);assert.equal(gate.clients.size,1);assert.ok(gate.link);
+  gate.link.disconnect();
+});
+
+test('a self-driven agent receives its own exact body through spatial scheduling', () => {
+  const own=['agent',0,0,[0.123456,0,0],[1,0,0],[1,0,0],0,[],[],3,2];
+  const selected=scheduledView({radiusM:0,precisionM:1},20)({e:1,k:1,d:[[],[own]],c:[[3,0,1,0]]},3);
+  assert.deepEqual(selected.d[1],[own]);
+});
+
+test('the public Worker authorizes the door and routes the chosen 300/1000 capacity to Gates', async () => {
+  const {default: worker} = await import('../worker/index.mjs');
+  for (const seats of [300,1000]) {
+    const routed=[];
+    const cat={studio:{name:'Crowd test'},games:[{id:'crowd',name:'Crowd',players:{min:1,max:seats},room:{host:'server',contract:2,tickHz:20}}]};
+    const env={ASSETS:{fetch:async()=>Response.json(cat)},GATE:{idFromName:n=>n,get:name=>({fetch:async request=>{routed.push({name,url:new URL(request.url)});return new Response('Gate');}})}};
+    const url='https://studio.test/crowd/__net?room=pub-1&b=seeded_browser_0001&max=1&host=browser';
+    const response=await worker.fetch(new Request(url,{headers:{upgrade:'websocket'}}),env,{waitUntil(){}});
+    assert.equal(response.status,200,await response.text());
+    assert.equal(routed.length,1);
+    assert.match(routed[0].name,/^crowd\/pub-1\/\d+$/);
+    assert.equal(routed[0].url.searchParams.get('max'),String(seats));
+    assert.equal(routed[0].url.searchParams.get('host'),'server');
+    assert.equal(routed[0].url.searchParams.get('gates'),String(roomLayout(seats).gates));
+    cat.games[0].launch='private';
+    const refused=await worker.fetch(new Request(url,{headers:{upgrade:'websocket'}}),env,{waitUntil(){}});
+    assert.equal(refused.status,403);assert.equal(routed.length,1);
+  }
+});
+
+test('named server settings preserve a studio-selected crowd capacity', async () => {
+  const {serverOf,checkServer,policyOf} = await import('../worker/servers.mjs');
+  const result=checkServer({name:'Crowd',policy:'hybrid',seats:1000,aiSeats:200},{create:true});
+  assert.equal(result.ok,true);assert.equal(result.fields.seats,1000);
+  const server=serverOf({id:'crowd',name:'Crowd',policy:'hybrid',seats:1000,aiSeats:200});
+  assert.equal(server.seats,1000);assert.equal(policyOf(server,{seats:1000}).aiSeats,200);
 });

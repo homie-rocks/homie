@@ -472,7 +472,7 @@ async function roomRow(env, meta, room, max) {
     openedAt: office.openedAt ?? f.openedAt ?? null, closedUntil: office.closedUntil ?? null, snapHz: f.snapHz ?? 0,
     regate: office.regate ?? null,
     host: f.host ?? null, announce: f.announce ?? null,
-    slots: slots.slice(0, 64).map((s) => ({ slot: s.slot, seat: s.seat ?? null, name: oneLine(s.name, 40), bot: Boolean(s.bot), ...(s.agent ? { agent: { role: s.agent.role ?? 'party', seat: s.agent.seat ?? null } } : {}) })),
+    slots: slots.map((s) => ({ slot: s.slot, seat: s.seat ?? null, name: oneLine(s.name, 40), bot: Boolean(s.bot), ...(s.agent ? { agent: { role: s.agent.role ?? 'party', seat: s.agent.seat ?? null } } : {}) })),
     clients, bans: office.bans ?? [], mutes: office.mutes ?? [],
     // Room chat (0.23.0): the room's last minutes, with who sent each line (a client id and account; never an address).
     chat: office.chat ? { mode: office.chat.rules?.mode ?? null, pending: office.chat.pending ?? 0, lines: (office.chat.lines ?? []).slice(-50).map((l) => ({ id: l.id, at: l.at, t: l.t, kind: l.kind, name: oneLine(l.name, 40), seat: l.seat ?? null, by: l.by, text: l.text ?? null, glyph: l.glyph ?? null, react: l.react ?? null, say: l.say ?? null, acct: Boolean(l.acct), owner: Boolean(l.owner), client: l.client ?? null, player: l.player ?? null, browser: l.browser ?? null, ...(l.review ? { review: l.review } : {}) })) } : null,

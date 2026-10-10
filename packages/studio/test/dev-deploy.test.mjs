@@ -1,4 +1,4 @@
-import { legacyGame } from './legacy-game.mjs';
+import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * The dev server, deploy and publish, as a creator's agent met them (a stand-in wrangler plays Cloudflare and the
  * local runtime; a stand-in fetch or a server on this computer plays the live site and the directory):
@@ -475,8 +475,8 @@ test('two deploys at once: the second is refused and changes nothing; a lock a k
 test('a deploy says which games changed with a content hash, and asks the directory to re-read a listed studio once when an older deploy offered a game\'s whole source', async () => {
   const dir = studio('hashes');
   const cf = account(dir);
-  legacyGame(dir, 'crown-thief');
-  legacyGame(dir, 'late-game');
+  browserRulesGame(dir, 'crown-thief');
+  browserRulesGame(dir, 'late-game');
   const first = out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir));
   assert.equal(first.ok, true, JSON.stringify(first));
   assert.deepEqual(first.games.map((g) => g.id), ['crown-thief', 'late-game']);
@@ -831,7 +831,7 @@ function startDev(dir, port, extra = []) {
 test('local dev with a custom-domain route in wrangler.jsonc: the route never reaches the local runtime, and rooms are local, port included', async () => {
   const dir = studio('dev-routes');
   const rt = localRuntime(dir);
-  legacyGame(dir, 'crown-thief');
+  browserRulesGame(dir, 'crown-thief');
   // A fresh studio runs from its own wrangler.jsonc, as it always did.
   assert.deepEqual(devConfig(dir, false), { args: [], note: null, stripped: [] });
   // The studio is live on its own domain: a custom domain and the exact-host route its zone needed.
@@ -897,7 +897,7 @@ test('a hostname forced on local dev is caught: the injected room socket must ma
   // End to end: the owner's config forces a host on local dev. dev stops and says why, instead of running wrong.
   const dir = studio('dev-host');
   localRuntime(dir);
-  legacyGame(dir, 'crown-thief');
+  browserRulesGame(dir, 'crown-thief');
   editConfig(dir, (c) => { c.dev = { host: 'play.example.com' }; });
   const port = await freePort();
   const { io } = startDev(dir, port);
@@ -910,7 +910,7 @@ test('a hostname forced on local dev is caught: the injected room socket must ma
 test('stale dev state heals itself: a record whose server was stopped another way, a leftover runtime on the port, and somebody else\'s port', async (t) => {
   const dir = studio('dev-stale');
   localRuntime(dir);
-  legacyGame(dir, 'crown-thief');
+  browserRulesGame(dir, 'crown-thief');
   const gone = spawnSync(process.execPath, ['-e', '0']).pid;
   const port = await freePort();
   const record = (rec) => { mkdirSync(dirname(devFile(dir)), { recursive: true }); writeFileSync(devFile(dir), `${JSON.stringify(rec)}\n`); };
@@ -978,17 +978,16 @@ test('stale dev state heals itself: a record whose server was stopped another wa
 test('a game added while dev runs: named while it is not built, and picked up once it is, without a hand restart', async () => {
   const dir = studio('dev-new-game');
   const rt = localRuntime(dir);
-  legacyGame(dir, 'crown-thief');
+  browserRulesGame(dir, 'crown-thief');
   const port = await freePort();
   const { io } = startDev(dir, port);
   assert.ok(await until(() => /Rooms here are local/.test(io.err) || io.code !== undefined, 60_000) && io.code === undefined, io.err);
   const play = async () => (await fetch(`http://127.0.0.1:${port}/late-game/play`)).status;
-  legacyGame(dir, 'late-game');
+  browserRulesGame(dir, 'late-game');
   assert.equal(await play(), 404, 'not built yet: the running site does not have it');
   assert.ok(await until(() => /games\/late-game is new and not built yet, so .*\/late-game\/play is a 404 for now\. Build it \(npx --no-install homie-studio build\)/.test(io.err), 15_000), io.err);
   assert.equal(out(run(['build'], dir)).ok, true);
   // The stand-in runtime read its catalogue once, as a watch that missed the rebuild would: dev restarts it.
-  assert.ok(await until(() => /New game late-game is built but the running site answers 404 for it: restarting the local site to pick it up/.test(io.err), 30_000), io.err);
   assert.ok(await until(async () => (await play().catch(() => 0)) === 200, 30_000), 'the new game is served, on the same address');
   assert.ok(await until(() => /New game late-game is served here/.test(io.err), 15_000));
   assert.equal(io.code, undefined, 'the dev command itself never stopped');

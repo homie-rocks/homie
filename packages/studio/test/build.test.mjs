@@ -1,4 +1,4 @@
-import { legacyGame } from './legacy-game.mjs';
+import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * @homie-rocks/studio: what `homie-studio build` promises a studio.
  *
@@ -58,7 +58,7 @@ function studio(name, games = ['alpha', 'beta'], { typescript = false } = {}) {
   symlinkSync(PKG, join(dir, 'node_modules', '@homie-rocks', 'studio'));
   symlinkSync(join(REPO_NM, 'esbuild'), join(dir, 'node_modules', 'esbuild'));
   if (typescript) symlinkSync(join(REPO_NM, 'typescript'), join(dir, 'node_modules', 'typescript'));
-  for (const id of games) legacyGame(dir, id, `Game ${id}`);
+  for (const id of games) browserRulesGame(dir, id, `Game ${id}`);
   return dir;
 }
 
@@ -256,40 +256,22 @@ test('each game is changed or unchanged with a build hash; build.json keeps it a
   }
 });
 
-test('build --types: a type error in a game stops the build; the studio\'s own TypeScript does the check', () => {
+test('rules builds always type-check the view and preserve the last good build on a type error', () => {
   const dir = studio('types', ['alpha'], { typescript: true });
-  assert.equal(run(['build', '--types'], dir).status, 0, 'the starter has no type errors');
-  const dist = join(dir, 'site', 'dist');
-  const before = snapshot(dist);
-  edit(join(dir, 'games/alpha/src/main.ts'), (t) => `${t}\nexport const hitPoints: number = 'full';\n`);
-  // The build itself only strips types: this ships, which is the gap.
-  assert.equal(run(['build'], dir).status, 0);
-  const shipped = snapshot(dist);
-  assert.notDeepEqual(shipped, before);
-  const bad = run(['build', '--types'], dir);
-  assert.equal(bad.status, 1);
-  assert.match(out(bad).why, /^1 type error \(build --types\); nothing was built:\n {2}games\/alpha\/src\/main\.ts:\d+:\d+ TS2322 Type 'string' is not assignable to type 'number'\.$/);
-  assert.deepEqual(snapshot(dist), shipped, 'nothing was built');
-  // A game's own tsconfig.json is the one it is checked with.
-  write(dir, 'games/alpha/tsconfig.json', JSON.stringify({ compilerOptions: { target: 'ES2022', module: 'ESNext', moduleResolution: 'Bundler', lib: ['ES2022', 'DOM'], strict: true, noEmit: true, skipLibCheck: true, allowImportingTsExtensions: true, types: [] }, files: ['src/main.ts'] }));
-  assert.match(out(run(['build', '--types'], dir)).why, /games\/alpha\/src\/main\.ts:\d+:\d+ TS2322/);
-  edit(join(dir, 'games/alpha/src/main.ts'), (t) => t.replace("hitPoints: number = 'full'", 'hitPoints: number = 3'));
-  const good = out(run(['build', '--types'], dir));
-  assert.equal(good.ok, true, JSON.stringify(good));
-  assert.deepEqual(good.types.games, [{ id: 'alpha', checked: true, with: 'its tsconfig.json', errors: 0, elsewhere: 0 }]);
-  assert.match(good.types.typescript, /^\d+\.\d+\.\d+/);
-
-  // A studio with no TypeScript: the command fails and says the one line that gets it. A plain build never asks.
-  const none = studio('types-none', ['alpha']);
-  const r = run(['build', '--types'], none);
-  assert.equal(r.status, 1);
-  assert.match(out(r).why, /this studio has none: run `npm install --save-dev typescript`/);
-  assert.equal(run(['build'], none).status, 0);
-  // Rules always use the toolkit's pinned compiler; legacy --types still uses the studio's own.
-  const pkg = json(join(PKG, 'package.json'));
-  assert.equal(pkg.dependencies?.typescript, '5.9.3');
-  assert.equal(pkg.peerDependencies?.typescript, undefined);
-  assert.match(json(join(none, 'package.json')).devDependencies.typescript, /^\d+\.\d+\.\d+$/, 'pinned exactly, in the studio\'s own devDependencies');
+  const first = run(['build', '--types'], dir);
+  assert.equal(first.status, 0, first.stdout + first.stderr);
+  const dist = join(dir, 'site', 'dist'), before = snapshot(dist);
+  edit(join(dir, 'games/alpha/src/main.ts'), t => `${t}\nexport const hitPoints: number = 'full';\n`);
+  for (const args of [['build'], ['build', '--types']]) {
+    const bad = run(args, dir);
+    assert.equal(bad.status, 1);
+    assert.match(out(bad).why, /Type 'string' is not assignable to type 'number'/);
+    assert.deepEqual(snapshot(dist), before, 'failed checks never replace the built site');
+  }
+  edit(join(dir, 'games/alpha/src/main.ts'), t => t.replace("hitPoints: number = 'full'", 'hitPoints: number = 3'));
+  const good = run(['build', '--types'], dir);
+  assert.equal(good.status, 0, good.stdout + good.stderr);
+  assert.equal(json(join(PKG, 'package.json')).dependencies.typescript, '5.9.3');
 });
 
 test('remix was retired: old game.json settings build with one note, no source is built or served (410), and a former remix keeps its credit', async () => {

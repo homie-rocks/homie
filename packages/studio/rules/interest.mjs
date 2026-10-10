@@ -1,6 +1,6 @@
 /** Per-connection state delivery. Pure data, shared by the relay and the view.
- * Deltas name a keyframe, never an unacknowledged previous delta. Losing a delta
- * therefore loses no baseline. A new keyframe bounds recovery to one second.
+ * Deltas may name a periodic keyframe or the previous ordered frame. A missing
+ * chained predecessor is ignored until the next keyframe (at most one second).
  * No history grows with time: one keyframe per connection, no per-frame queue.
  */
 const spatial = new WeakMap(), controls = new WeakMap();
@@ -12,7 +12,7 @@ function indexFor(snap, radius) {
   const size = radius > 0 ? radius : 1;
   for (const [i, e] of snap.d[1].entries()) {
     order.set(e, i);
-    if (e[9] !== undefined && e[10] === 0) own.set(e[9], e);
+    if (e[9] !== undefined && e[10] !== 1) own.set(e[9], e);
     const p = e[3], key = `${Math.floor(p[0]/size)},${Math.floor(p[1]/size)},${Math.floor((p[2]??0)/size)}`;
     const list = cells.get(key) ?? []; list.push(e); cells.set(key, list);
   }
@@ -125,7 +125,7 @@ export function scheduledView({ radiusM = null, precisionM = 0, nearM = null, fa
   return (snap, seat) => {
     if (snap.e !== epoch) { previous.clear(); epoch = snap.e; }
     const selected = interestSnapshot(snap, seat, radiusM);
-    const own = selected.d[1].find(e => e[9] === seat && e[10] === 0);
+    const own = selected.d[1].find(e => e[9] === seat && e[10] !== 1);
     const next = new Map();
     const entities = selected.d[1].map(entity => {
       let row = entity;

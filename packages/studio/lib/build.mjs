@@ -387,11 +387,10 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
   let chunks = [];
   const budgets = modelBudgetsOf(g, log);
   // RULES PLUS VIEW (rooms on the server). A game with "room" in game.json and a src/rules.ts has its rules checked, guarded and loaded first:
-  // a rule the wall refuses stops the build here, with the line named. A game without one is hosted by a player's
-  // browser exactly as before, and cannot ask for the server.
+  // a rule the wall refuses stops the build here, with the line named. Every game uses this contract.
   const ruled = isRulesGame(g);
-  if (!ruled && g.room?.host === 'server') {
-    throw new Error(`${label}/${manifest} asks for "room": { "host": "server" }, but ${mode === 'bundle' ? 'this game has no src/rules.ts: its rules are inside its own code and run in a player\'s browser. Ask for it to be rewritten as rules plus view' : 'a ported game is someone else\'s browser code, which the server cannot run. It stays hosted by a player\'s browser'}.`);
+  if (!ruled && g.kind !== 'app') {
+    throw new Error(`${label}/${manifest}: games use rules plus view. Write src/rules.ts and src/view.ts with room.host server (or browser for offline/private play). The old browser-hosted netplay build and port host scaffold are retired; preserve the imported renderer and move its game state into declared rules.`);
   }
   if (ruled && mode !== 'bundle') throw new Error(`${label} has a src/rules.ts and ${manifest} "build": { "mode": "${mode}" }. A game written as rules plus view is built by Homie itself: take the "build" setting out.`);
   if (ruled) {
@@ -469,11 +468,6 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
   }
   if (mode !== 'static' && existsSync(join(g.dir, 'public'))) cpSync(join(g.dir, 'public'), out, { recursive: true });
   if (!existsSync(join(out, 'index.html'))) throw new Error(`${label}/index.html is missing`);
-  // Older games declare netplay v1 or carry the helper's revision marker. A plain
-  // browser bundle is not automatically a multiplayer game. Apps may be local-only.
-  if (!rules && g.kind !== 'app' && netplayOf(g, out).v !== 1 && netplayRevOf(out, { skipPort: true }) === null) {
-    throw new Error(`${label}/${manifest}: this game is neither rules plus view nor a browser-hosted netplay game. Start with game new, src/rules.ts, src/view.ts and "room": { "host": "server" }. Existing browser-hosted games must retain their netplay v1 manifest or netplay helper.`);
-  }
   if (rules) {
     // Only this game's executable view and rules data: buildInfo, the site and other games cannot reload its players.
     const digest = createHash('sha256').update(rules.build);
@@ -514,10 +508,10 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
   for (const g of games) if (g.kind === 'app') { const bad = appProblems(g); if (bad.length) throw new Error(`apps/${g.id}/app.json: ${bad.join('; ')}`); }
   // `--types`: the games' TypeScript is checked first (esbuild only strips types, it never reads them), and a type
   // error stops the build before anything is built.
-  // Rules always use their generated capability types, including the view. The legacy
-  // compiler sees broad source types and can falsely reject valid rules callbacks.
-  const legacy = games.filter((g) => !isRulesGame(g));
-  const typed = types && legacy.length ? typecheck(root, legacy, { log }) : null;
+  // Rules always use generated capability types, including the view. Local apps
+  // use the source type checker.
+  const localApps = games.filter((g) => !isRulesGame(g));
+  const typed = types && localApps.length ? typecheck(root, localApps, { log }) : null;
   // What the build before this one made, to say which games changed.
   const before = readJson(join(live, '_site', 'build.json'))?.games ?? {};
   // Everything is built in a folder of its own and put in place only when all of it is there (lib/stage.mjs): a
