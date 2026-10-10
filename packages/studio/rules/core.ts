@@ -1,4 +1,4 @@
-import { rayQuery, queryParts, type QueryTarget } from './query.ts';
+import { rayQuery, type QueryTarget } from './query.ts';
 import { colliderSolid, castCollider2, colliderRow, collisionMap, collisionQueries, type CollisionRevision } from './live.ts';
 /*
  * core.ts — one room's world, stepped a tick at a time from a compiled rules module.
@@ -486,7 +486,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       if(e.dead || !e.kind.body)continue;
       const row=e.kind.collider?colliderRow(e.id,e.pos,e.kind.body,e.kind.collider,e.f):null;
       if(e.kind.collider&&!row)continue;
-      targets.push({id:e.id,kind:e.kind.name,query:e.kind.query,fields:e.f,geometry:Boolean(row),solid:row?colliderSolid(row):solidAt(e.pos,e.kind.body),parts:queryParts(e.pos,e.kind.query)});
+      targets.push({id:e.id,kind:e.kind.name,query:e.kind.query,fields:e.f,geometry:Boolean(row),solid:row?colliderSolid(row):solidAt(e.pos,e.kind.body),at:e.pos});
     }
     return targets;
   }

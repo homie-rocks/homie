@@ -126,7 +126,8 @@ export type RoomHandler = (world: RuntimeWorld, e?: any) => void;
 export type MoveFn = (body: any, input: any, ctx: any) => void;
 
 export type ColliderDef = true | { size?: string; enabled?: string };
-export interface QueryDef { layer?: string; tags?: readonly string[]; parts?: Record<string, { shape: 'sphere' | 'capsule' | 'box'; radius: number; height?: number; offset?: Vec3 }> }
+export interface HitRegion { shape: 'sphere' | 'capsule' | 'box'; radius: number; height?: number; offset?: Vec3 }
+export interface QueryDef { layer?: string; tags?: readonly string[]; parts?: Record<string, HitRegion>; profiles?: Record<string, Record<string, HitRegion>> }
 export interface BodyDef { shape: 'circle' | 'sphere' | 'capsule' | 'box'; radius: number; height?: number; maxSpeed: number; sweep?: boolean; move?: 'owner' }
 export interface GuideDef { view: (world: RuntimeWorld, self: RuntimeSelf) => unknown; floor?: (world: RuntimeWorld, self: RuntimeSelf, view: any) => unknown }
 export interface EntityDef {
@@ -548,13 +549,19 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
     if (e.query !== undefined) {
       const q = e.query;
       const word = (v: unknown): boolean => typeof v === 'string' && /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(v);
-      if (!body || !q || typeof q !== 'object' || Object.keys(q).some(k => !['layer','tags','parts'].includes(k))) throw new Error(`${at}.query needs a body and {layer, tags, parts}`);
+      if (!body || !q || typeof q !== 'object' || Object.keys(q).some(k => !['layer','tags','parts','profiles'].includes(k))) throw new Error(`${at}.query needs a body and {layer, tags, parts, profiles}`);
       if (q.layer !== undefined && !word(q.layer)) throw new Error(`${at}.query.layer is a short name`);
       if (q.tags !== undefined && (!Array.isArray(q.tags) || q.tags.length > 16 || !q.tags.every(word))) throw new Error(`${at}.query.tags holds at most 16 short names`);
-      if (q.parts !== undefined) {
-        if (!q.parts || typeof q.parts !== 'object' || Array.isArray(q.parts) || Object.keys(q.parts).length > 16) throw new Error(`${at}.query.parts holds at most 16 shapes`);
-        for (const [name, part] of Object.entries(q.parts)) {
-          if (!word(name) || !part || !['sphere','capsule','box'].includes(part.shape) || !Number.isFinite(part.radius) || part.radius <= 0 || part.radius > 10000 || part.height !== undefined && (!Number.isFinite(part.height) || part.height <= 0 || part.height > 10000 || part.shape === 'capsule' && part.height < 2*part.radius) || part.offset !== undefined && !['x','y','z'].every(k => Number.isFinite((part.offset as any)[k]) && Math.abs((part.offset as any)[k]) <= 10000)) throw new Error(`${at}.query.parts.${name} needs a finite shape, radius, height and offset`);
+      const groups: [string, Record<string, HitRegion>][] = [];
+      if(q.parts !== undefined) groups.push(['parts',q.parts]);
+      if(q.profiles !== undefined) {
+        if(!q.profiles || typeof q.profiles!=='object' || Array.isArray(q.profiles) || Object.keys(q.profiles).length>8 || !Object.keys(q.profiles).every(word))throw new Error(`${at}.query.profiles holds at most eight named region sets`);
+        for(const [name,parts] of Object.entries(q.profiles))groups.push([`profiles.${name}`,parts]);
+      }
+      for (const [group,parts] of groups) {
+        if (!parts || typeof parts !== 'object' || Array.isArray(parts) || Object.keys(parts).length > 16) throw new Error(`${at}.query.${group} holds at most 16 shapes`);
+        for (const [name, part] of Object.entries(parts)) {
+          if (!word(name) || !part || !['sphere','capsule','box'].includes(part.shape) || !Number.isFinite(part.radius) || part.radius <= 0 || part.radius > 10000 || part.height !== undefined && (!Number.isFinite(part.height) || part.height <= 0 || part.height > 10000 || part.shape === 'capsule' && part.height < 2*part.radius) || part.offset !== undefined && !['x','y','z'].every(k => Number.isFinite((part.offset as any)[k]) && Math.abs((part.offset as any)[k]) <= 10000)) throw new Error(`${at}.query.${group}.${name} needs a finite shape, radius, height and offset`);
         }
       }
     }

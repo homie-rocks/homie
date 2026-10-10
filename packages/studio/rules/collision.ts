@@ -1,4 +1,4 @@
-import { castTerrain, overlapsTerrain } from './terrain.ts';
+import { castTerrain } from './terrain.ts';
 import { nearbyMap } from './map-index.ts';
 /** Upright 3D collision. Positions are feet; a rounded box is a box plus a sphere.
  * Capsules are a vertical segment plus a sphere. No engine-specific maths or time.
@@ -38,7 +38,8 @@ export function castSolid(a: Solid, d: Vec3, b: Solid, includeInside = false): H
   if (includeInside) {
     const gap = separation(a, b, d, 0);
     const sq = gap.x*gap.x + gap.y*gap.y + gap.z*gap.z;
-    const inside = b.r > 0 ? sq < b.r*b.r : a.min.x > b.min.x && a.min.x < b.max.x && a.min.y > b.min.y && a.min.y < b.max.y && a.min.z > b.min.z && a.min.z < b.max.z;
+    const radius=a.r+b.r;
+    const inside = radius > 0 ? sq < radius*radius : a.max.x > b.min.x && a.min.x < b.max.x && a.max.y > b.min.y && a.min.y < b.max.y && a.max.z > b.min.z && a.min.z < b.max.z;
     if (inside) {const length = Math.sqrt(d.x*d.x+d.y*d.y+d.z*d.z)||1; return {t:0,nx:-d.x/length,ny:-d.y/length,nz:-d.z/length};}
   }
   let t = 0;
@@ -113,7 +114,7 @@ export function castMap3(map: Map3, p: Vec3, d: Vec3, body: BodyShape, hits?: Hi
     const n = point(0, 0, 0); n[axis] = d[axis] > 0 ? -1 : 1;
     take({ t: ((d[axis] > 0 ? high : low) - p[axis]) / d[axis], nx: n.x, ny: n.y, nz: n.z });
   }
-  for (const tile of map.heightTiles ?? []) take(tile.base === undefined ? castHeightTile(tile, p, d) : includeInside && overlapsTerrain(tile,a) ? {t:0,nx:-d.x/(Math.hypot(d.x,d.y,d.z)||1),ny:-d.y/(Math.hypot(d.x,d.y,d.z)||1),nz:-d.z/(Math.hypot(d.x,d.y,d.z)||1)} : castTerrain(tile, a, d));
+  for (const tile of map.heightTiles ?? []) take(tile.base === undefined ? castHeightTile(tile, p, d) : castTerrain(tile, a, d));
   for (const b of map.boxes) take(castSolid(a, d, { ...b, r: 0 }, includeInside), (b as any).id);
   // Legacy map circles are vertical columns in a 3D map.
   for (const c of map.circles) take(castSolid(a, d, { min: point(c.at.x, c.at.y, map.bounds.min.z - r), max: point(c.at.x, c.at.y, map.bounds.max.z + r), r: c.r }, includeInside), (c as any).id);
