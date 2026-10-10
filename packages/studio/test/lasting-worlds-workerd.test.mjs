@@ -55,6 +55,7 @@ test('real Table SQL: pickup, abrupt object death, account recall into a second 
     await new Promise(r=>setTimeout(r,30));
     const after=await state();const restored=typeof after.save.host==='string'?JSON.parse(after.save.host):after.save.host;
     assert.equal(restored.core.ents.find(e=>e[11]===0)[17][0],1);
+    assert.ok(after.facts.epoch > before.facts.epoch,'the object actually restarted, rather than reading the old in-memory host');
     assert.equal(after.save.buildHash,'one','restored state came from the earlier build');
     const b=await connect('two','two');await tick('two');
     const second=await state('two');const next=typeof second.save.host==='string'?JSON.parse(second.save.host):second.save.host;
