@@ -321,6 +321,25 @@ export const SAVES_SHELL_JS = `${PASSKEY_JS}
     });
   }
 
+  /**
+   * This browser's guest signed in to an account that had some of the same keys with other values, and no rule of
+   * the game's combined them on the server (mergeSaves): the account's stayed, and the sign-in answered with the
+   * guest's. Each is an ordinary conflict, the guest's value (mine) against the account's (theirs), so a game with
+   * onConflict keeps or merges it. Never a server: key: a browser cannot write one.
+   */
+  function keptByAccount(adopted, guestCopy) {
+    var asked = [];
+    ((adopted && adopted.kept) || []).forEach(function (k) {
+      var key = String(k.key);
+      if (k.game !== GAME || key.indexOf('server:') === 0 || !KEY.test(key)) return;
+      var mine = k.value !== undefined ? k.value : guestCopy[key];
+      if (mine === undefined || mine === null) return;
+      var c = S.cache[key];
+      asked.push(resolve(key, { op: 'set', v: mine }, { value: c ? c.v : null, version: c ? c.ver : 0 }, false));
+    });
+    if (asked.length) Promise.all(asked).then(function () { flush(); });
+  }
+
   addEventListener('online', function () { online(true); S.backoff = 0; flush(); });
   addEventListener('offline', function () { online(false); });
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flush(true); });
@@ -385,9 +404,10 @@ export const SAVES_SHELL_JS = `${PASSKEY_JS}
     };
     inn.onclick = function () {
       busy(true); said.className = 'said'; said.textContent = 'Follow your device…';
-      flush().then(function () { return P.signIn(); }).then(function (r) {
+      var guestCopy = {};
+      flush().then(function () { guestCopy = snapshot(); return P.signIn(); }).then(function (r) {
         setPlayer({ id: r.player.id, name: r.player.name, guest: false, owner: r.player.owner }, false);
-        return refresh().then(function () { tell('player', { player: me(), cache: snapshot() }); close(); });
+        return refresh().then(function () { tell('player', { player: me(), cache: snapshot() }); close(); keptByAccount(r.adopted, guestCopy); });
       }).catch(function (e) { said.className = 'said bad'; said.textContent = e && e.name ? P.said(e) : (e && e.message) || 'That did not work.'; busy(false); P.prime('in', '/api/player/signin/options'); });
     };
   }

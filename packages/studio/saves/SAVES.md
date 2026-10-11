@@ -64,8 +64,8 @@ landing. Pressing Play never needs an account.
   security key. No password, no email. A guest who makes an account keeps everything: it is the same player.
 - **Another device**: "Sign in" with the same passkey. The device's own passkey sync carries it (iCloud Keychain,
   Google Password Manager, a password manager), or the browser offers a phone's QR code. The same saves are there.
-  A guest who signs in to an account they already have keeps the account's saves, and anything only the guest had
-  (keys, stats, memorials the account lacks) moves over.
+  A guest who signs in to an account they already have loses nothing: what only the guest had (keys, stats,
+  memorials) moves over, and a key both have is combined ("When a guest signs in to their account", below).
 - **Recovery**: add another passkey on another device or a security key (`/account/`). A **recovery email** is
   offered only when the studio has a mail sender: a Cloudflare Email Service binding named `PLAYER_MAIL`
   (`"send_email": [{ "name": "PLAYER_MAIL" }]` in wrangler.jsonc; Email Sending needs the Workers paid plan and a
@@ -130,6 +130,82 @@ an old offline copy of a dead hero is a conflict with the wipe, and the wipe win
 
 A write is atomic **per key**, not across keys: keep one character in one key.
 
+## When a guest signs in to their account
+
+Somebody plays as a guest, then signs in to the account they made on another device. Both players have saves.
+Whatever only the guest had moves to the account as it is (keys, stats, memorials), and the guest is gone. For a
+key **both** have, the game says how the two combine, once, when the studio's Worker loads
+(`site/src/worker.mjs`):
+
+```js
+import { mergeSaves } from '@homie-rocks/studio/worker';
+
+mergeSaves({
+  'night-run': {
+    saves: {
+      'server:career-v1': { union: 'matches', by: 'id', order: 'endedAt', keep: 100 },
+      settings: 'newer', 'best-level': 'larger', coins: 'sum', 'slot-*': 'account',
+      inventory: (guest, account, ctx) => ({ items: [...new Set([...account.items, ...guest.items])] }),
+    },
+    stats: { kills: 'sum', level: 'larger', 'best-time': 'smaller' },
+  },
+});
+```
+
+A name is the exact key, or a prefix ending in `*`. The exact key beats a prefix; a longer prefix beats a shorter
+one. A rule that is none of the ones below throws when the Worker loads, naming it.
+
+| A save's rule | The account ends with |
+| --- | --- |
+| `'account'`, `'guest'` | that side's value. |
+| `'newer'` | the one written last (a tie: the account's). |
+| `'larger'`, `'smaller'` | the larger or smaller of two numbers. `{ rule: 'larger', by: 'level' }` compares that number in two objects and keeps the whole object. |
+| `'sum'` | two numbers added; or two objects with every number they share added, and for anything else the account's (the guest's where the account has none). |
+| `{ union: 'matches', by: 'id', order: 'endedAt', keep: 100 }` | the account's object with that list joined to the guest's by `by` (on the same id, the account's entry), newest `order` first, cut to `keep`. `order` and `keep` are optional; `'union'` alone is exactly the rule shown. A joined list too large for a save loses entries from its end until it fits. |
+| `(guest, account, ctx) => value` | what the game's own function returns, run on the server. It may be async. `ctx` is `{ game, key, guest: { updatedAt, version }, account: { updatedAt, version } }`. |
+
+A stat's rule is `'sum'`, `'larger'`, `'smaller'`, `'guest'` or `'account'`.
+
+**With no rule**, and whenever a rule cannot apply (two values that are not numbers to compare, a function that
+throws, returns nothing, or returns more than a save holds), the default applies. It never fails the sign-in:
+
+1. Equal values: nothing to do.
+2. Two values of the **record shape** the room server writes (`{ matches: [{ id, … }] }`, every `id` a text):
+   joined by id, newest first. For a `server:` key the newest 100 are kept, the record's own bound; only the server
+   can write such a key, so nothing else could combine the two. A key the browser wrote that happens to have this
+   shape is joined the same way and not cut (it is cut only if it would not fit a save). Declare `'account'` for a
+   key of that shape that must not be joined.
+3. Anything else: the account's value stays, and the guest's is **handed back** to the browser that signed in. The
+   play page raises it as an ordinary conflict, `mine` the guest's value and `theirs` the account's: a game with
+   `onConflict` keeps or merges it, and its answer is written on top; without `onConflict` the account's stays and
+   the game hears `conflict` with `kept: 'theirs'`. A stat keeps the account's number.
+
+The sign-in answers with what happened, beside `adoptedGuest: true`:
+
+```js
+adopted: {
+  merged: [{ game, key, rule, took }],      // took: 'merged', 'guest' or 'account' (a rule chose it)
+  moved: 3,                                 // keys only the guest had
+  kept: [{ game, key, value }],             // case 3; `rule` and `error` when a declared rule could not apply
+  stats: { merged: [{ game, name, rule }], kept: [{ game, name, value }] },
+}
+```
+
+`kept` carries at most 256 KiB of values; past that a key is named with `truncated: true` and the play page uses
+its own copy of the guest's value. A sign-in on `/account/` has no game to ask, so there the account's simply stays.
+
+It happens **exactly once**, in the one database transaction of the sign-in. If a room writes a record to either
+player between the read and that transaction, the transaction fails whole, and it is read and tried again; after
+four tries the account keeps every key both have and the answer says `fallback: true`. A round that ended a moment
+before the sign-in writes its record a moment after, under the guest's id: the guest leaves a forwarding row
+(`saves`, game `''`, key `server:moved`) and the record follows it to the account.
+
+**What is new and what is a fix.** `mergeSaves` and its rules are opt-in: a studio that declares nothing has the
+results it always had for every key and stat (the account's stays). Two things changed for everyone, both fixes:
+server records are joined (a guest's verified matches used to vanish), and a value the account did not take is
+handed back instead of dropped. A merged value larger than 64 KiB falls to the default; a merge never counts
+against a game's 256 KiB.
+
 ## The hall of the fallen: a hardcore recipe
 
 ```ts
@@ -182,6 +258,10 @@ Migration `site/migrations/0004_players.sql` (deploy applies it; an older studio
 | `player_emails` | a recovery email, only if the player added one | |
 | `saves`, `player_stats`, `memorials` | what the game saved | anything the game did not |
 
+A guest who signed in to their account leaves two small rows in `saves` under game `''`: `server:moved` under the
+guest's id (the account's id and when) and `server:from:<guest>` under the account's. They are in no export and no
+count, and they are deleted with the account.
+
 - **The player** sees all of it at `/account/`, downloads it as one JSON file (`/api/player/export`), and deletes
   it all (`/api/player/delete`): their passkeys, sessions, saves, stats, memorials and email, and their large
   saves in R2. The page tells them to remove the passkey from their device too, and tells the device itself where
@@ -227,7 +307,7 @@ Same origin only (a POST must come from this site's own pages, as JSON). For ref
 | --- | --- |
 | `GET /api/player/me` | the signed-in player, the features (`accounts`, `email`), the limits |
 | `POST /api/player/signup/options`, `POST /api/player/signup` | make an account, or add a passkey to this browser's guest or account |
-| `POST /api/player/signin/options`, `POST /api/player/signin` | sign in with a passkey (discoverable: no name typed) |
+| `POST /api/player/signin/options`, `POST /api/player/signin` | sign in with a passkey (discoverable: no name typed): `{ ok, player, adoptedGuest, adopted? }` |
 | `POST /api/player/signout`, `POST /api/player/name`, `GET /api/player/passkeys`, `POST /api/player/passkeys/remove` | |
 | `GET /api/player/export`, `POST /api/player/delete` (`{ "confirm": "delete" }`) | everything, and nothing |
 | `GET /api/player/saves/<game>[?values=1]`, `GET /api/player/saves/<game>/<key>` | read |

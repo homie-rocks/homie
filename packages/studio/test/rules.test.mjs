@@ -111,6 +111,9 @@ test('a declaration that does not fit the contract is named', async () => {
   bad((d) => { d.entities.a.fields = { n: 5 }; }, /entities\.a\.fields\.n is not a field type/);
   bad((d) => { d.entities.a.fields = { a: f.u8({ score: true }), b: f.u8({ score: true }) }; }, /one field is the score/);
   bad((d) => { d.entities.a.fields = { p: f.press() }; }, /f\.press\(\) is for input only/);
+  bad((d) => { d.entities.a.fields = { p: f.held() }; }, /f\.held\(\) is for input only/);
+  bad((d) => { d.room = { ...d.room, historySeconds: 1, rewindSeconds: 1.5 }; }, /room\.rewindSeconds is the most a shot is rewound/);
+  bad((d) => { d.room = { ...d.room, rewindSeconds: 0.25 }; }, /room\.rewindSeconds is the most a shot is rewound/);
   bad((d) => { d.entities.a.input = { v: f.vec3() }; }, /an input field is a whole number/);
   bad((d) => { d.entities.a.fields = { l: f.list(f.u8(), 0) }; }, /declares its largest size/);
   bad((d) => { d.entities.a.player = { leave: 'bot' }; }, /need a think\(world, self\) handler/);

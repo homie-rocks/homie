@@ -1682,7 +1682,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     else if (m.t === 'state' && typeof m.k === 'string') applyState(m.k, m.d);
     else if (m.t === 'round') { const incoming = m.round as RoundInfo; roundInfo = m.retime && roundInfo?.n === incoming.n ? { ...roundInfo, ...incoming } : incoming; if (!m.retime) { emit('round', roundInfo); post?.({ what: 'round', round: roundInfo }); } }
     else if (m.t === 'roster' && (offline || !connected)) { slots = m.slots as Slot[]; emit('roster', slots); post?.({ what: 'roster', slots }); }
-    else if (m.t === 'ev' && (m.to === undefined || m.to === seat || m.to === id)) emit('event', { k: String(m.k), d: m.d, from: typeof m.from === 'number' ? m.from : null });
+    else if (m.t === 'ev' && (m.to === undefined || m.to === seat || m.to === id || (m.to === -1 && seat === null))) emit('event', { k: String(m.k), d: m.d, from: typeof m.from === 'number' ? m.from : null });
   }
   let role: Role = 'replica';
   let roleKnown = false;

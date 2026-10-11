@@ -22,6 +22,7 @@ export interface RayOptions {
 export type RayHit = Hit & { readonly dist: number };
 export interface RaySnapshot {sweep(body:{pos:Point;grounded?:boolean},delta:Point,options?:{ground?:boolean}):Hit|undefined;support(body:{pos:Point},distance?:number):(Hit&{dist:number})|undefined;ray(from:Point,direction:Point,max:number):RayHit|undefined;rayAll(from:Point,direction:Point,max:number):readonly RayHit[]}
 export interface RayQueries { rays(options?:RayOptions):RaySnapshot; ray(from: Point, direction: Point, max: number, options?: RayOptions): RayHit | undefined; rayAll(from: Point, direction: Point, max: number, options?: RayOptions): readonly RayHit[] }
+export interface EffectAudience { readonly to?: string | readonly string[]; readonly within?: number }
 export type Area = { sphere: { at: Point; r: number } } | { box: { min: Point; max: Point } } | { cone: { at: Point; dir: Point; r: number; angle: number } };
 export interface MapView { readonly name: string; spot(name: string): Vec3 | undefined; spots(name: string): readonly Vec3[] }
 export interface Clock { readonly tick: number; readonly dt: number; ticks(seconds: number): number; readonly math: typeof math }
@@ -30,6 +31,8 @@ export type World<E, F, S, V, C, A, T, Room extends boolean = false> = Clock & {
   readonly tune: ReadonlyState<T>; readonly map: MapView; readonly stage: string; readonly level: number; readonly levelMax: number; readonly guideLevel: number; readonly guideSeats: readonly number[]; readonly kids: boolean; readonly levelSet: boolean;
   readonly shared: Room extends true ? S : ReadonlyState<S>;
   readonly round: Round & (Room extends true ? { end(): void; restart(): void } : {});
+  /** Budget units the running handler may still spend (0.46.3). */
+  readonly unitsLeft: number;
   random(): number;
   label(player:string):string;
   send<K extends keyof E>(target: string, event: K, ...data: Payload<E[K]>): void;
@@ -38,6 +41,8 @@ export type World<E, F, S, V, C, A, T, Room extends boolean = false> = Clock & {
   sendArea<K extends keyof E>(area: Area, event: K, ...data: Payload<E[K]>): void;
   after<K extends keyof E>(ticks: number, event: K, ...data: Payload<E[K]>): void;
   emit<K extends keyof F>(effect: K, at: Point | string, ...data: Payload<F[K]>): void;
+  /** With an audience (0.46.3): only the people driving the entities named in `to`, and those whose own body is within `within` metres, receive it. A watcher receives the ones with a range, never one addressed only `to` somebody. */
+  emit<K extends keyof F>(effect: K, at: Point | string, data: WriteState<F[K]>, audience: EffectAudience): void;
   spawn<K extends keyof C>(kind: K, at: Point, fields?: Partial<WriteState<C[K]>>): string;
   near<K extends keyof V>(at: Point, radius: number, kind: K): readonly Query<V[K]>[];
   near(at: Point, radius: number): readonly Query<V[keyof V]>[];

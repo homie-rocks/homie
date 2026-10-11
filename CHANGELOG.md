@@ -17,6 +17,67 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.46.3] - 2026-10-11
+
+**Plugin 0.46.3**
+
+A guest who signs in keeps both histories; a rival's sounds reach the players who can hear them; a shooter's own
+actions answer at once; a tap moves as far as it was held; a client cannot stretch its own lag compensation.
+
+### Added
+
+Every item here is opt-in: a game that declares none of them plays, costs and saves exactly as on 0.46.2.
+
+- `mergeSaves({ '<game>': { saves: { '<key or prefix*>': rule }, stats: { … } } })` from
+  `@homie-rocks/studio/worker`: how a guest's saves combine with an account's when the guest signs in to an account
+  that already has the same key. Rules: `'account'`, `'guest'`, `'newer'`, `'larger'`, `'smaller'`, `'sum'`,
+  `'union'` (a list joined by id), or the game's own function, run on the server. It happens once, in the sign-in's
+  own transaction, guarded against a room writing a result at the same moment. The sign-in response says what
+  was merged, moved and kept (`adopted`), and a key no rule could combine reaches the game's `onConflict` with the
+  guest's value (saves/SAVES.md, "When a guest signs in to their account").
+- Effects with an audience: `world.emit(effect, at, data, { within: metres, to: id | [ids] })` sends an effect only
+  to the players whose own body is in range or who are named; a watcher receives the ones with a range. For a sound a rival
+  could hear or a number only the shooter may see, in place of drawing it from state the rival should not have.
+  An effect with no audience is public and is sent as before.
+- `f.held()`, an input type: the browser sends the average of the control over each tick, so a key held for part
+  of a tick moves the body for that part. Short taps no longer travel a whole tick or two by where the tick's
+  edges fell. An entry that reaches the server after its tick is settled on the next ticks, not counted twice.
+- `openRoom({ predict: { <kind>(me, input, ctx) { … } } })`: the player's own actions predicted like their own
+  movement (run each predicted tick and between ticks, put right by every snapshot and re-run). `ctx.ghost` shows a
+  provisional entity and `ctx.effect` a provisional effect that the server's own then confirms (`confirms: true`)
+  or the room retracts (`room.on('retract', …)`). A valued pulse (`f.pulse()`) now names the tick it was pressed
+  on and the server acts on it in that tick; the control row says the newest pulse acted on, so a prediction
+  holds when the pulse's own message is late (as it can be through a Gate).
+- `world.unitsLeft`: the budget units the running handler may still spend, so a handler that plans can stop early.
+- `room.rewindSeconds` in rules: the game's hard cap on how far a person's ray is rewound for latency (from 0 to
+  `historySeconds`). Without it the cap is `historySeconds`, as before; `0.25` is a sensible value for a shooter.
+
+### Fixed
+
+Each of these changes what happened before; none needs a change to a game.
+
+- A guest with verified results who signed in to an account that also had some kept only the account's: the
+  guest's `server:` record was dropped, and nothing could combine the two afterwards because a browser cannot
+  write a `server:` key. Two server records are now joined by id when the guest signs in, with no rule declared.
+- A result a room wrote for the guest a moment after they signed in was written under a player that no longer
+  existed. It now follows the guest to the account (`appendServerRecord`, at the same one read and one write).
+- Lag compensation could be stretched by a client: the round trip was timed on a separate answer the client could
+  hold back, and only the smallest value ever seen was kept. It is now timed on the input frames themselves (each
+  names the newest snapshot its browser had), as a low percentile over the last ten seconds, and the allowance
+  counts the whole ticks an input waited after it arrived instead of a fixed one. A client still cannot look
+  faster than it is; one that pretends to be slower is bounded by `room.rewindSeconds`.
+
+### Upgrade notes
+
+- Nothing to do for a studio that declares none of the above. To use `mergeSaves`, add it to
+  `site/src/worker.mjs` beside `hostRules`.
+- A page from before this version that is still open against the new Worker is timed the old way until it
+  reloads. Its rewind is bounded by the same cap.
+- All of the above works the same through Gates (a room of more than 64 seats) as in a small room; each has a
+  seeded test both ways. Through a Gate a held input that misses its tick can be drawn a few centimetres short for
+  a tick or two before it settles.
+- Version 0.46.3 is provisional. No deploy or merge is part of this PR.
+
 ## [0.46.2] - 2026-10-11
 
 **Plugin 0.46.2** · Big rooms: the room runs the rules, its Gates do the rest.

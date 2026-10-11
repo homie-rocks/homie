@@ -132,9 +132,12 @@ export interface Host {
   readonly core: Core;
 }
 
-interface Entry { at: number; values: Record<string, unknown>; presses: (string | [string, number])[]; claim: StepInput['claim'] }
+interface Entry { at: number; values: Record<string, unknown>; presses: (string | [string, number])[]; claim: StepInput['claim']; /** How many ticks before its own tick it arrived (0.46.3): the time the input itself waited here. */ early?: number }
 interface SeatIn {
-  pulses?: [string,number][];
+  /** A valued pulse, and the tick its browser predicted it on (0: none given, act at once). */
+  pulses?: [string,number,number?,number?][];
+  /** The wait of the entry now held, in ticks (see Entry.early). */
+  early?: number;
   held: Record<string, unknown>; claim: StepInput['claim']; entries: Entry[];
   /** The newest stamp this seat has sent, the stamps not yet acknowledged, and the newest acknowledged. */
   newest: number; stamps: number[]; ack: number;
@@ -254,7 +257,7 @@ export function createHost(o: HostOptions): Host {
       for (const [seat, q] of saved.inputs) {
         check(uint(seat) && seat < c.seats && q && valuesOk(seat, q.held) && claimOk(q.claim) && uint(q.newest) && uint(q.ack) && uint(q.lastFrameTick) && Number.isInteger(q.lead) && q.lead >= -127 && q.lead <= 127);
         check(Array.isArray(q.stamps) && q.stamps.length <= 256 && q.stamps.every(uint) && Array.isArray(q.entries) && q.entries.length <= c.settings.tickHz + 1);
-        if(q.pulses!==undefined)check(Array.isArray(q.pulses)&&q.pulses.length<=16&&q.pulses.every(p=>Array.isArray(p)&&p.length===2&&c.kinds.some(k=>k.input.some(([n,f])=>n===p[0]&&f.t==='pulse'))&&Number.isInteger(p[1])&&p[1]>0&&p[1]<=255));
+        if(q.pulses!==undefined)check(Array.isArray(q.pulses)&&q.pulses.length<=16&&q.pulses.every(p=>Array.isArray(p)&&(p.length===2||p.length>=3&&p.length<=4&&uint(p[2])&&(p[3]===undefined||uint(p[3])))&&c.kinds.some(k=>k.input.some(([n,f])=>n===p[0]&&f.t==='pulse'))&&Number.isInteger(p[1])&&p[1]>0&&p[1]<=255));
         for (const e of q.entries) check(uint(e.at) && valuesOk(seat, e.values) && claimOk(e.claim) && Array.isArray(e.presses) && e.presses.every((p) => c.kinds.some((k) => k.input.some(([name, fd]) => (typeof p === 'string' ? name === p && fd.t === 'press' : Array.isArray(p) && p.length === 2 && name === p[0] && fd.t === 'pulse' && Number.isInteger(p[1]) && p[1] > 0 && p[1] <= 255)))));
       }
     }
@@ -273,7 +276,26 @@ export function createHost(o: HostOptions): Host {
       }
     },
   } : {};
-  const core = createCore(c, { ...characterOptions, rewindTicks: seat => Math.ceil(((measuredRtt.get(seat) ?? 0) + 150 + period) / period), label: (seat,driver)=>nameOf(seat,driver), moved: o.moved, observe: o.observe, noted: o.noted, seed: Math.floor(random() * 4294967296) >>> 0, epoch: saved ? undefined : (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
+  /*
+   * How far back a person's ray may look (0.46.3). A shot is judged where the shooter saw the target, so the rewind is
+   * the age of that view when the input was RECEIVED, plus the time the input then waited for its tick:
+   *
+   *   the view's age   the relay's own measurement of this connection's round trip (a low percentile over a window of
+   *                    acknowledgements carried by the input frames themselves, worker/room.mjs), plus 150 ms of
+   *                    presentation delay. A client cannot bring the measurement under its real latency. It can
+   *                    pretend to be slower, by holding back what it sends, and then its input is late too.
+   *   the wait         whole ticks between an entry's arrival and the tick it was stamped for (at least one, at most a
+   *                    quarter of a second): tied to when the server received the input, not to what the client says.
+   *
+   * `room.rewindSeconds` is the game's hard cap on the sum. Without it the cap is `room.historySeconds`, as before.
+   */
+  const rewindCap = c.rewindSeconds !== undefined ? Math.ceil(c.rewindSeconds * tickHz) : null;
+  const rewindTicks = (seat: number): number => {
+    const waited = Math.max(1, Math.min(lateTicks, queues.get(seat)?.early ?? 1));
+    const need = Math.ceil(((measuredRtt.get(seat) ?? 0) + 150) / period) + waited;
+    return rewindCap === null ? need : Math.min(rewindCap, need);
+  };
+  const core = createCore(c, { ...characterOptions, rewindTicks, label: (seat,driver)=>nameOf(seat,driver), moved: o.moved, observe: o.observe, noted: o.noted, seed: Math.floor(random() * 4294967296) >>> 0, epoch: saved ? undefined : (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
   let epoch = core.epoch;
   if (saved && (o.startPaused ?? o.restoreEpoch !== undefined)) for (const body of core.bodies()) if (body.driver !== 'bot' && body.owner !== 'reserved') core.seatAway(body.seat, true);
   let lastSaveAt = o.clock.now();
@@ -415,9 +437,21 @@ export function createHost(o: HostOptions): Host {
   for (const [seat, held, claim, newest, ack] of saved?.queues ?? []) queues.set(seat, { held, claim, entries: [], newest, stamps: [], ack, lead: 127, lastFrameTick: core.tick });
   for (const [seat, q] of saved?.inputs ?? []) queues.set(seat, q);
   const neutral = (kind: KindTable): Record<string, unknown> => { const v = initFields(kind.input, c.dims); for (const [name, fd] of kind.input) if (fd.t === 'press' || fd.t === 'pulse') v[name] = fd.t === 'press' ? false : 0; return v; };
+  /*
+   * `f.held()` inputs that arrive late (0.46.3). A held value is how much of ONE tick a control was down, so the sum over
+   * a tap's ticks is the tap. When an entry misses its tick, that tick has already run on the value before it (a
+   * release that arrives late ran one more whole tick of movement), and applying the entry a tick later as well would
+   * count the tap twice over. So the difference between what the missed ticks ran on and what they were meant to run
+   * on is owed, and paid on the next ticks, inside the range the control reads in. The body then ends where the
+   * browser predicted it, however the frames fell. Kept beside the queues and not saved: a restart forgets a debt.
+   */
+  const heldNames = new Map<KindTable, string[]>();
+  const heldOf = (kind: KindTable): string[] => { let names = heldNames.get(kind); if (!names) { names = kind.input.filter(([, fd]) => fd.t === 'held').map(([name]) => name); heldNames.set(kind, names); } return names; };
+  const pulsesTaken = new Map<number, number>();
+  const heldBook = new Map<number, { ran: [number, Record<string, number>][]; debt: Record<string, number>; until: number }>();
   function queueOf(seat: number, kind: KindTable): SeatIn {
     let q = queues.get(seat);
-    if (!q) { q = { held: neutral(kind), claim: null, entries: [], newest: 0, stamps: [], ack: 0, lead: 127, lastFrameTick: core.tick }; queues.set(seat, q); }
+    if (!q) { q = { held: neutral(kind), claim: null, entries: [], newest: 0, stamps: [], ack: 0, lead: 127, lastFrameTick: core.tick }; queues.set(seat, q); pulsesTaken.delete(seat); }
     return q;
   }
   const people = (): number => { let n = 0; for (const person of present.values()) if (person) n += 1; return n; };
@@ -461,9 +495,11 @@ export function createHost(o: HostOptions): Host {
       }
       const claim = kind.body?.owner && raw.length >= i + 9 ? { pos: unpackVec([raw[i], raw[i + 1], raw[i + 2]], c.dims), vel: unpackVec([raw[i + 3], raw[i + 4], raw[i + 5]], c.dims), heading: unpackVec([raw[i + 6], raw[i + 7], raw[i + 8]], c.dims), r } : null;
       q.stamps.push(j);
-      if (j > K) { q.entries.push({ at: j, values, presses, claim }); continue; }
+      if (j > K) { q.entries.push({ at: j, values, presses, claim, early: Math.min(lateTicks, j - K) }); continue; }
       // Late: its values hold from the next tick, and its presses fire there if that is within a quarter of a second of its stamp.
       stats.lateEntries += 1;
+      const book = heldBook.get(seat as number);
+      if (book) for (const row of book.ran) if (row[0] >= j) { for (const name of heldOf(kind)) { const meant = Number(values[name]) || 0; book.debt[name] = (book.debt[name] ?? 0) + meant - (row[1][name] ?? 0); row[1][name] = meant; } book.until = K + 1 + lateTicks; }
       const at = (K + 1) >>> 0;
       const keep = at - j <= lateTicks ? presses : [];
       const same = q.entries.find((x) => x.at === at);
@@ -554,9 +590,15 @@ export function createHost(o: HostOptions): Host {
         if (agents && (kind === 'agent:do' || /^ask:/.test(kind) || (SPEECH.test(kind) && present.get(m.from as number) === false))) { if (agentInbox.length < 128) agentInbox.push(m); return; }
         if(kind === 'pulse') {
           const data=m.d,body=core.bodyOf(m.from as number);
-          if(!body || !hasHands(m.from as number,body.driver) || !Array.isArray(data) || data.length!==3 || data[0]!==epoch || typeof data[1]!=='string' || !body.kind.input.some(([name,fd])=>name===data[1]&&fd.t==='pulse'))return;
+          if(!body || !hasHands(m.from as number,body.driver) || !Array.isArray(data) || data.length<3 || data.length>5 || data[0]!==epoch || typeof data[1]!=='string' || !body.kind.input.some(([name,fd])=>name===data[1]&&fd.t==='pulse'))return;
           const value=coerce({t:'pulse'},data[2],c.dims) as number,q=queueOf(m.from as number,body.kind);q.pulses??=[];
-          if(value && q.pulses.length<16)q.pulses.push([data[1],value]);return;
+          // The browser names the tick it predicted the pulse on (0.46.3): the server acts on it in that tick, as it does for a
+          // stamped input, so what was predicted is what the tick's snapshot holds. A tick already run, or none: at once.
+          const at=Number.isInteger(data[3])&&(data[3] as number)>0?Math.min(data[3] as number,0xffffffff):0;
+          // Its number in this browser's own count (0.46.3): the control row says the newest one acted on, so a browser knows
+          // whether a pulse it predicted has happened yet, however late its message was.
+          const n=Number.isInteger(data[4])&&(data[4] as number)>0?Math.min(data[4] as number,0xffffffff):0;
+          if(value && q.pulses.length<16)q.pulses.push(n?[data[1],value,at,n]:at?[data[1],value,at]:[data[1],value]);return;
         }
         if (kind === 'cmd') { const d = m.d as unknown[]; if (Array.isArray(d) && typeof d[0] === 'string') core.command(m.from as number, d[0], d[1]); return; }
         // Speech keeps its payload, except the identity fields only the host may attach.
@@ -616,10 +658,27 @@ export function createHost(o: HostOptions): Host {
         } });
       } else if (x.t === 'ask') o.send({ t: 'decide', n: x.n, state: x.state, questions: x.questions });
       else if (x.t === 'goalDone') agents?.done(x.seat, x.ok);
-      else if (x.t === 'fx') o.send({ t: 'ev', from: null, k: 'fx', d: [x.tick, x.list] });
+      else if (x.t === 'fx') {
+        // Effects with an audience (0.46.3) go to who may perceive them: one frame a person whose body is named or in
+        // range, with the tick's public effects in the order they were emitted. A watcher (no seat) and a seat with no
+        // body perceive the room: every effect with a range, never one addressed only `to` somebody.
+        // A tick with no audience at all is one frame for everybody, as before.
+        if (!x.list.some((row) => row[3])) o.send({ t: 'ev', from: null, k: 'fx', d: [x.tick, x.list] });
+        else {
+          const all = x.list.map((row) => [row[0], row[1], row[2]]);
+          const bodies = new Map(core.listeners().map((l) => [l.seat, l]));
+          const watching = all.filter((_, n) => { const a = x.list[n][3]; return !a || a[0] >= 0; });
+          for (const seat of present.keys()) {
+            const l = bodies.get(seat);
+            const mine = !l ? watching : all.filter((_, n) => { const a = x.list[n][3]; return !a || a[1].includes(l.id) || (a[0] >= 0 && a[2] !== null && Math.hypot(a[2][0] - l.pos.x, a[2][1] - l.pos.y, a[2][2] - l.pos.z) <= a[0]); });
+            if (mine.length) o.send({ t: 'ev', from: null, k: 'fx', d: [x.tick, mine], to: seat });
+          }
+          if (watching.length) o.send({ t: 'ev', from: null, k: 'fx', d: [x.tick, watching], to: -1 });
+        }
+      }
       else if (x.t === 'seats') roster = true;
       else if (x.t === 'shared') o.send({ t: 'state', k: 'shared', d: core.shared() });
-      else if (x.t === 'epoch') { forceSave = true; epoch = x.epoch; queues.clear(); roster = true; } else if (x.t === 'fail') end('budget', { kind: x.kind, handler: x.handler });
+      else if (x.t === 'epoch') { forceSave = true; epoch = x.epoch; queues.clear(); heldBook.clear(); pulsesTaken.clear(); roster = true; } else if (x.t === 'fail') end('budget', { kind: x.kind, handler: x.handler });
     }
     if (roster || !rosterText) sendRoster();
   }
@@ -639,15 +698,26 @@ export function createHost(o: HostOptions): Host {
       const presses: (string | [string, number])[] = [];
       while (q.entries.length && q.entries[0].at <= t) {
         const e = q.entries.shift() as Entry;
-        q.held = e.values; q.claim = e.claim;
+        q.held = e.values; q.claim = e.claim; q.early = e.early ?? 1;
         if (e.at === t) for (const p of e.presses) presses.push(p);
       }
       // Silence: no frame for a second. Its input is neutral until the next entry.
       if (t - q.lastFrameTick > tickHz && !q.entries.length) { q.held = neutral(body.kind); q.claim = null; }
       while (q.stamps.length && q.stamps[0] <= t) q.ack = q.stamps.shift() as number;
       const values = { ...q.held };
+      const heldFields = heldOf(body.kind);
+      if (heldFields.length) {
+        let book = heldBook.get(seat);
+        if (!book) { book = { ran: [], debt: {}, until: 0 }; heldBook.set(seat, book); }
+        const level: Record<string, number> = {};
+        for (const name of heldFields) level[name] = Number(values[name]) || 0;
+        book.ran.push([t, level]); if (book.ran.length > lateTicks + 1) book.ran.shift();
+        if (book.until >= t) for (const name of heldFields) { const owed = book.debt[name]; if (owed) { const range = Math.max(1, Math.abs(level[name])), want = level[name] + owed, paid = Math.max(-range, Math.min(range, want)); values[name] = paid; book.debt[name] = want - paid; } }
+        else book.debt = {};
+      }
       for (const p of presses) { if (typeof p === 'string') values[p] = true; else values[p[0]] = p[1]; }
-      const pulse=q.pulses?.shift();if(pulse)values[pulse[0]]=pulse[1];
+      // One pulse a tick, in order: the head waits for its own tick when that is no more than a quarter of a second ahead.
+      const head=q.pulses?.[0];if(head&&!((head[2]??0)>t&&(head[2] as number)-t<=Math.ceil(tickHz/4))){q.pulses!.shift();values[head[0]]=head[1];if(head[3])pulsesTaken.set(seat,head[3]);}
       inputs.set(seat, { values, claim: q.claim });
     }
     if (roundRebasePending) publishRebase(now);
@@ -677,7 +747,9 @@ export function createHost(o: HostOptions): Host {
     for (const b of core.bodies()) {
       if (!hasHands(b.seat, b.driver)) continue;
       const q = queues.get(b.seat);
-      rows.push([b.seat, b.r, q ? q.ack : 0, q && q.lead !== 127 ? q.lead : -128]);
+      // A fifth number only for a seat that has sent a numbered pulse: the newest one acted on.
+      const taken = pulsesTaken.get(b.seat);
+      rows.push(taken === undefined ? [b.seat, b.r, q ? q.ack : 0, q && q.lead !== 127 ? q.lead : -128] : [b.seat, b.r, q ? q.ack : 0, q && q.lead !== 127 ? q.lead : -128, taken]);
       if (q) q.lead = 127;
     }
     // A snapshot is stamped with the moment its tick was due, so ticks run in a burst to catch up are still a tick

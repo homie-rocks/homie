@@ -20,6 +20,7 @@ import { test } from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { prepareRules, viewPlugin } from '../lib/rules-build.mjs';
 import { NetRoom } from '../worker/room.mjs';
+import { Gate, multiplexSession } from '../worker/gate.mjs';
 import { COIN_DASH, PKG, esbuildOf, loadGame } from './rules-kit.mjs';
 import { virtualTime } from './virtual-time.mjs';
 import { predictionShaper } from './prediction-shaper.mjs';
@@ -30,8 +31,8 @@ const json = (rel) => JSON.parse(readFileSync(join(COIN_DASH, rel), 'utf8'));
 
 /** coin-dash's view library as its build bundles it (the declarations and the guarded move handed over first), and its rules for the server. */
 let kit = null; let viewBuild = 0;
-async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runaway = false, predict = {}, radiusM = null) {
-  if (kit && mode === 'server' && !offline && tickHz === 20 && !runaway && radiusM === null) return kit;
+async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runaway = false, predict = {}, radiusM = null, seats = 8) {
+  if (kit && mode === 'server' && !offline && tickHz === 20 && !runaway && radiusM === null && seats === 8) return kit;
   const esbuild = await esbuildOf();
   let dir = COIN_DASH;
   if (runaway) {
@@ -115,6 +116,19 @@ const age=c.tick-b.motion.launch; b.vel={x:b.motion.launch&&age>0&&age<=8?24:0,y
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules'; import {move} from './move';
 export default defineRules({contract:2,space:{dims:2},move,entities:{runner:{player:true,motion:{jumps:f.u8()},input:{ax:f.i8(),jump:f.press()},body:{shape:'circle',radius:.5,maxSpeed:6}}},room:{bots:{keep:0},join(){return {kind:'runner',at:{x:0,y:0,z:0}}}},map:'./map'});`);
       writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){if(i.jump)b.motion.jumps+=1;b.pos={x:b.pos.x+i.ax/127*6*c.dt,y:b.motion.jumps,z:0};}});`);
+    } else if (runaway === 'round3' || runaway === 'round3-open') {
+      // 0.46.3: effects with an audience, an input averaged over its tick, predicted own actions, a capped rewind.
+      writeFileSync(join(dir,'src/view.ts'),`import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom({predict:{runner(me,input,ctx){if(input.swap)me.weapon=1-me.weapon;if(input.fire)ctx.effect('hit',me.id,{target:''});}}});room.command('shout',{to:''});room.input({ax:1,swap:true});`);
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-100,-100,0],max:[100,100,20]}}));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
+export default defineRules({contract:2,space:{dims:3},move,map:'./map',
+shapes:{commands:{shout:{to:f.ref()},shoot:{at:f.fix(),y:f.fix()}},events:{},effects:{ping:{n:f.u8()},whisper:{n:f.u8()},tell:{n:f.u8()},hit:{target:f.ref()}}},
+entities:{runner:{player:true,input:{ax:f.held(),swap:f.press(),build:f.press(),fire:f.press(),tap:f.pulse()},fields:{weapon:f.u8(),builds:f.u8({init:2}),shots:f.u8(),hit:f.ref(),cool:f.tick(),taps:f.u8()},body:{shape:'capsule',radius:.4,height:1.8,maxSpeed:8},
+tick(w,s){if(s.input.swap)s.weapon=1-s.weapon;if(s.input.build&&s.builds>0){s.builds--;w.spawn('cover',{x:s.pos.x+2,y:s.pos.y,z:0});}if(s.input.fire){s.shots++;const h=w.ray({x:s.pos.x,y:s.pos.y,z:1},{x:0,y:1,z:0},10,{kind:'target'});if(h&&h.entity)w.emit('hit',s.id,{target:h.entity},{to:s.id});}if(s.input.tap){s.weapon=1-s.weapon;if(s.cool<=w.tick){s.cool=w.tick+6;s.taps++;w.emit('hit',s.id,{target:'tap'},{to:s.id});}}},
+commands:{shout(w,s,e){w.emit('ping',s.pos,{n:1});w.emit('whisper',s.pos,{n:2},{within:5});w.emit('tell',s.id,{n:3},{to:[e.to]});},shoot(w,s,e){s.hit=w.ray({x:0,y:e.y,z:1},{x:1,y:0,z:0},18,{atTick:e.at,kind:'mover'})?.entity??'';}}},
+target:{body:{shape:'box',radius:.5,height:2,maxSpeed:0}},mover:{body:{shape:'box',radius:.15,height:2,maxSpeed:2}},cover:{body:{shape:'box',radius:.5,height:2,maxSpeed:0}}},
+room:{historySeconds:1,${runaway === 'round3' ? 'rewindSeconds:.25,' : ''}bots:{keep:0},join(c,p){return{kind:'runner',at:{x:p.seat===2?40:p.seat*3,y:0,z:0}};},start(w){w.spawn('target',{x:0,y:4,z:0});w.spawn('mover',{x:8,y:0,z:0});}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.pos={x:b.pos.x+i.ax*6.4*c.dt,y:b.pos.y,z:0};},mover(b,i,c){b.pos={x:8,y:c.tick*.1,z:0};}});`);
     } else if (runaway === 'push') {
       writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-1000, -1000], max: [1000, 1000] } }));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules'; import {move} from './move';
@@ -127,7 +141,7 @@ export default defineRules({contract:2,space:{dims:2},move,shapes:{commands:{bum
   // asking a busy parallel test runner to meet a 17 ms wall-clock build deadline (rules-build tests own that check).
   const rules = await prepareRuntimeFixture(esbuild, scratch, { ...g, room: { ...g.room, tickHz: 20 } });
   const L = await loadGame(scratch, dir, 'coin-dash');
-  const compiled = L.R.compileRules(L.def, { tune: json('tunables.json'), map: L.R.compileMap(JSON.parse(readFileSync(join(dir, 'map/main.json'), 'utf8'))), settings: L.R.roomSettings(g.room).settings, seats: 8 });
+  const compiled = L.R.compileRules(L.def, { tune: json('tunables.json'), map: L.R.compileMap(JSON.parse(readFileSync(join(dir, 'map/main.json'), 'utf8'))), settings: L.R.roomSettings(g.room).settings, seats });
   rules.settings = compiled.settings;
   rules.schema = L.R.schemaOf(compiled);
   const entry = join(scratch, 'entry.ts');
@@ -136,7 +150,7 @@ export default defineRules({contract:2,space:{dims:2},move,shapes:{commands:{bum
   await esbuild.build({ entryPoints: ['homie:view'], bundle: true, format: 'esm', platform: 'neutral', outfile: file, logLevel: 'silent', plugins: [viewPlugin(g, rules, entry)] });
   await import(pathToFileURL(file).href);
   const result = { L, compiled, openRoom: globalThis.__openRoom, makeHost: globalThis.__makeHost, bundle: readFileSync(file, 'utf8') };
-  if (mode === 'server' && !offline && tickHz === 20 && !runaway && radiusM === null) kit = result;
+  if (mode === 'server' && !offline && tickHz === 20 && !runaway && radiusM === null && seats === 8) kit = result;
   return result;
 }
 
@@ -168,6 +182,44 @@ function rig(L, compiled, mode = false, lag = 0, uplink = 0) {
     /** The relay is replaced by one with no memory (a Worker restart with nothing saved) and every socket drops. */
     restart() { room = relay(); for (const s of [...sockets]) s.cut(); },
   };
+}
+/**
+ * The same, for a room large enough to use Gates (0.46.3): every browser's socket ends at one of two Gates, and each
+ * Gate has one ordered channel to the room, `hop` ms each way. What a player receives is what its Gate sent it.
+ */
+function gateRig(L, compiled, mode = false, lag = 0, uplink = 0, hop = 4) {
+  const lines = [];
+  const plain = () => { const events = new Map(); return { accept() {}, addEventListener(t, fn) { const list = events.get(t) ?? []; list.push(fn); events.set(t, list); }, emit(t, value) { for (const fn of events.get(t) ?? []) fn(value); }, send() {}, close(code, reason) { this.closed = [code, reason]; this.emit('close', {}); } }; };
+  const room = new NetRoom({ code: 'r', rules: true, maxPlayers: compiled.seats, tickHz: compiled.settings.tickHz, log: (l) => lines.push(l) });
+  const host = L.H.createHost({ game: 'coin-dash', compiled, send: (m, text) => room.hostFrame(m, text), log: (l) => lines.push(l), random: () => 0.37, clock: { now: () => Date.now(), setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: (h) => clearTimeout(h) } });
+  room.setServerHost(host);
+  const beat = setInterval(() => room.tick(), 250);
+  const gates = [0, 1].map(() => {
+    const gateEnd = plain(), roomEnd = plain();
+    gateEnd.send = (text) => setTimeout(() => roomEnd.emit('message', { data: text }), hop);
+    roomEnd.send = (text) => setTimeout(() => gateEnd.emit('message', { data: text }), hop);
+    multiplexSession(roomEnd, async (req, client) => {
+      const h = room.attach({ send: (text) => client.send(text), close: (code, why) => client.close(code, why), buffered: () => client.buffered(), snapshotGroup: client.snapshotGroup, subscribe: (seat) => client.subscribe(seat), transportFacts: client.transportFacts });
+      client.addEventListener('message', (e) => h.onMessage(e.data, e.receivedAt));
+      client.addEventListener('close', () => h.onClose('close'));
+    });
+    return new Gate({ waitUntil() {} }, { TABLE: { idFromName: (n) => n, get: () => ({ fetch: async () => ({ webSocket: gateEnd }) }) } });
+  });
+  const sockets = [];
+  const socket = () => class GateSocket {
+    constructor() {
+      this.readyState = 0; this.bufferedAmount = 0; this.sent = [];
+      this.link = sockets.length; sockets.push(this);
+      const server = this.server = plain();
+      const parsed = (x) => { try { return JSON.parse(x); } catch { return { t: 'snap' }; } };
+      server.send = (x) => { const delay = typeof lag === 'function' ? lag(parsed(x), this.link) : lag; if (delay !== null) setTimeout(() => { if (this.readyState === 1) this.onmessage?.({ data: x }); }, delay); };
+      server.close = () => { setTimeout(() => { if (this.readyState !== 3) { this.readyState = 3; this.onclose?.({}); } }, 0); };
+      gates[this.link % gates.length].connect(new Request(`https://table/__net?game=coin-dash&room=r&gates=2&gate=${this.link % gates.length}`), server).then(() => { this.readyState = 1; this.onopen?.({}); });
+    }
+    send(x) { this.sent.push(JSON.parse(x)); const delay = typeof uplink === 'function' ? uplink(JSON.parse(x), this.link) : uplink; if (delay === null) return; if (delay) setTimeout(() => this.server.emit('message', { data: x }), delay); else this.server.emit('message', { data: x }); }
+    close() { if (this.readyState === 3) return; this.readyState = 3; this.server.emit('close', {}); }
+  };
+  return { room, host, lines, sockets, socket, gates, stop: () => { clearInterval(beat); host.stop(); } };
 }
 const cfg = (who) => ({ v: 1, url: 'ws://relay/coin-dash/__net?room=r', room: 'r', device: 'desk', want: 'play', name: who });
 
@@ -1776,4 +1828,171 @@ test('low-latency player cannot request a one-second-old target pose, seed 4520'
  const {L,compiled,openRoom}=await coinDashKit('server',false,20,'history'),clock=virtualTime(t),shape=predictionShaper({delay:0,loss:0,seed:4520}),r=rig(L,compiled,false,shape,shape),a=openRoom({net:{config:cfg('Shooter'),WebSocketImpl:r.socket(),post:null}});
  t.after(()=>{a.close();r.stop();});await clock.wait(2500);const tick=r.host.core.tick;
  a.command('shoot',{at:tick-18,y:(tick-18)*.1});await clock.wait(300);assert.equal(a.me.hit,'','forged 900 ms rewind must be clamped to measured latency and presentation margin');assert.equal(r.host.core.stats.errors,0);
+});
+
+/* ---------------------------------------------------------------- 0.46.3: what the second Stormbreak playtest asked for */
+
+for(const via of ['a small room','Gates'])test('an effect with an audience reaches who may perceive it and nobody else, on the wire, seed 4611: '+via,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'round3',{},null,via==='Gates'?80:8),clock=virtualTime(t),wire=new Map(),r=(via==='Gates'?gateRig:rig)(L,compiled,false,(m,link)=>{if(m.t==='ev'&&m.k==='fx'){if(!wire.has(link))wire.set(link,[]);wire.get(link).push(...m.d[1].map(x=>x[0]));}return 0;},0);
+ const open=(who,watch=false)=>openRoom({net:{config:{...cfg(who),...(watch?{watch:true}:{})},WebSocketImpl:r.socket(),post:null}});
+ // Seats are given in the order the room admits, which through Gates is not the order of opening: each is known by where it stands.
+ const opened=[open('One'),open('Two'),open('Three')];t.after(()=>{for(const o of opened)o.close();w.close();r.stop();});await clock.wait(1500);const w=open('Watcher',true);await clock.wait(1500);
+ const order=[0,1,2].sort((x,y)=>opened[x].me.pos.x-opened[y].me.pos.x),[a,b,c]=order.map(i=>opened[i]);
+ assert.deepEqual([a.me.pos.x,b.me.pos.x,c.me.pos.x],[0,3,40]);
+ const heard=new Map([[a,[]],[b,[]],[c,[]],[w,[]]]);for(const [room,list] of heard)for(const name of ['ping','whisper','tell'])room.on(name,e=>list.push(name+e.n));
+ a.command('shout',{to:c.me.id});await clock.wait(600);
+ assert.deepEqual(heard.get(a),['ping1','whisper2'],'the one who made it: public, and within five metres of itself');
+ assert.deepEqual(heard.get(b),['ping1','whisper2'],'three metres away');
+ assert.deepEqual(heard.get(c),['ping1','tell3'],'forty metres away, and named');
+ assert.deepEqual(heard.get(w),['ping1','whisper2'],'a watcher perceives the room, in the order emitted, and never what was addressed to one player');
+ // The frames themselves: nothing a seat may not perceive was ever sent to it.
+ assert.deepEqual([...order.map(i=>wire.get(i)),wire.get(3)],[[0,1],[0,1],[0,2],[0,1]]);
+ // A tick with no audience is one frame for everybody, the bytes as before.
+ const before=r.sockets.map(s=>s.sent.length);r.host.core.stats;assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);assert.equal(before.length,4);
+});
+
+for(const via of ['a small room','Gates'])test('a held input moves for the part of the tick it was down: sixty-millisecond taps at every phase of the tick, seed 4612: '+via,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'round3',{},null,via==='Gates'?80:8),clock=virtualTime(t),shape=predictionShaper({delay:0,loss:0,seed:4612}),r=(via==='Gates'?gateRig:rig)(L,compiled,false,shape,shape);
+ const a=openRoom({net:{config:cfg('Tapper'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();r.stop();});await clock.wait(2500);
+ const frame=async ms=>{for(let left=ms;left>0;left-=Math.min(left,16)){a.pump();await clock.wait(Math.min(left,16));}a.pump();};
+ const server=()=>{const row=r.host.core.save().ents.find(e=>e[11]===0);return row[7][0];};
+ // The body is drawn stopping where it will rest. Through a Gate an entry can miss its tick (a Gate sends the room one
+ // frame every 50 ms): the server then settles it over the next ticks, and when it has to spread that over more than
+ // one, the drawn body is a few centimetres short for those ticks. Never in a small room; rarely, and bounded, through Gates.
+ const drifted=[];
+ for(const [ms,want] of [[60,.384],[120,.768],[30,.192]]){const moved=[];
+  for(let i=0;i<10;i++){await frame(331+i*7);const from=a.me.pos.x;a.input({ax:i%2?-1:1});await frame(ms);a.input({ax:0});const stop=a.me.pos.x;await frame(450);if(Math.abs(a.me.pos.x-stop)>=.004)drifted.push(a.me.pos.x-stop);moved.push(Math.abs(a.me.pos.x-from));assert.ok(Math.abs(server()-a.me.pos.x)<(via==='Gates'?.01:.002),'the server moved the body as far as this browser predicted');}
+  assert.ok(moved.every(m=>Math.abs(m-want)<.025),`${ms} ms taps move ${want} m at 6.4 m/s, whatever the phase: ${moved.map(m=>m.toFixed(3))}`);
+ }
+ // The same taps sampled at the tick's edge move one tick or two: this is what the field type is for.
+ assert.ok(via==='Gates'?drifted.length<=2&&drifted.every(d=>Math.abs(d)<.08):drifted.length===0,`drift after a release: ${drifted.map(d=>d.toFixed(3))}`);
+ assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+});
+
+// Through Gates the connection is delayed, and neither lossy nor reordered: a Gate's deltas ride an ordered socket with no periodic keyframe.
+for(const via of ['a small room','Gates'])test('own actions are predicted, confirmed and quietly retracted under 300 ms and loss, seed 4613: '+via,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'round3',{},null,via==='Gates'?80:8),clock=virtualTime(t),shape=predictionShaper({delay:300,loss:via==='Gates'?0:.05,seed:4613,jitter:via!=='Gates'}),r=(via==='Gates'?gateRig:rig)(L,compiled,false,shape,shape);
+ const predict={runner(me,input,ctx){if(input.swap)me.weapon=1-me.weapon;if(input.build&&me.builds>0){me.builds--;ctx.ghost('cover',{x:me.pos.x+2,y:me.pos.y,z:0});}if(input.fire)ctx.effect('hit',me.id,{target:'guess'});}};
+ const pair=[openRoom({predict,net:{config:cfg('Sure'),WebSocketImpl:r.socket(),post:null}}),openRoom({predict,net:{config:cfg('Wrong'),WebSocketImpl:r.socket(),post:null}})];t.after(()=>{pair[0].close();pair[1].close();r.stop();});await clock.wait(3000);
+ const [a,b]=pair.sort((x,y)=>x.seat-y.seat); // the target stands in front of seat 0, whoever was admitted first
+ const frame=async ms=>{for(let left=ms;left>0;left-=16){a.pump();b.pump();await clock.wait(Math.min(left,16));}};
+ const body=seat=>L.P.unpackFields(compiled.kinds[0].fields,r.host.core.save().ents.find(e=>e[11]===seat)[17],3);
+ // A weapon swap: on the next drawn frame here, while the server has not heard of it; then the server's, with no flicker back.
+ a.input({swap:true});await frame(16);assert.equal(a.me.weapon,1,'predicted on the next frame');assert.equal(body(0).weapon,0,'the server has not received it yet');
+ const seen=new Set();for(let i=0;i<90;i++){await frame(16);seen.add(a.me.weapon);}assert.deepEqual([...seen],[1],'never drawn back to the old weapon');assert.equal(body(0).weapon,1);assert.equal(b.get(a.me.id).weapon,1);
+ // Own cover: a provisional entity at once, then the server's, and exactly one is drawn the whole time.
+ const notes=[];for(const name of ['confirm','retract'])a.on(name,e=>notes.push(name));
+ const covers=()=>{const list=[];a.each('cover',e=>list.push(e));return list;};
+ a.input({build:true});await frame(16);assert.equal(covers().length,1);assert.equal(covers()[0].provisional,true);assert.equal(a.me.builds,1);assert.equal(body(0).builds,2);
+ const counts=new Set();for(let i=0;i<120;i++){await frame(16);counts.add(covers().length);}assert.deepEqual([...counts],[1],'the ghost gives way to the server\'s cover without a gap or a double');
+ assert.equal(covers()[0].provisional,undefined);assert.deepEqual(notes,['confirm']);assert.equal(body(0).builds,1);
+ // A provisional hit the server agrees with is confirmed; one it does not is retracted. Neither is heard twice as new.
+ const hits=new Map([[a,[]],[b,[]]]);for(const [room,list] of hits){room.on('hit',e=>list.push(e.predicted?'predicted':e.confirms?'confirms:'+(e.target!==''):'new'));room.on('retract',e=>list.push('retract:'+e.effect));}
+ a.input({fire:true});b.input({fire:true});await frame(16);assert.deepEqual(hits.get(a),['predicted']);assert.deepEqual(hits.get(b),['predicted']);
+ await frame(1500);assert.deepEqual(hits.get(a),['predicted','confirms:true'],'the server\'s own effect arrives as the confirmation, with its exact data');assert.deepEqual(hits.get(b),['predicted','retract:hit'],'nothing stood in front of this one');
+ assert.equal(body(0).shots,1);assert.equal(body(1).shots,1);assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+});
+
+for(const via of ['a small room','Gates'])test('a predicted effect is shown once a tick whatever else the predictor shows beside it, seed 4615: '+via,async t=>{
+ // The preview between ticks runs again whenever the input changes. A second effect that appears in a later run of the
+ // same tick (a jump pressed while the trigger is held) must not make the first one count as new: effects are told
+ // apart by their name and the game's own `key`, not by the order the predictor happened to ask in.
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'round3',{},null,via==='Gates'?80:8),clock=virtualTime(t),shape=predictionShaper({delay:0,loss:0,seed:4615}),r=(via==='Gates'?gateRig:rig)(L,compiled,false,shape,shape);
+ const predict={runner(me,input,ctx){if(input.swap){ctx.effect('ping',me.id,{n:7},{key:'swap'});ctx.effect('ping',me.id,{n:8},{key:'other'});}if(input.build)ctx.effect('ping',me.id,{n:9},{key:'build'});if(input.fire)ctx.effect('hit',me.id,{target:'guess'});}};
+ const a=openRoom({predict,net:{config:cfg('Twice'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();r.stop();});await clock.wait(3000);
+ const frame=async ms=>{for(let left=ms;left>0;left-=4){a.pump();await clock.wait(Math.min(left,4));}a.pump();};
+ const seen=[];a.on('hit',e=>{if(e.predicted)seen.push('hit');});a.on('ping',e=>{if(e.predicted)seen.push('ping'+e.n);});
+ for(let i=0;i<8;i++){
+  seen.length=0;await frame(203+i*7);
+  // Trigger first, then a second action a few milliseconds later, then a third: mostly inside one tick.
+  a.input({build:true});a.pump();await frame(4);a.input({fire:true});a.pump();await frame(4);a.input({swap:true});a.pump();await frame(120);
+  assert.deepEqual([...seen].sort(),['hit','ping7','ping8','ping9'],`attempt ${i}: each predicted effect once, got ${seen}`);
+ }
+ assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+});
+
+for(const via of ['a small room','Gates'])test('the server\'s word that arrives before the tick is predicted confirms the prediction instead of leaving it to be retracted, seed 4616: '+via,async t=>{
+ // A valued pulse that names no tick (an older page, or one whose tick has already run) is acted on by the server the
+ // moment it arrives, which at a low latency can be before this browser steps the tick that predicts the same action.
+ // The effect is then already waiting to be shown when the predictor asks for it: the two are the same event, heard
+ // once as predicted and once as its confirmation.
+ // A snapshot is its own message behind the tick's effects, and arrives unevenly (here every third one 34 ms late): this
+ // browser then steps the tick, and predicts, between a tick's effects and its snapshot.
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'round3',{},null,via==='Gates'?80:8),clock=virtualTime(t),r=(via==='Gates'?gateRig:rig)(L,compiled,false,m=>m.t==='snap'?(m.k%3===0?38:4):0,0);
+ const predict={runner(me,input,ctx){if(input.tap&&!ctx.preview&&me.cool<=ctx.tick){me.cool=ctx.tick+6;me.taps++;ctx.effect('hit',me.id,{target:'guess'});}}};
+ class Unstamped extends r.socket(){send(x){const m=JSON.parse(x);if(m.t==='ev'&&m.k==='pulse'&&Array.isArray(m.d))m.d=m.d.slice(0,3);super.send(JSON.stringify(m));}}
+ const a=openRoom({predict,net:{config:cfg('Early'),WebSocketImpl:Unstamped,post:null}});t.after(()=>{a.close();r.stop();});await clock.wait(3000);
+ const frame=async ms=>{for(let left=ms;left>0;left-=4){a.pump();await clock.wait(Math.min(left,4));}a.pump();};
+ const heard=[];a.on('hit',e=>heard.push(e.predicted?'predicted':e.confirms?'confirms':'new'));a.on('retract',e=>heard.push('retract'));
+ const seen=new Set();
+ for(let i=0;i<16;i++){heard.length=0;await frame(397+i*3);a.input({tap:1});await frame(8);a.input({tap:0});await frame(700);seen.add(heard.join('+'));
+  assert.ok(!heard.includes('retract'),`press ${i}: the server acted on it, so nothing is taken back: ${heard}`);
+  assert.ok(heard.join('+')==='predicted+confirms'||heard.join('+')==='new',`press ${i}: heard once, as a prediction and its confirmation or as the server's alone: ${heard}`);}
+ assert.ok(seen.has('predicted+confirms'));const body=L.P.unpackFields(compiled.kinds[0].fields,r.host.core.save().ents.find(e=>e[11]===0)[17],3);assert.equal(body.taps,16);assert.equal(a.me.taps,16);
+ assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+});
+
+for(const via of ['a small room','Gates'])test('a valued pulse is acted on in the tick it was predicted for: a predicted swap is drawn once and never drawn back, seed 4617: '+via,async t=>{
+ // `f.pulse()` travels on its own reliable message. It says which tick this browser predicted it on, and the server acts
+ // on it in that tick: the snapshot of that tick then holds what was predicted, at any latency, and nothing flickers.
+ const clock=virtualTime(t);
+ // Snapshots arrive unevenly (every third one 34 ms late), as on a real connection: without the tick, the server acts on
+ // the pulse the moment it arrives, a tick before or after the one predicted, and a toggle is then drawn twice or undone.
+ for(const delay of [0,150]){const {L,compiled,openRoom}=await coinDashKit('server',false,20,'round3',{},null,via==='Gates'?80:8),r=(via==='Gates'?gateRig:rig)(L,compiled,false,m=>delay+(m.t==='snap'?(m.k%3===0?38:4):0),delay);
+  const predict={runner(me,input){if(input.tap)me.weapon=1-me.weapon;}};
+  const a=openRoom({predict,net:{config:cfg('Swap'),WebSocketImpl:r.socket(),post:null}});await clock.wait(3000);
+  for(let i=0;i<12;i++){for(let left=403+i*7;left>0;left-=4){a.pump();await clock.wait(4);}const seen=[a.me.weapon];a.input({tap:1});
+   for(let n=0;n<220;n++){a.pump();if(n===2)a.input({tap:0});await clock.wait(4);if(seen[seen.length-1]!==a.me.weapon)seen.push(a.me.weapon);}
+   assert.deepEqual(seen,[i%2,1-i%2],`${delay} ms each way, press ${i}: the weapon is drawn changing once: ${seen}`);}
+  assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);a.close();r.stop();}
+});
+
+for(const via of ['a small room','Gates'])test('a lying client cannot inflate its rewind: delayed acknowledgements, forged acknowledgements and the cap, seed 4614: '+via,async t=>{
+ // (1) The playtest's client: it holds every latency answer back 900 ms and claims a view 18 ticks old. The round trip
+ //     is timed on its input frames, which it sent at once, so its answers are not what is measured.
+ {const {L,compiled,openRoom}=await coinDashKit('server',false,20,'round3-open',{},null,via==='Gates'?80:8),clock=virtualTime(t),shape=predictionShaper({delay:0,loss:0,seed:4614}),r=(via==='Gates'?gateRig:rig)(L,compiled,false,shape,shape);
+  class Slow extends r.socket(){send(x){const m=JSON.parse(x);if(m.t==='probeAck'){setTimeout(()=>super.send(x),900);return;}super.send(x);}}
+  const a=openRoom({net:{config:cfg('Slow answers'),WebSocketImpl:Slow,post:null}});await clock.wait(4000);a.input({ax:0});
+  for(let i=0;i<9;i++){const tick=r.host.core.tick;a.command('shoot',{at:tick-18,y:(tick-18)*.1});await clock.wait(400);assert.equal(a.me.hit,'',`shot ${i}: a target as it stood 900 ms ago is not hit`);}
+  const tick=r.host.core.tick;a.command('shoot',{at:tick-2,y:(tick-2)*.1});await clock.wait(400);assert.notEqual(a.me.hit,'','what it really saw is still hit');a.close();r.stop();}
+ // (2) A client that forges the acknowledgements on its input frames too looks 900 ms away. Without a cap it is
+ //     believed, as a player who is really that far away must be; the game's cap is what bounds it.
+ for(const [variant,capped] of [['round3-open',false],['round3',true]]){const {L,compiled,openRoom}=await coinDashKit('server',false,20,variant,{},null,via==='Gates'?80:8),shape=predictionShaper({delay:0,loss:0,seed:4614}),r=(via==='Gates'?gateRig:rig)(L,compiled,false,shape,shape),clock={wait:async ms=>{for(let left=ms;left>0;left--){t.mock.timers.tick(1);await new Promise(done=>setImmediate(done));}}};
+  class Forger extends r.socket(){send(x){const m=JSON.parse(x);if(m.t==='probeAck'){setTimeout(()=>super.send(x),900);return;}if(m.t==='in'&&Number.isInteger(m.g))m.g-=18;super.send(JSON.stringify(m));}}
+  const a=openRoom({net:{config:cfg('Forger'),WebSocketImpl:Forger,post:null}});
+  await clock.wait(2500);for(let i=0;i<40;i++){a.input({ax:i%2?.01:0});await clock.wait(50);}a.input({ax:0});await clock.wait(200);
+  let landed=0;for(let i=0;i<9;i++){const tick=r.host.core.tick;a.command('shoot',{at:tick-18,y:(tick-18)*.1});await clock.wait(400);if(a.me.hit)landed++;}
+  if(capped)assert.equal(landed,0,'rewindSeconds .25 holds a forged 900 ms to five ticks');else assert.equal(landed,9,'without a cap a connection that looks 900 ms away is compensated for it');
+  const tick=r.host.core.tick;a.command('shoot',{at:tick-3,y:(tick-3)*.1});await clock.wait(400);assert.notEqual(a.me.hit,'','inside the cap the shot is judged where the shooter saw it');
+  assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);a.close();r.stop();}
+});
+
+for(const via of ['a small room','Gates'])test('a held tap whose frames arrive late still moves for the time it was down, seed 4618: '+via,async t=>{
+ // Frames delayed unevenly on the way up: some entries miss their tick. The tick they missed ran on the value before
+ // them; the difference is owed and paid, so the server ends where the browser predicted.
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'round3',{},null,via==='Gates'?80:8),clock=virtualTime(t);let rng=4618;const random=()=>{rng=(Math.imul(rng,1664525)+1013904223)>>>0;return rng/4294967296;};
+ // One ordered connection: a frame never overtakes the one before it.
+ // The frames that carry a release are the ones held up, so the tap would be stretched, not just moved later.
+ let last=0,level=0;const r=(via==='Gates'?gateRig:rig)(L,compiled,false,0,(m)=>{if(m.t!=='in')return 0;const ax=Number(m.s.at(-1)?.[1])||0,falling=ax<level;level=ax;const now=Date.now(),at=Math.max(last,now+(falling?40+random()*50:0));last=at;return at-now;});
+ const a=openRoom({net:{config:cfg('Late'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();r.stop();});await clock.wait(2500);
+ const frame=async ms=>{for(let left=ms;left>0;left-=Math.min(left,16)){a.pump();await clock.wait(Math.min(left,16));}a.pump();};
+ const server=()=>r.host.core.save().ents.find(e=>e[11]===0)[7][0];
+ const moved=[];for(let i=0;i<24;i++){await frame(331+i*7);const from=server();a.input({ax:1});await frame(60);a.input({ax:0});await frame(700);moved.push(server()-from);}
+ const late=r.lines.filter(l=>l.ev==='ticks').reduce((n,l)=>n+(l.lateEntries??0),0);
+ assert.ok(moved.every(m=>Math.abs(m-.384)<.03),`every 60 ms tap moves .384 m on the server: ${moved.map(m=>m.toFixed(3))}`);
+ assert.ok(Math.abs(server()-a.me.pos.x)<.002,'and the browser agrees');assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+ t.diagnostic(`late entries logged: ${late}`);
+});
+
+test('recipient-specific fields through Gates: an owner field reaches its owner alone and a server field nobody, seed 4619',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'pulses',{},null,80),clock=virtualTime(t),seen=[];
+ const r=gateRig(L,compiled,false,(m)=>{seen.push(JSON.stringify(m));return 30;},30);
+ const pair=[openRoom({net:{config:cfg('One'),WebSocketImpl:r.socket(),post:null}}),openRoom({net:{config:cfg('Two'),WebSocketImpl:r.socket(),post:null}})];t.after(()=>{pair[0].close();pair[1].close();r.stop();});await clock.wait(3000);
+ const [a,b]=pair;
+ for(let i=0;i<12;i++){a.input({select:i%3+1});await clock.wait(1);a.input({select:0});await clock.wait(140);}
+ await clock.wait(800);assert.deepEqual([...a.me.actions],Array.from({length:12},(_,i)=>i%3+1),'every valued pulse arrived once, in order, through a Gate');
+ assert.equal(a.me.ammo,24,'the owner reads its own field');assert.equal(b.get(a.me.id).ammo,0,'a rival is not sent it');assert.equal(a.get(b.me.id).ammo,0);
+ assert.equal(a.me.secret,'');assert.equal(b.me.secret,'');
+ assert.ok(seen.length>100&&!seen.some(text=>text.includes('brain-secret')),'a server-only value was never on any wire a Gate wrote');
+ assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
 });

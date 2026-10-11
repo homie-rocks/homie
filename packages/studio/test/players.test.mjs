@@ -266,7 +266,10 @@ test('a guest signs in to the account they already have: the account keeps its s
   assert.deepEqual(Object.fromEntries(saves.map((k) => [k.key, k.value])), { hero: 'account hero', pet: 'owl' });
   assert.deepEqual((await cafe.get('/api/player/stats/ember')).body.stats, { fished: 4, kills: 10 });
   assert.equal(env.DB.sql.prepare('SELECT COUNT(*) AS n FROM players WHERE id = ?').get(guest).n, 0, 'the guest is gone');
-  assert.equal(env.DB.sql.prepare('SELECT COUNT(*) AS n FROM saves WHERE player = ?').get(guest).n, 0);
+  assert.equal(env.DB.sql.prepare("SELECT COUNT(*) AS n FROM saves WHERE player = ? AND game != ''").get(guest).n, 0);
+  // What stays under the guest's id is where they went, for a room's record that lands late (saves-merge.test.mjs).
+  assert.equal(JSON.parse(env.DB.sql.prepare("SELECT value FROM saves WHERE player = ? AND game = '' AND key = 'server:moved'").get(guest).value).to, inn.body.player.id);
+  assert.deepEqual(inn.body.adopted.kept, [{ game: 'ember', key: 'hero', value: 'guest hero' }], 'the value the account did not take is in the answer, not dropped');
 });
 
 test('saves are versioned: a stale copy is a conflict with the current value, never a silent overwrite', async () => {

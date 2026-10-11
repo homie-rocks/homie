@@ -54,6 +54,8 @@ export interface SavesOptions {
    * Another device saved a key since this one's copy (this browser was offline, or two devices played at once).
    * Return the value to keep (merge them, or return `mine`), or `undefined` for the cloud's (the default: a stale
    * offline copy never overwrites newer progress, so a hardcore character cannot come back from the dead).
+   * It is also asked when a guest signs in to an account that has the same key with another value and no
+   * `mergeSaves` rule combined them on the server: `mine` is the guest's value, `theirs` the account's.
    */
   onConflict?: (c: Conflict) => unknown | Promise<unknown>;
   /** Tests and custom shells: where messages go (default: the parent frame) and the shell's answer window. */
