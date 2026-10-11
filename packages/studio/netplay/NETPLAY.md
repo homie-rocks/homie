@@ -2106,7 +2106,9 @@ from outside the studio run on its server.
 The Table writes the whole room to its SQLite `save` table in one synchronous transaction:
 entities, motion, shared state, rounds, seats and their tokens, pending events, timers and
 inputs, RNG state, tick, epoch, state hash and build hash. Saves larger than 2 MB use several
-rows in that transaction. The default interval is `room.durability.movementSeconds: 1`;
+rows in that transaction. The default interval is `room.durability.movementSeconds: 1`
+(30 for a `lifetime: "persistent"` world, which writes its `durable` fields to a journal the moment they change and
+saves the rest on this interval);
 round end, `world.finish()` and pause save immediately. Both elapsed ticks and elapsed wall
 time bound the interval, including ticks that catch up after a delay. Cloudflare's output
 gate holds outgoing frames until preceding writes are confirmed.

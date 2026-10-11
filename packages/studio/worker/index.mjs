@@ -89,7 +89,7 @@ import { appRole, openPath } from './app-format.mjs';
  */
 import { playerEnabled, EMBED_GAME_JS } from './embed.mjs';
 import { NetRoom, WATCH_POLICIES, departure, errorLine, versionOf } from './room.mjs';
-import { hostedGame, hostedBuild, startHost } from './hosted.mjs';
+import { hostedGame, hostedBuild, compiledFor, startHost } from './hosted.mjs';
 import { roomStore, restoreDelay } from './room-store.mjs';
 import { appCors, isAppOrigin } from './standalone.mjs';
 import { ROOM_ID, badRoomPage, embedAncestors, embedPreview, frameAncestors, noWatchPage, playPage, watchPage } from './pages.mjs';
@@ -1445,7 +1445,7 @@ export class Table {
       this.hostRt = startHost(this.game, {
         ...(saved ? { restore: new TextEncoder().encode((saved.hostText ?? JSON.stringify(saved.host))), restoreEpoch: epoch, startDelayMs: boot.count === 1 ? restoreDelay(`${this.game}/${this.code}`) : 0 } : {}),
         record: (owner,key,value) => this.queueRoundRecord(owner,key,value),
-        store: { save: (bytes) => this.saveRoom(bytes) },
+        store: { save: (bytes, commitment) => this.saveRoom(bytes, commitment) },
         ...(build.settings.characters ? { characterFor: (peer) => {
           const account = room.clients.get(peer.id)?.player;
           return account ? this.characterGrants.get(account) ?? null : null;
@@ -1485,7 +1485,7 @@ export class Table {
     }
   }
 
-  saveRoom(bytes) {
+  saveRoom(bytes, commitment) {
     if (this.persistentFailed) throw new Error('Lasting world stopped; restart from its committed save');
     const now = Date.now();
     if (now < (this.saveRetryAt ?? 0)) throw this.saveError ?? new Error('room save retry is waiting');
@@ -1504,7 +1504,12 @@ export class Table {
       const saved = { ...(build.settings.characters ? { accountTokens: { ...this.accountTokens } } : {}), v: 1, game: this.game, room: this.code, at: now, pauseFromRestore: this.hostRt?.paused === true && this.pauseFromRestore === true, pausedAt: this.hostRt?.paused ? this.pausedAt ?? now : null, stateHash: build.stateHash, buildHash: build.build, host, net };
       const clearing = this.cleanupPending;
       if (clearing) this.durable.clear();
-      this.durable.write(saved);
+      if (this.isPersistent()) {
+        const c = compiledFor(this.game);
+        commitment ??= { force: false, seconds: c.settings.durability.movementSeconds, tickHz: c.settings.tickHz,
+          fields: { kinds: c.kinds.map(k => k.fields.flatMap(([,f],i) => f.durable ? [i] : [])), shared: c.shared.flatMap(([,f],i) => f.durable ? [i] : []) } };
+        this.durable.commit(saved, commitment);
+      } else this.durable.write(saved);
       if (clearing) { this.cleanupGeneration = (this.cleanupGeneration ?? 0) + 1; this.queueNetCleanup(false); }
       this.roomSave = saved;
       if (build.settings.characters) this.ctx.waitUntil(this.flushCharacters().catch(error => this.storageProblem(error)));
@@ -1659,7 +1664,8 @@ export class Table {
   endHosted(why) {
     if (this.isPersistent()) {
       this.persistentFailed = true;
-      this.hostRt?.stop();
+      // The host's own stop would checkpoint a healthy world; this one is refused by `persistentFailed`, and the committed save stands.
+      try { this.hostRt?.stop(); } catch { /* stopped all the same */ }
       clearTimeout(this.saveRetry); this.saveRetry = null;
       this.room?.failServerHost(`Lasting world paused: ${why}. Its committed save is retained.`);
       return;

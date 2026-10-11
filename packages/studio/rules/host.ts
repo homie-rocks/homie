@@ -78,7 +78,7 @@ export interface HostOptions {
   send(frame: Record<string, unknown>, text?: string): void;
   clock: HostClock;
   /** Synchronous save: the caller's storage output gate holds this tick's outgoing frames until confirmed. */
-  store?: { save(bytes: Uint8Array): void };
+  store?: { save(bytes: Uint8Array, commitment?: { force: boolean; seconds: number; tickHz: number; fields: { kinds: number[][]; shared: number[] } }): void };
   /** Table recovery reserves this epoch in storage before starting this host. Ordinary deterministic restores omit it. */
   restoreEpoch?: number;
   startDelayMs?: number;
@@ -119,7 +119,7 @@ export interface Host {
   resume(): void;
   /** Publish the round, the roster, the shared state and the capabilities again (a browser host's relay restarted). */
   announce(): void;
-  /** Stop for good: the room has ended. */
+  /** Stop for good: the room has ended. A lasting world whose storage is healthy checkpoints first, and that write can throw. */
   stop(): void;
   /** Run the next tick now, whatever the clock says (tests, and the build check's runs). Like the timer's own tick, it never throws. */
   tickNow(): void;
@@ -276,6 +276,9 @@ export function createHost(o: HostOptions): Host {
   let lastSaveAt = o.clock.now();
   let saveTick = core.tick;
   let forceSave = false;
+  let storeBroken = false;
+  /** Which state fields the game declared durable, by kind and for the shared state: what a lasting world journals at once. */
+  const durableFields = { kinds: c.kinds.map(k => k.fields.flatMap(([,f],i) => f.durable ? [i] : [])), shared: c.shared.flatMap(([,f],i) => f.durable ? [i] : []) };
   let saveFailures = 0;
   let retrySaveAt = 0;
   let roundPhase = saved?.core.round[1] ?? 1;
@@ -841,7 +844,10 @@ export function createHost(o: HostOptions): Host {
       // An empty match break or an unjoined reservation has no body-removal callback.
       for (const held of characters.values()) if (held.returning) held.seat = -1;
       if (!o.store) return; // Local checks/offline simulation have no durable account.
-      o.store.save(save());
+      // A write that threw leaves memory ahead of storage: nothing later may checkpoint it over the committed world.
+      storeBroken = true;
+      o.store.save(save(), { force, seconds: c.settings.durability.movementSeconds, tickHz, fields: durableFields });
+      storeBroken = false;
       saveTick = core.tick; lastSaveAt = o.clock.now(); forceSave = false;
       return;
     }
@@ -888,7 +894,9 @@ export function createHost(o: HostOptions): Host {
     get running() { return running; },
     get paused() { return paused; },
     get people() { return people(); },
-    frame, start, pause, resume, stop, announce,
+    frame, start, pause, resume, announce,
+    // An orderly stop of a lasting world folds what moved since the last checkpoint. One that follows a failed write, or arrives during one, writes nothing.
+    stop() { try { if (persistent && !ended && !storeBroken) checkpoint(true); } finally { stop(); } },
     tickNow: () => {
       if (ended) return;
       let now = lastStart;

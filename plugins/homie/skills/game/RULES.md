@@ -153,13 +153,16 @@ is not saved to the world or account. Never count that as proof of persistence.
 require the existing studio sign-in/passkey. Play redirects to the account page
 when needed. In `room.join(ctx, player)`, return
 `player.character ?? { kind: 'runner', at: spawn }`. Keep inventory in that player
-kind's declared fields and change it only in rules. The runtime returns its kind,
+kind's declared fields and change it only in rules. Mark inventory/currency and
+collectible-ID sets with `{durable: true, visibility: 'owner'}`; use `durable: true`
+for world changes and public progress too, omitting visibility only when public.
+Durability and recipient visibility are separate declarations. The runtime returns its kind,
 position, heading, fields and motion to the account when it leaves. Use
 `player: true` or `leave: 'despawn'`; a returned character cannot also become a bot.
 Do not reset inventory in `arrive`, round-start handlers or `world.finish`.
 
 The public world has a stable room name; `?room=<name>` chooses another world.
-Every tick commits before publishing its results. An empty world sleeps and
+Every durable change commits before publishing its results. An empty world sleeps and
 retains state. A failed write stops play with the last good save intact. Another
 room waits for the current holder to return the character; no timeout grants a
 stale copy. No database or IDs are set up by hand. Ordinary games keep their
@@ -171,8 +174,13 @@ recipient leaves; do not treat sending one as an atomic inventory transfer.
 Trading and shop-grant consumption need the later economy slice. Browser saves
 remain player-owned and are not an authoritative inventory.
 
-This first slice saves the whole world every tick, so opted-in games pay for
-more writes. Compatible deploys still restart/reload and then restore the world.
+Durable fields, entity lifecycle, pending events and character leases use an
+atomic incremental journal. The rest is checkpointed every 30 seconds by default
+(`room.durability.movementSeconds`, 1–60), and on pause/shutdown. Unchanged rooms
+write nothing. A crash can rewind movement, but committed value and consumed
+inputs replay together exactly once. Declare every fact needed to prevent a
+repeat reward durable, including pickup IDs and cooldowns that protect value.
+Compatible deploys still restart/reload and then restore the world.
 A state-schema change is refused on restore with data retained; keep the previous
 compatible build until migrations ship. Offline play has no account authority.
 
@@ -727,7 +735,8 @@ for a minute with delay. Movement should respond before the authoritative respon
 score and other shared outcomes still arrive with the network. The studio chooses `players.max`; neither frame rate nor feel is guaranteed by a passing build.
 
 Room state is saved automatically (default movementSeconds: 1, plus round end,
-pause and finish). After 60 seconds with no person the room ends even if screens or
+pause and finish; a lasting world instead journals its durable fields at once and
+checkpoints the rest every 30 seconds). After 60 seconds with no person the room ends even if screens or
 AI remain. Use browser createSaves for player-owned character progress; it is not
 server-verified money. Entity fields default to public. Declare visibility explicitly for private information (below); shared state and motion remain public. Use declared server round records for verified match history.
 

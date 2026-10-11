@@ -10,7 +10,7 @@ test('real Table SQL: pickup, abrupt object death, account recall into a second 
     import {Table as BaseTable,hostRules} from './index.mjs';
     import {defineRules,defineMove,f,roomSettings} from '../rules/rules.ts';
     const rules=defineRules({contract:2,space:{dims:2},move:defineMove({runner(){}}),shapes:{commands:{pickup:{}}},
-      entities:{runner:{player:true,fields:{coins:f.u32()},body:{shape:'circle',radius:.4,maxSpeed:1},commands:{pickup(w,s){s.coins++;}}}},
+      entities:{runner:{player:true,fields:{coins:f.u32({durable:true,visibility:'owner'})},body:{shape:'circle',radius:.4,maxSpeed:1},commands:{pickup(w,s){s.coins++;}}}},
       room:{join(c,p){return {kind:'runner',at:p.character?.at??{x:0,y:0,z:0},fields:p.character?.fields};}}});
     function configure(build='one'){hostRules({world:{rules,settings:roomSettings({lifetime:'persistent',characters:true,tickHz:1}).settings,seats:8,build,stateHash:'same-state',map:{bounds:{min:[-10,-10],max:[10,10]}}}});}
     configure();
