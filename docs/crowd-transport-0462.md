@@ -1,4 +1,33 @@
-# Two cloud trials of big rooms, and the shape that followed (0.46.2)
+# Four cloud trials of big rooms, and the shape that followed (0.46.2)
+
+## What is proven on Cloudflare, and what is not
+
+Measured on 11 October 2026 with the released code, the crowd-circuit game (every player
+in one dense arena, each seeing about 180 others), 150 seconds a step:
+
+| Players | From a home connection | From inside Cloudflare |
+| --- | --- | --- |
+| 50 | 20 Hz; ack 155 / 206 ms (p50 / p95) | 20 Hz; ack 99 / 150 |
+| 150 | 20 Hz; ack 178 / 242 | 20 Hz; ack 131 / 197 |
+| 300 | 20 Hz; ack 182 / 242; no drops | 20 Hz; ack 139 / 360 |
+| 600 | 19.4 Hz; ack 292 / 819; marginal | 20 Hz; ack 167 / 310; 599 of 600 held |
+| 1,000 | 10 Hz: not there | 785 got in and held 20 Hz; 215 did not get in |
+
+- **Proven: 300 players at 20 frames a second from a home connection**, 2.5 to 4.8 KB a
+  second a player on the wire, compressed on every socket.
+- **Proven: 600 at 20 frames a second measured from inside Cloudflare.** From one home
+  connection carrying all 600 players it was marginal.
+- **Not proven: 1,000.** Everyone is admitted and the room keeps its ticks, but delivery
+  from a home connection fell to half rate, and the in-Cloudflare probe seated 785.
+- "From inside Cloudflare" is a Worker playing the players (`lib/crowd-probe/`): what the
+  servers can do, with no home connection in the measurement and none of a player's last hop.
+- A game where players see fewer of each other costs less than this one; one with heavier
+  rules costs more. These are one game's numbers.
+
+Rooms of 64 seats or fewer, and every room a player's browser hosts, do not use any of
+this: they are their Table alone, as before. How that is known is at the end.
+
+The rest of this note is how it got here: four trials, and what each one showed.
 
 The trial ran 0.45.3 on real Cloudflare on 11 October 2026 (UTC), at 50, 150, 300, 600 and
 1,000 players, from one computer. Its data is in the trial studio under
@@ -268,6 +297,26 @@ its link during the ramp, before the measurement began.
   requests up into the same report. It shows what the servers can do with no home
   connection and no busy laptop in the measurement; it says nothing of a player's last hop.
 
+## The fourth trial (0.46.2 as released)
+
+Data under `reports/crowd-circuit/phase-g/20261011T080713Z/`; the table is at the top of
+this note. Each step ran from the trial computer and from the in-Cloudflare probe.
+
+- The room opened only the Gates its players filled (2 at 50, 7 at 300, 13 at 600, 20 at
+  1,000) and each channel carried one frame a tick each way.
+- An input's loop (the tick a player held, to the tick its input reached the rules) was
+  100 to 119 ms at the median from home at 50 to 300, and 63 to 75 ms from inside
+  Cloudflare. Players settled on a lead of three or four ticks; under 1.3% of inputs late.
+- World age, corrected by each Gate's measurement of the room's clock, was 0 to 3 ms at
+  the median. The quarter-second ages of the third trial were the two clocks.
+- 600 from home: every player was paced at some point and 12 to 16% of inputs were late,
+  where the same room from inside Cloudflare was clean. Unexplained yet.
+- 1,000 from home: Gates delivered 9.6 frames a second, a Gate's round trip to the room
+  was 0.6 s at the median, the room's ticks by the Gates' clocks fell to 18.9 a second.
+  The connection had room (3.45 of 19.7 MB a second) and the driver was not late.
+- 1,000 from inside Cloudflare: 785 seated, 20 frames a second for those. Whether the
+  215 are the probe's limit or admission is not known yet.
+
 ## What is proven, and where
 
 Deterministic, on virtual time with seeded players, in the release gate
@@ -310,9 +359,27 @@ the room being asked.
 Not proven: Cloudflare at 1,000 players. Load runs on the computer this was written on
 are not evidence either way; it was running other heavy work.
 
-## What the next trial needs
+## Small rooms and browser-hosted games
 
-Each step twice: from the trial computer (what a player at home sees) and from the
-in-Cloudflare probe (what the servers can do). The probe has never run on Cloudflare: it
-is tested whole against a Gate and the rules host on virtual time, with the Worker
-runtime's `fetch` stood in for. Its first run is also its own trial.
+A room of 64 seats or fewer never meets a Gate: the door hands its sockets to the Table
+(`gateFor`, unchanged for `gates === 1`), and none of the world wire, coasting, pacing or
+the diagnostics object is on its path. Three things do reach it:
+
+- A server-hosted game is no longer paced on what a player sends (inputs, events, pings).
+  Speech and chat keep their pace. A browser-hosted room keeps every cap it had.
+- A healthy room is not ended as an overrun for timers that arrive late and catch up.
+- The view library says `coast: 1` in its hello and names the tick it holds on inputs and
+  pings. A Table ignores both.
+
+How it is known: the suites that play those rooms pass unchanged, among them
+`rules-0452-compat` (games built with 0.45.2 against this relay), the browser-hosted
+rules suites, the legacy release gate in CI (starters released with 0.32.1, two real
+browsers finishing a round) and the two-browser studio check. The old view path
+(`scheduledView` with the plain encoder) gives byte-for-byte what it gave; the tests that
+pin its output were not changed.
+
+## Measuring your own game
+
+`lib/crowd-load.mjs` plays a crowd from your computer and `lib/crowd-probe/` from inside
+Cloudflare, on your own account; `lib/crowd-probe/README.md` has the commands, what each
+proves, and how to delete the probe afterwards. Both play the crowd-circuit game's input.

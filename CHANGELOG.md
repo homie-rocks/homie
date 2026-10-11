@@ -23,6 +23,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 A room of hundreds has a new shape, a deploy the owner asked for is approved by the asking, and Homie paces no input of a server-hosted game.
 
+Measured on Cloudflare with a game where every player sees about 180 others: 300 players at 20 frames a second from a home connection; 600 at 20 frames a second measured from inside Cloudflare, marginal from one home connection carrying all 600; 1,000 are admitted and the room keeps its ticks, but delivery is not there yet. 0.45.3 kept 300 at 13 frames a second and could not hold 1,000 at all.
+
 ### Added
 
 - `room.rates` in game.json: a studio's own pace on what one player may send, in messages a second by kind (`{ "in": 60 }`). Leave it out and there is none.
@@ -54,8 +56,10 @@ A room of hundreds has a new shape, a deploy the owner asked for is approved by 
 
 ### Upgrade notes
 
-- Rebuild and deploy a studio to get the new room shape; a game needs no change. A game page built before 0.46.2 still plays in a big room: it is sent every tick, because it does not say which tick it holds.
-- What the first cloud trial of 0.45.3 measured, and why, is in `docs/crowd-transport-0462.md`, with the two trials that followed and what each showed. Capacity on Cloudflare at 1,000 players awaits the next trial.
+- Rebuild and deploy a studio to get the new room shape; a game needs no change. A game page built before 0.46.2 still plays in a big room: it is sent every tick and every moving body, because it says neither which tick it holds nor that it coasts.
+- A room of 64 seats or fewer, and every room a player's browser hosts, is as it was: none of this is on its path. The one change that reaches a small server-hosted room is that Homie no longer paces what a player sends it.
+- To measure your own game on your own Cloudflare account: `lib/crowd-load.mjs` plays a crowd from your computer and `lib/crowd-probe/` from inside Cloudflare. `lib/crowd-probe/README.md` has the commands and how to delete the probe afterwards.
+- What four trials on Cloudflare measured, what is proven and what is not, is in `docs/crowd-transport-0462.md`.
 
 ## [0.46.0] - 2026-10-10
 

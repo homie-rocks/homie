@@ -256,8 +256,6 @@ export function scheduledView({ radiusM = null, precisionM = 0, nearM = null, fa
           if (!row) {
             row = entity.slice();
             for (const i of [3, 4]) row[i] = entity[i].map(n => Number((Math.round(n / precisionM) * precisionM).toPrecision(12)));
-            // A heading is a unit vector: a thousandth is a twentieth of a degree, and a third of the digits.
-            if (Array.isArray(entity[5])) row[5] = entity[5].map(n => Math.round(n * 1000) / 1000);
             if (!versions) quantizedRows.set(entity, { precision: precisionM, row });
             else { versions.others ??= new Map(); versions.others.set(precisionM, row); }
           }

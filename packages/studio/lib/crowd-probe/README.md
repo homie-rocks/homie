@@ -1,3 +1,22 @@
+# Measuring a big room
+
+Two tools, both for a trial on your own Cloudflare account. Neither is part of a studio: nothing in a studio's
+Worker imports them.
+
+- **From your computer** (`lib/crowd-load.mjs`): simulated players and two real Chrome players over your own
+  connection. What a player at home sees, up to what one connection and one computer can carry.
+
+  ```sh
+  CHROME_PATH=/path/to/chrome node node_modules/@homie-rocks/studio/lib/crowd-load.mjs \
+    --url https://<studio> --n 300 --seconds 150 --room home-300 --out reports/home-300
+  ```
+
+- **From inside Cloudflare** (this folder): what the room and its Gates can do, with no home connection in it.
+
+`lib/crowd-diagnostics.mjs` records the room's own figures beside either (a row a second), and
+`lib/crowd-summary.mjs <folder>` puts a run's steps in one table. Both players steer as the crowd-circuit
+fixture does; for another game, change the input they send.
+
 # The in-Cloudflare crowd probe
 
 A Worker that plays simulated players against a studio from inside Cloudflare's network. It separates what a

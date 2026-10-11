@@ -1,12 +1,14 @@
-# An isolated workerd experiment, not a Cloudflare deployment. Normal releases
-# keep the deterministic core in CI; this expensive comparison is manual unless
-# this workflow itself is being changed.
+# An isolated workerd experiment, not a Cloudflare deployment, and not a release
+# check: run by hand. It plays 300 and 1,000 players against eight local workerd
+# processes with two Chromes and the load driver, all on one four-core runner,
+# which cannot carry them (10 frames a second at 300 where Cloudflare measured
+# 20 at 600). Its failure there says what the runner can do. The release gate
+# is the deterministic core in CI (rules-crowd-shape.test.mjs and
+# gates-workerd.test.mjs); capacity is measured on Cloudflare
+# (docs/crowd-transport-0462.md).
 name: Crowd reproduction
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - .github/workflows/crowd-proof.yml
 permissions:
   contents: read
 defaults:
