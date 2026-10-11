@@ -1,22 +1,83 @@
+import { STUDIO_BUILD } from './build-id.mjs';
+import { stageTimings } from '../rules/timing.mjs';
+import { crowdView, crowdWorlds, scheduledView, snapshotEncoder, snapshotText } from '../rules/interest.mjs';
+import { worldSink, worldSource } from './world-wire.mjs';
+
+const parsedFrames = new WeakMap();
+const sharedSnapshotText = new WeakMap();
+function batchText(rows) {
+  return '[' + rows.map(row => {
+    // A world's block of numbers is base64, which needs no escaping: it is joined on, not walked 50 times a tick.
+    if (row[0] === 'world' && typeof row[5] === 'string') return JSON.stringify(row.slice(0, 5)).slice(0, -1) + ',"' + row[5] + '"]';
+    if (row[0] !== 'views' && row[0] !== 'world') return JSON.stringify(row);
+    // All downstream links share this immutable state. Serialize it once in
+    // this isolate, rather than once for every Gate fed by a Concentrator.
+    let state = sharedSnapshotText.get(row[2]);
+    if (state === undefined) { state = JSON.stringify(row[2]); sharedSnapshotText.set(row[2], state); }
+    return '[' + JSON.stringify(row[0]) + ',' + JSON.stringify(row[1]) + ',' + state + ',' + JSON.stringify([row[3], row[4]]).slice(1, -1) + ']';
+  }).join(',') + ']';
+}
+function parseFrame(event) {
+  let rows = parsedFrames.get(event);
+  if (!rows) { rows = JSON.parse(event.data); parsedFrames.set(event, rows); }
+  return rows;
+}
 /** Trusted, ordered multiplex links. Public authentication stays at the Worker;
  * only bindings can open these endpoints. A lost link closes its downstream
  * sockets: clients resume with their existing seat tokens and a fresh keyframe.
  * Inputs and commands are batched together, never overwritten or reordered.
  */
+/** Players a Gate holds in a room too big for its Table to hold directly.
+ *
+ * Two trials on Cloudflare set it. A Gate of 60 dense players that selected and encoded each one's view from
+ * scratch (0.45.4) could not keep 20 frames a second; the same work now costs a third as much. But twenty to a
+ * Gate (the first 0.46.2 build) made a room of 600 fifty channels, and the room spent its time on messages, not
+ * rules: what the room's one thread can bear is counted in messages, and a channel is two a tick. So a Gate is
+ * as full as it can serve, and a room opens only the Gates its players fill.
+ * A studio chooses its room's size and nothing else. */
+export const GATE_PLAYERS = 50;
 export function roomLayout(seats) {
-  const gates = Math.ceil(seats / 64);
-  return { gates, concentrators: gates > 8 ? Math.ceil(gates / 8) : 0 };
+  // A room of up to 64 is its Table alone, as it has been since 0.45.0.
+  const gates = seats <= 64 ? 1 : Math.ceil(seats / GATE_PLAYERS);
+  return { gates, concentrators: 0 };
+}
+/** The Gate a key lands on when the room cannot be asked: spread evenly, as 0.45.0 did. */
+function hashedGate(key, gates) {
+  let hash = 2166136261;
+  for (const c of key || crypto.randomUUID()) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619) >>> 0;
+  return hash % gates;
+}
+/**
+ * Which Gate takes the next player: the lowest one with room. A room of 50 players in a 1,000-seat game is one
+ * Gate, not twenty with two or three players each, every one of them costing the room a channel. `held` is each
+ * Gate's players now and `promised` those sent to it who have not arrived yet.
+ */
+export function nextGate(gates, held, promised = new Map()) {
+  let least = 0, fewest = Infinity;
+  for (let i = 0; i < gates; i++) {
+    const n = (held.get(i) ?? 0) + (promised.get(i) ?? 0);
+    if (n < GATE_PLAYERS) return i;
+    if (n < fewest) { fewest = n; least = i; }
+  }
+  return least;
 }
 export function gateFor(env, game, room, seats, key) {
   const layout = roomLayout(seats);
   // One logical Gate is embedded in the Table for a small room. Same relay,
   // admission and delivery protocol; no extra Durable Object or seat clamp.
-  if (layout.gates === 1) return env.TABLE.get(env.TABLE.idFromName(`${game}/${room}`));
-  let hash = 2166136261;
-  for (const c of key || crypto.randomUUID()) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619) >>> 0;
-  const index = hash % layout.gates;
-  return { fetch(request) {
+  const table = () => env.TABLE.get(env.TABLE.idFromName(`${game}/${room}`));
+  if (layout.gates === 1) return table();
+  return { async fetch(request) {
     const url = new URL(request.url);
+    // The room says which Gate has room (one short question a join; a join is the room's work anyway). If it
+    // cannot be asked in time the key's hash chooses, as before.
+    let index = null;
+    try {
+      const asked = await Promise.race([table().fetch(`https://table/__gate?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${seats}&gates=${layout.gates}`), new Promise(done => setTimeout(() => done(null), 2000))]);
+      const said = asked?.ok ? await asked.json() : null;
+      if (Number.isInteger(said?.gate) && said.gate >= 0 && said.gate < layout.gates) index = said.gate;
+    } catch { /* the hash chooses */ }
+    index ??= hashedGate(key, layout.gates);
     url.searchParams.set('gate', String(index));
     url.searchParams.set('gates', String(layout.gates));
     return env.GATE.get(env.GATE.idFromName(`${game}/${room}/${index}`)).fetch(new Request(url, request));
@@ -25,45 +86,148 @@ export function gateFor(env, game, room, seats, key) {
 
 export function* expandBatch(rows) {
   for (const row of rows) {
-    if (row[0] === 'fan') { for (const id of row[1]) yield ['data', id, row[2]]; }
+    if (row[0] === 'views') { for (const [id, seat] of row[1]) yield ['view', id, row[2], seat, row[3], row[4]]; }
+    else if (row[0] === 'fan') { for (const id of row[1]) yield row.length > 3 ? ['data', id, row[2], row[3]] : ['data', id, row[2]]; }
     else yield row;
   }
 }
-export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTimeout, delay = 5 } = {}) {
-  let queue = [], timer = null, closed = false;
+export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTimeout, delay = 1, receipts = false, maxFrames = 4, maxBytes = 4 * 1024 * 1024, onWritable = () => {}, autoReceipt = true, now = Date.now, world = null, onAck = () => {} } = {}) {
+  let queue = [], views = new Map(), strings = new Set(), timer = null, closed = false, bytes = 0, sequence = 0, inFlightBytes = 0, blockedByBytes = false, receipt = 0, receiptAt = 0, stamp = null, lastSentAt = -Infinity;
+  const pending = new Map();
+  const timing = stageTimings();
+  const stats = { frames: 0, rows: 0, bytes: 0, peakQueueBytes: 0, coalesced: 0, ackMs: 0, maxAckMs: 0, rttMs: 0 };
+  const close = () => { closed = true; queue = []; views.clear(); strings.clear(); pending.clear(); inFlightBytes = 0; bytes = 0; if (timer !== null) clearTimer(timer); timer = null; };
+  const fail = (reason) => { close(); try { socket.close(1011, reason); } catch {} };
+  const schedule = () => { if (!closed && (receipt || pending.size < maxFrames && !blockedByBytes && (queue.length || views.size)) && timer === null) timer = setTimer(flush, delay > 1 ? Math.max(0, lastSentAt + delay - now()) : delay); };
   const flush = () => {
-    timer = null;
-    if (closed || !queue.length) return;
-    const rows = []; let last = null;
+    if (timer !== null) clearTimer(timer); timer = null;
+    if (closed) return;
+    if (pending.size >= maxFrames || blockedByBytes) {
+      if (receipt) { try { socket.send(JSON.stringify([['ack', receipt, now() - receiptAt]])); receipt = 0; } catch { fail('room link send failed'); } }
+      return;
+    }
+    if (!queue.length && !views.size && !receipt) return;
+    const rows = []; let last = null, worldSeq = 0;
+    const hasPayload = queue.length || views.size;
+    // The receipt waits for this link's next scheduled frame; say how long,
+    // so the sender's receipt latency measures transit, not the cadence.
+    if (receipt) rows.push(['ack', receipt, now() - receiptAt, ...(stamp ? [[stamp[0], stamp[1], now()]] : [])]);
     for (const row of queue) {
-      if (row[0] === 'data' && last && (last[0] === 'data' || last[0] === 'fan') && last[2] === row[2]) {
+      if (row[0] === 'data' && last && (last[0] === 'data' || last[0] === 'fan') && last[2] === row[2] && last[3] === row[3]) {
         if (last[0] === 'data') { last[0] = 'fan'; last[1] = [last[1]]; }
         last[1].push(row[1]);
       } else { last = row.slice(); rows.push(last); }
     }
-    queue = [];
-    try { socket.send(JSON.stringify(rows)); } catch { close(); try { socket.close(1011, 'room link send failed'); } catch {} }
+    const groups = new Map();
+    for (const row of views.values()) {
+      // The room's side says how a world travels (worker/world-wire.mjs): a block of numbers and what changed.
+      if (row[0] === 'world') { const sent = world?.(row); if (sent) { rows.push(sent.row); worldSeq = sent.seq; } else rows.push(row); continue; }
+      let group = groups.get(row[2]);
+      if (!group) { group = ['views', [], row[2], row[4], row[5]]; groups.set(row[2], group); rows.push(group); }
+      group[1].push([row[1], row[3]]);
+    }
+    if (receipts && hasPayload) rows.push(['receipt', sequence + 1, now()]);
+    const encodeAt = timing.now();
+    const text = batchText(rows);
+    timing.record('encode', encodeAt);
+    const size = text.length;
+    if (size > maxBytes) { fail('room link frame limit'); return; }
+    if (receipts && inFlightBytes + size > maxBytes) { blockedByBytes = true; return; }
+    queue = []; views.clear(); strings.clear(); bytes = 0; receipt = 0;
+    if (receipts && hasPayload) { pending.set(++sequence, { at: now(), bytes: size }); inFlightBytes += size; }
+    stats.frames++; stats.rows += rows.length; stats.bytes += size;
+    const sendAt = timing.now();
+    try { lastSentAt = now(); socket.send(text); if (worldSeq) world.sent(worldSeq); timing.record('send', sendAt); onWritable(); } catch { fail('room link send failed'); }
   };
-  const close = () => { closed = true; queue = []; if (timer !== null) clearTimer(timer); timer = null; };
-  return { send(row) { if (closed) return; queue.push(row); if (queue.length >= 128) { if (timer !== null) clearTimer(timer); flush(); } else if (timer === null) timer = setTimer(flush, delay); }, flush, close, disconnect() { close(); socket.close(1012, 'room link restarted'); } };
+  if (receipts) socket.addEventListener('message', event => {
+    if (typeof event.data !== 'string') return;
+    try {
+      const rows = parseFrame(event);
+      if (!Array.isArray(rows)) return;
+      for (const row of rows) {
+        if (row[0] === 'ack' && pending.has(row[1])) {
+          const frame = pending.get(row[1]);
+          stats.ackMs = Math.max(0, now() - frame.at - (Number(row[2]) || 0)); stats.rttMs = Math.max(stats.ackMs, stats.rttMs * 0.95); onAck(Number(row[2]) || 0, Array.isArray(row[3]) ? row[3] : null); stats.maxAckMs = Math.max(stats.maxAckMs, stats.ackMs);
+          for (const [seq, held] of pending) if (seq <= row[1]) { pending.delete(seq); inFlightBytes -= held.bytes; } blockedByBytes = false; schedule(); onWritable();
+        }
+        if (autoReceipt && row[0] === 'receipt') socket.send(JSON.stringify([['ack',row[1]]]));
+      }
+    } catch { /* the session reports malformed frames */ }
+  });
+  return {
+    send(row) {
+      if (closed) return;
+      if (row[0] === 'close') views.delete(row[1]);
+      // Snapshots are absolute here; Gate encoders run only when they deliver.
+      // Replace unsent state, never an input, command, admission or departure.
+      if (row[0] === 'view' || row[0] === 'world') {
+        if (views.has(row[1])) stats.coalesced++;
+        views.set(row[1], row); schedule(); return;
+      }
+      // Fan-out payload strings are shared in memory and on the wire.
+      const size = row[0] === 'data' ? 48 + (strings.has(row[2]) ? 0 : row[2].length) : JSON.stringify(row).length;
+      if (row[0] === 'data') strings.add(row[2]);
+      if (bytes + size > maxBytes) { fail('room link queue limit'); return; }
+      queue.push(row); bytes += size; stats.peakQueueBytes = Math.max(bytes, stats.peakQueueBytes);
+      schedule();
+    },
+    /** Rows were handled: owe their receipt on this link's next frame. `inMs`
+     * aligns that frame (a Gate sends its tick's inputs just before the next tick). */
+    consumed(rows, inMs = null) {
+      for (const row of rows) if (row[0] === 'receipt' && row[1] > receipt) { if (!receipt) receiptAt = now(); receipt = row[1]; stamp = Number.isFinite(row[2]) ? [row[2], now()] : null; }
+      if (inMs !== null && !closed) { if (timer !== null) clearTimer(timer); timer = setTimer(flush, Math.max(0, inMs)); }
+      else schedule();
+    },
+    flush, close, forget: id => views.delete(id), buffered: () => bytes,
+    /** This link's recent round trip, ms: the newest receipt's, or a larger recent one fading out. */
+    rtt: () => stats.rttMs,
+    facts: () => ({ ...stats, timing: timing.facts(), queueRows: queue.length, pendingViews: views.size, queueBytes: bytes, inFlight: pending.size, inFlightBytes }),
+    disconnect() { close(); socket.close(1012, 'room link restarted'); }
+  };
 }
 
 /** Adapt one upstream socket into the same transport the Table accepts locally. */
-export function multiplexSession(socket, connect) {
-  const out = batchLink(socket), clients = new Map();
+export function multiplexSession(socket, connect, { onMetrics = () => {}, delay = 60, source = worldSource(), onCount = () => {} } = {}) {
+  // Eight frames may be unacknowledged: 400 ms of 20 Hz worlds. Past that the newest world replaces an unsent one.
+  // This link's Gate has every world up to `synced`, and holds the players in these seats.
+  let synced = 0; const seats = new Map();
+  const world = Object.assign((row) => { const w = source.encode(row[2]); return w ? { row: ['world', '*', source.header(w, synced, seats.values()), row[3], row[4], w.block], seq: w.seq } : null; }, { sent(seq) { synced = seq; } });
+  const out = batchLink(socket, { receipts: true, delay, maxFrames: 8, autoReceipt: false, world, onWritable: () => scheduleAdmission() }), clients = new Map();
   let chain = Promise.resolve(), closed = false;
+  const group = { snapshot(snap, settings, hz) { out.send(['world', '*', snap, settings, hz]); out.flush(); }, subscribe(id, seat) { seats.set(id, seat); out.send(['seat', id, seat]); }, facts: () => out.facts() };
+  const pending = new Set(), admissions = [];
+  let attaching = 0, admissionTimer = null;
+  const pump = () => {
+    admissionTimer = null;
+    if (closed) return;
+    // A welcome contains the peer list. Bound simultaneous welcome creation,
+    // leaving space for existing players' reliable traffic while a link drains.
+    while (admissions.length && attaching < 8 && out.buffered() < 512 * 1024) {
+      const admit = admissions.shift(); attaching++;
+      Promise.resolve().then(admit).finally(() => { attaching--; scheduleAdmission(); });
+    }
+    if (admissions.length) scheduleAdmission();
+  };
+  const scheduleAdmission = () => {
+    if (!closed && admissions.length && attaching < 8 && out.buffered() < 512 * 1024 && admissionTimer === null) admissionTimer = setTimeout(pump, 1);
+  };
+  const transportFacts = () => ({ ...out.facts(), admissions: admissions.length, attaching });
   const shutdown = () => {
     if (closed) return;
     closed = true; out.close();
+    if (admissionTimer !== null) clearTimeout(admissionTimer);
+    for (const admit of admissions.splice(0)) admit.cancel();
     for (const client of clients.values()) client.emit('close', {});
-    clients.clear();
+    clients.clear(); seats.clear(); onCount(0);
   };
   socket.addEventListener('message', event => {
+    if (typeof event.data !== 'string') return;
     chain = chain.then(async () => {
       if (closed) return;
-      const rows = JSON.parse(event.data);
+      const rows = parseFrame(event);
       if (!Array.isArray(rows)) throw new Error('invalid multiplex batch');
       for (const [op, id, value, ip, agent] of expandBatch(rows)) {
+        if (op === 'metrics') { onMetrics(id, value); continue; }
         if (op === 'open') {
           if (clients.has(id)) throw new Error('duplicate multiplex client');
           const handlers = new Map();
@@ -72,80 +236,299 @@ export function multiplexSession(socket, connect) {
             addEventListener(name, fn) { const list = handlers.get(name) ?? []; list.push(fn); handlers.set(name, list); },
             emit(name, event) { for (const fn of handlers.get(name) ?? []) fn(event); },
             send(text) { out.send(['data', id, text]); },
-            close(code, reason) { out.send(['close', id, code, reason]); clients.delete(id); client.emit('close', {}); },
+            snapshot(snap, seat, settings, hz) { out.send(['view', id, snap, seat, settings, hz]); },
+            snapshotGroup: group,
+            subscribe(seat) { group.subscribe(id, seat); },
+            buffered: () => out.buffered(),
+            transportFacts,
+            close(code, reason) { out.send(['close', id, code, reason]); clients.delete(id); seats.delete(id); onCount(clients.size); client.emit('close', {}); },
           };
-          clients.set(id, client);
-          await connect(new Request(value, { headers: { Upgrade: 'websocket', ...(ip ? { 'cf-connecting-ip': ip } : {}), ...(agent ? { 'user-agent': agent } : {}) } }), client);
-        } else if (op === 'data') clients.get(id)?.emit('message', { data: value });
-        else if (op === 'close') { clients.get(id)?.emit('close', {}); clients.delete(id); }
+          clients.set(id, client); onCount(clients.size);
+          client.ready = new Promise((resolve, reject) => {
+            const admit = async () => {
+              if (closed || !clients.has(id)) { resolve(); return; }
+              try { await connect(new Request(value, { headers: { Upgrade: 'websocket', ...(ip ? { 'cf-connecting-ip': ip } : {}), ...(agent ? { 'user-agent': agent } : {}) } }), client); client.attached = true; resolve(); }
+              catch (error) { reject(error); }
+            };
+            admit.cancel = resolve; admissions.push(admit);
+          });
+          scheduleAdmission();
+          const ready = client.ready; pending.add(ready);
+          ready.then(() => { pending.delete(ready); if (closed || !clients.has(id)) client.emit('close', {}); }, () => { pending.delete(ready); client.close(1011, 'admission failed'); });
+        } else if (op === 'data' || op === 'close') {
+          const client = clients.get(id);
+          if (client) {
+            client.queued = (client.queued ?? 0) + 1;
+            if (client.queued > 256) { client.close(1013, 'client queue limit'); continue; }
+            const deliver = () => {
+              client.queued--;
+              if (closed || !clients.has(id)) return;
+              if (op === 'data') client.emit('message', { data: value, receivedAt: ip });
+              else { out.forget(id); client.emit('close', {}); clients.delete(id); seats.delete(id); onCount(clients.size); }
+            };
+            if (client.attached && client.queued === 1) { deliver(); continue; }
+            const task = client.ready = client.ready.then(deliver);
+            pending.add(task); task.then(() => pending.delete(task), () => { pending.delete(task); client.close(1011, 'client message failed'); });
+          }
+        }
       }
-    }).catch(() => { shutdown(); try { socket.close(1011, 'room link failed'); } catch {} });
+      out.consumed(rows);
+      if (admissions.length && !attaching) { if (admissionTimer !== null) clearTimeout(admissionTimer); pump(); }
+    }).catch(error => { console.log(JSON.stringify({ ev: 'room-link-failed', stage: 'receive', error: String(error?.message ?? error).slice(0,160) })); shutdown(); try { socket.close(1011, 'room link failed'); } catch {} });
   });
   socket.addEventListener('close', shutdown);
   socket.addEventListener('error', shutdown);
-  return { shutdown, settled: () => chain };
+  return { group, shutdown, settled: async () => { await chain; await Promise.allSettled([...pending]); } };
 }
-export function acceptMultiplex(request, connect) {
+export function acceptMultiplex(request, connect, options) {
   const [client, server] = Object.values(new WebSocketPair());
-  server.accept(); multiplexSession(server, connect);
+  server.accept(); multiplexSession(server, connect, options);
   return new Response(null, { status: 101, webSocket: client });
 }
 
+/** How often one player is sent the world, from what that player says it has.
+ *
+ * A socket to a slow player has no back-pressure a Worker can read, so a Gate
+ * that writes every tick to a link that carries fewer leaves that player
+ * seconds behind for good: every frame arrives, each one later than the last.
+ * A client names the newest tick it holds (`g`, on its inputs and pings). While
+ * that trails the room by more than a second the Gate halves this player's
+ * rate, down to one a second; when it is back within half a second the rate
+ * doubles again. Each frame is a delta from the last one SENT, so a skipped
+ * tick costs nothing later, and the player's own body is in every frame.
+ * A client that names nothing is sent every tick, as before.
+ */
+export function deliveryPace(hz = 20) {
+  let interval = 1, sent = -Infinity, got = null, changedAt = -Infinity, lag = null;
+  const most = Math.max(1, Math.round(hz));
+  return {
+    /** The client holds tick `tick`; the room is at `world`. `now` in ms. */
+    report(tick, world, now) {
+      if (!Number.isFinite(tick) || !Number.isFinite(world)) return;
+      // A new room epoch restarts its ticks: a tick from the old one says nothing.
+      got = tick > world ? null : tick;
+      lag = got === null ? null : world - got;
+      if (lag === null) return;
+      if (lag > hz && now - changedAt >= 500 && interval < most) { interval = Math.min(most, interval * 2); changedAt = now; }
+      else if (lag <= hz / 2 && now - changedAt >= 1000 && interval > 1) { interval = Math.max(1, interval / 2); changedAt = now; }
+    },
+    due(tick) { return tick < sent || tick - sent >= interval; },
+    sent(tick) { sent = tick; },
+    facts: () => ({ interval, lag }),
+  };
+}
+const REPORTED_TICK = /^\{"t":"(?:in|ping)".{0,400}?"g":(\d{1,12})[,}]/;
+/** A client built with 0.46.2 moves a body it was not sent along its last velocity: it says so in its hello. */
+const COASTS = /^\{"t":"hello".{0,2000}?"coast":1[,}]/;
+
+const percentile = (sorted, p) => sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] : null;
+
 export class Gate {
-  constructor(ctx, env) { this.ctx = ctx; this.env = env; this.clients = new Map(); this.sequence = 0; this.link = null; this.opening = null; }
+  constructor(ctx, env) { this.ctx = ctx; this.env = env; this.clients = new Map(); this.admissions = new Map(); this.sequence = 0; this.link = null; this.opening = null; this.timing = stageTimings(); this.metricsAt = 0; this.window = this.freshWindow(); this.worldTick = null; }
+  freshWindow() { return { worlds: 0, frames: 0, bytes: 0, skipped: 0, inputs: 0, worldAge: [], tickFrom: null, tickFromAt: 0, tickAt: 0, gapMax: 0 }; }
+  /** `[sent, received, answered]`: this Gate's clock when its frame left, the room's when it read it and when it answered. */
+  roomClock([sent, received, answered]) {
+    const now = Date.now(), offset = ((received - sent) + (answered - now)) / 2, delay = (now - sent) - (answered - received);
+    if (![offset, delay].every(Number.isFinite)) return;
+    // The exchange with the least delay is the truest reading of the offset; forget it slowly.
+    if (!this.clock || delay <= this.clock.delayMs || now - this.clock.at > 10_000) this.clock = { offsetMs: Math.round(offset), delayMs: Math.round(delay), heldMs: Math.round(answered - received), at: now };
+  }
   async upstream(url) {
     if (this.link) return this.link;
     if (this.opening) return this.opening;
     this.opening = (async () => {
       const name = `${url.searchParams.get('game')}/${url.searchParams.get('room')}`;
-      const gates = Number(url.searchParams.get('gates'));
-      const useConcentrator = !(this instanceof Concentrator) && gates > 8;
-      const binding = useConcentrator ? this.env.CONCENTRATOR : this.env.TABLE;
-      const key = useConcentrator ? `${name}/${Math.floor(Number(url.searchParams.get('gate')) / 8)}` : name;
+      // One ordered channel from each Gate to the room. A relay between them
+      // (0.45.0's Concentrator) parsed and re-sent every world for eight Gates
+      // and was the first object to fall behind; sixteen channels of one frame
+      // a tick each way are cheaper for the room than two of hundreds.
       const target = new URL(url); target.pathname = '/__multiplex';
-      const response = await binding.get(binding.idFromName(key)).fetch(new Request(target, { headers: { Upgrade: 'websocket' } }));
+      const response = await this.env.TABLE.get(this.env.TABLE.idFromName(name)).fetch(new Request(target, { headers: { Upgrade: 'websocket' } }));
       if (!response.webSocket) throw new Error('room link refused');
       const socket = response.webSocket; socket.accept();
-      const link = batchLink(socket);
-      const lost = () => {
+      // What players send leaves this Gate as one frame at most every 50 ms: at once when the channel has been
+      // quiet, else with whatever arrived since the last. The room's one thread is spent by the message, so a
+      // Gate costs it one a tick each way. (Timing that frame to land just before the room's tick was tried twice
+      // and failed twice on Cloudflare: the round trip to the room varies by more than the window it aims for.)
+      const link = batchLink(socket, { receipts: true, delay: 50, maxFrames: 8, autoReceipt: false, onAck: (waited, clock) => { if (clock) this.roomClock(clock); } });
+      const sink = worldSink();
+      const lost = (event = {}) => {
         if (this.link !== link) return;
-        this.link = null; link.close();
+        console.log(JSON.stringify({ ev: 'room-link-lost', room: name, gate: url.searchParams.get('gate'), layer: 'gate', code: event.code ?? null, reason: event.reason ?? null, error: event.error?.message ?? null, clients: this.clients.size, transport: link.facts() }));
+        this.link = null; this.worlds = null; link.close();
+        for (const timer of this.admissions.values()) clearTimeout(timer); this.admissions.clear();
         for (const client of this.clients.values()) { try { client.close(1012, 'room link restarted'); } catch {} }
         this.clients.clear();
       };
+      const drop = (id, client) => { this.clients.delete(id); link.send(['close', id]); try { client.close(1011, 'client connection ended'); } catch {} };
       socket.addEventListener('message', event => {
-        try { for (const [op, id, value, reason] of expandBatch(JSON.parse(event.data))) {
-          const client = this.clients.get(id);
-          if (op === 'data') {
-            try { client?.send(value); } catch {
-              this.clients.delete(id); link.send(['close', id]);
-              try { client?.close(1011, 'client connection ended'); } catch {}
+        if (typeof event.data !== 'string') return;
+        try {
+          const rows = parseFrame(event); let hz = null;
+          for (const row of rows) {
+            if (row[0] === 'world') { hz = row[4]; const snap = row[2].w ? sink.decode(row[2], row[5]) : row[2]; this.deliver(snap, row[3], row[4], drop); continue; }
+            for (const [op, id, value, reason, settings, rate] of expandBatch([row])) {
+              const client = this.clients.get(id);
+              if (op === 'seat') { if (client) { client.seat = value; client.subscribed = true; } }
+              else if (op === 'view') { if (client) this.deliverOne(id, client, value, reason, settings, rate, drop); }
+              else if (op === 'data') { try { client?.send(value); } catch { if (client) drop(id, client); } }
+              else if (op === 'close') { this.clients.delete(id); try { client?.close(value, reason); } catch {} }
             }
-          } else if (op === 'close') {
-            this.clients.delete(id); try { client?.close(value, reason); } catch {}
           }
-        } } catch { lost(); try { socket.close(1011, 'room link failed'); } catch {} }
+          link.consumed(rows);
+          if (hz && Date.now() - this.metricsAt >= 1000) this.publishMetrics(url, link);
+        } catch (error) { lost({ error, reason: 'invalid room frame' }); try { socket.close(1011, 'room link failed'); } catch {} }
       });
       socket.addEventListener('close', lost); socket.addEventListener('error', lost);
       this.link = link; return link;
     })();
     try { return await this.opening; } finally { this.opening = null; }
   }
+  /** One world from the room: every player this Gate holds gets their own view of it. */
+  deliver(snap, settings, hz, drop) {
+    const w = this.window, now = Date.now(); w.worlds++;
+    if (w.tickFrom === null) { w.tickFrom = this.worldTick ?? snap.k; w.tickFromAt = this.worldAt ?? now; }
+    if (this.worldAt) w.gapMax = Math.max(w.gapMax, now - this.worldAt);
+    this.worldTick = snap.k; this.worldAt = now; w.tickAt = now;
+    // By this Gate's clock, corrected for what the room's clock is measured to differ by.
+    if (Number.isFinite(snap.st)) w.worldAge.push(Math.max(0, now - snap.st + (this.clock?.offsetMs ?? 0)));
+    for (const [id, client] of this.clients) if (client.subscribed) this.deliverOne(id, client, snap, client.seat, settings, hz, drop);
+  }
+  deliverOne(id, client, snap, seat, settings, hz, drop) {
+    try {
+      if (client.snapshot) { client.snapshot(snap, seat, settings, hz); return; }
+      client.pace ??= deliveryPace(hz);
+      if (!client.pace.due(snap.k)) { this.window.skipped++; return; }
+      if (client.coasts) {
+        // A client that coasts (0.46.2) takes the crowd path: what does not depend on the player is done once a world.
+        const at = this.timing.now();
+        // A room's view settings are its game's, fixed for the life of the link.
+        this.worlds ??= crowdWorlds(settings ?? {});
+        client.crowd ??= crowdView(this.worlds, settings ?? {}, hz);
+        const text = client.crowd(snap, seat);
+        this.timing.record('encode', at);
+        client.send(text); client.pace.sent(snap.k);
+        this.window.frames++; this.window.bytes += text.length;
+        return;
+      }
+      const viewAt = this.timing.now();
+      client.viewSchedule ??= scheduledView(settings, hz);
+      // This encoder sits after coalescing on an ordered WebSocket. A
+      // fresh connection/epoch gets a keyframe; subsequent deltas cannot
+      // lose a predecessor, so do not repeat a full interest set each second.
+      client.snapEncoder ??= snapshotEncoder(Infinity, true);
+      const selected = client.viewSchedule(snap, seat);
+      this.timing.record('view', viewAt);
+      const encodeAt = this.timing.now();
+      const text = snapshotText({ t: 'snap', from: null, ...client.snapEncoder.encode(selected, seat) });
+      this.timing.record('encode', encodeAt);
+      const sendAt = this.timing.now();
+      client.send(text); client.pace.sent(snap.k);
+      this.window.frames++; this.window.bytes += text.length;
+      this.timing.record('send', sendAt);
+    } catch { drop(id, client); }
+  }
   async connect(request, server) {
     const link = await this.upstream(new URL(request.url));
     const id = String(++this.sequence);
     this.clients.set(id, server);
-    link.send(['open', id, request.url, request.headers.get('cf-connecting-ip'), request.headers.get('user-agent')]);
-    server.addEventListener('message', event => { if (typeof event.data === 'string') link.send(['data', id, event.data]); });
-    const left = () => { if (this.clients.delete(id)) link.send(['close', id]); };
+    let opened = false;
+    const deadline = setTimeout(() => {
+      this.admissions.delete(id);
+      if (!opened && this.clients.delete(id)) { try { server.close(4000, 'no-hello'); } catch {} }
+    }, 5000);
+    deadline?.unref?.(); this.admissions.set(id, deadline);
+    server.addEventListener('message', event => {
+      if (!this.clients.has(id) || typeof event.data !== 'string') return;
+      // No legal public frame exceeds the largest checkpoint allowance
+      // (128 KiB). Reject it before it exhausts a shared relay's budget.
+      // The Table still enforces each message kind's smaller byte caps.
+      if (event.data.length > 128 * 1024) {
+        clearTimeout(deadline); this.admissions.delete(id); this.clients.delete(id);
+        if (opened) link.send(['close', id]);
+        try { server.close(1009, 'message too large'); } catch {}
+        return;
+      }
+      if (!opened) {
+        opened = true; clearTimeout(deadline); this.admissions.delete(id);
+        server.coasts = COASTS.test(event.data);
+        // Logical creation and the first frame share a batch: admission time at
+        // the Table excludes the public handshake and relay transit.
+        link.send(['open', id, request.url, request.headers.get('cf-connecting-ip'), request.headers.get('user-agent')]);
+      }
+      const now = Date.now();
+      const said = REPORTED_TICK.exec(event.data);
+      if (said && server.pace && this.worldTick !== null) server.pace.report(Number(said[1]), this.worldTick, now);
+      this.window.inputs++;
+      // Only the public Gate stamps ingress; a player cannot supply it inside their JSON.
+      link.send(['data', id, event.data, Number.isFinite(event.receivedAt) ? event.receivedAt : now]);
+    });
+    const left = () => { clearTimeout(deadline); this.admissions.delete(id); if (this.clients.delete(id) && opened) link.send(['close', id]); };
     server.addEventListener('close', left); server.addEventListener('error', left);
   }
+  /** What this Gate did in the last second, for whoever is measuring the room. */
+  gateFacts(link, now = Date.now()) {
+    const w = this.window, seconds = Math.max(0.001, (now - (this.metricsAt || now - 1000)) / 1000);
+    const subscribed = [...this.clients.values()].filter(c => c.subscribed);
+    const paces = subscribed.map(c => c.pace?.facts()).filter(Boolean);
+    const lags = paces.map(p => p.lag).filter(Number.isFinite).sort((a, b) => a - b), ages = w.worldAge.sort((a, b) => a - b);
+    return {
+      ...link.facts(), view: this.timing.facts(), clients: this.clients.size, subscribed: subscribed.length, tick: this.worldTick,
+      // Per second: worlds received from the room, and frames written to each player on average.
+      worldHz: Math.round(w.worlds / seconds * 100) / 100,
+      deliveredHz: subscribed.length ? Math.round(w.frames / seconds / subscribed.length * 100) / 100 : null,
+      bytesPerSecond: Math.round(w.bytes / seconds), inputsPerSecond: Math.round(w.inputs / seconds), skipped: w.skipped,
+      // Room stamp to this Gate writing it to players, ms (both are Cloudflare's clock at the start of an event).
+      worldAgeMs: { p50: percentile(ages, 0.5), p95: percentile(ages, 0.95), max: ages.at(-1) ?? null },
+      // How far behind the room players say they are, in ticks, and how many are being sent fewer frames for it.
+      clientLagTicks: { reporting: lags.length, p50: percentile(lags, 0.5), p95: percentile(lags, 0.95), max: lags.at(-1) ?? null },
+      paced: paces.filter(p => p.interval > 1).length,
+      coasting: subscribed.filter(c => c.coasts).length,
+      // Ticks the room's worlds advanced a second, by THIS Gate's clock: the room's own clock cannot see itself run late.
+      roomTickHz: w.tickFrom !== null && w.tickAt > w.tickFromAt ? Math.round((this.worldTick - w.tickFrom) / (w.tickAt - w.tickFromAt) * 100000) / 100 : null,
+      worldGapMs: w.gapMax,
+      // The room's clock less this Gate's, and the channel's delay, from stamps exchanged on the channel (as NTP does).
+      roomClock: this.clock ?? null,
+    };
+  }
+  publishMetrics(url, link) {
+    const now = Date.now(), facts = this.gateFacts(link, now);
+    this.metricsAt = now; this.window = this.freshWindow();
+    if (!this.env.GATE || this.metricsPending) return;
+    this.metricsPending = true;
+    const work = diagnosticsOf(this.env, url.searchParams.get('game'), url.searchParams.get('room')).fetch('https://diagnostics/__diagnostics', {
+      method: 'POST', body: JSON.stringify({ kind: 'gate', id: `gate/${url.searchParams.get('gate')}`, at: now, ...facts }),
+    }).then(r => r.body?.cancel?.()).catch(() => {}).finally(() => { this.metricsPending = false; });
+    this.ctx.waitUntil?.(work);
+  }
+  /** The room's diagnostics, kept by an object that is neither the room nor a
+   * Gate with players: the room and its Gates each post a second's facts here,
+   * and a reader is answered from the copy. Measuring a room costs it nothing,
+   * and a room too busy to answer still has its last word (and its age) read.
+   */
+  async diagnosticsFetch(request, url) {
+    if (request.method === 'POST') {
+      const value = await request.json();
+      if (value.kind === 'gate') { this.gateDiagnostics ??= new Map(); this.gateDiagnostics.set(value.id, value); }
+      else this.diagnostics = value;
+      return new Response(null, { status: 204 });
+    }
+    const at = Date.now();
+    for (const [id, value] of this.gateDiagnostics ?? []) if (at - value.at > 15_000) this.gateDiagnostics.delete(id);
+    const gates = [...(this.gateDiagnostics?.values() ?? [])].sort((a, b) => a.id.localeCompare(b.id, 'en', { numeric: true }));
+    return Response.json({ toolkit: STUDIO_BUILD, room: url.searchParams.get('room'), ...this.diagnostics, gates, diagnostics: { cached: true, at: this.diagnostics?.st ?? null, ageMs: this.diagnostics ? at - this.diagnostics.st : null } });
+  }
   async fetch(request) {
-    if (new URL(request.url).pathname === '/__multiplex') return acceptMultiplex(request, (req, socket) => this.connect(req, socket));
+    const url = new URL(request.url);
+    if (url.pathname === '/__diagnostics') return this.diagnosticsFetch(request, url);
+    if (url.pathname === '/__multiplex') return acceptMultiplex(request, (req, socket) => this.connect(req, socket));
     const [client, server] = Object.values(new WebSocketPair());
     server.accept();
     await this.connect(request, server);
     return new Response(null, { status: 101, webSocket: client });
   }
 }
+/** The object that keeps one room's diagnostics (a Gate by class, never one with players). */
+export function diagnosticsOf(env, game, room) { return env.GATE.get(env.GATE.idFromName(`${game}/${room}/diagnostics`)); }
+/** Kept so a studio deployed with 0.45.0's Concentrator binding still loads; nothing opens one. */
 export class Concentrator extends Gate {}

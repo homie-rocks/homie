@@ -205,6 +205,8 @@ export interface RoomSettings {
   durability: { movementSeconds: number };
   budget: { tick: number };
   predict: { idleHold?: boolean; catchM: number | null; catchUp: number; snapM: number | null; blendMs: number; interpMs: number | null };
+  /** The studio's own pace on what one player sends, messages a second by frame kind (`in`, `ev`, ...). Absent: none. */
+  rates?: Record<string, number>;
 }
 /**
  * The default `budget.tick`: 500,000 units at 20 ticks a second or fewer, and less at a faster rate, so a second of
@@ -238,8 +240,16 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
     if (!Number.isFinite(n) || n < 0) { problems.push(`"room.${name}" is a number, zero or more; using its default`); return d; }
     return n;
   };
-  const known = new Set(['host', 'offline', 'tickHz', 'inputHz', 'durability', 'budget', 'predict', 'view', 'lifetime', 'characters']);
-  for (const key of Object.keys(r)) if (!known.has(key)) problems.push(`"room.${key}" is not a setting (host, offline, tickHz, inputHz, durability, budget, predict, view)`);
+  const known = new Set(['host', 'offline', 'tickHz', 'inputHz', 'durability', 'budget', 'predict', 'view', 'lifetime', 'characters', 'rates']);
+  for (const key of Object.keys(r)) if (!known.has(key)) problems.push(`"room.${key}" is not a setting (host, offline, tickHz, inputHz, durability, budget, predict, view, rates)`);
+  let rates: Record<string, number> | undefined;
+  if (r.rates !== undefined) {
+    if (!r.rates || typeof r.rates !== 'object' || Array.isArray(r.rates)) problems.push('"room.rates" is an object of messages a second per player by kind ({ "in": 60 }); using none');
+    else for (const [kind, v] of Object.entries(r.rates)) {
+      if (!/^[a-z][a-z-]{0,15}$/.test(kind) || typeof v !== 'number' || !Number.isFinite(v) || v < 0) problems.push(`"room.rates.${kind}" is a number of messages a second, zero or more; leaving it out`);
+      else (rates ??= {})[kind] = v;
+    }
+  }
   let host: 'server' | 'browser' = 'server';
   if (r.host !== undefined) { if (r.host === 'server' || r.host === 'browser') host = r.host; else problems.push('"room.host" is "server" or "browser"; using "server"'); }
   if (r.lifetime !== undefined && !['match', 'persistent'].includes(r.lifetime)) problems.push('"room.lifetime" is "match" or "persistent"');
@@ -258,7 +268,7 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
   const p = r.predict && typeof r.predict === 'object' ? r.predict : {};
   return {
     settings: {
-      host, offline, tickHz, inputHz, ...(r.lifetime === 'persistent' ? { lifetime: 'persistent' as const } : {}), ...(r.characters === true ? { characters: true } : {}),
+      host, offline, tickHz, inputHz, ...(rates ? { rates } : {}), ...(r.lifetime === 'persistent' ? { lifetime: 'persistent' as const } : {}), ...(r.characters === true ? { characters: true } : {}),
       view: { radiusM: r.view?.radiusM === null ? null : num('view.radiusM', r.view?.radiusM, null), ...(r.view?.precisionM !== undefined ? { precisionM: num('view.precisionM', r.view.precisionM, 0) as number } : {}), ...(r.view?.nearM !== undefined ? { nearM: num('view.nearM', r.view.nearM, null) } : {}), ...(r.view?.farHz !== undefined ? { farHz: whole('view.farHz', r.view.farHz, 1, tickHz, tickHz) } : {}) },
       durability: { movementSeconds: whole('durability.movementSeconds', r.durability?.movementSeconds, 1, 60, r.lifetime === 'persistent' ? 30 : 1) },
       budget: { tick: Math.max(1, Math.floor(num('budget.tick', r.budget?.tick, budgetFor(tickHz)) as number)) },

@@ -1,0 +1,12 @@
+{
+  // The in-Cloudflare crowd probe (see README.md here). A trial's tool: deploy it for the trial, delete it after.
+  "name": "homie-crowd-probe",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-06-01",
+  // Its sockets go to the studio by its public address, as a player's do, even when both are in one account.
+  "compatibility_flags": ["global_fetch_strictly_public"],
+  "workers_dev": true,
+  // A step holds each request open for minutes and decodes every frame five players are sent.
+  "limits": { "cpu_ms": 300000 },
+  "observability": { "enabled": false }
+}

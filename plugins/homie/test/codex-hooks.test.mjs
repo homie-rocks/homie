@@ -145,6 +145,7 @@ test('cancel refuses it with the mod\'s words; a bare "proceed" answers only whe
     await pre(a, { dir: s.data });
     assert.ok((await prompt({ session_id: 'session-1', prompt: 'proceed' }, { dir: s.data })).hookSpecificOutput.additionalContext.includes('Deploy Night Owls'));
     assert.equal(await pre(a, { dir: s.data }), null);
+    await prompt({session_id:'session-1',cwd:s.root,prompt:'Do not deploy this again.'},{dir:s.data});
     await pre(bash(s, 'npm run deploy'), { dir: s.data });
     await pre(bash(s, 'npx wrangler secret put STRIPE_KEY'), { dir: s.data });
     assert.equal(await prompt({ session_id: 'session-1', prompt: 'proceed' }, { dir: s.data }), null, 'two waiting: a bare proceed answers neither');
@@ -358,4 +359,16 @@ test('Codex runs the hooks: .codex-plugin names hooks/codex.json, and the root p
   for (const tool of ['web_search', 'view_image', 'write_stdin']) assert.ok(!matcher.test(tool), tool);
   // Claude Code's hooks.json is the mod's, and Codex never reads it (an explicit hooks path replaces discovery).
   assert.deepEqual(json(join(PLUGIN, 'hooks', 'hooks.json')).modules, ['./homie.mjs']);
+});
+
+
+test('a human deploy request approves task retries, stays scoped, and can be revoked', async () => {
+  const s=studio();
+  try {
+    await prompt({session_id:'session-1',cwd:s.root,prompt:'Fix the movement, then deploy it when the checks pass.'},{dir:s.data});
+    for(const command of ['npm run deploy','npx homie-studio deploy'])assert.equal(await pre(bash(s,command),{dir:s.data}),null);
+    assert.ok(await pre(bash(s,'npm run deploy',{session_id:'different-task'}),{dir:s.data}));
+    await prompt({session_id:'session-1',cwd:s.root,prompt:"Don't deploy this."},{dir:s.data});
+    assert.ok(await pre(bash(s,'npm run deploy'),{dir:s.data}));
+  } finally {s.done();}
 });

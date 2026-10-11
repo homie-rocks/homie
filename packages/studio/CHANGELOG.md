@@ -17,6 +17,50 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.46.2] - 2026-10-11
+
+**Plugin 0.46.2** · Big rooms: the room runs the rules, its Gates do the rest.
+
+A room of hundreds has a new shape, a deploy the owner asked for is approved by the asking, and Homie paces no input of a server-hosted game.
+
+Measured on Cloudflare with a game where every player sees about 180 others: 300 players at 20 frames a second from a home connection; 600 at 20 frames a second measured from inside Cloudflare, marginal from one home connection carrying all 600; 1,000 are admitted and the room keeps its ticks, but delivery is not there yet. On the same game 0.45.0 delivered 13 frames a second at 300 and lost every player at 1,000.
+
+### Added
+
+- `room.rates` in game.json: a studio's own pace on what one player may send, in messages a second by kind (`{ "in": 60 }`). Leave it out and there is none.
+- `lib/crowd-probe/`: a Worker of its own that plays simulated players against a studio from inside Cloudflare, five a request, and `lib/crowd-cloud.mjs`, which adds the requests up into the report the home driver writes. A trial's tool: no studio's Worker imports it.
+- Each Gate measures the room's clock against its own, the room's ticks a second by its own clock, and the longest it went without a world. The room's own count of its ticks cannot see the room run late.
+- A big room's diagnostics come from an object that is neither the room nor a Gate with players. The room and each Gate post a second's facts to it (ticks a second, how long a player's input took to reach the rules, frames written to each player, how old the world was when a Gate sent it, how far behind players say they are), and `/_studio/api/room` answers from that copy with its age. Measuring a room costs it nothing, and a room too busy to answer still has its last word read.
+- A player's client says which tick it holds (`g` on its inputs and pings). A Gate that finds a player more than a second behind sends that player fewer, fresher frames, down to one a second, and restores the rate when they have caught up. Each frame is a change from the last one sent and carries the player's own body. A client that says nothing is sent every tick, as before.
+
+### Changed
+
+- In a room behind Gates the room object runs the rules and hands each Gate one world a tick. The Gate chooses what each of its players can see, encodes it and writes it. The room no longer selects, encodes or queues anything per player on its tick.
+- A Gate holds fifty players and Gates fill in order: the room tells the door which Gate has room, so fifty players in a 1,000-seat game are one Gate and a full room is twenty. A studio sets its room's size and nothing else. A room of 64 or fewer is still its Table alone.
+- The world crosses from the room to a Gate as one block of numbers, the same block for every Gate, plus whatever else about a body changed since that Gate last heard: about 33 KB a tick for 1,000 players where the JSON was 150 KB, and almost nothing for the Gate to parse.
+- A body that keeps its course is not sent again. A client built with 0.46.2 moves it along its last velocity, and a Gate sends it only when that has drifted past the game's `view.precisionM` (near bodies) or half the distance it covers between `view.farHz` refreshes (far ones). On the crowd-circuit game at 1,000 players a frame falls from 71 rows to 20, a player from 14.8 KB a second on the wire to 6.3, and a far body is drawn 3 cm from the truth on average where it was 35 cm. A game page built before 0.46.2 is sent every moving body, as before.
+- A Gate works out once for each world what does not depend on the player. Encoding a player's frame takes under a third of the time.
+- Each Gate has its own channel to the room. The relay between them (the Concentrator) is gone: it re-read and re-sent every world for eight Gates and was the first object to fall behind. A studio's `CONCENTRATOR` binding stays declared and unused, so an upgrade needs no migration.
+- A Gate sends the room what its players sent at once when the channel is quiet and never more than one frame in 50 ms, however many players it holds. Receipts ride that frame.
+- Far-view refreshes are spread across players, so a room's largest updates do not all leave on the same tick.
+- A deploy requested in the owner's prompt is approved for that task, including retries. Unrequested deployments remain held; explicit refusals revoke the task approval.
+- The crowd probe offers WebSocket compression, as every browser does, coasts, names the tick it holds, follows the room's word on how early its inputs arrive (as the toolkit's client does), and reports whether the server agreed to compress, what that saved, and the kilobytes a second a player cost.
+
+### Fixed
+
+- Homie no longer paces what a player sends a game whose rules run on the server. 0.45.3 dropped honest input at 60 a second when a slow network delivered a batch late. What players say to each other keeps its pace, and so does every room a player's own browser hosts.
+- A game with fields only their owner may see keeps each player's view in the room when the room is behind Gates. A Gate was handed the whole state.
+- Late callbacks that catch up at the requested tick rate no longer end a healthy room as an overrun; sustained slow ticks still stop.
+- Relay failures log their layer, close cause and queue counters. A link's receipt latency measures the link, not the cadence a receipt waited for. Frozen Cloudflare clocks are not reported as zero execution time.
+- Deployment summaries no longer assume Workers Free. A big room's estimate counts its Gates and its diagnostics object and says which request traffic it leaves out.
+
+### Upgrade notes
+
+- Rebuild and deploy a studio to get the new room shape; a game needs no change. A game page built before 0.46.2 still plays in a big room: it is sent every tick and every moving body, because it says neither which tick it holds nor that it coasts.
+- A room of 64 seats or fewer, and every room a player's browser hosts, is as it was: none of this is on its path. The one change that reaches a small server-hosted room is that Homie no longer paces what a player sends it.
+- To measure your own game on your own Cloudflare account: `lib/crowd-load.mjs` plays a crowd from your computer and `lib/crowd-probe/` from inside Cloudflare. `lib/crowd-probe/README.md` has the commands and how to delete the probe afterwards.
+- What four trials on Cloudflare measured, what is proven and what is not, is in `docs/crowd-transport-0462.md`.
+
 ## [0.46.0] - 2026-10-10
 
 **Plugin 0.46.0**

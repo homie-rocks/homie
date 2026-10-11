@@ -62,6 +62,7 @@ import { toolIdentity } from './tool-identity.mjs';
  * from an office key it is ALWAYS an ask (the AI may only propose one), and so is marking a referrer paid.
  */
 import { seatsOf } from './seats.mjs';
+import { diagnosticsOf, roomLayout } from './gate.mjs';
 import { PUBLIC_SERVER, SERVER_LIMITS, checkServer, levelName, narrows, policyOf, roomServer, rowFor, serverView, serversOf, serverPassCookie, writeServer } from './servers.mjs';
 import { BRAIN_BUDGET, aiName, brainFor, fillSpot, passById, passCreate, passList, passRevoke, think } from './agents.mjs';
 import { DEFAULT_MODEL, NEURONS_PER_M, OWNER_MODEL, vocabularyOf } from './brain.mjs';
@@ -424,6 +425,24 @@ async function roomFacts(env, game, room, max) {
   } catch { return null; }
 }
 
+/**
+ * One named room's diagnostics, for a measurement that polls it. A room big enough to run behind Gates is read from
+ * the object its room and Gates post to each second, so a poll neither waits behind the room's ticks nor costs them
+ * one; the answer carries its age. Only when that copy is missing or old is the room asked, and not for long. A
+ * small room answers for itself, as it always has.
+ */
+export async function roomDiagnostics(env, game, room, max) {
+  if (!env.GATE || roomLayout(max).gates === 1) return roomFacts(env, game, room, max);
+  let kept = null;
+  try {
+    const res = await diagnosticsOf(env, game, room).fetch(`https://diagnostics/__diagnostics?room=${enc(room)}`);
+    kept = res.ok ? await res.json() : null;
+  } catch { /* the room is asked below */ }
+  if (kept?.diagnostics?.ageMs != null && kept.diagnostics.ageMs < 5000) return kept;
+  const direct = await Promise.race([roomFacts(env, game, room, max), new Promise((done) => setTimeout(() => done(null), 1500))]);
+  return direct ? { ...direct, gates: kept?.gates?.length ? kept.gates : direct.gates, diagnostics: { cached: false, at: direct.st ?? null, ageMs: 0 } } : kept;
+}
+
 /** Hand one room one signed control; what the room says back. */
 async function roomControl(env, meta, settings, room, op, args) {
   const ctl = await signControl(env, { op, game: meta.id, room, args });
@@ -471,6 +490,7 @@ async function roomRow(env, meta, room, max) {
     round: f.round && typeof f.round === 'object' ? { n: f.round.n ?? null, phase: f.round.phase ?? null, startedAt: f.round.startedAt ?? null, endsAt: f.round.endsAt ?? null } : null,
     openedAt: office.openedAt ?? f.openedAt ?? null, closedUntil: office.closedUntil ?? null, snapHz: f.snapHz ?? 0,
     regate: office.regate ?? null,
+    telemetry: { source: 'server', toolkit: f.toolkit ?? null, ticks: f.ticks ?? null, transport: f.transport ?? [], gates: f.gates ?? [] },
     host: f.host ?? null, announce: f.announce ?? null,
     slots: slots.map((s) => ({ slot: s.slot, seat: s.seat ?? null, name: oneLine(s.name, 40), bot: Boolean(s.bot), ...(s.agent ? { agent: { role: s.agent.role ?? 'party', seat: s.agent.seat ?? null } } : {}) })),
     clients, bans: office.bans ?? [], mutes: office.mutes ?? [],
@@ -1213,6 +1233,13 @@ async function api(request, env, url, cat) {
     if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ ok: false, error: 'json' }, 400);
   } else if (request.method !== 'GET') return json({ ok: false, error: 'method' }, 405);
 
+  if (path === '/_studio/api/room' && request.method === 'GET') {
+    const game = url.searchParams.get('game'), room = url.searchParams.get('room');
+    const meta = (cat.games ?? []).find(g => g.id === game);
+    if (!meta || !ROOM_ID.test(room ?? '')) return json({ ok: false, error: 'room' }, 400);
+    const facts = await roomDiagnostics(env, game, room, seatsFor(meta, await settingsOf(env)));
+    return json({ ok: Boolean(facts), facts });
+  }
   if (path === '/_studio/api/office' && request.method === 'GET') {
     try { return json({ ...(await officeView(env, cat, url.origin)), by: who }); } catch (error) {
       return json({ ok: false, error: 'no-office', message: `The office is not in this studio's D1 yet: \`npm run deploy\` applies migration 0005_studio_office.sql. (${String(error?.message ?? error).slice(0, 120)})` }, 503);

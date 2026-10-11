@@ -458,6 +458,8 @@ test('a page that was blocked for seconds does not drop a healthy socket on the 
   r.sockets.at(-1).onmessage = null;
   await clock.wait(9000);
   assert.deepEqual(links.at(1), ['reconnecting', 'stale']);
+  assert.equal(net.stats().lastDisconnect.why, 'stale');
+  assert.ok(net.stats().lastDisconnect.silentMs >= 6000);
   net.close(); host.close();
 });
 

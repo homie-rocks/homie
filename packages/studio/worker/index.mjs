@@ -105,7 +105,8 @@ import { forgetLines, historyOf, keepLines, keptLine } from './lounge-store.mjs'
 import { isLoungePath, loungeRoutes } from './lounge.mjs';
 import { doorPage, serverPage, serversPage } from './site.mjs';
 import { isLocalOrigin, qrSvg } from './qr.mjs';
-import { acceptMultiplex, gateFor } from './gate.mjs';
+import { acceptMultiplex, diagnosticsOf, gateFor, nextGate } from './gate.mjs';
+import { worldSource } from './world-wire.mjs';
 export { Gate, Concentrator } from './gate.mjs';
 import { seatCount, paramsFrom, perAddress, seatsOf } from './seats.mjs';
 import {
@@ -123,6 +124,7 @@ import {
 // The back office knows the studio's player accounts: a signed-in player is named in the office and held by a kick on
 // every device, and the owner's own account (`homie-studio players owner`) counts as the owner.
 usePlayers(playerAccounts);
+import { STUDIO_BUILD } from './build-id.mjs';
 import { STUDIO_VERSION_TAG } from './version.mjs';
 import { reconcileOrders, readiness, roomBadge, shellShop, shopOf, shopRoutes } from './shop.mjs';
 import { DISCOVERY_FILES, discoveryResponse, llmsTxt, robotsTxt, sitemapXml } from './discover.mjs';
@@ -712,6 +714,7 @@ async function route(request, env, ctx) {
     return json({
       v: 1,
       kind: 'homie-studio',
+      toolkit: STUDIO_BUILD,
       name: cat.studio?.name ?? env.STUDIO_NAME ?? 'Studio',
       slug: cat.studio?.slug ?? null,
       ...(cat.studio?.tagline ? { tagline: cat.studio.tagline } : {}),
@@ -1327,6 +1330,10 @@ export class Table {
     this.hostRt = null;
     this.characterGrants = new Map();
     this.accountTokens = {};
+    this.inputTransit = [];
+    this.relayed = false;
+    this.gateHeld = new Map();
+    this.gatePromised = new Map();
     this.roomAlarmAt = 0;
     this.durable = null;
     this.roomSave = null;
@@ -1354,7 +1361,21 @@ export class Table {
       maxPlayers: max,
       perIp: perAddress(max),
       store: {
-        save: (o) => { if (this.hostRt) this.saveRoom(this.hostRt.save()); else if (!hostedGame(game)) storage.put('net', o).catch(() => {}); },
+        save: (o) => {
+          if (this.hostRt && !this.relayFrame) this.saveRoom(this.hostRt.save());
+          else if (this.hostRt) {
+            // All admissions in one relay turn share a checkpoint. The microtask
+            // runs before the relay's timer flush, retaining the storage output gate.
+            if (!this.admissionSaveQueued) {
+              this.admissionSaveQueued = true;
+              const host = this.hostRt;
+              queueMicrotask(() => {
+                this.admissionSaveQueued = false;
+                if (this.hostRt === host) { try { this.saveRoom(host.save()); } catch (error) { this.storageProblem(error); } }
+              });
+            }
+          } else if (!hostedGame(game)) storage.put('net', o).catch(() => {});
+        },
         clear: () => { this.clearRoom(); },
       },
       // The room's lifecycle, one line each with its time and room (worker/room.mjs `log`): a hello, a leave, an
@@ -1362,6 +1383,7 @@ export class Table {
       // are told apart by these. HOMIE_ROOM_LOG=0 keeps only the failures.
       log: (line) => this.say(line),
     });
+    this.room.gateFacts = () => [...(this.gateMetrics?.values() ?? [])];
     if (this.saved && !hostedGame(game)) this.room.restore(this.saved);
     if (this.officeSaved) this.room.restoreOffice(this.officeSaved);
     this.vocabRead = this.readVocab(game).catch(() => false);
@@ -2072,8 +2094,26 @@ export class Table {
       if (body.op === 'return') return json(this.characters.return(body.game, body.holder, body.lease, body.character));
       return json({ ok: false }, 400);
     }
-    if (new URL(request.url).pathname === '/__multiplex') {
-      return acceptMultiplex(request, (req, socket) => this.connect(req, socket));
+    const path = new URL(request.url).pathname;
+    if (path === '/__gate') {
+      // The door asks which Gate takes the next player (worker/gate.mjs, nextGate): the lowest with room, counting
+      // players sent to a Gate in the last ten seconds who have not reached it yet.
+      const gates = Number(new URL(request.url).searchParams.get('gates')) || 1, now = Date.now(), promised = new Map();
+      for (const [index, due] of this.gatePromised) { const live = due.filter((at) => at > now); if (live.length) { this.gatePromised.set(index, live); promised.set(index, live.length); } else this.gatePromised.delete(index); }
+      const gate = nextGate(gates, this.gateHeld, promised);
+      if (!this.gatePromised.has(gate)) this.gatePromised.set(gate, []);
+      this.gatePromised.get(gate).push(now + 10_000);
+      return json({ gate });
+    }
+    if (path === '/__multiplex') {
+      this.relayed = true;
+      const index = Number(new URL(request.url).searchParams.get('gate'));
+      // One encoding of each world for every Gate link (worker/world-wire.mjs).
+      return acceptMultiplex(request, (req, socket) => this.connect(req, socket), { source: (this.worldSource ??= worldSource()), onCount: (n) => {
+        // A player arrived: a promise to that Gate is kept. The Gate's count is what the next join is placed by.
+        if (n > (this.gateHeld.get(index) ?? 0)) this.gatePromised.get(index)?.shift();
+        if (n > 0) this.gateHeld.set(index, n); else this.gateHeld.delete(index);
+      } });
     }
     return this.connect(request);
   }
@@ -2109,7 +2149,7 @@ export class Table {
     }
     // The back office (worker/office.mjs), from the studio's Worker only: the room as its owner sees it, and the
     // owner's signed controls, which this room verifies before it applies one (NETPLAY.md section 15).
-    if (url.pathname === '/__facts') return json({ ...room.officeFacts(), durability: this.storageHealth ?? { ok: true }, ...(this.house ? { brains: this.house.facts() } : {}) });
+    if (url.pathname === '/__facts') return json({ ...room.officeFacts(), gates: [...(this.gateMetrics?.values() ?? [])], durability: this.storageHealth ?? { ok: true }, ...(this.house ? { brains: this.house.facts() } : {}) });
     // A chat line as the room keeps it (section 19), for a report: the Worker files the room's own copy, never a reporter's.
     if (url.pathname === '/__chat') {
       const id = url.searchParams.get('id');
@@ -2206,7 +2246,9 @@ export class Table {
       ...(url.pathname === '/__watch' && url.searchParams.get('mod') === '1' ? { mod: true } : {}),
       send: (text) => { try { server.send(text); } catch { /* closed */ } },
       close: (c, r) => { try { server.close(c, r); } catch { /* closed */ } },
-      buffered: () => 0,
+      buffered: () => server.buffered?.() ?? 0,
+      ...(server.snapshotGroup ? { snapshotGroup: server.snapshotGroup, subscribe: seat => server.subscribe(seat) } : {}),
+      ...(server.snapshot ? { snapshot: (...args) => server.snapshot(...args), transportFacts: server.transportFacts } : {}),
     };
     if (url.pathname === '/__watch') {
       // Watching shells are cheap (outgoing is free) but not free: a room holds at most 256, and 24 from one address
@@ -2227,14 +2269,18 @@ export class Table {
       // seats, so it is not counted twice). One counter write per room.
       const fresh = room.seats.size === 0;
       server.addEventListener('message', (e) => {
+        this.relayFrame = Boolean(server.snapshot);
+        try {
         let text = typeof e.data === 'string' ? e.data : '';
         if (hostedBuild(game)?.settings.characters && account) {
           try { const message = JSON.parse(text); if (message.t === 'hello') { delete message.token; if (this.accountTokens[account]) message.token = this.accountTokens[account]; text = JSON.stringify(message); } } catch { /* normal parser diagnoses it */ }
         }
-        h.onMessage(text);
+        if (Number.isFinite(e.receivedAt)) this.inputTransit.push(Math.max(0, Date.now() - e.receivedAt));
+        h.onMessage(text, this.relayFrame ? e.receivedAt : undefined);
         if (hostedBuild(game)?.settings.characters && account) { const joined = room.clients.get(h.id); if (joined?.token) this.accountTokens[account] = joined.token; }
+        } finally { this.relayFrame = false; }
         // A newcomer: the Lobby hears of the room at once, so the owner's office (and a launch change) never misses it.
-        if (typeof e.data === 'string' && e.data.startsWith('{"t":"hello"')) this.report();
+        if (typeof e.data === 'string' && e.data.startsWith('{"t":"hello"')) this.scheduleReport();
         if (fresh && !this.openCounted && room.seats.size > 0) {
           this.openCounted = true;
           if (conn.qa) return;
@@ -2250,7 +2296,7 @@ export class Table {
         }
         // The room says the departure itself (its `leave` line: who, which seat, host or not, how many are left).
         h.onClose(via);
-        try { this.report(); } catch (error) { this.say({ ev: 'failed', op: 'report', error: errorLine(error) }); }
+        try { this.scheduleReport(); } catch (error) { this.say({ ev: 'failed', op: 'report', error: errorLine(error) }); }
       };
       server.addEventListener('close', () => left('close'));
       // A lost network arrives here, not as a close: said as what it is, with the client it was, then handled as the
@@ -2279,7 +2325,7 @@ export class Table {
       // A launch change the room applied by itself (after its round): its stored state says so too.
       if (room.officeDirty) { room.officeDirty = false; this.ctx.storage.put('office', room.officeSaved()).catch(() => {}); }
       n += 1;
-      if (n % 4 === 0) { room.tellWatchers(); this.report(); this.recordRound(); this.syncHouse(); }
+      if (n % 4 === 0) { this.publishDiagnostics(); room.tellWatchers(); this.report(); this.recordRound(); this.syncHouse(); }
       // Room chat's counts, once a minute (section 19).
       if (n % 240 === 0) this.ctx.waitUntil(this.flushChat().catch(() => {}));
       // A server-hosted room in play keeps its alarm ahead of it (re-armed every five minutes of play).
@@ -2312,6 +2358,40 @@ export class Table {
     const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName(this.game));
     this.lastReport = -1;
     this.ctx.waitUntil(lobby.fetch(`https://lobby/report?game=${encodeURIComponent(this.game)}`, { method: 'POST', body: JSON.stringify({ room: this.code, players: 0, people: 0, ...extra }) }).catch(() => {}));
+  }
+
+  /**
+   * A big room's diagnostics leave it once a second for the object that answers readers (worker/gate.mjs,
+   * `diagnosticsFetch`): nothing per player, one post outstanding at most, never awaited by a tick or an admission.
+   * A room that every player reaches directly (one Gate's worth of seats) answers for itself and posts nothing.
+   */
+  publishDiagnostics() {
+    const transit = this.inputTransit.sort((a, b) => a - b); this.inputTransit = [];
+    if (!this.env.GATE || !this.relayed || this.diagnosticsPending || !this.room) return;
+    const facts = this.room.diagnosticFacts(), now = Date.now(), last = this.diagnosticsLast;
+    const at = (p) => transit.length ? transit[Math.min(transit.length - 1, Math.floor(transit.length * p))] : null;
+    const tick = facts.ticks?.tick ?? null;
+    this.diagnosticsLast = { now, tick };
+    this.diagnosticsPending = true;
+    const body = JSON.stringify({
+      ...facts,
+      // Ticks the rules ran per second of this object's clock since the last post.
+      tickRate: last && tick !== null && last.tick !== null && now > last.now ? Math.round((tick - last.tick) / (now - last.now) * 100000) / 100 : null,
+      // A Gate's stamp on a player's message to this object handling it, ms.
+      inputTransitMs: { n: transit.length, p50: at(0.5), p95: at(0.95), max: transit.at(-1) ?? null },
+      durability: this.storageHealth ?? { ok: true },
+    });
+    const work = diagnosticsOf(this.env, this.game, this.code).fetch('https://diagnostics/__diagnostics', { method: 'POST', body })
+      .then((r) => r.body?.cancel?.())
+      .catch((error) => { this.say({ ev: 'diagnostics-publish-failed', error: errorLine(error) }); })
+      .finally(() => { this.diagnosticsPending = false; });
+    this.ctx.waitUntil(work);
+  }
+
+  scheduleReport() {
+    if (this.reportQueued) return;
+    this.reportQueued = true;
+    queueMicrotask(() => { this.reportQueued = false; this.report(); });
   }
 
   /** Tell the Lobby how many players this room has, when it changes. */

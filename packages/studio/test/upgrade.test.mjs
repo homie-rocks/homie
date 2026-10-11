@@ -97,6 +97,7 @@ test('upgrade shows what the new template adds, and changes nothing until --appl
     'update-section AGENTS.md ## Layout',
     'update-section AGENTS.md ## Making games',
     'update-section AGENTS.md ## The site',
+    'update-section AGENTS.md (intro)',
     'version studio.json',
   ].sort());
   assert.deepEqual(plan.changes.find((c) => c.kind === 'add-lines').lines, ['# Screenshots from check and look runs.', '.checks/'], 'a missing line comes with its comment');

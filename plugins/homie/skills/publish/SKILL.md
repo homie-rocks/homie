@@ -107,11 +107,7 @@ then rename it in `studio.json` and `wrangler.jsonc` (an older studio's is
 `site/wrangler.jsonc`). Never
 delete, rename or redeploy anything the studio did not create. When it answers with a
 `needs` step (a new account verifies its email address; an account with no workers.dev
-address picks one), say that step to the person and wait. The deploy itself is held for the
-person's Proceed, with where it goes and what changed since the last one: by the Homie mod in
-Claude Code, and by Homie's hooks in Codex and Grok Build (`studio-setup` says how a hold is answered there).
-Where nothing holds it (Codex or Grok Build before the hooks are trusted: the setup status says "Homie's
-holds: off"), say what the deploy would do in a sentence and wait for the person's yes.
+address picks one), say that step to the person and wait. A deploy the person requested in their own words is approved by that request for the whole task, including retries after fixes. Say where it will go and carry it out; do not demand another confirmation or typed code. The hooks still hold an unrequested deploy. If the person explicitly says not to deploy, stop; that revokes the earlier approval. Approval is scoped to this studio and task, not another studio or a later task.
 
 Storage for songs and videos (`npx --no-install homie-studio storage add`, an R2 bucket) is
 separate and optional: Cloudflare asks for a payment method before R2 works, so only

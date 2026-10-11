@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Miniflare } from 'miniflare';
 import { build } from 'esbuild';
+import { snapshotDecoder } from '../rules/interest.mjs';
+import { GATE_PLAYERS, roomLayout } from '../worker/gate.mjs';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 
-test('workerd routes 20 Gates through concentrators, preserves order and reconnects after Gate eviction', async () => {
+test('workerd routes 20 Gates straight to the room, preserves order and reconnects after Gate eviction', async () => {
   const bundle = await build({ stdin: { contents: `
     import {Gate as BaseGate,Concentrator,gateFor,acceptMultiplex} from './gate.mjs';
     export {Concentrator};
@@ -52,18 +54,19 @@ test('public Worker, real Table storage and Gates admit above 32 and preserve se
     const configured=env=>({...env,ASSETS:assets,HOMIE_ROOM_LOG:'0'});
     export class Table extends BaseTable {constructor(ctx,env){super(ctx,configured(env));}say(line){if(line.ev==='host-ended')console.log(JSON.stringify(line));}fetch(req){if(new URL(req.url).pathname==='/test-abort'){this.saveRoom(this.hostRt.save());setTimeout(()=>this.ctx.abort('test rules restart'),1);return new Response(null,{status:204});}return super.fetch(req);}}
     export class Gate extends BaseGate {fetch(req){if(new URL(req.url).pathname==='/test-abort'){setTimeout(()=>this.ctx.abort('test Gate death'),1);return new Response(null,{status:204});}return super.fetch(req);}}
-    export default {fetch(request,env,ctx){const u=new URL(request.url);if(u.pathname==='/test-abort'){const binding=u.searchParams.get('table')?env.TABLE:env.GATE;const key=u.searchParams.get('table')?'crowd/pub-1':u.searchParams.get('key');return binding.get(binding.idFromName(key)).fetch(request);}return worker.fetch(request,configured(env),ctx);}};
+    export default {fetch(request,env,ctx){const u=new URL(request.url);if(u.pathname==='/test-diagnostics')return env.GATE.get(env.GATE.idFromName('crowd/pub-1/diagnostics')).fetch('https://diagnostics/__diagnostics?room=pub-1');if(u.pathname==='/test-abort'){const binding=u.searchParams.get('table')?env.TABLE:env.GATE;const key=u.searchParams.get('table')?'crowd/pub-1':u.searchParams.get('key');return binding.get(binding.idFromName(key)).fetch(request);}return worker.fetch(request,configured(env),ctx);}};
   `},bundle:true,write:false,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*']});
   const classes=['Table','Lobby','Gate','Concentrator'];
   const mf=new Miniflare({telemetry:{enabled:false},workers:[{config:{name:'rooms',compatibilityDate:'2026-10-07',compatibilityFlags:['nodejs_compat'],manifest:{mainModule:'entry.mjs',modules:{'entry.mjs':{type:'esm',contents:bundle.outputFiles[0].text}}},exports:Object.fromEntries(classes.map(name=>[name,{type:'durable-object',storage:'sqlite'}])),env:Object.fromEntries(classes.map(name=>[name.toUpperCase(),{type:'durable-object',worker:'rooms',exportName:name}]))}}]});
   const peers=[];
   const heartbeat=setInterval(()=>{for(const p of peers)try{p.send(JSON.stringify({t:'ping',c:Date.now()}));}catch{}},1000);
-  const shard=key=>{let hash=2166136261;for(const c of key)hash=Math.imul(hash^c.charCodeAt(0),16777619)>>>0;return hash%Math.ceil(capacity/64);};
+  const shard=key=>{let hash=2166136261;for(const c of key)hash=Math.imul(hash^c.charCodeAt(0),16777619)>>>0;return hash%roomLayout(capacity).gates;};
   const closedPeers=[];
   const open=async(key,token=null)=>{
     const response=await mf.dispatchFetch(`https://studio.test/crowd/__net?room=pub-1&b=${key}&gv=test-build`,{headers:{Upgrade:'websocket','cf-connecting-ip':'203.0.113.1'}});
     assert.equal(response.status,101);const ws=response.webSocket;ws.accept();
-    const result=await new Promise((resolve,reject)=>{ws.addEventListener('message',e=>{const m=JSON.parse(e.data);if(m.t==='welcome')resolve({ws,welcome:m});else if(m.t==='error')reject(new Error(JSON.stringify(m)));});ws.addEventListener('close',()=>reject(new Error('closed before welcome')));ws.send(JSON.stringify({t:'hello',v:1,rev:12,rules:true,want:'play',token}));});
+    const view={decoder:snapshotDecoder(),seat:null,own:0,without:0,undecodable:0};
+    const result=await new Promise((resolve,reject)=>{ws.addEventListener('message',e=>{const m=JSON.parse(e.data);if(m.t==='snap'){const snap=view.decoder.decode(m);if(!snap)view.undecodable++;else if(snap.d[1].some(row=>row[9]===view.seat))view.own++;else view.without++;return;}if(m.t==='welcome'){view.seat=m.seat;resolve({ws,welcome:m,view});}else if(m.t==='error')reject(new Error(JSON.stringify(m)));});ws.addEventListener('close',()=>reject(new Error('closed before welcome')));ws.send(JSON.stringify({t:'hello',v:1,rev:12,rules:true,want:'play',token,...(key.endsWith('0')?{}:{coast:1})}));});
     result.ws.addEventListener('close',e=>closedPeers.push({key,code:e.code,reason:e.reason}));
     peers.push(result.ws);return {...result,key,gate:shard(key)};
   };
@@ -76,11 +79,29 @@ test('public Worker, real Table storage and Gates admit above 32 and preserve se
     assert.equal(new Set(holders.map(p=>p.welcome.seat)).size,count,JSON.stringify(closedPeers));
     assert.equal(closedPeers.length,0,JSON.stringify(closedPeers));
     assert.ok(holders.every(p=>p.welcome.max===capacity&&p.welcome.role==='replica'));
+    // Each Gate is handed one world a tick and gives every player their own view of it (0.46.2).
+    for(let wait=0;wait<200&&!holders.every(p=>p.view.own>=2);wait++)await new Promise(r=>setTimeout(r,50));
+    assert.ok(holders.every(p=>p.view.own>=2),'every player behind a Gate is sent the world with their own body in it');
+    assert.equal(holders.reduce((a,p)=>a+p.view.without+p.view.undecodable,0),0);
+    if(count<1000){
+      // The room and its Gates post a second's facts to the diagnostics object; a reader never asks the room.
+      let kept=null;
+      for(let wait=0;wait<100&&!(kept?.gates?.length&&kept?.ticks);wait++){await new Promise(r=>setTimeout(r,100));kept=await (await mf.dispatchFetch('https://studio.test/test-diagnostics')).json();}
+      assert.equal(kept.counts.players,count);assert.equal(kept.diagnostics.cached,true);
+      assert.equal(kept.gates.reduce((a,g)=>a+g.subscribed,0),count,'the Gates between them hold every player');
+      assert.equal(kept.gates.length,Math.ceil(count/GATE_PLAYERS),'and the room opened only the Gates its players fill');
+      assert.ok(kept.gates.every(g=>g.deliveredHz===null||g.deliveredHz>0));
+      assert.equal(kept.gates.reduce((a,g)=>a+g.coasting,0),count-count/10,'nine players in ten are current clients, on the crowd path');
+    }
     for(const failure of ['gate','table']){
-      const gate=holders[0].gate, affected=failure==='table'?holders:holders.filter(p=>p.gate===gate);
-      const closed=Promise.all(affected.map(p=>new Promise(resolve=>p.ws.addEventListener('close',resolve))));
-      const query=failure==='table'?'table=1':`key=crowd/pub-1/${gate}`;
-      assert.equal((await mf.dispatchFetch(`https://studio.test/test-abort?${query}`)).status,204);await closed;
+      // The room fills its Gates in order, so Gate 0 holds players whatever the count; who it holds is whoever closes.
+      const gone=new Set();for(const p of holders)p.ws.addEventListener('close',()=>gone.add(p));
+      const query=failure==='table'?'table=1':'key=crowd/pub-1/0';
+      assert.equal((await mf.dispatchFetch(`https://studio.test/test-abort?${query}`)).status,204);
+      const expected=failure==='table'?holders.length:Math.min(holders.length,GATE_PLAYERS);
+      for(let wait=0;wait<200&&gone.size<expected;wait++)await new Promise(r=>setTimeout(r,50));
+      assert.equal(gone.size,expected,`${failure}: every player it carried was closed, and nobody else`);
+      const affected=[...gone];
       const back=new Map();
       for(let i=0;i<affected.length;i+=20)await Promise.all(affected.slice(i,i+20).map(async p=>{const next=await open(p.key,p.welcome.token);assert.equal(next.welcome.seat,p.welcome.seat);back.set(p.key,next);}));
       holders=holders.map(p=>back.get(p.key)??p);

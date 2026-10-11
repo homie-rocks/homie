@@ -529,6 +529,7 @@ export interface NetStats {
   offline: boolean;
   rtt: number | null;
   offset: number;
+  telemetrySource: 'server' | 'browser' | 'offline' | 'disconnected';
   snapHzIn: number;
   snapHzOut: number;
   inputHzIn: number;
@@ -550,6 +551,8 @@ export interface NetStats {
   stateKeys: number;
   peers: number;
   reconnects: number;
+  /** Most recent loss, retained after recovery so a brief reconnect is diagnosable. */
+  lastDisconnect?: { at: number; why: string; code: number | null; reason: string | null; silentMs: number };
   /** Revision 9: times a link that was up went down (a reconnect that worked on the first knock counts once). */
   drops?: number;
   /** Revision 9: where this browser stands with its room. */
@@ -1695,6 +1698,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   let ws: WebSocketLike | null = null;
   let attempt = 0;
   let reconnects = 0;
+  let lastDisconnect: NetStats['lastDisconnect'];
   let drops = 0;
   let heartbeats = 0;
   /** My welcome gave me back the seat my token named (the same player), and a newer build is live (section 23). */
@@ -1777,6 +1781,9 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   let playableSent = false;
   let autoArmed = false;
   let snapSeen = false;
+  /** The newest tick this socket has been sent (rules games): said on inputs and pings as `g`, so a Gate that
+   * finds this player far behind the room sends it fewer, fresher frames instead of every one late. */
+  let gotTick: number | null = null;
   let loadingAt = 0;
   const createdAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const arrived: ArrivalInfo = { mode: arrival, by: null, playableMs: null, explicitMs: null, lateMs: null };
@@ -2619,6 +2626,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     if (wasOffline && rulesGame) rulesNotice('Connection restored. Joining the online round.');
     offline = false;
     connected = true;
+    gotTick = null;
     downSince = 0;
     attempt = 0;
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
@@ -2764,6 +2772,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     if (Array.isArray(m['c'])) s.c = m['c'] as ControlWire[];
     if (m['hb'] === 1) s.hb = 1;
     if (typeof m['e'] === 'number') s.e = m['e'];
+    if (!local && rulesGame) gotTick = s.k;
     if (acceptSnap(s, bytes, true, local)) { emit('snapshot', s); if (!snapSeen) { snapSeen = true; autoPlayable(); } }
   }
 
@@ -2881,7 +2890,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     pingsOut.set(c, c);
     if (pingsOut.size > 16) { const first = pingsOut.keys().next().value; if (first !== undefined) pingsOut.delete(first); }
     // A hidden host's yield is behind its checkpoint in the sender: the relay hears of the hidden tab after both.
-    raw({ t: 'ping', c, hid: hidden() && !rulesSender?.handing, ...(rulesGame ? { readySpeed } : {}) });
+    raw({ t: 'ping', c, hid: hidden() && !rulesSender?.handing, ...(rulesGame ? { readySpeed } : {}), ...(gotTick !== null ? { g: gotTick } : {}) });
   }
 
   function sendCheckpoint(): void {
@@ -2939,12 +2948,13 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   function statsNow(): NetStats {
     const t = wall();
     return {
+      telemetrySource: offline ? 'offline' : !connected ? 'disconnected' : opts.rulesHost?.mode === 'server' ? 'server' : 'browser',
       role, seat, host, connected, offline, rtt, offset: Math.round(offset),
       snapHzIn: snapIn.hz(t), snapHzOut: snapOut.hz(t), inputHzIn: inputIn.hz(t), inputHzOut: inputOut.hz(t), idleInputsSkipped: idleSkipped,
       lastSnapBytes, maxSnapBytes, bytesInPerS: perSecond(bytesIn), bytesOutPerS: perSecond(bytesOut),
       interpDelay: Math.round(interpDelay()), snapAgeP90: Math.round(ageP90), starvedPct: +starvedPct.toFixed(3), rejectedSnaps,
       owned: api.owned, pending: sentHist.length, stateKeys: stateMap.size,
-      peers: peers.size, reconnects, drops, link, heartbeats, promotions, round: roundInfo ? roundInfo.n : null,
+      peers: peers.size, reconnects, lastDisconnect, drops, link, heartbeats, promotions, round: roundInfo ? roundInfo.n : null,
       decides: { asked: decideStats.asked, ai: decideStats.ai, local: decideStats.local, floor: decideStats.floor, msP50: [...decideStats.ms].sort((x, y) => x - y)[Math.floor(decideStats.ms.length / 2)] ?? null },
     };
   }
@@ -2980,8 +2990,10 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     else paintLink();
   }
 
-  function lost(sock: WebSocketLike, why: string): void {
+  function lost(sock: WebSocketLike, why: string, event?: unknown): void {
     if (ws !== sock) return;
+    const detail = event && typeof event === 'object' ? event as { code?: unknown; reason?: unknown } : null;
+    lastDisconnect = { at: Date.now(), why, code: typeof detail?.code === 'number' ? detail.code : null, reason: typeof detail?.reason === 'string' ? detail.reason.slice(0, 160) : null, silentMs: Math.max(0, wall() - lastMsgAt) };
     ws = null;
     sock.onclose = null; sock.onmessage = null; sock.onerror = null; sock.onopen = null;
     if (why !== 'closed') { try { sock.close(4000, why); } catch { /* gone */ } }
@@ -3011,13 +3023,14 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       lastMsgAt = wall();
       raw({
         t: 'hello', rules: rulesGame, v: NETPLAY_VERSION, rev: NETPLAY_REVISION, token, name: name || undefined, device, want, canHost: asAgent && asAgent.hands === 'host' ? false : canHost, game: opts.game, max: opts.maxPlayers,
+        ...(rulesGame ? { coast: 1 } : {}),
         ...(watching ? { watch: true } : {}), ...(caps.size ? { caps: [...caps] } : {}), ...(asAgent ? { agent: asAgent } : {}),
         // Revision 9 (an older relay ignores both): the game's revision and what this build can do.
         ...(version ? { ver: version } : {}), ...(features.length ? { feat: features } : {}),
       });
     };
     sock.onmessage = (ev) => onMessage(ev.data);
-    sock.onclose = () => lost(sock, 'closed');
+    sock.onclose = (event) => lost(sock, 'closed', event);
     // Browsers follow an error with close; Node's WebSocket, on a refused connection, never does.
     sock.onerror = () => lost(sock, 'error');
   }
@@ -3415,7 +3428,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       if (seat === null || !entries.length) return false;
       if (rulesHost && offline) { rulesHost.frame({ t: 'in', from: seat, e, k, s: entries, r }); return true; }
       if ((!rulesGame && role === 'host') || offline || !connected) return false;
-      if (!raw({ t: 'in', e, k, s: entries, r })) return false;
+      if (!raw({ t: 'in', e, k, s: entries, r, ...(gotTick !== null ? { g: gotTick } : {}) })) return false;
       inputOut.hit(wall());
       return true;
     },

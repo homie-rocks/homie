@@ -1,6 +1,6 @@
 {
   "name": "@homie-rocks/studio",
-  "version": "0.46.0",
+  "version": "0.46.2",
   "description": "A studio for games, music and video on its own Cloudflare: scaffold, multiplayer starters on the netplay contract, a port toolkit that makes existing single-player web games multiplayer, the site Worker with public rooms (Table/Lobby Durable Objects and D1, all on the free Workers plan, no payment method), a site with the hub's sections (Home, Games, Music, Videos, Rooms, Posts with feeds) in the studio's own look, an epic landing page for every game, big songs and videos in the studio's own R2 once it has storage (uploaded, checked by SHA-256, served at the same addresses), deploy, and the homie.rocks directory.",
   "type": "module",
   "license": "Apache-2.0",
@@ -95,6 +95,7 @@
     }
   },
   "files": [
+    "docs/",
     "bin/",
     "lib/",
     "netplay/",
@@ -158,10 +159,11 @@
     "three": "0.185.1",
     "typescript": "5.9.3",
     "viem": "2.57.4",
+    "ws": "8.22.0",
     "zod": "4.3.6"
   },
   "scripts": {
     "test": "node --test --test-concurrency=2 --test-timeout=1800000 test/*.test.mjs",
-    "prepack": "node ../../scripts/authoring-guides.mjs --check"
+    "prepack": "node lib/build-identity.mjs --check && node ../../scripts/authoring-guides.mjs --check"
   }
 }
