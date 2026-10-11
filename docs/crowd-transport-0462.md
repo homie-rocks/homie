@@ -1,10 +1,13 @@
-# What the 0.45.3 cloud trial measured, and the shape that followed (0.46.2)
+# Two cloud trials of big rooms, and the shape that followed (0.46.2)
 
 The trial ran 0.45.3 on real Cloudflare on 11 October 2026 (UTC), at 50, 150, 300, 600 and
 1,000 players, from one computer. Its data is in the trial studio under
 `reports/crowd-circuit/phase-d/20261011T001053Z/`. This is what that data says, what it
-cannot say, and what 0.46.2 changes. Nothing here is a capacity claim: no trial of 0.46.2
-has run on Cloudflare yet.
+cannot say, and what changed. The first set of changes was tried on Cloudflare as a build
+numbered 0.45.4, which was never released; the second section is that trial. Nothing here
+is a capacity claim: no trial of 0.46.2 itself has run on Cloudflare yet.
+
+Below, "the first changes" are the ones the second trial ran.
 
 ## What the trial's own data can and cannot show
 
@@ -101,7 +104,7 @@ A third thing made the first worse. A Gate cannot see how full a player's connec
 (the Workers runtime has no `bufferedAmount`), so it wrote all 20 frames a second to a
 player who could take six.
 
-## What 0.46.2 changes
+## The first changes (tried as 0.45.4)
 
 - **The room runs the rules and visits Gates, not players.** One world a Gate a tick. The
   Gate selects each player's view, encodes it and writes it.
@@ -119,43 +122,127 @@ player who could take six.
 - **The probe behaves like a browser**: it offers compression, and reports the bytes its
   sockets read.
 
+## The second trial (the first changes, on Cloudflare)
+
+Run on 11 October 2026 (UTC) from the same computer; data under
+`reports/crowd-circuit/phase-e/20261011T041939Z/`.
+
+| Players | joined / end | ack p50 / p95 ms | frames a player a second | wire MB/s (link) | Gate frames a second, median | Gate round trip to room, median / p90 ms |
+| --- | --- | --- | --- | --- | --- | --- |
+| 50 | 50 / 50 | 142 / 292 | 20 | 0.25 (7.1) | 20 | 5 to 26 |
+| 150 | 150 / 150 | 152 / 342 | 20.03 | 1.44 (5.2) | 20 | 37 / 69 |
+| 300 | 300 / 300 | 188 / 413 | 19.76 | 3.52 (6.3) | 19.8 | 38 to 50 / 85 |
+| 600 | 600 / 598 | 461 / 1,041 | 17.4 | 5.46 (6.9) | 17.1 | 51 to 99 / 356 |
+| 1,000 | 994 / 993 | 847 / 2,853 | 4.0 | 3.71 (6.9) | 3.1 | 554 to 589 / 2,320 |
+
+What held: the room ran its rules at exactly 20 ticks a second at every size, 994 of 998
+were admitted, nothing restarted, the diagnostics collector did not miss a poll, and
+nothing was dropped for a rate.
+
+**Compression is real.** Cloudflare agreed to permessage-deflate on every socket that
+offered it (50 of 50, 150 of 150, 300 of 300, 600 of 600, 996 of 996) and it saved 5.5 to
+5.8 times. A browser gets the same.
+
+**What collapsed between 600 and 1,000 was the Gates, on output.** The connection was not
+full at 1,000 (3.7 of 6.9 MB/s) and the room was on time. A Gate's own numbers:
+
+- A Gate wrote about 2 to 2.5 MB a second of frames when it kept up (30 players at 300:
+  up to 3.45 MB/s, 20 Hz), and no more when it did not: at 1,000, with 52 to 72 players
+  each, Gates wrote 0.3 to 4.4 MB a second and 3 frames a second per player, where 20
+  frames to that many players would have been 6 to 7 MB a second.
+- A Gate's round trip to the room, on its own clock, was 5 to 26 ms at 50 players, 38 to 50
+  at 300, 51 to 99 at 600 and 554 to 589 at 1,000 (2.3 s at the 90th percentile; one Gate
+  waited 9.4 s for a receipt). The room measured the same links at 10 to 20 ms at 300 and
+  525 to 875 ms at 1,000: a Gate was that long getting to the next thing in its queue.
+- The room replaced 9 worlds a second per link at 1,000 because eight were already
+  unacknowledged; a Gate received 13 a second instead of 20.
+- Every player was then "paced": a Gate that reads a player's report seconds late thinks
+  the player is seconds behind. The pacing did not cause the collapse; it followed it.
+
+Calibrating a laptop against the first trial (a Gate there used 108 ms of CPU a second for
+at most 20 players of 150) puts Cloudflare at five to eight times slower than the laptop
+these were measured on. On the laptop, a 0.45.4 Gate of 62 players in a room of 1,000
+needs 10.7 ms a tick for selecting and encoding alone, before compression: 50 to 85 ms of
+a 50 ms tick on Cloudflare.
+
+**Per-player bytes were too high.** 11.7 KB a second on the wire per player at 300, after
+compression. In this game a player near the middle sees about 180 bodies, 71 of them
+changed in any frame, and a third of each row was a heading printed to 16 digits.
+
+**"Late inputs" measured the probe, and then a mistake of mine.** The column is the share
+of inputs that reached the rules after the tick they were stamped for (they apply on the
+next). The probe stamped every input three ticks ahead and never adjusted; the toolkit's
+client moves its clock by the lead the room reports in every snapshot. On this connection
+(41 to 55 ms round trip, to 173) a fixed three ticks misses about a quarter of the time,
+as it did in the first trial (28%). The rise with size (0.27, 0.33, 0.54, 0.99) was the
+Gate's timing: it sent its input frame a fixed interval after a world ARRIVED, and a
+world arrives after the room's tick has run. The longer the tick ran, the later the frame,
+until it missed every tick by a little. "Input transit" and "world age" compare two
+computers' clocks and are only good for seconds.
+
+### What 0.46.2 adds to the first changes
+
+- **Twenty players a Gate**, from the room's size alone: 50 Gates at 1,000.
+- **The world crosses as numbers.** One block for every Gate (24 bytes a body, exact) and
+  what else changed. The room sends 26 MB a second to 50 Gates where the JSON would be 179,
+  and a Gate rebuilds it in 0.18 ms where parsing took 0.93.
+- **Bodies coast.** A Gate sends a body when a client coasting it on its last velocity
+  would be off by more than the game's precision (near) or half a far interval's travel
+  (far). 71 rows a frame become 20; 14.8 KB a second per player becomes 6.3; far bodies
+  are drawn 3 cm from the truth on average where holding them still between refreshes
+  gave 35 cm. `view.precisionM` is now the dial: at 0.05 it is 5.3 KB a second.
+- **Once a world, not once a player**, for everything that does not depend on the player:
+  46 microseconds a player-frame where it was 156.
+- Together, on the laptop, a Gate's tick at 1,000 players is 1.4 ms where it was 10.7.
+- **A Gate finds the room's tick** from how long the room says its frame waited.
+- **The probe follows the room's reported lead**, as the client does.
+
+Measured with `node packages/studio/test/crowd-gate-cost.mjs` (the fixture game's real
+rules, 1,000 seeded players). A laptop, one core, nothing else measured.
+
 ## What is proven, and where
 
 Deterministic, on virtual time with seeded players, in the release gate
 (`packages/studio/test/rules-crowd-shape.test.mjs`):
 
-- 64 players on a Gate, two inputs each a tick for 100 ticks: at most one frame a tick to
-  the room, each sent 5 ms before the next world is due on a link with no delay, every
-  input once and in its player's order, none waiting more than 50 ms.
+- 20 players on a Gate, two inputs each a tick for 240 ticks, against a room whose tick
+  takes 2, 12 and 30 ms and is 1, 3 and 6 ms away: one frame a tick, every input once and
+  in its player's order; after three seconds nine frames in ten are read 3 to 16 ms
+  before the tick that takes them.
 - A player whose link carries six frames a second, for thirty seconds: never more than 40
   ticks behind, own body in every frame, every delta decodes; a player on a good link
   beside them gets all 600 frames. The same link without the client's word: more than 300
   ticks behind and still falling.
-- 120 seeded players behind four Gates and the real rules host, five seconds, with the
-  room 3 ms and then 10 ms away: 100 frames each, own body in every one, 0 of 9,202 inputs
-  late, 100 frames from each Gate to the room.
-- The room sends 16 worlds a tick for 1,000 players and writes nothing per player.
+- 120 seeded players behind four Gates and the real rules host with every runner running,
+  five seconds, the room 3 ms and then 10 ms away: 100 frames each, own body in every one,
+  no input late, 100 frames from each Gate to the room, and a coasting client sent under
+  six tenths of the bytes of an older one beside it.
+- The world wire: 120 ticks of a real 200-player crowd, with a body leaving and one
+  joining, arrive at a Gate exactly as the room held them, for a link that takes every
+  world, one that has two in three replaced, and one that opens half way; in under a
+  quarter of the JSON's bytes. Numbers that are not 32-bit exact cross in 64 bits.
+- The crowd path: 200 ticks of a real 300-player crowd, six players (one paced, one a
+  screen): exactly the bodies in range every tick; a player's own body exact; a near body
+  never more than 2.5 hundredths of a metre from the truth and a far one never further
+  than holding it still did; under half the bytes.
+- The room sends one world a Gate a tick and writes nothing per player.
 - A game with owner-only fields is never handed to a Gate whole.
 - Rates, `room.rates`, and the diagnostics object answering without asking the room.
 
-In real `workerd` (`gates-workerd.test.mjs`): 40 players behind five Gates each receive
-the world with their own body in it, and the diagnostics object reports every one of them
-without the room being asked.
+In real `workerd` (`gates-workerd.test.mjs`): 40 players behind fifteen Gates each
+receive the world, sent as numbers, with their own body in it; nine in ten on the crowd
+path; and the diagnostics object reports every one without the room being asked.
 
-Not proven: anything about Cloudflare at 300 or 1,000 players. Load runs on the computer
-this was written on are not evidence either way; it was running other heavy work. Two
-runs of the local reproduction at 300 players (`npm run test:rules:extended`), with the
-computer's load average at 5 and then 16, admitted and kept all 300 at 20.0 ticks a
-second, delivered 19.5 and 19.1 frames a second and acknowledged input in 209 and 252 ms
-at p95, against a budget of 162: failures, on a computer whose own processes took 28 to
-165 ms to answer each other. The probe's sockets read 194 MB for 1,113 MB of frames, so
-compression is worth 5.7 times on this game.
+Not proven: Cloudflare at 1,000 players. Load runs on the computer this was written on
+are not evidence either way; it was running other heavy work.
 
 ## What the next trial needs
 
-The connection it runs from decides what it can show. At 1,000 dense players this game
-sends each one about 2.7 KB a frame before compression, 53 MB a second in all. The run
-script measures the link before each step and marks a step whose delivered bytes reached
-the link's capacity. For those steps the numbers to read are the server's own: the room's
-ticks a second, the time an input took from a Gate to the rules, and the frames each Gate
-wrote to each player.
+At 6.3 KB a second a player, 1,000 players are 6.3 MB a second: the trial connection's
+whole capacity (5.2 to 7.1 MB/s measured across the second trial). The 1,000 step will be
+at or over the link, and pacing will hold players near a second behind rather than
+further; its server columns are the ones to read. Setting the trial game's
+`view.precisionM` to 0.05 brings it to 5.3 MB a second. A probe that opens its sockets
+from inside Cloudflare would take the link out of the measurement, and would say nothing
+about a player's own connection or the last hop, which is where the first trial's seconds
+were; it is not built.

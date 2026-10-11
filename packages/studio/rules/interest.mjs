@@ -293,6 +293,15 @@ const sameTail = (a, b) => {
 /** What a Gate works out once for each world, whoever is looking. One per Gate. */
 export function crowdWorlds({ radiusM = null, precisionM = 0 } = {}) {
   const known = new Map(); let generation = 0, last = null, lastOut = null;
+  // A precision that is one over a whole number (0.01, 0.05, 0.25) rounds with one multiply and one divide, to the
+  // same number the longer way gives; any other takes the longer way.
+  const steps = precisionM > 0 ? 1 / precisionM : 0, whole = precisionM > 0 && Math.abs(steps - Math.round(steps)) < 1e-9 ? Math.round(steps) : 0;
+  const quantize = (v) => {
+    const out = new Array(v.length);
+    if (whole) for (let a = 0; a < v.length; a++) out[a] = Math.round(v[a] * whole) / whole;
+    else for (let a = 0; a < v.length; a++) out[a] = Number((Math.round(v[a] / precisionM) * precisionM).toPrecision(12));
+    return out;
+  };
   return {
     radiusM, precisionM,
     of(snap) {
@@ -326,8 +335,8 @@ export function crowdWorlds({ radiusM = null, precisionM = 0 } = {}) {
             const e = entities[i];
             if (precisionM > 0) {
               row = e.slice();
-              for (const f of [3, 4]) row[f] = e[f].map(v => Number((Math.round(v / precisionM) * precisionM).toPrecision(12)));
-              if (Array.isArray(e[5])) row[5] = e[5].map(v => Math.round(v * 1000) / 1000);
+              row[3] = quantize(e[3]); row[4] = quantize(e[4]);
+              if (Array.isArray(e[5])) { const h = e[5], out = new Array(h.length); for (let a = 0; a < h.length; a++) out[a] = Math.round(h[a] * 1000) / 1000; row[5] = out; }
             } else row = e;
             visual[i] = row;
           }

@@ -13,8 +13,10 @@ import { join } from 'node:path';
 import zlib from 'node:zlib';
 import { crowdView, crowdWorlds, scheduledView, snapshotDecoder, snapshotEncoder, snapshotText } from '../rules/interest.mjs';
 import { PKG, hostRig, loadGame } from './rules-kit.mjs';
+import { GATE_PLAYERS } from '../worker/gate.mjs';
+import { worldSink, worldSource } from '../worker/world-wire.mjs';
 
-const [N = 1000, PER = 32, TICKS = 200] = process.argv.slice(2).map(Number);
+const [N = 1000, PER = GATE_PLAYERS, TICKS = 200] = process.argv.slice(2).map(Number);
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-gate-cost-')));
 const dir = join(PKG, 'test/fixtures/crowd-circuit/game');
 const L = await loadGame(scratch, dir, 'gate-cost');
@@ -29,6 +31,7 @@ export function run(options) {
   const view = { ...settings.view, ...options.view }, worlds = crowdWorlds(view);
   const clients = Array.from({ length: PER }, (_, i) => ({ seat: Math.floor(i * N / PER), view: scheduledView(view, 20), enc: snapshotEncoder(Infinity, true), crowd: crowdView(worlds, view, 20), dec: snapshotDecoder(), z: zlib.createDeflateRaw({ level: 6 }), wire: 0, worst: 0 }));
   for (const c of clients) c.z.on('data', (b) => { c.wire += b.length; });
+  const source = worldSource(), sink = worldSink(), gates = Math.ceil(N / PER); let synced = 0, room = 0, wireBytes = 0;
   let parse = 0, encode = 0, deflate = 0, bytes = 0, frames = 0, worldBytes = 0, rows = 0, sum = 0, count = 0; const errors = [];
   for (let t = 0; t < TICKS; t += 1) {
     const snap0 = h.snap(), now = t * 50;
@@ -38,8 +41,17 @@ export function run(options) {
       h.host.frame({ t: 'in', from: own[9], e: snap0.e, k: snap0.k + 2, s: [[0, east ? 127 : -127, y > 55 ? -35 : y < -55 ? 35 : Math.round(Math.sin(now / 3100 + own[9]) * 35)]], r: own[2] });
     }
     h.ticks(1);
-    const text = JSON.stringify(h.snap()); worldBytes += text.length;
-    let at = ms(); const snap = JSON.parse(text); parse += ms() - at;
+    const made = h.snap(); let at, snap;
+    if (options.coast) {
+      // The room's share: one block for every Gate, and a header a Gate (here, all of them).
+      at = ms(); const world = source.encode(made); let header;
+      for (let g = 0; g < gates; g += 1) header = JSON.stringify(source.header(world, synced, clients.map((c) => c.seat)));
+      room += ms() - at; synced = world.seq; worldBytes += world.motion.byteLength + header.length;
+      at = ms(); snap = sink.decode(JSON.parse(header), world.motion); parse += ms() - at;
+    } else {
+      at = ms(); const text = JSON.stringify(made); for (let g = 1; g < gates; g += 1) Buffer.from(text); room += ms() - at; worldBytes += text.length;
+      at = ms(); snap = JSON.parse(text); parse += ms() - at;
+    }
     at = ms(); const outs = clients.map((c) => options.coast ? c.crowd(snap, c.seat) : snapshotText({ t: 'snap', from: null, ...c.enc.encode(c.view(snap, c.seat), c.seat) })); encode += ms() - at;
     at = ms(); for (const [i, c] of clients.entries()) { c.z.write(outs[i]); c.z.flush(zlib.constants.Z_SYNC_FLUSH); } deflate += ms() - at;
     for (const [i, c] of clients.entries()) {
@@ -52,8 +64,8 @@ export function run(options) {
     }
   }
   return new Promise((done) => setTimeout(() => done({
-    ...options, players: N, perGate: PER, worldKB: Math.round(worldBytes / TICKS / 1024),
-    msPerTick: { parse: +(parse / TICKS).toFixed(2), viewEncode: +(encode / TICKS).toFixed(2), deflate: +(deflate / TICKS).toFixed(2) },
+    ...options, players: N, perGate: PER, gates, worldKB: Math.round(worldBytes / TICKS / 1024), roomSendsMBs: +(worldBytes / TICKS * 20 * gates / 1e6).toFixed(1),
+    msPerTick: { roomAllGates: +(room / TICKS).toFixed(2), parse: +(parse / TICKS).toFixed(2), viewEncode: +(encode / TICKS).toFixed(2), deflate: +(deflate / TICKS).toFixed(2) },
     bytesPerFrame: Math.round(bytes / frames), rowsPerFrame: +(rows / frames).toFixed(1),
     wireKBsPerPlayer: +(clients.reduce((a, c) => a + c.wire, 0) / PER / (TICKS / 20) / 1024).toFixed(2),
     visibleBodies: Math.round(count / frames), meanErrorM: +(sum / count).toFixed(4), worstNearErrorM: +Math.max(...clients.map((c) => c.worstNear ?? 0)).toFixed(3), worstErrorM: +Math.max(...clients.map((c) => c.worst)).toFixed(3),
