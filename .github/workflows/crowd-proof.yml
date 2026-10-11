@@ -1,0 +1,78 @@
+# An isolated workerd experiment, not a Cloudflare deployment. Normal releases
+# keep the deterministic core in CI; this expensive comparison is manual unless
+# this workflow itself is being changed.
+name: Crowd reproduction
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/crowd-proof.yml
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+concurrency:
+  group: crowd-proof-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  crowd:
+    name: Isolated workerd crowd comparison
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Real Chrome with a display
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb
+          chrome=$(command -v google-chrome)
+          "$chrome" --version
+          echo "CHROME_PATH=$chrome" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/crowd-before" "$RUNNER_TEMP/crowd-after" "$RUNNER_TEMP/crowd-profile"
+          lscpu
+          free -m
+      - name: Original server comparison (failure is retained as evidence)
+        continue-on-error: true
+        env:
+          CROWD_BASELINE: '1'
+          RULES_EXTENDED: '1'
+        run: |
+          export TMPDIR="$RUNNER_TEMP/crowd-before"
+          xvfb-run -a --server-args='-screen 0 1920x1080x24' node --test packages/studio/test/rules-cloud-extended.mjs | tee "$RUNNER_TEMP/crowd-before.log"
+      - name: Patched server must pass both capacity cases
+        env:
+          RULES_EXTENDED: '1'
+        run: |
+          export TMPDIR="$RUNNER_TEMP/crowd-after"
+          xvfb-run -a --server-args='-screen 0 1920x1080x24' node --test packages/studio/test/rules-cloud-extended.mjs | tee "$RUNNER_TEMP/crowd-after.log"
+      - name: Profile workerd and the unchanged driver when capacity fails
+        if: failure()
+        continue-on-error: true
+        env:
+          RULES_EXTENDED: '1'
+          CROWD_PROFILE: '1'
+        run: |
+          export TMPDIR="$RUNNER_TEMP/crowd-profile"
+          xvfb-run -a --server-args='-screen 0 1920x1080x24' node --test packages/studio/test/rules-cloud-extended.mjs | tee "$RUNNER_TEMP/crowd-profile.log"
+      - name: Preserve reports, screenshots and raw logs even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: crowd-proof-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/crowd-before.log
+            ${{ runner.temp }}/crowd-after.log
+            ${{ runner.temp }}/crowd-profile.log
+            ${{ runner.temp }}/crowd-before/homie-crowd-proof-*/
+            ${{ runner.temp }}/crowd-after/homie-crowd-proof-*/
+            ${{ runner.temp }}/crowd-profile/homie-crowd-proof-*/
+          retention-days: 14

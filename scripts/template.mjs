@@ -20,6 +20,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { stampRuntime } from '../packages/studio/lib/build-identity.mjs';
+stampRuntime(process.argv.includes('--check'));
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TEMPLATE = join(ROOT, 'template');
 const { newStudio } = await import(join(ROOT, 'packages', 'studio', 'lib', 'scaffold.mjs'));

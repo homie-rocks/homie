@@ -1,3 +1,4 @@
+import { STUDIO_BUILD } from './build-id.mjs';
 import { interestSnapshot, snapshotEncoder, scheduledView } from '../rules/interest.mjs';
 /*
  * room.mjs — the netplay v1 relay semantics, with no transport in it.
@@ -260,8 +261,9 @@ export class NetRoom {
   constructor({
     code, rules = false, tickHz = 20, maxPlayers = 8, maxScreens = 16, perIp = 12, stallMs = 1500, silentMs = 2500, idleMs = 10_000,
     holdMs = 60_000, forgetMs = 60_000, persistMs = 30_000, store = null, now = Date.now, log = () => {},
-    agentsAloneMs = AGENTS_ALONE_MS, voteMs = VOTE.ms, voteCooldownMs = VOTE.cooldownMs, autoVoteMs = VOTE.autoMs,
+    rates = null, agentsAloneMs = AGENTS_ALONE_MS, voteMs = VOTE.ms, voteCooldownMs = VOTE.cooldownMs, autoVoteMs = VOTE.autoMs,
   }) {
+    this.rates = rates;
     this.agentsAloneMs = agentsAloneMs;
     this.voteMs = voteMs;
     this.voteCooldownMs = voteCooldownMs;
@@ -386,6 +388,7 @@ export class NetRoom {
   /** The host runtime of a server-hosted room (`{ frame(m), facts() }`), or null. Seats already here are said as joins. */
   setServerHost(h) {
     this.server = h;
+    if (h?.rates) this.rates = h.rates;
     this.hostFailed = null;
     this.hostId = null;
     this.preferHost = null;
@@ -474,12 +477,24 @@ export class NetRoom {
     const out = text ?? JSON.stringify({ t: 'snap', from: c ? c.seat : null, ...snap, ...(m.hb === 1 ? { hb: 1 } : {}) });
     if (m.hb === 1) this.stats.heartbeats = (this.stats.heartbeats ?? 0) + 1;
     this.lastSnapText = out;
+    // A server-hosted room behind Gates hands each Gate ONE world a tick; the Gate selects, encodes and paces
+    // every player it holds (worker/gate.mjs). This object's tick does no per-player selection or serialisation:
+    // a player costs it one comparison here. A game with fields only their owner may see is the exception: the
+    // room alone knows who may see what, so it keeps each player's view to itself and the Gates only carry it.
+    const shared = !c && this.server && !this.server.privateDelivery;
+    const groups = shared ? new Set() : null;
     for (const o of this.others(c)) {
       if (this.lite(o)) continue; // an agent with no game client draws nothing
+      if (shared && o.conn.snapshotGroup) {
+        if (o.conn.snapshotSeat !== o.seat) { o.conn.snapshotSeat = o.seat; o.conn.subscribe(o.seat); }
+        groups.add(o.conn.snapshotGroup);
+        continue;
+      }
       // A congested socket skips a snapshot rather than queueing a stale one.
       if (o.conn.buffered && o.conn.buffered() > 256 * 1024) { this.stats.drops += 1; continue; }
       this.sendText(o.conn, this.hasViewSchedule() ? JSON.stringify({ t: 'snap', from: null, ...this.playerSnapshot(o, snap) }) : out);
     }
+    if (groups) for (const group of groups) group.snapshot(snap, this.server.viewSettings ?? {}, this.tickHz);
   }
 
   hasViewSchedule() {
@@ -490,6 +505,12 @@ export class NetRoom {
   /** The same per-player delivery role will run in Gates. Keyframes belong to sockets, not saved seats. */
   playerSnapshot(client, snap, welcome = false) {
     if (!snap || !this.hasViewSchedule()) return snap;
+    // Relayed clients get a complete welcome, then Gates own their delivery
+    // baselines. Retaining a welcome-only encoder here pins a second set of
+    // per-player rows for the lifetime of every seat, without ever using it.
+    if (welcome && client.conn.snapshotGroup && !this.server.privateDelivery) {
+      return scheduledView(this.server.viewSettings ?? { radiusM: this.server.viewRadiusM }, this.tickHz)(snap, client.seat);
+    }
     client.viewSchedule ??= scheduledView(this.server.viewSettings ?? { radiusM: this.server.viewRadiusM }, this.tickHz);
     let selected = client.viewSchedule(snap, client.seat);
     if(this.server?.projectSnapshot) selected=this.server.projectSnapshot(selected,client.seat);
@@ -601,7 +622,7 @@ export class NetRoom {
     this.clients.set(c.id, c);
     return {
       id: c.id,
-      onMessage: (text) => this.guard(c, 'message', () => this.onMessage(c, text), text),
+      onMessage: (text, receivedAt) => this.guard(c, 'message', () => this.onMessage(c, text, receivedAt), text),
       /** `via`: how the transport learned it (`close`, or `error`: the socket failed, which is how a lost network arrives). */
       onClose: (via = 'close') => this.guard(c, 'close', () => this.onClose(c, 'closed', via)),
     };
@@ -664,7 +685,9 @@ export class NetRoom {
   sendText(conn, text) {
     try { conn.send(text); this.stats.bytesOut += this.rules ? byteLength(text) : text.length; } catch { /* closing */ }
   }
-  send(c, msg) { this.sendText(c.conn, JSON.stringify(msg)); }
+  send(c, msg) {
+    this.sendText(c.conn, JSON.stringify(msg));
+  }
   error(c, code, message, extra = {}) { this.send(c, { t: 'error', code, message, ...extra }); }
   live() { return [...this.clients.values()].filter((c) => c.helloed); }
   others(c) { return this.live().filter((o) => o !== c); }
@@ -754,7 +777,7 @@ export class NetRoom {
     return true;
   }
 
-  allow(c, t, bytes, view = false) {
+  allow(c, t, bytes, view = false, receivedAt, kind = null) {
     // A spectator screen has little to say: its events are capped at 512 B (16 screens x 2/s x 512 B at most reach the host).
     const cap = t === 'ev' && c.seat === null && (view || c.id !== this.hostId) ? 512 : capOf(t, this.seatCap);
     const rulesOutput = !view && this.rules && c.rules && c.id === this.hostId;
@@ -765,10 +788,14 @@ export class NetRoom {
       if (rulesOutput) this.stopBrowserRules(c, 'size', `This game's rules exceeded the browser room size cap: ${detail}. Join again for a fresh room.`);
       return false;
     }
-    const now = this.now();
+    // Trusted Gate ingress time measures the sender, not a delayed batch's
+    // arrival at the Table. Direct sockets keep the Table clock. Monotonicity
+    // prevents a relay clock adjustment from resetting an existing rate window.
+    const now = Number.isFinite(receivedAt) ? (c.ingressRateAt = Math.max(c.ingressRateAt ?? receivedAt, receivedAt)) : this.now();
     if (rulesOutput) {
       c.rulesBuckets ??= new Map();
-      const rate = rulesRates(this.tickHz, this.seatCap)[t];
+      const rate = this.rates?.[t] ?? rulesRates(this.tickHz, this.seatCap)[t];
+      if (!(Number.isFinite(rate) && rate > 0)) return true;
       if (!takeRulesToken(c.rulesBuckets, t, rate, now)) return true;
       this.stats.drops += 1;
       if (t === 'snap') return false;
@@ -779,7 +806,16 @@ export class NetRoom {
       else { this.hostId = c.id; this.stopBrowserRules(c, 'rate', 'No player can host this room after its host failed. Join again for a fresh room.'); }
       return false;
     }
-    const limit = t === 'ev' ? EV_RATES[view ? (c.seat === null ? 'screen' : 'replica') : this.roleOf(c)] : (RATES[t] ?? RATES.other);
+    // Homie paces nothing a player sends a game whose rules run on the server: the rules hold every input to
+    // its declared type and their own budget, and a batch a slow network delivered late is not a flood (0.45.3
+    // dropped honest input at 60 a second in a room of 1,000). A studio that wants a pace names one
+    // (`room.rates` in game.json, messages a second per player; 0 lifts one). What players say to each other
+    // (speech, chat, reactions) keeps its pace, and so does every room a player's own browser hosts, where the
+    // caps are what stands between that phone and the rest of the room.
+    const social = t === 'say' || t === 'react' || t === 'ev' && SPEECH.test(kind ?? '');
+    const preset = this.server && !social ? null : t === 'ev' ? EV_RATES[view ? (c.seat === null ? 'screen' : 'replica') : this.roleOf(c)] : (RATES[t] ?? RATES.other);
+    const limit = this.rates?.[t] ?? preset;
+    if (!(Number.isFinite(limit) && limit > 0)) return true;
     const rateKey = view ? `${t}:view` : t;
     const list = c.rates.get(rateKey) ?? [];
     while (list.length && list[0] <= now - 1000) list.shift();
@@ -797,7 +833,7 @@ export class NetRoom {
     return true;
   }
 
-  onMessage(c, text) {
+  onMessage(c, text, receivedAt) {
     if (this.clients.get(c.id) !== c) return;
     text = String(text);
     const now = this.now();
@@ -809,7 +845,7 @@ export class NetRoom {
     if (!m || typeof m.t !== 'string') return;
     if (!c.helloed) { if (m.t === 'hello' && bytes <= LIMITS.hello) this.hello(c, m); return; }
     const view = this.rules && !(c.rules && c.id === this.hostId && m.rules === true && RULES_FRAMES.includes(m.t));
-    if (!this.allow(c, m.t, bytes, view)) return;
+    if (!this.allow(c, m.t, bytes, view, receivedAt, m.t === 'ev' ? String(m.k ?? '') : null)) return;
     const isHost = c.id === this.hostId && !view;
     switch (m.t) {
       case 'rules-end': {
@@ -1816,9 +1852,9 @@ export class NetRoom {
   }
 
   /** The seat a slot names (its own, or the one its agent sits in), and what holds it. */
-  holderOf(seat) {
+  holderOf(seat, holders) {
     if (!Number.isInteger(seat)) return { kind: 'none' };
-    const c = this.live().find((o) => o.seat === seat);
+    const c = holders ? holders.get(seat) : this.live().find((o) => o.seat === seat);
     const s = this.seats.get(seat);
     if (c && c.agent) return { kind: 'agent', agent: c.agent, name: c.name };
     if (c) return { kind: 'human', name: c.name };
@@ -1832,21 +1868,29 @@ export class NetRoom {
    * slot with no seat is a bot; a slot naming a seat nobody holds is a bot; a person is never marked AI and never
    * named with an AI mark. A host's game cannot present an AI as a person.
    */
+  holderIndex() {
+    const holders = new Map();
+    for (const client of this.live()) if (!holders.has(client.seat)) holders.set(client.seat, client);
+    return holders;
+  }
+
   labelRoster(slots) {
-    return slots.map((raw) => this.labelOne(raw, false)).filter(Boolean);
+    const holders = this.holderIndex();
+    return slots.map((raw) => this.labelOne(raw, false, holders)).filter(Boolean);
   }
 
   /** A round's results, labelled the same way (`agent: true` on every AI's row). */
   labelResults(rows) {
-    return rows.slice(0, this.server || this.rules ? this.seatCap : 64).map((raw) => this.labelOne(raw, true)).filter(Boolean);
+    const holders = this.holderIndex();
+    return rows.slice(0, this.server || this.rules ? this.seatCap : 64).map((raw) => this.labelOne(raw, true, holders)).filter(Boolean);
   }
 
-  labelOne(raw, result) {
+  labelOne(raw, result, holders) {
     if (!raw || typeof raw !== 'object') return null;
     if (this.rules) {
       if (!Number.isInteger(raw.slot) || raw.slot < 0 || raw.slot >= this.seatCap) return null;
       raw = { ...raw, seat: raw.slot };
-      const holder = this.holderOf(raw.slot);
+      const holder = this.holderOf(raw.slot, holders);
       if (holder.kind !== 'human' && holder.kind !== 'agent') {
         if (raw.slot >= this.maxPlayers - this.reserve())
           raw.agent = { seat: null, role: raw.slot >= this.maxPlayers - this.policy.guides ? 'guide' : 'party', hands: 'host' };
@@ -1856,7 +1900,7 @@ export class NetRoom {
     const out = { ...raw };
     const seat = Number.isInteger(raw.seat) ? raw.seat : null;
     const agentSeat = !result && raw.agent && Number.isInteger(raw.agent.seat) ? raw.agent.seat : null;
-    const who = this.holderOf(seat ?? agentSeat);
+    const who = this.holderOf(seat ?? agentSeat, holders);
     const role = (a) => (['party', 'guide', 'player'].includes(a?.role) ? a.role : 'party');
     if (who.kind === 'agent') {
       out.name = who.name || aiName(raw.name);
@@ -2403,6 +2447,9 @@ export class NetRoom {
     const live = this.live();
     const agents = live.filter((c) => c.agent && c.seat !== null).length;
     return {
+      transport: [...new Set(this.live().map(c => c.conn.transportFacts).filter(Boolean))].map(f => f()),
+      toolkit: STUDIO_BUILD,
+      gates: this.gateFacts?.() ?? [],
       t: 'net', v: NET_VERSION, rev: NET_REVISION, room: this.code, st: now,
       host: this.hostRef(),
       openedAt: this.openedAt || null,
@@ -2445,6 +2492,28 @@ export class NetRoom {
         stateBytes: this.stateBytes,
       },
       stats: { ...this.stats, elections: this.stats.elections.slice(-8) },
+    };
+  }
+
+  /** What a measurement of a big room reads each second: its counts, clock and links, and nothing per player. */
+  diagnosticFacts() {
+    const now = this.now(), live = this.live();
+    while (this.snapTimes.length && this.snapTimes[0] < now - 1000) this.snapTimes.shift();
+    return {
+      toolkit: STUDIO_BUILD, room: this.code, st: now,
+      transport: [...new Set(live.map(c => c.conn.transportFacts).filter(Boolean))].map(f => f()),
+      counts: {
+        players: live.filter((c) => c.seat !== null && !c.agent).length,
+        agents: live.filter((c) => c.agent && c.seat !== null).length,
+        screens: live.filter((c) => c.seat === null).length,
+        waiting: live.filter((c) => c.waiting).length,
+        shells: this.watchers.size,
+        maxPlayers: this.maxPlayers,
+      },
+      snapHz: this.snapTimes.length,
+      ...(this.server ? { hosted: 'server', ticks: this.server.facts?.() ?? null } : {}),
+      stats: { ins: this.stats.ins, snaps: this.stats.snaps, drops: this.stats.drops, oversize: this.stats.oversize },
+      snapBytes: this.lastSnapText ? this.lastSnapText.length : 0,
     };
   }
 

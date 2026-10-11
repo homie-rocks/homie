@@ -1,0 +1,61 @@
+{
+  "id": "crowd-circuit",
+  "name": "Crowd Circuit",
+  "blurb": "A thousand runners, one circuit. Cross alternating checkpoint lines to score in sixty-second rounds.",
+  "players": {
+    "min": 1,
+    "max": 1000
+  },
+  "entry": "src/view.ts",
+  "room": {
+    "host": "server",
+    "tickHz": 20,
+    "view": {
+      "radiusM": 12,
+      "precisionM": 0.01,
+      "nearM": 4,
+      "farHz": 5
+    }
+  },
+  "landing": {
+    "pitch": "Find your lane. Run with the crowd.",
+    "about": "Shuttle between the amber and mint lines. Each crossing scores a point, then your target switches sides. Everyone shares one long arena; nearby runners stay in view.",
+    "controls": {
+      "phone": "Drag anywhere on the arena to run.",
+      "computer": "WASD or arrow keys to run."
+    },
+    "howToPlay": [
+      "Cross the mint line on your right.",
+      "Turn and cross the amber line on your left.",
+      "Keep shuttling until the sixty-second round ends."
+    ],
+    "credits": [
+      {
+        "role": "Movement and networking",
+        "name": "Homie coin-dash starter, studio 0.45.0"
+      },
+      {
+        "role": "Game, canvas art and synthesized checkpoint tone",
+        "name": "Shop Trial"
+      }
+    ]
+  },
+  "from": {
+    "starter": "coin-dash",
+    "studio": "0.45.0"
+  },
+  "roundSeconds": 60,
+  "genre": [
+    "Racing",
+    "Party"
+  ],
+  "screen": {
+    "share": {
+      "at": "bottom-right",
+      "label": false
+    },
+    "chat": {
+      "lines": "sheet-only"
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import { deployIntent } from './lib/deploy-intent.mjs';
 /**
  * THE HOMIE STUDIO MOD (Claude Code 2.1.287 and later; the CLI and the desktop app's Code tab).
  *
@@ -106,6 +107,7 @@ export function register(on, options) {
 
   on('session.start', async ($, e, next) => {
     const started = await next(e);
+    S.deployRequested = null;
     S.interactive = Boolean(e.isInteractive);
     S.cwd = e.cwd;
     try { S.surfaces = [...(await $.session.surfaces())]; } catch { S.surfaces = []; }
@@ -116,6 +118,14 @@ export function register(on, options) {
     }
     $.clock.every(TICK_MS, () => tick($));
     return started;
+  });
+
+  on('prompt.submit', async ($, e, next) => {
+    if (['composer', 'bridge', 'sdk'].includes(e.origin?.kind)) {
+      const intent = deployIntent(e.text);
+      if (intent !== null) S.deployRequested = intent ? S.root : null;
+    }
+    return next(e);
   });
 
   on('session.end', async ($, e, next) => {
@@ -1263,7 +1273,7 @@ function holdCtx() {
 async function deployKnown($, root) {
   const own = root === S.root;
   return {
-    by: 'Claude', stored: await $.store.get(`deployed:${root}`),
+    requested: S.deployRequested === root, by: 'Claude', stored: await $.store.get(`deployed:${root}`),
     ...(own ? { live: S.live, liveIds: (S.rooms.games ?? []).map((g) => g.id), games: S.games, playing: S.rooms.live?.playing ?? 0 } : {}),
   };
 }
@@ -1274,7 +1284,7 @@ async function settle($, d) {
   if (d.deny) return { deny: d.deny };
   if (d.note) { $.ui.toast(d.note); return null; }
   const answer = await ask($, d.hold);
-  if (answer === 'Proceed') return null;
+  if (answer === 'Proceed') { if (d.hold.kind === 'deploy') S.deployRequested = S.root; return null; }
   return { deny: answer === null ? d.hold.nobody : d.hold.no };
 }
 

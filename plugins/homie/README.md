@@ -269,7 +269,7 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
 2.1.287):
 
 ```text
-❯ ./homie.mjs hooks: session.start, session.end, command.run{command=studio}, command.run{command=build},
+❯ ./homie.mjs hooks: session.start, session.end, prompt.submit, command.run{command=studio}, command.run{command=build},
   command.run{command=rooms}, command.run{command=play}, command.run{command=watch}, command.run{command=codex},
   command.run{command=deploy-status}, command.run{command=perf-numbers}, command.run{command=parts},
   command.run{command=arcade}, command.run{command=look}, command.run{command=lock}, command.run{command=assets},
@@ -291,6 +291,7 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
 - `session.start` / `session.end`: find the studio, register the commands, start a 2-second
   timer that rereads the studio's files; end any game bridge.
 - `command.run` (its eighteen commands only).
+- `prompt.submit`: remember a trusted owner’s request to deploy this studio for the task, including retries; an explicit refusal revokes it. Tool output and plugin-authored prompts do not grant approval.
 - `tool.call` (every tool): after the tool ran, take secrets out of its result; note which Homie
   command ran (for drawing it) and which agent ran what (for the parts). It never changes a tool's
   input.

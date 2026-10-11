@@ -447,9 +447,15 @@ test('the office API is the owner\'s: a key looks, announces and invites, and on
   const { fetchSite, owner, same, officeKey, readKey, seat } = await site();
   assert.equal((await fetchSite('/_studio/api/office')).status, 401);
   assert.equal((await fetchSite('/_studio/api/office', { headers: { authorization: `Bearer ${readKey}` } })).status, 401, 'a stats read key is not an office key');
+  assert.equal((await fetchSite('/_studio/api/room?game=owl-run&room=qa-probe')).status, 401);
   const amy = await seat('owl-run', 'pub-1', { browser: KEY_A, name: 'Amy' });
   const ben = await seat('owl-run', 'pub-1', { browser: KEY_B, name: 'Ben' });
   const bearer = { authorization: `Bearer ${officeKey}` };
+  const diagnostic = await (await fetchSite('/_studio/api/room?game=owl-run&room=pub-1', { headers: bearer })).json();
+  assert.equal(diagnostic.ok, true);
+  assert.match(diagnostic.facts.toolkit.sha256, /^[a-f0-9]{64}$/);
+  assert.equal(diagnostic.facts.counts.players, 2);
+  assert.deepEqual(diagnostic.facts.gates, []);
   const office = await (await fetchSite('/_studio/api/office', { headers: bearer })).json();
   assert.equal(office.ok, true);
   const og = office.games.find((g) => g.id === 'owl-run');

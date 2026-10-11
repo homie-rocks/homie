@@ -206,8 +206,9 @@ game its studio chooses to share, each with its own licence ("Game parts", below
 
 `players.max` in game.json is the room's chosen positive integer capacity; omitted means 8.
 There is no 32-player ceiling or default per-address admission limit. Public games use
-rules plus view with `room.host: "server"`. Gates carry the browser connections and
-concentrators combine Gate links for larger rooms. Server rules survive browser departures.
+rules plus view with `room.host: "server"`. Gates carry the browser connections, each on
+its own channel to the room: the room runs the rules and hands every Gate one world a tick;
+the Gate selects, encodes and paces each player's view. Server rules survive browser departures.
 New browser/offline games use the same rules contract. Existing netplay games and their
 port host helpers remain supported for upgrades, with their original 32-seat limit.
 For larger rooms, follow `guides/game/REWRITE.md`.

@@ -1,0 +1,5 @@
+{
+  "public": {
+    "speed": { "value": 6, "min": 2, "max": 6, "step": 0.1, "unit": "m/s", "group": "Run", "note": "How fast a runner goes. Never above the body's maxSpeed in rules.ts (6): the server holds every runner to that" }
+  }
+}

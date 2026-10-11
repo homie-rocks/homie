@@ -95,6 +95,7 @@
     }
   },
   "files": [
+    "docs/",
     "bin/",
     "lib/",
     "netplay/",
@@ -158,10 +159,11 @@
     "three": "0.185.1",
     "typescript": "5.9.3",
     "viem": "2.57.4",
+    "ws": "8.22.0",
     "zod": "4.3.6"
   },
   "scripts": {
     "test": "node --test --test-concurrency=2 --test-timeout=1800000 test/*.test.mjs",
-    "prepack": "node ../../scripts/authoring-guides.mjs --check"
+    "prepack": "node lib/build-identity.mjs --check && node ../../scripts/authoring-guides.mjs --check"
   }
 }
