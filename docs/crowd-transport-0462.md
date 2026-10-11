@@ -183,9 +183,11 @@ computers' clocks and are only good for seconds.
 ### What 0.46.2 adds to the first changes
 
 - **Twenty players a Gate**, from the room's size alone: 50 Gates at 1,000.
-- **The world crosses as numbers.** One block for every Gate (24 bytes a body, exact) and
-  what else changed. The room sends 26 MB a second to 50 Gates where the JSON would be 179,
-  and a Gate rebuilds it in 0.18 ms where parsing took 0.93.
+- **The world crosses as numbers.** One block for every Gate (24 bytes a body, exact,
+  carried in the frame as base64) and what else changed: 33 KB a tick at 1,000. The room
+  sends 34 MB a second to 50 Gates where the JSON would be 179 (and was 48 to sixteen),
+  and a Gate rebuilds it in 0.26 ms where parsing took 0.93. Building it for all 50 Gates
+  takes the room 0.8 ms a tick.
 - **Bodies coast.** A Gate sends a body when a client coasting it on its last velocity
   would be off by more than the game's precision (near) or half a far interval's travel
   (far). 71 rows a frame become 20; 14.8 KB a second per player becomes 6.3; far bodies
