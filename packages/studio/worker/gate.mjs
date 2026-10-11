@@ -1,6 +1,7 @@
 import { STUDIO_BUILD } from './build-id.mjs';
 import { stageTimings } from '../rules/timing.mjs';
-import { scheduledView, snapshotEncoder, snapshotText } from '../rules/interest.mjs';
+import { crowdView, crowdWorlds, scheduledView, snapshotEncoder, snapshotText } from '../rules/interest.mjs';
+import { worldSink, worldSource } from './world-wire.mjs';
 
 const parsedFrames = new WeakMap();
 const sharedSnapshotText = new WeakMap();
@@ -24,8 +25,13 @@ function parseFrame(event) {
  * sockets: clients resume with their existing seat tokens and a fresh keyframe.
  * Inputs and commands are batched together, never overwritten or reordered.
  */
+/** Players a Gate holds in a room too big for its Table to hold directly. Measured on Cloudflare (0.45.4): a Gate
+ * of 60 dense players could not select, encode and compress for them twenty times a second; one of 30 could.
+ * A studio chooses its room's size and nothing else: the Gates follow from it. */
+export const GATE_PLAYERS = 20;
 export function roomLayout(seats) {
-  const gates = Math.ceil(seats / 64);
+  // A room of up to 64 is its Table alone, as it has been since 0.45.0.
+  const gates = seats <= 64 ? 1 : Math.ceil(seats / GATE_PLAYERS);
   return { gates, concentrators: 0 };
 }
 export function gateFor(env, game, room, seats, key) {
@@ -51,7 +57,7 @@ export function* expandBatch(rows) {
     else yield row;
   }
 }
-export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTimeout, delay = 1, receipts = false, maxFrames = 4, maxBytes = 4 * 1024 * 1024, onWritable = () => {}, autoReceipt = true, now = Date.now } = {}) {
+export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTimeout, delay = 1, receipts = false, maxFrames = 4, maxBytes = 4 * 1024 * 1024, onWritable = () => {}, autoReceipt = true, now = Date.now, world = null, onAck = () => {} } = {}) {
   let queue = [], views = new Map(), strings = new Set(), timer = null, closed = false, bytes = 0, sequence = 0, inFlightBytes = 0, blockedByBytes = false, receipt = 0, receiptAt = 0, lastSentAt = -Infinity;
   const pending = new Map();
   const timing = stageTimings();
@@ -67,7 +73,7 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
       return;
     }
     if (!queue.length && !views.size && !receipt) return;
-    const rows = []; let last = null;
+    const rows = []; let last = null, block = null, worldSeq = 0;
     const hasPayload = queue.length || views.size;
     // The receipt waits for this link's next scheduled frame; say how long,
     // so the sender's receipt latency measures transit, not the cadence.
@@ -80,7 +86,8 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
     }
     const groups = new Map();
     for (const row of views.values()) {
-      if (row[0] === 'world') { rows.push(row); continue; }
+      // The room's side says how a world travels (worker/world-wire.mjs): a block of numbers ahead of this frame.
+      if (row[0] === 'world') { const sent = world?.(row); if (sent) { rows.push(sent.row); block = sent.block; worldSeq = sent.seq; } else rows.push(row); continue; }
       let group = groups.get(row[2]);
       if (!group) { group = ['views', [], row[2], row[4], row[5]]; groups.set(row[2], group); rows.push(group); }
       group[1].push([row[1], row[3]]);
@@ -89,22 +96,24 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
     const encodeAt = timing.now();
     const text = batchText(rows);
     timing.record('encode', encodeAt);
-    if (text.length > maxBytes) { fail('room link frame limit'); return; }
-    if (receipts && inFlightBytes + text.length > maxBytes) { blockedByBytes = true; return; }
+    const size = text.length + (block?.byteLength ?? 0);
+    if (size > maxBytes) { fail('room link frame limit'); return; }
+    if (receipts && inFlightBytes + size > maxBytes) { blockedByBytes = true; return; }
     queue = []; views.clear(); strings.clear(); bytes = 0; receipt = 0;
-    if (receipts && hasPayload) { pending.set(++sequence, { at: now(), bytes: text.length }); inFlightBytes += text.length; }
-    stats.frames++; stats.rows += rows.length; stats.bytes += text.length;
+    if (receipts && hasPayload) { pending.set(++sequence, { at: now(), bytes: size }); inFlightBytes += size; }
+    stats.frames++; stats.rows += rows.length; stats.bytes += size;
     const sendAt = timing.now();
-    try { lastSentAt = now(); socket.send(text); timing.record('send', sendAt); onWritable(); } catch { fail('room link send failed'); }
+    try { lastSentAt = now(); if (block) socket.send(block); socket.send(text); if (worldSeq) world.sent(worldSeq); timing.record('send', sendAt); onWritable(); } catch { fail('room link send failed'); }
   };
   if (receipts) socket.addEventListener('message', event => {
+    if (typeof event.data !== 'string') return; // a world's block of numbers: its frame follows
     try {
       const rows = parseFrame(event);
       if (!Array.isArray(rows)) return;
       for (const row of rows) {
         if (row[0] === 'ack' && pending.has(row[1])) {
           const frame = pending.get(row[1]);
-          stats.ackMs = Math.max(0, now() - frame.at - (Number(row[2]) || 0)); stats.rttMs = Math.max(stats.ackMs, stats.rttMs * 0.95); stats.maxAckMs = Math.max(stats.maxAckMs, stats.ackMs);
+          stats.ackMs = Math.max(0, now() - frame.at - (Number(row[2]) || 0)); stats.rttMs = Math.max(stats.ackMs, stats.rttMs * 0.95); onAck(Number(row[2]) || 0); stats.maxAckMs = Math.max(stats.maxAckMs, stats.ackMs);
           for (const [seq, held] of pending) if (seq <= row[1]) { pending.delete(seq); inFlightBytes -= held.bytes; } blockedByBytes = false; schedule(); onWritable();
         }
         if (autoReceipt && row[0] === 'receipt') socket.send(JSON.stringify([['ack',row[1]]]));
@@ -144,11 +153,14 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
 }
 
 /** Adapt one upstream socket into the same transport the Table accepts locally. */
-export function multiplexSession(socket, connect, { onMetrics = () => {}, delay = 50 } = {}) {
+export function multiplexSession(socket, connect, { onMetrics = () => {}, delay = 50, source = worldSource() } = {}) {
   // Eight frames may be unacknowledged: 400 ms of 20 Hz worlds. Past that the newest world replaces an unsent one.
-  const out = batchLink(socket, { receipts: true, delay, maxFrames: 8, autoReceipt: false, onWritable: () => scheduleAdmission() }), clients = new Map();
+  // This link's Gate has every world up to `synced`, and holds the players in these seats.
+  let synced = 0; const seats = new Map();
+  const world = Object.assign((row) => { const w = source.encode(row[2]); return w ? { row: ['world', '*', source.header(w, synced, seats.values()), row[3], row[4]], block: w.motion, seq: w.seq } : null; }, { sent(seq) { synced = seq; } });
+  const out = batchLink(socket, { receipts: true, delay, maxFrames: 8, autoReceipt: false, world, onWritable: () => scheduleAdmission() }), clients = new Map();
   let chain = Promise.resolve(), closed = false;
-  const group = { snapshot(snap, settings, hz) { out.send(['world', '*', snap, settings, hz]); out.flush(); }, subscribe(id, seat) { out.send(['seat', id, seat]); }, facts: () => out.facts() };
+  const group = { snapshot(snap, settings, hz) { out.send(['world', '*', snap, settings, hz]); out.flush(); }, subscribe(id, seat) { seats.set(id, seat); out.send(['seat', id, seat]); }, facts: () => out.facts() };
   const pending = new Set(), admissions = [];
   let attaching = 0, admissionTimer = null;
   const pump = () => {
@@ -172,9 +184,10 @@ export function multiplexSession(socket, connect, { onMetrics = () => {}, delay 
     if (admissionTimer !== null) clearTimeout(admissionTimer);
     for (const admit of admissions.splice(0)) admit.cancel();
     for (const client of clients.values()) client.emit('close', {});
-    clients.clear();
+    clients.clear(); seats.clear();
   };
   socket.addEventListener('message', event => {
+    if (typeof event.data !== 'string') return;
     chain = chain.then(async () => {
       if (closed) return;
       const rows = parseFrame(event);
@@ -194,7 +207,7 @@ export function multiplexSession(socket, connect, { onMetrics = () => {}, delay 
             subscribe(seat) { group.subscribe(id, seat); },
             buffered: () => out.buffered(),
             transportFacts,
-            close(code, reason) { out.send(['close', id, code, reason]); clients.delete(id); client.emit('close', {}); },
+            close(code, reason) { out.send(['close', id, code, reason]); clients.delete(id); seats.delete(id); client.emit('close', {}); },
           };
           clients.set(id, client);
           client.ready = new Promise((resolve, reject) => {
@@ -217,7 +230,7 @@ export function multiplexSession(socket, connect, { onMetrics = () => {}, delay 
               client.queued--;
               if (closed || !clients.has(id)) return;
               if (op === 'data') client.emit('message', { data: value, receivedAt: ip });
-              else { out.forget(id); client.emit('close', {}); clients.delete(id); }
+              else { out.forget(id); client.emit('close', {}); clients.delete(id); seats.delete(id); }
             };
             if (client.attached && client.queued === 1) { deliver(); continue; }
             const task = client.ready = client.ready.then(deliver);
@@ -271,6 +284,34 @@ export function deliveryPace(hz = 20) {
   };
 }
 const REPORTED_TICK = /^\{"t":"(?:in|ping)".{0,400}?"g":(\d{1,12})[,}]/;
+/** A client built with 0.46.2 moves a body it was not sent along its last velocity: it says so in its hello. */
+const COASTS = /^\{"t":"hello".{0,2000}?"coast":1[,}]/;
+
+/**
+ * When a Gate's one frame of input a tick leaves, in milliseconds after a world arrives.
+ *
+ * It should reach the room just before the room's next tick: any earlier and inputs that arrive after it wait a
+ * whole tick for no reason; any later and every input in it does. A Gate cannot see the room's tick, only when a
+ * world arrives, which is after the tick ran and crossed the link. But the room says, with each receipt, how long
+ * the frame it acknowledges WAITED there before a tick took it. So the Gate sends a little later each time while
+ * that wait is long, and when the wait jumps up (the frame arrived as the tick began, and waited for the next) it
+ * steps back and holds off trying again for a while.
+ */
+export function inputPhase(period = 50, target = 8) {
+  let offset = 0, before = null, hold = 0;
+  return {
+    offset: () => offset,
+    /** The room took the last frame `waited` ms after it arrived. */
+    waited(waited) {
+      if (!Number.isFinite(waited)) return;
+      if (before !== null && before <= target * 2 && waited > before + period * 0.2) { offset -= target + 6; hold = 40; }
+      else if (waited < target - 2) offset -= (target - waited) * 0.5;
+      else if (hold > 0) hold -= 1;
+      else if (waited > target + 2) offset += Math.min(2, (waited - target) * 0.2);
+      offset = Math.max(0, Math.min(period - 2, offset)); before = waited;
+    },
+  };
+}
 const percentile = (sorted, p) => sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] : null;
 
 export class Gate {
@@ -289,21 +330,27 @@ export class Gate {
       const response = await this.env.TABLE.get(this.env.TABLE.idFromName(name)).fetch(new Request(target, { headers: { Upgrade: 'websocket' } }));
       if (!response.webSocket) throw new Error('room link refused');
       const socket = response.webSocket; socket.accept();
-      const link = batchLink(socket, { receipts: true, delay: 50, maxFrames: 8, autoReceipt: false });
+      // A world's motion is a block of numbers: have it as bytes, whatever this runtime's default for binary frames.
+      try { socket.binaryType = 'arraybuffer'; } catch { /* a runtime that only has ArrayBuffer */ }
+      let phase = null;
+      const link = batchLink(socket, { receipts: true, delay: 50, maxFrames: 8, autoReceipt: false, onAck: (waited) => phase?.waited(waited) });
+      const sink = worldSink(); let block = null;
       const lost = (event = {}) => {
         if (this.link !== link) return;
         console.log(JSON.stringify({ ev: 'room-link-lost', room: name, gate: url.searchParams.get('gate'), layer: 'gate', code: event.code ?? null, reason: event.reason ?? null, error: event.error?.message ?? null, clients: this.clients.size, transport: link.facts() }));
-        this.link = null; link.close();
+        this.link = null; this.worlds = null; link.close();
         for (const timer of this.admissions.values()) clearTimeout(timer); this.admissions.clear();
         for (const client of this.clients.values()) { try { client.close(1012, 'room link restarted'); } catch {} }
         this.clients.clear();
       };
       const drop = (id, client) => { this.clients.delete(id); link.send(['close', id]); try { client.close(1011, 'client connection ended'); } catch {} };
       socket.addEventListener('message', event => {
+        // A world's motion arrives as a block of numbers, just ahead of the frame that describes it.
+        if (typeof event.data !== 'string') { block = event.data; return; }
         try {
           const rows = parseFrame(event); let hz = null;
           for (const row of rows) {
-            if (row[0] === 'world') { hz = row[4]; this.deliver(row[2], row[3], row[4], drop); continue; }
+            if (row[0] === 'world') { hz = row[4]; const snap = row[2].w ? sink.decode(row[2], block) : row[2]; block = null; this.deliver(snap, row[3], row[4], drop); continue; }
             for (const [op, id, value, reason, settings, rate] of expandBatch([row])) {
               const client = this.clients.get(id);
               if (op === 'seat') { if (client) { client.seat = value; client.subscribed = true; } }
@@ -312,12 +359,10 @@ export class Gate {
               else if (op === 'close') { this.clients.delete(id); try { client?.close(value, reason); } catch {} }
             }
           }
-          // The tick's inputs leave as ONE frame, timed to reach the room just
-          // before its next tick: the room handles one message a Gate a tick,
-          // however many players the Gate holds. The world took half this link's
-          // round trip to get here and the frame takes the other half back, so
-          // it leaves a round trip and a little before the next world is due.
-          link.consumed(rows, hz ? Math.max(1, 1000 / hz - Math.min(25, Math.max(5, link.rtt() + 3))) : null);
+          // The tick's inputs leave as ONE frame, timed to reach the room just before its next tick (inputPhase):
+          // the room handles one message a Gate a tick, however many players the Gate holds.
+          if (hz) { phase ??= inputPhase(1000 / hz); this.phase = phase; }
+          link.consumed(rows, hz ? phase.offset() : null);
           if (hz && Date.now() - this.metricsAt >= 1000) this.publishMetrics(url, link);
         } catch (error) { lost({ error, reason: 'invalid room frame' }); try { socket.close(1011, 'room link failed'); } catch {} }
       });
@@ -337,6 +382,18 @@ export class Gate {
       if (client.snapshot) { client.snapshot(snap, seat, settings, hz); return; }
       client.pace ??= deliveryPace(hz);
       if (!client.pace.due(snap.k)) { this.window.skipped++; return; }
+      if (client.coasts) {
+        // A client that coasts (0.46.2) takes the crowd path: what does not depend on the player is done once a world.
+        const at = this.timing.now();
+        // A room's view settings are its game's, fixed for the life of the link.
+        this.worlds ??= crowdWorlds(settings ?? {});
+        client.crowd ??= crowdView(this.worlds, settings ?? {}, hz);
+        const text = client.crowd(snap, seat);
+        this.timing.record('encode', at);
+        client.send(text); client.pace.sent(snap.k);
+        this.window.frames++; this.window.bytes += text.length;
+        return;
+      }
       const viewAt = this.timing.now();
       client.viewSchedule ??= scheduledView(settings, hz);
       // This encoder sits after coalescing on an ordered WebSocket. A
@@ -377,6 +434,7 @@ export class Gate {
       }
       if (!opened) {
         opened = true; clearTimeout(deadline); this.admissions.delete(id);
+        server.coasts = COASTS.test(event.data);
         // Logical creation and the first frame share a batch: admission time at
         // the Table excludes the public handshake and relay transit.
         link.send(['open', id, request.url, request.headers.get('cf-connecting-ip'), request.headers.get('user-agent')]);
@@ -408,6 +466,9 @@ export class Gate {
       // How far behind the room players say they are, in ticks, and how many are being sent fewer frames for it.
       clientLagTicks: { reporting: lags.length, p50: percentile(lags, 0.5), p95: percentile(lags, 0.95), max: lags.at(-1) ?? null },
       paced: paces.filter(p => p.interval > 1).length,
+      coasting: subscribed.filter(c => c.coasts).length,
+      // Milliseconds after a world that this Gate's input frame leaves, and how long the room last held one before its tick.
+      inputOffsetMs: this.phase ? Math.round(this.phase.offset()) : null,
     };
   }
   publishMetrics(url, link) {

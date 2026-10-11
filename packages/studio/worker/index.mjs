@@ -106,6 +106,7 @@ import { isLoungePath, loungeRoutes } from './lounge.mjs';
 import { doorPage, serverPage, serversPage } from './site.mjs';
 import { isLocalOrigin, qrSvg } from './qr.mjs';
 import { acceptMultiplex, diagnosticsOf, gateFor } from './gate.mjs';
+import { worldSource } from './world-wire.mjs';
 export { Gate, Concentrator } from './gate.mjs';
 import { seatCount, paramsFrom, perAddress, seatsOf } from './seats.mjs';
 import {
@@ -2093,7 +2094,8 @@ export class Table {
     }
     if (new URL(request.url).pathname === '/__multiplex') {
       this.relayed = true;
-      return acceptMultiplex(request, (req, socket) => this.connect(req, socket));
+      // One encoding of each world for every Gate link (worker/world-wire.mjs).
+      return acceptMultiplex(request, (req, socket) => this.connect(req, socket), { source: (this.worldSource ??= worldSource()) });
     }
     return this.connect(request);
   }

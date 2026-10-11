@@ -20,11 +20,12 @@ import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { Gate, batchLink, deliveryPace, multiplexSession, roomLayout } from '../worker/gate.mjs';
+import { Gate, batchLink, deliveryPace, inputPhase, multiplexSession, roomLayout } from '../worker/gate.mjs';
 import { NetRoom } from '../worker/room.mjs';
 import { roomDiagnostics } from '../worker/office.mjs';
-import { snapshotDecoder } from '../rules/interest.mjs';
-import { PKG, fakeClock, loadGame } from './rules-kit.mjs';
+import { crowdView, crowdWorlds, interestSnapshot, scheduledView, snapshotDecoder, snapshotEncoder, snapshotText } from '../rules/interest.mjs';
+import { worldSink, worldSource } from '../worker/world-wire.mjs';
+import { PKG, fakeClock, hostRig, loadGame } from './rules-kit.mjs';
 import { virtualTime } from './virtual-time.mjs';
 
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-crowd-shape-')));
@@ -42,49 +43,59 @@ const request = (gate = 0) => new Request(`https://table/__net?game=g&room=r&gat
 const runner = (seat, x, y, k) => [`r${seat}`, 0, 0, [x, y], [k % 7, 0], [1, 0], 0, [k, true], [], seat, 0];
 const world = (k, seats, at = (seat) => [seat * 0.5, k * 0.01]) => ({ k, e: 7, st: Date.now(), d: [[1, 0, 0], seats.map((seat) => runner(seat, ...at(seat), k))], c: seats.map((seat) => [seat, 0, k]) });
 
-test('a room of a thousand is sixteen Gates, each on its own channel to the room', () => {
+test('Gates follow from the room\'s size: twenty players each, and a room of 64 or fewer is its Table alone', () => {
+  assert.deepEqual(roomLayout(8), { gates: 1, concentrators: 0 });
   assert.deepEqual(roomLayout(64), { gates: 1, concentrators: 0 });
-  assert.deepEqual(roomLayout(300), { gates: 5, concentrators: 0 });
-  assert.deepEqual(roomLayout(1000), { gates: 16, concentrators: 0 });
+  assert.deepEqual(roomLayout(65), { gates: 4, concentrators: 0 });
+  assert.deepEqual(roomLayout(300), { gates: 15, concentrators: 0 });
+  assert.deepEqual(roomLayout(1000), { gates: 50, concentrators: 0 });
 });
 
-test('a Gate sends the room one frame of input a tick, timed to make the next tick, each input once and in order', async (t) => {
-  const clock = virtualTime(t), random = seeded(11);
+// The room's tick takes `run` ms before its world leaves, and the channel `hop` ms each way. A Gate sees neither.
+for (const [run, hop] of [[2, 1], [12, 3], [30, 6]]) test(`a Gate sends the room one frame of input a tick and finds the moment that makes the next tick (a ${run} ms tick, ${hop} ms away)`, async (t) => {
+  const clock = virtualTime(t), random = seeded(11 + run);
   const upstream = socket(), gate = new Gate({}, tableOf(upstream));
-  const players = Array.from({ length: 64 }, socket), said = players.map(() => []);
+  const players = Array.from({ length: 20 }, socket), said = players.map(() => []);
   for (const p of players) await gate.connect(request(), p);
   for (const [i, p] of players.entries()) p.emit('message', { data: JSON.stringify({ t: 'hello', i }) });
   await clock.wait(60);
-  upstream.sent.length = 0;
-  const frames = []; let receipt = 0, receiptAt = 0;
-  upstream.send = (text) => { const rows = JSON.parse(text); frames.push({ at: Date.now(), rows }); for (const row of rows) if (row[0] === 'receipt') { receipt = row[1]; receiptAt = Date.now(); } };
+  // The room, as a Gate's frames meet it: a frame that arrives while a tick runs is read when the tick is done,
+  // and every frame read before a tick is acknowledged on that tick's world, with how long it waited.
+  const zero = Date.now(), ticks = 240, frames = [], waiting = [];
+  const startOf = (k) => zero + k * 50;
+  upstream.send = (text) => { const sent = Date.now(), rows = JSON.parse(text); setTimeout(() => {
+    const arrived = Date.now(), k = Math.floor((arrived - zero) / 50), read = arrived < startOf(k) + run ? startOf(k) + run : arrived;
+    const frame = { sent, arrived, read, rows, receipt: rows.find((row) => row[0] === 'receipt')?.[1] ?? null };
+    frames.push(frame); if (frame.receipt !== null) waiting.push(frame);
+  }, hop); };
   const offsets = players.map(() => [Math.floor(random() * 50), Math.floor(random() * 50)]);
-  const ticks = 100; let sequence = 0; const worldAt = [];
+  let sequence = 0;
   for (let k = 1; k <= ticks; k += 1) {
-    worldAt.push(Date.now());
-    // The room acknowledges the Gate's last frame on the frame its own tick sends, as multiplexSession does.
-    upstream.emit('message', { data: JSON.stringify([...(receipt ? [['ack', receipt, Date.now() - receiptAt]] : []), ['world', '*', world(k, []), {}, 20], ['receipt', k]]) });
+    while (Date.now() < startOf(k)) await clock.wait(1);
+    const acks = waiting.filter((f) => f.read <= startOf(k)); waiting.splice(0, waiting.length, ...waiting.filter((f) => f.read > startOf(k)));
+    const newest = acks.at(-1), world = JSON.stringify([...(newest ? [['ack', newest.receipt, startOf(k) - newest.read]] : []), ['world', '*', { k, e: 7, st: startOf(k), d: [[1, 0, 0], []], c: [] }, {}, 20], ['receipt', k]]);
+    for (const f of acks) f.tookTick = k;
+    setTimeout(() => upstream.emit('message', { data: world }), run + hop);
     for (let ms = 0; ms < 50; ms += 1) {
       for (const [i, p] of players.entries()) for (const at of offsets[i]) if (at === ms) { const n = ++sequence; said[i].push(n); p.emit('message', { data: JSON.stringify({ t: 'in', e: 7, k: k + 3, n, at: Date.now() }) }); }
       await clock.wait(1);
     }
   }
-  await clock.wait(60);
+  await clock.wait(120);
   const input = frames.filter((f) => f.rows.some((row) => row[0] === 'data' || row[0] === 'fan'));
-  assert.ok(input.length <= ticks + 1, `one frame a tick, not ${input.length} for ${ticks} ticks`);
-  assert.ok(frames.length <= ticks + 2, 'receipts ride the input frame; none is sent alone');
-  // This link's round trip is nothing, so the frame leaves 5 ms before the next world is due: 45 ms after the last.
-  for (const f of input.slice(0, -1)) assert.ok(worldAt.includes(f.at - 45), `a frame left at ${f.at}, 45 ms after no world`);
-  const heard = players.map(() => []); let worstWait = 0;
-  for (const f of input) for (const row of f.rows) {
-    if (row[0] !== 'data') continue; // every input here is a different string: none is fanned
-    const m = JSON.parse(row[2]); heard[Number(row[1]) - 1].push(m.n);
-    assert.equal(row[3], m.at, 'the Gate stamped the moment it arrived');
-    worstWait = Math.max(worstWait, f.at - m.at);
-  }
+  // One a tick; a handful more while it steps back from a tick it ran into.
+  assert.ok(input.length <= ticks + 8, `one frame a tick, not ${input.length} for ${ticks} ticks`);
+  const heard = players.map(() => []);
+  for (const f of input) for (const row of f.rows) if (row[0] === 'data') { const m = JSON.parse(row[2]); heard[Number(row[1]) - 1].push(m.n); assert.equal(row[3], m.at, 'the Gate stamped the moment it arrived'); }
   assert.deepEqual(heard, said, 'every input reached the room once, in the order its player sent it');
-  assert.ok(worstWait <= 50, `an input waited ${worstWait} ms for its frame`);
-  assert.deepEqual(frames.flatMap((f) => f.rows.filter((row) => row[0] === 'ack').map((row) => row[1])), Array.from({ length: ticks }, (_, i) => i + 1), 'every world was acknowledged, on a frame that was going anyway');
+  // Once it has found the moment (three seconds), a frame is read between 3 and 16 ms before the tick that takes it,
+  // and an input waits less than a tick and a bit from its Gate to the rules.
+  const settled = input.filter((f) => f.sent > zero + 3000 && f.tookTick);
+  const slack = settled.map((f) => startOf(f.tookTick) - f.read), good = slack.filter((ms) => ms >= 3 && ms <= 16).length;
+  assert.ok(good >= settled.length * 0.9, `${good} of ${settled.length} frames reached the room just before its tick (waits: ${slack.slice(0, 30).join(' ')})`);
+  let worst = 0;
+  for (const f of settled) for (const row of f.rows) if (row[0] === 'data') worst = Math.max(worst, startOf(f.tookTick) - JSON.parse(row[2]).at);
+  assert.ok(worst <= 50 + 16 + hop + 2, `an input waited ${worst} ms for the rules`);
   gate.link.disconnect();
 });
 
@@ -264,7 +275,7 @@ for (const hop of [3, 10]) test(`120 seeded players behind four Gates and a real
   const dir = join(PKG, 'test/fixtures/crowd-circuit/game');
   const L = await loadGame(scratch, dir, `crowd-shape-${hop}`);
   const game = JSON.parse(readFileSync(join(dir, 'game.json'), 'utf8'));
-  const compiled = L.R.compileRules(L.def, { settings: L.R.roomSettings(game.room).settings, seats: 1000, map: L.R.compileMap({ ...JSON.parse(readFileSync(join(dir, 'map/main.json'), 'utf8')), name: 'main' }, 'main') });
+  const compiled = L.R.compileRules(L.def, { tune: JSON.parse(readFileSync(join(dir, 'tunables.json'), 'utf8')), settings: L.R.roomSettings(game.room).settings, seats: 1000, map: L.R.compileMap({ ...JSON.parse(readFileSync(join(dir, 'map/main.json'), 'utf8')), name: 'main' }, 'main') });
   const clock = virtualTime(t), random = seeded(20261010);
   const timers = { now: () => Date.now(), setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: (id) => clearTimeout(id) };
   const room = new NetRoom({ code: 'r', maxPlayers: 1000, now: timers.now, log() {}, rules: true });
@@ -287,27 +298,28 @@ for (const hop of [3, 10]) test(`120 seeded players behind four Gates and a real
     const gate = new Gate({ waitUntil() {} }, tableOf(gateEnd));
     for (let i = 0; i < PER; i += 1) {
       const p = socket(), decoder = snapshotDecoder(), up = 5 + Math.floor(random() * 30), down = 5 + Math.floor(random() * 30), phase = Math.floor(random() * 100);
-      const me = { p, seat: null, held: null, heldAt: 0, epoch: null, r: 0, east: true, snaps: 0, ownMissing: 0, undecodable: 0, sent: 0, lastSent: 0, measured: 0 };
+      const me = { p, seat: null, held: null, heldAt: 0, epoch: null, r: 0, east: true, snaps: 0, ownMissing: 0, undecodable: 0, sent: 0, lastSent: 0, measured: 0, bytes: 0, from: null, travelled: 0 };
       p.send = (text) => setTimeout(() => {
         const m = JSON.parse(text);
         if (m.t === 'welcome') { me.seat = m.seat; return; }
         if (m.t !== 'snap') return;
         const snap = decoder.decode(m);
         if (!snap) { me.undecodable += 1; return; }
-        me.snaps += 1; if (me.measuring) me.measured += 1;
+        me.snaps += 1; if (me.measuring) { me.measured += 1; me.bytes += text.length; }
         const own = snap.d[1].find((e) => e[9] === me.seat && e[10] !== 1);
         if (!own) { me.ownMissing += 1; return; }
         me.held = m.k; me.heldAt = Date.now(); me.epoch = snap.e; me.r = own[2]; me.east = Boolean(own[7][1]);
+        me.from ??= own[3]; me.travelled = Math.max(me.travelled, Math.abs(own[3][0] - me.from[0]));
       }, down);
       await gate.connect(new Request(`https://table/__net?game=crowd-circuit&room=r&gates=16&gate=${g}`), p);
       setTimeout(() => {
-        p.emit('message', { data: JSON.stringify({ t: 'hello', rules: true, v: 1, rev: 12, name: `Seeded ${g}-${i}`, device: 'desk', want: 'play', canHost: false, game: 'crowd-circuit', max: 1000 }) });
+        p.emit('message', { data: JSON.stringify({ t: 'hello', rules: true, v: 1, rev: 12, name: `Seeded ${g}-${i}`, device: 'desk', want: 'play', canHost: false, game: 'crowd-circuit', max: 1000, ...(i % 5 ? { coast: 1 } : {}) }) });
         setInterval(() => {
           if (me.held === null) return;
           // The toolkit's client: the tick it holds, the ticks since, and a lead of three.
           const k = Math.max(me.lastSent + 1, me.held + Math.floor((Date.now() - me.heldAt) / 50) + 3);
           me.lastSent = k; me.sent += 1;
-          p.emit('message', { data: JSON.stringify({ t: 'in', e: me.epoch, k, s: [[0, me.east ? 127 : -127, 0]], r: me.r, g: me.held }) });
+          p.emit('message', { data: JSON.stringify({ t: 'in', e: me.epoch, k, s: [[0, me.east ? 127 : -127, Math.round(Math.sin(Date.now() / 3100 + i) * 35)]], r: me.r, g: me.held }) });
         }, 100);
       }, up + phase + g * 40 + i * 10);
       players.push(me);
@@ -325,6 +337,12 @@ for (const hop of [3, 10]) test(`120 seeded players behind four Gates and a real
     assert.equal(p.undecodable, 0);
   }
   assert.equal(after.ticks - before.ticks, 100, 'the rules kept 20 Hz');
+  assert.equal(after.faults, 0, 'and ran without a fault');
+  assert.ok(players.every((p) => p.travelled > 3), 'every runner ran');
+  // Four players in five are current clients, which coast; the fifth is a page built before 0.46.2 and is sent every body it sees move.
+  const each = (list) => list.reduce((a, p) => a + p.bytes, 0) / list.length / 5;
+  const coasting = each(players.filter((_, i) => i % PER % 5)), older = each(players.filter((_, i) => i % PER % 5 === 0));
+  assert.ok(coasting < older * 0.6, `a coasting client was sent ${Math.round(coasting)} B a second, an older one ${Math.round(older)}`);
   assert.equal(after.dropped, 0); assert.equal(room.stats.drops, 0);
   const sent = players.reduce((a, p) => a + p.sent, 0);
   assert.ok(room.stats.ins >= sent - GATES * PER && room.stats.ins <= sent, `the room heard ${room.stats.ins} of ${sent} inputs`);
@@ -340,20 +358,113 @@ test('a run\'s summary names tick rate and delivered rate for every step, the pl
   const { summarize, table } = await import('../lib/crowd-summary.mjs');
   const report = { n: 300, total: 302, room: 'r', measurementStarted: '2026-10-11T00:00:10.000Z', ended: '2026-10-11T00:00:20.000Z', measuredSeconds: 10, joined: 300, connectedAtEnd: 300, disconnects: 0,
     inputAckMs: { p50: 150, p95: 210, p99: 260 }, receiveGapMs: { p95: 70, p99: 110 }, tickHz: { min: 19.8, median: 20.004, max: 20.1 }, deliveredHz: { min: 9.9, median: 19.96, max: 20 },
-    payload: { downBytes: 80e6, wireDownBytes: 20e6, compressedSockets: 300 }, errors: [{ text: 'x', count: 2 }], ackExpired: 0 };
+    payload: { downBytes: 80e6, wireDownBytes: 20e6, compressedSockets: 300 }, compression: { offered: true, sockets: 300, of: 300, ratio: 4 }, inputLead: { ticksMedian: 3, ticksMax: 5, lateShare: 0.02 }, errors: [{ text: 'x', count: 2 }], ackExpired: 0 };
   const at = Date.parse('2026-10-11T00:00:12.000Z');
   const row = (i, tickRate) => ({ at: at + i * 1000, ok: true, ticks: { ins: 3000, lateEntries: 30 }, tickRate, inputTransitMs: { p50: 12, p95: 44, max: 61 }, diagnostics: { ageMs: 400 + i },
-    gates: [{ id: 'gate/0', subscribed: 150, worldHz: 20, deliveredHz: 20, worldAgeMs: { p50: 4, p95: 9, max: 30 }, ackMs: 3, maxAckMs: 40, paced: 0, clientLagTicks: { p95: 4, max: 6 } },
-      { id: 'gate/1', subscribed: 150, worldHz: 20, deliveredHz: 17.5, worldAgeMs: { p50: 5, p95: 12, max: 35 }, ackMs: 4, maxAckMs: 44, paced: 12, clientLagTicks: { p95: 9, max: 31 } }] });
+    gates: [{ id: 'gate/0', subscribed: 150, worldHz: 20, deliveredHz: 20, worldAgeMs: { p50: 4, p95: 9, max: 30 }, ackMs: 3, maxAckMs: 40, rttMs: 4, paced: 0, clientLagTicks: { p95: 4, max: 6 } },
+      { id: 'gate/1', subscribed: 150, worldHz: 20, deliveredHz: 17.5, worldAgeMs: { p50: 5, p95: 12, max: 35 }, ackMs: 4, maxAckMs: 44, rttMs: 9, paced: 12, clientLagTicks: { p95: 9, max: 31 } }] });
   const rows = [{ at: at - 60_000, ok: true, ticks: { ins: 1, lateEntries: 1 }, tickRate: 3 }, row(0, 20), row(1, 19.9), row(2, 20.1), { at: at + 3000, ok: false, error: 'timeout' }];
   const s = summarize(report, rows, { downMBps: 2.4 });
   assert.deepEqual(s.client.tickHz, { median: 20, min: 19.8 }); assert.deepEqual(s.client.deliveredHz, { median: 19.96, min: 9.9 });
   assert.deepEqual(s.server.tickRate, { median: 20, min: 19.9 }, 'a row from before the measurement is not in it');
-  assert.deepEqual(s.server.gateDeliveredHz, { median: 20, min: 17.5 }); assert.equal(s.server.lateInputs, 0.01);
+  assert.equal(s.server.gateDeliveredHz.median, 20); assert.equal(s.server.gateDeliveredHz.p05, 17.5); assert.equal(s.client.compression.ratio, 4, 'the server agreed to compress every socket, four to one'); assert.equal(s.server.lateInputs, 0.01);
   assert.equal(s.server.samples, 3); assert.equal(s.server.failedPolls, 1); assert.equal(s.server.pacedPlayers, 12); assert.deepEqual(s.server.playersPerGate, { min: 150, max: 150 });
   assert.equal(s.client.wireMBps, 2); assert.equal(s.link.limited, true, 'two of the 2.4 MB a second this link carries');
   assert.equal(summarize(report, rows, { downMBps: 40 }).link.limited, false);
-  assert.match(table([s]), /\| 300 \| 300\/300\/0 \| 150\/210\/260 \| 20 \| 19\.96 \| 2 \(2\.4, LINK-LIMITED\) \| 20\/19\.9 \| 12\/44 \| 0\.01 \| 20\/17\.5 \| 12 \| 12 \| 3\/1 \|/);
+  assert.match(table([s]), /\| 300 \| 300\/300\/0 \| 150\/210\/260 \| 3 \(0\.02\) \| 20 \| 19\.96 \| 2 \(2\.4, LINK-LIMITED\) \| 6\.67 \| 300\/300 \(4\) \| 20\/19\.9 \| 0\.01 \| 2 \| 20\/17\.5 \| 9\/9 \| 12 \| 12 \| 3\/1 \|/);
   const empty = summarize({ n: 50, payload: {} }, [], null);
   assert.equal(empty.server.tickRate.median, null); assert.match(table([empty]), /—/, 'a number that was not measured is a dash, never a blank');
+});
+
+/** A real crowd: the fixture game's rules with `players` seated, each steering as the load probe does. `step()` is the next world. */
+async function crowd(players, name) {
+  const dir = join(PKG, 'test/fixtures/crowd-circuit/game');
+  const L = await loadGame(scratch, dir, name);
+  const settings = L.R.roomSettings(JSON.parse(readFileSync(join(dir, 'game.json'), 'utf8')).room).settings;
+  const compiled = L.R.compileRules(L.def, { tune: JSON.parse(readFileSync(join(dir, 'tunables.json'), 'utf8')), settings, seats: 1000, map: L.R.compileMap({ ...JSON.parse(readFileSync(join(dir, 'map/main.json'), 'utf8')), name: 'main' }, 'main') });
+  const h = hostRig(L, compiled, { host: { enforceOverrun: false } });
+  for (let seat = 0; seat < players; seat += 1) h.join(seat);
+  h.ticks(30);
+  let n = 0;
+  return { h, view: settings.view, step() {
+    const now = h.snap(); n += 1;
+    if (n % 2) for (const own of now.d[1]) if (own[9] !== undefined) h.host.frame({ t: 'in', from: own[9], e: now.e, k: now.k + 2, s: [[0, own[7][1] ? 127 : -127, Math.round(Math.sin(n / 60 + own[9]) * 35)]], r: own[2] });
+    h.ticks(1);
+    assert.equal(h.host.facts().faults, 0);
+    return h.snap();
+  } };
+}
+
+test('the world crosses to a Gate as a block of numbers and what changed, and arrives exactly as the room held it', async () => {
+  const c = await crowd(200, 'crowd-wire');
+  const source = worldSource(), steady = worldSink(), skipping = worldSink(); let late = null;
+  let synced = 0, skipSynced = 0, lateSynced = 0, blockBytes = 0, headerBytes = 0, plain = 0, frames = 0;
+  const seats = [3, 77, 150];
+  for (let t = 0; t < 120; t += 1) {
+    if (t === 40) c.h.host.frame({ t: 'leave', seat: 11 });
+    if (t === 60) c.h.join(400);
+    const { k, st, e, d, c: control } = c.step(), snap = { k, st, e, d, c: control }, world = source.encode(snap); // as the room holds it
+    assert.equal(source.encode(snap), world, 'one encoding of a world, whichever link asks');
+    assert.equal(world.narrow, true, 'a rules host keeps its bodies in 32-bit numbers: they cross as such, exactly');
+    const want = (list) => ({ ...JSON.parse(JSON.stringify(snap)), c: snap.c.filter((row) => list.includes(row[0])) });
+    // A link that takes every world.
+    const header = JSON.parse(JSON.stringify(source.header(world, synced, seats)));
+    assert.deepEqual(steady.decode(header, world.motion), want(seats)); synced = world.seq;
+    if (t > 5 && t !== 40 && t !== 60) { blockBytes += world.motion.byteLength; headerBytes += JSON.stringify(header).length; plain += JSON.stringify(snap).length; frames += 1; }
+    // A link that was busy and had every third world replaced before it was sent.
+    if (t % 3 === 0) { assert.deepEqual(skipping.decode(JSON.parse(JSON.stringify(source.header(world, skipSynced, [5]))), world.motion), want([5])); skipSynced = world.seq; }
+    // A Gate that opens half way through is told everything once.
+    if (t >= 50) { late ??= worldSink(); assert.deepEqual(late.decode(JSON.parse(JSON.stringify(source.header(world, lateSynced, []))), world.motion), want([])); lateSynced = world.seq; }
+  }
+  assert.ok(blockBytes / frames <= 200 * 24 + 24, `${Math.round(blockBytes / frames)} bytes of motion for 200 bodies`);
+  assert.ok((blockBytes + headerBytes) / frames < plain / frames / 4, `a world is ${Math.round((blockBytes + headerBytes) / frames)} bytes to a Gate, where its JSON is ${Math.round(plain / frames)}`);
+  assert.throws(() => steady.decode({ k: 1, st: 0, round: [], c: [], w: { seq: 999, n: 200, dims: 2, narrow: true, tails: [] } }, new ArrayBuffer(8)), /does not fit/);
+  // Numbers that are not 32-bit exact, and three dimensions: still exact, in 64 bits.
+  const odd = { k: 1, e: 1, st: 5, d: [[1], [['a', 0, 0, [0.1, 0.2, 0.3], [1e-9, 2, 3], [0, 0, 1], 1, [{ deep: [1] }], [], 0, 0]], { walls: 1 }], c: [[0, 0, 1, 16]] };
+  const other = worldSource(), wide = other.encode(odd);
+  assert.equal(wide.narrow, false);
+  assert.deepEqual(worldSink().decode(JSON.parse(JSON.stringify(other.header(wide, 0, [0]))), wide.motion), odd);
+  assert.equal(worldSource().encode({ k: 1, d: null }), null, 'a frame with no bodies in it is sent as it is');
+});
+
+test('a Gate\'s crowd path: the same bodies in view, each within the game\'s precision of the truth, in under half the bytes', async () => {
+  const c = await crowd(300, 'crowd-path');
+  const view = c.view, worlds = crowdWorlds(view), seats = [0, 37, 111, 205, 299, null];
+  const clients = seats.map((seat) => ({ seat, crowd: crowdView(worlds, view, 20), decoder: snapshotDecoder(), old: { view: scheduledView(view, 20), encoder: snapshotEncoder(Infinity, true), decoder: snapshotDecoder() }, bytes: 0, oldBytes: 0, rows: 0, worstNear: 0, worstFar: 0, oldWorst: 0 }));
+  const farAllowance = 0.5 * 6 / view.farHz;
+  for (let t = 0; t < 200; t += 1) {
+    if (t === 70) c.h.host.frame({ t: 'leave', seat: 38 });
+    if (t === 90) c.h.join(500);
+    const snap = JSON.parse(JSON.stringify(c.step())), truth = new Map(snap.d[1].map((e) => [e[0], e]));
+    for (const client of clients) {
+      // A paced player is skipped for a few ticks now and then: the next frame is from the last one SENT.
+      if (client.seat === 111 && t > 20 && t % 7 < 3) continue;
+      const text = client.crowd(snap, client.seat), frame = JSON.parse(text), seen = client.decoder.decode(frame);
+      assert.ok(seen, `tick ${snap.k}: the frame decodes`);
+      client.bytes += text.length; client.rows += Array.isArray(frame.d) ? frame.d[1].length : frame.d.changed.length;
+      const visible = interestSnapshot(snap, client.seat, view.radiusM);
+      assert.deepEqual(seen.d[1].map((e) => e[0]).sort(), visible.d[1].map((e) => e[0]).sort(), `tick ${snap.k}, seat ${client.seat}: exactly the bodies in range`);
+      assert.deepEqual(seen.c, visible.c); assert.deepEqual(seen.d[0], snap.d[0]);
+      const own = client.seat === null ? null : truth.get(snap.d[1].find((e) => e[9] === client.seat)[0]);
+      for (const e of seen.d[1]) {
+        const real = truth.get(e[0]);
+        if (real === own) { assert.deepEqual(e, own, 'a player\'s own body is the room\'s, exactly'); continue; }
+        assert.deepEqual([e[0], e[1], e[2], e[6], e[7], e[8], e.slice(9)], [real[0], real[1], real[2], real[6], real[7], real[8], real.slice(9)], 'everything but its motion is as the room has it');
+        const off = Math.hypot(e[3][0] - real[3][0], e[3][1] - real[3][1]);
+        const near = !own || Math.hypot(real[3][0] - own[3][0], real[3][1] - own[3][1]) <= view.nearM;
+        if (near) client.worstNear = Math.max(client.worstNear, off); else client.worstFar = Math.max(client.worstFar, off);
+      }
+      if (client.seat === 111) continue;
+      const before = snapshotText({ t: 'snap', from: null, ...client.old.encoder.encode(client.old.view(snap, client.seat), client.seat) });
+      client.oldBytes += before.length;
+      for (const e of client.old.decoder.decode(JSON.parse(before)).d[1]) { const real = truth.get(e[0]); client.oldWorst = Math.max(client.oldWorst, Math.hypot(e[3][0] - real[3][0], e[3][1] - real[3][1])); }
+    }
+  }
+  for (const client of clients) {
+    assert.ok(client.worstNear <= view.precisionM * 2.5, `seat ${client.seat}: a near body was drawn ${client.worstNear.toFixed(3)} m from where it is`);
+    assert.ok(client.worstFar <= farAllowance + view.precisionM * 2.5, `seat ${client.seat}: a far body was drawn ${client.worstFar.toFixed(3)} m from where it is`);
+    if (client.seat === 111 || client.seat === null) continue;
+    assert.ok(client.bytes < client.oldBytes * 0.5, `seat ${client.seat}: ${client.bytes} bytes where every moving body was sent ${client.oldBytes}`);
+    assert.ok(client.worstFar <= client.oldWorst, 'and a far body is never drawn further from the truth than holding it still between refreshes did');
+  }
 });

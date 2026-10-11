@@ -3023,6 +3023,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       lastMsgAt = wall();
       raw({
         t: 'hello', rules: rulesGame, v: NETPLAY_VERSION, rev: NETPLAY_REVISION, token, name: name || undefined, device, want, canHost: asAgent && asAgent.hands === 'host' ? false : canHost, game: opts.game, max: opts.maxPlayers,
+        ...(rulesGame ? { coast: 1 } : {}),
         ...(watching ? { watch: true } : {}), ...(caps.size ? { caps: [...caps] } : {}), ...(asAgent ? { agent: asAgent } : {}),
         // Revision 9 (an older relay ignores both): the game's revision and what this build can do.
         ...(version ? { ver: version } : {}), ...(features.length ? { feat: features } : {}),

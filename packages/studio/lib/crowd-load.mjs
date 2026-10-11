@@ -533,6 +533,29 @@ try {
       wireDownBytes: sum('wireDownBytes'),
       compressedSockets: sum('compressed')
     },
+    // Whether the server agreed to permessage-deflate on these sockets, as a
+    // browser's would be, and what it saved: decoded bytes over wire bytes.
+    compression: {
+      offered: opts.compress !== 'off',
+      sockets: sum('compressed'),
+      of: sum('attempted'),
+      ratio:
+        sum('wireDownBytes') > 0
+          ? Math.round((sum('downBytes') / sum('wireDownBytes')) * 100) / 100
+          : null
+    },
+    // The whole ticks ahead each player stamps its input (it starts at 3 and
+    // follows what the room reports, as the toolkit's client does), and the
+    // share of the room's reports that said an input missed its tick.
+    inputLead: (() => {
+      const a = finals.flatMap((f) => f.leadTicks ?? []).sort((x, y) => x - y);
+      const reports = sum('inputReports');
+      return {
+        ticksMedian: a[Math.floor(a.length / 2)] ?? null,
+        ticksMax: a.at(-1) ?? null,
+        lateShare: reports ? Math.round((sum('inputReportsLate') / reports) * 1000) / 1000 : null
+      };
+    })(),
     driver: {
       workers: workerCount,
       maxRssMiB: maxRss,

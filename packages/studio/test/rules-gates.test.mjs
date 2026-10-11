@@ -11,9 +11,9 @@ function socket() {
     emit(t, value) { for (const fn of events.get(t) ?? []) fn(value); }, send(text) { this.sent.push(JSON.parse(text)); }, close() { this.emit('close', {}); } };
 }
 test('room layouts scale without imposing an admission ceiling; carrier addresses have no default limit', () => {
-  assert.deepEqual(roomLayout(300), { gates: 5, concentrators: 0 });
-  assert.deepEqual(roomLayout(1000), { gates: 16, concentrators: 0 });
-  assert.deepEqual(roomLayout(1280), { gates: 20, concentrators: 0 });
+  assert.deepEqual(roomLayout(300), { gates: 15, concentrators: 0 });
+  assert.deepEqual(roomLayout(1000), { gates: 50, concentrators: 0 });
+  assert.deepEqual(roomLayout(1280), { gates: 64, concentrators: 0 });
   assert.equal(seatCount(1000), 1000);
   assert.equal(perAddress(300, true), 0);
 });

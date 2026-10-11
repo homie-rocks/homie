@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { Miniflare } from 'miniflare';
 import { build } from 'esbuild';
 import { snapshotDecoder } from '../rules/interest.mjs';
+import { roomLayout } from '../worker/gate.mjs';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 
@@ -59,13 +60,13 @@ test('public Worker, real Table storage and Gates admit above 32 and preserve se
   const mf=new Miniflare({telemetry:{enabled:false},workers:[{config:{name:'rooms',compatibilityDate:'2026-10-07',compatibilityFlags:['nodejs_compat'],manifest:{mainModule:'entry.mjs',modules:{'entry.mjs':{type:'esm',contents:bundle.outputFiles[0].text}}},exports:Object.fromEntries(classes.map(name=>[name,{type:'durable-object',storage:'sqlite'}])),env:Object.fromEntries(classes.map(name=>[name.toUpperCase(),{type:'durable-object',worker:'rooms',exportName:name}]))}}]});
   const peers=[];
   const heartbeat=setInterval(()=>{for(const p of peers)try{p.send(JSON.stringify({t:'ping',c:Date.now()}));}catch{}},1000);
-  const shard=key=>{let hash=2166136261;for(const c of key)hash=Math.imul(hash^c.charCodeAt(0),16777619)>>>0;return hash%Math.ceil(capacity/64);};
+  const shard=key=>{let hash=2166136261;for(const c of key)hash=Math.imul(hash^c.charCodeAt(0),16777619)>>>0;return hash%roomLayout(capacity).gates;};
   const closedPeers=[];
   const open=async(key,token=null)=>{
     const response=await mf.dispatchFetch(`https://studio.test/crowd/__net?room=pub-1&b=${key}&gv=test-build`,{headers:{Upgrade:'websocket','cf-connecting-ip':'203.0.113.1'}});
     assert.equal(response.status,101);const ws=response.webSocket;ws.accept();
     const view={decoder:snapshotDecoder(),seat:null,own:0,without:0,undecodable:0};
-    const result=await new Promise((resolve,reject)=>{ws.addEventListener('message',e=>{const m=JSON.parse(e.data);if(m.t==='snap'){const snap=view.decoder.decode(m);if(!snap)view.undecodable++;else if(snap.d[1].some(row=>row[9]===view.seat))view.own++;else view.without++;return;}if(m.t==='welcome'){view.seat=m.seat;resolve({ws,welcome:m,view});}else if(m.t==='error')reject(new Error(JSON.stringify(m)));});ws.addEventListener('close',()=>reject(new Error('closed before welcome')));ws.send(JSON.stringify({t:'hello',v:1,rev:12,rules:true,want:'play',token}));});
+    const result=await new Promise((resolve,reject)=>{ws.addEventListener('message',e=>{const m=JSON.parse(e.data);if(m.t==='snap'){const snap=view.decoder.decode(m);if(!snap)view.undecodable++;else if(snap.d[1].some(row=>row[9]===view.seat))view.own++;else view.without++;return;}if(m.t==='welcome'){view.seat=m.seat;resolve({ws,welcome:m,view});}else if(m.t==='error')reject(new Error(JSON.stringify(m)));});ws.addEventListener('close',()=>reject(new Error('closed before welcome')));ws.send(JSON.stringify({t:'hello',v:1,rev:12,rules:true,want:'play',token,...(key.endsWith('0')?{}:{coast:1})}));});
     result.ws.addEventListener('close',e=>closedPeers.push({key,code:e.code,reason:e.reason}));
     peers.push(result.ws);return {...result,key,gate:shard(key)};
   };
@@ -89,6 +90,7 @@ test('public Worker, real Table storage and Gates admit above 32 and preserve se
       assert.equal(kept.counts.players,count);assert.equal(kept.diagnostics.cached,true);
       assert.equal(kept.gates.reduce((a,g)=>a+g.subscribed,0),count,'the Gates between them hold every player');
       assert.ok(kept.gates.every(g=>g.deliveredHz===null||g.deliveredHz>0));
+      assert.equal(kept.gates.reduce((a,g)=>a+g.coasting,0),count-count/10,'nine players in ten are current clients, on the crowd path');
     }
     for(const failure of ['gate','table']){
       const gate=holders[0].gate, affected=failure==='table'?holders:holders.filter(p=>p.gate===gate);

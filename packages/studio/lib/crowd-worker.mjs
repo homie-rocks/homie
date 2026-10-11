@@ -54,6 +54,9 @@ export function createLoad({
     welcome = new Histogram(),
     ack = new Histogram(),
     gaps = new Histogram();
+  // Snapshots that said how early this player's input was, and how many said late.
+  let lateAcks = 0,
+    onTime = 0;
   const loop = monitorEventLoopDelay({ resolution: 10 });
   loop.enable();
   let measuring = false,
@@ -141,6 +144,19 @@ export function createLoad({
       gaps.add(gap);
     }
     const control = snap.c?.find((row) => row[0] === c.seat);
+    // The room says how early this player's inputs arrive, in sixteenths of a
+    // tick (the smallest since its last snapshot). The toolkit's client steers
+    // its clock by that; this probe moves its whole-tick lead: one more when
+    // an input in the last second was under half a tick early, one fewer when
+    // every input in the last three seconds was more than two early.
+    if (control && control[3] !== -128 && control[3] !== undefined) {
+      const early = control[3] / 16;
+      if (measuring) { if (early <= 0) lateAcks++; onTime++; }
+      c.minEarly = Math.min(c.minEarly ?? Infinity, early);
+      c.leadSamples = (c.leadSamples ?? 0) + 1;
+      if (early < 0.5 && now - (c.leadAt ?? 0) > 1000 && c.lead < 12) { c.lead++; c.leadAt = now; c.minEarly = Infinity; c.leadSamples = 0; }
+      else if (c.leadSamples >= 30 && now - (c.leadAt ?? 0) > 3000) { if (c.minEarly > 2 && c.lead > 1) c.lead--; c.leadAt = now; c.minEarly = Infinity; c.leadSamples = 0; }
+    }
     if (control)
       for (const [tick, at] of c.pending) {
         if (tick > control[2]) break;
@@ -159,6 +175,7 @@ export function createLoad({
       token: reused?.token ?? null,
       priorSeat: reused?.seat ?? null,
       first: null,
+      lead,
       began: performance.now(),
       decoder: snapshotDecoder(),
       pending: new Map(),
@@ -217,6 +234,8 @@ export function createLoad({
           device: 'desk',
           want: 'play',
           canHost: false,
+          // As the toolkit's client (0.46.2): this decoder coasts a body it was not sent.
+          coast: 1,
           game,
           max: 1000,
           ...(cfg.ver ? { ver: cfg.ver } : {})
@@ -296,7 +315,7 @@ export function createLoad({
       if (c.nextInput <= now) c.nextInput = now + 100;
       const k = Math.max(
           c.lastSent + 1,
-          c.k + Math.min(10, Math.floor((now - c.at) / 50)) + lead
+          c.k + Math.min(10, Math.floor((now - c.at) / 50)) + c.lead
         ),
         y = c.own[3][1],
         east = Boolean(c.own[7][1]);
@@ -416,6 +435,9 @@ export function createLoad({
         ...end,
         errors: [...errors].map(([text, count]) => ({ text, count })),
         histograms: { first, welcome, ack, gaps },
+        inputReports: onTime,
+        inputReportsLate: lateAcks,
+        leadTicks: clients.filter((c) => !c.retired).map((c) => c.lead),
         ackSkipped: skipped,
         ackExpired: expired,
         totalUp,

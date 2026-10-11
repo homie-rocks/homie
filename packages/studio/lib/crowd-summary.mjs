@@ -38,6 +38,11 @@ export function summarize(report, rows = [], link = null) {
       receiveGapMs: { p95: report.receiveGapMs?.p95 ?? null, p99: report.receiveGapMs?.p99 ?? null },
       ackExpired: report.ackExpired ?? null,
       compressedSockets: report.payload?.compressedSockets ?? null,
+      // Did the server agree to compress these sockets, and what it saved (decoded bytes over wire bytes).
+      compression: report.compression ?? null,
+      // Whole ticks ahead the median player stamped its input, and the share of the room's reports that said late.
+      inputLead: report.inputLead ?? null,
+      wireKBsPerPlayer: round(seconds && report.joined ? wire / seconds / report.joined / 1000 : null),
       wireMBps: round(wireMBps), decodedMBps: round(seconds ? (report.payload?.downBytes ?? 0) / seconds / 1e6 : null),
       errors: (report.errors ?? []).reduce((a, e) => a + (e.count ?? 1), 0),
     },
@@ -49,32 +54,49 @@ export function summarize(report, rows = [], link = null) {
       tickRate: { median: round(pick(during.map((r) => r.tickRate), 0.5)), min: round(pick(during.map((r) => r.tickRate), 0)) },
       // A Gate's stamp on a player's message to the room handling it.
       inputTransitMs: { p50: pick(during.map((r) => r.inputTransitMs?.p50), 0.5), p95: pick(during.map((r) => r.inputTransitMs?.p95), 0.5), max: pick(during.map((r) => r.inputTransitMs?.max), 1) },
+      // Inputs that reached the rules after the tick they were stamped for (they apply on the next one).
       lateInputs: (() => { const ins = during.reduce((a, r) => a + (r.ticks.ins ?? 0), 0), late = during.reduce((a, r) => a + (r.ticks.lateEntries ?? 0), 0); return ins ? round(late / ins, 3) : null; })(),
       // Frames a Gate wrote to each of its players a second: the median Gate-second, and the worst.
-      gateDeliveredHz: { median: round(pick(gates.map((g) => g.deliveredHz), 0.5)), min: round(pick(gates.map((g) => g.deliveredHz), 0)) },
+      gateDeliveredHz: { median: round(pick(gates.map((g) => g.deliveredHz), 0.5)), p05: round(pick(gates.map((g) => g.deliveredHz), 0.05)), min: round(pick(gates.map((g) => g.deliveredHz), 0)) },
       gateWorldHz: { median: round(pick(gates.map((g) => g.worldHz), 0.5)), min: round(pick(gates.map((g) => g.worldHz), 0)) },
       worldAgeMs: { p50: pick(gates.map((g) => g.worldAgeMs?.p50), 0.5), p95: pick(gates.map((g) => g.worldAgeMs?.p95), 0.95), max: pick(gates.map((g) => g.worldAgeMs?.max), 1) },
       roomLinkAckMs: { median: pick(gates.map((g) => g.ackMs), 0.5), max: pick(gates.map((g) => g.maxAckMs), 1) },
       gates: Math.max(0, ...during.map((r) => (r.gates ?? []).length)),
       playersPerGate: (() => { const last = during.at(-1)?.gates ?? []; const c = sorted(last.map((g) => g.subscribed)); return c.length ? { min: c[0], max: c.at(-1) } : null; })(),
       pacedPlayers: pick(during.map((r) => (r.gates ?? []).reduce((a, g) => a + (g.paced ?? 0), 0)), 1),
+      coastingPlayers: pick(during.map((r) => (r.gates ?? []).reduce((a, g) => a + (g.coasting ?? 0), 0)), 1),
+      // A Gate's own round trip to the room (its event loop's wait is in it): the median Gate-second and the worst.
+      gateRttMs: { median: round(pick(gates.map((g) => g.rttMs), 0.5), 0), p95: round(pick(gates.map((g) => g.rttMs), 0.95), 0) },
+      inputOffsetMs: pick(gates.map((g) => g.inputOffsetMs), 0.5),
       clientLagTicks: { p95: pick(gates.map((g) => g.clientLagTicks?.p95), 0.95), max: pick(gates.map((g) => g.clientLagTicks?.max), 1) },
     },
   };
 }
 
+/**
+ * The columns, in order. Three are easy to misread:
+ *   - "lead (late)": the whole ticks ahead the median player stamps its input, and the share of the room's reports
+ *     to players that said an input missed its tick. A player adds a tick of lead when that happens, so a steady
+ *     room ends near zero; ack is never less than the lead (three ticks is 150 ms at 20 Hz).
+ *   - "server late": of every input the rules took, the share that arrived after its stamped tick.
+ *   - "world age": a Gate's clock when it wrote a world, less the room's when it made it. Two computers' clocks:
+ *     read it for seconds, not for tens of milliseconds. "Gate rtt" is one clock and is the one to trust.
+ */
 export function table(steps) {
   const cell = (v) => (v === null || v === undefined ? '—' : String(v));
-  const head = ['N', 'joined/end/drops', 'ack p50/p95/p99 ms', 'client tick Hz', 'client delivered Hz', 'wire MB/s (link)', 'server tick Hz med/min', 'input transit p50/p95 ms', 'late inputs', 'Gate delivered Hz med/min', 'world age p95 ms', 'paced', 'diag ok/failed'];
+  const head = ['N', 'joined/end/drops', 'ack p50/p95/p99 ms', 'lead (late)', 'client tick Hz', 'client delivered Hz', 'wire MB/s (link)', 'KB/s a player', 'compressed (ratio)', 'server tick Hz med/min', 'server late', 'Gates', 'Gate delivered Hz med/p05', 'Gate rtt med/p95 ms', 'world age p95 ms', 'paced', 'diag ok/failed'];
   const lines = [`| ${head.join(' | ')} |`, `| ${head.map(() => '---').join(' | ')} |`];
   for (const s of steps) lines.push(`| ${[
     s.n, `${cell(s.joined)}/${cell(s.connectedAtEnd)}/${cell(s.disconnects)}`,
     `${cell(s.client.inputAckMs.p50)}/${cell(s.client.inputAckMs.p95)}/${cell(s.client.inputAckMs.p99)}`,
+    `${cell(s.client.inputLead?.ticksMedian)} (${cell(s.client.inputLead?.lateShare)})`,
     cell(s.client.tickHz.median), cell(s.client.deliveredHz.median),
     `${cell(s.client.wireMBps)} (${cell(s.link.downMBps)}${s.link.limited ? ', LINK-LIMITED' : ''})`,
-    `${cell(s.server.tickRate.median)}/${cell(s.server.tickRate.min)}`,
-    `${cell(s.server.inputTransitMs.p50)}/${cell(s.server.inputTransitMs.p95)}`, cell(s.server.lateInputs),
-    `${cell(s.server.gateDeliveredHz.median)}/${cell(s.server.gateDeliveredHz.min)}`, cell(s.server.worldAgeMs.p95), cell(s.server.pacedPlayers),
+    cell(s.client.wireKBsPerPlayer),
+    s.client.compression ? `${s.client.compression.sockets}/${s.client.compression.of} (${cell(s.client.compression.ratio)})` : (s.client.compressedSockets === null ? '—' : `${s.client.compressedSockets} (${cell(s.client.wireMBps && s.client.decodedMBps ? round(s.client.decodedMBps / s.client.wireMBps) : null)})`),
+    `${cell(s.server.tickRate.median)}/${cell(s.server.tickRate.min)}`, cell(s.server.lateInputs), cell(s.server.gates || null),
+    `${cell(s.server.gateDeliveredHz.median)}/${cell(s.server.gateDeliveredHz.p05)}`, `${cell(s.server.gateRttMs.median)}/${cell(s.server.gateRttMs.p95)}`,
+    cell(s.server.worldAgeMs.p95), cell(s.server.pacedPlayers),
     `${s.server.samples}/${s.server.failedPolls}`,
   ].join(' | ')} |`);
   return lines.join('\n');
