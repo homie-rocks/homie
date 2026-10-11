@@ -49,7 +49,7 @@ import { lab } from '../lab/lab.ts';
 import { exposePort, type PortProbeOptions } from '../port/probe.ts';
 import { BudgetError } from './guard.ts';
 import { moveContext } from './math.ts';
-import { coerce, dir, stepMove, thawFields, unpackEntity, unpackFields, unpackVec, vec3 } from './pack.ts';
+import { coerce, coerceFields, dir, initFields, stepMove, thawFields, unpackEntity, unpackFields, unpackVec, vec3 } from './pack.ts';
 import type { Unpacked } from './pack.ts';
 import { compileMap } from './rules.ts';
 import type { FieldList, MoveFn, Schema, Vec3 } from './rules.ts';
@@ -95,12 +95,37 @@ export interface OpenRoomOptions {
   game?: GameData;
   move?: Record<string, MoveFn>;
   net?: NetplayOptions;
+  /**
+   * Predict the player's OWN actions (0.46.3), by kind: `predict: { runner(me, input, ctx) { ... } }`. The room runs it
+   * for the own body once a predicted tick, after `move`, with that tick's input, and again on a copy between ticks so
+   * a press answers on the next drawn frame. `me` holds the body's declared fields and may be written: `room.me` then
+   * reads the predicted values. Every snapshot puts the server's values back and the pending inputs are run again,
+   * exactly as the own position is. `ctx.ghost` shows a provisional entity and `ctx.effect` a provisional effect until
+   * the server confirms or the room retracts them (`room.on('retract', ...)`). The server stays the authority.
+   */
+  predict?: Record<string, Predictor>;
   /** Camera axes on the rules' x/y plane for the testing tools. Default: x right, y up. */
   screenBasis?: PortProbeOptions['basis'];
   /** Tests: a clock in ms and a way to run without timers. */
   now?: () => number;
   timers?: boolean;
 }
+/** What a predictor (`openRoom({ predict })`) is handed beside the body and the tick's input. */
+export interface PredictContext extends RayQueries {
+  readonly tick: number; readonly dt: number;
+  /** The tick the other bodies are drawn at: what the player is looking at. */
+  readonly viewTick: number;
+  /** This run draws ahead of the tick; the tick's own run follows. What it shows is shown once. */
+  readonly preview: boolean;
+  /** A provisional entity, drawn by `room.each` with `provisional: true` until an entity of that kind which `match` accepts (default: within a metre of it) arrives, or the server has run the tick without one. Returns its id. */
+  ghost(kind: string, at: { x: number; y: number; z?: number }, fields?: Record<string, unknown>, options?: { seconds?: number; match?: (e: Entity) => boolean; key?: string }): string;
+  /**
+   * A provisional effect: listeners hear it now with `predicted: true`. The server's own effect of that name which `match` accepts (default: the next one) then arrives with `confirms: true`; if the server ran the tick without one, listeners of `retract` hear it.
+   * A tick's prediction runs more than once (a preview between ticks, again whenever the input changes, then the tick itself) and shows each thing once: things are told apart by their name and `key`, so give two effects of one name that mean different things (two sounds) a `key` each.
+   */
+  effect(name: string, at: { x: number; y: number; z?: number } | string, data?: Record<string, unknown>, options?: { match?: (e: any) => boolean; key?: string }): void;
+}
+export type Predictor = (me: any, input: any, ctx: PredictContext) => void;
 export interface Room<R = unknown> extends RayQueries {
   readonly viewTick: number;
   readonly status: RoomStatus;
@@ -163,7 +188,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let round: RoomRound | null = null;
   let results: RoundInfo['results'] | undefined;
   let closed = false;
-  const fxQueue: { tick: number; name: string; at: unknown; data: Record<string, unknown> }[] = [];
+  const fxQueue: { tick: number; name: string; at: unknown; data: Record<string, unknown>; confirms?: boolean }[] = [];
   const setStatus = (s: RoomStatus): void => { if (s !== status) { status = s; emit('status', s); } };
 
   /* ---------------------------------------------------------------- frames in */
@@ -186,7 +211,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
 
   /* ---------------------------------------------------------------- the own body, on this browser's copy of the clock */
 
-  interface Mine { id: string; kind: string; r: number; pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean; motion: Record<string, unknown> }
+  interface Mine { id: string; kind: string; r: number; pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean; motion: Record<string, unknown>; fields: Record<string, unknown> }
   let mine: Mine | null = null;
   /** The clock: the room tick this browser is on at `at` (ms), and the newest step it has run. */
   let base: { tick: number; at: number } | null = null;
@@ -203,8 +228,13 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let entries: { t: number; row: number[] }[] = [];
   let hiddenSent = false;
   const history = new Map<number, Mine>();
-  let pending: { t: number; input: Readonly<Record<string, unknown>> }[] = [];
+  let pending: { t: number; input: Readonly<Record<string, unknown>>; pulses?: Record<string, number> }[] = [];
+  /** Valued pulses sent, numbered: the server's control row names the newest it has acted on (0.46.3). */
+  let pulseCount = 0;
+  let pulseNumber = new Map<string, number>();
   let replayHeld: Readonly<Record<string, unknown>> = Object.freeze({});
+  /** `f.held()` values as the server last had them: those of the newest entry it has acknowledged. */
+  let serverHeld: Record<string, number> = {};
   let speed = 1;
   let leadAfter = 0;
   let observedLeadAt = 0;
@@ -294,7 +324,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     leadAfter = clock() + 2 * rtt + period;
     base = { tick: k + Math.ceil(rtt / period + target) + sendEvery - 1, at: clock() };
     stepped = Math.floor(base.tick) - 1;
-    entries = []; pending = []; history.clear(); replayHeld = {}; held = {}; lastSent = ''; leads.length = 0; pressed = new Map();
+    entries = []; pending = []; history.clear(); replayHeld = {}; serverHeld = {}; held = {}; lastSent = ''; leads.length = 0; pressed = new Map(); pulseNumber = new Map(); heldTrack.clear(); if (reason !== 'lead') dropPredictions();
     speed = 1; phases.length = 0; phases.push({ ...base, rate: 1 }); catchTick = null; offsets = []; headingBlend = null; correction.rebases += 1;
     const u = mine && latest?.ents.get(mine.id); if (u) adopt(u);
     if (mine) {
@@ -305,7 +335,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   /** `motion` as this browser's own `move` may change it in place: what a snapshot carries is frozen, so every list, map and struct in it is copied. */
   const motionOf = (kindName: string, motion: Record<string, unknown>): Record<string, unknown> => thawFields(kindOf.get(kindName)?.motion ?? [], motion);
   function adopt(u: Unpacked): void {
-    mine = { id: u.id, kind: u.kind, r: u.r, pos: u.pos, vel: u.vel, heading: u.heading, grounded: u.grounded, motion: motionOf(u.kind, u.motion) };
+    mine = { id: u.id, kind: u.kind, r: u.r, pos: u.pos, vel: u.vel, heading: u.heading, grounded: u.grounded, motion: motionOf(u.kind, u.motion), fields: predictors[u.kind] ? thawFields(kindOf.get(u.kind)?.fields ?? [], u.fields) : u.fields };
   }
   /** The game's guarded `move` for one tick, counted as the server counts it, with the result rounded as the server rounds it. */
   function runMove(kindName: string, body: { pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean; motion: Record<string, unknown> }, input: Readonly<Record<string, unknown>>, t: number): typeof body {
@@ -321,8 +351,117 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     out.pos = vec3({ x: Math.max(map.bounds.min.x + r, Math.min(map.bounds.max.x - r, out.pos.x)), y: Math.max(map.bounds.min.y + r, Math.min(map.bounds.max.y - r, out.pos.y)), z: dims === 3 ? Math.max(map.bounds.min.z, Math.min(map.bounds.max.z - height, out.pos.z)) : 0 }, dims);
     return out;
   }
+  /* ---------------------------------------------------------------- the own actions, predicted (0.46.3) */
+
+  const predictors = opts.predict ?? {};
+  interface Ghost { id: string; kind: string; tick: number; pos: Vec3; fields: Record<string, unknown>; until: number; match?: (e: Entity) => boolean; /** The server's entity that confirmed it: the ghost is drawn until that one is. */ real?: string }
+  const ghosts = new Map<string, Ghost>();
+  let ghostSeq = 0;
+  let provisional: { name: string; tick: number; payload: Record<string, unknown>; match?: (e: any) => boolean }[] = [];
+  /** What a tick's prediction has already shown, by tick and by the order it asked: a preview and the tick's own run show a thing once. */
+  const shown = new Map<number, Set<string>>();
+  let previewKey = '', previewFields: Record<string, unknown> | null = null;
+  const ghostEntity = (g: Ghost): Entity => Object.freeze({ id: g.id, kind: g.kind, pos: g.pos, vel: ZERO3, heading: ZERO3, grounded: false, provisional: true, ...g.fields, motion: Object.freeze({}) }) as Entity;
+  const ZERO3: Vec3 = Object.freeze({ x: 0, y: 0, z: 0 });
+  function dropPredictions(): void {
+    for (const g of ghosts.values()) if (!g.real) emit('retract', { ghost: g.id, kind: g.kind, at: g.pos, tick: g.tick });
+    for (const x of provisional) emit('retract', { ...x.payload, effect: x.name, tick: x.tick });
+    ghosts.clear(); provisional = []; shown.clear(); previewKey = ''; previewFields = null;
+  }
+  /**
+   * The game's predictor for one tick of the own body. `live` is false while a snapshot's pending inputs are run again:
+   * that run only brings the fields up to date, and shows nothing.
+   */
+  function runPredict(kindName: string, body: { pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean; motion: Record<string, unknown> }, fields: Record<string, unknown>, input: Readonly<Record<string, unknown>>, t: number, live: boolean, preview: boolean): void {
+    const fn = predictors[kindName], kind = kindOf.get(kindName);
+    if (!fn || !kind || !mine) return;
+    const id = mine.id;
+    // What a run asks to show is told apart by what it is (the name and the game's `key`), then by how many of that this
+    // run has asked for: never by the order of everything asked, which changes when another action joins the tick.
+    const asked = new Map<string, number>();
+    const once = (what: string): boolean => { if (!live) return false; let set = shown.get(t); if (!set) { set = new Set(); shown.set(t, set); } const n = asked.get(what) ?? 0; asked.set(what, n + 1); const key = what + '#' + n; if (set.has(key)) return false; set.add(key); return true; };
+    const ctx: PredictContext = {
+      tick: t, dt: 1 / tickHz, preview,
+      get viewTick() { return viewTickNow(); },
+      ray: (from, direction, max, options) => viewRay(from, direction, max, options)[0],
+      rays: (options) => raySnapshot(map, viewTargets(), dims, options, id),
+      rayAll: (from, direction, max, options) => viewRay(from, direction, max, options, true),
+      ghost(kindOfGhost, at, data = {}, options = {}) {
+        const k = kindOf.get(kindOfGhost);
+        if (!k) { console.warn(`[room] predict: no kind "${kindOfGhost}"`); return ''; }
+        if (!once('g:' + kindOfGhost + ':' + (options.key ?? ''))) return '';
+        const g: Ghost = { id: `~${++ghostSeq}`, kind: kindOfGhost, tick: t, pos: vec3(at, dims), fields: coerceFields(k.fields, { ...initFields(k.fields, dims), ...data }, dims), until: clock() + (options.seconds ?? 2) * 1000, match: options.match };
+        ghosts.set(g.id, g);
+        emit('enter', ghostEntity(g));
+        return g.id;
+      },
+      effect(name, at, data = {}, options = {}) {
+        if (!schema.effects[name]) { console.warn(`[room] predict: no effect "${name}" is declared in shapes.effects`); return; }
+        if (!once('e:' + name + ':' + (options.key ?? ''))) return;
+        const target = typeof at === 'string' ? at : null;
+        const payload = { ...data, at: target ? get(target)?.pos ?? null : vec3(at as Vec3, dims), ...(target ? { id: target } : {}), tick: t };
+        // The server's own effect may already be here, waiting for its tick to be drawn (it acted before this browser
+        // stepped the tick, and its snapshot is still on the way): that one is this prediction's confirmation.
+        const waiting = fxQueue.find((x) => x.name === name && !x.confirms && (!options.match || safe(() => options.match!({ ...x.data, ...(typeof x.at === 'string' ? { id: x.at } : { at: unpackVec(x.at, dims) }), tick: x.tick }))));
+        if (waiting) waiting.confirms = true; else provisional.push({ name, tick: t, payload, match: options.match });
+        emit(name, Object.freeze({ ...payload, predicted: true }));
+      },
+    };
+    const me = Object.assign(fields, { id, kind: kindName }) as Record<string, unknown>;
+    for (const [key, value] of Object.entries({ pos: body.pos, vel: body.vel, heading: body.heading, grounded: body.grounded, motion: body.motion })) Object.defineProperty(me, key, { value, enumerable: false, configurable: true, writable: true });
+    try { fn(me, input, ctx); } catch (err) { console.warn('[room] predict', err); }
+    // What it wrote is held to the declared types, as the server holds its own writes.
+    for (const [name, fd] of kind.fields) fields[name] = coerce(fd, fields[name], dims);
+    for (const key of Object.keys(fields)) if (!kind.fields.some(([name]) => name === key)) delete fields[key];
+  }
+  /** After a snapshot: a ghost or a provisional effect whose tick the server has run without confirming it is taken back. */
+  function settlePredictions(f: Frame, before: Frame | null, ack: number): void {
+    if (ghosts.size) {
+      for (const [id, u] of f.ents) {
+        if (before?.ents.has(id)) continue;
+        const e = entityOf(u);
+        for (const g of ghosts.values()) if (!g.real && g.kind === u.kind && (g.match ? safe(() => g.match!(e)) : distance(u.pos, g.pos) <= 1)) { g.real = u.id; g.until = Infinity; emit('confirm', { ghost: g.id, id: u.id, kind: g.kind, tick: g.tick }); break; }
+      }
+      const now = clock();
+      for (const g of [...ghosts.values()]) if (g.real ? !f.ents.has(g.real) : (ack >= g.tick && f.k >= g.tick) || now >= g.until) { ghosts.delete(g.id); if (!g.real) emit('retract', { ghost: g.id, kind: g.kind, at: g.pos, tick: g.tick }); emit('leave', ghostEntity(g)); }
+    }
+    if (provisional.length) {
+      const gone = provisional.filter((x) => ack >= x.tick && f.k > x.tick);
+      if (gone.length) { provisional = provisional.filter((x) => !gone.includes(x)); for (const x of gone) emit('retract', Object.freeze({ ...x.payload, effect: x.name })); }
+    }
+    for (const t of shown.keys()) if (t < f.k - tickHz) shown.delete(t);
+  }
+  const safe = (fn: () => boolean): boolean => { try { return fn() === true; } catch { return false; } };
+
   /** The input values the last step held (a press is never held). */
   let held: Readonly<Record<string, unknown>> = Object.freeze({});
+  /*
+   * `f.held()` inputs (0.46.3). A step takes one value a tick, read at the tick's edge: a key down for 60 ms of a 50 ms
+   * tick then moves the body for one tick or for two, by where the edges fell. A held field is instead the MEAN of what
+   * the control read over the tick's own span, so the body moves for the part of the tick the key was down, the same on
+   * the server as here. Each field keeps its changes since the last edge it was read up to: [when (ms), value from then].
+   */
+  const heldTrack = new Map<string, { from: number; changes: [number, number][] }>();
+  const heldNumber = (v: unknown, init: unknown): number => { const x = v === undefined ? init : v; return x === true ? 1 : typeof x === 'number' && Number.isFinite(x) ? x : 0; };
+  /** When tick `t` begins on this browser's clock, in ms. */
+  const edgeOf = (t: number): number => (base ? base.at + (t - base.tick) * period / speed : clock());
+  /** The mean of a held field from its last edge to `end`. `advance` moves the edge there; without it the tick is not over, and what is left of it (to `fill`) counts at the value the control reads now. */
+  function heldMean(name: string, init: unknown, end: number, advance: boolean, fill = end): number {
+    const now = heldNumber(sample[name], init);
+    let tr = heldTrack.get(name);
+    if (!tr) { tr = { from: end, changes: [[end, now]] }; heldTrack.set(name, tr); }
+    const span = fill - tr.from;
+    let sum = 0, value = tr.changes[0][1];
+    if (span > 0.001) {
+      let at = tr.from;
+      for (const [when, next] of tr.changes) { const w = Math.min(Math.max(when, tr.from), end); if (w > at) { sum += value * (w - at); at = w; } if (when <= end) value = next; }
+      if (end > at) sum += value * (end - at);
+      if (fill > end) sum += now * (fill - end);
+    }
+    const mean = span > 0.001 ? sum / span : now;
+    if (advance) { tr.changes = [[end, value], ...tr.changes.filter((c) => c[0] > end)]; tr.from = end; }
+    return mean;
+  }
   /** One step of the own body on tick `t`: the input step, `move`, and an entry when the sample or the claim changed. */
   function step(t: number, fresh = true): void {
     const kind = myKind();
@@ -331,17 +470,20 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const input: Record<string, unknown> = {};
     let press = false;
     for (const [name, fd] of kind.input) {
-      if (fd.t === 'press' || fd.t === 'pulse') { const on = fresh ? (pressed.get(name) ?? (fd.t === 'press' ? false : 0)) : (fd.t === 'press' ? false : 0); input[name] = on; values.push(fd.t === 'pulse' ? 0 : Number(on)); if (on) press = true; } else { const v = coerce(fd, (fresh ? sample[name] : held[name]) ?? fd.init, dims); input[name] = v; values.push(v === true ? 1 : v === false ? 0 : v as number); }
+      if (fd.t === 'press' || fd.t === 'pulse') { const on = fresh ? (pressed.get(name) ?? (fd.t === 'press' ? false : 0)) : (fd.t === 'press' ? false : 0); input[name] = on; values.push(fd.t === 'pulse' ? 0 : Number(on)); if (on) press = true; } else if (fd.t === 'held') { const v = coerce(fd, heldMean(name, fd.init, edgeOf(t), true), dims) as number; input[name] = v; values.push(v); } else { const v = coerce(fd, (fresh ? sample[name] : held[name]) ?? fd.init, dims); input[name] = v; values.push(v === true ? 1 : v === false ? 0 : v as number); }
     }
-    if (fresh) pressed = new Map();
+    const numbered = fresh && pulseNumber.size ? Object.fromEntries(pulseNumber) : undefined;
+    if (fresh) { pressed = new Map(); pulseNumber = new Map(); }
     held = Object.freeze({ ...input });
     {
       const body = runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: mine.motion }, held, t);
       mine.pos = body.pos; mine.vel = body.vel; mine.heading = body.heading; mine.grounded = body.grounded; mine.motion = body.motion;
+      runPredict(kind.name, body, mine.fields, held, t, true, false);
+      previewKey = '';
     }
     const claim = kind.owner ? [mine.pos.x, mine.pos.y, mine.pos.z, mine.vel.x, mine.vel.y, mine.vel.z, mine.heading.x, mine.heading.y, mine.heading.z] : [];
     const sig = JSON.stringify([values, claim]);
-    if (sig !== lastSent || press) { entries.push({ t, row: [...values, ...claim] }); pending.push({ t, input: held }); lastSent = sig; }
+    if (sig !== lastSent || press) { entries.push({ t, row: [...values, ...claim] }); pending.push({ t, input: held, ...(numbered ? { pulses: numbered } : {}) }); lastSent = sig; }
     history.set(t, copyMine(mine));
     for (const k of history.keys()) if (k < t - tickHz && (catchTick === null || k < Math.floor(catchTick))) history.delete(k);
   }
@@ -363,12 +505,18 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   function keepalive(t: number): void {
     const kind = myKind();
     if (!mine || !kind) return;
-    const values = kind.input.map(([name, fd]) => ((fd.t === 'press' || fd.t === 'pulse') ? 0 : Number(coerce(fd, sample[name] ?? fd.init, dims))));
+    const values = kind.input.map(([name, fd]) => ((fd.t === 'press' || fd.t === 'pulse') ? 0 : fd.t === 'held' ? Number(coerce(fd, heldNumber(sample[name], fd.init), dims)) : Number(coerce(fd, sample[name] ?? fd.init, dims))));
     const claim = kind.owner ? [mine.pos.x, mine.pos.y, mine.pos.z, mine.vel.x, mine.vel.y, mine.vel.z, mine.heading.x, mine.heading.y, mine.heading.z] : [];
     entries = [{ t, row: [...values, ...claim] }]; pending.push({ t, input: Object.fromEntries(kind.input.map(([name, fd], i) => [name, fd.t === 'press' ? false : values[i]])) }); lastSent = JSON.stringify([values, claim]);
   }
+  let pumping = false;
   function pump(): void {
-    if (closed) return;
+    // A predictor's own queries read the room, and reading the room pumps: a step is never begun inside a step.
+    if (closed || pumping) return;
+    pumping = true;
+    try { pumpOnce(); } finally { pumping = false; }
+  }
+  function pumpOnce(): void {
     if (net.offline && !net.rulesHosting) setStatus(net.closedWhy ? 'closed' : 'offline');
     const now = clock();
     checkSolo(now);
@@ -379,7 +527,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (hidden) {
       // A hidden tab's timers are too slow to keep input alive, and a body must not run on without its player:
       // one neutral entry at once (every field at its init, no press), then no more steps until the tab shows again.
-      if (!hiddenSent) { hiddenSent = true; sample = {}; pressed = new Map(); const t = Math.floor(tickAt(now)) + 1; keepalive(t); lastSendAt = 0; flush(now, t); }
+      if (!hiddenSent) { hiddenSent = true; sample = {}; pressed = new Map(); heldTrack.clear(); const t = Math.floor(tickAt(now)) + 1; keepalive(t); lastSendAt = 0; flush(now, t); }
       base = null;
       return;
     }
@@ -425,6 +573,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         if (placed) emit('placed', entityOf(me, true));
       } else if (kindOf.get(me.kind)?.owner) {
         mine!.motion = motionOf(me.kind, me.motion);
+        if (predictors[me.kind]) mine!.fields = thawFields(kindOf.get(me.kind)?.fields ?? [], me.fields);
       } else {
         const previous = mine!.pos;
         const shownBody = meNow();
@@ -434,13 +583,35 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         adopt(me);
         history.set(f.k, copyMine(mine!));
         const ack = row?.[2] ?? 0;
+        // A numbered pulse is still to come while the server's row has not reached its number (0.46.3): its own message
+        // can be later than the input frame of its tick, so the input's acknowledgement says nothing about it.
+        const taken = typeof row?.[4] === 'number' ? row[4] : null;
+        const owed = (entry: (typeof pending)[number], name: string): boolean => { const n = entry.pulses?.[name]; return taken !== null && n !== undefined ? n > taken : entry.t > ack; };
+        const fresh = (entry: (typeof pending)[number]): boolean => f.k + 1 - entry.t <= Math.ceil(tickHz / 4);
         const late = new Map<string, unknown>();
+        // Held input the server had not received when it ran its tick (0.46.3): those ticks ran on the values before, and
+        // the server settles the difference on its next ticks (host.ts). The replay owes the same, so the body is
+        // predicted where the server will bring it and not where a late frame left it for a moment.
+        const heldFields = myKind()!.input.filter(([, fd]) => fd.t === 'held').map(([name]) => name);
+        const debt: Record<string, number> = {};
+        if (heldFields.length) {
+          for (const entry of pending) if (entry.t <= ack) for (const name of heldFields) serverHeld[name] = Number(entry.input[name]) || 0;
+          const waiting = pending.filter((entry) => entry.t > ack && entry.t <= f.k && fresh(entry));
+          if (waiting.length) for (let i = waiting[0].t; i <= f.k; i++) {
+            let meant: Readonly<Record<string, unknown>> | null = null;
+            for (const entry of waiting) if (entry.t <= i) meant = entry.input;
+            if (meant) for (const name of heldFields) debt[name] = (debt[name] ?? 0) + (Number(meant[name]) || 0) - (serverHeld[name] ?? 0);
+          }
+        }
         for (const entry of pending) if (entry.t <= f.k) {
           replayHeld = entry.input;
-          if (entry.t > ack && f.k + 1 - entry.t <= Math.ceil(tickHz / 4))
-            for (const [name, fd] of myKind()!.input) if ((fd.t === 'press' || fd.t === 'pulse') && entry.input[name]) late.set(name, entry.input[name]);
+          if (fresh(entry))
+            for (const [name, fd] of myKind()!.input) if ((fd.t === 'press' || fd.t === 'pulse') && entry.input[name] && (fd.t === 'pulse' ? owed(entry, name) : entry.t > ack)) late.set(name, entry.input[name]);
         }
+        // After a reset nothing is held yet: the replay runs on every field's own zero, never on an input with no fields
+        // (a `move` that reads `input.yaw` would be handed `undefined`).
         let input = replayHeld;
+        if (!Object.keys(input).length) { const zero: Record<string, unknown> = {}; for (const [name, fd] of myKind()!.input) zero[name] = fd.t === 'press' ? false : fd.t === 'pulse' ? 0 : coerce(fd, fd.init, dims); input = Object.freeze(zero); }
         for (let t = f.k + 1; t <= stepped; t++) {
           const presses = new Map(t === f.k + 1 ? late : []);
           for (const entry of pending) if (entry.t === t) {
@@ -449,10 +620,12 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
           }
           const stepInput = { ...input };
           for (const [name, fd] of myKind()!.input) if (fd.t === 'press' || fd.t === 'pulse') stepInput[name] = presses.get(name) ?? (fd.t === 'press' ? false : 0);
+          for (const name of heldFields) if (debt[name]) { const level = Number(stepInput[name]) || 0, range = Math.max(1, Math.abs(level)), want = level + debt[name], paid = Math.max(-range, Math.min(range, want)); stepInput[name] = paid; debt[name] = want - paid; }
           Object.assign(mine!, runMove(me.kind, mine!, Object.freeze(stepInput), t));
+          runPredict(me.kind, mine!, mine!.fields, stepInput, t, false, false);
           history.set(t, copyMine(mine!));
         }
-        pending = pending.filter(e => e.t > f.k || e.t > ack && f.k + 1 - e.t <= Math.ceil(tickHz / 4));
+        pending = pending.filter(e => e.t > f.k || fresh(e) && (e.t > ack || Object.keys(e.pulses ?? {}).some((name) => owed(e, name))));
         if (shownBody && distance(oldHeading, mine!.heading) > 0.0001) headingBlend = { from: shownBody.heading, at: clock() };
         const error = distance(previous, mine!.pos);
         correction.last = error;
@@ -504,7 +677,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
           steer(now);
         }
       }
-    } else mine = null;
+      previewKey = '';
+      settlePredictions(f, before && before.e === f.e ? before : null, row?.[2] ?? 0);
+    } else { if (mine) dropPredictions(); mine = null; }
     if (before) {
       for (const [id, u] of f.ents) { const old = before.ents.get(id); if (!old) emit('enter', entityOf(u)); else if (old.r !== u.r && id !== mine?.id) emit('placed', entityOf(u)); }
       for (const [id, u] of before.ents) if (!f.ents.has(id)) emit('leave', entityOf(u));
@@ -532,11 +707,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     for (let i = 0; i < fxQueue.length;) {
       const x = fxQueue[i];
       const ownTick = catchTick === null ? tickAt(clock()) : catchTick + Math.max(0, clock() - catchAt) / period * predict.catchUp;
-      if (x.tick > (x.at === mine?.id ? Math.min(latest?.k ?? 0, ownTick) : drawn)) { i++; continue; }
+      if (!x.confirms && x.tick > (x.at === mine?.id ? Math.min(latest?.k ?? 0, ownTick) : drawn)) { i++; continue; }
       fxQueue.splice(i, 1);
       const id = typeof x.at === 'string' ? x.at : null;
       const where = id ? get(id)?.pos ?? null : unpackVec(x.at, dims);
-      emit(x.name, Object.freeze({ ...x.data, at: where, ...(id ? { id } : {}), tick: x.tick }));
+      emit(x.name, Object.freeze({ ...x.data, at: where, ...(id ? { id } : {}), tick: x.tick, ...(x.confirms ? { confirms: true } : {}) }));
     }
   }
 
@@ -549,7 +724,18 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   net.on('event', (e) => {
     if (e.k === 'fx' && Array.isArray(e.d)) {
       const [tick, list] = e.d as [number, [number, unknown, unknown][]];
-      for (const [i, at, data] of Array.isArray(list) ? list : []) { const name = schema.effectNames[i]; if (name) fxQueue.push({ tick: Number(tick) || 0, name, at, data: unpackFields(schema.effects[name] as FieldList, data, dims) }); }
+      for (const [i, at, data] of Array.isArray(list) ? list : []) {
+        const name = schema.effectNames[i];
+        if (!name) continue;
+        const item: (typeof fxQueue)[number] = { tick: Number(tick) || 0, name, at, data: unpackFields(schema.effects[name] as FieldList, data, dims) };
+        // The server's word on something this browser already showed (a predictor's `ctx.effect`): it confirms it.
+        if (provisional.length) {
+          const probe = { ...item.data, ...(typeof at === 'string' ? { id: at } : { at: unpackVec(at, dims) }), tick: item.tick };
+          const n = provisional.findIndex((x) => x.name === name && (!x.match || safe(() => x.match!(probe))));
+          if (n >= 0) { provisional.splice(n, 1); item.confirms = true; }
+        }
+        fxQueue.push(item);
+      }
       return;
     }
     // A player's speech and emotes, and a guide's lines and goals, as the relay carries them today.
@@ -594,7 +780,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (kind && base) {
       const a = Math.max(0, Math.min(1, tickAt(clock()) - stepped));
       const now: Record<string, unknown> = {};
-      for (const [name, fd] of kind.input) now[name] = (fd.t === 'press' || fd.t === 'pulse') ? (pressed.get(name) ?? (fd.t === 'press' ? false : 0)) : coerce(fd, sample[name] ?? fd.init, dims);
+      // A held field previews as its mean over the part of the tick that has passed. The body is drawn that fraction of
+      // the way to the preview, so it stands exactly where the control has carried it: it starts from rest at a press
+      // and stops dead at a release, with nothing to blend away afterwards.
+      for (const [name, fd] of kind.input) now[name] = (fd.t === 'press' || fd.t === 'pulse') ? (pressed.get(name) ?? (fd.t === 'press' ? false : 0)) : fd.t === 'held' ? coerce(fd, heldMean(name, fd.init, Math.min(clock(), edgeOf(stepped + 1)), false), dims) : coerce(fd, sample[name] ?? fd.init, dims);
       const next = runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: motionOf(mine.kind, mine.motion) }, Object.freeze(now), stepped + 1);
       pos = vec3({ x: lerp(mine.pos.x, next.pos.x, a), y: lerp(mine.pos.y, next.pos.y, a), z: lerp(mine.pos.z, next.pos.z, a) }, dims);
       heading = blendHeading(mine.heading, next.heading, a, dims);
@@ -602,6 +791,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       // A takeoff is airborne as soon as it rises; a landing waits for its contact.
       grounded = mine.grounded && (a === 0 || next.grounded);
       preview = next;
+      if (predictors[kind.name]) {
+        // The own actions between ticks: the predictor on a copy of the fields, for the tick about to be stepped.
+        const key = stepped + JSON.stringify(now);
+        if (key !== previewKey) { previewKey = key; previewFields = thawFields(kind.fields, mine.fields); runPredict(kind.name, next, previewFields, Object.freeze(now), stepped + 1, true, true); }
+      }
       settled = distance(next.pos, mine.pos) < 0.00001;
     }
     if (catchTick !== null && base) {
@@ -625,7 +819,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       heading = blendHeading(headingBlend.from, heading, t, dims);
       if (t >= 1) headingBlend = null;
     }
-    return entityOf({ ...server, pos, vel: velocity, heading, grounded, motion }, true);
+    return entityOf({ ...server, ...(kind && predictors[kind.name] ? { fields: (base ? previewFields : null) ?? mine.fields } : {}), pos, vel: velocity, heading, grounded, motion }, true);
   }
   function drawn(id: string): Entity | null {
     if (solo) return solo.get(id);
@@ -641,7 +835,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const h = blendHeading(ea.heading, eb.heading, t, dims);
     return entityOf({ ...(t < 1 ? ea : eb), grounded: t >= 1 ? eb.grounded : ea.grounded && (t === 0 || eb.grounded), pos: vec3({ x: lerp(ea.pos.x, eb.pos.x, t), y: lerp(ea.pos.y, eb.pos.y, t), z: lerp(ea.pos.z, eb.pos.z, t) }, dims), vel: vec3({ x: lerp(ea.vel.x, eb.vel.x, t), y: lerp(ea.vel.y, eb.vel.y, t), z: lerp(ea.vel.z, eb.vel.z, t) }, dims), heading: h });
   }
-  function get(id: string): Entity | null { return drawn(id); }
+  function get(id: string): Entity | null { const g = ghosts.get(id); return g ? ghostEntity(g) : drawn(id); }
   function each(kind: string, fn: (e: Entity) => void): void {
     pump();
     if (solo) { solo.each(kind, fn); return; }
@@ -653,6 +847,8 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     for (const f of [a, s && s.alpha >= 1 ? b : null, a ? null : b]) if (f) for (const u of f.ents.values()) if (u.kind === kind) ids.add(u.id);
     if (mine && mine.kind === kind) ids.add(mine.id);
     for (const id of ids) { const e = drawn(id); if (e) fn(e); }
+    // A confirmed ghost stands in until the server's own entity is drawn (it arrives a moment behind, interpolated).
+    for (const g of [...ghosts.values()]) if (g.kind === kind) { if (g.real && ids.has(g.real)) { ghosts.delete(g.id); emit('leave', ghostEntity(g)); } else fn(ghostEntity(g)); }
   }
   function roster(): RosterRow[] {
     if (solo) return solo.roster;
@@ -684,7 +880,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // traffic, writes no room save to the server, and closes as soon as a body arrives.
     const g = globalThis as unknown as Record<string, unknown>;
     const probes = [g.__homieNet, g.__homiePort];
-    solo = openRoom<R>({ game, move: moves, now: opts.now, timers: opts.timers, net: { config: null, post: null, linkOverlay: false } });
+    solo = openRoom<R>({ game, move: moves, predict: opts.predict, now: opts.now, timers: opts.timers, net: { config: null, post: null, linkOverlay: false } });
     [g.__homieNet, g.__homiePort] = probes;
     for (const name of listeners.keys()) forwardSolo(name);
     net.line(net.full ? 'This room is full · playing on your own until a seat is free' : 'Playing on your own until the next round');
@@ -715,6 +911,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const onShow = (): void => { if (typeof document !== 'undefined' && !document.hidden) { base = null; if (latest) rebase(latest.k); } };
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onShow);
 
+  function viewTickNow(): number { const s=net.sample();const a=s?frameOf(s.a):latest,b=s?frameOf(s.b):latest;return a&&b?a.k+(b.k-a.k)*(s?.alpha??0):latest?.k??0; }
   const viewTargets = () => {
     pump();
     const targets: QueryTarget[] = collisionTargets(collisionMap(map, collisionHistory.at(-1)?.[2] ?? []));
@@ -726,7 +923,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   };
   const viewRay = (from: unknown, direction: unknown, max: number, options?: RayOptions, all=false) => rayQuery(map,viewTargets(),dims,from,direction,max,options,mine?.id,all);
   return {
-    get viewTick() { if(solo)return solo.viewTick;const s=net.sample();const a=s?frameOf(s.a):latest,b=s?frameOf(s.b):latest;return a&&b?a.k+(b.k-a.k)*(s?.alpha??0):latest?.k??0; },
+    get viewTick() { return solo ? solo.viewTick : viewTickNow(); },
     get status() { return solo ? 'offline' : status; },
     get seat() { return solo ? solo.seat : net.seat; },
     get me() { pump(); return meNow(); },
@@ -748,9 +945,16 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       // A fresh control can replace a preview partway through a tick (especially
       // a jump). Keep the pose at the instant of the press; only subsequent time
       // may advance the new path, rather than drawing elapsed time with new input.
+      // A held control changed NOW, before anything else here takes time: the steps this call runs must already know it.
+      const at = clock();
+      for (const [name, fd] of kind?.input ?? []) if (fd.t === 'held') {
+        const v = heldNumber(next[name], fd.init), tr = heldTrack.get(name);
+        if (!tr) heldTrack.set(name, { from: at, changes: [[at, v]] });
+        else if (tr.changes[tr.changes.length - 1][1] !== v) { tr.changes.push([at, v]); if (tr.changes.length > 256) tr.changes.splice(1, tr.changes.length - 256); }
+      }
       if (changed) pump();
       const shown = changed ? meNow()?.pos : null;
-      for (const [name, fd] of kind?.input ?? []) if ((fd.t === 'press' || fd.t === 'pulse') && coerce(fd,s[name],dims)) { const value=coerce(fd,s[name],dims) as number | boolean; if(fd.t==='pulse'&&!pressed.has(name))net.send('pulse',[epoch,name,value]); pressed.set(name,value); }
+      for (const [name, fd] of kind?.input ?? []) if ((fd.t === 'press' || fd.t === 'pulse') && coerce(fd,s[name],dims)) { const value=coerce(fd,s[name],dims) as number | boolean; if(fd.t==='pulse'&&!pressed.has(name)){pulseCount+=1;pulseNumber.set(name,pulseCount);net.send('pulse',[epoch,name,value,stepped+1,pulseCount]);} pressed.set(name,value); }
       sample = next;
       if (shown) {
         const now = clock(), nextShown = meNow()?.pos;

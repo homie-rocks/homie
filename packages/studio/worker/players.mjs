@@ -28,7 +28,7 @@ import { toolIdentity } from './tool-identity.mjs';
 import { handleFor } from './room.mjs';
 import { isAiName } from './agents.mjs';
 import { cookieValue } from './stats.mjs';
-import { adoptStatements, bumpPlayerStats, dropPlayerData, fall, fallenList, getSave, listSaves, playerData, readPlayerStats, SAVE_LIMITS, savesSummary, wipeSaves, writeSaves } from './saves.mjs';
+import { adoptGuest, bumpPlayerStats, dropPlayerData, fall, fallenList, getSave, listSaves, playerData, readPlayerStats, SAVE_LIMITS, savesSummary, wipeSaves, writeSaves } from './saves.mjs';
 import { bytesToB64url, randomToken, sha256Hex, verifyAssertion, verifyRegistration } from './webauthn.mjs';
 import { ACCOUNT_JS, accountPage } from './account-page.mjs';
 import { adoptShopStatements, migrated as shopMigrated, forgetPlayerShop, livePurchases, shopDataOf } from './shop-store.mjs';
@@ -693,21 +693,19 @@ async function apiRoute(request, env, ctx, url, parts, { catalogueOf, read, f })
       session.statement,
     ];
     let adopted = null;
-    if (current && current.player.id !== key.player) {
-      writes.push(env.DB.prepare('DELETE FROM player_sessions WHERE hash = ?1').bind(current.hash));
-      // A guest signing in to their account: what only the guest had moves over, then the guest is gone.
-      if (current.player.guest) {
-        adopted = await adoptStatements(env, current.player.id, key.player);
-        writes.push(...adopted.statements, ...(await adoptShopStatements(env, current.player.id, key.player)),
-          env.DB.prepare('DELETE FROM player_sessions WHERE player = ?1').bind(current.player.id),
-          env.DB.prepare('DELETE FROM player_challenges WHERE player = ?1').bind(current.player.id),
-          env.DB.prepare('DELETE FROM players WHERE id = ?1 AND guest = 1').bind(current.player.id));
-      }
-    }
-    await env.DB.batch(writes);
-    if (adopted) await adopted.after();
+    if (current && current.player.id !== key.player) writes.push(env.DB.prepare('DELETE FROM player_sessions WHERE hash = ?1').bind(current.hash));
+    if (current && current.player.id !== key.player && current.player.guest) {
+      // A guest signing in to their account: what only the guest had moves over, what both have is combined by the
+      // game's rules (mergeSaves), then the guest is gone. One batch; read and tried again if a room wrote in between.
+      const guest = current.player.id;
+      const shop = await adoptShopStatements(env, guest, key.player);
+      adopted = await adoptGuest(env, guest, key.player, (statements) => [...writes, ...statements, ...shop,
+        env.DB.prepare('DELETE FROM player_sessions WHERE player = ?1').bind(guest),
+        env.DB.prepare('DELETE FROM player_challenges WHERE player = ?1').bind(guest),
+        env.DB.prepare('DELETE FROM players WHERE id = ?1 AND guest = 1').bind(guest)]);
+    } else await env.DB.batch(writes);
     const player = { id: key.player, name: key.name, named: Number(key.named) === 1, guest: false, owner: Number(key.owner) === 1, since: Number(key.created_at) };
-    return withCookies(json({ ok: true, player: await meOf(env, player), adoptedGuest: Boolean(adopted) }), [session.cookie]);
+    return withCookies(json({ ok: true, player: await meOf(env, player), adoptedGuest: Boolean(adopted), ...(adopted ? { adopted } : {}) }), [session.cookie]);
   }
 
   /* ---------------- a recovery email, signed out: the link in the mail is the proof */

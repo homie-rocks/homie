@@ -207,6 +207,7 @@ State belongs only in `fields`, `motion`, or `shared`; never a changing module v
 | `f.fix()` | Multiples of 1/4096, ±2147483648; `fuel: f.fix({ init: 1 })` |
 | `f.bit()` | Boolean; `alive: f.bit({ init: true })` |
 | `f.press()` | Input-only one-shot boolean button; `fire: f.press()` |
+| `f.held()` | Input-only number averaged over the tick (0.46.3); `ax: f.held()` |
 | `f.tick()` | Absolute tick, 0–4294967295; `until: f.tick()` |
 | `f.ticks()` | Tick duration, same range; `cooldown: f.ticks()` |
 | `f.vec3()` | Float32 vector `{x,y,z}`; `target: f.vec3()` |
@@ -220,7 +221,7 @@ State belongs only in `fields`, `motion`, or `shared`; never a changing module v
 Vector writes may omit z (it becomes zero); reads contain all three coordinates.
 Integer writes round and clamp, not wrap. Guard against underflow explicitly:
 `self.hp = Math.max(0, self.hp - damage)`. Inputs may contain only integer types,
-fix, bit and press. Each field may hold at most 16,384 cells and a kind 65,536.
+fix, held, bit and press. Each field may hold at most 16,384 cells and a kind 65,536.
 A scalar is one cell; a vector four; a text is `1 + ceil(max/64)`;
 a list is `1 + max * itemCells`; a map is `1 + max * (1 + itemCells)`;
 a struct is one plus the cells of its fields. Map keys are at most 32 characters.
@@ -344,6 +345,7 @@ These costs bound work, not elapsed wall time.
 | `sendArea(area,event,data?)` | Entity/room; 20 + 2N + 6C; 64 areas/tick, reach 64m | `world.sendArea({sphere:{at:self.pos,r:2}}, 'hit', {damage:1})` |
 | `after(ticks,event,data?)` | Entity/room; 16 + 6C; wait clamped 1–2147483647; targets caller | `world.after(20, 'ready', {})` |
 | `emit(effect,at,data?)` | Declared effect; 10 + 6C; at is position or ID; 256 effects a tick, and the next one throws | `world.emit('spark', self.pos, {})` |
+| `emit(effect,at,data,audience)` | The same, plus 8, for who may perceive it (0.46.3): `{within: metres}`, `{to: id}` or `{to: [ids]}` (32 at most), or both | `world.emit('grunt', self.id, {}, {within: 45})` |
 | `spawn(kind,at,fields?)` | Entity/room; 10 + copy cost; 2048 entities, non-player kinds only | `world.spawn('coin', self.pos, { value: 2 })` |
 | `despawn(self)` | Own non-player entity; constant guard cost | `world.despawn(self)` |
 | `place(self,at,options?)` | Own entity; 82; options vel/heading; clamps to bounds, changes movement revision | `world.place(self, world.map.spots('start')[0])` |
@@ -369,7 +371,8 @@ Queries return readonly views; send events to make recipients change themselves.
 Math vectors are readonly too: replace `d.x += n` with
 `d = { ...d, x: d.x + n }`, or use `world.math.add`/`scale`.
 
-World properties: `tick`, `dt`, `tune`, `shared`, `map`, `math`, `stage`, `level`,
+World properties: `tick`, `dt`, `unitsLeft` (0.46.3: budget units the running
+handler may still spend, so a planner can stop early), `tune`, `shared`, `map`, `math`, `stage`, `level`,
 `levelMax`, `round: {n,phase,endsAt}`. Phase is `live` or `over`.
 `rounds.seconds: 0` means no automatic deadline: your room must call round.end.
 A positive duration ends automatically. Round results arrive two ticks after the
@@ -941,7 +944,22 @@ Declare `room.historySeconds: 1` (maximum two seconds). The server retains and
 saves non-collider body positions and placement revisions on its virtual clock.
 The view's `room.viewTick` is the tick used to interpolate remote bodies. Send it
 with an action, then use `world.ray(..., {atTick, ...filters})`. Fractional ticks
-interpolate saved poses. Player requests clamp to the smaller of the configured window and the server-measured round-trip latency plus 150 ms presentation delay and one simulation tick. Without a measurement only that small margin is allowed. The relay measures a nonce challenge; client-supplied latency figures are ignored.
+interpolate saved poses. A player's request is clamped to: the relay's own
+measurement of that connection's round trip, plus 150 ms of presentation delay,
+plus the whole ticks the input waited between arriving and running (at least one,
+at most a quarter of a second). Without a measurement only that margin is allowed.
+
+The measurement (0.46.3) is a low percentile of the last ten seconds of round
+trips timed on the input frames themselves: each frame names the newest snapshot
+its browser had, and the relay knows when that snapshot left. A client cannot
+make it shorter than its real latency, and holding back a separate answer no
+longer raises it. A modified client can still pretend to be further away than it
+is, as it could by really being so; what that buys is bounded by the game's cap.
+Set `room.rewindSeconds` (from 0 to `historySeconds`): the most any shot is
+rewound, whatever the connection reports. `0.25` suits a shooter: a round trip
+up to about 100 ms is compensated in full and a slower player leads the target a
+little. Without it the cap is `historySeconds`, as before. Client-supplied
+latency figures are ignored.
 A placement or new round prevents rewinding through a teleport or reset.
 
 Rewind changes actor poses only. Eligibility filters use current fields, so a
@@ -985,6 +1003,89 @@ next round on the next tick, keeping seats and entities and running the normal
 skips the intermission. Use it for an authorized retry; validate eligibility in
 your room handler. Pending restart intent survives save/restore.
 
+
+### Held input: a tap moves for the time it was down (0.46.3)
+
+An ordinary input field is read once a tick, at the tick's edge. A key held for
+60 ms of a 50 ms tick therefore moves the body for one tick or for two, by where
+the edges happened to fall: short taps travel too far and vary. Declare a
+movement axis `ax: f.held()` instead. The browser then sends the average of what
+the control read over each tick (a key down for a third of the tick reads a
+third of its value; an analogue stick reads its mean), prediction uses the same
+number, and `move` multiplies speed by it as before, so the body moves for the
+part of the tick the key was down. `room.input({ax: 1})` is called as usual,
+every frame or on change; a boolean counts as 1. `think` returns a plain number.
+Use it for movement axes, not for buttons: a button is `f.press()` or `f.pulse()`.
+Keep its values in -1 to 1. An entry that reaches the server after its tick is
+not counted twice: the tick it missed ran on the value before it, and the server
+settles the difference on the next ticks, so the body ends where the browser
+predicted.
+
+### Effects with an audience: what a player may perceive (0.46.3)
+
+Everything in a snapshot's public fields and every plain `world.emit` reaches
+every player. A sound or a flash must not be drawn from state a rival should not
+have (another player's exact health), and need not be sent to someone who could
+not perceive it. Emit the event instead, and say who perceives it:
+
+```ts
+world.emit('grunt', self.id, {}, { within: 45 });            // earshot of where self stands
+world.emit('hitConfirm', target.id, { damage }, { to: shooter.id }); // the shooter alone
+world.emit('alarm', self.pos, {}, { within: 30, to: allies }); // either is enough
+```
+
+`within` is metres from the effect's place (the named entity's position at that
+moment) to the listener's own body; `to` names entities, and the people driving
+them receive it. A watcher, and a seat with no body yet, perceive the room: they
+receive every effect with a `within`, and never one addressed only `to` somebody.
+An effect with no audience is public, exactly as before. Delivery costs one
+frame a listener on ticks that have such effects and nothing on ticks that do
+not. Send what is perceivable (a hit landed, roughly how hard); send exact
+numbers only `to` the player entitled to them.
+
+### Predicting the player's own actions (0.46.3)
+
+The own position is predicted by `move`. Other own actions (a weapon swap, a
+build, a reload, a hit marker) otherwise wait for the server's round trip. Give
+the view a predictor for the kind:
+
+```ts
+const room = openRoom<typeof rules>({ predict: { runner(me, input, ctx) {
+  if (input.select) swap(me, input.select, ctx.tick * ctx.dt);        // the rules' own pure helper
+  if (input.build && me.builds > 0) { me.builds--; ctx.ghost('cover', spot(me), { size }); }
+  if (input.fire && aimHits(ctx, me)) ctx.effect('hit', me.id, {});
+} } });
+```
+
+The room runs it for the own body once a predicted tick, after `move`, with that
+tick's input, and on a copy between ticks, so a press answers on the next drawn
+frame. `me` holds the body's declared fields (and readonly `id`, `pos`, `vel`,
+`heading`, `grounded`, `motion`); what it writes is held to the declared types
+and read back through `room.me`. Every snapshot puts the server's values back
+and runs the still-pending inputs again, exactly as it does for the position, so
+a wrong guess corrects itself. Share pure helpers with the rules (no `world`):
+the server's handler remains the authority and the only place a result counts.
+
+`ctx.ghost(kind, at, fields?, {match?, seconds?})` draws a provisional entity:
+`room.each` yields it with `provisional: true` until an entity of that kind that
+`match(entity)` accepts (default: within a metre) arrives, and then until that
+one is drawn, so there is never a gap or a double. `ctx.effect(name, at, data?,
+{match?})` fires the effect's listeners now with `predicted: true`; the server's
+own effect of that name then arrives with `confirms: true` (use its exact data,
+do not replay the sound). If the server ran the tick without confirming, the
+room emits `retract` (`{ghost, kind}` or `{effect, ...data}`) and the ghost
+leaves: take the marker down quietly. `ctx.ray/rays/rayAll` query what the
+player sees (`ctx.viewTick`); `ctx.preview` says the run is between ticks. A
+predictor runs often: keep it cheap, and keep per-entity state in `me`.
+
+A tick's prediction runs more than once (between ticks, again when the input
+changes, then the tick itself) and shows each thing once. Things are told apart
+by their name and `key`: give two effects of one name that mean different things
+(`ctx.effect('audio', me.id, {name: 'jump'}, {key: 'jump'})` beside a `reload`)
+a `key` each, and the same for two ghosts of a kind. Read `me.id` into a constant
+before using it in a `match` closure: `me` is reused. A valued pulse
+(`f.pulse()`) carries the tick it was predicted on, and the server acts on it in
+that tick, so a predicted swap is in the snapshot of the tick it was drawn for.
 
 ### Discrete actions with a value
 

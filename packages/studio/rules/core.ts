@@ -69,6 +69,10 @@ export const SEND = 16;
 export const THROWN = 512;
 /** The most effects (`world.emit`) one tick takes. */
 export const FX_MAX = 256;
+/** The most entities one effect's audience names (`world.emit(effect, at, data, { to })`). */
+export const FX_TO_MAX = 32;
+/** Who may perceive an effect: within so many metres of where it happened (-1: no distance), the entities named, and where it happened. */
+export type FxAudience = [within: number, to: string[], from: [number, number, number] | null];
 /** The most area events (`world.sendArea`) one tick takes. */
 export const AREAS_MAX = 64;
 /** What the log names when a room ends because of what it holds, not because of a handler. */
@@ -85,7 +89,7 @@ export interface StepInput { values: Record<string, unknown>; claim?: { pos: Vec
 export interface ResultRow { seat: number; id: string; driver: Driver; score: number; place: number }
 export type CoreOut =
   | { t: 'round'; n: number; phase: 'live' | 'over'; endsAt: number; startedAt: number; results?: ResultRow[] }
-  | { t: 'fx'; tick: number; list: [number, unknown, unknown][] }
+  | { t: 'fx'; tick: number; list: [number, unknown, unknown, FxAudience?][] }
   | { t: 'ask'; n: string; state: unknown; questions: Record<string, unknown> }
   | { t: 'goalDone'; seat: number; ok: boolean }
   | { t: 'seats' }
@@ -162,6 +166,8 @@ export interface Core {
   /** The current round, for a host rebasing wall-clock deadlines after a pause or restore. */
   round(): Extract<CoreOut, { t: 'round' }>;
   bodies(): Body[];
+  /** Every person's body with where it stands: who an effect with an audience reaches (0.46.3). */
+  listeners(): { seat: number; id: string; pos: Vec3 }[];
   /** The body in a seat, as the host runtime needs it for the input protocol. */
   character(seat: number): import('./rules.ts').Character | null;
   bodyOf(seat: number): { id: string; kind: KindTable; r: number; away: boolean; driver: Driver } | null;
@@ -235,7 +241,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
   let sharedROVer = -1;
   const sharedChanged = (): void => { sharedDirty = true; sharedVer += 1; };
   let out: CoreOut[] = [];
-  let fx: [number, unknown, unknown][] = [];
+  let fx: [number, unknown, unknown, FxAudience?][] = [];
   /** What is left of the running tick's budget. A room's first `room.start` runs before any tick, with a whole one. */
   let left = c.settings.budget.tick;
   let trips = 0;
@@ -527,6 +533,8 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
   const world = brand({} as Record<string, unknown>);
   const getters: Record<string, () => unknown> = {
     tick: () => tick, dt: () => dt, round: () => roundApi, shared: sharedView, level: () => policy.level, levelMax: () => policy.levelMax, guideLevel: () => policy.guideLevel ?? policy.level, guideSeats: () => policy.guideSeats ?? EMPTY_GUIDE_SEATS, kids: () => Boolean(policy.kids), levelSet: () => Boolean(policy.levelSet),
+    // What the running handler may still spend (0.46.3): a handler that plans can stop short of its share instead of being stopped.
+    unitsLeft: () => Math.max(0, Math.min(2147483647, Math.floor(G.left))),
     stage: () => stage, tune: () => c.tune, math: () => math, map: () => mapApi,
   };
   for (const [name, get] of Object.entries(getters)) Object.defineProperty(world, name, { get, enumerable: true });
@@ -594,14 +602,30 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       const wait = w >= 1 ? Math.min(w, 0x7fffffff) : 1;
       push({ due: tick + wait, to: cx.ent ? cx.ent.id : '', kind: cx.ent ? 'ev' : 'room', ev: ev as string, data: shapeData(c.events, ev, 'the event', data), at: tick });
     },
-    emit: (effect: unknown, at: unknown, data?: unknown): void => {
+    emit: (effect: unknown, at: unknown, data?: unknown, audience?: unknown): void => {
       charge(10);
       if (cx.scope !== 'ent' && cx.scope !== 'room') throw new Error('world.emit is for handlers');
       const i = typeof effect === 'string' ? c.effectNames.indexOf(effect) : -1;
       if (i < 0) throw new Error(`the effect "${said(effect)}" is not declared in shapes.effects`);
       if (fx.length >= FX_MAX) { G.note?.('effect', '', said(effect)); return; }
       const shape = c.effects[c.effectNames[i]];
-      fx.push([i, typeof at === 'string' ? at.slice(0, 24) : packVec(V(at), dims), packFields(shape, shapeData(c.effects, effect, 'the effect', data), dims)]);
+      const row: [number, unknown, unknown, FxAudience?] = [i, typeof at === 'string' ? at.slice(0, 24) : packVec(V(at), dims), packFields(shape, shapeData(c.effects, effect, 'the effect', data), dims)];
+      // An audience (0.46.3): who may perceive this effect. Without one it is public, as before.
+      if (audience !== undefined && audience !== null) {
+        charge(8);
+        const to = own(audience, 'to'), within = own(audience, 'within');
+        const ids: string[] = [];
+        if (typeof to === 'string') ids.push(to.slice(0, 24));
+        else if (Array.isArray(to)) { if (to.length > FX_TO_MAX) throw new Error(`an effect's audience names at most ${FX_TO_MAX} entities`); for (let n = 0; n < to.length; n++) { const id = to[n]; if (typeof id === 'string') ids.push(id.slice(0, 24)); } }
+        else if (to !== undefined) throw new Error('an effect\'s audience is { to: id | [ids], within: metres }');
+        if (within !== undefined && (typeof within !== 'number' || !Number.isFinite(within) || within < 0)) throw new Error('an effect\'s audience `within` is a distance in metres');
+        if (typeof to === 'undefined' && within === undefined) throw new Error('an effect\'s audience is { to: id | [ids], within: metres }');
+        // The place it is heard from: where it was emitted, or where the entity it names stands now.
+        const e = typeof at === 'string' ? ents.get(at.slice(0, 24)) : undefined;
+        const from = typeof at === 'string' ? (e && !e.dead ? e.pos : null) : V(at);
+        row.push([typeof within === 'number' ? within : -1, ids, from ? [from.x, from.y, from.z] : null]);
+      }
+      fx.push(row);
     },
     spawn: (kind: unknown, at: unknown, fields?: unknown): string => {
       charge(10);
@@ -1484,6 +1508,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     shared: () => packFields(c.shared, shared, dims),
     character: (seat) => { const e = playerBodies().find(e => e.seat === seat); return e ? JSON.parse(JSON.stringify({ kind: e.kind.name, at: e.pos, heading: e.heading, fields: e.f, motion: e.m })) : null; },
     bodies: () => playerBodies().map((e) => ({ seat: e.seat, id: e.id, kind: e.kind.name, driver: e.driver, owner: e.owner, away: e.away, score: e.kind.score ? Number(e.f[e.kind.score]) || 0 : 0, r: e.r })),
+    listeners: () => playerBodies().filter((e) => e.driver === 'person').map((e) => ({ seat: e.seat, id: e.id, pos: e.pos })),
     bodyOf: (seat) => { const s = seats.get(seat); const e = s?.id ? ents.get(s.id) : null; return e ? { id: e.id, kind: e.kind, r: e.r, away: e.away, driver: e.driver } : null; },
     drain: () => { const o = out; out = []; return o; },
     save,

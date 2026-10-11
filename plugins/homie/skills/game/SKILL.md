@@ -243,6 +243,11 @@ world or inventory, use Lasting worlds above. Ordinary match rooms expire after 
   handle. Draw the character's name over its body and in the ranking (a declared command requests it; rules validate and keep it in the player entity), except on a kids server, where the others stay handles. Ember Vale does it.
 - Show who is playing (`saves.player.name`, guest or signed in) and a small "Keep my progress" button that calls
   `saves.signIn()`; the play page shows its passkey sheet. Pressing Play never needs an account.
+- A guest who signs in to an account that already has the same key: say how the two combine, once, in
+  `site/src/worker.mjs`: `mergeSaves({ '<id>': { saves: { coins: 'sum', 'best-level': 'larger', settings: 'newer' },
+  stats: { kills: 'sum' } } })` from `@homie-rocks/studio/worker` (or a function for an inventory). Server records
+  are joined without a rule; any other key with no rule reaches the game's `onConflict` (SAVES.md, "When a guest
+  signs in to their account").
 - Prove it: build, `npm run dev`, open `http://localhost:8787/<id>/play` (passkeys need `localhost`, not
   `127.0.0.1`), play, reload: the progress is still there. The whole guide is
   `node_modules/@homie-rocks/studio/saves/SAVES.md` (the limits, offline and conflicts, what is stored, privacy).

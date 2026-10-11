@@ -452,12 +452,32 @@ export class NetRoom {
         this.stats.evs += 1;
         const out = { t: 'ev', from: Number.isInteger(m.from) ? m.from : null, k: kind, d: m.d ?? null };
         const line = JSON.stringify(out);
-        if (Number.isInteger(m.to)) { for (const o of this.live()) if (o.seat === m.to) this.sendText(o.conn, line); return; }
+        // `to: -1` (0.46.3): everyone with no seat, a watcher. An effect with an audience reaches them whole.
+        if (Number.isInteger(m.to)) { for (const o of this.live()) if (m.to === -1 ? o.seat === null : o.seat === m.to) this.sendText(o.conn, line); return; }
         for (const o of this.live()) if (!this.lite(o) || this.liteHears(kind)) this.sendText(o.conn, line);
         return;
       }
       default: return;
     }
+  }
+
+  /**
+   * One measurement of a connection's round trip (0.46.3), and what the rules are told: a LOW PERCENTILE of the last ten
+   * seconds of them. A measurement is never shorter than the real round trip, so the low end of a window is close to
+   * it and one slow answer does not raise it; a window, so a connection that really got slower or faster is followed.
+   * A client can still pretend to be slower by answering late every time: what that buys is bounded by the game's
+   * `room.rewindSeconds`, and with acknowledgements on the input frames it has to send its input late as well.
+   */
+  latencySample(c, ms, now) {
+    if (!(ms >= 0 && ms <= 10000)) return;
+    const w = (c.rttWindow ??= []);
+    w.push([now, ms]);
+    while (w.length > 256 || (w.length > 1 && w[0][0] < now - 10000)) w.shift();
+    const sorted = w.map((x) => x[1]).sort((a, b) => a - b);
+    const low = sorted[Math.floor((sorted.length - 1) * 0.1)];
+    if (c.measuredRtt !== undefined && Math.abs(low - c.measuredRtt) < 2 && now - (c.rttToldAt ?? 0) < 1000) return;
+    c.measuredRtt = low; c.rttToldAt = now;
+    if (c.seat !== null) this.toServer({ t: 'latency', seat: c.seat, ms: low });
   }
 
   /** A snapshot from the host (a browser's socket `c`, or the server: `c` null), kept for joiners and fanned out. */
@@ -468,6 +488,7 @@ export class NetRoom {
     // Revision 10: a rules game's snapshot names the room's epoch.
     if ((!c || this.rules && c.rules) && Number.isFinite(m.e)) snap.e = m.e;
     this.lastSnap = snap;
+    if (!c) { const sentAt = (this.snapAt ??= new Map()); sentAt.set(snap.k, now); if (sentAt.size > 128) sentAt.delete(sentAt.keys().next().value); }
     if (c) c.lastSnapAt = now;
     this.stats.snaps += 1;
     this.snapTimes.push(now);
@@ -870,6 +891,9 @@ export class NetRoom {
         if (this.server) {
           if (!Array.isArray(m.s)) return;
           this.stats.ins += 1;
+          // 0.46.3: the frame names the newest snapshot this browser had when it sent it (`g`). From when that snapshot
+          // left here to when this input arrived is this connection's round trip, measured on the input's own path.
+          if (Number.isInteger(m.g)) { c.inBand = true; const sent = this.snapAt?.get(m.g); if (sent !== undefined) this.latencySample(c, now - sent, now); }
           this.toServer({ t: 'in', from: c.seat, e: Number(m.e) || 0, k: Number(m.k) || 0, s: m.s.slice(0, 64), r: Number(m.r) || 0 });
           return;
         }
@@ -909,7 +933,7 @@ export class NetRoom {
         const recipients = isHost && this.rules && c.rules ? this.live() : this.others(c);
         if (isHost) {
           if (typeof m.to === 'string') { const o = this.clients.get(m.to); if (o && o.helloed && (o !== c || (this.rules && c.rules))) this.send(o, out); }
-          else if (Number.isInteger(m.to)) { for (const o of recipients) if (o.seat === m.to) this.send(o, out); }
+          else if (Number.isInteger(m.to)) { for (const o of recipients) if (m.to === -1 ? o.seat === null : o.seat === m.to) this.send(o, out); }
           // An agent with no game client hears only what is addressed to its seat (the lite feed), and the party's lines.
           else for (const o of recipients) { if (!this.lite(o) || this.liteHears(kind)) this.send(o, out); }
         } else {
@@ -958,7 +982,8 @@ export class NetRoom {
       case 'probeAck': {
         if (c.probe && m.n === c.probe.n) {
           const ms = now - c.probe.at; c.probe = null;
-          if(ms>=0 && ms<=10000){ c.measuredRtt=Math.min(c.measuredRtt??Infinity,ms); if(c.seat!==null)this.toServer({t:'latency',seat:c.seat,ms:c.measuredRtt}); }
+          // A browser that acknowledges on its input frames is measured there; this separate answer is for one that does not.
+          if(ms>=0 && ms<=10000 && !c.inBand) this.latencySample(c, ms, now);
         }
         return;
       }

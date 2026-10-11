@@ -140,6 +140,7 @@ const made = <T extends object>(fd: Field, o: T): T => { Object.freeze(o); MADE.
 export function coerce(fd: Field, v: unknown, dims: number): unknown {
   switch (fd.t) {
     case 'bit': case 'press': return v === true || v === 1;
+    case 'held':
     case 'fix': { const x = num(v); const n = Math.round(x * FIX_STEP) / FIX_STEP; return Number.isFinite(n) ? Math.max(-FIX_MAX, Math.min(FIX_MAX, n)) + 0 : zeroed(v, x); }
     case 'vec3': return vec3(v, dims);
     case 'dir': return dir(v, dims);

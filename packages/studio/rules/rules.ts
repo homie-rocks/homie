@@ -54,7 +54,7 @@ export const QUEUE_MAX = 16_384;
 
 /* ------------------------------------------------------------------ field types */
 
-export type FieldKind = 'u8' | 'u16' | 'u32' | 'i8' | 'i16' | 'i32' | 'bit' | 'fix' | 'vec3' | 'dir' | 'tick' | 'ticks' | 'ref' | 'text' | 'list' | 'map' | 'struct' | 'press' | 'pulse';
+export type FieldKind = 'u8' | 'u16' | 'u32' | 'i8' | 'i16' | 'i32' | 'bit' | 'fix' | 'vec3' | 'dir' | 'tick' | 'ticks' | 'ref' | 'text' | 'list' | 'map' | 'struct' | 'press' | 'pulse' | 'held';
 export interface Field {
   readonly t: FieldKind;
   /** The value a new entity starts with. */
@@ -82,7 +82,8 @@ const plain = (t: FieldKind) => (o?: FieldOptions): Field => made(t, o);
  * false; `fix` is a fixed-point number in steps of 1/4096; `vec3` is a position or a velocity in metres; `dir` is a
  * unit vector in the declared dimensions; `tick` is a moment and `ticks` a length on the room's clock; `ref` is the id of an
  * entity or a player; `text`, `list` and `map` name their largest size. `press` (in `input` only) is a button that
- * fires once.
+ * fires once; `held` (in `input` only) is a number the browser averages over each tick, so a tap shorter than a tick
+ * moves for the part of the tick it was down.
  */
 export const f = brand(Object.freeze({
   u8: plain('u8'), u16: plain('u16'), u32: plain('u32'), i8: plain('i8'), i16: plain('i16'), i32: plain('i32'),
@@ -93,6 +94,8 @@ export const f = brand(Object.freeze({
   struct: (fields: Fields, o?: FieldOptions): Field => made('struct', o, { fields: Object.freeze({ ...fields }) }),
   press: (): Field => made('press', undefined),
   pulse: (): Field => made('pulse', undefined),
+  /** Input only (0.46.3): a number averaged over the tick. A key down for a third of a tick reads a third; a stick reads its mean. */
+  held: (): Field => made('held', undefined),
 }));
 
 /**
@@ -167,6 +170,8 @@ export interface RulesDef {
     bots?: { keep: number };
     records?: RoundRecords;
     historySeconds?: number;
+  /** The furthest a person's ray may be rewound, in seconds (0.46.3): a hard cap under `historySeconds`, whatever their connection measures. */
+  rewindSeconds?: number;
     start?: RoomHandler;
     join?: (ctx: any, player: { seat: number; driver: 'person' | 'bot' | 'ai'; owner: string; character?: Character | null }) => { kind: string; at: Vec3; heading?: Vec3; fields?: Record<string, unknown>; motion?: Record<string, unknown> };
     on?: Record<string, RoomHandler>;
@@ -387,6 +392,8 @@ export interface Compiled {
   view: FieldList;
   records?: RoundRecords;
   historySeconds?: number;
+  /** The furthest a person's ray may be rewound, in seconds (0.46.3): a hard cap under `historySeconds`, whatever their connection measures. */
+  rewindSeconds?: number;
   rounds: { seconds: number; breakSeconds: number } | null;
   bots: number;
   start: RoomHandler | null;
@@ -409,7 +416,7 @@ export const BUILT_IN_FIELDS = Object.freeze(['id', 'kind', 'pos', 'vel', 'headi
 
 const NAME = /^[a-z][A-Za-z0-9_]{0,31}$/;
 const INTS = new Set(['u8', 'u16', 'u32', 'i8', 'i16', 'i32']);
-const TYPES = new Set(['u8', 'u16', 'u32', 'i8', 'i16', 'i32', 'bit', 'fix', 'vec3', 'dir', 'tick', 'ticks', 'ref', 'text', 'list', 'map', 'struct', 'press', 'pulse']);
+const TYPES = new Set(['u8', 'u16', 'u32', 'i8', 'i16', 'i32', 'bit', 'fix', 'vec3', 'dir', 'tick', 'ticks', 'ref', 'text', 'list', 'map', 'struct', 'press', 'pulse', 'held']);
 
 /**
  * One declared field, checked, and made again as the runtime's own: a frozen record of its type, its sizes and its
@@ -436,7 +443,8 @@ function checkField(fd: unknown, where: string, inInput: boolean): void {
   const x = fd as Field;
   if (!x || typeof x !== 'object' || typeof x.t !== 'string' || !TYPES.has(x.t)) throw new Error(`${where} is not a field type: declare it with f (f.u16(), f.vec3(), f.list(f.ref(), 8)…)`);
   if ((x.t === 'press' || x.t === 'pulse') && !inInput) throw new Error(`${where}: f.press() is for input only (a button that fires once)`);
-  if (inInput && !(INTS.has(x.t) || x.t === 'bit' || x.t === 'press' || x.t === 'pulse' || x.t === 'fix')) throw new Error(`${where}: an input field is a whole number, f.fix(), f.bit() or f.press()`);
+  if (x.t === 'held' && !inInput) throw new Error(`${where}: f.held() is for input only (a control averaged over the tick it was held in)`);
+  if (inInput && !(INTS.has(x.t) || x.t === 'bit' || x.t === 'press' || x.t === 'pulse' || x.t === 'held' || x.t === 'fix')) throw new Error(`${where}: an input field is a whole number, f.fix(), f.held(), f.bit() or f.press()`);
   if (x.durable !== undefined && (typeof x.durable !== 'boolean' || inInput || !/^(entities\.[^.]+\.fields|shared)\.[^.]+$/.test(where))) throw new Error(`${where}: durable belongs on a top-level state field`);
   if (x.visibility !== undefined && !/^entities\.[^.]+\.fields\.[^.]+$/.test(where)) throw new Error(`${where}: visibility belongs on a top-level entity field`);
   if (x.visibility !== undefined && (!['owner','server','results'].includes(x.visibility) || inInput)) throw new Error(`${where}: visibility is owner, server or results on state fields only`);
@@ -646,13 +654,14 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
     }
   }
   if (room.historySeconds !== undefined && (typeof room.historySeconds !== 'number' || !Number.isFinite(room.historySeconds) || room.historySeconds < 0 || room.historySeconds > 2)) throw new Error('room.historySeconds is from 0 to 2');
+  if (room.rewindSeconds !== undefined && (typeof room.rewindSeconds !== 'number' || !Number.isFinite(room.rewindSeconds) || room.rewindSeconds < 0 || room.rewindSeconds > (room.historySeconds ?? 0))) throw new Error('room.rewindSeconds is the most a shot is rewound for a slow connection: a number from 0 to room.historySeconds');
   const seats = Math.max(1, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(Number(env.seats)) || 8));
   const navigation:Record<string,readonly RouteNode[]> = Object.create(null);let graphNodes=0;
   if(d.navigation){const entries=Object.entries(d.navigation);if(entries.length>8)throw new Error('navigation declares at most 8 graphs');for(const [name,graph] of entries){if(!/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(name))throw new Error('navigation graph names are identifiers up to 48 characters');navigation[name]=prepareGraph(graph);graphNodes+=navigation[name].length;if(graphNodes>8192)throw new Error('navigation declares at most 8192 nodes in total');}}
   Object.freeze(navigation);
   return {
     navigation, contract: RULES_CONTRACT, save: SAVE_REVISION, dims, kinds, kindOf, events, commands, effects, effectNames: Object.keys(effects),
-    shared: fieldList(d.shared, 'shared'), view, ...(room.records?{records:room.records}:{}), ...(room.historySeconds ? {historySeconds:room.historySeconds}:{}), rounds, bots: Math.min(keep, seats), start: room.start ?? null, join: room.join ?? null, roomOn, asks,
+    shared: fieldList(d.shared, 'shared'), view, ...(room.records?{records:room.records}:{}), ...(room.historySeconds ? {historySeconds:room.historySeconds}:{}), ...(room.rewindSeconds !== undefined ? {rewindSeconds:room.rewindSeconds}:{}), rounds, bots: Math.min(keep, seats), start: room.start ?? null, join: room.join ?? null, roomOn, asks,
     tune, publicTune, map, settings, seats,
   };
 }
@@ -674,6 +683,8 @@ export interface Schema {
   commands: Record<string, FieldList>;
   shared: FieldList;
   historySeconds?: number;
+  /** The furthest a person's ray may be rewound, in seconds (0.46.3): a hard cap under `historySeconds`, whatever their connection measures. */
+  rewindSeconds?: number;
   rounds: { seconds: number; breakSeconds: number } | null;
   settings: RoomSettings;
 }

@@ -233,7 +233,7 @@ function play(c, companions, allow) {
   }
 
   /* ---- what the people press. Each plays one of three ways, changing every 20 s; seat 1 never sends anything. */
-  const ends = (fd) => (fd.t === 'bit' || fd.t === 'press' ? [false, true] : fd.t === 'fix' ? [-1, 1] : [L.P.coerce(fd, -Infinity, c.dims), L.P.coerce(fd, Infinity, c.dims)]);
+  const ends = (fd) => (fd.t === 'bit' || fd.t === 'press' ? [false, true] : fd.t === 'fix' || fd.t === 'held' ? [-1, 1] : [L.P.coerce(fd, -Infinity, c.dims), L.P.coerce(fd, Infinity, c.dims)]);
   const steering = new Map();
   let moveTick = 0;
   let moveSelf;

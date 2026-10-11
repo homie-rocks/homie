@@ -143,6 +143,8 @@ export { usePlayers } from './office.mjs';
 export { countVisit } from './stats.mjs';
 /** Players and cloud saves (saves/SAVES.md): `players.list`, `players.get`, `players.isOwner`… for the back office. */
 export { players, cleanName } from './players.mjs';
+/** How a guest's saves combine with the account's when they sign in (saves/SAVES.md): the studio's Worker calls it once, at load. */
+export { mergeSaves } from './saves.mjs';
 
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const POST_SLUG = /^[a-z0-9][a-z0-9-]{0,79}$/;
