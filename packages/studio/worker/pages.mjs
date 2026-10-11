@@ -19,7 +19,11 @@ import { STUDIO_VERSION_TAG } from './version.mjs';
  * It does not change when only the game's code or art does: that is still a reload of the frame alone.
  */
 export function shellKey(g) {
-  const text = JSON.stringify([g?.kind ?? null, g?.players ?? null, g?.room ?? null, g?.saves ?? null, g?.agents ?? null, g?.screen ?? null, g?.netplay ?? null, g?.launch ?? null]);
+  // Never what names a build (the rules' build and state hashes, the bundle's version): those change with every
+  // edit, and a newer build of the same game inside the same page is exactly what the frame's own reload is for.
+  const { build: _build, stateHash: _state, ...room } = g?.room ?? {};
+  const { version: _version, ...netplay } = g?.netplay ?? {};
+  const text = JSON.stringify([g?.kind ?? null, g?.players ?? null, room, g?.saves ?? null, g?.agents ?? null, g?.screen ?? null, netplay, g?.launch ?? null]);
   let h = 2166136261;
   for (let i = 0; i < text.length; i += 1) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
   return `${STUDIO_VERSION_TAG}-${(h >>> 0).toString(36)}`;

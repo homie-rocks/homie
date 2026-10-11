@@ -32,7 +32,7 @@ test('a play page older than the game it hosts is told so by the frame it asks f
   // Never for a big screen, a watcher, a player card, or a game that keeps nothing for a player.
   for(const other of ['/records/__game/?room=proof&device=tv&want=screen&pf=1','/records/__game/?room=proof&watch=1','/plain/__game/?room=proof&device=desk&want=play&pf=1'])assert.equal(standIn((await ask(other)).text),null,other);
   // The key follows what the page is built around, not the game's words or code.
-  assert.equal(shellKey({...game,blurb:'New words',build:'abc'}),shellKey(game));assert.notEqual(shellKey({...game,room:{}}),shellKey(game));assert.notEqual(shellKey({...game,saves:true}),shellKey(game));
+  assert.equal(shellKey({...game,blurb:'New words',build:'abc'}),shellKey(game));assert.equal(shellKey({...game,room:{...game.room,build:'abc',stateHash:'def'},netplay:{version:'abc'}}),shellKey({...game,room:{...game.room,build:'xyz',stateHash:'uvw'},netplay:{version:'xyz'}}),'a newer build of the same game is the frame\'s own reload, not the page\'s');assert.notEqual(shellKey({...game,room:{}}),shellKey(game));assert.notEqual(shellKey({...game,saves:true}),shellKey(game));
  }finally{sql.close();}
 });
 test('a game names its own bots: the roster, the results and world.label say the same, after a restore too',async()=>{
