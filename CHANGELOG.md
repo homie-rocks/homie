@@ -17,6 +17,51 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.46.5] - 2026-10-11
+
+**Plugin 0.46.5**
+
+A page left open across a deploy is brought up to date with its game, and a check never opens the live site
+unless it is asked to.
+
+### Added
+
+- `room.bots: { keep, names: [...] }`: a rules game names its own bots, by seat. The roster, the results and
+  `world.label` all use it. Opt-in: without `names` the toolkit's own list is used, as before.
+
+- A predictor can judge its own shot as the server will: `ctx.judgedTick(aimTick)` (the tick the server will
+  pose the others at for this seat; the snapshot's control row now carries the seat's own rewind allowance in a
+  game that declares `room.historySeconds`), `ctx.ray/rays(..., { atTick })` and `room.poseAt(id, tick)` (the pose
+  at a tick from the snapshots the browser holds), and `ctx.math` (the rules' own `math`).
+
+### Fixed
+
+Each of these changes what happened before; none needs a change to a game.
+
+- A play page open during a deploy kept hosting the newer game inside the older page: only the frame was loaded
+  again. When the newer game needed something the old page did not have (a player ticket, for a game that had
+  just started keeping results with `room.records`), the player saw an empty history and finished rounds were not
+  recorded until they reloaded the page themselves. The page now says what it was made for, the Worker answers
+  the frame with a stand-in when a page made now would differ, and the page does one full reload to the same room
+  and seat. A page from before this handshake is sent to a fresh page, by the one way it has, only when the game
+  cannot keep its results inside it. A deploy that changes only a game's code or art still reloads the frame alone.
+- A finished round that had no player to be written for was dropped without a word. The log now says
+  `record-unsaved`, and the player is told on their screen that the round was not saved and to reload.
+- The player's own body was drawn sinking for the whole tick it landed in, and standing only at the tick's end
+  (up to 33 ms late at 20 ticks a second). It is drawn down to the ground by the moment it met it.
+- `homie-studio check` with no `--url` opened the studio's **live** site, and with no game the first game by name:
+  `npm run check` could seat two check browsers in a live public room of a game nobody was working on. With no
+  `--url` a check now runs against this studio's own build: its running dev server, or one it starts on a free
+  port and stops afterwards. With no game it covers the games this checkout changed (against the default branch,
+  committed or not), else every game. The live site is checked only when asked: `--live`, or its address in
+  `--url`. `port check` and `perf` follow the same rule (the running dev server, `--url`, or `--live`).
+
+### Upgrade notes
+
+- Nothing to do. A script that relied on `homie-studio check` reaching the live site says `--live` now.
+- The first deploy of this version reloads open play pages whole, once (their pages are older than it).
+- Version 0.46.5 is provisional. No deploy or merge is part of this PR.
+
 ## [0.46.3] - 2026-10-11
 
 **Plugin 0.46.3**

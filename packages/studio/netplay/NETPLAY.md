@@ -1699,6 +1699,18 @@ reads the other's snapshot with the wrong code.
 - **An old tab that knocks at the live build's room is refused**: `error stale` (final; the helper
   shows "This game was updated. Tap to reload." and the play page reloads the frame, at most twice
   a minute).
+- **A page older than the game it would host is brought up to date too (0.46.5).** The frame alone
+  is reloaded only while the play page around it is still the page the Worker would write now. The
+  page says what it was made for (`sh` on the frame's address: the toolkit's version and the parts
+  of the manifest a page is built around, `shellKey` in worker/pages.mjs; not the game's code or
+  words). When that differs, the Worker answers the frame with a stand-in that says so, and the
+  page does **one full reload**, to the same room (it is in the address) and the same seat (its
+  token is in the tab). A page from before this handshake has only one way to load a whole new
+  page, the one for leaving a finished room; it is used only when the game cannot work inside the
+  old page at all: the game keeps results for a player (`room.records`) and the old page holds no
+  player ticket. Such a player lands in a fresh page and a room the lobby gives them. A result
+  that still has no player to be written for is never dropped in silence: the log says
+  `record-unsaved`, and the player's screen says the round was not saved and to reload.
 - **A tab of the live build that knocks at a room still on the old build waits**: `error
   room-stale` (not final). The room's players are told to reload; when the last of them has left,
   the next knock is let in, and the room **starts fresh**: its checkpoint, snapshot, round, roster

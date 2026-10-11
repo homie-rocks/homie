@@ -304,6 +304,8 @@ npm run build                                          # fix every error it name
 npx --no-install homie-studio build --types            # the same, with the TypeScript checked first: run it before a deploy
 npm run dev                                            # in the background: http://127.0.0.1:8787/<id>/play
 npx --no-install homie-studio check <id> --url http://127.0.0.1:8787 --shots ./.checks
+# With no --url the check runs against this studio's own build (its running dev server, or one it starts and
+# stops); with no <id>, on the games this checkout changed. The live site only with --live or its address.
 npx --no-install homie-studio shoot <id> --preview     # pictures of the built game on a stepped clock, no site needed (a 3D game where there is no GPU)
 npx --no-install homie-studio preview <id>             # only that game's built files at an address (alone, offline): for a capture script
 ```

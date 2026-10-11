@@ -1078,6 +1078,23 @@ leaves: take the marker down quietly. `ctx.ray/rays/rayAll` query what the
 player sees (`ctx.viewTick`); `ctx.preview` says the run is between ticks. A
 predictor runs often: keep it cheap, and keep per-entity state in `me`.
 
+To guess a shot the server will judge with rewind, ask for what the server
+will use (0.46.5). `ctx.judgedTick(aimTick)` is the tick it will pose the others
+at: the `aimTick` the input carries, held to how far back this seat may look
+right now (the server says so in every snapshot) and to this tick. Pass it on:
+`ctx.ray(from, dir, max, { atTick: ctx.judgedTick(input.aimTick), ...filters })`
+poses the other bodies as the server will, from the snapshots this browser
+holds (between two of them, or carried on from the newest along its velocity).
+Inside the allowance that is the drawn target; past the game's cap it is a newer
+pose, and the predictor then shows no hit where the server will see none.
+`room.poseAt(id, tick)` gives `{pos, vel, known}` for the game's own tests
+(`known: false` is a guess past the newest snapshot). `ctx.math` is the rules'
+own `math`, and the context is accepted by guarded rules code as a world is for
+what the two share (`tick`, `dt`, `math`, `ray`, `rays`, `rayAll`, and a scene's
+`ray`, `rayAll`, `sweep`, `support`), so an aiming helper written for the rules
+can be called with `ctx` instead of being restated in the view. It has no
+`near`, `inBox`, `send` or `emit`: a helper that needs those is the server's.
+
 A tick's prediction runs more than once (between ticks, again when the input
 changes, then the tick itself) and shows each thing once. Things are told apart
 by their name and `key`: give two effects of one name that mean different things
@@ -1086,6 +1103,12 @@ a `key` each, and the same for two ghosts of a kind. Read `me.id` into a constan
 before using it in a `match` closure: `me` is reused. A valued pulse
 (`f.pulse()`) carries the tick it was predicted on, and the server acts on it in
 that tick, so a predicted swap is in the snapshot of the tick it was drawn for.
+
+### Naming the bots (0.46.5)
+
+`room.bots: { keep: 4, names: ['Vex', 'Moth', 'Kilo'] }` gives the game's bots its own names, by seat (the list
+wraps). The roster, the round's results and `world.label(id)` all say the same name, and a restore keeps it.
+Without `names` the toolkit's own list is used. A name is 1 to 24 characters on one line.
 
 ### Discrete actions with a value
 

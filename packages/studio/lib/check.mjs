@@ -1,5 +1,6 @@
 /**
- * `homie-studio check <game> --url <site>` — the promise, measured: two fresh
+ * `homie-studio check [<game>] [--url <site> | --live]` — the promise, measured (where it runs and on which games
+ * when nobody says: lib/check-site.mjs; never the live site unless asked): two fresh
  * browsers (separate Chrome processes and profiles, one a computer and one a
  * phone) press Play, land in the SAME public room, play, and both see the round
  * finish. Exit 0 only when all of that happened. Uses this Mac's Chrome through

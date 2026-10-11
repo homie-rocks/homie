@@ -47,8 +47,8 @@ import { createNetplay } from '../netplay/netplay.ts';
 import type { Netplay, NetplayOptions, RulesHostFactory, RoundInfo, Snapshot, StepEntry } from '../netplay/netplay.ts';
 import { lab } from '../lab/lab.ts';
 import { exposePort, type PortProbeOptions } from '../port/probe.ts';
-import { BudgetError } from './guard.ts';
-import { moveContext } from './math.ts';
+import { BudgetError, brand } from './guard.ts';
+import { math, moveContext } from './math.ts';
 import { coerce, coerceFields, dir, initFields, stepMove, thawFields, unpackEntity, unpackFields, unpackVec, vec3 } from './pack.ts';
 import type { Unpacked } from './pack.ts';
 import { compileMap } from './rules.ts';
@@ -113,6 +113,15 @@ export interface OpenRoomOptions {
 /** What a predictor (`openRoom({ predict })`) is handed beside the body and the tick's input. */
 export interface PredictContext extends RayQueries {
   readonly tick: number; readonly dt: number;
+  /** The same deterministic `math` a `move` is handed (0.46.5): a helper shared with the rules can be called with `ctx`. */
+  readonly math: typeof math;
+  /**
+   * The tick the server will judge this player's ray against when the browser says it aimed at `aimTick` (0.46.5):
+   * `aimTick`, held to how far back this seat may look right now (the server says so in every snapshot) and to this
+   * tick. Pass it to `ctx.ray(..., { atTick })`: the other bodies are then posed as the server will pose them, from
+   * the snapshots this browser holds (between two of them, or carried on from the newest along its velocity).
+   */
+  judgedTick(aimTick: number): number;
   /** The tick the other bodies are drawn at: what the player is looking at. */
   readonly viewTick: number;
   /** This run draws ahead of the tick; the tick's own run follows. What it shows is shown once. */
@@ -128,6 +137,8 @@ export interface PredictContext extends RayQueries {
 export type Predictor = (me: any, input: any, ctx: PredictContext) => void;
 export interface Room<R = unknown> extends RayQueries {
   readonly viewTick: number;
+  /** Where a body was at a tick, from the snapshots this browser holds (0.46.5); `known: false` past the newest one. */
+  poseAt(id: string, tick: number): { pos: Vec3; vel: Vec3; known: boolean } | null;
   readonly status: RoomStatus;
   readonly seat: number | null;
   readonly me: Entity | null;
@@ -184,6 +195,8 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
 
   let status: RoomStatus = 'connecting';
   let latest: Frame | null = null;
+  /** The snapshots this browser holds, oldest first: two seconds of them (see poseAt). */
+  const held2: Frame[] = [];
   let epoch = 0;
   let round: RoomRound | null = null;
   let results: RoundInfo['results'] | undefined;
@@ -380,11 +393,14 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // run has asked for: never by the order of everything asked, which changes when another action joins the tick.
     const asked = new Map<string, number>();
     const once = (what: string): boolean => { if (!live) return false; let set = shown.get(t); if (!set) { set = new Set(); shown.set(t, set); } const n = asked.get(what) ?? 0; asked.set(what, n + 1); const key = what + '#' + n; if (set.has(key)) return false; set.add(key); return true; };
-    const ctx: PredictContext = {
-      tick: t, dt: 1 / tickHz, preview,
+    // Branded as a world is (0.46.5): a guarded helper of the rules may call its queries, so the server's own aiming
+    // code can be run on it instead of being restated in the view.
+    const ctx: PredictContext = brand({
+      tick: t, dt: 1 / tickHz, preview, math,
+      judgedTick: (aimTick) => Math.max(t - rewindAllowance(), Math.min(t, Number(aimTick) || 0)),
       get viewTick() { return viewTickNow(); },
       ray: (from, direction, max, options) => viewRay(from, direction, max, options)[0],
-      rays: (options) => raySnapshot(map, viewTargets(), dims, options, id),
+      rays: (options) => raySnapshot(map, viewTargets(atTickOf(options)), dims, options, id),
       rayAll: (from, direction, max, options) => viewRay(from, direction, max, options, true),
       ghost(kindOfGhost, at, data = {}, options = {}) {
         const k = kindOf.get(kindOfGhost);
@@ -406,7 +422,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         if (waiting) waiting.confirms = true; else provisional.push({ name, tick: t, payload, match: options.match });
         emit(name, Object.freeze({ ...payload, predicted: true }));
       },
-    };
+    });
     const me = Object.assign(fields, { id, kind: kindName }) as Record<string, unknown>;
     for (const [key, value] of Object.entries({ pos: body.pos, vel: body.vel, heading: body.heading, grounded: body.grounded, motion: body.motion })) Object.defineProperty(me, key, { value, enumerable: false, configurable: true, writable: true });
     try { fn(me, input, ctx); } catch (err) { console.warn('[room] predict', err); }
@@ -551,6 +567,8 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const before = latest;
     if (before && before.e === f.e && f.k <= before.k) return;
     latest = f;
+    if (before && before.e !== f.e) held2.length = 0;
+    held2.push(f); if (held2.length > 2 * tickHz) held2.shift();
     if (!before || before.e !== f.e) collisionHistory = [];
     const collision = f.collision;
     if (collision) {
@@ -785,11 +803,19 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       // and stops dead at a release, with nothing to blend away afterwards.
       for (const [name, fd] of kind.input) now[name] = (fd.t === 'press' || fd.t === 'pulse') ? (pressed.get(name) ?? (fd.t === 'press' ? false : 0)) : fd.t === 'held' ? coerce(fd, heldMean(name, fd.init, Math.min(clock(), edgeOf(stepped + 1)), false), dims) : coerce(fd, sample[name] ?? fd.init, dims);
       const next = runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: motionOf(mine.kind, mine.motion) }, Object.freeze(now), stepped + 1);
-      pos = vec3({ x: lerp(mine.pos.x, next.pos.x, a), y: lerp(mine.pos.y, next.pos.y, a), z: lerp(mine.pos.z, next.pos.z, a) }, dims);
+      // A landing does not take the whole tick (0.46.5): the body met the ground part way through it. How far through is
+      // read from the fall it would have made at the speed it entered the tick with; it is drawn down to the ground by
+      // then and standing from then, not sinking until the tick's end.
+      let av = a, landed = false;
+      if (dims === 3 && !mine.grounded && next.grounded && mine.vel.z < 0) {
+        const free = -mine.vel.z / tickHz, contact = free > 1e-6 ? Math.max(0.05, Math.min(1, (mine.pos.z - next.pos.z) / free)) : 1;
+        av = Math.min(1, a / contact); landed = a >= contact;
+      }
+      pos = vec3({ x: lerp(mine.pos.x, next.pos.x, a), y: lerp(mine.pos.y, next.pos.y, a), z: lerp(mine.pos.z, next.pos.z, av) }, dims);
       heading = blendHeading(mine.heading, next.heading, a, dims);
       velocity = vec3({ x: lerp(mine.vel.x, next.vel.x, a), y: lerp(mine.vel.y, next.vel.y, a), z: lerp(mine.vel.z, next.vel.z, a) }, dims);
       // A takeoff is airborne as soon as it rises; a landing waits for its contact.
-      grounded = mine.grounded && (a === 0 || next.grounded);
+      grounded = landed || mine.grounded && (a === 0 || next.grounded);
       preview = next;
       if (predictors[kind.name]) {
         // The own actions between ticks: the predictor on a copy of the fields, for the tick about to be stepped.
@@ -912,16 +938,43 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onShow);
 
   function viewTickNow(): number { const s=net.sample();const a=s?frameOf(s.a):latest,b=s?frameOf(s.b):latest;return a&&b?a.k+(b.k-a.k)*(s?.alpha??0):latest?.k??0; }
-  const viewTargets = () => {
+  /*
+   * WHERE A BODY WAS, OR WILL BE JUDGED TO BE (0.46.5). The server judges a rewound ray against poses it kept by
+   * tick. A browser holds the snapshots it has received: a pose at a tick between two of them is the point between;
+   * past the newest it is that snapshot's pose carried on along its velocity (`known: false`: a guess); before the
+   * oldest it is the oldest. A placement between the two is not glided across.
+   */
+  function poseAt(id: string, at: number): { pos: Vec3; vel: Vec3; known: boolean } | null {
+    let before: Frame | null = null, after: Frame | null = null;
+    for (const f of held2) { if (!f.ents.has(id)) continue; if (f.k <= at) before = f; if (f.k >= at && !after) after = f; }
+    const a = before?.ents.get(id), b = after?.ents.get(id);
+    if (a && b) { if (before === after || a.r !== b.r) return { pos: b.pos, vel: b.vel, known: true }; const m = (at - before!.k) / (after!.k - before!.k); return { pos: vec3({ x: lerp(a.pos.x, b.pos.x, m), y: lerp(a.pos.y, b.pos.y, m), z: lerp(a.pos.z, b.pos.z, m) }, dims), vel: b.vel, known: true }; }
+    if (a) { const s = Math.min(tickHz, at - before!.k) / tickHz; return { pos: vec3({ x: a.pos.x + a.vel.x * s, y: a.pos.y + a.vel.y * s, z: a.pos.z + a.vel.z * s }, dims), vel: a.vel, known: false }; }
+    return b ? { pos: b.pos, vel: b.vel, known: false } : null;
+  }
+  const atTickOf = (options: unknown): number | undefined => { const v = options !== null && typeof options === 'object' ? (options as { atTick?: unknown }).atTick : undefined; return typeof v === 'number' && Number.isFinite(v) ? v : undefined; };
+  /** How many ticks back this seat's ray may look: the server's own figure from the newest snapshot, else the rule it follows with this browser's round trip. */
+  function rewindAllowance(): number {
+    const seat = net.seat, row = seat === null ? undefined : latest?.rows.find((x) => x[0] === seat);
+    const history = Math.ceil((schema.rewind?.historySeconds ?? 0) * tickHz);
+    if (typeof row?.[5] === 'number') return row[5];
+    const cap = schema.rewind?.capSeconds !== undefined ? Math.ceil(schema.rewind.capSeconds * tickHz) : history;
+    return Math.min(history, cap, Math.ceil((authorityRtt() + 150) / period) + 1);
+  }
+  const viewTargets = (atTick?: number) => {
     pump();
     const targets: QueryTarget[] = collisionTargets(collisionMap(map, collisionHistory.at(-1)?.[2] ?? []));
     for(const k of schema.kinds) {
       if(k.collider || !k.radius)continue;
-      each(k.name,e=>targets.push({id:e.id,kind:k.name,query:k.query,fields:e as Record<string,unknown>,geometry:false,solid:solidAt(e.pos,{shape:k.shape??'circle',radius:k.radius,height:k.height??0}),at:e.pos}));
+      each(k.name,e=>{
+        // At a tick: where the server will have the body, with the fields as they are now (the server filters on current fields too).
+        const at = atTick !== undefined && e.id !== mine?.id && !e.provisional ? poseAt(e.id, atTick)?.pos ?? e.pos : e.pos;
+        targets.push({id:e.id,kind:k.name,query:k.query,fields:e as Record<string,unknown>,geometry:false,solid:solidAt(at,{shape:k.shape??'circle',radius:k.radius,height:k.height??0}),at});
+      });
     }
     return targets;
   };
-  const viewRay = (from: unknown, direction: unknown, max: number, options?: RayOptions, all=false) => rayQuery(map,viewTargets(),dims,from,direction,max,options,mine?.id,all);
+  const viewRay = (from: unknown, direction: unknown, max: number, options?: RayOptions, all=false) => rayQuery(map,viewTargets(atTickOf(options)),dims,from,direction,max,options,mine?.id,all);
   return {
     get viewTick() { return solo ? solo.viewTick : viewTickNow(); },
     get status() { return solo ? 'offline' : status; },
@@ -929,7 +982,8 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     get me() { pump(); return meNow(); },
     each, get,
     ray: (from,direction,max,options) => solo ? solo.ray(from,direction,max,options) : viewRay(from,direction,max,options)[0],
-    rays: options => solo ? solo.rays(options) : raySnapshot(map,viewTargets(),dims,options,mine?.id),
+    rays: options => solo ? solo.rays(options) : raySnapshot(map,viewTargets(atTickOf(options)),dims,options,mine?.id),
+    poseAt: (id, tick) => solo ? solo.poseAt(id, tick) : poseAt(id, tick),
     rayAll: (from,direction,max,options) => solo ? solo.rayAll(from,direction,max,options) : viewRay(from,direction,max,options,true),
     on(name, fn) { let set = listeners.get(name); if (!set) { set = new Set(); listeners.set(name, set); } set.add(fn); forwardSolo(name); return () => { set?.delete(fn); }; },
     get shared() { if (solo) return solo.shared; return Object.freeze(unpackFields(schema.shared, net.stateOf('shared'), dims)); },

@@ -10,3 +10,37 @@ test('record-enabled play authenticates a new guest before issuing the room page
  const {default:worker}=await import('../worker/index.mjs');const {sql,env}=database();env.STUDIO_NAME='Records';const cat={studio:{name:'Records',slug:'records',theme:{}},games:[{id:'records',name:'Records',players:{min:1,max:8},room:{records:true},landing:{hero:{},credits:{people:[]}}}],songs:[],videos:[],posts:[],site:{pages:[],partials:{}}};env.ASSETS={fetch:async req=>new URL(req.url).pathname==='/games.json'?Response.json(cat):new Response('missing',{status:404})};
  try{const request=new Request('https://records.example/records/play?room=proof',{headers:{'user-agent':'Mozilla/5.0','cf-connecting-ip':'198.51.100.42'}}),response=await worker.fetch(request,env,{waitUntil(){}});assert.equal(response.status,200,await response.clone().text());assert(response.headers.get('set-cookie'));assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM players').get().n,1);const player=sql.prepare('SELECT id FROM players').get().id;await appendServerRecord(env,player,'records','server:career',{id:'proof-round',endedAt:1,kills:2});const cookie=response.headers.getSetCookie().map(c=>c.split(';')[0]).join('; '),read=await worker.fetch(new Request('https://records.example/api/player/saves/records/server%3Acareer',{headers:{cookie}}),env,{waitUntil(){}});assert.equal(read.status,200);assert.equal((await read.json()).value.matches[0].kills,2);}finally{sql.close();}
 });
+test('a play page older than the game it hosts is told so by the frame it asks for, and never served a game it cannot keep results for',async()=>{
+ const {default:worker}=await import('../worker/index.mjs');const {shellKey}=await import('../worker/pages.mjs');const {sql,env}=database();env.STUDIO_NAME='Records';
+ const game={id:'records',name:'Records',players:{min:1,max:8},room:{records:true},landing:{hero:{},credits:{people:[]}}},plain={...game,id:'plain',name:'Plain',room:{}};
+ const cat={studio:{name:'Records',slug:'records',theme:{}},games:[game,plain],songs:[],videos:[],posts:[],site:{pages:[],partials:{}}};env.ASSETS={fetch:async req=>new URL(req.url).pathname==='/games.json'?Response.json(cat):new Response('missing',{status:404})};
+ const ask=async path=>{const r=await worker.fetch(new Request('https://records.example'+path,{headers:{'user-agent':'Mozilla/5.0','cf-connecting-ip':'198.51.100.42'}}),env,{waitUntil(){}});return {status:r.status,text:await r.text()};};
+ const standIn=text=>{const m=/parent\.postMessage\((\{.*?\}),'\*'\)/.exec(text);return m?JSON.parse(m[1]):null;};
+ try{
+  const page=await ask('/records/play?room=proof');assert.equal(page.status,200);const boot=JSON.parse(/window\.__HOMIE_PLAY=(\{.*?\});<\/script>/.exec(page.text)[1]);
+  assert.equal(boot.sh,shellKey(game),'the page says what it was made for');assert.ok(boot.t,'and holds the player\'s ticket');
+  assert.ok(page.text.includes("q.set('sh'"),'and hands it to the frame');
+  const frame='/records/__game/?room=proof&device=desk&want=play&pf=1';
+  // A page from before the handshake, with no ticket: the game would have nobody to write a result for.
+  assert.deepEqual(standIn((await ask(frame)).text),{t:'homie-net',what:'rematch',room:'proof'},'sent to a whole new page by the one way an old page has');
+  // The same old page, when it does hold a player ticket, can host the game: it is left alone.
+  assert.equal(standIn((await ask(frame+'&t='+boot.t)).text),null);
+  // A page that knows the handshake and is behind: told the key a page made now would have, and reloads itself.
+  assert.deepEqual(standIn((await ask(frame+'&t='+boot.t+'&sh=0.40.0-zzz')).text),{t:'homie-net',what:'shell',key:boot.sh});
+  // Up to date: the game.
+  assert.equal(standIn((await ask(frame+'&t='+boot.t+'&sh='+boot.sh)).text),null);
+  // Never for a big screen, a watcher, a player card, or a game that keeps nothing for a player.
+  for(const other of ['/records/__game/?room=proof&device=tv&want=screen&pf=1','/records/__game/?room=proof&watch=1','/plain/__game/?room=proof&device=desk&want=play&pf=1'])assert.equal(standIn((await ask(other)).text),null,other);
+  // The key follows what the page is built around, not the game's words or code.
+  assert.equal(shellKey({...game,blurb:'New words',build:'abc'}),shellKey(game));assert.equal(shellKey({...game,room:{...game.room,build:'abc',stateHash:'def'},netplay:{version:'abc'}}),shellKey({...game,room:{...game.room,build:'xyz',stateHash:'uvw'},netplay:{version:'xyz'}}),'a newer build of the same game is the frame\'s own reload, not the page\'s');assert.notEqual(shellKey({...game,room:{}}),shellKey(game));assert.notEqual(shellKey({...game,saves:true}),shellKey(game));
+ }finally{sql.close();}
+});
+test('a game names its own bots: the roster, the results and world.label say the same, after a restore too',async()=>{
+ const rules=names=>`import {defineRules,defineMove,f} from '@homie-rocks/studio/rules';export default defineRules({contract:2,space:{dims:2},move:defineMove({runner(){}}),entities:{runner:{player:{leave:'bot'},body:{shape:'circle',radius:.4,maxSpeed:0},fields:{said:f.text(40),score:f.u16({score:true})},think(){return{};},tick(w,s){s.said=w.label(s.id);}}},room:{rounds:{seconds:1,breakSeconds:1},bots:{keep:3${names?`,names:${JSON.stringify(names)}`:''}},join(c,p){return{kind:'runner',at:{x:p.seat,y:0}};}}});`;
+ const play=async(id,names)=>{const L=await loadGame(scratch,writeGame(scratch,id,{rules:rules(names)}),id),c=L.R.compileRules(L.def,{map:L.R.compileMap({bounds:{min:[-10,-10],max:[10,10]}}),seats:4}),r=hostRig(L,c);r.join(0);r.ticks(45);const roster=r.sent.filter(m=>m.t==='roster').at(-1).slots,results=r.sent.filter(m=>m.t==='round'&&m.round.results).at(-1).round.results,said=r.ents().filter(e=>e.driver==='bot').map(e=>e.fields[0]);const saved=r.host.save();r.host.stop();const again=hostRig(L,c,{host:{restore:saved}});again.ticks(3);const after=again.ents().filter(e=>e.driver==='bot').map(e=>e.fields[0]);again.host.stop();return{seats:roster.filter(s=>s.bot).map(s=>s.slot),roster:roster.filter(s=>s.bot).map(s=>s.name),results:results.filter(x=>x.bot).map(x=>x.name).sort(),said,after};};
+ const named=await play('bot-names',['Vex','Moth','Kilo','Juno']);
+ const list=['Vex','Moth','Kilo','Juno'],want=named.seats.map(seat=>list[seat%4]);assert.equal(want.length,2);
+ assert.deepEqual(named.roster,want,'by seat, from the game\'s own list');assert.deepEqual(named.results,[...want].sort());assert.deepEqual([...named.said].sort(),[...want].sort(),'world.label says the same');assert.deepEqual([...named.after].sort(),[...want].sort(),'and after a restore');
+ const plain=await play('bot-plain',null);const own=['Pip','Juno','Moss','Rook'];assert.deepEqual(plain.roster,plain.seats.map(seat=>own[seat]),'without names the toolkit\'s own list, as before');
+ const L=await loadGame(scratch,writeGame(scratch,'bot-bad',{rules:rules(['ok',''])}),'bot-bad');assert.throws(()=>L.R.compileRules(L.def,{map:L.R.compileMap({bounds:{min:[-10,-10],max:[10,10]}}),seats:4}),/room\.bots\.names is a list/);
+});
