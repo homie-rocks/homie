@@ -144,3 +144,49 @@ test('short runway retries the same hold, without accepting wrong steering or mi
   assert.equal(needsRunway({ ...blocked, why: 'blocked at once (it started against something)' }), true);
   for (const change of [{ ok: true }, { dirErrDeg: 180 }, { yawChangeDeg: 10 }, { why: 'too few samples' }, { why: 'went the wrong way' }]) assert.equal(needsRunway({ ...blocked, ...change }), false);
 });
+
+/* ---------------------------------------------------------------- 0.46.5: where a check runs, and on which games */
+
+test('a check with no --url runs against this studio\'s own build, and the live site only when asked', async (t) => {
+  const { checkSite } = await import('../lib/check-site.mjs');
+  const { mkdtempSync, mkdirSync, rmSync, writeFileSync } = await import('node:fs');
+  const { EventEmitter } = await import('node:events');
+  const root = mkdtempSync(join(tmpdir(), 'homie-check-site-')); t.after(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(join(root, 'studio.json'), JSON.stringify({ name: 'Owls', slug: 'owls', cloudflare: { url: 'https://owls.example' } }));
+  mkdirSync(join(root, 'site'), { recursive: true });
+  // An address given is used as it is.
+  assert.deepEqual(await checkSite(root, { url: 'http://127.0.0.1:8787' }).then((s) => [s.ok, s.url, s.local, s.started]), [true, 'http://127.0.0.1:8787', true, false]);
+  assert.deepEqual(await checkSite(root, { url: 'https://owls.example' }).then((s) => [s.url, s.local]), ['https://owls.example', false]);
+  // --live: the studio's own site, by name.
+  assert.deepEqual(await checkSite(root, { live: true }).then((s) => [s.ok, s.url, s.live]), [true, 'https://owls.example', true]);
+  // Neither: no dev server runs here, so one is started for the check, on this computer, and stopped by the check.
+  const spawned = []; let killed = false;
+  const spawnFn = (bin, args, opts) => { const child = new EventEmitter(); Object.assign(child, { pid: 2 ** 22 + 7, exitCode: null, signalCode: null, stdout: new EventEmitter(), stderr: new EventEmitter(), kill() { killed = true; child.exitCode = 0; child.emit('exit', 0, null); } }); spawned.push({ args, cwd: opts.cwd }); return child; };
+  const asked = [];
+  const site = await checkSite(root, { spawnFn, fetchFn: async (u) => { asked.push(u); return { ok: asked.length > 2 }; } });
+  assert.equal(site.ok, true); assert.equal(site.started, true); assert.equal(site.local, true);
+  assert.match(site.url, /^http:\/\/127\.0\.0\.1:\d+$/); assert.ok(asked.every((u) => u.startsWith('http://127.0.0.1:')), 'nothing but this computer was asked');
+  assert.deepEqual(spawned.map((s) => [s.args[1], s.args[2], s.cwd]), [['dev', '--port', root]]);
+  await site.stop(); assert.equal(killed, true, 'the server the check started is the one it stops');
+  // A server that never comes up is a failed check with its own words, not a fall back to the live site.
+  const dead = await checkSite(root, { spawnFn, fetchFn: async () => ({ ok: false }), waitMs: 900 });
+  assert.equal(dead.ok, false); assert.match(dead.why, /did not start/); assert.doesNotMatch(dead.why, /owls\.example/);
+});
+
+test('a check with no game covers the games this checkout changed, else all of them', async (t) => {
+  const { changedGames, gamesToCheck } = await import('../lib/check-site.mjs');
+  const { mkdtempSync, mkdirSync, rmSync, writeFileSync } = await import('node:fs');
+  const { spawnSync } = await import('node:child_process');
+  const root = mkdtempSync(join(tmpdir(), 'homie-check-games-')); t.after(() => rmSync(root, { recursive: true, force: true }));
+  const git = (...args) => assert.equal(spawnSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', '-c', 'commit.gpgsign=false', ...args], { cwd: root, encoding: 'utf8' }).status, 0, args.join(' '));
+  writeFileSync(join(root, 'studio.json'), JSON.stringify({ name: 'Owls', slug: 'owls' }));
+  for (const id of ['alpha', 'beta', 'gamma']) { mkdirSync(join(root, 'games', id, 'src'), { recursive: true }); writeFileSync(join(root, 'games', id, 'game.json'), JSON.stringify({ id, name: id })); writeFileSync(join(root, 'games', id, 'src/view.ts'), '1'); }
+  assert.deepEqual(gamesToCheck(root).games, ['alpha', 'beta', 'gamma'], 'not a git checkout: every game');
+  git('init', '-q', '-b', 'main'); git('add', '-A'); git('commit', '-q', '-m', 'first');
+  assert.deepEqual(changedGames(root), []); assert.deepEqual(gamesToCheck(root).games, ['alpha', 'beta', 'gamma'], 'nothing changed: every game');
+  git('checkout', '-q', '-b', 'work'); writeFileSync(join(root, 'games/gamma/src/view.ts'), '2'); git('commit', '-q', '-am', 'gamma');
+  assert.deepEqual(gamesToCheck(root), { games: ['gamma'], why: 'changed in this checkout' }, 'never the first game by name');
+  writeFileSync(join(root, 'games/beta/src/new.ts'), '3');
+  assert.deepEqual(changedGames(root), ['beta', 'gamma'], 'uncommitted work counts');
+  assert.deepEqual(gamesToCheck(root, 'alpha').games, ['alpha'], 'a game named is the game checked');
+});

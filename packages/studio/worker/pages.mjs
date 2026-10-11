@@ -8,6 +8,32 @@ import { playerAncestors, PLAYER_SANDBOX, PLAYER_SIZE } from './embed.mjs';
 import { esc, layout, gameSocialTags } from './site.mjs';
 import { NET_PALETTE } from './room.mjs';
 import { PARAM_VALUE, PREFS_LIMITS, playParams } from './seats.mjs';
+import { STUDIO_VERSION_TAG } from './version.mjs';
+
+/**
+ * What a play page was made for (0.46.5): the toolkit that wrote it and the parts of the game's manifest it is built
+ * around (who may sit, what the room keeps, whether the player has saves and a ticket). The page hands it to the
+ * game's frame (`sh`), and the Worker that serves the frame knows what a page made now would say. A page left open
+ * across a deploy says something older: it is brought up to date with one full reload, to the same room and seat,
+ * instead of hosting a newer game inside a page that lacks what that game needs (a player ticket, for one).
+ * It does not change when only the game's code or art does: that is still a reload of the frame alone.
+ */
+export function shellKey(g) {
+  const text = JSON.stringify([g?.kind ?? null, g?.players ?? null, g?.room ?? null, g?.saves ?? null, g?.agents ?? null, g?.screen ?? null, g?.netplay ?? null, g?.launch ?? null]);
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i += 1) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return `${STUDIO_VERSION_TAG}-${(h >>> 0).toString(36)}`;
+}
+/**
+ * The frame's stand-in when its page is older than the game it would host. It tells the page, and loads no game.
+ * `key`: the page understands the handshake and reloads itself once. No key: a page from before the handshake, whose
+ * only way to load a whole new page is the one it has for leaving a finished room; it is used only when the game cannot
+ * work inside that page at all.
+ */
+export function shellStandIn(room, key) {
+  const message = key ? { t: 'homie-net', what: 'shell', key } : { t: 'homie-net', what: 'rematch', room };
+  return `<!doctype html><meta charset="utf-8"><title>Updating</title><body style="margin:0;background:#0b0d14;color:#cfd6e6;font:15px system-ui;display:grid;place-items:center;height:100vh"><p>This game was updated. Loading it again…</p><script>try{parent.postMessage(${JSON.stringify(message).replace(/</g, '\\u003c')},'*');}catch(e){}</script>`;
+}
 import { SKILLS } from './agents.mjs';
 import { KIDS_LINE, POLICY_WORDS } from './servers.mjs';
 import { SAVES_SHELL_CSS, SAVES_SHELL_JS } from './saves-shell.mjs';
@@ -180,7 +206,7 @@ ${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${shop ? SHO
   // game.json "agents": { "vote": "game" } draws its own vote card; false turns the vote off (section 17).
   const vote = g.agents?.vote === 'game' || g.agents?.vote === false ? g.agents.vote : 'shell';
   // The address's switches the game's frame is handed (NETPLAY.md section 24): the defaults and the game's own names.
-  const boot = { ...(g.kind === 'app' ? { kind: 'app', appWords: appWords(g) } : {}), embed, game: g.id, name: g.name, screen: Boolean(screen), share: places, params: playParams(g), paramValue: PARAM_VALUE, prefs: PREFS_LIMITS, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}), ...(owner ? { owner: true, launch } : {}), ...(srv ? { server: srv } : {}), vote, skills: SKILLS.map((k) => ({ level: k.level, name: k.name, card: k.card })), words: POLICY_WORDS, kidsLine: KIDS_LINE, ...(shop ? { shop } : {}) };
+  const boot = { ...(g.kind === 'app' ? { kind: 'app', appWords: appWords(g) } : {}), embed, game: g.id, name: g.name, screen: Boolean(screen), share: places, params: playParams(g), paramValue: PARAM_VALUE, prefs: PREFS_LIMITS, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}), sh: shellKey(g), ...(owner ? { owner: true, launch } : {}), ...(srv ? { server: srv } : {}), vote, skills: SKILLS.map((k) => ({ level: k.level, name: k.name, card: k.card })), words: POLICY_WORDS, kidsLine: KIDS_LINE, ...(shop ? { shop } : {}) };
   // game.json "screen": { "join": "top-left" | "top-right" | "bottom-left" | "bottom-right" } keeps the card off the game's own HUD.
   const joinCorner = corner('join', 'bottom-right');
   const first = places.desk;
@@ -497,6 +523,8 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
       q.set('b', roomKey);
       if (boot.embed) q.set('name', guestName);
       if (boot.t) q.set('t', boot.t);
+      // What this page was made for (0.46.5): the Worker answers with a stand-in when a page made now would differ.
+      if (boot.sh) q.set('sh', shellSaid || boot.sh);
       if (!boot.embed && params.get('name')) q.set('name', params.get('name'));
       else if (!boot.embed) {
         // A player with an account (or a named guest) on this studio plays under their own name in every room.
@@ -517,6 +545,18 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
     }
     state.params = {};
     (boot.params || []).forEach(function (k) { var v = params.get(k); if (v !== null && new RegExp(boot.paramValue || '^$').test(v)) state.params[k] = v; });
+    // The Worker says this page is older than the game (a deploy while it was open): one full reload, which keeps the
+    // room (it is in the address) and the seat (its token is in this tab's storage). Once for each newer page: if the
+    // reload came back the same, the frame is asked for as the Worker described it and play goes on.
+    var shellSaid = '';
+    function shellBehind(key) {
+      var tried = '';
+      try { tried = sessionStorage.getItem('homie-shell') || ''; } catch (e) {}
+      if (tried === key) { shellSaid = key; frame.src = frameUrl(); return; }
+      try { sessionStorage.setItem('homie-shell', key); } catch (e) { shellSaid = key; frame.src = frameUrl(); return; }
+      state.shellReload = key;
+      location.reload();
+    }
     var updating = buildRetry(function () {
       state.stale = null; state.closed = null; state.reloaded = (state.reloaded || 0) + 1;
       frame.src = frameUrl();
@@ -532,6 +572,7 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
       var m = ev.data;
       if (!m || typeof m !== 'object' || m.t !== 'homie-net') return;
       A.message(m);
+      if (m.what === 'shell' && typeof m.key === 'string' && /^[A-Za-z0-9._-]{1,64}$/.test(m.key)) { shellBehind(m.key); return; }
       if (m.what === 'wait') updating.stop();
       if (m.what === 'build' && updating.acknowledge(m.ver) && toast) toast.hidden = true;
       if (m.what === 'attached' || m.what === 'ready') updating.reported();

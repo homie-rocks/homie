@@ -785,6 +785,8 @@ function print(result) {
         `Written: ${result.file}`);
       break;
     case 'check':
+      if (result.results) { for (const r of result.results) lines.push(`${r.game}: PASS at ${r.site}: room ${r.room}, round ${r.round?.n} (${r.round?.humans} humans, ${r.round?.bots} bots), connection ${r.uninterrupted === true ? 'uninterrupted' : r.uninterrupted === false ? 'INTERRUPTED' : 'unknown'}`); break; }
+      if (result.site) lines.push(`Checked ${result.local ? 'this studio\'s own build' : 'the site'} at ${result.site}.`);
       lines.push(`PASS: two fresh browsers in room ${result.room} finished round ${result.round.n} (${result.round.humans} humans, ${result.round.bots} bots) in ${Math.round(result.totalMs / 1000)} s.`,
         ...result.seats.map((s) => `  ${s.browser}: seat ${s.seat} (${s.role}), seated in ${(s.seatedMs / 1000).toFixed(1)} s`),
         ...(result.frames ?? []).map((f) => `  ${f.browser} drew ${f.fps ?? '?'} fps${f.renderer ? ` on ${f.renderer}` : ''}`),
@@ -933,8 +935,9 @@ async function main() {
   if (cmd === 'port' && sub === 'import') return importPort(root, positional[2], flags.get('id'), { name: flags.get('name'), mode: flags.get('mode') });
   if (cmd === 'port' && sub === 'check') {
     const game = positional[2] ?? listGames(root)[0]?.id;
-    const url = flags.get('url') ?? siteUrl(root);
-    if (!url) return { ok: false, command: 'port check', why: 'give --url (the local dev address or the live site)' };
+    // Never the live site unless asked (--live, or its address): this studio's running dev server, else say so.
+    const url = flags.get('url') ?? (flags.has('live') ? siteUrl(root) : (await import('../lib/dev.mjs')).runningDev(root)?.url);
+    if (!url) return { ok: false, command: 'port check', why: 'give --url (the local dev address), start npm run dev, or say --live for the live site' };
     return tracked(root, 'checks', (report) => portCheck({ url, game, root, only: flags.get('only') ?? null, shots: flags.get('shots') ? resolve(flags.get('shots')) : null, log, report }), 'port check');
   }
   if (cmd === 'app' && sub === 'role') {
@@ -955,8 +958,8 @@ async function main() {
   if (cmd === 'lab') return labCommand(root, sub);
   if (cmd === 'perf') {
     const game = sub ?? listGames(root)[0]?.id;
-    const url = flags.get('url') ?? siteUrl(root);
-    if (!url) return { ok: false, command: 'perf', why: 'give --url (the local dev address or the live site)' };
+    const url = flags.get('url') ?? (flags.has('live') ? siteUrl(root) : (await import('../lib/dev.mjs')).runningDev(root)?.url);
+    if (!url) return { ok: false, command: 'perf', why: 'give --url (the local dev address), start npm run dev, or say --live for the live site' };
     const devices = String(flags.get('device') ?? 'computer,phone').split(',').map((d) => d.trim()).filter(Boolean);
     const num = (k, d, lo, hi) => Math.max(lo, Math.min(hi, Number(flags.get(k) ?? d) || d));
     return perfRun({ root, url, game, devices, runs: num('runs', 1, 1, 50), seconds: num('seconds', 15, 3, 300), warm: num('warm', 3, 0, 60), profile: flags.has('profile'), out: flags.get('out') ? resolve(String(flags.get('out'))) : null, maxLoad: num('max-load', 0.8, 0.05, 50), cpu: num('cpu', 4, 1, 20), pair: flags.get('pair') ? String(flags.get('pair')) : null, log });
@@ -973,14 +976,30 @@ async function main() {
   if (cmd === 'dev' && flags.has('stop')) return stopDev(root);
   if (cmd === 'dev') return dev(root, { lan: flags.has('lan'), port: flags.get('port') ?? 8787, remoteAi: flags.has('remote-ai'), localAi: !flags.has('no-local-ai'), timestamps: flags.has('timestamps'), log });
   if (cmd === 'check') {
-    const game = positional[1] ?? listGames(root)[0]?.id;
-    const url = flags.get('url') ?? siteUrl(root);
-    if (!url) return { ok: false, command: 'check', why: 'give --url (the local dev address or the live site)' };
+    // lib/check-site.mjs: with no --url a check runs against this studio's own build, never the live site (--live asks
+    // for that); with no game it covers the games this checkout changed.
+    const { checkSite, gamesToCheck } = await import('../lib/check-site.mjs');
+    const { games, why } = gamesToCheck(root, positional[1]);
+    if (!games.length) return { ok: false, command: 'check', why: 'this studio has no game to check' };
     // A big binary committed under games/ fails the check before any browser starts: it belongs in R2, never in git.
     const { bigCommittedFiles } = await import('../lib/asset-check.mjs');
-    const big = bigCommittedFiles(root).filter((f) => f.path.startsWith(`games/${game}/`));
-    if (big.length) return { ok: false, command: 'check', why: `committed files over 5 MB under games/${game}: ${big.map((f) => `${f.path} (${(f.bytes / 1024 / 1024).toFixed(1)} MB)`).join(', ')}. Big media goes to the studio's R2 (homie-studio storage add, then media move); raw models stay in art/<slug>/raw/ (git-ignored); a shipped model is made phone-sized with homie-studio assets optimise. Take it out of git (git rm --cached), then check again.` };
-    return tracked(root, 'checks', (report) => check({ url, game, shots: flags.get('shots') ? resolve(flags.get('shots')) : null, log, report }), 'check');
+    for (const game of games) {
+      const big = bigCommittedFiles(root).filter((f) => f.path.startsWith(`games/${game}/`));
+      if (big.length) return { ok: false, command: 'check', why: `committed files over 5 MB under games/${game}: ${big.map((f) => `${f.path} (${(f.bytes / 1024 / 1024).toFixed(1)} MB)`).join(', ')}. Big media goes to the studio's R2 (homie-studio storage add, then media move); raw models stay in art/<slug>/raw/ (git-ignored); a shipped model is made phone-sized with homie-studio assets optimise. Take it out of git (git rm --cached <file>) and check again.` };
+    }
+    const site = await checkSite(root, { url: flags.get('url') ?? null, live: flags.has('live'), log });
+    if (!site.ok) return { ok: false, command: 'check', why: site.why };
+    try {
+      if (!positional[1]) log(`check: ${games.join(', ')} (${why}) at ${site.url}`);
+      const results = [];
+      for (const game of games) {
+        const shots = flags.get('shots') ? resolve(flags.get('shots'), ...(games.length > 1 ? [game] : [])) : null;
+        const r = await tracked(root, 'checks', (report) => check({ url: site.url, game, shots, log, report }), 'check');
+        results.push({ ...r, game, site: site.url, local: site.local });
+        if (!r.ok) break;
+      }
+      return results.length === 1 ? results[0] : { ok: results.every((r) => r.ok), command: 'check', site: site.url, local: site.local, why: results.find((r) => !r.ok)?.why, results };
+    } finally { await site.stop(); }
   }
   if (cmd === 'shoot') {
     const game = positional[1] ?? listGames(root)[0]?.id;

@@ -92,7 +92,7 @@ import { NetRoom, WATCH_POLICIES, departure, errorLine, versionOf } from './room
 import { hostedGame, hostedBuild, compiledFor, startHost } from './hosted.mjs';
 import { roomStore, restoreDelay } from './room-store.mjs';
 import { appCors, isAppOrigin } from './standalone.mjs';
-import { ROOM_ID, badRoomPage, embedAncestors, embedPreview, frameAncestors, noWatchPage, playPage, watchPage } from './pages.mjs';
+import { ROOM_ID, badRoomPage, embedAncestors, embedPreview, frameAncestors, noWatchPage, playPage, shellKey, shellStandIn, watchPage } from './pages.mjs';
 import {
   PUBLIC_SERVER, SERVER_ID, homeOf, memberCounts, memberOf, noteMember, policyOf, pooledRoom, roomCode, roomServer, serverAccess, serverPassOf, serverView, serversOf,
   setMembership,
@@ -1226,6 +1226,17 @@ async function route(request, env, ctx) {
     if (sub === '__game' || sub === '__game/' || sub === '__game/index.html') {
       if (url.searchParams.get('embed') === '1' && (!playerEnabled(cat, meta) || launch !== 'public')) return notFoundPage('Embedding is off for this game.', cat);
       const who = await ticketSub(env, game, url.searchParams.get('t'));
+      // A play page left open across a deploy (0.46.5). One that names what it was made for (`sh`) and is behind is
+      // told so, and reloads itself whole, once, to the same room and seat. One from before that handshake is sent
+      // to a fresh page only when this game cannot work inside it: the game keeps verified results for a player, and
+      // the old page has no player ticket to give its frame (a result would have nobody to be written for).
+      if (url.searchParams.get('pf') === '1' && url.searchParams.get('embed') !== '1' && url.searchParams.get('want') !== 'screen' && !url.searchParams.has('watch')) {
+        const said = url.searchParams.get('sh'), now = shellKey(meta);
+        const ticketless = Boolean(meta.room?.records && env.DB) && !holders(who).some((x) => x.startsWith('p-'));
+        if (said !== null ? said !== now : ticketless) {
+          return new Response(shellStandIn(url.searchParams.get('room') ?? '', said !== null ? now : null), { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
+        }
+      }
       if (launch !== 'public' && !(await ticketAllows(env, who, launch))) return new Response('This game is not open to you.\n', { status: 403, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
       // An agent's frame (hands `self`): the game plays as that AI.
       const agentPart = holders(who).find((x) => x.startsWith('a-'));
@@ -1778,7 +1789,12 @@ export class Table {
     sql.exec('CREATE TABLE IF NOT EXISTS round_players(owner TEXT PRIMARY KEY,player TEXT)');
     const client=[...this.room.clients.values()].find(c=>c.seat!==null&&'p'+this.room.seats.get(c.seat)?.occ===owner);
     const player=client?.player??sql.exec('SELECT player FROM round_players WHERE owner=?',owner).toArray()[0]?.player;
-    if(!player)return;
+    if(!player){
+      // Never dropped in silence (0.46.5): the log says so, and the person is told on their own screen.
+      try{console.error(JSON.stringify({at:new Date().toISOString(),ev:'record-unsaved',why:'no-player',game:this.game??null,room:this.code??null,key,id:value?.id??null}));}catch{}
+      if(client)this.room.error(client,'unsaved','This round was not saved to your history. Reload the page to keep the next one.');
+      return;
+    }
     sql.exec('CREATE TABLE IF NOT EXISTS round_outbox(id TEXT PRIMARY KEY,player TEXT,key TEXT,value TEXT)');
     sql.exec('INSERT OR IGNORE INTO round_outbox VALUES(?,?,?,?)',player+':'+key+':'+value.id,player,key,JSON.stringify(value));
     this.ctx.waitUntil(this.flushRoundRecords());

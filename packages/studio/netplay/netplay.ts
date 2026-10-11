@@ -2547,6 +2547,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         // An AI alone in a room (nobody seated): it knocks again only after a while (section 17).
         if (code === 'agents-alone') aloneUntil = wall() + AGENTS_ALONE_WAIT_MS;
         if (code === 'host-fault') { rulesNotice(String(m.message)); return; }
+        // A result the server could not keep for this player (0.46.5): said on their screen, not dropped in silence.
+        if (code === 'unsaved') { rulesNotice(String(m.message)); return; }
         if (code === 'vote') { warnOnce('vote', m['message']); return; }
         if (code === 'rate' || code === 'state-full') { warnOnce(`${code}:${String(m['of'] ?? '')}`, m['message']); return; }
         // The room still runs another build of the game (section 23): not final. Its players were told to reload; this

@@ -10,3 +10,28 @@ test('record-enabled play authenticates a new guest before issuing the room page
  const {default:worker}=await import('../worker/index.mjs');const {sql,env}=database();env.STUDIO_NAME='Records';const cat={studio:{name:'Records',slug:'records',theme:{}},games:[{id:'records',name:'Records',players:{min:1,max:8},room:{records:true},landing:{hero:{},credits:{people:[]}}}],songs:[],videos:[],posts:[],site:{pages:[],partials:{}}};env.ASSETS={fetch:async req=>new URL(req.url).pathname==='/games.json'?Response.json(cat):new Response('missing',{status:404})};
  try{const request=new Request('https://records.example/records/play?room=proof',{headers:{'user-agent':'Mozilla/5.0','cf-connecting-ip':'198.51.100.42'}}),response=await worker.fetch(request,env,{waitUntil(){}});assert.equal(response.status,200,await response.clone().text());assert(response.headers.get('set-cookie'));assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM players').get().n,1);const player=sql.prepare('SELECT id FROM players').get().id;await appendServerRecord(env,player,'records','server:career',{id:'proof-round',endedAt:1,kills:2});const cookie=response.headers.getSetCookie().map(c=>c.split(';')[0]).join('; '),read=await worker.fetch(new Request('https://records.example/api/player/saves/records/server%3Acareer',{headers:{cookie}}),env,{waitUntil(){}});assert.equal(read.status,200);assert.equal((await read.json()).value.matches[0].kills,2);}finally{sql.close();}
 });
+test('a play page older than the game it hosts is told so by the frame it asks for, and never served a game it cannot keep results for',async()=>{
+ const {default:worker}=await import('../worker/index.mjs');const {shellKey}=await import('../worker/pages.mjs');const {sql,env}=database();env.STUDIO_NAME='Records';
+ const game={id:'records',name:'Records',players:{min:1,max:8},room:{records:true},landing:{hero:{},credits:{people:[]}}},plain={...game,id:'plain',name:'Plain',room:{}};
+ const cat={studio:{name:'Records',slug:'records',theme:{}},games:[game,plain],songs:[],videos:[],posts:[],site:{pages:[],partials:{}}};env.ASSETS={fetch:async req=>new URL(req.url).pathname==='/games.json'?Response.json(cat):new Response('missing',{status:404})};
+ const ask=async path=>{const r=await worker.fetch(new Request('https://records.example'+path,{headers:{'user-agent':'Mozilla/5.0','cf-connecting-ip':'198.51.100.42'}}),env,{waitUntil(){}});return {status:r.status,text:await r.text()};};
+ const standIn=text=>{const m=/parent\.postMessage\((\{.*?\}),'\*'\)/.exec(text);return m?JSON.parse(m[1]):null;};
+ try{
+  const page=await ask('/records/play?room=proof');assert.equal(page.status,200);const boot=JSON.parse(/window\.__HOMIE_PLAY=(\{.*?\});<\/script>/.exec(page.text)[1]);
+  assert.equal(boot.sh,shellKey(game),'the page says what it was made for');assert.ok(boot.t,'and holds the player\'s ticket');
+  assert.ok(page.text.includes("q.set('sh'"),'and hands it to the frame');
+  const frame='/records/__game/?room=proof&device=desk&want=play&pf=1';
+  // A page from before the handshake, with no ticket: the game would have nobody to write a result for.
+  assert.deepEqual(standIn((await ask(frame)).text),{t:'homie-net',what:'rematch',room:'proof'},'sent to a whole new page by the one way an old page has');
+  // The same old page, when it does hold a player ticket, can host the game: it is left alone.
+  assert.equal(standIn((await ask(frame+'&t='+boot.t)).text),null);
+  // A page that knows the handshake and is behind: told the key a page made now would have, and reloads itself.
+  assert.deepEqual(standIn((await ask(frame+'&t='+boot.t+'&sh=0.40.0-zzz')).text),{t:'homie-net',what:'shell',key:boot.sh});
+  // Up to date: the game.
+  assert.equal(standIn((await ask(frame+'&t='+boot.t+'&sh='+boot.sh)).text),null);
+  // Never for a big screen, a watcher, a player card, or a game that keeps nothing for a player.
+  for(const other of ['/records/__game/?room=proof&device=tv&want=screen&pf=1','/records/__game/?room=proof&watch=1','/plain/__game/?room=proof&device=desk&want=play&pf=1'])assert.equal(standIn((await ask(other)).text),null,other);
+  // The key follows what the page is built around, not the game's words or code.
+  assert.equal(shellKey({...game,blurb:'New words',build:'abc'}),shellKey(game));assert.notEqual(shellKey({...game,room:{}}),shellKey(game));assert.notEqual(shellKey({...game,saves:true}),shellKey(game));
+ }finally{sql.close();}
+});
