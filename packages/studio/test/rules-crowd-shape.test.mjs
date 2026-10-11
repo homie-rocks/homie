@@ -20,7 +20,7 @@ import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { Gate, batchLink, deliveryPace, inputPhase, multiplexSession, roomLayout } from '../worker/gate.mjs';
+import { GATE_PLAYERS, Gate, batchLink, deliveryPace, multiplexSession, nextGate, roomLayout } from '../worker/gate.mjs';
 import { NetRoom } from '../worker/room.mjs';
 import { roomDiagnostics } from '../worker/office.mjs';
 import { crowdView, crowdWorlds, interestSnapshot, scheduledView, snapshotDecoder, snapshotEncoder, snapshotText } from '../rules/interest.mjs';
@@ -43,39 +43,46 @@ const request = (gate = 0) => new Request(`https://table/__net?game=g&room=r&gat
 const runner = (seat, x, y, k) => [`r${seat}`, 0, 0, [x, y], [k % 7, 0], [1, 0], 0, [k, true], [], seat, 0];
 const world = (k, seats, at = (seat) => [seat * 0.5, k * 0.01]) => ({ k, e: 7, st: Date.now(), d: [[1, 0, 0], seats.map((seat) => runner(seat, ...at(seat), k))], c: seats.map((seat) => [seat, 0, k]) });
 
-test('Gates follow from the room\'s size: twenty players each, and a room of 64 or fewer is its Table alone', () => {
+test('Gates follow from the room\'s size and fill in order: a room opens only the Gates its players need', () => {
   assert.deepEqual(roomLayout(8), { gates: 1, concentrators: 0 });
   assert.deepEqual(roomLayout(64), { gates: 1, concentrators: 0 });
-  assert.deepEqual(roomLayout(65), { gates: 4, concentrators: 0 });
-  assert.deepEqual(roomLayout(300), { gates: 15, concentrators: 0 });
-  assert.deepEqual(roomLayout(1000), { gates: 50, concentrators: 0 });
+  assert.deepEqual(roomLayout(65), { gates: 2, concentrators: 0 });
+  assert.deepEqual(roomLayout(300), { gates: 6, concentrators: 0 });
+  assert.deepEqual(roomLayout(1000), { gates: 20, concentrators: 0 });
+  // A thousand players arriving in a storm, each asked for before the last has reached its Gate.
+  const held = new Map(), promised = new Map(), placed = [];
+  for (let i = 0; i < 1000; i += 1) {
+    const gate = nextGate(20, held, promised); placed.push(gate); promised.set(gate, (promised.get(gate) ?? 0) + 1);
+    if (i % 7 === 6) for (const g of placed.splice(0)) { promised.set(g, promised.get(g) - 1); held.set(g, (held.get(g) ?? 0) + 1); }
+    if (i === 49) assert.deepEqual([...new Set([...held.keys(), ...promised.keys()])], [0], 'fifty players are one Gate');
+    if (i === 299) assert.equal(new Set([...held.keys(), ...promised.keys()].filter((g) => (held.get(g) ?? 0) + (promised.get(g) ?? 0) > 0)).size, 6);
+  }
+  for (const g of placed) held.set(g, (held.get(g) ?? 0) + 1);
+  assert.deepEqual([...held.values()], Array(20).fill(GATE_PLAYERS), 'a full room is twenty full Gates');
+  // Players leave Gate 3; the next to join take their places before any other Gate grows.
+  held.set(3, 40); assert.equal(nextGate(20, held), 3);
+  // A room over its seats (the count is the game's to enforce) spreads the extra on the least full.
+  held.set(3, 50); held.set(7, 51); assert.equal(nextGate(20, held), 0);
 });
 
-// The room's tick takes `run` ms before its world leaves, and the channel `hop` ms each way. A Gate sees neither.
-for (const [run, hop] of [[2, 1], [12, 3], [30, 6]]) test(`a Gate sends the room one frame of input a tick and finds the moment that makes the next tick (a ${run} ms tick, ${hop} ms away)`, async (t) => {
-  const clock = virtualTime(t), random = seeded(11 + run);
+test('a Gate sends the room at most one frame every 50 ms however many players it holds, at once when the channel is quiet, each input once and in order', async (t) => {
+  const clock = virtualTime(t), random = seeded(11);
   const upstream = socket(), gate = new Gate({}, tableOf(upstream));
-  const players = Array.from({ length: 20 }, socket), said = players.map(() => []);
+  const players = Array.from({ length: 50 }, socket), said = players.map(() => []);
   for (const p of players) await gate.connect(request(), p);
   for (const [i, p] of players.entries()) p.emit('message', { data: JSON.stringify({ t: 'hello', i }) });
-  await clock.wait(60);
-  // The room, as a Gate's frames meet it: a frame that arrives while a tick runs is read when the tick is done,
-  // and every frame read before a tick is acknowledged on that tick's world, with how long it waited.
-  const zero = Date.now(), ticks = 240, frames = [], waiting = [];
-  const startOf = (k) => zero + k * 50;
-  upstream.send = (text) => { const sent = Date.now(), rows = JSON.parse(text); setTimeout(() => {
-    const arrived = Date.now(), k = Math.floor((arrived - zero) / 50), read = arrived < startOf(k) + run ? startOf(k) + run : arrived;
-    const frame = { sent, arrived, read, rows, receipt: rows.find((row) => row[0] === 'receipt')?.[1] ?? null };
-    frames.push(frame); if (frame.receipt !== null) waiting.push(frame);
-  }, hop); };
+  await clock.wait(200);
+  const frames = []; let receipt = 0, receiptAt = 0, stamp = null;
+  upstream.send = (text) => { const rows = JSON.parse(text); frames.push({ at: Date.now(), rows }); for (const row of rows) if (row[0] === 'receipt') { receipt = row[1]; receiptAt = Date.now(); stamp = row[2]; } };
+  // A quiet channel: one input goes at once.
+  players[0].emit('message', { data: JSON.stringify({ t: 'in', n: 0, at: Date.now() }) }); said[0].push(0);
+  await clock.wait(2);
+  assert.equal(frames.length, 1, 'nothing to wait for');
   const offsets = players.map(() => [Math.floor(random() * 50), Math.floor(random() * 50)]);
-  let sequence = 0;
+  const ticks = 100; let sequence = 0; const from = Date.now();
   for (let k = 1; k <= ticks; k += 1) {
-    while (Date.now() < startOf(k)) await clock.wait(1);
-    const acks = waiting.filter((f) => f.read <= startOf(k)); waiting.splice(0, waiting.length, ...waiting.filter((f) => f.read > startOf(k)));
-    const newest = acks.at(-1), world = JSON.stringify([...(newest ? [['ack', newest.receipt, startOf(k) - newest.read]] : []), ['world', '*', { k, e: 7, st: startOf(k), d: [[1, 0, 0], []], c: [] }, {}, 20], ['receipt', k]]);
-    for (const f of acks) f.tookTick = k;
-    setTimeout(() => upstream.emit('message', { data: world }), run + hop);
+    // The room acknowledges on the frame its tick sends, with how long it held the Gate's and both its clocks.
+    upstream.emit('message', { data: JSON.stringify([...(receipt ? [['ack', receipt, Date.now() - receiptAt, [stamp, receiptAt + 7, Date.now() + 7]]] : []), ['world', '*', world(k, []), {}, 20], ['receipt', k, Date.now() + 7]]) });
     for (let ms = 0; ms < 50; ms += 1) {
       for (const [i, p] of players.entries()) for (const at of offsets[i]) if (at === ms) { const n = ++sequence; said[i].push(n); p.emit('message', { data: JSON.stringify({ t: 'in', e: 7, k: k + 3, n, at: Date.now() }) }); }
       await clock.wait(1);
@@ -83,19 +90,18 @@ for (const [run, hop] of [[2, 1], [12, 3], [30, 6]]) test(`a Gate sends the room
   }
   await clock.wait(120);
   const input = frames.filter((f) => f.rows.some((row) => row[0] === 'data' || row[0] === 'fan'));
-  // One a tick; a handful more while it steps back from a tick it ran into.
-  assert.ok(input.length <= ticks + 8, `one frame a tick, not ${input.length} for ${ticks} ticks`);
-  const heard = players.map(() => []);
-  for (const f of input) for (const row of f.rows) if (row[0] === 'data') { const m = JSON.parse(row[2]); heard[Number(row[1]) - 1].push(m.n); assert.equal(row[3], m.at, 'the Gate stamped the moment it arrived'); }
+  assert.ok(frames.length <= ticks + 4, `${frames.length} frames for ${ticks} ticks of 100 inputs each`);
+  for (let i = 1; i < frames.length; i += 1) assert.ok(frames[i].at - frames[i - 1].at >= 50, 'never two within 50 ms');
+  const heard = players.map(() => []); let worst = 0;
+  for (const f of input) for (const row of f.rows) if (row[0] === 'data') { const m = JSON.parse(row[2]); heard[Number(row[1]) - 1].push(m.n); assert.equal(row[3], m.at, 'the Gate stamped the moment it arrived'); worst = Math.max(worst, f.at - m.at); }
   assert.deepEqual(heard, said, 'every input reached the room once, in the order its player sent it');
-  // Once it has found the moment (three seconds), a frame is read between 3 and 16 ms before the tick that takes it,
-  // and an input waits less than a tick and a bit from its Gate to the rules.
-  const settled = input.filter((f) => f.sent > zero + 3000 && f.tookTick);
-  const slack = settled.map((f) => startOf(f.tookTick) - f.read), good = slack.filter((ms) => ms >= 3 && ms <= 16).length;
-  assert.ok(good >= settled.length * 0.9, `${good} of ${settled.length} frames reached the room just before its tick (waits: ${slack.slice(0, 30).join(' ')})`);
-  let worst = 0;
-  for (const f of settled) for (const row of f.rows) if (row[0] === 'data') worst = Math.max(worst, startOf(f.tookTick) - JSON.parse(row[2]).at);
-  assert.ok(worst <= 50 + 16 + hop + 2, `an input waited ${worst} ms for the rules`);
+  assert.ok(worst <= 50, `an input waited ${worst} ms for its frame`);
+  assert.deepEqual(frames.flatMap((f) => f.rows.filter((row) => row[0] === 'ack').map((row) => row[1])).at(-1), ticks, 'every world was acknowledged, on a frame that was going anyway');
+  // The room's clock is 7 ms ahead of this Gate's in this test, and the Gate has measured it.
+  const facts = gate.gateFacts(gate.link);
+  assert.equal(facts.roomClock.offsetMs, 7); assert.equal(facts.roomClock.delayMs, 0);
+  assert.ok(Math.abs(facts.roomTickHz - 20) < 0.5, `the room's ticks by this Gate's clock: ${facts.roomTickHz} a second`);
+  assert.ok(Date.now() - from > 0);
   gate.link.disconnect();
 });
 
@@ -371,7 +377,8 @@ test('a run\'s summary names tick rate and delivered rate for every step, the pl
   assert.equal(s.server.samples, 3); assert.equal(s.server.failedPolls, 1); assert.equal(s.server.pacedPlayers, 12); assert.deepEqual(s.server.playersPerGate, { min: 150, max: 150 });
   assert.equal(s.client.wireMBps, 2); assert.equal(s.link.limited, true, 'two of the 2.4 MB a second this link carries');
   assert.equal(summarize(report, rows, { downMBps: 40 }).link.limited, false);
-  assert.match(table([s]), /\| 300 \| 300\/300\/0 \| 150\/210\/260 \| 3 \(0\.02\) \| 20 \| 19\.96 \| 2 \(2\.4, LINK-LIMITED\) \| 6\.67 \| 300\/300 \(4\) \| 20\/19\.9 \| 0\.01 \| 2 \| 20\/17\.5 \| 9\/9 \| 12 \| 12 \| 3\/1 \|/);
+  assert.match(table([s]), /\| 300 \| home \| 300\/300\/0 \| 150\/210\/260 \| —\/— \| 3 \(0\.02\) \| 20 \| 19\.96 \| 2 \(2\.4, LINK-LIMITED\) \| 6\.67 \| 300\/300 \(4\) \| — \| 0\.01 \| 2 \| —\/— \| 20\/17\.5 \| 9\/9 \| 5\/12 \| 12 \| 3\/1 \|/);
+  assert.match(table([summarize({ ...report, driver: { workerLoopP99Ms: [14], peakTimerLagMs: [640] } }, rows, null)]), /\| 640 DRIVER \|/, 'a step the driver could not keep up with says so');
   const empty = summarize({ n: 50, payload: {} }, [], null);
   assert.equal(empty.server.tickRate.median, null); assert.match(table([empty]), /—/, 'a number that was not measured is a dash, never a blank');
 });
@@ -468,4 +475,66 @@ test('a Gate\'s crowd path: the same bodies in view, each within the game\'s pre
     assert.ok(client.bytes < client.oldBytes * 0.5, `seat ${client.seat}: ${client.bytes} bytes where every moving body was sent ${client.oldBytes}`);
     assert.ok(client.worstFar <= client.oldWorst, 'and a far body is never drawn further from the truth than holding it still between refreshes did');
   }
+});
+
+test('the in-Cloudflare probe plays its players against a room and reports what the home driver reports', async (t) => {
+  const dir = join(PKG, 'test/fixtures/crowd-circuit/game');
+  const L = await loadGame(scratch, dir, 'crowd-probe');
+  const game = JSON.parse(readFileSync(join(dir, 'game.json'), 'utf8'));
+  const compiled = L.R.compileRules(L.def, { tune: JSON.parse(readFileSync(join(dir, 'tunables.json'), 'utf8')), settings: L.R.roomSettings(game.room).settings, seats: 1000, map: L.R.compileMap({ ...JSON.parse(readFileSync(join(dir, 'map/main.json'), 'utf8')), name: 'main' }, 'main') });
+  const { default: probe } = await import('../lib/crowd-probe/worker.mjs');
+  const { cloudReport } = await import('../lib/crowd-cloud.mjs');
+  const { summarize } = await import('../lib/crowd-summary.mjs');
+  const clock = virtualTime(t), random = seeded(7);
+  const timers = { now: () => Date.now(), setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: (id) => clearTimeout(id) };
+  const room = new NetRoom({ code: 'r', maxPlayers: 1000, now: timers.now, log() {}, rules: true });
+  const host = L.H.createHost({ game: 'test', compiled, clock: timers, send: (m, text) => room.hostFrame(m, text), log() {}, random });
+  room.setServerHost(host);
+  const beat = setInterval(() => room.tick(), 250);
+  t.after(() => { clearInterval(beat); host.stop(); });
+  // One Gate and its channel to the room, 4 ms each way; a player's socket is 8 ms each way.
+  const gateEnd = socket(), roomEnd = socket();
+  gateEnd.send = (text) => setTimeout(() => roomEnd.emit('message', { data: text }), 4);
+  roomEnd.send = (text) => setTimeout(() => gateEnd.emit('message', { data: text }), 4);
+  multiplexSession(roomEnd, async (req, client) => {
+    const h = room.attach({ send: (text) => client.send(text), close: (code, why) => client.close(code, why), buffered: () => client.buffered(), snapshotGroup: client.snapshotGroup, subscribe: (seat) => client.subscribe(seat), transportFacts: client.transportFacts });
+    client.addEventListener('message', (e) => h.onMessage(e.data, e.receivedAt));
+    client.addEventListener('close', () => h.onClose('close'));
+  });
+  const gate = new Gate({ waitUntil() {} }, tableOf(gateEnd)), asked = [];
+  // What the probe sees of the studio: the game's page, which names the socket, and the socket.
+  t.mock.method(globalThis, 'fetch', async (input, init) => {
+    const url = new URL(typeof input === 'string' ? input : input.url); asked.push(url.pathname);
+    if (url.pathname.endsWith('/__game/')) return new Response(`<script>window.HOMIE_NET=${JSON.stringify({ url: `wss://studio.test/crowd-circuit/__net?room=${url.searchParams.get('room')}&b=${url.searchParams.get('b')}`, room: url.searchParams.get('room') })}</script>`);
+    assert.equal(init.headers.Upgrade, 'websocket');
+    const theirs = socket(), mine = socket();
+    theirs.send = (text) => setTimeout(() => mine.emit('message', { data: text }), 8);
+    mine.send = (text) => setTimeout(() => theirs.emit('message', { data: text }), 8);
+    mine.close = () => theirs.emit('close', {});
+    await gate.connect(new Request(`https://table/__net?game=crowd-circuit&room=r&gates=20&gate=0`), theirs);
+    return { status: 101, webSocket: mine };
+  });
+  const env = { PROBE_KEY: 'k' }, waits = [], ctx = { waitUntil: (p) => waits.push(p) };
+  assert.equal((await probe.fetch(new Request('https://probe.test/play?origin=https://studio.test&room=r'), env, ctx)).status, 404, 'nothing without the key');
+  const started = Date.now(), joinAt = started + 100, measureAt = joinAt + 3000, endAt = measureAt + 5000, finals = [];
+  const requests = [0, 5, 10].map(async (from) => {
+    const res = await probe.fetch(new Request(`https://probe.test/play?origin=https://studio.test&game=crowd-circuit&room=r&from=${from}&count=5&joinAt=${joinAt}&rampMs=20&measureAt=${measureAt}&endAt=${endAt}`, { headers: { 'x-probe-key': 'k' } }), env, ctx);
+    assert.equal(res.status, 200);
+    for (const text of (await res.text()).split('\n').filter(Boolean)) { const row = JSON.parse(text); if (row.t === 'final') finals.push(row); assert.notEqual(row.t, 'failed', text); }
+  });
+  await clock.wait(endAt - Date.now() + 200);
+  await Promise.all(requests); await Promise.all(waits);
+  assert.equal(finals.length, 3);
+  const report = cloudReport({ origin: 'https://studio.test', room: 'r', n: 15, seconds: 5, started, measureAt, endAt, finals });
+  assert.equal(report.joined, 15); assert.equal(report.connectedAtEnd, 15); assert.equal(report.disconnects, 0); assert.deepEqual(report.errors, []);
+  assert.ok(report.deliveredHz.min >= 19.5 && report.deliveredHz.max <= 20.5, `every player was sent 20 frames a second (${report.deliveredHz.min} to ${report.deliveredHz.max})`);
+  assert.ok(report.tickHz.median > 19.8 && report.tickHz.median < 20.2);
+  assert.ok(report.inputAckMs.count > 600, `${report.inputAckMs.count} inputs acknowledged`);
+  // 8 ms to the Gate, up to 50 for its frame, 4 to the room, up to 50 for the tick, and 12 back: under three ticks.
+  assert.ok(report.inputLoopMs.p50 <= 100 && report.inputLoopMs.p95 <= 150, `an input's loop took ${report.inputLoopMs.p50} ms at the median, ${report.inputLoopMs.p95} at p95`);
+  assert.ok(report.inputLead.ticksMedian <= 3 && report.inputLead.lateShare <= 0.05, `players settled on ${report.inputLead.ticksMedian} ticks of lead, ${report.inputLead.lateShare} late`);
+  assert.ok(report.inputAckMs.p95 <= report.inputLead.ticksMax * 50 + 40, `ack p95 ${report.inputAckMs.p95} ms with a lead of ${report.inputLead.ticksMax}`);
+  assert.ok(asked.filter((path) => path.endsWith('/__game/')).length === 15);
+  const line = summarize(report, [], null);
+  assert.equal(line.from, 'cloudflare'); assert.equal(line.client.inputLoopMs.p50, report.inputLoopMs.p50); assert.equal(line.link.limited, null);
 });

@@ -26,18 +26,20 @@ A room of hundreds has a new shape, a deploy the owner asked for is approved by 
 ### Added
 
 - `room.rates` in game.json: a studio's own pace on what one player may send, in messages a second by kind (`{ "in": 60 }`). Leave it out and there is none.
+- `lib/crowd-probe/`: a Worker of its own that plays simulated players against a studio from inside Cloudflare, five a request, and `lib/crowd-cloud.mjs`, which adds the requests up into the report the home driver writes. A trial's tool: no studio's Worker imports it.
+- Each Gate measures the room's clock against its own, the room's ticks a second by its own clock, and the longest it went without a world. The room's own count of its ticks cannot see the room run late.
 - A big room's diagnostics come from an object that is neither the room nor a Gate with players. The room and each Gate post a second's facts to it (ticks a second, how long a player's input took to reach the rules, frames written to each player, how old the world was when a Gate sent it, how far behind players say they are), and `/_studio/api/room` answers from that copy with its age. Measuring a room costs it nothing, and a room too busy to answer still has its last word read.
 - A player's client says which tick it holds (`g` on its inputs and pings). A Gate that finds a player more than a second behind sends that player fewer, fresher frames, down to one a second, and restores the rate when they have caught up. Each frame is a change from the last one sent and carries the player's own body. A client that says nothing is sent every tick, as before.
 
 ### Changed
 
 - In a room behind Gates the room object runs the rules and hands each Gate one world a tick. The Gate chooses what each of its players can see, encodes it and writes it. The room no longer selects, encodes or queues anything per player on its tick.
-- A Gate holds twenty players, so a room of 1,000 has fifty Gates (it had sixteen). A studio sets its room's size and nothing else. A room of 64 or fewer is still its Table alone.
+- A Gate holds fifty players and Gates fill in order: the room tells the door which Gate has room, so fifty players in a 1,000-seat game are one Gate and a full room is twenty. A studio sets its room's size and nothing else. A room of 64 or fewer is still its Table alone.
 - The world crosses from the room to a Gate as one block of numbers, the same block for every Gate, plus whatever else about a body changed since that Gate last heard: about 33 KB a tick for 1,000 players where the JSON was 150 KB, and almost nothing for the Gate to parse.
 - A body that keeps its course is not sent again. A client built with 0.46.2 moves it along its last velocity, and a Gate sends it only when that has drifted past the game's `view.precisionM` (near bodies) or half the distance it covers between `view.farHz` refreshes (far ones). On the crowd-circuit game at 1,000 players a frame falls from 71 rows to 20, a player from 14.8 KB a second on the wire to 6.3, and a far body is drawn 3 cm from the truth on average where it was 35 cm. A game page built before 0.46.2 is sent every moving body, as before.
 - A Gate works out once for each world what does not depend on the player. Encoding a player's frame takes under a third of the time.
 - Each Gate has its own channel to the room. The relay between them (the Concentrator) is gone: it re-read and re-sent every world for eight Gates and was the first object to fall behind. A studio's `CONCENTRATOR` binding stays declared and unused, so an upgrade needs no migration.
-- A Gate sends the room one frame of input a tick, however many players it holds. The room says with each receipt how long the frame waited for its tick, and the Gate moves its moment until that is a few milliseconds. Receipts ride that frame.
+- A Gate sends the room what its players sent at once when the channel is quiet and never more than one frame in 50 ms, however many players it holds. Receipts ride that frame.
 - Far-view refreshes are spread across players, so a room's largest updates do not all leave on the same tick.
 - A deploy requested in the owner's prompt is approved for that task, including retries. Unrequested deployments remain held; explicit refusals revoke the task approval.
 - The crowd probe offers WebSocket compression, as every browser does, coasts, names the tick it holds, follows the room's word on how early its inputs arrive (as the toolkit's client does), and reports whether the server agreed to compress, what that saved, and the kilobytes a second a player cost.
@@ -53,7 +55,7 @@ A room of hundreds has a new shape, a deploy the owner asked for is approved by 
 ### Upgrade notes
 
 - Rebuild and deploy a studio to get the new room shape; a game needs no change. A game page built before 0.46.2 still plays in a big room: it is sent every tick, because it does not say which tick it holds.
-- What the first cloud trial of 0.45.3 measured, and why, is in `docs/crowd-transport-0462.md`, with the second trial (0.45.4, never released) and what it showed. Capacity on Cloudflare at 1,000 players awaits the next trial.
+- What the first cloud trial of 0.45.3 measured, and why, is in `docs/crowd-transport-0462.md`, with the two trials that followed and what each showed. Capacity on Cloudflare at 1,000 players awaits the next trial.
 
 ## [0.46.0] - 2026-10-10
 

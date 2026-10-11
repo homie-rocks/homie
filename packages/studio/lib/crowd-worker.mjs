@@ -53,7 +53,10 @@ export function createLoad({
     first = new Histogram(),
     welcome = new Histogram(),
     ack = new Histogram(),
-    gaps = new Histogram();
+    gaps = new Histogram(),
+    // From the tick a player held when it stamped an input to the tick it
+    // reached the rules, ms: what the system took, whatever the lead.
+    loops = new Histogram();
   // Snapshots that said how early this player's input was, and how many said late.
   let lateAcks = 0,
     onTime = 0;
@@ -152,7 +155,7 @@ export function createLoad({
     // early, one fewer when it was over a tick and a half.
     if (control && control[3] !== -128 && control[3] !== undefined) {
       const early = control[3] / 16;
-      if (measuring) { if (early <= 0) lateAcks++; onTime++; }
+      if (measuring) { if (early <= 0) lateAcks++; onTime++; loops.add((c.lead - early) * 50); }
       (c.early ??= []).push(early); if (c.early.length > 40) c.early.shift();
       if (c.early.length >= 20 && now - (c.leadAt ?? 0) > 2000) {
         const low = c.early.slice().sort((a, b) => a - b)[Math.floor(c.early.length / 20)];
@@ -438,7 +441,7 @@ export function createLoad({
       return {
         ...end,
         errors: [...errors].map(([text, count]) => ({ text, count })),
-        histograms: { first, welcome, ack, gaps },
+        histograms: { first, welcome, ack, gaps, loops },
         inputReports: onTime,
         inputReportsLate: lateAcks,
         leadTicks: clients.filter((c) => !c.retired).map((c) => c.lead),

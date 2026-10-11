@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { Miniflare } from 'miniflare';
 import { build } from 'esbuild';
 import { snapshotDecoder } from '../rules/interest.mjs';
-import { roomLayout } from '../worker/gate.mjs';
+import { GATE_PLAYERS, roomLayout } from '../worker/gate.mjs';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 
@@ -89,14 +89,19 @@ test('public Worker, real Table storage and Gates admit above 32 and preserve se
       for(let wait=0;wait<100&&!(kept?.gates?.length&&kept?.ticks);wait++){await new Promise(r=>setTimeout(r,100));kept=await (await mf.dispatchFetch('https://studio.test/test-diagnostics')).json();}
       assert.equal(kept.counts.players,count);assert.equal(kept.diagnostics.cached,true);
       assert.equal(kept.gates.reduce((a,g)=>a+g.subscribed,0),count,'the Gates between them hold every player');
+      assert.equal(kept.gates.length,Math.ceil(count/GATE_PLAYERS),'and the room opened only the Gates its players fill');
       assert.ok(kept.gates.every(g=>g.deliveredHz===null||g.deliveredHz>0));
       assert.equal(kept.gates.reduce((a,g)=>a+g.coasting,0),count-count/10,'nine players in ten are current clients, on the crowd path');
     }
     for(const failure of ['gate','table']){
-      const gate=holders[0].gate, affected=failure==='table'?holders:holders.filter(p=>p.gate===gate);
-      const closed=Promise.all(affected.map(p=>new Promise(resolve=>p.ws.addEventListener('close',resolve))));
-      const query=failure==='table'?'table=1':`key=crowd/pub-1/${gate}`;
-      assert.equal((await mf.dispatchFetch(`https://studio.test/test-abort?${query}`)).status,204);await closed;
+      // The room fills its Gates in order, so Gate 0 holds players whatever the count; who it holds is whoever closes.
+      const gone=new Set();for(const p of holders)p.ws.addEventListener('close',()=>gone.add(p));
+      const query=failure==='table'?'table=1':'key=crowd/pub-1/0';
+      assert.equal((await mf.dispatchFetch(`https://studio.test/test-abort?${query}`)).status,204);
+      const expected=failure==='table'?holders.length:Math.min(holders.length,GATE_PLAYERS);
+      for(let wait=0;wait<200&&gone.size<expected;wait++)await new Promise(r=>setTimeout(r,50));
+      assert.equal(gone.size,expected,`${failure}: every player it carried was closed, and nobody else`);
+      const affected=[...gone];
       const back=new Map();
       for(let i=0;i<affected.length;i+=20)await Promise.all(affected.slice(i,i+20).map(async p=>{const next=await open(p.key,p.welcome.token);assert.equal(next.welcome.seat,p.welcome.seat);back.set(p.key,next);}));
       holders=holders.map(p=>back.get(p.key)??p);

@@ -30,7 +30,8 @@ for (const k of Object.keys(opts))
       'workers',
       'churn',
       'churn-at',
-      'compress'
+      'compress',
+      'strict-chrome'
     ].includes(k)
   )
     throw Error('Unknown option --' + k);
@@ -95,6 +96,7 @@ const browsers = [],
   errors = new Map(),
   workers = [];
 let stopReason = null,
+  chromeTrouble = 0,
   measureStart = 0,
   measureEnd = 0,
   maxRss = 0,
@@ -310,7 +312,12 @@ async function sample(phase) {
         'browser membership',
         JSON.stringify({ i, room: f.room, seat: f.seat, stats: f.stats })
       );
-      stop('Chrome membership failed or its link reconnected');
+      chromeTrouble++;
+      // A real browser on a busy computer losing its link is a finding, and
+      // no reason to throw away what a thousand other players measured:
+      // the step runs on unless it was asked to stop (--strict-chrome 1).
+      if (opts['strict-chrome'] === '1')
+        stop('Chrome membership failed or its link reconnected');
     }
   const s = {
     phase,
@@ -467,7 +474,7 @@ try {
   );
   loop.disable();
   const histograms = {};
-  for (const key of ['first', 'welcome', 'ack', 'gaps']) {
+  for (const key of ['first', 'welcome', 'ack', 'gaps', 'loops']) {
     const h = new Histogram();
     for (const f of finals) h.merge(f.histograms[key]);
     histograms[key] = h.json();
@@ -512,6 +519,7 @@ try {
     welcomeMs: histograms.welcome,
     inputAckMs: histograms.ack,
     receiveGapMs: histograms.gaps,
+    inputLoopMs: histograms.loops,
     ackSkipped: sum('ackSkipped'),
     ackExpired: sum('ackExpired'),
     tickHz: percentiles('tickHz'),
@@ -533,6 +541,8 @@ try {
       wireDownBytes: sum('wireDownBytes'),
       compressedSockets: sum('compressed')
     },
+    // Samples in which a Chrome player was not a connected replica of this room.
+    chromeTrouble,
     // Whether the server agreed to permessage-deflate on these sockets, as a
     // browser's would be, and what it saved: decoded bytes over wire bytes.
     compression: {

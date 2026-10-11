@@ -105,7 +105,7 @@ import { forgetLines, historyOf, keepLines, keptLine } from './lounge-store.mjs'
 import { isLoungePath, loungeRoutes } from './lounge.mjs';
 import { doorPage, serverPage, serversPage } from './site.mjs';
 import { isLocalOrigin, qrSvg } from './qr.mjs';
-import { acceptMultiplex, diagnosticsOf, gateFor } from './gate.mjs';
+import { acceptMultiplex, diagnosticsOf, gateFor, nextGate } from './gate.mjs';
 import { worldSource } from './world-wire.mjs';
 export { Gate, Concentrator } from './gate.mjs';
 import { seatCount, paramsFrom, perAddress, seatsOf } from './seats.mjs';
@@ -1332,6 +1332,8 @@ export class Table {
     this.accountTokens = {};
     this.inputTransit = [];
     this.relayed = false;
+    this.gateHeld = new Map();
+    this.gatePromised = new Map();
     this.roomAlarmAt = 0;
     this.durable = null;
     this.roomSave = null;
@@ -2092,10 +2094,26 @@ export class Table {
       if (body.op === 'return') return json(this.characters.return(body.game, body.holder, body.lease, body.character));
       return json({ ok: false }, 400);
     }
-    if (new URL(request.url).pathname === '/__multiplex') {
+    const path = new URL(request.url).pathname;
+    if (path === '/__gate') {
+      // The door asks which Gate takes the next player (worker/gate.mjs, nextGate): the lowest with room, counting
+      // players sent to a Gate in the last ten seconds who have not reached it yet.
+      const gates = Number(new URL(request.url).searchParams.get('gates')) || 1, now = Date.now(), promised = new Map();
+      for (const [index, due] of this.gatePromised) { const live = due.filter((at) => at > now); if (live.length) { this.gatePromised.set(index, live); promised.set(index, live.length); } else this.gatePromised.delete(index); }
+      const gate = nextGate(gates, this.gateHeld, promised);
+      if (!this.gatePromised.has(gate)) this.gatePromised.set(gate, []);
+      this.gatePromised.get(gate).push(now + 10_000);
+      return json({ gate });
+    }
+    if (path === '/__multiplex') {
       this.relayed = true;
+      const index = Number(new URL(request.url).searchParams.get('gate'));
       // One encoding of each world for every Gate link (worker/world-wire.mjs).
-      return acceptMultiplex(request, (req, socket) => this.connect(req, socket), { source: (this.worldSource ??= worldSource()) });
+      return acceptMultiplex(request, (req, socket) => this.connect(req, socket), { source: (this.worldSource ??= worldSource()), onCount: (n) => {
+        // A player arrived: a promise to that Gate is kept. The Gate's count is what the next join is placed by.
+        if (n > (this.gateHeld.get(index) ?? 0)) this.gatePromised.get(index)?.shift();
+        if (n > 0) this.gateHeld.set(index, n); else this.gateHeld.delete(index);
+      } });
     }
     return this.connect(request);
   }

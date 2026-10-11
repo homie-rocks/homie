@@ -11,9 +11,9 @@ function socket() {
     emit(t, value) { for (const fn of events.get(t) ?? []) fn(value); }, send(text) { this.sent.push(JSON.parse(text)); }, close() { this.emit('close', {}); } };
 }
 test('room layouts scale without imposing an admission ceiling; carrier addresses have no default limit', () => {
-  assert.deepEqual(roomLayout(300), { gates: 15, concentrators: 0 });
-  assert.deepEqual(roomLayout(1000), { gates: 50, concentrators: 0 });
-  assert.deepEqual(roomLayout(1280), { gates: 64, concentrators: 0 });
+  assert.deepEqual(roomLayout(300), { gates: 6, concentrators: 0 });
+  assert.deepEqual(roomLayout(1000), { gates: 20, concentrators: 0 });
+  assert.deepEqual(roomLayout(1280), { gates: 26, concentrators: 0 });
   assert.equal(seatCount(1000), 1000);
   assert.equal(perAddress(300, true), 0);
 });
@@ -151,12 +151,15 @@ test('the public Worker authorizes the door and routes the chosen 300/1000 capac
   for (const seats of [300,1000]) {
     const routed=[];
     const cat={studio:{name:'Crowd test'},games:[{id:'crowd',name:'Crowd',players:{min:1,max:seats},room:{host:'server',contract:2,tickHz:20}}]};
-    const env={ASSETS:{fetch:async()=>Response.json(cat)},GATE:{idFromName:n=>n,get:name=>({fetch:async request=>{routed.push({name,url:new URL(request.url)});return new Response('Gate');}})}};
+    // The room says which Gate has room; with no room to ask (the first case) the key's hash chooses.
+    const asked=[];
+    const env={ASSETS:{fetch:async()=>Response.json(cat)},GATE:{idFromName:n=>n,get:name=>({fetch:async request=>{routed.push({name,url:new URL(request.url)});return new Response('Gate');}})},...(seats===1000?{TABLE:{idFromName:n=>n,get:name=>({fetch:async input=>{asked.push([name,new URL(input).pathname]);return Response.json({gate:3});}})}}:{})};
     const url='https://studio.test/crowd/__net?room=pub-1&b=seeded_browser_0001&max=1&host=browser';
     const response=await worker.fetch(new Request(url,{headers:{upgrade:'websocket'}}),env,{waitUntil(){}});
     assert.equal(response.status,200,await response.text());
     assert.equal(routed.length,1);
     assert.match(routed[0].name,/^crowd\/pub-1\/\d+$/);
+    if(seats===1000){assert.equal(routed[0].name,'crowd/pub-1/3');assert.deepEqual(asked,[['crowd/pub-1','/__gate']]);}
     assert.equal(routed[0].url.searchParams.get('max'),String(seats));
     assert.equal(routed[0].url.searchParams.get('host'),'server');
     assert.equal(routed[0].url.searchParams.get('gates'),String(roomLayout(seats).gates));

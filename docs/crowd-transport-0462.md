@@ -180,9 +180,9 @@ world arrives after the room's tick has run. The longer the tick ran, the later 
 until it missed every tick by a little. "Input transit" and "world age" compare two
 computers' clocks and are only good for seconds.
 
-### What 0.46.2 adds to the first changes
+### What the second set of changes added (tried as the first 0.46.2 build)
 
-- **Twenty players a Gate**, from the room's size alone: 50 Gates at 1,000.
+- **Twenty players a Gate**, from the room's size alone: 50 Gates at 1,000. (Wrong: see the third trial.)
 - **The world crosses as numbers.** One block for every Gate (24 bytes a body, exact,
   carried in the frame as base64) and what else changed: 33 KB a tick at 1,000. The room
   sends 34 MB a second to 50 Gates where the JSON would be 179 (and was 48 to sixteen),
@@ -196,21 +196,92 @@ computers' clocks and are only good for seconds.
 - **Once a world, not once a player**, for everything that does not depend on the player:
   46 microseconds a player-frame where it was 156.
 - Together, on the laptop, a Gate's tick at 1,000 players is 1.4 ms where it was 10.7.
-- **A Gate finds the room's tick** from how long the room says its frame waited.
+- **A Gate finds the room's tick** from how long the room says its frame waited. (It did not: see the third trial.)
 - **The probe follows the room's reported lead**, as the client does.
 
 Measured with `node packages/studio/test/crowd-gate-cost.mjs` (the fixture game's real
 rules, 1,000 seeded players). A laptop, one core, nothing else measured.
+
+## The third trial (the second set of changes, on Cloudflare)
+
+Run on 11 October 2026 (UTC); data under `reports/crowd-circuit/phase-f/20261011T063259Z/`.
+The computer it ran from had a load average of 10 to 12 throughout.
+
+| Players | joined / end | ack p50 / p95 ms | lead (late) | frames a player a second | KB/s a player | Gates | Gate round trip med / p95 ms | driver's worst timer lag ms |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 50 | 50 / 50 | 277 / 413 | 6 (0.017) | 20.0 | 2.46 | 26 | 14 / 43 | 26 |
+| 150 | 150 / 150 | 289 / 458 | 6 (0.031) | 20.1 | 3.80 | 49 | 19 / 53 | 38 |
+| 300 | 300 / 300 | 341 / 531 | 7 (0.04) | 20.1 | 4.54 | 49 | 35 / 78 | 144 |
+| 600 | 600 / 600 | 672 / 1,239 | 12 (0.33) | 15.5 | 3.74 | 50 | 36 / 276 | 637 |
+| 1,000 | 976 / 977 | not measured | 12 | not measured | | 50 | 805 / 3,621 | 101 |
+
+**What held.** Compression on every socket (4.7 times). A player costs 2.5 to 4.5 KB a
+second on the wire, down from 11.7. 20 frames a second to 300. Nothing dropped to 600.
+
+**The room was spent on messages.** Players were spread over every Gate by a hash: 26
+Gates for 50 players, 49 for 150. Each channel carried 26 to 32 frames a second from the
+room and about as many back, so at 50 Gates the room handled some 2,600 to 3,000 messages
+a second, where the second trial's sixteen channels made about 800 and were fine to 600.
+At 600 the room replaced 0.65 worlds a second per channel and a Gate's round trip reached
+276 ms at p95 and 1.9 s at p99; at 1,000 the room waited 600 to 850 ms for receipts with
+eight worlds unacknowledged on every channel, and a Gate's round trip was 0.8 s at the
+median. A Gate itself was nearly idle (0.2 MB a second of frames at 600). Twenty players
+a Gate was the wrong answer to the second trial: it cured the Gates and overloaded the
+room, by the message.
+
+**The room cannot see itself run late.** "Server tick 20 / 20" on every row, the collapsed
+ones too, is the room's count by its own clock, and a Worker's clock does not move while
+its code runs. At 600 every Gate alike put the world 0.86 to 1.46 s behind its stamp while
+its round trip was 36 ms: the room was that far behind its schedule, or its clock is
+that far from the Gates'. This data cannot say which, nor how much of the 150 to 490 ms at
+50 to 300 is which. The next build measures both from the Gates (below).
+
+**The 600 step's client numbers are partly the driver's.** Its timers ran up to 637 ms
+late and it held 1 GB. The room-side numbers above are not the driver's.
+
+**Ack of 277 ms in a room of 50 was two mistakes of mine.** The lead of six ticks is what
+the probe settled on to keep late inputs under one in twenty, and an input's path had two
+waits in it that should be one: the Gate's search for the room's tick did not converge
+(its frame left 0 to 23 ms after a world at the median, the worst moment), so an input
+waited up to a tick at the Gate and up to another at the room. The search reads how long
+the room held a frame, and that reading moves by more than the window it aims for.
+
+**The 1,000 step was not measured** because the driver stopped when a Chrome player lost
+its link during the ramp, before the measurement began.
+
+### What 0.46.2 is now
+
+- **Fifty players a Gate, and Gates fill in order.** The room tells the door which Gate
+  has room: 50 players are one Gate, 300 are six, 1,000 are twenty. A channel is one frame
+  each way a tick: 800 messages a second at the room at 1,000 players.
+- **A Gate sends what players sent at once when its channel is quiet, and never more
+  than one frame in 50 ms.** No search for the room's tick.
+- **Each Gate measures the room**: the room's clock against its own (stamps exchanged on
+  the channel, as NTP does), the room's ticks a second by the Gate's clock, and the
+  longest it went without a world. World age is corrected by the measured offset.
+- **An input's loop is reported**: from the tick a player held when it stamped an input
+  to the tick it reached the rules, whatever lead the player keeps.
+- **A Chrome player's trouble no longer ends a step**, and a step that measured nothing
+  still reports what it saw.
+- **The in-Cloudflare probe** (`lib/crowd-probe/`): a Worker of its own that plays five
+  players a request against a studio from inside Cloudflare, and a runner that adds the
+  requests up into the same report. It shows what the servers can do with no home
+  connection and no busy laptop in the measurement; it says nothing of a player's last hop.
 
 ## What is proven, and where
 
 Deterministic, on virtual time with seeded players, in the release gate
 (`packages/studio/test/rules-crowd-shape.test.mjs`):
 
-- 20 players on a Gate, two inputs each a tick for 240 ticks, against a room whose tick
-  takes 2, 12 and 30 ms and is 1, 3 and 6 ms away: one frame a tick, every input once and
-  in its player's order; after three seconds nine frames in ten are read 3 to 16 ms
-  before the tick that takes them.
+- 50 players on a Gate, two inputs each a tick for 100 ticks: never two frames to the room
+  within 50 ms, the first at once when the channel is quiet, every input once and in its
+  player's order, none waiting more than 50 ms; and the Gate measures the room's clock
+  (7 ms ahead in the test) and the room's ticks a second by its own.
+- A thousand players arriving in a storm fill twenty Gates in order: fifty players are one
+  Gate, three hundred are six.
+- The in-Cloudflare probe, run whole against a Gate and the real rules host: fifteen
+  players, 20 frames a second each, an input's loop under 100 ms at the median and 150 at
+  p95, a lead of three ticks or fewer.
 - A player whose link carries six frames a second, for thirty seconds: never more than 40
   ticks behind, own body in every frame, every delta decodes; a player on a good link
   beside them gets all 600 frames. The same link without the client's word: more than 300
@@ -231,20 +302,17 @@ Deterministic, on virtual time with seeded players, in the release gate
 - A game with owner-only fields is never handed to a Gate whole.
 - Rates, `room.rates`, and the diagnostics object answering without asking the room.
 
-In real `workerd` (`gates-workerd.test.mjs`): 40 players behind fifteen Gates each
-receive the world, sent as numbers, with their own body in it; nine in ten on the crowd
-path; and the diagnostics object reports every one without the room being asked.
+In real `workerd` (`gates-workerd.test.mjs`): 40 players in a 300-seat room are placed on
+one Gate by the room, each receives the world, sent as numbers, with their own body in
+it; nine in ten on the crowd path; and the diagnostics object reports every one without
+the room being asked.
 
 Not proven: Cloudflare at 1,000 players. Load runs on the computer this was written on
 are not evidence either way; it was running other heavy work.
 
 ## What the next trial needs
 
-At 6.3 KB a second a player, 1,000 players are 6.3 MB a second: the trial connection's
-whole capacity (5.2 to 7.1 MB/s measured across the second trial). The 1,000 step will be
-at or over the link, and pacing will hold players near a second behind rather than
-further; its server columns are the ones to read. Setting the trial game's
-`view.precisionM` to 0.05 brings it to 5.3 MB a second. A probe that opens its sockets
-from inside Cloudflare would take the link out of the measurement, and would say nothing
-about a player's own connection or the last hop, which is where the first trial's seconds
-were; it is not built.
+Each step twice: from the trial computer (what a player at home sees) and from the
+in-Cloudflare probe (what the servers can do). The probe has never run on Cloudflare: it
+is tested whole against a Gate and the rules host on virtual time, with the Worker
+runtime's `fetch` stood in for. Its first run is also its own trial.
