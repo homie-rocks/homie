@@ -167,7 +167,8 @@ export interface RulesDef {
   shared?: Fields;
   room?: {
     rounds?: { seconds: number; breakSeconds: number };
-    bots?: { keep: number };
+    /** `names` (0.46.5): what the game's bots are called, by seat; the toolkit's own list without it. */
+    bots?: { keep: number; names?: readonly string[] };
     records?: RoundRecords;
     historySeconds?: number;
   /** The furthest a person's ray may be rewound, in seconds (0.46.3): a hard cap under `historySeconds`, whatever their connection measures. */
@@ -396,6 +397,7 @@ export interface Compiled {
   rewindSeconds?: number;
   rounds: { seconds: number; breakSeconds: number } | null;
   bots: number;
+  botNames?: readonly string[];
   start: RoomHandler | null;
   join: NonNullable<RulesDef['room']>['join'] | null;
   roomOn: Record<string, RoomHandler>;
@@ -636,6 +638,8 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
   }
   const keep = room.bots === undefined ? 0 : typeof room.bots?.keep === 'number' ? Math.floor(room.bots.keep) : NaN;
   if (!(keep >= 0 && keep <= SEATS_MAX)) throw new Error(`room.bots is { keep: n }, 0 to ${SEATS_MAX}`);
+  const botNames = (room.bots as { names?: unknown } | undefined)?.names;
+  if (botNames !== undefined && !(Array.isArray(botNames) && botNames.length >= 1 && botNames.length <= 64 && botNames.every((n) => typeof n === 'string' && n.trim().length >= 1 && n.length <= 24 && !/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/.test(n)))) throw new Error('room.bots.names is a list of 1 to 64 names, each 1 to 24 characters on one line');
   if (room.start !== undefined && typeof room.start !== 'function') throw new Error('room.start is a function');
   if (room.join !== undefined && typeof room.join !== 'function') throw new Error('room.join is a function');
   const players = kinds.filter((k) => k.player);
@@ -661,7 +665,7 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
   Object.freeze(navigation);
   return {
     navigation, contract: RULES_CONTRACT, save: SAVE_REVISION, dims, kinds, kindOf, events, commands, effects, effectNames: Object.keys(effects),
-    shared: fieldList(d.shared, 'shared'), view, ...(room.records?{records:room.records}:{}), ...(room.historySeconds ? {historySeconds:room.historySeconds}:{}), ...(room.rewindSeconds !== undefined ? {rewindSeconds:room.rewindSeconds}:{}), rounds, bots: Math.min(keep, seats), start: room.start ?? null, join: room.join ?? null, roomOn, asks,
+    shared: fieldList(d.shared, 'shared'), view, ...(room.records?{records:room.records}:{}), ...(room.historySeconds ? {historySeconds:room.historySeconds}:{}), ...(room.rewindSeconds !== undefined ? {rewindSeconds:room.rewindSeconds}:{}), rounds, ...(botNames ? { botNames: Object.freeze([...(botNames as string[])]) } : {}), bots: Math.min(keep, seats), start: room.start ?? null, join: room.join ?? null, roomOn, asks,
     tune, publicTune, map, settings, seats,
   };
 }

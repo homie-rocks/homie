@@ -24,6 +24,11 @@ file) and what the upgrade would change, and changes nothing until you agree.
 A page left open across a deploy is brought up to date with its game, and a check never opens the live site
 unless it is asked to.
 
+### Added
+
+- `room.bots: { keep, names: [...] }`: a rules game names its own bots, by seat. The roster, the results and
+  `world.label` all use it. Opt-in: without `names` the toolkit's own list is used, as before.
+
 ### Fixed
 
 Each of these changes what happened before; none needs a change to a game.

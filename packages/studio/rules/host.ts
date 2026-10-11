@@ -628,7 +628,9 @@ export function createHost(o: HostOptions): Host {
   /* ---------------------------------------------------------------- frames out */
 
   const hasHands = (seat: number, driver: Driver): boolean => driver === 'person' || (driver === 'ai' && [...peers.values()].some((p) => p.seat === seat && p.agent?.hands === 'self'));
-  const nameOf = (seat: number, driver: Driver): string => (driver === 'bot' || (driver === 'ai' && (core.bodies().find((b) => b.seat === seat)?.owner === 'reserved' || !names.has(seat))) ? BOT_NAMES[seat % BOT_NAMES.length] : names.get(seat) || `Player ${seat + 1}`);
+  // The game's own names for its bots (room.bots.names, 0.46.5), else the toolkit's.
+  const botNames = c.botNames?.length ? c.botNames : BOT_NAMES;
+  const nameOf = (seat: number, driver: Driver): string => (driver === 'bot' || (driver === 'ai' && (core.bodies().find((b) => b.seat === seat)?.owner === 'reserved' || !names.has(seat))) ? botNames[seat % botNames.length] : names.get(seat) || `Player ${seat + 1}`);
   function sendRoster(): void {
     const guides = new Map(agentSlots().map((s) => [s.slot, s.agent]));
     const slots = core.bodies().sort((a, b) => a.seat - b.seat).map((b) => ({ slot: b.seat, seat: b.driver === 'bot' ? null : b.seat, name: nameOf(b.seat, b.driver), bot: b.driver === 'bot', ...(guides.has(b.seat) ? { agent: guides.get(b.seat) } : {}) }));

@@ -1087,6 +1087,12 @@ before using it in a `match` closure: `me` is reused. A valued pulse
 (`f.pulse()`) carries the tick it was predicted on, and the server acts on it in
 that tick, so a predicted swap is in the snapshot of the tick it was drawn for.
 
+### Naming the bots (0.46.5)
+
+`room.bots: { keep: 4, names: ['Vex', 'Moth', 'Kilo'] }` gives the game's bots its own names, by seat (the list
+wraps). The roster, the round's results and `world.label(id)` all say the same name, and a restore keeps it.
+Without `names` the toolkit's own list is used. A name is 1 to 24 characters on one line.
+
 ### Discrete actions with a value
 
 Use `select: f.pulse()` for a weapon slot or other byte-valued action. Call
