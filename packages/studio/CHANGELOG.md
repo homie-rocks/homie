@@ -29,6 +29,11 @@ unless it is asked to.
 - `room.bots: { keep, names: [...] }`: a rules game names its own bots, by seat. The roster, the results and
   `world.label` all use it. Opt-in: without `names` the toolkit's own list is used, as before.
 
+- A predictor can judge its own shot as the server will: `ctx.judgedTick(aimTick)` (the tick the server will
+  pose the others at for this seat; the snapshot's control row now carries the seat's own rewind allowance in a
+  game that declares `room.historySeconds`), `ctx.ray/rays(..., { atTick })` and `room.poseAt(id, tick)` (the pose
+  at a tick from the snapshots the browser holds), and `ctx.math` (the rules' own `math`).
+
 ### Fixed
 
 Each of these changes what happened before; none needs a change to a game.
@@ -42,6 +47,8 @@ Each of these changes what happened before; none needs a change to a game.
   cannot keep its results inside it. A deploy that changes only a game's code or art still reloads the frame alone.
 - A finished round that had no player to be written for was dropped without a word. The log now says
   `record-unsaved`, and the player is told on their screen that the round was not saved and to reload.
+- The player's own body was drawn sinking for the whole tick it landed in, and standing only at the tick's end
+  (up to 33 ms late at 20 ticks a second). It is drawn down to the ground by the moment it met it.
 - `homie-studio check` with no `--url` opened the studio's **live** site, and with no game the first game by name:
   `npm run check` could seat two check browsers in a live public room of a game nobody was working on. With no
   `--url` a check now runs against this studio's own build: its running dev server, or one it starts on a free

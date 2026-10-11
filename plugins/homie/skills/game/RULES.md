@@ -1078,6 +1078,20 @@ leaves: take the marker down quietly. `ctx.ray/rays/rayAll` query what the
 player sees (`ctx.viewTick`); `ctx.preview` says the run is between ticks. A
 predictor runs often: keep it cheap, and keep per-entity state in `me`.
 
+To guess a shot the server will judge with rewind, ask for what the server
+will use (0.46.5). `ctx.judgedTick(aimTick)` is the tick it will pose the others
+at: the `aimTick` the input carries, held to how far back this seat may look
+right now (the server says so in every snapshot) and to this tick. Pass it on:
+`ctx.ray(from, dir, max, { atTick: ctx.judgedTick(input.aimTick), ...filters })`
+poses the other bodies as the server will, from the snapshots this browser
+holds (between two of them, or carried on from the newest along its velocity).
+Inside the allowance that is the drawn target; past the game's cap it is a newer
+pose, and the predictor then shows no hit where the server will see none.
+`room.poseAt(id, tick)` gives `{pos, vel, known}` for the game's own tests
+(`known: false` is a guess past the newest snapshot). `ctx.math` is the rules'
+own `math`, so a helper shared with the rules can be called with `ctx` as its
+world.
+
 A tick's prediction runs more than once (between ticks, again when the input
 changes, then the tick itself) and shows each thing once. Things are told apart
 by their name and `key`: give two effects of one name that mean different things

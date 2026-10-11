@@ -123,12 +123,12 @@ export default defineRules({contract:2,space:{dims:2},move,entities:{runner:{pla
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
 export default defineRules({contract:2,space:{dims:3},move,map:'./map',
 shapes:{commands:{shout:{to:f.ref()},shoot:{at:f.fix(),y:f.fix()}},events:{},effects:{ping:{n:f.u8()},whisper:{n:f.u8()},tell:{n:f.u8()},hit:{target:f.ref()}}},
-entities:{runner:{player:true,input:{ax:f.held(),swap:f.press(),build:f.press(),fire:f.press(),tap:f.pulse()},fields:{weapon:f.u8(),builds:f.u8({init:2}),shots:f.u8(),hit:f.ref(),cool:f.tick(),taps:f.u8()},body:{shape:'capsule',radius:.4,height:1.8,maxSpeed:8},
-tick(w,s){if(s.input.swap)s.weapon=1-s.weapon;if(s.input.build&&s.builds>0){s.builds--;w.spawn('cover',{x:s.pos.x+2,y:s.pos.y,z:0});}if(s.input.fire){s.shots++;const h=w.ray({x:s.pos.x,y:s.pos.y,z:1},{x:0,y:1,z:0},10,{kind:'target'});if(h&&h.entity)w.emit('hit',s.id,{target:h.entity},{to:s.id});}if(s.input.tap){s.weapon=1-s.weapon;if(s.cool<=w.tick){s.cool=w.tick+6;s.taps++;w.emit('hit',s.id,{target:'tap'},{to:s.id});}}},
+entities:{runner:{player:true,input:{ax:f.held(),swap:f.press(),build:f.press(),fire:f.press(),tap:f.pulse(),snipe:f.press(),aimY:f.fix(),aimTick:f.fix()},fields:{sniped:f.u16(),weapon:f.u8(),builds:f.u8({init:2}),shots:f.u8(),hit:f.ref(),cool:f.tick(),taps:f.u8()},body:{shape:'capsule',radius:.4,height:1.8,maxSpeed:8},
+tick(w,s){if(s.input.snipe){s.sniped++;const h=w.ray({x:0,y:s.input.aimY,z:1},{x:1,y:0,z:0},18,{kind:'mover',atTick:s.input.aimTick});if(h&&h.entity)w.emit('hit',s.id,{target:h.entity},{to:s.id});}if(s.input.swap)s.weapon=1-s.weapon;if(s.input.build&&s.builds>0){s.builds--;w.spawn('cover',{x:s.pos.x+2,y:s.pos.y,z:0});}if(s.input.fire){s.shots++;const h=w.ray({x:s.pos.x,y:s.pos.y,z:1},{x:0,y:1,z:0},10,{kind:'target'});if(h&&h.entity)w.emit('hit',s.id,{target:h.entity},{to:s.id});}if(s.input.tap){s.weapon=1-s.weapon;if(s.cool<=w.tick){s.cool=w.tick+6;s.taps++;w.emit('hit',s.id,{target:'tap'},{to:s.id});}}},
 commands:{shout(w,s,e){w.emit('ping',s.pos,{n:1});w.emit('whisper',s.pos,{n:2},{within:5});w.emit('tell',s.id,{n:3},{to:[e.to]});},shoot(w,s,e){s.hit=w.ray({x:0,y:e.y,z:1},{x:1,y:0,z:0},18,{atTick:e.at,kind:'mover'})?.entity??'';}}},
 target:{body:{shape:'box',radius:.5,height:2,maxSpeed:0}},mover:{body:{shape:'box',radius:.15,height:2,maxSpeed:2}},cover:{body:{shape:'box',radius:.5,height:2,maxSpeed:0}}},
 room:{historySeconds:1,${runaway === 'round3' ? 'rewindSeconds:.25,' : ''}bots:{keep:0},join(c,p){return{kind:'runner',at:{x:p.seat===2?40:p.seat*3,y:0,z:0}};},start(w){w.spawn('target',{x:0,y:4,z:0});w.spawn('mover',{x:8,y:0,z:0});}}});`);
-      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.pos={x:b.pos.x+i.ax*6.4*c.dt,y:b.pos.y,z:0};},mover(b,i,c){b.pos={x:8,y:c.tick*.1,z:0};}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.pos={x:b.pos.x+i.ax*6.4*c.dt,y:b.pos.y,z:0};},mover(b,i,c){b.pos={x:8,y:c.tick*.1,z:0};b.vel={x:0,y:.1/c.dt,z:0};}});`);
     } else if (runaway === 'push') {
       writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-1000, -1000], max: [1000, 1000] } }));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules'; import {move} from './move';
@@ -1994,5 +1994,29 @@ test('recipient-specific fields through Gates: an owner field reaches its owner 
  assert.equal(a.me.ammo,24,'the owner reads its own field');assert.equal(b.get(a.me.id).ammo,0,'a rival is not sent it');assert.equal(a.get(b.me.id).ammo,0);
  assert.equal(a.me.secret,'');assert.equal(b.me.secret,'');
  assert.ok(seen.length>100&&!seen.some(text=>text.includes('brain-secret')),'a server-only value was never on any wire a Gate wrote');
+ assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+});
+
+for(const [each,expect] of [[0,'hits'],[75,'mixed'],[150,'misses']])test(`a predictor judges its own shot as the server will: the pose at the judged tick, ${each} ms each way, seed 4620`,async t=>{
+ // The player aims at the mover where it is DRAWN. The server judges at the tick the player saw, held to how far back
+ // this seat may look (rewindSeconds .25: five ticks). Beyond that it judges a NEWER pose, and the shot misses. The
+ // predictor asks for that same tick (ctx.judgedTick) and that same pose (ctx.ray atTick), so its guess is the verdict.
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'round3'),clock=virtualTime(t),shape=predictionShaper({delay:each*2,loss:0,seed:4620,jitter:false}),r=rig(L,compiled,false,shape,shape);
+ let helper=0;const predict={runner(me,input,ctx){helper=ctx.math.add({x:1,y:0,z:0},{x:1,y:0,z:0}).x;if(input.snipe){const h=ctx.ray({x:0,y:input.aimY,z:1},{x:1,y:0,z:0},18,{kind:'mover',atTick:ctx.judgedTick(input.aimTick)});if(h&&h.entity)ctx.effect('hit',me.id,{target:h.entity});}}};
+ const a=openRoom({predict,net:{config:cfg('Sniper'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();r.stop();});await clock.wait(4000);
+ const frame=async ms=>{for(let left=ms;left>0;left-=16){a.pump();await clock.wait(Math.min(left,16));}};
+ let mover;a.each('mover',e=>mover=e);assert.ok(mover);
+ // Where a body was at a tick, from the snapshots held: exact between them, a marked guess past the newest.
+ const newest=Math.floor(a.viewTick),past=a.poseAt(mover.id,newest-3.5),ahead=a.poseAt(mover.id,newest+40);
+ assert.ok(past.known&&Math.abs(past.pos.y-(newest-3.5)*.1)<.001,'a held tick is the pose the server kept');assert.equal(ahead.known,false,'past the newest snapshot it is a guess, and says so');
+ const out=[];a.on('hit',e=>out.push(e.predicted?'predicted':e.confirms?'confirmed':'unpredicted'));a.on('retract',()=>out.push('retracted'));
+ for(let i=0;i<40;i++){await frame(203+i*11);const tick=a.viewTick;a.input({ax:0,snipe:true,aimTick:tick,aimY:a.poseAt(mover.id,tick).pos.y});await frame(16);a.input({ax:0,snipe:false,aimTick:tick,aimY:a.poseAt(mover.id,tick).pos.y});} // the aim is held: a press is taken on the next tick, with the values of that tick
+ await frame(1500);
+ const n=k=>out.filter(x=>x===k).length;t.diagnostic(`${each} ms each way: predicted ${n('predicted')}, confirmed ${n('confirmed')}, retracted ${n('retracted')}, not predicted ${n('unpredicted')}`);
+ assert.equal(helper,2,'the rules\' own math is the predictor\'s');
+ assert.equal(L.P.unpackFields(compiled.kinds[0].fields,r.host.core.save().ents.find(e=>e[11]===0)[17],3).sniped,40,'every shot was taken');
+ assert.ok(n('unpredicted')<=1&&n('retracted')<=1,`the guess is the verdict: ${n('unpredicted')} not predicted, ${n('retracted')} taken back of 40`);
+ if(expect==='hits')assert.ok(n('confirmed')>=38,'inside the allowance every shot at the drawn target lands');
+ if(expect==='misses')assert.ok(n('predicted')<=2,'far past the cap the drawn target is not where the server looks, and the predictor shows no hit');
  assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
 });

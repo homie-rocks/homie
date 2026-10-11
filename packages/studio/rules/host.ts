@@ -289,6 +289,7 @@ export function createHost(o: HostOptions): Host {
    *
    * `room.rewindSeconds` is the game's hard cap on the sum. Without it the cap is `room.historySeconds`, as before.
    */
+  const historyTicks = Math.ceil((c.historySeconds ?? 0) * tickHz);
   const rewindCap = c.rewindSeconds !== undefined ? Math.ceil(c.rewindSeconds * tickHz) : null;
   const rewindTicks = (seat: number): number => {
     const waited = Math.max(1, Math.min(lateTicks, queues.get(seat)?.early ?? 1));
@@ -751,7 +752,12 @@ export function createHost(o: HostOptions): Host {
       const q = queues.get(b.seat);
       // A fifth number only for a seat that has sent a numbered pulse: the newest one acted on.
       const taken = pulsesTaken.get(b.seat);
-      rows.push(taken === undefined ? [b.seat, b.r, q ? q.ack : 0, q && q.lead !== 127 ? q.lead : -128] : [b.seat, b.r, q ? q.ack : 0, q && q.lead !== 127 ? q.lead : -128, taken]);
+      const row = [b.seat, b.r, q ? q.ack : 0, q && q.lead !== 127 ? q.lead : -128];
+      // A sixth number only in a game that rewinds (room.historySeconds, 0.46.5): how many ticks back this seat's own
+      // ray may look right now, so its browser can predict against the pose the server will judge, not a guess at it.
+      if (historyTicks) row.push(taken ?? 0, Math.min(historyTicks, rewindTicks(b.seat)));
+      else if (taken !== undefined) row.push(taken);
+      rows.push(row);
       if (q) q.lead = 127;
     }
     // A snapshot is stamped with the moment its tick was due, so ticks run in a burst to catch up are still a tick

@@ -678,6 +678,8 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
  */
 export interface Schema {
   records?: true;
+  /** A game that rewinds (0.46.5): its window and its cap, for a browser predicting its own shots. */
+  rewind?: { historySeconds: number; capSeconds?: number };
   contract: 2;
   dims: 2 | 3;
   seats: number;
@@ -702,7 +704,7 @@ function publicField(field: Field, hidden=false): Field {
 }
 export function schemaOf(c: Compiled): Schema {
   return {
-    contract: RULES_CONTRACT, dims: c.dims, seats: c.seats, ...(c.records?{records:true as const}:{}),
+    contract: RULES_CONTRACT, dims: c.dims, seats: c.seats, ...(c.records?{records:true as const}:{}), ...(c.historySeconds ? { rewind: { historySeconds: c.historySeconds, ...(c.rewindSeconds !== undefined ? { capSeconds: c.rewindSeconds } : {}) } } : {}),
     kinds: c.kinds.map((k) => ({ ...(k.query?{query:k.query}:{}), ...(k.collider?{collider:k.collider}:{}), ...(k.body?.terrain ? {terrain:k.body.terrain} : {}), name: k.name, player: Boolean(k.player), ...(k.player?.control ? {control:k.player.control}:{}), owner: Boolean(k.body?.owner), radius: k.body?.radius ?? 0, ...(c.dims === 3 && k.body ? { shape: k.body.shape, height: k.body.height || 2 * k.body.radius } : {}), maxSpeed: k.body?.maxSpeed ?? 0, score: k.score, fields: k.fields.map(([name,field])=>[name,publicField(field)]), motion: k.motion, input: k.input })),
     effects: c.effects, effectNames: c.effectNames, commands: c.commands, shared: c.shared, rounds: c.rounds, settings: c.settings,
   };
