@@ -53,7 +53,8 @@ test('the room goes into the address, and the room button shares it: Invite, Big
   assert.deepEqual(a.replaced, ['/rock-race/play?room=pub-3']);
   // 0.13.0: the browser's room key (what an owner's kick holds out) rides along.
   // Revision 9: `pf=1` says this page keeps net.prefs for the frame.
-  assert.match(a.el('iframe.game').src, /^\/rock-race\/__game\/\?room=pub-3&device=desk&want=play&b=[A-Za-z0-9_-]{16,43}&pf=1$/);
+  // 0.46.5: `sh` says what the page was made for, so a page left open across a deploy can be told it is behind.
+  assert.match(a.el('iframe.game').src, /^\/rock-race\/__game\/\?room=pub-3&device=desk&want=play&b=[A-Za-z0-9_-]{16,43}&sh=[A-Za-z0-9._-]+&pf=1$/);
   assert.equal(a.el('[data-room-code]').textContent, 'Room 3');
   assert.equal(a.el('[data-bigscreen]').href, '/rock-race/tv?room=pub-3');
   assert.equal(a.el('[data-room-link]').textContent, 'owls.example/rock-race/play?room=pub-3');
