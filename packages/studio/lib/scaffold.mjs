@@ -1,4 +1,4 @@
-import { FUNCTIONS_MIGRATION, FUNCTIONS_MIGRATION_FILE, FUNCTIONS_CURSOR_MIGRATION, FUNCTIONS_CURSOR_MIGRATION_FILE } from '../worker/functions-schema.mjs';
+import { FUNCTIONS_META_MIGRATION, FUNCTIONS_META_MIGRATION_FILE, FUNCTIONS_MIGRATION, FUNCTIONS_MIGRATION_FILE, FUNCTIONS_CURSOR_MIGRATION, FUNCTIONS_CURSOR_MIGRATION_FILE } from '../worker/functions-schema.mjs';
 import { MCP_MIGRATION, MCP_MIGRATION_FILE } from '../worker/mcp-store.mjs';
 import { APPS_MIGRATION, APPS_MIGRATION_FILE } from '../worker/app-records.mjs';
 import { PURCHASE_MIGRATION, PURCHASE_MIGRATION_FILE, PURCHASE_STATE, PURCHASE_STATE_FILE } from '../worker/purchase-schema.mjs';
@@ -802,6 +802,7 @@ export { default, Table, Lobby, Gate, Concentrator } from '@homie-rocks/studio/w
     [`site/migrations/${MCP_MIGRATION_FILE}`]: MCP_MIGRATION,
     [`site/migrations/${FUNCTIONS_MIGRATION_FILE}`]: FUNCTIONS_MIGRATION,
     [`site/migrations/${FUNCTIONS_CURSOR_MIGRATION_FILE}`]: FUNCTIONS_CURSOR_MIGRATION,
+    [`site/migrations/${FUNCTIONS_META_MIGRATION_FILE}`]: FUNCTIONS_META_MIGRATION,
     [`site/migrations/${LOUNGE_MIGRATION_FILE}`]: LOUNGE_MIGRATION,
     'wrangler.jsonc': wranglerConfig({ worker, name, d1: studio.cloudflare.d1, r2: studio.cloudflare.r2, layout: 'root' }),
     '.claude/skills/.gitkeep': '',
@@ -973,6 +974,11 @@ function ensurePartsStateMigration(root) {
   return `site/migrations/${PURCHASE_STATE_FILE}`;
 }
 
+function ensureFunctionMeta(root) {
+  const file=join(root,'site','migrations',FUNCTIONS_META_MIGRATION_FILE);
+  if(existsSync(file))return null;
+  mkdirSync(dirname(file),{recursive:true});writeFileSync(file,FUNCTIONS_META_MIGRATION);return `site/migrations/${FUNCTIONS_META_MIGRATION_FILE}`;
+}
 function ensureFunctionCursors(root) {
   const file=join(root,'site','migrations',FUNCTIONS_CURSOR_MIGRATION_FILE);
   if(existsSync(file))return null;
@@ -989,12 +995,12 @@ function ensureMcpMigration(root) {
   mkdirSync(dirname(file),{recursive:true});writeFileSync(file,MCP_MIGRATION);return `site/migrations/${MCP_MIGRATION_FILE}`;
 }
 export function ensureMigrations(root) {
-  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopStatements(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root)].filter(Boolean);
+  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopStatements(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root)].filter(Boolean);
 }
 
 /** What a migration file the template added is for, in a few words (deploy and dev say it). */
 export function migrationWord(file) {
-  return /studio_mcp/.test(file) ? 'AI connections and tool call history' : /studio_apps/.test(file) ? 'apps: lasting records and signed-in role grants' : /lounge/.test(file) ? 'the Lounge and kept chat: play nights, moderators, and what was said only where an owner turns history on' : /shop/.test(file) ? 'the shop: orders, what players own, refunds and referral books (paid sales wait until shop.json and the studio\'s Stripe connection are ready)' : /players/.test(file) ? 'player accounts and cloud saves' : /chat/.test(file) ? 'room chat: the owner\'s chat rules and players\' reports (never the chat itself)' : /servers/.test(file) ? 'servers and agent seats: room pools with their own rules, AI passes' : /office/.test(file) ? 'the back office: launch states, invites, the owner\'s controls' : 'the studio\'s own stats: counts, never tracks';
+  return /function_meta/.test(file) ? 'refund events alongside plain-text studio settings' : /studio_mcp/.test(file) ? 'AI connections and tool call history' : /studio_apps/.test(file) ? 'apps: lasting records and signed-in role grants' : /lounge/.test(file) ? 'the Lounge and kept chat: play nights, moderators, and what was said only where an owner turns history on' : /shop/.test(file) ? 'the shop: orders, what players own, refunds and referral books (paid sales wait until shop.json and the studio\'s Stripe connection are ready)' : /players/.test(file) ? 'player accounts and cloud saves' : /chat/.test(file) ? 'room chat: the owner\'s chat rules and players\' reports (never the chat itself)' : /servers/.test(file) ? 'servers and agent seats: room pools with their own rules, AI passes' : /office/.test(file) ? 'the back office: launch states, invites, the owner\'s controls' : 'the studio\'s own stats: counts, never tracks';
 }
 
 /**

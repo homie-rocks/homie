@@ -799,3 +799,29 @@ test('failure to remove an old key marker never clears a newer SQL save', async 
     live=await tableRig(r,entry()); assert.equal(live.t.hostRt.tick,saved.host.core.tick);
   } finally { live?.t.hostRt?.stop(); clock.restore(); r.close(); }
 });
+
+test('lasting worlds survive tomorrow, repeated restores and incompatible builds without match cleanup', async t => {
+  const r=storageRig();t.after(()=>r.close());
+  const build={...entry(),settings:roomSettings({lifetime:'persistent'}).settings};
+  const first=await tableRig(r,build);connect(first.room,'a');first.t.hostRt.tickNow();
+  const core=first.t.hostRt.core.save();first.t.hostRt.stop();
+  const store=roomStore(r.storage);const saved=store.read();saved.at-=86_400_000;saved.pausedAt=saved.at;store.write(saved);
+  store.boot({epoch:core.epoch,count:10});
+  const back=await tableRig(r,build);assert.ok(back.t.hostRt);assert.equal(back.t.hostRt.tick,core.tick);assert.equal(back.room.forgetMs,Infinity);back.t.hostRt.stop();
+  const incompatible=await tableRig(r,{...build,stateHash:'incompatible'});
+  assert.equal(incompatible.t.hostRt,null);assert.match(incompatible.room.hostFailed,/retained/);assert.equal(store.read().stateHash,build.stateHash);
+  const disabled=await tableRig(r,entry());assert.equal(disabled.t.hostRt,null);assert.ok(store.read(),'removing the setting does not erase the world');
+  const restored=await tableRig(r,build);assert.ok(restored.t.hostRt);assert.equal(restored.t.hostRt.tick,core.tick);restored.t.hostRt.stop();
+});
+
+test('character token recovery retains current seats, not every account that ever visited', async t => {
+  const r=storageRig();t.after(()=>r.close());
+  const build={...entry(),settings:roomSettings({lifetime:'persistent',characters:true}).settings};
+  const rig=await tableRig(r,build);t.after(()=>rig.t.hostRt?.stop());
+  rig.t.accountTokens={departed:'gone',current:'kept'};
+  rig.room.saved=()=>({seats:[[0,'kept']],state:[]});
+  rig.t.saveRoom(rig.t.hostRt.save());
+  assert.deepEqual(roomStore(r.storage).read().accountTokens,{current:'kept'});
+  rig.t.accountTokens.next='future';
+  assert.deepEqual(rig.t.roomSave.accountTokens,{current:'kept'},'committed envelope does not alias the mutable lookup');
+});

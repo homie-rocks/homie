@@ -17,6 +17,64 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.46.0] - 2026-10-10
+
+**Plugin 0.46.0**
+
+Keep a world and its account characters across restarts.
+
+### Added
+
+- Opt-in lasting single-area worlds: `room.lifetime: "persistent"` retains a room
+  across empty periods, restarts and compatible builds. State fields declared
+  `{ durable: true }` are written the moment they change, as one small journal
+  record committed before that tick is published, exactly once across a crash.
+  The rest of the room is checkpointed every `room.durability.movementSeconds`
+  (30 by default for a lasting world) and on pause or an orderly stop; a restore
+  is the last checkpoint plus the journal, so value is never lost or repeated
+  though positions may rewind a moment. A room where nothing changes writes
+  nothing. Storage failures stop play and retain committed state.
+- Optional `room.characters: true` keeps one character per game on the existing
+  signed-in player account. Rules read `player.character` on join and write its
+  inventory through declared entity fields. A durable lease and return outbox
+  prevent two rooms holding the character at once. Explicit `world.finish()`
+  resets retain the latest account character instead of replaying its old inventory.
+  No manual provisioning.
+
+### Changed
+
+- Only opted-in worlds use a stable public room instead of allocating fresh match
+  copies. Full worlds wait for seats; named room links select other worlds.
+- Lasting worlds default to `offline: false` so practice cannot look like a
+  durable session. An explicit `offline: true` still allows unsaved local practice.
+- Only character games require studio account sign-in before playing and return
+  the character on disconnect/recall instead of leaving it as a bot.
+- `room.durability.movementSeconds` defaults to 30 when `lifetime` is
+  `"persistent"`; it is still 1 for every other room. In a lasting world an
+  undeclared field, a position or an undeclared non-player entity can come back
+  up to that many seconds old after a crash: declare what must not.
+- Only lasting worlds retain incompatible saves instead of
+  resetting and stop on write failure. Their save envelopes do
+  not use the match path's 16 MB cap. Existing simulation and Cloudflare constraints
+  still apply. Ordinary rules games and browser-hosted games keep their APIs,
+  save costs and lifecycle.
+
+### Fixed
+
+- Refund-event SQL triggers no longer try to parse plain-text settings as JSON,
+  which could prevent account room tickets being signed. The automatic
+  `0020_function_meta.sql` migration preserves refund IDs and delivery behavior.
+
+### Upgrade notes
+
+- First milestone-3 slice. Compatible deployments still restart the Worker and
+  reload old views; uninterrupted rule swaps, migrations, durable command retries,
+  atomic trades and restore points remain later slices. Commands should be
+  idempotent; a command lost before commitment has not happened. Queued events are
+  not atomic transfers when a recipient leaves. Existing cloud saves, shop orders
+  and grants, and app records retain their existing behavior.
+- Version 0.46.0 is provisional. No deploy or merge is part of this PR.
+
 ## [0.45.3] - 2026-10-10
 
 **Plugin 0.45.3**

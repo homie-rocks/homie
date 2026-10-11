@@ -1,3 +1,4 @@
+import { characterStore, characterRequest } from './characters.mjs';
 export { useFunctions } from './functions.mjs';
 import { appAccess, appRecordsRoute } from './app-records.mjs';
 import { appRole, openPath } from './app-format.mjs';
@@ -88,7 +89,7 @@ import { appRole, openPath } from './app-format.mjs';
  */
 import { playerEnabled, EMBED_GAME_JS } from './embed.mjs';
 import { NetRoom, WATCH_POLICIES, departure, errorLine, versionOf } from './room.mjs';
-import { hostedGame, hostedBuild, startHost } from './hosted.mjs';
+import { hostedGame, hostedBuild, compiledFor, startHost } from './hosted.mjs';
 import { roomStore, restoreDelay } from './room-store.mjs';
 import { appCors, isAppOrigin } from './standalone.mjs';
 import { ROOM_ID, badRoomPage, embedAncestors, embedPreview, frameAncestors, noWatchPage, playPage, watchPage } from './pages.mjs';
@@ -1024,6 +1025,7 @@ async function route(request, env, ctx) {
         srv = h && h.state === 'open' ? h : serverById('public') ?? PUBLIC_SERVER;
       }
       const d = await pageDoor(srv);
+      if (meta.room?.characters && !screen && !embed && (!d.acct || !(await chatWho(env, game, srv, d.acct)).acct)) return Response.redirect(`${url.origin}/account/?next=${encodeURIComponent(url.pathname + url.search)}`, 303);
       // The owner hid the public server: Play shows the servers to pick from, and a named room is off (owner aside).
       if (srv.id === 'public' && publicHidden() && !d.owner) {
         if (named) return doorPage(cat, meta, srv, { why: 'closed' });
@@ -1112,6 +1114,11 @@ async function route(request, env, ctx) {
       // Lobby is told it came from an app (`app=1`) and keeps only a few such builds' rooms (LOBBY_APP_VERSIONS).
       const ver = app ? versionOf(url.searchParams.get('gv')) : versionOf(meta?.netplay?.version);
       if (app && meta?.room?.host === 'server' && ver !== meta.room.build) return json({ ok: false, error: 'stale', message: 'Update the app to play online.' }, 409);
+      if (meta.room?.lifetime === 'persistent') {
+        const room = srv.id === 'public' ? 'pub-1' : `s-${srv.id}-1`;
+        if (not.split(',').includes(room)) return json({ ok: false, error: 'world-unavailable', message: 'This world is unavailable. Choose another named world.' }, 409);
+        return json({ room, players: 0, max: humanSeats(pol), server: srv.id });
+      }
       return lobby().fetch(`https://lobby/join?max=${humanSeats(pol)}&server=${srv.id}&rooms=${srv.roomsMax}${not ? `&not=${encodeURIComponent(not)}` : ''}${ver ? `&ver=${encodeURIComponent(ver)}` : ''}${app ? '&app=1' : ''}`, { method: 'POST' });
     }
     if (sub === 'api/agent') {
@@ -1318,6 +1325,8 @@ export class Table {
      * room next needs the object's one alarm (the house guides and the day's counters share it).
      */
     this.hostRt = null;
+    this.characterGrants = new Map();
+    this.accountTokens = {};
     this.roomAlarmAt = 0;
     this.durable = null;
     this.roomSave = null;
@@ -1366,6 +1375,7 @@ export class Table {
     this.room.decider = (state, questions, opts) => this.decide(state, questions, opts);
     // A server-hosted room that forgets everything (nobody came back, or the owner closed it) ends its host runtime.
     this.room.onForget = () => { if (this.hostRt) this.finishRoom('forgotten'); };
+    if (this.isPersistent()) this.room.forgetMs = Infinity;
     return this.room;
   }
 
@@ -1376,6 +1386,8 @@ export class Table {
    * elected. `hosted`: the Worker's word that this game's settings say `host: server`. Rules that are missing from
    * this build, or do not fit the contract, do not start: the room refuses joins and says why.
    */
+  isPersistent() { return this.persistentStored === true || hostedBuild(this.game)?.settings?.lifetime === 'persistent'; }
+
   ensureHost(room, hosted) {
     if (this.hostRt || !this.game) return;
     if (!hostedGame(this.game)) {
@@ -1386,9 +1398,11 @@ export class Table {
     let pauseWriteFailed = false;
     try {
       const build = hostedBuild(this.game);
-      try { this.durable ??= roomStore(this.ctx.storage); } catch (error) { this.storageProblem(error); }
+      const persistent = this.isPersistent();
+      try { this.durable ??= roomStore(this.ctx.storage, { persistent: this.isPersistent() }); } catch (error) { if (persistent) throw error; this.storageProblem(error); }
       let saved = this.cleanupPending ? null : this.readRoom();
       restoring = Boolean(saved);
+      if (this.persistentStored && build.settings.lifetime !== 'persistent') throw new Error('This room holds a lasting world. Keep room.lifetime persistent; its save is retained.');
       let boot = { epoch: 0, count: 0 };
       try { boot = this.durable?.boots() ?? boot; } catch (error) { if (saved) throw error; this.storageProblem(error); }
       if (!Number.isSafeInteger(boot.epoch) || boot.epoch < 0 || !Number.isInteger(boot.count) || boot.count < 0) {
@@ -1402,7 +1416,8 @@ export class Table {
       const restorePause = saved?.pauseFromRestore === true && Date.now() >= saved.pausedAt + ROOM_PAUSE_MS && this.recoveredAlarmAt !== null ? null : saved?.pausedAt;
       const restoredEnd = saved ? roomEndAt({ people: 0, pausedAt: restorePause, restoredAt: Date.now(), savedAt: saved.at, alarmAt: this.recoveredAlarmAt }) : Infinity;
       const expired = Date.now() >= restoredEnd;
-      if (saved && (saved.stateHash !== build.stateHash || boot.count >= 2 || expired)) {
+      if (saved && persistent && saved.stateHash !== build.stateHash) throw new Error('This lasting world needs its previous state schema. Restore the compatible build; the saved world has been retained.');
+      if (saved && !persistent && (saved.stateHash !== build.stateHash || boot.count >= 2 || expired)) {
         const why = saved.stateHash !== build.stateHash ? 'state-changed' : boot.count >= 2 ? 'restore loop' : 'nobody-returned';
         const tokens = new Set((saved.net.seats ?? []).map((s) => s[1]));
         this.finishRoom(why);
@@ -1412,15 +1427,16 @@ export class Table {
         this.room = room; saved = null; restoring = false; boot = { epoch: 0, count: 0 };
       }
       this.roomSave = saved;
+      this.accountTokens = saved?.accountTokens ?? {};
       if (saved) {
         // The seat map and the world came from one transaction. No unrelated net write can take a body from its token.
         room.seats.clear(); room.state.clear(); room.stateBytes = 0;
         room.restore({ ...saved.net, savedAt: Date.now(), durable: true });
-        this.pausedAt = restoredEnd - ROOM_PAUSE_MS;
+        this.pausedAt = persistent ? Date.now() : restoredEnd - ROOM_PAUSE_MS;
         this.pauseFromRestore = saved.pauseFromRestore = saved.pausedAt === null || saved.pauseFromRestore === true;
         saved.pausedAt = this.pausedAt;
         // A failed pause write must never be mistaken for an invalid host save.
-        try { this.durable.write(saved); } catch (error) { pauseWriteFailed = true; this.storageProblem(error); }
+        try { this.durable.write(saved); } catch (error) { if (persistent) throw error; pauseWriteFailed = true; this.storageProblem(error); }
       }
       const epoch = saved ? Math.max(saved.host.core.epoch, boot.epoch) + 1 : undefined;
       if (saved) this.durable.boot({ epoch, count: boot.count });
@@ -1429,7 +1445,11 @@ export class Table {
       this.hostRt = startHost(this.game, {
         ...(saved ? { restore: new TextEncoder().encode((saved.hostText ?? JSON.stringify(saved.host))), restoreEpoch: epoch, startDelayMs: boot.count === 1 ? restoreDelay(`${this.game}/${this.code}`) : 0 } : {}),
         record: (owner,key,value) => this.queueRoundRecord(owner,key,value),
-        store: { save: (bytes) => this.saveRoom(bytes) },
+        store: { save: (bytes, commitment) => this.saveRoom(bytes, commitment) },
+        ...(build.settings.characters ? { characterFor: (peer) => {
+          const account = room.clients.get(peer.id)?.player;
+          return account ? this.characterGrants.get(account) ?? null : null;
+        } } : {}),
         onTick: () => {
           if (!saved) return;
           ticks += 1;
@@ -1454,7 +1474,7 @@ export class Table {
       this.armRoom(roomEndAt({ people: 0, pausedAt: this.pausedAt, createdAt: this.hostCreatedAt }));
     } catch (error) {
       this.hostRt?.stop(); this.hostRt = null;
-      if (restoring) {
+      if (restoring && !this.isPersistent()) {
         this.storageProblem(error);
         room.forget(); this.clearRoom();
         this.skipSave = true;
@@ -1465,19 +1485,35 @@ export class Table {
     }
   }
 
-  saveRoom(bytes) {
+  saveRoom(bytes, commitment) {
+    if (this.persistentFailed) throw new Error('Lasting world stopped; restart from its committed save');
     const now = Date.now();
     if (now < (this.saveRetryAt ?? 0)) throw this.saveError ?? new Error('room save retry is waiting');
     try {
-      this.durable ??= roomStore(this.ctx.storage);
+      this.durable ??= roomStore(this.ctx.storage, { persistent: this.isPersistent() });
       const build = hostedBuild(this.game);
       const host = new TextDecoder().decode(bytes);
-      const saved = { v: 1, game: this.game, room: this.code, at: now, pauseFromRestore: this.hostRt?.paused === true && this.pauseFromRestore === true, pausedAt: this.hostRt?.paused ? this.pausedAt ?? now : null, stateHash: build.stateHash, buildHash: build.build, host, net: this.room.saved() };
+      const net = this.room.saved();
+      if (build.settings.characters) for (const client of this.room.clients.values()) {
+        if (client.player && client.seat !== null && client.token) this.accountTokens[client.player] = client.token;
+      }
+      if (build.settings.characters) {
+        const tokens = new Set((net.seats ?? []).map(seat => seat[1]));
+        for (const [account, token] of Object.entries(this.accountTokens)) if (!tokens.has(token)) delete this.accountTokens[account];
+      }
+      const saved = { ...(build.settings.characters ? { accountTokens: { ...this.accountTokens } } : {}), v: 1, game: this.game, room: this.code, at: now, pauseFromRestore: this.hostRt?.paused === true && this.pauseFromRestore === true, pausedAt: this.hostRt?.paused ? this.pausedAt ?? now : null, stateHash: build.stateHash, buildHash: build.build, host, net };
       const clearing = this.cleanupPending;
       if (clearing) this.durable.clear();
-      this.durable.write(saved);
+      if (this.isPersistent()) {
+        const c = compiledFor(this.game);
+        commitment ??= { force: false, seconds: c.settings.durability.movementSeconds, tickHz: c.settings.tickHz,
+          fields: { kinds: c.kinds.map(k => k.fields.flatMap(([,f],i) => f.durable ? [i] : [])), shared: c.shared.flatMap(([,f],i) => f.durable ? [i] : []) } };
+        this.durable.commit(saved, commitment);
+      } else this.durable.write(saved);
       if (clearing) { this.cleanupGeneration = (this.cleanupGeneration ?? 0) + 1; this.queueNetCleanup(false); }
-      this.roomSave = saved; this.cleanupPending = false; clearTimeout(this.cleanupRetry); this.cleanupRetry = null;
+      this.roomSave = saved;
+      if (build.settings.characters) this.ctx.waitUntil(this.flushCharacters().catch(error => this.storageProblem(error)));
+      this.cleanupPending = false; clearTimeout(this.cleanupRetry); this.cleanupRetry = null;
       this.saveFailures = 0; this.saveRetryAt = 0; this.saveError = null;
       clearTimeout(this.saveRetry); this.saveRetry = null;
       this.storageHealth = { ok: !this.pendingBoot };
@@ -1486,7 +1522,8 @@ export class Table {
       const delay = Math.min(60_000, 1000 * 2 ** Math.min(this.saveFailures ?? 0, 6));
       this.saveFailures = (this.saveFailures ?? 0) + 1; this.saveRetryAt = now + delay;
       this.storageProblem(error);
-      if (!this.saveRetry) {
+      if (this.isPersistent()) this.endHosted('storage-failed');
+      if (!this.isPersistent() && !this.saveRetry) {
         this.saveRetry = setTimeout(() => {
           this.saveRetry = null;
           if (this.hostRt) { try { this.saveRoom(this.hostRt.save()); } catch { /* saveRoom scheduled the next attempt */ } }
@@ -1507,7 +1544,9 @@ export class Table {
   readRoom(validateHost = false) {
     if (this.skipSave) { this.skipSave = false; return null; }
     try {
-      if (this.durable?.boots()?.retired === true) { this.clearRoom(); return null; }
+      const boot = this.durable?.boots();
+      this.persistentStored = boot?.persistent === true;
+      if (boot?.retired === true) { this.clearRoom(); return null; }
       const saved = this.durable?.read();
       if (!saved) return null;
       if (saved.v !== 1 || typeof saved.game !== 'string' || typeof saved.room !== 'string' ||
@@ -1529,10 +1568,11 @@ export class Table {
         probe.stop();
       } else if (!hostedGame(saved.game)) throw new Error('saved game is not in this build');
       return saved;
-    } catch (error) { this.storageProblem(error); this.clearRoom(); return null; }
+    } catch (error) { this.storageProblem(error); if (this.isPersistent()) throw error; this.clearRoom(); return null; }
   }
 
   clearRoom() {
+    if (this.isPersistent()) throw new Error('A lasting world cannot be cleared by match cleanup');
     this.cleanupGeneration = (this.cleanupGeneration ?? 0) + 1;
     this.roomSave = null; this.saved = null; this.pendingBoot = null;
     try { this.durable?.retire(); this.durable?.clear(); this.cleanupPending = false; clearTimeout(this.cleanupRetry); this.cleanupRetry = null; }
@@ -1581,6 +1621,7 @@ export class Table {
   }
 
   finishRoom(why) {
+    if (this.isPersistent()) { this.hostRt?.stop(); this.room?.failServerHost(`Lasting world paused: ${why}. Its committed save is retained.`); return; }
     this.hostRt?.stop(); this.hostRt = null;
     clearInterval(this.timer); this.timer = null;
     clearTimeout(this.saveRetry); this.saveRetry = null; this.saveRetryAt = 0;
@@ -1599,6 +1640,7 @@ export class Table {
 
   /** The room wants the alarm at `at` (ms): set it unless an earlier one is already waiting. */
   armRoom(at) {
+    if (this.isPersistent()) return;
     this.roomAlarmAt = at;
     this.alarmWrite = (this.alarmWrite ?? Promise.resolve()).then(async () => {
       const cur = await this.ctx.storage.getAlarm();
@@ -1620,6 +1662,14 @@ export class Table {
    * five): the room ends. Its players are told, their seats are freed, and the next visitor starts a fresh room.
    */
   endHosted(why) {
+    if (this.isPersistent()) {
+      this.persistentFailed = true;
+      // The host's own stop would checkpoint a healthy world; this one is refused by `persistentFailed`, and the committed save stands.
+      try { this.hostRt?.stop(); } catch { /* stopped all the same */ }
+      clearTimeout(this.saveRetry); this.saveRetry = null;
+      this.room?.failServerHost(`Lasting world paused: ${why}. Its committed save is retained.`);
+      return;
+    }
     const room = this.room;
     if (!room) return;
     this.finishRoom(why);
@@ -1661,6 +1711,7 @@ export class Table {
         const saved = this.cleanupPending ? null : this.readRoom(true);
         if (saved) {
           this.game = saved.game; this.code = saved.room;
+          if (this.isPersistent()) return;
           if (saved.stateHash !== hostedBuild(saved.game)?.stateHash) { this.finishRoom('state-changed'); return; }
           // No saved pause means people were present. The first cold wake starts the absence period.
           if (saved.pausedAt === null) {
@@ -1675,6 +1726,7 @@ export class Table {
       return;
     }
     if (!this.hostRt) return;
+    if (this.isPersistent()) { await this.flushCharacters(); return; }
     const endAt = roomEndAt({ people: this.hostRt.people, pausedAt: this.pausedAt, createdAt: this.hostCreatedAt });
     if (endAt === Infinity) { if (now >= this.roomAlarmAt - 1000) this.armRoom(now + ROOM_ALARM_MS); else this.armRoom(this.roomAlarmAt); return; }
     if (now < endAt) { this.armRoom(endAt); return; }
@@ -1963,7 +2015,63 @@ export class Table {
     try { await this.roomAlarm(); } catch (error) { this.say({ ev: 'failed', op: 'room-alarm', error: errorLine(error) }); }
   }
 
+  async flushCharacters() {
+    if (this.characterFlush) { await this.characterFlush; return; }
+    const saved = this.roomSave;
+    if (!saved) return;
+    const host = typeof saved.host === 'string' ? JSON.parse(saved.host) : saved.host;
+    const returns = (host.characters ?? []).filter(c => c.returning);
+    if (!returns.length) return;
+    this.characterFlush = (async () => {
+      for (const item of returns) {
+        await characterRequest(this.env, item.account, { op: 'return', game: this.game, holder: this.code, lease: item.lease, character: item.character });
+        this.hostRt?.characterReturned(item.account, item.lease);
+        if (this.characterGrants.get(item.account)?.lease === item.lease) this.characterGrants.delete(item.account);
+      }
+    })();
+    try { await this.characterFlush; } finally { this.characterFlush = null; }
+  }
+
+  // Network awaits may interleave another join or recall. Serialize each account
+  // within this room so a delayed acquisition cannot revive a returned lease.
+  async withCharacter(account, operation) {
+    this.characterOperations ??= new Map();
+    const previous = this.characterOperations.get(account) ?? Promise.resolve();
+    const current = previous.catch(() => {}).then(operation);
+    this.characterOperations.set(account, current);
+    try { return await current; }
+    finally { if (this.characterOperations.get(account) === current) this.characterOperations.delete(account); }
+  }
+
+  acquireCharacter(account) { return this.withCharacter(account, () => this.acquireCharacterOnce(account)); }
+
+  async acquireCharacterOnce(account) {
+    for (const c of [...this.room.clients.values()]) if (c.player === account && c.helloed) this.room.kick(c, 'character-moved', 4001);
+    await this.flushCharacters();
+    const body = { op: 'acquire', game: this.game, holder: this.code, schema: hostedBuild(this.game).stateHash };
+    let grant = await characterRequest(this.env, account, body);
+    if (grant.error === 'character-held') {
+      const old = this.env.TABLE.get(this.env.TABLE.idFromName(`${this.game}/${grant.holder}`));
+      const url = `https://room/__recall?game=${encodeURIComponent(this.game)}&room=${encodeURIComponent(grant.holder)}`;
+      const response = await old.fetch(url, { method: 'POST', body: JSON.stringify({ account }) });
+      if (!response.ok) throw new Error('Finishing your last session; its room is unavailable');
+      grant = await characterRequest(this.env, account, body);
+    }
+    if (!grant.ok) throw new Error(grant.error);
+    const held = { account, lease: grant.lease, seat: -1, character: grant.character };
+    this.characterGrants.set(account, held);
+    this.hostRt.reserveCharacter(held);
+    this.saveRoom(this.hostRt.save());
+  }
+
   async fetch(request) {
+    if (new URL(request.url).pathname === '/__character') {
+      const body = await request.json();
+      this.characters ??= characterStore(this.ctx.storage);
+      if (body.op === 'acquire') return json(this.characters.acquire(body.game, body.holder, body.schema));
+      if (body.op === 'return') return json(this.characters.return(body.game, body.holder, body.lease, body.character));
+      return json({ ok: false }, 400);
+    }
     if (new URL(request.url).pathname === '/__multiplex') {
       return acceptMultiplex(request, (req, socket) => this.connect(req, socket));
     }
@@ -1982,6 +2090,23 @@ export class Table {
       return json({ ok: true });
     }
     const room = this.roomFor(game, code, max);
+    if (url.pathname === '/__recall') {
+      const { account } = await request.json();
+      return this.withCharacter(account, async () => {
+        this.ensureHost(room, true);
+        if (!this.hostRt || this.persistentFailed || room.hostFailed) return json({ ok: false }, 503);
+        await this.flushCharacters();
+        if (!this.hostRt.characters.has(account)) {
+          const grant = await characterRequest(this.env, account, { op: 'acquire', game, holder: code, schema: hostedBuild(game).stateHash });
+          if (!grant.ok) return json({ ok: true });
+          this.hostRt.reserveCharacter({ account, lease: grant.lease, seat: -1, character: grant.character });
+        }
+        this.hostRt.releaseCharacter(account);
+        for (const c of [...room.clients.values()]) if (c.player === account) room.kick(c, 'character-moved', 4001);
+        await this.flushCharacters();
+        return json({ ok: true });
+      });
+    }
     // The back office (worker/office.mjs), from the studio's Worker only: the room as its owner sees it, and the
     // owner's signed controls, which this room verifies before it applies one (NETPLAY.md section 15).
     if (url.pathname === '/__facts') return json({ ...room.officeFacts(), durability: this.storageHealth ?? { ok: true }, ...(this.house ? { brains: this.house.facts() } : {}) });
@@ -2044,6 +2169,12 @@ export class Table {
     const agent = decodeFacts(url.searchParams.get('ag'));
     // Kept chat (0.29.0): the room's history is back in its window before this page hears it.
     await this.hydrateHistory(room);
+    const account = holders(url.searchParams.get('via')).find(p => p.startsWith('p-'))?.slice(2) ?? null;
+    if (hostedBuild(game)?.settings.characters && url.pathname !== '/__watch') {
+      if (!account || url.searchParams.get('acct') !== '1') return new Response('Sign in to keep your character', { status: 401 });
+      try { await this.acquireCharacter(account); }
+      catch (error) { return new Response(String(error.message), { status: 409 }); }
+    }
     const [client, server] = transport ? [null, transport] : Object.values(new WebSocketPair());
     server.accept();
     const via = url.searchParams.get('via');
@@ -2096,7 +2227,12 @@ export class Table {
       // seats, so it is not counted twice). One counter write per room.
       const fresh = room.seats.size === 0;
       server.addEventListener('message', (e) => {
-        h.onMessage(typeof e.data === 'string' ? e.data : '');
+        let text = typeof e.data === 'string' ? e.data : '';
+        if (hostedBuild(game)?.settings.characters && account) {
+          try { const message = JSON.parse(text); if (message.t === 'hello') { delete message.token; if (this.accountTokens[account]) message.token = this.accountTokens[account]; text = JSON.stringify(message); } } catch { /* normal parser diagnoses it */ }
+        }
+        h.onMessage(text);
+        if (hostedBuild(game)?.settings.characters && account) { const joined = room.clients.get(h.id); if (joined?.token) this.accountTokens[account] = joined.token; }
         // A newcomer: the Lobby hears of the room at once, so the owner's office (and a launch change) never misses it.
         if (typeof e.data === 'string' && e.data.startsWith('{"t":"hello"')) this.report();
         if (fresh && !this.openCounted && room.seats.size > 0) {

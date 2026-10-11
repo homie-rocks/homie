@@ -58,3 +58,15 @@ test('room events survive D1 failure and interrupted acknowledgement without rep
  offline=false;interruptDelete=true;await table.flushFunctionEvents();assert.equal(DB.sql.prepare('SELECT count(*) n FROM studio_events').get().n,1);assert.ok(room.prepare('SELECT id FROM function_outbox').get());
  await table.flushFunctionEvents();assert.equal(DB.sql.prepare('SELECT count(*) n FROM studio_events').get().n,1);assert.equal(DB.sql.prepare('SELECT id FROM studio_events').get().id,saved.id);assert.equal(room.prepare('SELECT count(*) n FROM function_outbox').get().n,0);
 });
+
+test('refund triggers leave plain-text account signing keys writable, with and without subscribers', async t => {
+ const DB=database();t.after(()=>DB.sql.close());
+ for(const subscribed of [false,true]) {
+  if(subscribed)await syncFunctions({DB},[{name:'refunds',event:'payment.refunded'}]);
+  DB.sql.prepare('INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)').run('office_key','non-json-signing-key');
+  DB.sql.prepare('UPDATE meta SET value=? WHERE key=?').run('updated-signing-key','office_key');
+  DB.sql.prepare('INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)').run('shop-money:test:refund:invalid','not-json');
+  assert.equal(DB.sql.prepare("SELECT value FROM meta WHERE key='office_key'").get().value,'updated-signing-key');
+  assert.equal(DB.sql.prepare('SELECT count(*) n FROM studio_events').get().n,0);
+ }
+});

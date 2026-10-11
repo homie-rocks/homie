@@ -179,11 +179,55 @@ edits, build, act on the diagnostics and test the actual play before declaring i
   Never turn typing off to make room: place the strip instead (`chat/CHAT.md` has every field).
 - Update `game.json` `name` and `blurb`, and the `<title>`.
 
+## Lasting worlds and account characters
+
+For a world that should still exist tomorrow, set game.json:
+
+```json
+{"room":{"host":"server","lifetime":"persistent","characters":true}}
+```
+
+Lasting worlds default to `offline: false`: wait for the durable server. A studio
+may explicitly set `offline: true` for separate local practice, whose progress
+is not saved to the world or account. Never count that as proof of persistence.
+
+`characters` is optional: `lifetime` alone keeps the world. Account characters
+require the existing studio sign-in/passkey. Play redirects to the account page
+when needed. In `room.join(ctx, player)`, return
+`player.character ?? { kind: 'runner', at: spawn }`. Keep inventory in that player
+kind's declared fields and change it only in rules. The runtime returns its kind,
+position, heading, fields and motion to the account when it leaves. Use
+`player: true` or `leave: 'despawn'`; a returned character cannot also become a bot.
+Do not reset inventory in `arrive`, round-start handlers or `world.finish`.
+
+The public world has a stable room name; `?room=<name>` chooses another world.
+Every tick commits before publishing its results. An empty world sleeps and
+retains state. A failed write stops play with the last good save intact. Another
+room waits for the current holder to return the character; no timeout grants a
+stale copy. No database or IDs are set up by hand. Ordinary games keep their
+existing save frequency and behavior.
+
+Write idempotent pickups using a saved collectible ID/set; duplicate commands
+must not mint again. Events arrive later and can become `undeliverable` when a
+recipient leaves; do not treat sending one as an atomic inventory transfer.
+Trading and shop-grant consumption need the later economy slice. Browser saves
+remain player-owned and are not an authoritative inventory.
+
+This first slice saves the whole world every tick, so opted-in games pay for
+more writes. Compatible deploys still restart/reload and then restore the world.
+A state-schema change is refused on restore with data retained; keep the previous
+compatible build until migrations ship. Offline play has no account authority.
+
+For proof, build normally, then sign two players in and test movement, pickup,
+restart mid-pickup, a compatible rebuild, and a fresh profile signing in as the
+same player. Verify actual inventory and world state. A lasting world need not
+finish a round: its browser proof replaces the match check's round requirement.
+
 ## Progress that lasts: cloud saves
 
 When the plan says progress persists across sessions or devices (the codex's "Progress that lasts", or the person
-asks for a character, levels, unlocks, a collection, hardcore), wire in saves. Never keep it in the room: a room
-forgets everything 60 s after its last player leaves.
+asks for a character, levels, unlocks, a collection, hardcore), wire in saves. For player-owned browser progress use the existing saves API below. For a server-authoritative
+world or inventory, use Lasting worlds above. Ordinary match rooms expire after their last player leaves.
 
 - `game.json`: `"saves": true`. A new game of that kind can start from the starter:
   `npx --no-install homie-studio game new <id> --from ember-vale --name "<Name>"` (a hero that lasts, lifetime

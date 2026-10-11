@@ -80,7 +80,7 @@ type Definition = Omit<RulesDef, 'entities' | 'room' | 'move' | 'asks'> & {
   entities: ${entities}; move?: Moves;
   room?: { records?: {key:string;identity:string;eligible?:string;fields:Readonly<Record<string,string>>}; rounds?: { seconds: number; breakSeconds: number }; bots?: { keep: number }; historySeconds?: number;
     start?: (world: RW) => void;
-    join?: (ctx: Pick<W, 'map' | 'shared' | 'tune' | 'math' | 'round'>, player: { seat: number; driver: 'person' | 'bot' | 'ai'; owner: string }) => ${joins};
+    join?: (ctx: Pick<W, 'map' | 'shared' | 'tune' | 'math' | 'round'>, player: { seat: number; driver: 'person' | 'bot' | 'ai'; owner: string; character?: (${joins}) | null }) => ${joins};
     on?: { [K in keyof (Omit<Events, keyof GameRoomEvents> & GameRoomEvents)]?: (world: RW, event: EventData<(Omit<Events, keyof GameRoomEvents> & GameRoomEvents)[K]>) => void };
   };
   asks?: ${record(Object.entries(d.asks).map(([n, a]) => [n, `{ state: Fields; questions: ${value(a.questions)}; floor: (state: ReadonlyState<${fields(a.state)}>) => ${picks(a.questions)} }`]))};

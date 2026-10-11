@@ -61,6 +61,7 @@ export interface Field {
   readonly init?: unknown;
   /** On one integer field of a player's body: this is the score a round's results rank by. */
   readonly score?: true;
+  readonly durable?: boolean;
   readonly visibility?: 'owner' | 'server' | 'results';
   /** `text`: the most characters. `list` and `map`: the most entries. */
   readonly max?: number;
@@ -69,11 +70,11 @@ export interface Field {
   /** `struct`: its fields, in order. */
   readonly fields?: Readonly<Record<string, Field>>;
 }
-export interface FieldOptions { init?: unknown; score?: boolean; visibility?: 'owner' | 'server' | 'results' }
+export interface FieldOptions { durable?: boolean; init?: unknown; score?: boolean; visibility?: 'owner' | 'server' | 'results' }
 export type Fields = Readonly<Record<string, Field>>;
 
 const made = (t: FieldKind, o: FieldOptions | undefined, extra: Partial<Field> = {}): Field =>
-  Object.freeze({ t, ...extra, ...(o?.visibility ? {visibility:o.visibility} : {}), ...(o && o.init !== undefined ? { init: o.init } : {}), ...(o && o.score === true ? { score: true as const } : {}) });
+  Object.freeze({ t, ...extra, ...(o?.durable !== undefined ? {durable:o.durable} : {}), ...(o?.visibility ? {visibility:o.visibility} : {}), ...(o && o.init !== undefined ? { init: o.init } : {}), ...(o && o.score === true ? { score: true as const } : {}) });
 const plain = (t: FieldKind) => (o?: FieldOptions): Field => made(t, o);
 
 /**
@@ -167,7 +168,7 @@ export interface RulesDef {
     records?: RoundRecords;
     historySeconds?: number;
     start?: RoomHandler;
-    join?: (ctx: any, player: { seat: number; driver: 'person' | 'bot' | 'ai'; owner: string }) => { kind: string; at: Vec3; heading?: Vec3; fields?: Record<string, unknown>; motion?: Record<string, unknown> };
+    join?: (ctx: any, player: { seat: number; driver: 'person' | 'bot' | 'ai'; owner: string; character?: Character | null }) => { kind: string; at: Vec3; heading?: Vec3; fields?: Record<string, unknown>; motion?: Record<string, unknown> };
     on?: Record<string, RoomHandler>;
   };
   asks?: Record<string, AskDef>;
@@ -189,9 +190,14 @@ export function defineMove<M extends Record<string, MoveFn>>(def: M): M {
 
 /* ------------------------------------------------------------------ settings (game.json "room") */
 
+export interface Character { kind: string; at: Vec3; heading: Vec3; fields: Record<string, unknown>; motion: Record<string, unknown> }
+
 export interface RoomSettings {
   host: 'server' | 'browser';
   offline: boolean;
+  /** Persistent rooms retain their committed world until explicitly replaced. */
+  lifetime?: 'match' | 'persistent';
+  characters?: boolean;
   tickHz: number;
   inputHz: number;
   /** Omit the radius to send the whole room. No implicit visibility or bandwidth cap. */
@@ -232,12 +238,16 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
     if (!Number.isFinite(n) || n < 0) { problems.push(`"room.${name}" is a number, zero or more; using its default`); return d; }
     return n;
   };
-  const known = new Set(['host', 'offline', 'tickHz', 'inputHz', 'durability', 'budget', 'predict', 'view']);
+  const known = new Set(['host', 'offline', 'tickHz', 'inputHz', 'durability', 'budget', 'predict', 'view', 'lifetime', 'characters']);
   for (const key of Object.keys(r)) if (!known.has(key)) problems.push(`"room.${key}" is not a setting (host, offline, tickHz, inputHz, durability, budget, predict, view)`);
   let host: 'server' | 'browser' = 'server';
   if (r.host !== undefined) { if (r.host === 'server' || r.host === 'browser') host = r.host; else problems.push('"room.host" is "server" or "browser"; using "server"'); }
-  let offline = true;
-  if (r.offline !== undefined) { if (typeof r.offline === 'boolean') offline = r.offline; else problems.push('"room.offline" is true or false; using true'); }
+  if (r.lifetime !== undefined && !['match', 'persistent'].includes(r.lifetime)) problems.push('"room.lifetime" is "match" or "persistent"');
+  if (r.lifetime === 'persistent' && host !== 'server') problems.push('"room.lifetime: persistent" needs room.host "server"');
+  if (r.characters !== undefined && typeof r.characters !== 'boolean') problems.push('"room.characters" is true or false');
+  if (r.characters === true && r.lifetime !== 'persistent') problems.push('"room.characters" needs room.lifetime "persistent"');
+  let offline = r.lifetime !== 'persistent';
+  if (r.offline !== undefined) { if (typeof r.offline === 'boolean') offline = r.offline; else problems.push(`"room.offline" is true or false; using ${offline}`); }
   const tickHz = whole('tickHz', r.tickHz, 1, 60, 20);
   const inputHz = whole('inputHz', r.inputHz, 1, tickHz, tickHz);
   if (host === 'browser' && r.view?.radiusM != null) problems.push('"room.view.radiusM" needs room.host "server"; browser hosting sends the whole room');
@@ -248,9 +258,9 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
   const p = r.predict && typeof r.predict === 'object' ? r.predict : {};
   return {
     settings: {
-      host, offline, tickHz, inputHz,
+      host, offline, tickHz, inputHz, ...(r.lifetime === 'persistent' ? { lifetime: 'persistent' as const } : {}), ...(r.characters === true ? { characters: true } : {}),
       view: { radiusM: r.view?.radiusM === null ? null : num('view.radiusM', r.view?.radiusM, null), ...(r.view?.precisionM !== undefined ? { precisionM: num('view.precisionM', r.view.precisionM, 0) as number } : {}), ...(r.view?.nearM !== undefined ? { nearM: num('view.nearM', r.view.nearM, null) } : {}), ...(r.view?.farHz !== undefined ? { farHz: whole('view.farHz', r.view.farHz, 1, tickHz, tickHz) } : {}) },
-      durability: { movementSeconds: whole('durability.movementSeconds', r.durability?.movementSeconds, 1, 60, 1) },
+      durability: { movementSeconds: whole('durability.movementSeconds', r.durability?.movementSeconds, 1, 60, r.lifetime === 'persistent' ? 30 : 1) },
       budget: { tick: Math.max(1, Math.floor(num('budget.tick', r.budget?.tick, budgetFor(tickHz)) as number)) },
       predict: { ...(p.idleHold === true ? {idleHold:true} : {}), catchM: num('predict.catchM', p.catchM, null), catchUp: num('predict.catchUp', p.catchUp, 1.25) as number, snapM: num('predict.snapM', p.snapM, null), blendMs: num('predict.blendMs', p.blendMs, 100) as number, interpMs: num('predict.interpMs', p.interpMs, null) },
     },
@@ -403,6 +413,7 @@ function cleanField(fd: unknown, where: string, inInput: boolean): Field {
   const init = own(x, 'init');
   return Object.freeze({
     t: x.t,
+    ...(x.durable ? {durable:true} : {}),
     ...(x.visibility ? {visibility:x.visibility} : {}),
     ...(x.t === 'text' || x.t === 'list' || x.t === 'map' ? { max: x.max } : {}),
     ...(x.t === 'list' || x.t === 'map' ? { of: cleanField(x.of, `${where} (its entries)`, false) } : {}),
@@ -416,6 +427,7 @@ function checkField(fd: unknown, where: string, inInput: boolean): void {
   if (!x || typeof x !== 'object' || typeof x.t !== 'string' || !TYPES.has(x.t)) throw new Error(`${where} is not a field type: declare it with f (f.u16(), f.vec3(), f.list(f.ref(), 8)…)`);
   if ((x.t === 'press' || x.t === 'pulse') && !inInput) throw new Error(`${where}: f.press() is for input only (a button that fires once)`);
   if (inInput && !(INTS.has(x.t) || x.t === 'bit' || x.t === 'press' || x.t === 'pulse' || x.t === 'fix')) throw new Error(`${where}: an input field is a whole number, f.fix(), f.bit() or f.press()`);
+  if (x.durable !== undefined && (typeof x.durable !== 'boolean' || inInput || !/^(entities\.[^.]+\.fields|shared)\.[^.]+$/.test(where))) throw new Error(`${where}: durable belongs on a top-level state field`);
   if (x.visibility !== undefined && !/^entities\.[^.]+\.fields\.[^.]+$/.test(where)) throw new Error(`${where}: visibility belongs on a top-level entity field`);
   if (x.visibility !== undefined && (!['owner','server','results'].includes(x.visibility) || inInput)) throw new Error(`${where}: visibility is owner, server or results on state fields only`);
   if (x.t === 'text' && !(Number.isInteger(x.max) && (x.max as number) >= 1 && (x.max as number) <= 4096)) throw new Error(`${where}: f.text(max) needs its largest length, 1 to 4096 characters`);
@@ -489,6 +501,7 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
   const dims = d.space?.dims;
   if (dims !== 2 && dims !== 3) throw new Error('rules name their space: space: { dims: 2 } or { dims: 3 }');
   const settings = env.settings ?? ROOM_DEFAULTS;
+  if (settings.characters && Object.values(d.entities ?? {}).some(e => typeof e.player === 'object' && e.player.leave === 'bot')) throw new Error('Account characters return on leaving; player.leave must be despawn');
   const map = env.map ?? compileMap({ bounds: { min: [-32, -32], max: [32, 32] } });
   if (dims === 2 && (map.spheres.length || map.capsules.length || map.heightTiles.length)) throw new Error('spheres, capsules and height tiles need space.dims: 3');
   if (dims === 3 && map.bounds.max.z <= map.bounds.min.z) throw new Error('a 3D map needs bounds with positive height');
