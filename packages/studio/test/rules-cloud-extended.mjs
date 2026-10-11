@@ -28,8 +28,9 @@ for(const total of (process.env.CROWD_TOTAL ? [Number(process.env.CROWD_TOTAL)] 
     // The driver counts decoded frames only during the steady measurement.
     const delivered = report.players.map(p=>p.deliveredHz).filter(Number.isFinite);
     const deliveredHz = report.deliveredHz;
-    // Two inter-object hops since 0.46.2 (Gate to room and back), each with the configured propagation/service cost.
-    const ackBudgetMs = 150 + 2 * (info.delay + info.cost);
+    // A lead of three ticks, two inter-object hops (Gate to room and back) at the configured cost, and the wait
+    // for a Gate's frame, which leaves at most every 50 ms: the players' lead rises to four ticks when it bites.
+    const ackBudgetMs = 200 + 2 * (info.delay + info.cost);
     console.log(JSON.stringify({out,code,total,joined:report.joined,live:report.connectedAtEnd,hz:report.tickHz,deliveredHz,ack:report.inputAckMs,ackBudgetMs}));
     assert.equal(code,0);assert.equal(report.joined,total-2);assert.equal(report.connectedAtEnd,total-2);assert.equal(report.disconnects,0);
     assert.ok(report.tickHz.median>=19.5 && report.tickHz.median<=20.5);
