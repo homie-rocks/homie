@@ -46,8 +46,8 @@ export function run(options) {
       // The room's share: one block for every Gate, and a header a Gate (here, all of them).
       at = ms(); const world = source.encode(made); let header;
       for (let g = 0; g < gates; g += 1) header = JSON.stringify(source.header(world, synced, clients.map((c) => c.seat)));
-      room += ms() - at; synced = world.seq; worldBytes += world.motion.byteLength + header.length;
-      at = ms(); snap = sink.decode(JSON.parse(header), world.motion); parse += ms() - at;
+      room += ms() - at; synced = world.seq; worldBytes += header.length + world.block.length;
+      at = ms(); snap = sink.decode(JSON.parse(header), JSON.parse('"' + world.block + '"')); parse += ms() - at;
     } else {
       at = ms(); const text = JSON.stringify(made); for (let g = 1; g < gates; g += 1) Buffer.from(text); room += ms() - at; worldBytes += text.length;
       at = ms(); snap = JSON.parse(text); parse += ms() - at;

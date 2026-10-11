@@ -5,8 +5,10 @@
  * Gates, each of which parsed it. Most of that text was six numbers a body (where it is, how fast, which way), and
  * the rest (its fields, its seat) changes rarely. So the motion goes as one block of numbers, the same block for
  * every Gate, and each Gate is told only the rest of a body when it has changed since that Gate last heard: about
- * 25 KB a tick for a thousand players, and nothing to parse. The numbers are exact: 32-bit when every one of them
- * is (a rules host's are), 64-bit when any is not.
+ * 33 KB a tick for a thousand players, and one string to read. The numbers are exact: 32-bit when every one of
+ * them is (a rules host's are), 64-bit when any is not. The block travels inside the frame, as base64: a frame
+ * of bytes beside the text would have to arrive just before it, and not every path between two objects keeps a
+ * binary frame and the text after it together (a local run of 300 players lost four links that way).
  *
  * `worldSource()` belongs to the room, one for all its Gate links. `worldSink()` belongs to a Gate.
  */
@@ -22,6 +24,8 @@ const sameTail = (a, b) => {
   for (let i = 7; i < a.length; i++) if (!sameValue(a[i], b[i])) return false;
   return true;
 };
+const base64 = (bytes) => { let text = ''; for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(text); };
+const bytesOf = (text) => { const raw = atob(text), out = new Uint8Array(raw.length); for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i); return out; };
 const numbers = (v) => Array.isArray(v) && v.every((n) => typeof n === 'number' && Number.isFinite(n));
 
 export function worldSource() {
@@ -55,7 +59,8 @@ export function worldSource() {
       const text = snap.d.length > 2 ? JSON.stringify(snap.d.slice(2)) : '';
       if (text !== restText) { restText = text; restSeq = seq; }
       last = snap;
-      lastOut = { seq, n, dims, narrow, motion: narrow ? Float32Array.from(wide).buffer : wide.buffer, entities, changed, control: new Map((snap.c ?? []).map((row) => [row[0], row])), snap };
+      const motion = narrow ? Float32Array.from(wide).buffer : wide.buffer;
+      lastOut = { seq, n, dims, narrow, motion, block: base64(new Uint8Array(motion)), entities, changed, control: new Map((snap.c ?? []).map((row) => [row[0], row])), snap };
       return lastOut;
     },
     /** What one Gate needs beside the block: the bodies whose rest changed since world `synced`, and its own players' control rows. */
@@ -78,7 +83,7 @@ export function worldSink() {
   let ids = [], tails = [], rest = [];
   return {
     /** The world a header and its block describe, as the room held it. Throws when they do not fit each other. */
-    decode(header, block) {
+    decode(header, block64) {
       const w = header.w;
       if (w.ids) {
         const held = new Map(ids.map((id, i) => [id, tails[i]]));
@@ -86,9 +91,9 @@ export function worldSink() {
       }
       for (const [i, tail] of w.tails) tails[i] = tail;
       if (w.rest) rest = w.rest;
-      const width = w.dims * 3;
-      if (ArrayBuffer.isView(block)) block = block.buffer.slice(block.byteOffset, block.byteOffset + block.byteLength);
-      if (!(block instanceof ArrayBuffer) || ids.length !== w.n || block.byteLength !== w.n * width * (w.narrow ? 4 : 8)) throw new Error(`world block does not fit its header (${Object.prototype.toString.call(block)}, ${block?.byteLength ?? block?.size} bytes for ${w.n} bodies, ${ids.length} known)`);
+      const width = w.dims * 3, bytes = typeof block64 === 'string' ? bytesOf(block64) : null;
+      if (!bytes || ids.length !== w.n || bytes.length !== w.n * width * (w.narrow ? 4 : 8)) throw new Error(`world block does not fit its header (${bytes?.length} bytes for ${w.n} bodies, ${ids.length} known)`);
+      const block = bytes.buffer;
       const a = w.narrow ? new Float32Array(block) : new Float64Array(block), entities = new Array(w.n), d = w.dims;
       for (let i = 0; i < w.n; i++) {
         const tail = tails[i];

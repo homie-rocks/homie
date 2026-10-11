@@ -784,6 +784,10 @@ A small room embeds delivery in its Table. Larger rooms open Gate connections, o
 from each Gate to the room: the room runs the rules and hands each Gate one world a tick, and
 the Gate selects, encodes and paces each player's view. A player on a slow connection is sent
 fewer, fresher frames, never a growing backlog; draw from the newest snapshot and interpolate.
+A body that keeps its course is not sent every tick: the view library moves it along its last
+velocity, and it is sent again when that has drifted past `view.precisionM` (near bodies) or half
+the distance it covers between `view.farHz` refreshes (far ones). `precisionM` is what a crowd
+costs a player's connection: 0.01 is a centimetre; 0.05 sends about a sixth fewer bytes.
 Homie sets no pace on what a player sends a server-hosted game. To set your own, add
 `"rates": { "in": 60 }` to `room` in game.json: messages a second per player, by frame kind.
 The studio template supplies the Gate exports, bindings and

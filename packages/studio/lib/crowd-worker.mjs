@@ -146,16 +146,20 @@ export function createLoad({
     const control = snap.c?.find((row) => row[0] === c.seat);
     // The room says how early this player's inputs arrive, in sixteenths of a
     // tick (the smallest since its last snapshot). The toolkit's client steers
-    // its clock by that; this probe moves its whole-tick lead: one more when
-    // an input in the last second was under half a tick early, one fewer when
-    // every input in the last three seconds was more than two early.
+    // its clock by that, to be half a tick early but for its jitter; this probe
+    // moves its whole-tick lead the same way: every two seconds, one more when
+    // the earliest twentieth of its last forty reports was under half a tick
+    // early, one fewer when it was over a tick and a half.
     if (control && control[3] !== -128 && control[3] !== undefined) {
       const early = control[3] / 16;
       if (measuring) { if (early <= 0) lateAcks++; onTime++; }
-      c.minEarly = Math.min(c.minEarly ?? Infinity, early);
-      c.leadSamples = (c.leadSamples ?? 0) + 1;
-      if (early < 0.5 && now - (c.leadAt ?? 0) > 1000 && c.lead < 12) { c.lead++; c.leadAt = now; c.minEarly = Infinity; c.leadSamples = 0; }
-      else if (c.leadSamples >= 30 && now - (c.leadAt ?? 0) > 3000) { if (c.minEarly > 2 && c.lead > 1) c.lead--; c.leadAt = now; c.minEarly = Infinity; c.leadSamples = 0; }
+      (c.early ??= []).push(early); if (c.early.length > 40) c.early.shift();
+      if (c.early.length >= 20 && now - (c.leadAt ?? 0) > 2000) {
+        const low = c.early.slice().sort((a, b) => a - b)[Math.floor(c.early.length / 20)];
+        if (low < 0.5 && c.lead < 12) c.lead++;
+        else if (low > 1.5 && c.lead > 1) c.lead--;
+        c.leadAt = now; c.early.length = 0;
+      }
     }
     if (control)
       for (const [tick, at] of c.pending) {

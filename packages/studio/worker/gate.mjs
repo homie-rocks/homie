@@ -7,6 +7,8 @@ const parsedFrames = new WeakMap();
 const sharedSnapshotText = new WeakMap();
 function batchText(rows) {
   return '[' + rows.map(row => {
+    // A world's block of numbers is base64, which needs no escaping: it is joined on, not walked 50 times a tick.
+    if (row[0] === 'world' && typeof row[5] === 'string') return JSON.stringify(row.slice(0, 5)).slice(0, -1) + ',"' + row[5] + '"]';
     if (row[0] !== 'views' && row[0] !== 'world') return JSON.stringify(row);
     // All downstream links share this immutable state. Serialize it once in
     // this isolate, rather than once for every Gate fed by a Concentrator.
@@ -73,7 +75,7 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
       return;
     }
     if (!queue.length && !views.size && !receipt) return;
-    const rows = []; let last = null, block = null, worldSeq = 0;
+    const rows = []; let last = null, worldSeq = 0;
     const hasPayload = queue.length || views.size;
     // The receipt waits for this link's next scheduled frame; say how long,
     // so the sender's receipt latency measures transit, not the cadence.
@@ -86,8 +88,8 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
     }
     const groups = new Map();
     for (const row of views.values()) {
-      // The room's side says how a world travels (worker/world-wire.mjs): a block of numbers ahead of this frame.
-      if (row[0] === 'world') { const sent = world?.(row); if (sent) { rows.push(sent.row); block = sent.block; worldSeq = sent.seq; } else rows.push(row); continue; }
+      // The room's side says how a world travels (worker/world-wire.mjs): a block of numbers and what changed.
+      if (row[0] === 'world') { const sent = world?.(row); if (sent) { rows.push(sent.row); worldSeq = sent.seq; } else rows.push(row); continue; }
       let group = groups.get(row[2]);
       if (!group) { group = ['views', [], row[2], row[4], row[5]]; groups.set(row[2], group); rows.push(group); }
       group[1].push([row[1], row[3]]);
@@ -96,17 +98,17 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
     const encodeAt = timing.now();
     const text = batchText(rows);
     timing.record('encode', encodeAt);
-    const size = text.length + (block?.byteLength ?? 0);
+    const size = text.length;
     if (size > maxBytes) { fail('room link frame limit'); return; }
     if (receipts && inFlightBytes + size > maxBytes) { blockedByBytes = true; return; }
     queue = []; views.clear(); strings.clear(); bytes = 0; receipt = 0;
     if (receipts && hasPayload) { pending.set(++sequence, { at: now(), bytes: size }); inFlightBytes += size; }
     stats.frames++; stats.rows += rows.length; stats.bytes += size;
     const sendAt = timing.now();
-    try { lastSentAt = now(); if (block) socket.send(block); socket.send(text); if (worldSeq) world.sent(worldSeq); timing.record('send', sendAt); onWritable(); } catch { fail('room link send failed'); }
+    try { lastSentAt = now(); socket.send(text); if (worldSeq) world.sent(worldSeq); timing.record('send', sendAt); onWritable(); } catch { fail('room link send failed'); }
   };
   if (receipts) socket.addEventListener('message', event => {
-    if (typeof event.data !== 'string') return; // a world's block of numbers: its frame follows
+    if (typeof event.data !== 'string') return;
     try {
       const rows = parseFrame(event);
       if (!Array.isArray(rows)) return;
@@ -157,7 +159,7 @@ export function multiplexSession(socket, connect, { onMetrics = () => {}, delay 
   // Eight frames may be unacknowledged: 400 ms of 20 Hz worlds. Past that the newest world replaces an unsent one.
   // This link's Gate has every world up to `synced`, and holds the players in these seats.
   let synced = 0; const seats = new Map();
-  const world = Object.assign((row) => { const w = source.encode(row[2]); return w ? { row: ['world', '*', source.header(w, synced, seats.values()), row[3], row[4]], block: w.motion, seq: w.seq } : null; }, { sent(seq) { synced = seq; } });
+  const world = Object.assign((row) => { const w = source.encode(row[2]); return w ? { row: ['world', '*', source.header(w, synced, seats.values()), row[3], row[4], w.block], seq: w.seq } : null; }, { sent(seq) { synced = seq; } });
   const out = batchLink(socket, { receipts: true, delay, maxFrames: 8, autoReceipt: false, world, onWritable: () => scheduleAdmission() }), clients = new Map();
   let chain = Promise.resolve(), closed = false;
   const group = { snapshot(snap, settings, hz) { out.send(['world', '*', snap, settings, hz]); out.flush(); }, subscribe(id, seat) { seats.set(id, seat); out.send(['seat', id, seat]); }, facts: () => out.facts() };
@@ -330,11 +332,9 @@ export class Gate {
       const response = await this.env.TABLE.get(this.env.TABLE.idFromName(name)).fetch(new Request(target, { headers: { Upgrade: 'websocket' } }));
       if (!response.webSocket) throw new Error('room link refused');
       const socket = response.webSocket; socket.accept();
-      // A world's motion is a block of numbers: have it as bytes, whatever this runtime's default for binary frames.
-      try { socket.binaryType = 'arraybuffer'; } catch { /* a runtime that only has ArrayBuffer */ }
       let phase = null;
       const link = batchLink(socket, { receipts: true, delay: 50, maxFrames: 8, autoReceipt: false, onAck: (waited) => phase?.waited(waited) });
-      const sink = worldSink(); let block = null;
+      const sink = worldSink();
       const lost = (event = {}) => {
         if (this.link !== link) return;
         console.log(JSON.stringify({ ev: 'room-link-lost', room: name, gate: url.searchParams.get('gate'), layer: 'gate', code: event.code ?? null, reason: event.reason ?? null, error: event.error?.message ?? null, clients: this.clients.size, transport: link.facts() }));
@@ -345,12 +345,11 @@ export class Gate {
       };
       const drop = (id, client) => { this.clients.delete(id); link.send(['close', id]); try { client.close(1011, 'client connection ended'); } catch {} };
       socket.addEventListener('message', event => {
-        // A world's motion arrives as a block of numbers, just ahead of the frame that describes it.
-        if (typeof event.data !== 'string') { block = event.data; return; }
+        if (typeof event.data !== 'string') return;
         try {
           const rows = parseFrame(event); let hz = null;
           for (const row of rows) {
-            if (row[0] === 'world') { hz = row[4]; const snap = row[2].w ? sink.decode(row[2], block) : row[2]; block = null; this.deliver(snap, row[3], row[4], drop); continue; }
+            if (row[0] === 'world') { hz = row[4]; const snap = row[2].w ? sink.decode(row[2], row[5]) : row[2]; this.deliver(snap, row[3], row[4], drop); continue; }
             for (const [op, id, value, reason, settings, rate] of expandBatch([row])) {
               const client = this.clients.get(id);
               if (op === 'seat') { if (client) { client.seat = value; client.subscribed = true; } }

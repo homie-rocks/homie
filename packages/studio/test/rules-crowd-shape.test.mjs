@@ -398,7 +398,7 @@ async function crowd(players, name) {
 test('the world crosses to a Gate as a block of numbers and what changed, and arrives exactly as the room held it', async () => {
   const c = await crowd(200, 'crowd-wire');
   const source = worldSource(), steady = worldSink(), skipping = worldSink(); let late = null;
-  let synced = 0, skipSynced = 0, lateSynced = 0, blockBytes = 0, headerBytes = 0, plain = 0, frames = 0;
+  let synced = 0, skipSynced = 0, lateSynced = 0, blockBytes = 0, headerBytes = 0, wireBytes = 0, plain = 0, frames = 0;
   const seats = [3, 77, 150];
   for (let t = 0; t < 120; t += 1) {
     if (t === 40) c.h.host.frame({ t: 'leave', seat: 11 });
@@ -409,21 +409,22 @@ test('the world crosses to a Gate as a block of numbers and what changed, and ar
     const want = (list) => ({ ...JSON.parse(JSON.stringify(snap)), c: snap.c.filter((row) => list.includes(row[0])) });
     // A link that takes every world.
     const header = JSON.parse(JSON.stringify(source.header(world, synced, seats)));
-    assert.deepEqual(steady.decode(header, world.motion), want(seats)); synced = world.seq;
-    if (t > 5 && t !== 40 && t !== 60) { blockBytes += world.motion.byteLength; headerBytes += JSON.stringify(header).length; plain += JSON.stringify(snap).length; frames += 1; }
+    assert.deepEqual(steady.decode(header, world.block), want(seats)); synced = world.seq;
+    if (t > 5 && t !== 40 && t !== 60) { blockBytes += world.motion.byteLength; headerBytes += JSON.stringify(header).length; wireBytes += JSON.stringify(header).length + world.block.length; plain += JSON.stringify(snap).length; frames += 1; }
     // A link that was busy and had every third world replaced before it was sent.
-    if (t % 3 === 0) { assert.deepEqual(skipping.decode(JSON.parse(JSON.stringify(source.header(world, skipSynced, [5]))), world.motion), want([5])); skipSynced = world.seq; }
+    if (t % 3 === 0) { assert.deepEqual(skipping.decode(JSON.parse(JSON.stringify(source.header(world, skipSynced, [5]))), world.block), want([5])); skipSynced = world.seq; }
     // A Gate that opens half way through is told everything once.
-    if (t >= 50) { late ??= worldSink(); assert.deepEqual(late.decode(JSON.parse(JSON.stringify(source.header(world, lateSynced, []))), world.motion), want([])); lateSynced = world.seq; }
+    if (t >= 50) { late ??= worldSink(); assert.deepEqual(late.decode(JSON.parse(JSON.stringify(source.header(world, lateSynced, []))), world.block), want([])); lateSynced = world.seq; }
   }
   assert.ok(blockBytes / frames <= 200 * 24 + 24, `${Math.round(blockBytes / frames)} bytes of motion for 200 bodies`);
-  assert.ok((blockBytes + headerBytes) / frames < plain / frames / 4, `a world is ${Math.round((blockBytes + headerBytes) / frames)} bytes to a Gate, where its JSON is ${Math.round(plain / frames)}`);
-  assert.throws(() => steady.decode({ k: 1, st: 0, round: [], c: [], w: { seq: 999, n: 200, dims: 2, narrow: true, tails: [] } }, new ArrayBuffer(8)), /does not fit/);
+  assert.ok(wireBytes / frames < plain / frames / 4, `a world is ${Math.round(wireBytes / frames)} bytes to a Gate, where its JSON is ${Math.round(plain / frames)}`);
+  assert.ok(headerBytes / frames < 800, `beside the block, a steady world says ${Math.round(headerBytes / frames)} bytes to a Gate`);
+  assert.throws(() => steady.decode({ k: 1, st: 0, round: [], c: [], w: { seq: 999, n: 200, dims: 2, narrow: true, tails: [] } }, 'AAAA'), /does not fit/);
   // Numbers that are not 32-bit exact, and three dimensions: still exact, in 64 bits.
   const odd = { k: 1, e: 1, st: 5, d: [[1], [['a', 0, 0, [0.1, 0.2, 0.3], [1e-9, 2, 3], [0, 0, 1], 1, [{ deep: [1] }], [], 0, 0]], { walls: 1 }], c: [[0, 0, 1, 16]] };
   const other = worldSource(), wide = other.encode(odd);
   assert.equal(wide.narrow, false);
-  assert.deepEqual(worldSink().decode(JSON.parse(JSON.stringify(other.header(wide, 0, [0]))), wide.motion), odd);
+  assert.deepEqual(worldSink().decode(JSON.parse(JSON.stringify(other.header(wide, 0, [0]))), wide.block), odd);
   assert.equal(worldSource().encode({ k: 1, d: null }), null, 'a frame with no bodies in it is sent as it is');
 });
 
