@@ -1089,8 +1089,11 @@ Inside the allowance that is the drawn target; past the game's cap it is a newer
 pose, and the predictor then shows no hit where the server will see none.
 `room.poseAt(id, tick)` gives `{pos, vel, known}` for the game's own tests
 (`known: false` is a guess past the newest snapshot). `ctx.math` is the rules'
-own `math`, so a helper shared with the rules can be called with `ctx` as its
-world.
+own `math`, and the context is accepted by guarded rules code as a world is for
+what the two share (`tick`, `dt`, `math`, `ray`, `rays`, `rayAll`, and a scene's
+`ray`, `rayAll`, `sweep`, `support`), so an aiming helper written for the rules
+can be called with `ctx` instead of being restated in the view. It has no
+`near`, `inBox`, `send` or `emit`: a helper that needs those is the server's.
 
 A tick's prediction runs more than once (between ticks, again when the input
 changes, then the tick itself) and shows each thing once. Things are told apart

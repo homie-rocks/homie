@@ -47,7 +47,7 @@ import { createNetplay } from '../netplay/netplay.ts';
 import type { Netplay, NetplayOptions, RulesHostFactory, RoundInfo, Snapshot, StepEntry } from '../netplay/netplay.ts';
 import { lab } from '../lab/lab.ts';
 import { exposePort, type PortProbeOptions } from '../port/probe.ts';
-import { BudgetError } from './guard.ts';
+import { BudgetError, brand } from './guard.ts';
 import { math, moveContext } from './math.ts';
 import { coerce, coerceFields, dir, initFields, stepMove, thawFields, unpackEntity, unpackFields, unpackVec, vec3 } from './pack.ts';
 import type { Unpacked } from './pack.ts';
@@ -393,7 +393,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // run has asked for: never by the order of everything asked, which changes when another action joins the tick.
     const asked = new Map<string, number>();
     const once = (what: string): boolean => { if (!live) return false; let set = shown.get(t); if (!set) { set = new Set(); shown.set(t, set); } const n = asked.get(what) ?? 0; asked.set(what, n + 1); const key = what + '#' + n; if (set.has(key)) return false; set.add(key); return true; };
-    const ctx: PredictContext = {
+    // Branded as a world is (0.46.5): a guarded helper of the rules may call its queries, so the server's own aiming
+    // code can be run on it instead of being restated in the view.
+    const ctx: PredictContext = brand({
       tick: t, dt: 1 / tickHz, preview, math,
       judgedTick: (aimTick) => Math.max(t - rewindAllowance(), Math.min(t, Number(aimTick) || 0)),
       get viewTick() { return viewTickNow(); },
@@ -420,7 +422,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         if (waiting) waiting.confirms = true; else provisional.push({ name, tick: t, payload, match: options.match });
         emit(name, Object.freeze({ ...payload, predicted: true }));
       },
-    };
+    });
     const me = Object.assign(fields, { id, kind: kindName }) as Record<string, unknown>;
     for (const [key, value] of Object.entries({ pos: body.pos, vel: body.vel, heading: body.heading, grounded: body.grounded, motion: body.motion })) Object.defineProperty(me, key, { value, enumerable: false, configurable: true, writable: true });
     try { fn(me, input, ctx); } catch (err) { console.warn('[room] predict', err); }
