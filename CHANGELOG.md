@@ -23,7 +23,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 A room of hundreds has a new shape, a deploy the owner asked for is approved by the asking, and Homie paces no input of a server-hosted game.
 
-Measured on Cloudflare with a game where every player sees about 180 others: 300 players at 20 frames a second from a home connection; 600 at 20 frames a second measured from inside Cloudflare, marginal from one home connection carrying all 600; 1,000 are admitted and the room keeps its ticks, but delivery is not there yet. 0.45.3 kept 300 at 13 frames a second and could not hold 1,000 at all.
+Measured on Cloudflare with a game where every player sees about 180 others: 300 players at 20 frames a second from a home connection; 600 at 20 frames a second measured from inside Cloudflare, marginal from one home connection carrying all 600; 1,000 are admitted and the room keeps its ticks, but delivery is not there yet. On the same game 0.45.0 delivered 13 frames a second at 300 and lost every player at 1,000.
 
 ### Added
 
