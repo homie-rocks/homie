@@ -17,6 +17,40 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.46.2] - 2026-10-11
+
+**Plugin 0.46.2** · Big rooms: the room runs the rules, its Gates do the rest.
+
+A room of hundreds has a new shape, a deploy the owner asked for is approved by the asking, and Homie paces no input of a server-hosted game.
+
+### Added
+
+- `room.rates` in game.json: a studio's own pace on what one player may send, in messages a second by kind (`{ "in": 60 }`). Leave it out and there is none.
+- A big room's diagnostics come from an object that is neither the room nor a Gate with players. The room and each Gate post a second's facts to it (ticks a second, how long a player's input took to reach the rules, frames written to each player, how old the world was when a Gate sent it, how far behind players say they are), and `/_studio/api/room` answers from that copy with its age. Measuring a room costs it nothing, and a room too busy to answer still has its last word read.
+- A player's client says which tick it holds (`g` on its inputs and pings). A Gate that finds a player more than a second behind sends that player fewer, fresher frames, down to one a second, and restores the rate when they have caught up. Each frame is a change from the last one sent and carries the player's own body. A client that says nothing is sent every tick, as before.
+
+### Changed
+
+- In a room behind Gates the room object runs the rules and hands each Gate one world a tick. The Gate chooses what each of its players can see, encodes it and writes it. The room no longer selects, encodes or queues anything per player on its tick.
+- Each Gate has its own channel to the room. The relay between them (the Concentrator) is gone: it re-read and re-sent every world for eight Gates and was the first object to fall behind. A studio's `CONCENTRATOR` binding stays declared and unused, so an upgrade needs no migration.
+- A Gate sends the room one frame of input a tick, however many players it holds, timed by the round trip it measures so the frame arrives just before the room's next tick. Receipts ride that frame.
+- Far-view refreshes are spread across players, so a room's largest updates do not all leave on the same tick.
+- A deploy requested in the owner's prompt is approved for that task, including retries. Unrequested deployments remain held; explicit refusals revoke the task approval.
+- The crowd probe offers WebSocket compression, as every browser does, names the tick it holds, and reports the bytes its sockets read beside the bytes it decoded.
+
+### Fixed
+
+- Homie no longer paces what a player sends a game whose rules run on the server. 0.45.3 dropped honest input at 60 a second when a slow network delivered a batch late. What players say to each other keeps its pace, and so does every room a player's own browser hosts.
+- A game with fields only their owner may see keeps each player's view in the room when the room is behind Gates. A Gate was handed the whole state.
+- Late callbacks that catch up at the requested tick rate no longer end a healthy room as an overrun; sustained slow ticks still stop.
+- Relay failures log their layer, close cause and queue counters. A link's receipt latency measures the link, not the cadence a receipt waited for. Frozen Cloudflare clocks are not reported as zero execution time.
+- Deployment summaries no longer assume Workers Free. A big room's estimate counts its Gates and its diagnostics object and says which request traffic it leaves out.
+
+### Upgrade notes
+
+- Rebuild and deploy a studio to get the new room shape; a game needs no change. A game page built before 0.46.2 still plays in a big room: it is sent every tick, because it does not say which tick it holds.
+- What the first cloud trial of 0.45.3 measured, and why, is in `docs/crowd-transport-0462.md`. Capacity on Cloudflare awaits the next trial from a connection that can carry it.
+
 ## [0.46.0] - 2026-10-10
 
 **Plugin 0.46.0**

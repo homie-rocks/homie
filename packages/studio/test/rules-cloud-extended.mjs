@@ -28,7 +28,7 @@ for(const total of (process.env.CROWD_TOTAL ? [Number(process.env.CROWD_TOTAL)] 
     // The driver counts decoded frames only during the steady measurement.
     const delivered = report.players.map(p=>p.deliveredHz).filter(Number.isFinite);
     const deliveredHz = report.deliveredHz;
-    // Two inter-object hops since 0.45.4 (Gate to room and back), each with the configured propagation/service cost.
+    // Two inter-object hops since 0.46.2 (Gate to room and back), each with the configured propagation/service cost.
     const ackBudgetMs = 150 + 2 * (info.delay + info.cost);
     console.log(JSON.stringify({out,code,total,joined:report.joined,live:report.connectedAtEnd,hz:report.tickHz,deliveredHz,ack:report.inputAckMs,ackBudgetMs}));
     assert.equal(code,0);assert.equal(report.joined,total-2);assert.equal(report.connectedAtEnd,total-2);assert.equal(report.disconnects,0);

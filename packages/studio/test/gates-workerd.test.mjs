@@ -78,7 +78,7 @@ test('public Worker, real Table storage and Gates admit above 32 and preserve se
     assert.equal(new Set(holders.map(p=>p.welcome.seat)).size,count,JSON.stringify(closedPeers));
     assert.equal(closedPeers.length,0,JSON.stringify(closedPeers));
     assert.ok(holders.every(p=>p.welcome.max===capacity&&p.welcome.role==='replica'));
-    // Each Gate is handed one world a tick and gives every player their own view of it (0.45.4).
+    // Each Gate is handed one world a tick and gives every player their own view of it (0.46.2).
     for(let wait=0;wait<200&&!holders.every(p=>p.view.own>=2);wait++)await new Promise(r=>setTimeout(r,50));
     assert.ok(holders.every(p=>p.view.own>=2),'every player behind a Gate is sent the world with their own body in it');
     assert.equal(holders.reduce((a,p)=>a+p.view.without+p.view.undecodable,0),0);

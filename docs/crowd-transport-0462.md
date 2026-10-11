@@ -1,9 +1,9 @@
-# What the 0.45.3 cloud trial measured, and the shape that followed (0.45.4)
+# What the 0.45.3 cloud trial measured, and the shape that followed (0.46.2)
 
 The trial ran 0.45.3 on real Cloudflare on 11 October 2026 (UTC), at 50, 150, 300, 600 and
 1,000 players, from one computer. Its data is in the trial studio under
 `reports/crowd-circuit/phase-d/20261011T001053Z/`. This is what that data says, what it
-cannot say, and what 0.45.4 changes. Nothing here is a capacity claim: no trial of 0.45.4
+cannot say, and what 0.46.2 changes. Nothing here is a capacity claim: no trial of 0.46.2
 has run on Cloudflare yet.
 
 ## What the trial's own data can and cannot show
@@ -41,7 +41,7 @@ at 1,000, during the ramp. (That reading assumes Cloudflare bills a Durable Obje
 to its open request; a facts answer by itself costs 1.4 ms for 1,000 players on a laptop.)
 At 1,000 the room's receipts from its Concentrators took 50 to 800 ms and up to 1,696 rows
 waited. So the room was heading for saturation at a full 1,000, and its per-player work
-each tick (one queued view per player, one promise chain per input) is what 0.45.4 removes.
+each tick (one queued view per player, one promise chain per input) is what 0.46.2 removes.
 
 **How many Gates, and how were players spread?** Sixteen at every step, behind two
 Concentrators. Players per Gate: 1 to 7 at 50; 5 to 20 at 150; 12 to 27 at 300; 25 to 47
@@ -73,7 +73,7 @@ counted against a Gate's stamp of when the input arrived. A player whose connect
 stalled and then delivered ten seconds of honest input at once was over it. Every default
 on this path, all in `worker/limits.mjs`: `RATES` (`in` 60, `ev` 30, `ping` 8, `other` 8,
 `say` 4, `react` 10, `decide` 2, and the host-only kinds), `EV_RATES` (host 30, replica
-10, screen 2) and `rulesRates` (a browser host's output). 0.45.4 applies none of them to
+10, screen 2) and `rulesRates` (a browser host's output). 0.46.2 applies none of them to
 what a player sends a server-hosted game, except what players say to each other; a studio
 names its own in `room.rates`. A room hosted by a player's browser keeps all of them.
 
@@ -101,7 +101,7 @@ A third thing made the first worse. A Gate cannot see how full a player's connec
 (the Workers runtime has no `bufferedAmount`), so it wrote all 20 frames a second to a
 player who could take six.
 
-## What 0.45.4 changes
+## What 0.46.2 changes
 
 - **The room runs the rules and visits Gates, not players.** One world a Gate a tick. The
   Gate selects each player's view, encodes it and writes it.

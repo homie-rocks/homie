@@ -1,5 +1,5 @@
 /**
- * The shape of a big room (0.45.4), on virtual time with seeded players: the room object runs the rules and hands
+ * The shape of a big room (0.46.2), on virtual time with seeded players: the room object runs the rules and hands
  * each Gate one world a tick; every Gate selects, encodes and paces its own players and sends the room ONE frame of
  * input a tick; diagnostics are read from an object that is neither. Nothing here opens a socket or waits on a
  * real clock: a real-time load run belongs in `npm run test:rules:extended`.
@@ -139,7 +139,7 @@ async function slowLinkRun(t, { reports }) {
   const seconds = 30;
   for (let k = 1; k <= seconds * 20; k += 1) {
     upstream.emit('message', { data: JSON.stringify([['world', '*', world(k, seats, (seat) => [seat * 0.5, Math.sin(k / 9 + seat)]), { radiusM: 12 }, 20]]) });
-    // Ten inputs a second, each naming the newest tick the player holds (the toolkit's client, 0.45.4).
+    // Ten inputs a second, each naming the newest tick the player holds (the toolkit's client, 0.46.2).
     if (k % 2 === 0) for (const c of [fast, slow]) if (c.held !== null) c.p.emit('message', { data: JSON.stringify({ t: 'in', e: 7, k: c.held + 3, s: [[0, 1, 0]], r: 0, ...(reports ? { g: c.held } : {}) }) });
     await clock.wait(50);
     if (k > 200 && slow.held !== null) slow.worstLag = Math.max(slow.worstLag, k - slow.held);
@@ -159,7 +159,7 @@ test('a player on a slow link is sent fewer, fresher frames: never more than two
 test('without the player saying what it holds, every tick is sent and the same link falls behind for good', async (t) => {
   const { slow, ticks } = await slowLinkRun(t, { reports: false });
   assert.ok(slow.worstLag > 300, `an older client on that link is ${slow.worstLag} ticks behind after thirty seconds`);
-  assert.ok(slow.queue.length > 300 && slow.frames < ticks / 2, 'as before 0.45.4: nothing is dropped, everything is late');
+  assert.ok(slow.queue.length > 300 && slow.frames < ticks / 2, 'as before 0.46.2: nothing is dropped, everything is late');
 });
 
 test('the room hands each Gate one world a tick and names each player to it once', () => {
