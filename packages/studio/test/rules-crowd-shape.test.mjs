@@ -119,15 +119,43 @@ test('a receipt that waited for its frame is not counted as a slow link', () => 
   left.close(); right.close();
 });
 
-test('deliveryPace halves a lagging player down to one frame a second and restores a recovered one', () => {
+test('deliveryPace sends less only to a player who is behind and not catching up, and restores them a step a second', () => {
   const pace = deliveryPace(20); let now = 0;
   assert.equal(pace.due(1), true); pace.sent(1); assert.equal(pace.due(2), true, 'a player who says nothing gets every tick');
-  for (const interval of [2, 4, 8, 16, 20, 20]) { now += 500; pace.report(100, 200, now); assert.equal(pace.facts().interval, interval); }
+  // A connection that stalled for two seconds and is draining: behind, but less each time. Never paced.
+  for (const lag of [45, 38, 30, 22, 14, 6, 2]) { now += 500; pace.report(1000 - lag, 1000, now); assert.equal(pace.facts().interval, 1, `${lag} ticks behind and catching up`); }
+  // A connection that cannot carry 20 frames a second: behind and no better, report after report.
+  for (const interval of [1, 2, 4, 8, 16, 20, 20]) { now += 500; pace.report(100, 200, now); assert.equal(pace.facts().interval, interval); }
   pace.sent(200); assert.equal(pace.due(219), false); assert.equal(pace.due(220), true);
-  pace.report(215, 220, now + 400); assert.equal(pace.facts().interval, 20, 'not twice inside a second');
+  now += 500; pace.report(185, 200, now); assert.equal(pace.facts().interval, 20, 'between half a second and a second behind: left as it is');
   for (const interval of [10, 5, 2.5, 1.25, 1, 1]) { now += 1000; pace.report(now, now + 5, now); assert.equal(pace.facts().interval, interval); }
-  pace.report(15, 30, now + 5000); assert.equal(pace.facts().interval, 1, 'between half a second and a second behind: left alone');
   pace.report(900, 30, now + 9000); assert.equal(pace.facts().lag, null, 'a tick from before the room restarted says nothing');
+});
+
+test('a home connection that stalls for a second paces nobody on a healthy Gate', async (t) => {
+  const clock = virtualTime(t);
+  const upstream = socket(), gate = new Gate({}, tableOf(upstream));
+  const players = Array.from({ length: 50 }, () => ({ p: socket(), held: 0, got: [] }));
+  let stalled = false; const waiting = [];
+  for (const me of players) {
+    me.p.send = (text) => { const m = JSON.parse(text); if (m.t !== 'snap') return; const take = () => { me.held = m.k; me.got.push(m.k); }; if (stalled) waiting.push(take); else take(); };
+    await gate.connect(request(), me.p); me.p.emit('message', { data: '{"t":"hello","coast":1}' });
+  }
+  await clock.wait(60);
+  upstream.emit('message', { data: JSON.stringify(players.map((_, i) => ['seat', String(i + 1), i])) });
+  const seats = players.map((_, i) => i); let worst = 0;
+  for (let k = 1; k <= 300; k += 1) {
+    // All fifty share one connection, which carries nothing from tick 100 to tick 124 and then everything at once.
+    if (k === 100) stalled = true;
+    if (k === 125) { stalled = false; for (const take of waiting.splice(0)) take(); }
+    upstream.emit('message', { data: JSON.stringify([['world', '*', world(k, seats), { radiusM: 12, precisionM: 0.01 }, 20]]) });
+    if (k % 2 === 0 && !stalled) for (const me of players) me.p.emit('message', { data: JSON.stringify({ t: 'in', e: 7, k: me.held + 3, s: [[0, 1, 0]], r: 0, g: me.held }) });
+    await clock.wait(50);
+    worst = Math.max(worst, gate.gateFacts(gate.link).paced);
+  }
+  assert.equal(worst, 0, 'nobody was sent fewer frames');
+  for (const me of players) assert.equal(me.got.length, 300, 'and everybody got every frame');
+  gate.link.disconnect();
 });
 
 /** One Gate, one world a tick, and players whose links carry `perSecond` frames (Infinity: all of them, at once). */
@@ -165,10 +193,10 @@ async function slowLinkRun(t, { reports }) {
   gate.link.disconnect();
   return { fast, slow, facts, ticks: seconds * 20 };
 }
-test('a player on a slow link is sent fewer, fresher frames: never more than two seconds behind, their own body in each', async (t) => {
+test('a player on a slow link is sent fewer, fresher frames: never more than two and a half seconds behind, their own body in each', async (t) => {
   const { fast, slow, ticks } = await slowLinkRun(t, { reports: true });
   assert.equal(fast.frames, ticks, 'a player whose link keeps up is sent every tick');
-  assert.ok(slow.worstLag <= 40, `the slow player fell ${slow.worstLag} ticks behind`);
+  assert.ok(slow.worstLag <= 50, `the slow player fell ${slow.worstLag} ticks behind`);
   assert.equal(slow.undecodable, 0, 'a delta is from the last frame SENT: a skipped tick breaks nothing');
   assert.equal(slow.ownMissing + fast.ownMissing, 0, 'own body in every frame');
   assert.ok(slow.frames >= 30 * 2, 'and they are still sent at least two frames a second');
@@ -177,6 +205,42 @@ test('without the player saying what it holds, every tick is sent and the same l
   const { slow, ticks } = await slowLinkRun(t, { reports: false });
   assert.ok(slow.worstLag > 300, `an older client on that link is ${slow.worstLag} ticks behind after thirty seconds`);
   assert.ok(slow.queue.length > 300 && slow.frames < ticks / 2, 'as before 0.46.2: nothing is dropped, everything is late');
+});
+
+test('five sockets of fifty that stop reading for four seconds in five cost nobody else a frame, and nobody else is paced', async (t) => {
+  const clock = virtualTime(t);
+  const upstream = socket(), gate = new Gate({}, tableOf(upstream));
+  const seats = Array.from({ length: 50 }, (_, i) => i);
+  // What the load driver's --slow-every does to a socket: nothing is read for four seconds, then everything held at once.
+  const players = seats.map((seat) => ({ seat, slow: seat % 10 === 0, p: socket(), held: null, got: 0, waiting: [], reading: true, worstLag: 0, decoder: snapshotDecoder(), undecodable: 0, ownMissing: 0 }));
+  for (const me of players) {
+    const take = (text) => { const m = JSON.parse(text); if (m.t !== 'snap') return; const snap = me.decoder.decode(m); if (!snap) { me.undecodable += 1; return; } me.got += 1; me.held = m.k; if (!snap.d[1].some((e) => e[9] === me.seat)) me.ownMissing += 1; };
+    me.p.send = (text) => { if (me.reading) take(text); else me.waiting.push(text); };
+    me.resume = () => { me.reading = true; for (const text of me.waiting.splice(0)) take(text); };
+    await gate.connect(request(), me.p); me.p.emit('message', { data: '{"t":"hello","coast":1}' });
+  }
+  await clock.wait(60);
+  upstream.emit('message', { data: JSON.stringify(players.map((me, i) => ['seat', String(i + 1), me.seat])) });
+  let pacedHealthyWorst = 0, pacedWorst = 0;
+  const TICKS = 60 * 20;
+  for (let k = 1; k <= TICKS; k += 1) {
+    for (const me of players) if (me.slow) { const at = (k + me.seat * 3) % 100; if (at === 0) me.reading = false; else if (at === 80) me.resume(); }
+    upstream.emit('message', { data: JSON.stringify([['world', '*', world(k, seats, (seat) => [seat * 0.5, Math.sin(k / 9 + seat)]), { radiusM: 12, precisionM: 0.01 }, 20]]) });
+    // A paused socket still writes: its player goes on sending input, naming the old tick it holds.
+    if (k % 2 === 0) for (const me of players) if (me.held !== null) me.p.emit('message', { data: JSON.stringify({ t: 'in', e: 7, k: me.held + 3, s: [[0, 1, 0]], r: 0, g: me.held }) });
+    await clock.wait(50);
+    const paces = [...gate.clients.values()].map((c) => c.pace?.facts().interval ?? 1);
+    pacedWorst = Math.max(pacedWorst, paces.filter((x) => x > 1).length);
+    pacedHealthyWorst = Math.max(pacedHealthyWorst, players.filter((me, i) => !me.slow && paces[i] > 1).length);
+    if (k > 200) for (const me of players) if (!me.slow && me.held !== null) me.worstLag = Math.max(me.worstLag, k - me.held);
+  }
+  const healthy = players.filter((me) => !me.slow), slow = players.filter((me) => me.slow);
+  assert.equal(pacedHealthyWorst, 0, 'no healthy player was ever sent fewer frames');
+  assert.ok(pacedWorst >= 1 && pacedWorst <= 5, `${pacedWorst} players were paced at once, all of them slow`);
+  for (const me of healthy) { assert.equal(me.got, TICKS, `healthy player ${me.seat} got every frame`); assert.equal(me.worstLag, 0); }
+  // The slow players are sent fewer frames while they cannot read, their own body in each, and every one decodes.
+  for (const me of slow) { assert.ok(me.got < TICKS * 0.8 && me.got > TICKS * 0.1, `slow player ${me.seat} was sent ${me.got} of ${TICKS} frames`); assert.equal(me.undecodable + me.ownMissing, 0); }
+  gate.link.disconnect();
 });
 
 test('the room hands each Gate one world a tick and names each player to it once', () => {
@@ -377,7 +441,7 @@ test('a run\'s summary names tick rate and delivered rate for every step, the pl
   assert.equal(s.server.samples, 3); assert.equal(s.server.failedPolls, 1); assert.equal(s.server.pacedPlayers, 12); assert.deepEqual(s.server.playersPerGate, { min: 150, max: 150 });
   assert.equal(s.client.wireMBps, 2); assert.equal(s.link.limited, true, 'two of the 2.4 MB a second this link carries');
   assert.equal(summarize(report, rows, { downMBps: 40 }).link.limited, false);
-  assert.match(table([s]), /\| 300 \| home \| 300\/300\/0 \| 150\/210\/260 \| —\/— \| 3 \(0\.02\) \| 20 \| 19\.96 \| 2 \(2\.4, LINK-LIMITED\) \| 6\.67 \| 300\/300 \(4\) \| — \| 0\.01 \| 2 \| —\/— \| 20\/17\.5 \| 9\/9 \| 5\/12 \| 12 \| 3\/1 \|/);
+  assert.match(table([s]), /\| 300 \| home deflate \| 300\/300\/0 \| 150\/210\/260 \| —\/— \| 3 \(0\.02\) \| 20 \| 19\.96 \| 2 \(2\.4, LINK-LIMITED\) \| 6\.67 \| 300\/300 \(4\) \| — \| 0\.01 \| 2 \| —\/— \| 20\/17\.5 \| 9\/9 \| 5\/12 \| 12 \| 3\/1 \|/);
   assert.match(table([summarize({ ...report, driver: { workerLoopP99Ms: [14], peakTimerLagMs: [640] } }, rows, null)]), /\| 640 DRIVER \|/, 'a step the driver could not keep up with says so');
   const empty = summarize({ n: 50, payload: {} }, [], null);
   assert.equal(empty.server.tickRate.median, null); assert.match(table([empty]), /—/, 'a number that was not measured is a dash, never a blank');
@@ -477,9 +541,11 @@ test('a Gate\'s crowd path: the same bodies in view, each within the game\'s pre
   }
 });
 
-test('the in-Cloudflare probe plays its players against a room and reports what the home driver reports', async (t) => {
+// Without slow players, and with one in five of them slow (a connection that carries six frames a second): beside
+// every slow player on the Gate, the healthy ones get every frame and the Gate's exchange with the room is no slower.
+for (const slowEvery of [0, 5]) test(slowEvery ? 'slow players among the probe\'s cost only themselves: the others get every frame and the Gate\'s round trip to the room does not move' : 'the in-Cloudflare probe plays its players against a room and reports what the home driver reports', async (t) => {
   const dir = join(PKG, 'test/fixtures/crowd-circuit/game');
-  const L = await loadGame(scratch, dir, 'crowd-probe');
+  const L = await loadGame(scratch, dir, `crowd-probe-${slowEvery}`);
   const game = JSON.parse(readFileSync(join(dir, 'game.json'), 'utf8'));
   const compiled = L.R.compileRules(L.def, { tune: JSON.parse(readFileSync(join(dir, 'tunables.json'), 'utf8')), settings: L.R.roomSettings(game.room).settings, seats: 1000, map: L.R.compileMap({ ...JSON.parse(readFileSync(join(dir, 'map/main.json'), 'utf8')), name: 'main' }, 'main') });
   const { default: probe } = await import('../lib/crowd-probe/worker.mjs');
@@ -518,15 +584,29 @@ test('the in-Cloudflare probe plays its players against a room and reports what 
   assert.equal((await probe.fetch(new Request('https://probe.test/play?origin=https://studio.test&room=r'), env, ctx)).status, 404, 'nothing without the key');
   const started = Date.now(), joinAt = started + 100, measureAt = joinAt + 3000, endAt = measureAt + 5000, finals = [];
   const requests = [0, 5, 10].map(async (from) => {
-    const res = await probe.fetch(new Request(`https://probe.test/play?origin=https://studio.test&game=crowd-circuit&room=r&from=${from}&count=5&joinAt=${joinAt}&rampMs=20&measureAt=${measureAt}&endAt=${endAt}`, { headers: { 'x-probe-key': 'k' } }), env, ctx);
+    const res = await probe.fetch(new Request(`https://probe.test/play?origin=https://studio.test&game=crowd-circuit&room=r&from=${from}&count=5&joinAt=${joinAt}&rampMs=20&measureAt=${measureAt}&endAt=${endAt}${slowEvery ? `&slowEvery=${slowEvery}` : ''}`, { headers: { 'x-probe-key': 'k' } }), env, ctx);
     assert.equal(res.status, 200);
     for (const text of (await res.text()).split('\n').filter(Boolean)) { const row = JSON.parse(text); if (row.t === 'final') finals.push(row); assert.notEqual(row.t, 'failed', text); }
   });
+  // The Gate's own account of its last second, read while the players are still on it.
+  let facts = null;
+  setTimeout(() => { facts = gate.gateFacts(gate.link); }, endAt - Date.now() - 300);
   await clock.wait(endAt - Date.now() + 200);
   await Promise.all(requests); await Promise.all(waits);
   assert.equal(finals.length, 3);
   const report = cloudReport({ origin: 'https://studio.test', room: 'r', n: 15, seconds: 5, started, measureAt, endAt, finals });
   assert.equal(report.joined, 15); assert.equal(report.connectedAtEnd, 15); assert.equal(report.disconnects, 0); assert.deepEqual(report.errors, []);
+  if (slowEvery) {
+    assert.equal(report.slowPlayers, 3); assert.equal(report.healthy.players, 12);
+    assert.ok(report.healthy.deliveredHz.min >= 19.5, `a healthy player beside the slow ones got ${report.healthy.deliveredHz.min} frames a second`);
+    assert.ok(report.healthy.maxStateGapMs.max <= 110, `and never waited ${report.healthy.maxStateGapMs.max} ms for one`);
+    assert.ok(report.slow.deliveredHz.max <= 7, `a slow player took ${report.slow.deliveredHz.max} frames a second`);
+    assert.ok(facts.paced >= 1 && facts.paced <= 3, `${facts.paced} players were being sent fewer frames, and only slow ones can be`);
+    assert.ok(facts.rttMs <= 20, `the Gate's round trip to the room was ${facts.rttMs} ms with slow players on it (the channel is 8)`);
+    const healthy = report.players.filter((p) => !p.slow), late = healthy.reduce((a, p) => a + p.late, 0), reports = healthy.reduce((a, p) => a + p.reports, 0);
+    assert.ok(reports > 400 && late <= reports * 0.05, `${late} of ${reports} of the healthy players' inputs were late (the slow players' own are, being stamped from old ticks)`);
+    return;
+  }
   assert.ok(report.deliveredHz.min >= 19.5 && report.deliveredHz.max <= 20.5, `every player was sent 20 frames a second (${report.deliveredHz.min} to ${report.deliveredHz.max})`);
   assert.ok(report.tickHz.median > 19.8 && report.tickHz.median < 20.2);
   assert.ok(report.inputAckMs.count > 600, `${report.inputAckMs.count} inputs acknowledged`);
@@ -537,4 +617,98 @@ test('the in-Cloudflare probe plays its players against a room and reports what 
   assert.ok(asked.filter((path) => path.endsWith('/__game/')).length === 15);
   const line = summarize(report, [], null);
   assert.equal(line.from, 'cloudflare'); assert.equal(line.client.inputLoopMs.p50, report.inputLoopMs.p50); assert.equal(line.link.limited, null);
+});
+
+test('a big match room\'s checkpoint waits for no confirmation, is the newest save when it exists, and a confirmed save replaces it', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const { roomStore, LOOSE_SAVE } = await import('../worker/room-store.mjs');
+  const db = new DatabaseSync(':memory:'), kv = new Map(), puts = [];
+  const storage = {
+    sql: { exec(sql, ...args) { const stmt = db.prepare(sql); if (/^SELECT/.test(sql)) return { toArray: () => stmt.all(...args) }; stmt.run(...args); return { toArray: () => [] }; } },
+    transactionSync(fn) { db.exec('BEGIN'); try { const out = fn(); db.exec('COMMIT'); return out; } catch (error) { db.exec('ROLLBACK'); throw error; } },
+    async put(entries, options) { puts.push(options); for (const [key, value] of Object.entries(entries)) kv.set(key, structuredClone(value)); },
+    async delete(keys) { for (const key of keys) kv.delete(key); },
+    async list({ prefix }) { return new Map([...kv].filter(([key]) => key.startsWith(prefix))); },
+  };
+  const save = (at, tick) => ({ v: 1, game: 'g', room: 'r', at, host: JSON.stringify({ v: 1, core: { tick } }), net: { v: 1, room: 'r', seats: [] } });
+  const store = roomStore(storage);
+  // An admission's save: confirmed, in SQL, as on 0.46.3.
+  store.write(save(1000, 10));
+  assert.equal(kv.size, 0); assert.equal(store.read().host.core.tick, 10);
+  // The once-a-second checkpoint: key-value storage, told not to hold the object's output for it.
+  store.write(save(2000, 30), { unconfirmed: true });
+  assert.deepEqual(puts, [{ allowUnconfirmed: true }]); assert.equal(store.unconfirmedWrites, 1);
+  assert.equal(kv.get(LOOSE_SAVE).pieces, 1);
+  assert.equal(store.read().host.core.tick, 30, 'it is the newest save');
+  // The object is evicted and wakes: what it reads of its key-value storage is the room.
+  const woke = roomStore(storage, { loose: await storage.list({ prefix: LOOSE_SAVE }) });
+  const read = woke.read();
+  assert.equal(read.host.core.tick, 30); assert.equal(read.at, 2000); assert.equal(typeof read.hostText, 'string');
+  // A confirmed save after it (a player joins) removes it in the same turn: the older checkpoint can never come back.
+  woke.write(save(3000, 50));
+  await Promise.resolve();
+  assert.equal(kv.size, 0);
+  assert.equal(roomStore(storage, { loose: await storage.list({ prefix: LOOSE_SAVE }) }).read().host.core.tick, 50);
+  // The object stopped between a confirmed save and the removal of the checkpoint before it: the later save is the room.
+  const stale = await storage.list({ prefix: LOOSE_SAVE });
+  assert.equal(stale.size, 0);
+  woke.write(save(2500, 40), { unconfirmed: true });
+  assert.equal(roomStore(storage, { loose: await storage.list({ prefix: LOOSE_SAVE }) }).read().host.core.tick, 50, 'an unconfirmed checkpoint older than the confirmed save does not replace it');
+  // A checkpoint in several pieces, and one whose pieces do not fit their record: the confirmed save is the room.
+  const big = save(4000, 70); big.net.pad = 'x'.repeat(2_500_000);
+  woke.write(big, { unconfirmed: true });
+  assert.equal(kv.get(LOOSE_SAVE).pieces, 3);
+  assert.equal(roomStore(storage, { loose: await storage.list({ prefix: LOOSE_SAVE }) }).read().host.core.tick, 70);
+  kv.delete(`${LOOSE_SAVE}/1`);
+  const problems = [];
+  assert.equal(roomStore(storage, { loose: await storage.list({ prefix: LOOSE_SAVE }), onProblem: (error) => problems.push(error.message) }).read().host.core.tick, 50);
+  assert.equal(problems.length, 1);
+  // Clearing the room clears both. A lasting world never writes one.
+  woke.clear(); await Promise.resolve();
+  assert.equal(kv.size, 0); assert.equal(roomStore(storage).read(), null);
+  const lasting = roomStore(storage, { persistent: true });
+  lasting.write(save(5000, 90), { unconfirmed: true });
+  assert.equal(kv.size, 0, 'a lasting world\'s write is always confirmed'); assert.equal(lasting.unconfirmedWrites, 0);
+  db.close();
+});
+
+test('a Gate nobody is on gives its channel to the room back after ten seconds, and the next player opens another', async (t) => {
+  // The Gate's side: ten seconds after its last player leaves, the channel is closed; a player arriving opens another.
+  const clock = virtualTime(t);
+  const opened = [];
+  const env = { TABLE: { idFromName: (n) => n, get: () => ({ fetch: async () => { const upstream = socket(); opened.push({ upstream }); return { webSocket: upstream }; } }) } };
+  const gate = new Gate({ waitUntil() {} }, env), first = socket();
+  await gate.connect(request(), first);
+  assert.equal(opened.length, 1);
+  first.emit('close', {});
+  await clock.wait(9000);
+  assert.equal(opened[0].upstream.closed, undefined, 'not yet');
+  const second = socket();
+  await gate.connect(request(), second);
+  second.emit('message', { data: JSON.stringify({ t: 'hello', rules: true, v: 1, rev: 12, name: 'Back', device: 'desk', want: 'play', canHost: false }) });
+  await clock.wait(15000);
+  assert.equal(opened[0].upstream.closed, undefined, 'a player came back: the channel stays');
+  second.emit('close', {});
+  await clock.wait(10500);
+  assert.deepEqual(opened[0].upstream.closed, [1000, 'no players']);
+  assert.equal(gate.link, null);
+  await gate.connect(request(), socket());
+  assert.equal(opened.length, 2, 'the next player opens a new channel');
+});
+
+test('the reference work is the same work everywhere, and a calibration is Cloudflare\'s time for it over this computer\'s', async () => {
+  const { referenceWork } = await import('../lib/crowd-probe/reference-work.mjs');
+  const { calibrate } = await import('../lib/crowd-cloud.mjs');
+  const { default: probe } = await import('../lib/crowd-probe/worker.mjs');
+  assert.equal(referenceWork(3), referenceWork(3)); assert.notEqual(referenceWork(3), referenceWork(4));
+  const answer = await (await probe.fetch(new Request('https://probe.test/calibrate?rounds=2', { headers: { 'x-probe-key': 'k' } }), { PROBE_KEY: 'k' }, {})).json();
+  assert.equal(answer.check, referenceWork()); assert.equal(answer.rounds, 2);
+  assert.equal((await (await probe.fetch(new Request('https://probe.test/calibrate', { headers: { 'x-probe-key': 'k' } }), { PROBE_KEY: 'k' }, {})).json()).rounds, 0);
+  // The stopwatch is the caller's. On a clock the test owns: this computer takes 5 ms a round; a request to the
+  // probe takes 30 ms with no rounds and 430 with ten, so a round there is 40 ms and Cloudflare is eight times slower.
+  let clock = 0, pending = 5;
+  const result = await calibrate({ probe: 'https://probe.test', key: 'k', requests: 3, rounds: 10, now: () => { clock += pending; pending = 5; return clock; },
+    fetchFn: async (url) => { const rounds = Number(new URL(url).searchParams.get('rounds')); pending = rounds ? 430 : 30; return Response.json({ ok: true, colo: 'YYZ', rounds, check: referenceWork(), own: 1 }); } });
+  assert.deepEqual(result.localMs, [5, 5, 5, 5, 5]); assert.deepEqual(result.cloudMsARound, { min: 40, median: 40, max: 40 });
+  assert.equal(result.ratio.median, 8); assert.equal(result.same, true); assert.deepEqual(result.workerOwnClockMs, [1, 1, 1]);
 });

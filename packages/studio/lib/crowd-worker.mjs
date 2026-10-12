@@ -46,6 +46,7 @@ export function createLoad({
   workers = 1,
   lead = 3,
   compress = true,
+  slowEvery = 0,
   onProblem = () => {}
 }) {
   const clients = [],
@@ -53,6 +54,8 @@ export function createLoad({
     first = new Histogram(),
     welcome = new Histogram(),
     ack = new Histogram(),
+    // A deliberately slow player's own figures, apart: its acknowledgements are seconds late by what it is.
+    slowAck = new Histogram(),
     gaps = new Histogram(),
     // From the tick a player held when it stamped an input to the tick it
     // reached the rules, ms: what the system took, whatever the lead.
@@ -144,7 +147,7 @@ export function createLoad({
       c.lastTick = snap.k;
       c.lastAt = now;
       c.frames++;
-      gaps.add(gap);
+      if (!c.slow) gaps.add(gap);
     }
     const control = snap.c?.find((row) => row[0] === c.seat);
     // The room says how early this player's inputs arrive, in sixteenths of a
@@ -155,7 +158,7 @@ export function createLoad({
     // early, one fewer when it was over a tick and a half.
     if (control && control[3] !== -128 && control[3] !== undefined) {
       const early = control[3] / 16;
-      if (measuring) { if (early <= 0) lateAcks++; onTime++; loops.add((c.lead - early) * 50); }
+      if (measuring && !c.slow) { if (early <= 0) lateAcks++; onTime++; loops.add((c.lead - early) * 50); }
       (c.early ??= []).push(early); if (c.early.length > 40) c.early.shift();
       if (c.early.length >= 20 && now - (c.leadAt ?? 0) > 2000) {
         const low = c.early.slice().sort((a, b) => a - b)[Math.floor(c.early.length / 20)];
@@ -169,7 +172,7 @@ export function createLoad({
         if (tick > control[2]) break;
         c.pending.delete(tick);
         if (measuring) {
-          if (tick === control[2]) ack.add(now - at);
+          if (tick === control[2]) (c.slow ? slowAck : ack).add(now - at);
           else skipped++;
         }
       }
@@ -230,6 +233,9 @@ export function createLoad({
       });
       c.ws.on('open', () => {
         c.helloAt = performance.now();
+        // A deliberately slow player: this socket stops reading for four seconds in every five, as a connection
+        // that cannot keep up does. What it costs the players beside it is the question.
+        if (slowEvery > 0 && i % slowEvery === 0) { c.slow = true; c.slowTimer = setInterval(() => { c.ws._socket?.pause(); setTimeout(() => c.ws._socket?.resume(), 4000); }, 5000); }
         c.compressed = /permessage-deflate/.test(c.ws.extensions ?? '');
         send(c, {
           t: 'hello',
@@ -434,6 +440,7 @@ export function createLoad({
       measuring = false;
       stopping = true;
       clearInterval(timer);
+      for (const c of clients) clearInterval(c.slowTimer);
       loop.disable();
       for (const c of clients) c.ws?.close(1000, 'load step complete');
       await new Promise((r) => setTimeout(r, 250));
@@ -441,7 +448,7 @@ export function createLoad({
       return {
         ...end,
         errors: [...errors].map(([text, count]) => ({ text, count })),
-        histograms: { first, welcome, ack, gaps, loops },
+        histograms: { first, welcome, ack, slowAck, gaps, loops },
         inputReports: onTime,
         inputReportsLate: lateAcks,
         leadTicks: clients.filter((c) => !c.retired).map((c) => c.lead),
@@ -456,6 +463,7 @@ export function createLoad({
           priorSeat: c.priorSeat,
           sameSeat: c.priorSeat === null ? null : c.seat === c.priorSeat,
           retired: Boolean(c.retired),
+          slow: Boolean(c.slow),
           firstStateMs: c.first === null ? null : c.first - c.began,
           helloAfterMs: c.helloAt ? c.helloAt - c.began : null,
           closeCode: c.closeCode,

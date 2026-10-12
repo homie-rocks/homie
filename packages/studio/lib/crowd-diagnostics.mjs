@@ -58,6 +58,7 @@ const result = await withKey(
           transport: f?.transport,
           gates: f?.gates,
           durability: f?.durability,
+          save: f?.save,
           diagnostics: f?.diagnostics,
           error: r.error
         }) + '\n'

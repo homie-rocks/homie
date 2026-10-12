@@ -91,6 +91,12 @@ test('public Worker, real Table storage and Gates admit above 32 and preserve se
       assert.equal(kept.gates.reduce((a,g)=>a+g.subscribed,0),count,'the Gates between them hold every player');
       assert.equal(kept.gates.length,Math.ceil(count/GATE_PLAYERS),'and the room opened only the Gates its players fill');
       assert.ok(kept.gates.every(g=>g.deliveredHz===null||g.deliveredHz>0));
+      // In real workerd: the room's checkpoint is written without holding its frames (allowUnconfirmed).
+      for(let wait=0;wait<60&&!(kept.save?.unconfirmed>0);wait++){await new Promise(r=>setTimeout(r,100));kept=await (await mf.dispatchFetch('https://studio.test/test-diagnostics')).json();}
+      assert.ok(kept.save.unconfirmed>0,`the room wrote ${kept.save?.unconfirmed} unconfirmed checkpoints`);
+      assert.equal(kept.durability.ok,true);
+      assert.ok(kept.transport.every(t=>t.in.frames>0),'and counts what each Gate sent it');
+      assert.ok(kept.gates.every(g=>g.worldsOld&&g.worldGaps));
       assert.equal(kept.gates.reduce((a,g)=>a+g.coasting,0),count-count/10,'nine players in ten are current clients, on the crowd path');
     }
     for(const failure of ['gate','table']){

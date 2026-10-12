@@ -90,7 +90,7 @@ import { appRole, openPath } from './app-format.mjs';
 import { playerEnabled, EMBED_GAME_JS } from './embed.mjs';
 import { NetRoom, WATCH_POLICIES, departure, errorLine, versionOf } from './room.mjs';
 import { hostedGame, hostedBuild, compiledFor, startHost } from './hosted.mjs';
-import { roomStore, restoreDelay } from './room-store.mjs';
+import { roomStore, restoreDelay, LOOSE_SAVE } from './room-store.mjs';
 import { appCors, isAppOrigin } from './standalone.mjs';
 import { ROOM_ID, badRoomPage, embedAncestors, embedPreview, frameAncestors, noWatchPage, playPage, shellKey, shellStandIn, watchPage } from './pages.mjs';
 import {
@@ -105,7 +105,7 @@ import { forgetLines, historyOf, keepLines, keptLine } from './lounge-store.mjs'
 import { isLoungePath, loungeRoutes } from './lounge.mjs';
 import { doorPage, serverPage, serversPage } from './site.mjs';
 import { isLocalOrigin, qrSvg } from './qr.mjs';
-import { acceptMultiplex, diagnosticsOf, gateFor, nextGate } from './gate.mjs';
+import { acceptMultiplex, diagnosticsOf, gateFor, gatePlayers, nextGate } from './gate.mjs';
 import { worldSource } from './world-wire.mjs';
 export { Gate, Concentrator } from './gate.mjs';
 import { seatCount, paramsFrom, perAddress, seatsOf } from './seats.mjs';
@@ -1361,6 +1361,9 @@ export class Table {
       if (this.saved?.retired === true) this.cleanupPending = true;
       this.recorded = (await ctx.storage.get('recorded')) ?? 0;
       this.officeSaved = (await ctx.storage.get('office')) ?? null;
+      // A big match room's last unconfirmed checkpoint (worker/room-store.mjs), read once as the object wakes.
+      try { this.looseSave = (await ctx.storage.list?.({ prefix: LOOSE_SAVE })) ?? null; }
+      catch (error) { this.looseSave = null; this.storageProblem(error); }
     });
   }
 
@@ -1434,7 +1437,7 @@ export class Table {
     try {
       const build = hostedBuild(this.game);
       const persistent = this.isPersistent();
-      try { this.durable ??= roomStore(this.ctx.storage, { persistent: this.isPersistent() }); } catch (error) { if (persistent) throw error; this.storageProblem(error); }
+      try { this.durable ??= this.openStore(); } catch (error) { if (persistent) throw error; this.storageProblem(error); }
       let saved = this.cleanupPending ? null : this.readRoom();
       restoring = Boolean(saved);
       if (this.persistentStored && build.settings.lifetime !== 'persistent') throw new Error('This room holds a lasting world. Keep room.lifetime persistent; its save is retained.');
@@ -1480,7 +1483,9 @@ export class Table {
       this.hostRt = startHost(this.game, {
         ...(saved ? { restore: new TextEncoder().encode((saved.hostText ?? JSON.stringify(saved.host))), restoreEpoch: epoch, startDelayMs: boot.count === 1 ? restoreDelay(`${this.game}/${this.code}`) : 0 } : {}),
         record: (owner,key,value) => this.queueRoundRecord(owner,key,value),
-        store: { save: (bytes, commitment) => this.saveRoom(bytes, commitment) },
+        store: { save: (bytes, commitment) => this.saveRoom(bytes, commitment, true) },
+        // A room behind Gates needs no snapshot as text: nothing is encoded that nobody is sent (room.mjs, hostSnap).
+        snapshotText: () => !this.relayed,
         ...(build.settings.characters ? { characterFor: (peer) => {
           const account = room.clients.get(peer.id)?.player;
           return account ? this.characterGrants.get(account) ?? null : null;
@@ -1520,12 +1525,19 @@ export class Table {
     }
   }
 
-  saveRoom(bytes, commitment) {
+  /** This object's room store, with the unconfirmed checkpoint it woke to (if any). */
+  openStore(persistent = this.isPersistent()) {
+    const loose = this.looseSave; this.looseSave = null;
+    return roomStore(this.ctx.storage, { persistent, loose, onProblem: (error) => this.storageProblem(error) });
+  }
+
+  /** `periodic`: the rules host's own checkpoint of a tick, as against a save an admission or a pause asked for. */
+  saveRoom(bytes, commitment, periodic = false) {
     if (this.persistentFailed) throw new Error('Lasting world stopped; restart from its committed save');
     const now = Date.now();
     if (now < (this.saveRetryAt ?? 0)) throw this.saveError ?? new Error('room save retry is waiting');
     try {
-      this.durable ??= roomStore(this.ctx.storage, { persistent: this.isPersistent() });
+      this.durable ??= this.openStore();
       const build = hostedBuild(this.game);
       const host = new TextDecoder().decode(bytes);
       const net = this.room.saved();
@@ -1544,6 +1556,10 @@ export class Table {
         commitment ??= { force: false, seconds: c.settings.durability.movementSeconds, tickHz: c.settings.tickHz,
           fields: { kinds: c.kinds.map(k => k.fields.flatMap(([,f],i) => f.durable ? [i] : [])), shared: c.shared.flatMap(([,f],i) => f.durable ? [i] : []) } };
         this.durable.commit(saved, commitment);
+      } else if (this.relayed && periodic && !clearing) {
+        // A room behind Gates: its once-a-second checkpoint holds none of its frames (worker/room-store.mjs). A save
+        // an admission asks for is still confirmed before the welcome that names the seat can leave.
+        this.durable.write(saved, { unconfirmed: true });
       } else this.durable.write(saved);
       if (clearing) { this.cleanupGeneration = (this.cleanupGeneration ?? 0) + 1; this.queueNetCleanup(false); }
       this.roomSave = saved;
@@ -1742,7 +1758,7 @@ export class Table {
     const room = this.room;
     if (!room || !this.hostRt) {
       if (this.ctx.storage.sql?.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'save'").toArray().length) {
-        this.durable ??= roomStore(this.ctx.storage);
+        this.durable ??= this.openStore(false);
         const saved = this.cleanupPending ? null : this.readRoom(true);
         if (saved) {
           this.game = saved.game; this.code = saved.room;
@@ -2118,7 +2134,7 @@ export class Table {
       // players sent to a Gate in the last ten seconds who have not reached it yet.
       const gates = Number(new URL(request.url).searchParams.get('gates')) || 1, now = Date.now(), promised = new Map();
       for (const [index, due] of this.gatePromised) { const live = due.filter((at) => at > now); if (live.length) { this.gatePromised.set(index, live); promised.set(index, live.length); } else this.gatePromised.delete(index); }
-      const gate = nextGate(gates, this.gateHeld, promised);
+      const gate = nextGate(gates, this.gateHeld, promised, gatePlayers(this.env));
       if (!this.gatePromised.has(gate)) this.gatePromised.set(gate, []);
       this.gatePromised.get(gate).push(now + 10_000);
       return json({ gate });
@@ -2398,6 +2414,8 @@ export class Table {
       // A Gate's stamp on a player's message to this object handling it, ms.
       inputTransitMs: { n: transit.length, p50: at(0.5), p95: at(0.95), max: transit.at(-1) ?? null },
       durability: this.storageHealth ?? { ok: true },
+      // Checkpoints written without holding the room's frames for them (worker/room-store.mjs), so far.
+      save: { unconfirmed: this.durable?.unconfirmedWrites ?? 0 },
     });
     const work = diagnosticsOf(this.env, this.game, this.code).fetch('https://diagnostics/__diagnostics', { method: 'POST', body })
       .then((r) => r.body?.cancel?.())

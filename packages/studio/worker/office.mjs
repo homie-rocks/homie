@@ -62,7 +62,7 @@ import { toolIdentity } from './tool-identity.mjs';
  * from an office key it is ALWAYS an ask (the AI may only propose one), and so is marking a referrer paid.
  */
 import { seatsOf } from './seats.mjs';
-import { diagnosticsOf, roomLayout } from './gate.mjs';
+import { diagnosticsOf, gatePlayers, roomLayout } from './gate.mjs';
 import { PUBLIC_SERVER, SERVER_LIMITS, checkServer, levelName, narrows, policyOf, roomServer, rowFor, serverView, serversOf, serverPassCookie, writeServer } from './servers.mjs';
 import { BRAIN_BUDGET, aiName, brainFor, fillSpot, passById, passCreate, passList, passRevoke, think } from './agents.mjs';
 import { DEFAULT_MODEL, NEURONS_PER_M, OWNER_MODEL, vocabularyOf } from './brain.mjs';
@@ -432,7 +432,7 @@ async function roomFacts(env, game, room, max) {
  * small room answers for itself, as it always has.
  */
 export async function roomDiagnostics(env, game, room, max) {
-  if (!env.GATE || roomLayout(max).gates === 1) return roomFacts(env, game, room, max);
+  if (!env.GATE || roomLayout(max, gatePlayers(env)).gates === 1) return roomFacts(env, game, room, max);
   let kept = null;
   try {
     const res = await diagnosticsOf(env, game, room).fetch(`https://diagnostics/__diagnostics?room=${enc(room)}`);

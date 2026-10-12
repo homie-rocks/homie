@@ -222,7 +222,18 @@ For example, a 300-player room can choose spatial delivery explicitly:
 The studio chooses the radius, precision and distant update rate for its game. The
 controlled body stays precise. Whole-room state remains the default. The build runs a
 local capacity trial; its numbers are not Cloudflare capacity guarantees. Test the actual
-mechanic at the chosen size. Rules builds derive their revision from rules and view;
+mechanic at the chosen size.
+
+**What one room carries.** A room's rules run in one object on one thread, whatever its
+`players.max`. Measured on Cloudflare in October 2026 with a light game at 20 ticks a
+second (every player in one dense arena, ten inputs a second each): 300 players with
+margin (clean in every run), 600 at the edge (four runs of six), and 800 to 1,000 only by
+luck (five runs of twenty-five). A game with heavier rules carries fewer. Homie sets no
+limit on `players.max`; it is the studio's to choose with its own game's numbers:
+`lib/crowd-probe/README.md` is how to measure them on your own Cloudflare account. Beyond
+what one room carries, a world is split across rooms (several rooms of a game today; one
+world of many areas is on the roadmap). `docs/rooms-capacity-findings.md` in the Homie
+repository has the measurements. Rules builds derive their revision from rules and view;
 do not manually bump `netplay.version`. Optional `netplay.params` still selects play-page
 query parameters passed to the view, beside `debug` and `q`.
 
