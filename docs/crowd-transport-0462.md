@@ -1,6 +1,25 @@
-# Four cloud trials of big rooms, and the shape that followed (0.46.2)
+# Six cloud trials of big rooms, and the shape that followed (0.46.2 to 0.46.6)
 
-## What is proven on Cloudflare, and what is not
+## What one room carries
+
+Measured on Cloudflare with the crowd-circuit game (every player in one dense arena, each
+seeing about 180 others, 20 ticks a second), over the last three trials:
+
+- **300 players with margin**: clean in all seven runs, from home and from inside
+  Cloudflare, at any hour.
+- **600 is the edge**: clean in four runs of six.
+- **800 to 1,000 is luck**: clean in five runs of twenty-five from inside Cloudflare. The
+  same step gave 10 frames a second or 20, minutes apart.
+- It depends on what the game's rules cost: a heavier game carries fewer. Measure your own
+  (`lib/crowd-probe/README.md`).
+- Past that, a world has to be more than one room object: the roadmap's worlds of many
+  areas (`docs/rooms-plan.md`, milestone 4). 1,000 players in one object is not promised.
+
+The numbers, the cost of a tick and the ways past one object are in
+`docs/rooms-capacity-findings.md`. The rest of this note is how it got here: six trials,
+and what each one showed. The table below is the fourth trial's, as it was written then.
+
+## What was proven on Cloudflare by the fourth trial, and what was not
 
 Measured on 11 October 2026 with the released code, the crowd-circuit game (every player
 in one dense arena, each seeing about 180 others), 150 seconds a step:
@@ -317,6 +336,129 @@ this note. Each step ran from the trial computer and from the in-Cloudflare prob
 - 1,000 from inside Cloudflare: 785 seated, 20 frames a second for those. Whether the
   215 are the probe's limit or admission is not known yet.
 
+## The fifth trial (the first build of 0.46.6, numbered 0.46.4 when it ran), and what the room costs
+
+Data under `reports/crowd-circuit/phase-h/20261011T115304Z/`: 600, 800, 900 and 1,000 players, each from home and
+from inside Cloudflare, with compression and without. One run of each.
+
+**What held.** 1,000 of 1,000 admitted. With compression, from inside Cloudflare: 20 frames a second at 1,000, ack
+168 / 340 ms. Compression helps at every size.
+
+**What did not.** From inside Cloudflare without compression the room was clean at 800 and fell to 14 frames a
+second at 900 and 1,000; with compression it wobbled at 900 and was clean at 1,000; from home it fell at 800.
+When it fell, every Gate fell alike: in one second all twenty Gates measured a round trip to the room of 0.94 to
+1.10 s, and the room measured 0.99 to 1.13 s to each of them, with eight worlds unacknowledged on every channel.
+Worlds still arrived smoothly (the longest wait for one was 0.16 to 0.29 s), so this was a steady queue in front
+of one busy object and not a pause: the room. Compression is a Gate's work and the room cannot see it, so the
+two columns differing at 900 and 1,000 is one run differing from another, not compression.
+
+**The room's second, measured where a clock moves.** `test/crowd-room-cost.mjs` runs the room's own objects in
+Node with 1,000 seeded players sending what the probe sends (about 11,000 rows a second). On the laptop this was
+written on, a second of a 1,000-player room took about 125 to 145 ms of one core:
+
+| Part | ms a tick | share |
+| --- | --- | --- |
+| The rules (1,000 bodies stepped) | 3.6 to 4.0 | 55% |
+| Players' messages read (a Gate's frame of them, 500 a tick) | 1.3 to 1.7 | 23% |
+| Each Gate's world built and written (20 of 29 KB) | 0.5 | 8% |
+| The snapshot, the control rows, the checkpoint once a second, the rest | 0.5 | 8% |
+| The whole snapshot as text, which a room behind Gates sends to nobody (removed in this release) | 0.84 | was 12% |
+
+It grows with players in a straight line (77 ms a second at 600, 97 at 800, 126 at 1,000). The second trial put
+Cloudflare at five to eight times slower than this laptop; if that holds, a 1,000-player room spends 0.6 to 1.0
+of every second of its one thread, which is where it fell. That figure is an inference from a Gate's cost in the
+first trial. This release measures it instead (below).
+
+**A second cause, at every size.** Cloudflare holds whatever an object sends after a storage write until the write
+is confirmed. The room wrote its whole checkpoint once a second, so every second, at 50 players as at 1,000, one
+or two worlds reached every Gate a tick or more late (a Gate's longest wait for a world was 0.10 s at 50 players
+and 0.13 to 0.14 s at 1,000 in the healthy runs, where 0.05 is due). "World age p95" in these tables is the worst
+world of a Gate's second, so it was 0.23 to 0.32 s in runs that were otherwise clean.
+
+**No object can see itself run late.** Three findings, one cause. The room's own clock read behind its Gates' by
+more as the room grew: about 0 at 300 players, 0.45 s at 600, 0.8 s at 1,000 in a clean run and 1.4 s in a fallen
+one, checked against two other clocks (the diagnostics object's and the collector's). The room's count of its own
+late ticks was 0 throughout. And the probe's own gauge of its timers' lateness read exactly 0 in every one of 520
+requests, each some 15,000 timer turns with frames to decode between them, where any real clock shows a
+millisecond now and then. On Cloudflare a Worker's clock stands still while its code runs, and when a timer fires
+it reads the time the timer was due, not the time it ran. So "Gate late 0 / 0" in this trial's table, a Gate's
+20 ms timer measured by the Gate's own clock, says nothing either way, and the room's clock is its timers'
+schedule, behind the world by however late they have run. (Local `workerd` does not do this: its clock moves.)
+What an object's lateness looks like from outside is all there is: a Gate's round trip to the room, the players'
+loop, and Cloudflare's own count of processor time.
+
+**From one home connection.** With compression the connection was not full (3.1 to 3.5 of about 20 MB a second),
+and the Gates' columns show the same fall as from inside Cloudflare, at 800 and not 900: the home driver's players
+send 10.5 inputs a second each where the probe's send 8 to 9, a fifth more work for the room. Without compression
+the same players ask for 12 MB a second of one satellite connection, and every player is behind and is sent fewer
+frames, as they should be. A thousand players on one connection is not a population of players; from home, the
+honest sizes are the ones a connection carries with room to spare (600 here), and the question it answers is what
+a player's last hop adds.
+
+**Pacing.** A player is sent fewer frames when behind and not catching up, by their own reports alone. An
+exemption for a Gate whose players are mostly behind at once was written and removed before release: that case is
+a connection they share being full, which sending each of them less is the only cure for. In the fallen runs
+delivery fell because worlds did not reach the Gates (a Gate wrote as many frames a player as it received
+worlds), not because players were paced. Each Gate now also counts the players more than a second behind,
+whether or not it is pacing them.
+
+### What 0.46.6 changes
+
+- **The room's checkpoint holds none of its frames.** A match room behind Gates writes its once-a-second
+  checkpoint to the object's key-value storage with `allowUnconfirmed`, Cloudflare's own way to say that nothing
+  need wait for it. A save an admission asks for is still confirmed before the welcome that names the seat
+  leaves, and removes the unconfirmed one in the same transaction, so an older checkpoint can never be restored
+  over a newer save. A lasting world's writes are confirmed, as before.
+- **Less of the room's second**: no whole snapshot as text for nobody (0.84 ms a tick); a message's size is not
+  measured by encoding it when it is ASCII; the round trip the rules are told for lag compensation is read, for a
+  player behind a Gate, from its ten-second window four times a second, not once an input.
+- **A Gate nobody is on gives its channel back after ten seconds.** An open channel kept the room and the Gate in
+  memory, and billed, with nothing to carry; in earlier trials none ever ended. The next player opens another.
+  (Reading the room's processor time off those channels' requests in a tail was tried in the sixth trial and
+  does not work: the work is not counted there.) A room cannot divide a tick between the rules and its sends, or
+  time anything else about itself (above); `crowd-room-cost.mjs` gives the division.
+- **How fast Cloudflare is, measured from outside**: the probe runs one fixed piece of work ten times in a request
+  and the computer running the trial holds the stopwatch (that request less one that does no work), then times
+  the same work itself (`crowd-cloud.mjs --calibrate`). An instrument that timed the room's thread from inside
+  with an idle timer was written and removed: on a clock that reads a timer's due time it could measure nothing,
+  and a timer chain that falls behind could drag the clock the tick is scheduled by.
+- **A world's age as a share**, not only the worst of a second: of every world every Gate wrote, how many were
+  over 100, 200 and 400 ms old, and how many came more than 75, 150 and 300 ms after the one before.
+- **Slow players in both drivers**, every Kth so every Gate holds some: the probe's take six frames a second; the
+  home driver's sockets stop reading for four seconds in five. The report gives the healthy players' figures apart.
+
+What this release does not do is make the rules cheaper, and they are over half of the room.
+
+## The sixth trial (the second build, numbered 0.46.4 when it ran; 0.46.6 is that build less the measurements that could not measure)
+
+Data under `reports/crowd-circuit/phase-i/20261011T205700Z/`, run at 14:00 Pacific where the fifth ran at 05:00:
+300 and 600 from home, 300 with slow sockets, and 800, 900 and 1,000 from inside Cloudflare three times each with
+compression and three without.
+
+- **It was not better than the fifth, and 1,000 is not dependable.** 800 was clean in one run of six where the
+  fifth had it clean in two of two; 900 in one of six; 1,000 in none, the best delivering 18.5 frames a second.
+  The same step gave 10 frames a second and 20 an hour apart.
+- **The build is not what got worse.** On one computer, back to back, this build's room costs 113 to 116 ms of a
+  core a second at 1,000 players where the fifth trial's costs 121, and 119 against 123 with every input late.
+  The checkpoint change helps wherever the room is not out of time: at 300 the gap every Gate saw once a second
+  is gone (103 ms in every second before; 63 ms now, over 75 ms in 22% of seconds) and a Gate's round trip to the
+  room fell from 40 ms to 18. What differed was the hour, or nothing but chance: this note cannot say which.
+- **Cloudflare ran a fixed piece of work 2.6 to 4.1 times slower than the laptop**, by a stopwatch outside it,
+  varying by half again between requests. By the bench that is 0.30 to 0.47 of the room's thread at 1,000 for
+  the work the bench sees, which does not by itself explain a room falling at 800: about as much again is the
+  runtime's own work on the same thread and the machine's other tenants, and it was not measured.
+- **The room's processor time could not be read.** The channels' requests reported 0.1% to 0.9% of the thread in
+  runs where the room was out of time, and the tail's filters were not applied. The column is gone.
+- **A late probe's clock runs slow**: rows of 25 to 32 "ticks a second" from a 20-tick room. The cloud report
+  now counts frames for each tick the room advanced.
+- **Slow sockets, 30 of 300 from home**: the other 270 got 19.95 frames a second (the worst 19.57). In steady
+  play only slow players were paced (18 to 28 of the 30). Once, as measurement began, every Gate's players fell
+  behind together for three seconds (the home connection) and 41 healthy players were paced with them, then
+  restored. The acknowledgement tail of 3.9 s in that row is the slow players' own; the drivers now keep their
+  figures apart.
+
+The conclusion is at the top of this note, and what to do about it in `docs/rooms-capacity-findings.md`.
+
 ## What is proven, and where
 
 Deterministic, on virtual time with seeded players, in the release gate
@@ -350,14 +492,25 @@ Deterministic, on virtual time with seeded players, in the release gate
 - The room sends one world a Gate a tick and writes nothing per player.
 - A game with owner-only fields is never handed to a Gate whole.
 - Rates, `room.rates`, and the diagnostics object answering without asking the room.
+- Fifteen probe players on one Gate, three of them slow (six frames a second): the twelve others get 20 frames a
+  second each and never wait 110 ms for one, under one in twenty of their inputs is late, only slow players are
+  paced, and the Gate's round trip to the room stays under 20 ms.
+- A match room's unconfirmed checkpoint: written with `allowUnconfirmed`, the newest save when it exists, read
+  back by an object that wakes, replaced by any confirmed save, ignored when its pieces do not fit its record,
+  never written by a lasting world. In real `workerd` a room behind a Gate writes them and restores.
+- A Gate's channel stays while a player is on the Gate or comes back within ten seconds, closes ten seconds after
+  the last leaves, and the next player opens another.
+- Fifty players on a Gate, five of them on sockets that stop reading for four seconds in five, for a minute: the
+  forty-five others get every frame and are never paced; only slow players are; every frame a slow player is sent
+  decodes and has their own body in it.
 
 In real `workerd` (`gates-workerd.test.mjs`): 40 players in a 300-seat room are placed on
 one Gate by the room, each receives the world, sent as numbers, with their own body in
 it; nine in ten on the crowd path; and the diagnostics object reports every one without
 the room being asked.
 
-Not proven: Cloudflare at 1,000 players. Load runs on the computer this was written on
-are not evidence either way; it was running other heavy work.
+Not proven, and not promised: 1,000 players in one room object on Cloudflare (the top of this note). Load runs on
+the computer this was written on are not evidence either way; it was running other heavy work.
 
 ## Small rooms and browser-hosted games
 
@@ -377,6 +530,20 @@ rules suites, the legacy release gate in CI (starters released with 0.32.1, two 
 browsers finishing a round) and the two-browser studio check. The old view path
 (`scheduledView` with the plain encoder) gives byte-for-byte what it gave; the tests that
 pin its output were not changed.
+
+## The local reproduction, by hand
+
+```sh
+CHROME_PATH='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' npm run test:crowd
+```
+
+Eight local `workerd` processes (the Worker, the room, the Gates), two Chrome players and
+the load driver on one computer, at 300 players and then 1,000 (`CROWD_TOTAL=302` for the
+first alone). It is not a check: it needs most of a computer to itself, and a four-core CI
+runner gives 10 frames a second at 300 where Cloudflare gives 20 at 600. On an idle
+eight-core laptop the 300 case passes (20 frames a second, ack p95 170 ms). Use it to see
+a change work end to end with the real driver before a cloud trial; do not read capacity
+from it.
 
 ## Measuring your own game
 

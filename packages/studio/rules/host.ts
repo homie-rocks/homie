@@ -80,6 +80,8 @@ export interface HostOptions {
   clock: HostClock;
   /** Synchronous save: the caller's storage output gate holds this tick's outgoing frames until confirmed. */
   store?: { save(bytes: Uint8Array, commitment?: { force: boolean; seconds: number; tickHz: number; fields: { kinds: number[][]; shared: number[] } }): void };
+  /** Whether a snapshot is also handed over as text (the default). A room that sends the whole world to nobody answers false. */
+  snapshotText?: () => boolean;
   /** Table recovery reserves this epoch in storage before starting this host. Ordinary deterministic restores omit it. */
   restoreEpoch?: number;
   startDelayMs?: number;
@@ -764,7 +766,8 @@ export function createHost(o: HostOptions): Host {
     // apart to whoever interpolates between them. The stamp always rises: a replica drops one that does not.
     lastSt = Math.max(lastSt + 1, Math.round(Math.min(now, dueOf(core.tick))));
     const snap = { t: 'snap', from: null, e: epoch, k: core.tick, st: lastSt, d: data, c: rows };
-    const encoded = JSON.stringify(snap);
+    // The whole world as text, for whoever is sent it whole. A room that sends it to nobody says so and is spared it.
+    const encoded = o.snapshotText?.() === false ? undefined : JSON.stringify(snap);
     timing.record('encode', encodeAt);
     const sendAt = timing.now();
     o.send(snap, encoded);

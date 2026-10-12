@@ -31,7 +31,8 @@ for (const k of Object.keys(opts))
       'churn',
       'churn-at',
       'compress',
-      'strict-chrome'
+      'strict-chrome',
+      'slow-every'
     ].includes(k)
   )
     throw Error('Unknown option --' + k);
@@ -127,7 +128,8 @@ function makeWorker(index) {
       room,
       index,
       workers: workerCount,
-      compress: opts.compress !== 'off'
+      compress: opts.compress !== 'off',
+      slowEvery: Number(opts['slow-every'] ?? 0)
     }
   });
   let sequence = 0;
@@ -474,7 +476,7 @@ try {
   );
   loop.disable();
   const histograms = {};
-  for (const key of ['first', 'welcome', 'ack', 'gaps', 'loops']) {
+  for (const key of ['first', 'welcome', 'ack', 'slowAck', 'gaps', 'loops']) {
     const h = new Histogram();
     for (const f of finals) h.merge(f.histograms[key]);
     histograms[key] = h.json();
@@ -518,6 +520,8 @@ try {
     firstStateMs: histograms.first,
     welcomeMs: histograms.welcome,
     inputAckMs: histograms.ack,
+    // With --slow-every: the slow players' own acknowledgements, kept out of everybody else's.
+    slowInputAckMs: histograms.slowAck,
     receiveGapMs: histograms.gaps,
     inputLoopMs: histograms.loops,
     ackSkipped: sum('ackSkipped'),
@@ -541,6 +545,14 @@ try {
       wireDownBytes: sum('wireDownBytes'),
       compressedSockets: sum('compressed')
     },
+    // --slow-every K: every Kth simulated player reads for one second in five (so every Gate holds some). `healthy` is everybody else: what the
+    // slow ones cost them is the difference from a run without any.
+    slowPlayers: players.filter((p) => p.slow).length,
+    healthy: (() => {
+      const a = players.filter((p) => !p.slow && !p.retired), of = (key) => a.map((p) => p[key]).filter(Number.isFinite).sort((x, y) => x - y);
+      const hz = of('deliveredHz'), gap = of('maxStateGapMs');
+      return { players: a.length, deliveredHz: { min: hz[0] ?? null, median: hz[Math.floor(hz.length / 2)] ?? null }, maxStateGapMs: { median: gap[Math.floor(gap.length / 2)] ?? null, max: gap.at(-1) ?? null } };
+    })(),
     // Samples in which a Chrome player was not a connected replica of this room.
     chromeTrouble,
     // Whether the server agreed to permessage-deflate on these sockets, as a

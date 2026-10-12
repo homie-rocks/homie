@@ -17,6 +17,31 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.46.6] - 2026-10-11
+
+**Plugin 0.46.6** · Big rooms: what one room carries, measured.
+
+What one room object carries on Cloudflare, measured in six trials and stated: with a light game at 20 ticks a second, 300 players with margin, 600 at the edge, 800 to 1,000 only by luck.
+
+### Changed
+
+- A big match room's once-a-second checkpoint no longer holds its frames. Cloudflare holds whatever an object sends after a storage write until the write is confirmed, so one or two worlds a second reached every Gate a tick late, at every size. The checkpoint is now written with `allowUnconfirmed`; a save an admission asks for is confirmed as before and replaces it. A lasting world's writes are unchanged. At 300 players the gap every Gate saw once a second is gone, and a Gate's round trip to the room fell from 40 ms to 18.
+- A big room costs less of its one thread than on 0.46.3 (a fifth less; a quarter less when inputs arrive late): it no longer builds the whole snapshot as text for nobody, does not encode an ASCII message to measure it, and reads the round trip it tells the rules, for a player behind a Gate, once a second from its ten-second window, not once an input.
+- A player is sent fewer frames only when behind and not catching up. A connection that stalls for a second and then delivers what it held catches up by itself; 0.46.2 slowed every player of a healthy room of 600 when their one home link hiccuped.
+- A Gate nobody is on gives its channel to the room back after ten seconds; the next player to arrive opens another. An open channel kept a big room and its Gates in memory after everybody had left.
+- Each Gate reports the share of worlds over 100, 200 and 400 ms old and the players more than a second behind, beside the worst of each second.
+
+### Added
+
+- Measuring a game's capacity on your own Cloudflare account (`lib/crowd-probe/README.md`): the in-Cloudflare probe offers compression as a browser does, reports every thirty seconds so a request cut short has still said what it saw, can play slow players among healthy ones (`--slow-every`), and times a fixed piece of work against your computer with the stopwatch outside Cloudflare (`--calibrate`). `lib/crowd-probe/run-trial.sh` runs a whole trial, each in-Cloudflare step three times, and writes one summary. The home driver can stop every Kth player's socket reading (`--slow-every`). Slow players' own figures are kept apart from everybody else's.
+
+### Upgrade notes
+
+- 1,000 players in one room is not promised; past what one room carries a world is split across rooms. Rooms of 64 seats or fewer and games a player's browser hosts are not on any of this path and behave as on 0.46.3.
+- **What one room carries** is in the README ("Room size and delivery") and, with the measurements and the ways past one room, in `docs/rooms-capacity-findings.md`. Homie still sets no limit on `players.max`: choose it with your own game's numbers.
+- Nothing an object measures about itself by its own clock is to be trusted on Cloudflare: a Worker's clock stands still while its code runs and reads a timer's due time when the timer fires. Each Gate's 20 ms lateness timer (added early in this release) read 0 in every step of every trial, fallen ones too. Read a Gate's round trip to the room and the share of worlds over 200 ms old.
+- `HOMIE_GATE_PLAYERS` on a studio's Worker sets the players a Gate holds, for a trial that is finding the right number. A studio does not set it.
+- The local crowd reproduction (eight workerd processes, two Chrome players and the load driver on one computer) is no longer a check. Run it by hand with `npm run test:crowd`; `docs/crowd-transport-0462.md` says what it can and cannot show.
 ## [0.46.5] - 2026-10-11
 
 **Plugin 0.46.5**

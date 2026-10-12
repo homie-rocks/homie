@@ -36,9 +36,11 @@ function parseFrame(event) {
  * as full as it can serve, and a room opens only the Gates its players fill.
  * A studio chooses its room's size and nothing else. */
 export const GATE_PLAYERS = 50;
-export function roomLayout(seats) {
+/** `per`: players a Gate, for a trial that is finding the right number (`HOMIE_GATE_PLAYERS` on the Worker). A studio never sets it. */
+export const gatePlayers = (env) => { const n = Number(env?.HOMIE_GATE_PLAYERS); return Number.isInteger(n) && n >= 4 && n <= 200 ? n : GATE_PLAYERS; };
+export function roomLayout(seats, per = GATE_PLAYERS) {
   // A room of up to 64 is its Table alone, as it has been since 0.45.0.
-  const gates = seats <= 64 ? 1 : Math.ceil(seats / GATE_PLAYERS);
+  const gates = seats <= 64 ? 1 : Math.ceil(seats / per);
   return { gates, concentrators: 0 };
 }
 /** The Gate a key lands on when the room cannot be asked: spread evenly, as 0.45.0 did. */
@@ -52,17 +54,17 @@ function hashedGate(key, gates) {
  * Gate, not twenty with two or three players each, every one of them costing the room a channel. `held` is each
  * Gate's players now and `promised` those sent to it who have not arrived yet.
  */
-export function nextGate(gates, held, promised = new Map()) {
+export function nextGate(gates, held, promised = new Map(), per = GATE_PLAYERS) {
   let least = 0, fewest = Infinity;
   for (let i = 0; i < gates; i++) {
     const n = (held.get(i) ?? 0) + (promised.get(i) ?? 0);
-    if (n < GATE_PLAYERS) return i;
+    if (n < per) return i;
     if (n < fewest) { fewest = n; least = i; }
   }
   return least;
 }
 export function gateFor(env, game, room, seats, key) {
-  const layout = roomLayout(seats);
+  const layout = roomLayout(seats, gatePlayers(env));
   // One logical Gate is embedded in the Table for a small room. Same relay,
   // admission and delivery protocol; no extra Durable Object or seat clamp.
   const table = () => env.TABLE.get(env.TABLE.idFromName(`${game}/${room}`));
@@ -211,7 +213,9 @@ export function multiplexSession(socket, connect, { onMetrics = () => {}, delay 
   const scheduleAdmission = () => {
     if (!closed && admissions.length && attaching < 8 && out.buffered() < 512 * 1024 && admissionTimer === null) admissionTimer = setTimeout(pump, 1);
   };
-  const transportFacts = () => ({ ...out.facts(), admissions: admissions.length, attaching });
+  // What this Gate has sent the room: frames, the rows in them (a row is a player's message, mostly) and their size.
+  const heard = { frames: 0, rows: 0, bytes: 0 };
+  const transportFacts = () => ({ ...out.facts(), in: { ...heard }, admissions: admissions.length, attaching });
   const shutdown = () => {
     if (closed) return;
     closed = true; out.close();
@@ -226,6 +230,7 @@ export function multiplexSession(socket, connect, { onMetrics = () => {}, delay 
       if (closed) return;
       const rows = parseFrame(event);
       if (!Array.isArray(rows)) throw new Error('invalid multiplex batch');
+      heard.frames += 1; heard.rows += rows.length; heard.bytes += event.data.length;
       for (const [op, id, value, ip, agent] of expandBatch(rows)) {
         if (op === 'metrics') { onMetrics(id, value); continue; }
         if (op === 'open') {
@@ -291,26 +296,38 @@ export function acceptMultiplex(request, connect, options) {
  * A socket to a slow player has no back-pressure a Worker can read, so a Gate
  * that writes every tick to a link that carries fewer leaves that player
  * seconds behind for good: every frame arrives, each one later than the last.
- * A client names the newest tick it holds (`g`, on its inputs and pings). While
- * that trails the room by more than a second the Gate halves this player's
- * rate, down to one a second; when it is back within half a second the rate
- * doubles again. Each frame is a delta from the last one SENT, so a skipped
- * tick costs nothing later, and the player's own body is in every frame.
- * A client that names nothing is sent every tick, as before.
+ * A client names the newest tick it holds (`g`, on its inputs and pings).
+ *
+ * Being behind is not the reason to send less: a connection that stalls for a
+ * second and then delivers what it held catches up by itself, and sending it
+ * less only makes it worse (0.46.2 paced all 600 players of a healthy room
+ * when their one home link hiccuped). The reason is being behind and NOT
+ * catching up: more than a second behind on two reports half a second apart,
+ * the second not a quarter of a second nearer than the first. Then this
+ * player's rate halves, down to one a second, and halves again while that
+ * stays so. Within half a second of the room, the rate doubles back, a step a
+ * second. Each frame is a delta
+ * from the last one SENT, so a skipped tick costs nothing later, and the
+ * player's own body is in every frame. A client that names nothing is sent
+ * every tick, as before.
  */
 export function deliveryPace(hz = 20) {
-  let interval = 1, sent = -Infinity, got = null, changedAt = -Infinity, lag = null;
+  let interval = 1, sent = -Infinity, changedAt = -Infinity, lag = null, behind = null;
   const most = Math.max(1, Math.round(hz));
   return {
     /** The client holds tick `tick`; the room is at `world`. `now` in ms. */
     report(tick, world, now) {
       if (!Number.isFinite(tick) || !Number.isFinite(world)) return;
       // A new room epoch restarts its ticks: a tick from the old one says nothing.
-      got = tick > world ? null : tick;
-      lag = got === null ? null : world - got;
-      if (lag === null) return;
-      if (lag > hz && now - changedAt >= 500 && interval < most) { interval = Math.min(most, interval * 2); changedAt = now; }
-      else if (lag <= hz / 2 && now - changedAt >= 1000 && interval > 1) { interval = Math.max(1, interval / 2); changedAt = now; }
+      lag = tick > world ? null : world - tick;
+      if (lag === null) { behind = null; return; }
+      if (lag <= hz / 2) { behind = null; if (interval > 1 && now - changedAt >= 1000) { interval = Math.max(1, interval / 2); changedAt = now; } return; }
+      if (lag <= hz) { behind = null; return; }
+      if (behind === null) { behind = { lag, at: now }; return; }
+      if (now - behind.at < 500) return;
+      // Catching up means a quarter of a second nearer in half a second; anything less is a link that cannot keep this rate.
+      if (lag > behind.lag - hz / 4 && now - changedAt >= 500 && interval < most) { interval = Math.min(most, interval * 2); changedAt = now; }
+      behind = { lag, at: now };
     },
     due(tick) { return tick < sent || tick - sent >= interval; },
     sent(tick) { sent = tick; },
@@ -324,8 +341,19 @@ const COASTS = /^\{"t":"hello".{0,2000}?"coast":1[,}]/;
 const percentile = (sorted, p) => sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] : null;
 
 export class Gate {
-  constructor(ctx, env) { this.ctx = ctx; this.env = env; this.clients = new Map(); this.admissions = new Map(); this.sequence = 0; this.link = null; this.opening = null; this.timing = stageTimings(); this.metricsAt = 0; this.window = this.freshWindow(); this.worldTick = null; }
-  freshWindow() { return { worlds: 0, frames: 0, bytes: 0, skipped: 0, inputs: 0, worldAge: [], tickFrom: null, tickFromAt: 0, tickAt: 0, gapMax: 0 }; }
+  constructor(ctx, env) { this.ctx = ctx; this.env = env; this.clients = new Map(); this.admissions = new Map(); this.sequence = 0; this.link = null; this.opening = null; this.timing = stageTimings(); this.metricsAt = 0; this.window = this.freshWindow(); this.worldTick = null; this.behind = new Set(); this.idle = null; }
+  freshWindow() { return { worlds: 0, frames: 0, bytes: 0, skipped: 0, inputs: 0, worldAge: [], tickFrom: null, tickFromAt: 0, tickAt: 0, gapMax: 0, gaps: [0, 0, 0], late: 0, busy: 0 }; }
+  /** This Gate's own lateness: a timer every 20 ms, and how long past it each one came. A Gate that is out of time is late to its own timer. */
+  watchLoop() {
+    if (this.loopTimer) return;
+    let due = Date.now() + 20;
+    this.loopTimer = setInterval(() => {
+      const now = Date.now(), late = Math.max(0, now - due); due = now + 20;
+      this.window.late = Math.max(this.window.late, late); if (late > 20) this.window.busy += 1;
+      if (!this.link || !this.clients.size) { clearInterval(this.loopTimer); this.loopTimer = null; }
+    }, 20);
+    this.loopTimer?.unref?.();
+  }
   /** `[sent, received, answered]`: this Gate's clock when its frame left, the room's when it read it and when it answered. */
   roomClock([sent, received, answered]) {
     const now = Date.now(), offset = ((received - sent) + (answered - now)) / 2, delay = (now - sent) - (answered - received);
@@ -380,6 +408,13 @@ export class Gate {
         } catch (error) { lost({ error, reason: 'invalid room frame' }); try { socket.close(1011, 'room link failed'); } catch {} }
       });
       socket.addEventListener('close', lost); socket.addEventListener('error', lost);
+      // A Gate nobody is on gives its channel back after ten seconds: an open channel keeps the room and this Gate in
+      // memory (and billed) with nothing to carry. The next player to arrive opens another, as the first did.
+      this.rest = () => {
+        if (this.link !== link || this.clients.size) return;
+        this.link = null; this.worlds = null; link.close();
+        try { socket.close(1000, 'no players'); } catch { /* gone */ }
+      };
       this.link = link; return link;
     })();
     try { return await this.opening; } finally { this.opening = null; }
@@ -388,7 +423,7 @@ export class Gate {
   deliver(snap, settings, hz, drop) {
     const w = this.window, now = Date.now(); w.worlds++;
     if (w.tickFrom === null) { w.tickFrom = this.worldTick ?? snap.k; w.tickFromAt = this.worldAt ?? now; }
-    if (this.worldAt) w.gapMax = Math.max(w.gapMax, now - this.worldAt);
+    if (this.worldAt) { const gap = now - this.worldAt; w.gapMax = Math.max(w.gapMax, gap); if (gap > 75) w.gaps[0] += 1; if (gap > 150) w.gaps[1] += 1; if (gap > 300) w.gaps[2] += 1; }
     this.worldTick = snap.k; this.worldAt = now; w.tickAt = now;
     // By this Gate's clock, corrected for what the room's clock is measured to differ by.
     if (Number.isFinite(snap.st)) w.worldAge.push(Math.max(0, now - snap.st + (this.clock?.offsetMs ?? 0)));
@@ -431,7 +466,7 @@ export class Gate {
   async connect(request, server) {
     const link = await this.upstream(new URL(request.url));
     const id = String(++this.sequence);
-    this.clients.set(id, server);
+    this.clients.set(id, server); clearTimeout(this.idle); this.idle = null; this.watchLoop();
     let opened = false;
     const deadline = setTimeout(() => {
       this.admissions.delete(id);
@@ -458,12 +493,18 @@ export class Gate {
       }
       const now = Date.now();
       const said = REPORTED_TICK.exec(event.data);
-      if (said && server.pace && this.worldTick !== null) server.pace.report(Number(said[1]), this.worldTick, now);
+      if (said && server.pace && this.worldTick !== null) {
+        server.pace.report(Number(said[1]), this.worldTick, now);
+        // Counted, never acted on: players more than a second behind at this moment. Many at once on one Gate is a
+        // connection they share or something upstream of them all; each is still paced by their own reports alone
+        // (a full shared link is cured by sending each of them less, and nothing else cures it).
+        if ((server.pace.facts().lag ?? 0) > 20) this.behind.add(id); else this.behind.delete(id);
+      }
       this.window.inputs++;
       // Only the public Gate stamps ingress; a player cannot supply it inside their JSON.
       link.send(['data', id, event.data, Number.isFinite(event.receivedAt) ? event.receivedAt : now]);
     });
-    const left = () => { clearTimeout(deadline); this.admissions.delete(id); if (this.clients.delete(id) && opened) link.send(['close', id]); };
+    const left = () => { this.behind.delete(id); clearTimeout(deadline); this.admissions.delete(id); if (this.clients.delete(id) && opened) link.send(['close', id]); if (!this.clients.size && !this.idle) { this.idle = setTimeout(() => { this.idle = null; this.rest?.(); }, 10_000); this.idle?.unref?.(); } };
     server.addEventListener('close', left); server.addEventListener('error', left);
   }
   /** What this Gate did in the last second, for whoever is measuring the room. */
@@ -480,15 +521,21 @@ export class Gate {
       bytesPerSecond: Math.round(w.bytes / seconds), inputsPerSecond: Math.round(w.inputs / seconds), skipped: w.skipped,
       // Room stamp to this Gate writing it to players, ms (both are Cloudflare's clock at the start of an event).
       worldAgeMs: { p50: percentile(ages, 0.5), p95: percentile(ages, 0.95), max: ages.at(-1) ?? null },
+      // Of this second's worlds: how many were over 100, 200 and 400 ms old when this Gate wrote them, and how many came
+      // more than 75, 150 and 300 ms after the one before (a world is due every 50).
+      worldsOld: { n: ages.length, over100: ages.filter(a => a > 100).length, over200: ages.filter(a => a > 200).length, over400: ages.filter(a => a > 400).length },
+      worldGaps: { over75: w.gaps[0], over150: w.gaps[1], over300: w.gaps[2] },
       // How far behind the room players say they are, in ticks, and how many are being sent fewer frames for it.
       clientLagTicks: { reporting: lags.length, p50: percentile(lags, 0.5), p95: percentile(lags, 0.95), max: lags.at(-1) ?? null },
-      paced: paces.filter(p => p.interval > 1).length,
+      paced: paces.filter(p => p.interval > 1).length, behind: this.behind.size,
       coasting: subscribed.filter(c => c.coasts).length,
       // Ticks the room's worlds advanced a second, by THIS Gate's clock: the room's own clock cannot see itself run late.
       roomTickHz: w.tickFrom !== null && w.tickAt > w.tickFromAt ? Math.round((this.worldTick - w.tickFrom) / (w.tickAt - w.tickFromAt) * 100000) / 100 : null,
       worldGapMs: w.gapMax,
       // The room's clock less this Gate's, and the channel's delay, from stamps exchanged on the channel (as NTP does).
       roomClock: this.clock ?? null,
+      // The worst this Gate's own 20 ms timer came late in the second, and how many of the fifty came over 20 ms late.
+      loopLateMs: w.late, loopLateTimers: w.busy,
     };
   }
   publishMetrics(url, link) {

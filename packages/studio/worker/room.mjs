@@ -148,7 +148,10 @@ export function medianVote(list) {
   return v.length ? v[Math.floor((v.length - 1) / 2)] : null;
 }
 const utf8 = new TextEncoder();
-const byteLength = text => utf8.encode(text).length;
+// A message's size in bytes. Text that is all ASCII (nearly every frame a game sends) is as long as it is wide: it is
+// not encoded to be measured, which at ten inputs a second from a thousand players was a twentieth of a room's second.
+const ASCII = /^[\x00-\x7f]*$/;
+const byteLength = text => ASCII.test(text) ? text.length : utf8.encode(text).length;
 const PALETTE_SIZE = 12;
 const DEVICE_RANK = { desk: 0, tv: 1, phone: 2 };
 
@@ -473,6 +476,12 @@ export class NetRoom {
     const w = (c.rttWindow ??= []);
     w.push([now, ms]);
     while (w.length > 256 || (w.length > 1 && w[0][0] < now - 10000)) w.shift();
+    // A low percentile of ten seconds does not move in one. For a player behind a Gate (a big room) a full window
+    // is read once a second, not once an input: at ten inputs a second from a thousand players, sorting it each time
+    // was a tenth of the room's second when its clock moved between frames (0.46.3 against the build before it,
+    // test/crowd-room-cost.mjs). A room its players reach directly reads it as before.
+    if (c.conn.snapshotGroup && w.length >= 32 && now - (c.rttReadAt ?? 0) < 1000) return;
+    c.rttReadAt = now;
     const sorted = w.map((x) => x[1]).sort((a, b) => a - b);
     const low = sorted[Math.floor((sorted.length - 1) * 0.1)];
     if (c.measuredRtt !== undefined && Math.abs(low - c.measuredRtt) < 2 && now - (c.rttToldAt ?? 0) < 1000) return;
@@ -495,7 +504,10 @@ export class NetRoom {
     while (this.snapTimes.length && this.snapTimes[0] < now - 1000) this.snapTimes.shift();
     // A heartbeat (revision 9): the host's last state again while its frames hitch. It counts as a snapshot here
     // (the host is alive), and replicas are told which it is.
-    const out = text ?? JSON.stringify({ t: 'snap', from: c ? c.seat : null, ...snap, ...(m.hb === 1 ? { hb: 1 } : {}) });
+    // The whole snapshot as text: what a player with no view of their own is sent. The server's host hands it over
+    // unless this room sends it to nobody (a room behind Gates); then it is made only if somebody turns out to need it.
+    let out = text ?? (c ? JSON.stringify({ t: 'snap', from: c.seat, ...snap, ...(m.hb === 1 ? { hb: 1 } : {}) }) : null);
+    const whole = () => (out ??= JSON.stringify({ t: 'snap', from: null, ...snap, ...(m.hb === 1 ? { hb: 1 } : {}) }));
     if (m.hb === 1) this.stats.heartbeats = (this.stats.heartbeats ?? 0) + 1;
     this.lastSnapText = out;
     // A server-hosted room behind Gates hands each Gate ONE world a tick; the Gate selects, encodes and paces
@@ -513,9 +525,10 @@ export class NetRoom {
       }
       // A congested socket skips a snapshot rather than queueing a stale one.
       if (o.conn.buffered && o.conn.buffered() > 256 * 1024) { this.stats.drops += 1; continue; }
-      this.sendText(o.conn, this.hasViewSchedule() ? JSON.stringify({ t: 'snap', from: null, ...this.playerSnapshot(o, snap) }) : out);
+      this.sendText(o.conn, this.hasViewSchedule() ? JSON.stringify({ t: 'snap', from: null, ...this.playerSnapshot(o, snap) }) : whole());
     }
     if (groups) for (const group of groups) group.snapshot(snap, this.server.viewSettings ?? {}, this.tickHz);
+    if (out !== null) this.lastSnapText = out;
   }
 
   hasViewSchedule() {

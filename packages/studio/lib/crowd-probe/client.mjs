@@ -90,6 +90,9 @@ export function crowdClient({ index, game, send, tallies, period = 50, lead = 3 
       const span = c.lastAt > c.firstAt ? c.lastAt - c.firstAt : 0;
       return { i: index, seat: c.seat, firstStateMs: c.first, welcomeMs: c.welcomed, closed: c.closed, lead: c.lead, frames: c.frames, maxStateGapMs: c.maxGap,
         tickHz: span ? (c.lastTick - c.firstTick) * 1000 / span : null, deliveredHz: span ? (c.frames - 1) * 1000 / span : null,
+        // Frames received for each tick the room advanced: 1 is every frame. It needs no clock, which matters where
+        // the caller's clock is a Worker's (it reads a timer's due time, and runs slow when the Worker runs late).
+        framesPerTick: c.lastTick > c.firstTick ? (c.frames - 1) / (c.lastTick - c.firstTick) : null,
         downBytes: c.down, upBytes: c.up, inputs: c.inputs, reports: c.reports, late: c.late, undecodable: c.undecodable, ownMissing: c.ownMissing, errors: c.errors.slice(0, 8), fresh: c.at ? true : false };
     },
   };
