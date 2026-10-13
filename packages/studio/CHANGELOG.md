@@ -17,6 +17,45 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.48.0] - 2026-10-13
+
+**Plugin 0.48.0** · Baked physics worlds for server rules and local prediction.
+
+Rules games can sweep capsules through a baked GLB with the same deterministic physics on the server and in local prediction.
+
+### Added
+
+- Rules games can opt into deterministic Rapier collision through
+  `@homie-rocks/physics`: build-time GLB baking, asynchronous initialization before
+  ticking, synchronous metered capsule sweeps, casts, rays, overlaps and solver
+  steps, and complete physics snapshots saved with the room. Browser movement
+  replays against the same baked world. Games without physics retain their
+  existing behavior and budget costs.
+- `ctx.substeps(body, hz, callback)` lets a game choose its own integration rate
+  within a room tick. Server and browser share the callback and budget; the view
+  draws its recorded intermediate poses. The build checks authoritative body
+  fields separately from these temporary drawing traces.
+- Release tests compare 220 complete guarded-room hashes across Node, Chrome and
+  workerd for eight capsules at 300 Hz on a 1,754-triangle level, restore mid-fall,
+  and settle two predictions exactly with 150 ms each way and seeded packet loss.
+  The calibration and real two-Chrome-player Octree trial are recorded in
+  `docs/physics-048-calibration.md` and `docs/receipts/`.
+- Physics 0.1.2 adds a stateless capsule cast for applications that own integration
+  and replay; it uses the package's existing character contact handling.
+
+### Fixed
+
+- Predictor callbacks that inspect the room no longer reenter snapshot replay.
+- Provider discovery recognizes existing Homie fal and ElevenLabs key files,
+  including the legacy workspace location, without copying or exposing keys.
+
+### Upgrade notes
+
+- Physics is opt-in. Install `@homie-rocks/physics` 0.1.2 and name the
+  game's static GLB with `map.physics.level`; see the Physics section of the
+  rules guide. The complete solver save can exceed browser-host checkpoint caps,
+  so the real-mesh example uses server hosting.
+
 ## [0.47.0] - 2026-10-13
 
 **Plugin 0.47.0** · Wrapped worlds and generated collision maps.

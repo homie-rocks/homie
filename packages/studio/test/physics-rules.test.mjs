@@ -1,0 +1,70 @@
+import assert from 'node:assert/strict';
+import {test} from 'node:test';
+import {mkdtempSync,readFileSync,writeFileSync,cpSync,rmSync,symlinkSync} from 'node:fs';
+import {join,dirname} from 'node:path';
+import {fileURLToPath,pathToFileURL} from 'node:url';
+import {createRequire} from 'node:module';
+import {spawn} from 'node:child_process';
+import {once} from 'node:events';
+import {createServer} from 'node:http';
+import * as esbuild from 'esbuild';
+const {build}=esbuild;
+test.after(()=>esbuild.stop());
+import puppeteer from 'puppeteer-core';
+import {guardRules} from '../lib/rules-guard.mjs';
+import {loadRules, writeRules, rulesModulesPlugin} from '../lib/rules-build.mjs';
+import {bakePhysicsMesh} from '../lib/physics-mesh.mjs';
+import {findChrome,chromeArgs} from '../lib/chrome.mjs';
+import {physicsRulesFixture} from './physics-rules-fixture.mjs';
+const root=fileURLToPath(new URL('../../../',import.meta.url));
+const fixture=fileURLToPath(new URL('./fixtures/physics-arena/',import.meta.url));
+const require=createRequire(new URL('../../physics/package.json',import.meta.url));
+test('guarded physics: eight capsules at 300 Hz, 220 seeded ticks and mid-fall save in Node, Chrome and workerd',async t=>{
+ const dir=mkdtempSync('/tmp/homie-physics-gate-');t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ symlinkSync(join(root,'node_modules'),join(dir,'node_modules'),'dir');
+ const src=join(dir,'src');cpSync(fixture,src,{recursive:true});
+ // guardRules takes a game directory with src/.
+ const mesh=await bakePhysicsMesh(join(fixture,'level.glb'));
+ assert.equal(mesh.indices.length/3,1754);
+ const guarded=await guardRules(esbuild,dir,dir);assert.ok(guarded.ok,JSON.stringify(guarded.problems));
+ const L=await loadRules(esbuild,dir,'physics',guarded.code,{physics:true});
+ const wasm=readFileSync(require.resolve('@homie-rocks/physics/vendor/rapier.wasm'));
+ const initializing=L.initializePhysics(wasm);
+ const c=L.R.compileRules(L.def,{map:L.R.compileMap({bounds:{min:[-100,-100,-100],max:[100,100,100]},physics:mesh}),seats:8});
+ assert.throws(()=>L.C.createCore(c,{seed:480}),/initialize the game/,'no room starts before async initialization completes');
+ await initializing;
+ const core=L.C.createCore(c,{seed:480});const api=core.world.physics;const saved=core.save();
+ const body={pos:{x:0,y:0,z:8},vel:{x:0,y:0,z:0},grounded:false};
+ for(const call of [()=>api.sweep(body,{x:0,y:0,z:0},.35,1.35),()=>api.cast({kind:'sphere',radius:.35},body.pos,{x:1,y:0,z:0}),()=>api.ray(body.pos,{x:0,y:0,z:-1},10),()=>api.overlap({kind:'sphere',radius:.35},body.pos),()=>api.step(.05)]) {
+  L.W.G.left=0;assert.throws(call,/whole share/);L.W.G.left=Infinity;assert.deepEqual(core.save(),saved,'budget rejection precedes engine work');
+ }
+ core.dispose();
+ const slope=L.C.createCore(L.R.compileRules(L.def,{map:L.R.compileMap({bounds:{min:[-100,-100,-100],max:[100,100,100]},physics:{vertices:[-10,-10,-5,10,-10,5,10,10,5,-10,10,-5],indices:[0,1,2,0,2,3]}}),seats:8}),{seed:480});
+ const idle={pos:{x:0,y:0,z:8},vel:{x:0,y:0,z:0},grounded:false};
+ for(let n=0;n<900;n++){idle.vel.z-=30/300;slope.world.physics.sweep(idle,{x:0,y:0,z:idle.vel.z/300},.35,1.35);}
+ assert.ok(idle.grounded);assert.equal(idle.pos.x,0,'gravity must not produce downhill drift on a walkable slope');slope.dispose();
+ const node=await physicsRulesFixture(L,mesh);
+ const code=await loadRules(esbuild,dir,'runtime',guarded.code,{physics:true,bundleOnly:true});
+ const common=`import {physicsRulesFixture} from ${JSON.stringify(fileURLToPath(new URL('./physics-rules-fixture.mjs',import.meta.url)))};const module={exports:{}};const exports=module.exports;${code};const L=module.exports;const mesh=${JSON.stringify(mesh)};`;
+ const bytes=JSON.stringify(wasm.toString('base64'));
+ await build({stdin:{contents:`${common}globalThis.probe=(async()=>{await L.initializePhysics(Uint8Array.from(atob(${bytes}),c=>c.charCodeAt(0)));return physicsRulesFixture(L,mesh);})();`,resolveDir:root},bundle:true,platform:'browser',format:'iife',outfile:join(dir,'browser.js'),logLevel:'silent'});
+ // Exercise the build's actual lazy initializer and hosted table in workerd.
+ writeRules(dir,[{id:'arena',code:guarded.code,map:{bounds:{min:[-100,-100,-100],max:[100,100,100]},physics:mesh},settings:L.R.roomSettings({host:'server'}).settings,seats:8}],['arena']);
+ const lib=name=>JSON.stringify(fileURLToPath(new URL('../'+name,import.meta.url)));
+ const workerEntry=`import table from ${JSON.stringify(join(dir,'site/src/rules/index.mjs'))};import {hostRules,prepareHost,startHost} from ${lib('worker/hosted.mjs')};import * as R from ${lib('rules/rules.ts')};import * as C from ${lib('rules/core.ts')};import {physicsRulesFixture} from ${JSON.stringify(fileURLToPath(new URL('./physics-rules-fixture.mjs',import.meta.url)))};hostRules(table);const L={R,C,def:table.arena.rules};const mesh=table.arena.map.physics;let cold=true;export default {async fetch(){if(cold){let refused=false;try{C.createCore(R.compileRules(L.def,{map:R.compileMap({bounds:{min:[-100,-100,-100],max:[100,100,100]},physics:mesh}),seats:8}));}catch(e){refused=e.message.includes('initialize the game');}if(!refused)throw Error('physics initialized before room start');cold=false;}const pending=prepareHost('arena');if(pending)await pending;const host=startHost('arena',{send(){}});if(!host.core.save().physics.length)throw Error('host did not save physics');host.stop();return Response.json(await physicsRulesFixture(L,mesh));}};`;
+ await build({stdin:{contents:workerEntry,resolveDir:root},bundle:true,platform:'neutral',mainFields:['module','main'],format:'esm',outfile:join(dir,'worker.js'),plugins:[{name:'worker-wasm',setup(b){b.onResolve({filter:/^@homie-rocks\/physics\/vendor\/rapier\.wasm$/},()=>({path:'./rapier.wasm',external:true}));}},rulesModulesPlugin()],logLevel:'silent'});
+ writeFileSync(join(dir,'rapier.wasm'),wasm);
+ writeFileSync(join(dir,'config.capnp'),`using Workerd=import "/workerd/workerd.capnp";const config:Workerd.Config=(services=[(name="main",worker=(modules=[(name="worker.js",esModule=embed "worker.js"),(name="rapier.wasm",wasm=embed "rapier.wasm")],compatibilityDate="2026-10-06"))],sockets=[(name="http",address="127.0.0.1:0",http=(),service="main")]);`);
+ const server=createServer((req,res)=>{res.setHeader('content-type',req.url==='/browser.js'?'text/javascript':'text/html');res.end(req.url==='/browser.js'?readFileSync(join(dir,'browser.js')):'<script src="/browser.js"></script>');});
+ server.listen(0,'127.0.0.1');await once(server,'listening');t.after(()=>new Promise(r=>{server.close(r);server.closeAllConnections();}));
+ const browser=await puppeteer.launch({executablePath:findChrome(),headless:true,args:chromeArgs()});t.after(()=>browser.close());
+ const page=await browser.newPage();await page.goto(`http://127.0.0.1:${server.address().port}`);
+ assert.deepEqual(await page.evaluate(()=>globalThis.probe),node,'Chrome hashes');
+ const worker=spawn(require('workerd').default,['serve',join(dir,'config.capnp'),'--control-fd=1'],{stdio:['ignore','pipe','pipe']});
+ t.after(async()=>{if(worker.exitCode===null&&worker.signalCode===null){const ended=once(worker,'exit');worker.kill();await ended;}});
+ let stderr='';worker.stderr.on('data',d=>stderr+=d);
+ const port=await new Promise((resolve,reject)=>{let buffer='';const timeout=setTimeout(()=>reject(Error(stderr||'workerd startup timeout')),15000);worker.stdout.on('data',d=>{buffer+=d;const lines=buffer.split('\n');buffer=lines.pop();for(const line of lines){const event=JSON.parse(line);if(event.port){clearTimeout(timeout);resolve(event.port);}}});worker.once('exit',()=>{clearTimeout(timeout);reject(Error(stderr));});});
+ const response=await fetch(`http://127.0.0.1:${port}`,{signal:AbortSignal.timeout(60000)});assert.equal(response.status,200,(await response.clone().text())+stderr);
+ assert.deepEqual(await response.json(),node,'workerd hashes');
+ t.diagnostic(JSON.stringify({...node,hashes:`${node.hashes.length} equal hashes`}));
+});

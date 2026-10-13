@@ -1,3 +1,4 @@
+import { disposeMoveContext } from './math.ts';
 import { boundPosition, periodicDelta, blendPosition, relativePoint, wrapPoint } from './topology.mjs';
 import { rayQuery, raySnapshot, type QueryTarget } from './query.ts';
 import { solidAt } from './collision.ts';
@@ -1079,6 +1080,6 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     askButtons(id, offer = {}) { if (solo) return []; const e = latest?.ents.get(id); return e && e.seat !== undefined ? agents?.askButtons(e.seat, offer) ?? [] : []; },
     tune, get map(){return solo ? solo.map : mapAt(latest?.k??0);}, net: net as Netplay,
     pump,
-    close() { stopSolo(); closed = true; if (timer) clearInterval(timer); if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onShow); agents?.stop(); net.close(); setStatus('closed'); },
+    close() { stopSolo(); disposeMoveContext(moveCtx as object); closed = true; if (timer) clearInterval(timer); if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onShow); agents?.stop(); net.close(); setStatus('closed'); },
   };
 }

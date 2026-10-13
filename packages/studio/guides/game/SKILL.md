@@ -456,3 +456,16 @@ nothing is cut off or runs off the side. Fix what you see; build again.
 A whole landing of the studio's own (`site/pages/<id>/index.html`) replaces the generated one: only when
 the person asks for a hand-made page, and start from the generated one's HTML so Play, the TV road and
 "Made with Homie" stay.
+
+## Physics
+
+For movement against a static GLB's triangles, use the opt-in physics bridge in
+[RULES.md](RULES.md#physics). Install `@homie-rocks/physics` 0.1.2, set
+`map/main.json`'s `physics.level` to the game's GLB, and call
+`ctx.physics.sweep(body, delta, radius, height)` inside the game's movement.
+`ctx.substeps(body, 300, step => { ... })` shares its existing handler budget and
+predicts the same baked world in the browser. The full example, cost table and
+save contract are in that section. Prefer kernel collision for its primitive
+maps; use physics for arbitrary static triangle levels. Initialization is awaited
+before the first room tick, calls in handlers are synchronous, and the complete
+physics snapshot is saved with the room. No opt-in means no physics load or cost.

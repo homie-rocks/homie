@@ -89,7 +89,7 @@ import { appRole, openPath } from './app-format.mjs';
  */
 import { playerEnabled, EMBED_GAME_JS } from './embed.mjs';
 import { NetRoom, WATCH_POLICIES, departure, errorLine, versionOf } from './room.mjs';
-import { hostedGame, hostedBuild, compiledFor, startHost } from './hosted.mjs';
+import { hostedGame, hostedBuild, compiledFor, prepareHost, startHost } from './hosted.mjs';
 import { roomStore, restoreDelay, LOOSE_SAVE } from './room-store.mjs';
 import { appCors, isAppOrigin } from './standalone.mjs';
 import { ROOM_ID, badRoomPage, embedAncestors, embedPreview, frameAncestors, noWatchPage, playPage, shellKey, shellStandIn, watchPage } from './pages.mjs';
@@ -1592,13 +1592,13 @@ export class Table {
     this.say({ ev: 'persist-failed', build: hostedBuild(this.game)?.build, error: this.storageHealth.message });
   }
 
-  readRoom(validateHost = false) {
+  readRoom(validateHost = false, alreadyRead) {
     if (this.skipSave) { this.skipSave = false; return null; }
     try {
       const boot = this.durable?.boots();
       this.persistentStored = boot?.persistent === true;
       if (boot?.retired === true) { this.clearRoom(); return null; }
-      const saved = this.durable?.read();
+      const saved = alreadyRead ?? this.durable?.read();
       if (!saved) return null;
       if (saved.v !== 1 || typeof saved.game !== 'string' || typeof saved.room !== 'string' ||
           this.game && saved.game !== this.game || this.code && saved.room !== this.code ||
@@ -1759,7 +1759,12 @@ export class Table {
     if (!room || !this.hostRt) {
       if (this.ctx.storage.sql?.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'save'").toArray().length) {
         this.durable ??= this.openStore(false);
-        const saved = this.cleanupPending ? null : this.readRoom(true);
+        let saved = this.cleanupPending ? null : this.readRoom();
+        if (saved) {
+          const preparing = prepareHost(saved.game);
+          if (preparing) await preparing;
+          saved = this.readRoom(true, saved);
+        }
         if (saved) {
           this.game = saved.game; this.code = saved.room;
           if (this.isPersistent()) return;
@@ -2167,6 +2172,8 @@ export class Table {
     if (url.pathname === '/__recall') {
       const { account } = await request.json();
       return this.withCharacter(account, async () => {
+        const preparing = prepareHost(game);
+        if (preparing) await preparing;
         this.ensureHost(room, true);
         if (!this.hostRt || this.persistentFailed || room.hostFailed) return json({ ok: false }, 503);
         await this.flushCharacters();
@@ -2232,6 +2239,8 @@ export class Table {
     const said = url.searchParams.has('cur');
     if (said) { room.setStall(url.searchParams.get('stall')); room.setCurrent(url.searchParams.get('cur') || null); }
     // Restore before applying the Worker's current policy: a save must not replace a newer policy.
+    const preparing = prepareHost(game);
+    if (preparing) await preparing;
     this.ensureHost(room, url.searchParams.get('host') === 'server');
     // The room's policy (section 17), composed by the Worker for every socket: a newer one than the room's applies.
     const pol = decodeFacts(url.searchParams.get('pol'));

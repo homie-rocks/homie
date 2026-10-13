@@ -1,4 +1,8 @@
-# 0.48.0 work in progress — not a release receipt
+# Historical 0.48.0 handoff at e58e644e
+
+This is the pre-bridge handoff. The subsequent physics implementation, calibration
+and real two-player evidence are in [physics-048-calibration.md](physics-048-calibration.md).
+Navigation documentation and the assisted rewrite command remain separate jobs.
 
 Branch `ported-games-2` was cut from `origin/main` after fetching and confirming
 studio 0.47.0. PR #93 was **open** at the start; its publication/version changes

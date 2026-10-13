@@ -67,5 +67,5 @@ export function runRulesWorker(bundle, data, { declarationsOnly = false, allowan
 export async function checkRules(esbuild, root, id, code, data, options = {}) {
   // Imported here, not at the top: the worker imports this file for `stateHash`, and has no use for the build's tools.
   const { loadRules } = await import('./rules-build.mjs');
-  return runRulesWorker(await loadRules(esbuild, root, id, code, { bundleOnly: true }), { id, ...data }, options);
+  return runRulesWorker(await loadRules(esbuild, root, id, code, { bundleOnly: true, physics: Boolean(data.map?.physics) }), { id, ...data }, options);
 }

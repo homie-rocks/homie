@@ -10,8 +10,10 @@ kilograms. Worlds are right-handed and support Y-up or Z-up.
 
 ## Install
 
+Install the published package in a game or app:
+
 ```sh
-npm install --save-exact @homie-rocks/physics@0.1.1
+npm install --save-exact @homie-rocks/physics@0.1.2
 ```
 
 The optional `Three.js` module needs `three@0.185.1`. The core does not import it.
@@ -263,6 +265,13 @@ average vertical velocity, preserving the expected ballistic apex at fixed-step
 resolution. These controls, timers, signals and inherited momentum are saved.
 
 ## Queries and terrain
+
+`castCapsule(position, displacement, radius, height, skin?)` is a stateless
+upright capsule sweep for games that own integration and replay. Position is the
+capsule centre and height includes both caps. It shares the character solver's
+contact filtering and defaults to a 0.001-metre skin. Separating and tangential
+contacts do not trap a capsule against its supporting floor. It returns a
+`ShapeHit` or `null` and creates no body or persistent controller.
 
 `raycast(origin, unitDirection, metres, filter?)` returns the nearest boundary or
 null. `raycastAll` returns all boundaries sorted by distance and collider handle.

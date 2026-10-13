@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-13T18:06:51.492Z",
+  "node": "v22.23.3",
+  "platform": "darwin",
+  "arch": "arm64",
+  "triangles": 1754,
+  "method": "9 batches of 10,000 calls after 2,000 warmup; process.cpuUsage; median and maximum batch; kernel equivalent operations on a box (no arbitrary-mesh equivalent)",
+  "table": [
+    {
+      "operation": "capsule cast",
+      "physics": {
+        "medianNs": 8441.8,
+        "p90Ns": 14487.6,
+        "units": 0
+      },
+      "kernel": {
+        "medianNs": 1150.8,
+        "p90Ns": 2519.6,
+        "units": 92
+      }
+    },
+    {
+      "operation": "ray",
+      "physics": {
+        "medianNs": 2203.7,
+        "p90Ns": 7241.3,
+        "units": 0
+      },
+      "kernel": {
+        "medianNs": 1705.1,
+        "p90Ns": 7073.7,
+        "units": 152
+      }
+    },
+    {
+      "operation": "overlap",
+      "physics": {
+        "medianNs": 3425.2,
+        "p90Ns": 6170.8,
+        "units": 0
+      },
+      "kernel": {
+        "medianNs": 247.6,
+        "p90Ns": 1511.2,
+        "units": 32
+      }
+    },
+    {
+      "operation": "step (static level, 1/300 s)",
+      "physics": {
+        "medianNs": 6078.1,
+        "p90Ns": 18597.7,
+        "units": 0
+      },
+      "kernel": null
+    }
+  ]
+}

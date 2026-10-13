@@ -932,6 +932,7 @@ export function createHost(o: HostOptions): Host {
   }
   function stop(): void {
     running = false; paused = false; ended = true;
+    core.dispose();
     disarm();
     agents?.stop();
     for (let i = recent.length - 1; i >= 0; i -= 1) if (recent[i].who === self) recent.splice(i, 1);
