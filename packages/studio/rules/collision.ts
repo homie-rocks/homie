@@ -11,6 +11,7 @@ export interface BodyShape { shape: string; radius: number; height: number; terr
 export interface Solid { min: Vec3; max: Vec3; r: number }
 export interface Hit3 { t: number; nx: number; ny: number; nz: number; id?: string }
 export interface Map3 {
+  wrap?: import('./rules.ts').MapWrap;
   staticMap?: Map3;
   bounds: MapBox; boxes: readonly MapBox[]; circles: readonly MapCircle[];
   heightTiles?: readonly MapHeightTile[];

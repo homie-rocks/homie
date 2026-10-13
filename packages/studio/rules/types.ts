@@ -24,11 +24,11 @@ export interface RaySnapshot {sweep(body:{pos:Point;grounded?:boolean},delta:Poi
 export interface RayQueries { rays(options?:RayOptions):RaySnapshot; ray(from: Point, direction: Point, max: number, options?: RayOptions): RayHit | undefined; rayAll(from: Point, direction: Point, max: number, options?: RayOptions): readonly RayHit[] }
 export interface EffectAudience { readonly to?: string | readonly string[]; readonly within?: number }
 export type Area = { sphere: { at: Point; r: number } } | { box: { min: Point; max: Point } } | { cone: { at: Point; dir: Point; r: number; angle: number } };
-export interface MapView { readonly name: string; spot(name: string): Vec3 | undefined; spots(name: string): readonly Vec3[] }
+export interface MapView { tile(x:number,y:number):number; distance(flow:string,x:number,y:number):number; flow(name:string,x:number,y:number):Vec3|undefined; readonly name: string; spot(name: string): Vec3 | undefined; spots(name: string): readonly Vec3[] }
 export interface Clock { readonly tick: number; readonly dt: number; ticks(seconds: number): number; readonly math: typeof math }
 export interface Round { readonly n: number; readonly phase: 'live' | 'over'; readonly endsAt: number }
 export type World<E, F, S, V, C, A, T, Room extends boolean = false> = Clock & {
-  readonly tune: ReadonlyState<T>; readonly map: MapView; readonly stage: string; readonly level: number; readonly levelMax: number; readonly guideLevel: number; readonly guideSeats: readonly number[]; readonly kids: boolean; readonly levelSet: boolean;
+  readonly tune: ReadonlyState<T>; readonly map: MapView & (Room extends true ? {replace(data:Record<string,unknown>):void} : {}); readonly stage: string; readonly level: number; readonly levelMax: number; readonly guideLevel: number; readonly guideSeats: readonly number[]; readonly kids: boolean; readonly levelSet: boolean;
   readonly shared: Room extends true ? S : ReadonlyState<S>;
   readonly round: Round & (Room extends true ? { end(): void; restart(): void } : {});
   /** Budget units the running handler may still spend (0.46.3). */

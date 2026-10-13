@@ -1,9 +1,22 @@
+import { periodicDelta, wrapValue } from './topology.mjs';
 /** Per-connection state delivery. Pure data, shared by the relay and the view.
  * Deltas may name a periodic keyframe or the previous ordered frame. A missing
  * chained predecessor is ignored until the next keyframe. Periodic encoders
  * repair the chain; ordered transports reset it on connection or epoch change.
  * No history grows with time: one keyframe per connection, no per-frame queue.
  */
+const wrapOf = snap => snap.d?.[2]?.[3]?.wrap;
+const axisNames=['x','y','z'];
+const distanceSq=(p,q,wrap)=>{if(!wrap){const dx=p[0]-q[0],dy=p[1]-q[1],dz=(p[2]??0)-(q[2]??0);return dx*dx+dy*dy+dz*dz;}let d=0;for(let i=0;i<3;i++)d+=periodicDelta(q[i]??0,p[i]??0,wrap?.[axisNames[i]])**2;return d;};
+function periodicCells(cells,p,size,wrap) {
+  const shifts=axisNames.map(k=>wrap?.[k]?[0,wrap[k][1]-wrap[k][0],wrap[k][0]-wrap[k][1]]:[0]);
+  const found=new Set();
+  for(const sx of shifts[0])for(const sy of shifts[1])for(const sz of shifts[2]){
+    const x=Math.floor((p[0]+sx)/size),y=Math.floor((p[1]+sy)/size),z=Math.floor(((p[2]??0)+sz)/size);
+    for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)for(let dz=-1;dz<=1;dz++)for(const e of cells.get(`${x+dx},${y+dy},${z+dz}`)??[])found.add(e);
+  }
+  return [...found];
+}
 const spatial = new WeakMap(), controls = new WeakMap();
 function indexFor(snap, radius) {
   let byRadius = spatial.get(snap.d[1]);
@@ -29,10 +42,11 @@ export function interestSnapshot(snap, seat, radiusM) {
     else if (own) {
       const q=own[3], x=Math.floor(q[0]/index.size), y=Math.floor(q[1]/index.size), z=Math.floor((q[2]??0)/index.size);
       const cell = `${x},${y},${z}`;
-      let candidates = index.candidates.get(cell);
+      let candidates = wrapOf(snap) ? null : index.candidates.get(cell);
       if (!candidates) {
         candidates = [];
-        for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)for(let dz=-1;dz<=1;dz++)
+        if(wrapOf(snap)) candidates=periodicCells(index.cells,q,index.size,wrapOf(snap));
+        else for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)for(let dz=-1;dz<=1;dz++)
           candidates.push(...(index.cells.get(`${x+dx},${y+dy},${z+dz}`)??[]));
         // Every player in this cell shares the ordered candidates. The final
         // radius check remains exact for that player's position.
@@ -41,7 +55,7 @@ export function interestSnapshot(snap, seat, radiusM) {
       }
       for (const e of candidates) {
         const p=e[3];
-        if(e===own||(p[0]-q[0])**2+(p[1]-q[1])**2+((p[2]??0)-(q[2]??0))**2<=radiusM**2)visible.push(e);
+        if(e===own||distanceSq(p,q,wrapOf(snap))<=radiusM**2)visible.push(e);
       }
     }
   }
@@ -97,9 +111,9 @@ export function snapshotText(snap) {
 
 /** Whether a body that left `sent` at tick `sentTick` and kept its velocity is within `tolerance` of `entity` now. */
 const POSITION = 1 << 3, VELOCITY = 1 << 4, HEADING = 1 << 5;
-function coasts(entity, sent, ticks, hz, tolerance) {
+function coasts(entity, sent, ticks, hz, tolerance, wrap) {
   const p = entity[3], q = sent[3], v = sent[4], t = ticks / hz;
-  for (let i = 0; i < p.length; i++) if (Math.abs(p[i] - (q[i] + v[i] * t)) > tolerance) return false;
+  for (let i = 0; i < p.length; i++) if (Math.abs(periodicDelta(q[i] + v[i] * t,p[i],wrap?.[axisNames[i]])) > tolerance) return false;
   // A heading is a unit vector: the same tolerance, as a turn of that many metres at one metre's reach.
   const h = entity[5], g = sent[5];
   if (Array.isArray(h) && Array.isArray(g)) for (let i = 0; i < h.length; i++) if (Math.abs(h[i] - g[i]) > COAST_HEADING) return false;
@@ -136,7 +150,7 @@ export function snapshotEncoder(keyframeTicks, chained = false, coast = null) {
         if (!before) { changed.push(entity); continue; }
         const change = changedRow(entity, before);
         // Only where it is, how fast and which way it faces: anything else a body changed is always sent.
-        if (change && coasting && !(change[1] & ~(POSITION | VELOCITY | HEADING)) && coasts(entity, before, snap.k - held.k, coasting.hz, coasting.toleranceM)) continue;
+        if (change && coasting && !(change[1] & ~(POSITION | VELOCITY | HEADING)) && coasts(entity, before, snap.k - held.k, coasting.hz, coasting.toleranceM, wrapOf(snap))) continue;
         if (held && chained) { held.entity = entity; held.k = snap.k; }
         if (change) changed.push(change);
       }
@@ -154,13 +168,13 @@ export function snapshotDecoder() {
   // The tick each row was last SENT at: a frame that says `coast` leaves a body out while it keeps its course,
   // and this end moves it along its last velocity. `rows` keeps what was sent; what is returned is where it is now.
   let sentAt = new Map();
-  const coasted = (list, snap) => {
+  const coasted = (list, snap, collision) => {
     const hz = snap.coast;
     if (!(hz > 0)) return list;
     return list.map(row => {
       const ticks = snap.k - (sentAt.get(row[0]) ?? snap.k), v = row[4];
       if (ticks <= 0 || !Array.isArray(v) || !v.some(n => n !== 0)) return row;
-      const moved = row.slice(); moved[3] = row[3].map((n, i) => n + v[i] * ticks / hz);
+      const moved = row.slice(); moved[3] = row[3].map((n, i) => wrapValue(n + v[i] * ticks / hz, collision?.[3]?.wrap?.[axisNames[i]]));
       return moved;
     });
   };
@@ -212,7 +226,7 @@ export function snapshotDecoder() {
       for (const id of d.removed) { next.delete(id); if (d.chain) sentAt.delete(id); }
       for (const entity of updates) { next.set(entity[0], entity); if (d.chain) sentAt.set(entity[0], snap.k); }
       for (const e of d.own ?? []) { next.set(e[0], e); if (d.chain) sentAt.set(e[0], snap.k); }
-      const decoded = { ...snap, d: [d.round, coasted([...next.values()], snap), ...(d.collision === undefined ? base.d.slice(2) : [d.collision])] };
+      const decoded = { ...snap, d: [d.round, coasted([...next.values()], snap, d.collision ?? base.d[2]), ...(d.collision === undefined ? base.d.slice(2) : [d.collision])] };
       if (d.chain) { base = decoded; rows = next; }
       return decoded;
     },
@@ -238,7 +252,7 @@ export function scheduledView({ radiusM = null, precisionM = 0, nearM = null, fa
       let row = entity, sampledTick = snap.k;
       if (entity !== own) {
         const p = entity[3], q = own?.[3];
-        const distanceSquared = q ? (p[0]-q[0])**2 + (p[1]-q[1])**2 + ((p[2]??0)-(q[2]??0))**2 : 0;
+        const distanceSquared = q ? distanceSq(p,q,wrapOf(snap)) : 0;
         const old = held?.row;
         const interval = farHz && nearM !== null && distanceSquared > nearM**2 ? Math.max(1, Math.round(tickHz / farHz)) : 1;
         // Spread far-view refreshes across players instead of sending the
@@ -355,10 +369,11 @@ export function crowdWorlds({ radiusM = null, precisionM = 0 } = {}) {
         near(p) {
           if (radiusM === null) return this.everything();
           const x = Math.floor(p[0] / size), y = Math.floor(p[1] / size), z = Math.floor((p[2] ?? 0) / size), key = `${x},${y},${z}`;
-          let list = around.get(key);
+          let list = wrapOf(snap) ? null : around.get(key);
           if (!list) {
             list = [];
-            for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) { const cell = cells.get(`${x + dx},${y + dy},${z + dz}`); if (cell) for (const i of cell) list.push(i); }
+            if(wrapOf(snap)) list=periodicCells(cells,p,size,wrapOf(snap));
+            else for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) { const cell = cells.get(`${x + dx},${y + dy},${z + dz}`); if (cell) for (const i of cell) list.push(i); }
             list.sort((a, b) => a - b); around.set(key, list);
           }
           return list;
@@ -390,7 +405,7 @@ export function crowdView(worlds, { nearM = null, farHz = null } = {}, tickHz = 
       let far = false;
       if (e !== mine && q) {
         const p = e[3]; let d = 0;
-        for (let a = 0; a < p.length; a++) d += (p[a] - q[a]) ** 2;
+        for (let a = 0; a < p.length; a++) d += periodicDelta(q[a],p[a],wrapOf(snap)?.[axisNames[a]]) ** 2;
         if (d > reach) continue;
         far = d > nearSq;
       }
@@ -407,7 +422,7 @@ export function crowdView(worlds, { nearM = null, farHz = null } = {}, tickHz = 
         let tolerance = precisionM;
         if (far) { let speed = 0; for (let a = 0; a < v.length; a++) speed += v[a] * v[a]; tolerance = Math.max(precisionM, Math.sqrt(speed) * farShare); }
         let there = true;
-        for (let a = 0; a < p.length; a++) if (Math.abs(p[a] - (b[a] + v[a] * t)) > tolerance) { there = false; break; }
+        for (let a = 0; a < p.length; a++) if (Math.abs(periodicDelta(b[a]+v[a]*t,p[a],wrapOf(snap)?.[axisNames[a]])) > tolerance) { there = false; break; }
         if (there) {
           const h = row[5], g = before[5];
           if (Array.isArray(h) && Array.isArray(g)) for (let a = 0; a < h.length; a++) if (Math.abs(h[a] - g[a]) > COAST_HEADING) { there = false; break; }

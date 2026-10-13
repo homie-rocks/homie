@@ -1,3 +1,6 @@
+import { prepareMapReplacement, type MapRevision } from './map-state.ts';
+import { tileApi } from './tiles.ts';
+import { boundPosition, periodicDelta, relativePoint, blendPosition, wrapPoint } from './topology.mjs';
 import {routeGraph} from './navigation.ts';
 import { rayQuery, raySnapshot, type QueryTarget } from './query.ts';
 import { colliderSolid, castCollider2, colliderRow, collisionMap, collisionQueries, type CollisionRevision } from './live.ts';
@@ -141,6 +144,7 @@ export interface SavedCore {
   round: [number, number, number, number]; overAt: number; match: [number, number]; trips: number;
   shared: unknown[]; policy: CorePolicy; intent?: [number, number, number?];
   collision?: [number,number];
+  maps?: {current:MapRevision|null;pending:MapRevision|null};
   history?: [number, [string, number, number, number, number][]][];
   asks: PendingAsk[];
   guideViews: [number, Record<string, unknown>][];
@@ -191,6 +195,9 @@ export interface Core {
  * `Adjusted`; also `effect`, `think` and `decision`): the handler, what was done, the field's name and what was written.
  */
 export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number) => import('./rules.ts').Character | null | undefined; characterSaved?: (seat: number, character: import('./rules.ts').Character) => void; rewindTicks?: (seat: number)=>number; label?: (seat:number,driver:Driver)=>string; moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes, id: string) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
+  let currentMap=c.map;
+  let mapRevision:MapRevision|null=null,pendingMap:MapRevision|null=null;
+  let pendingGeometry:typeof currentMap|null=null,mapCells=0,currentMapCells=0,pendingMapCells=0;
   const dims = c.dims;
   const tickHz = c.settings.tickHz;
   const dt = 1 / tickHz;
@@ -356,7 +363,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     naming(kind.name, 'fields'); const f = coerceFields(kind.fields, init.fields, dims);
     naming(kind.name, 'motion'); const m = coerceFields(kind.motion, init.motion, dims); naming();
     const e: Ent = {
-      id: `e${n.toString(36)}`, n, kind, pos: clampIn(V(at), kind.body?.radius ?? 0, kind.body ? kind.body.height || 2 * kind.body.radius : 0), vel: ZERO, heading: init.heading === undefined ? AHEAD : dir(init.heading, dims), grounded: dims === 2 || restsOnMap(c.map, clampIn(V(at), kind.body?.radius ?? 0, kind.body ? kind.body.height || 2 * kind.body.radius : 0), kind.body ?? { shape: 'sphere', radius: 0, height: 0 }),
+      id: `e${n.toString(36)}`, n, kind, pos: clampIn(V(at), kind.body?.radius ?? 0, kind.body ? kind.body.height || 2 * kind.body.radius : 0), vel: ZERO, heading: init.heading === undefined ? AHEAD : dir(init.heading, dims), grounded: dims === 2 || restsOnMap(currentMap, clampIn(V(at), kind.body?.radius ?? 0, kind.body ? kind.body.height || 2 * kind.body.radius : 0), kind.body ?? { shape: 'sphere', radius: 0, height: 0 }),
       r: 0, born: tick, arrived: false, why, dead: false,
       f, m,
       seat: player ? player.seat : -1, owner: player ? player.owner : '', driver: player ? player.driver : 'bot', away: false, goal: null,
@@ -366,10 +373,15 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     return e;
   }
   function clampIn(p: Vec3, r: number, height = 0): Vec3 {
-    const b = c.map.bounds;
-    const x = Math.max(b.min.x + r, Math.min(b.max.x - r, p.x)); const y = Math.max(b.min.y + r, Math.min(b.max.y - r, p.y));
-    const z = dims === 3 ? Math.max(b.min.z, Math.min(b.max.z - height, p.z)) : 0;
-    return x === p.x && y === p.y && z === p.z ? p : V({ x, y, z });
+    if(!currentMap.wrap){
+      const b=currentMap.bounds;
+      const x=Math.max(b.min.x+r,Math.min(b.max.x-r,p.x));
+      const y=Math.max(b.min.y+r,Math.min(b.max.y-r,p.y));
+      const z=dims===3?Math.max(b.min.z,Math.min(b.max.z-height,p.z)):0;
+      return x===p.x&&y===p.y&&z===p.z?p:V({x,y,z});
+    }
+    const at = boundPosition(p,currentMap,r,height,dims);
+    return at.x===p.x&&at.y===p.y&&at.z===p.z?p:V(at);
   }
 
   /* ---------------------------------------------------------------- running a handler under the budget */
@@ -470,9 +482,15 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     return k;
   };
   const mapApi = brand(Object.freeze({
-    name: c.map.name,
-    spot: (name: unknown): Vec3 | undefined => (typeof name === 'string' && Object.hasOwn(c.map.spots, name) ? c.map.spots[name][0] : undefined),
-    spots: (name: unknown): readonly Vec3[] => (typeof name === 'string' && Object.hasOwn(c.map.spots, name) ? c.map.spots[name] : NO_SPOTS),
+    get name(){return currentMap.name;},
+    ...tileApi(()=>currentMap),
+    replace:(raw:unknown)=>{
+      need('room','world.map.replace()');
+      const prepared=prepareMapReplacement(raw,c.map);
+      pendingMap=Object.freeze([tick+1,prepared.raw]);pendingGeometry=prepared.map;pendingMapCells=prepared.cells;mapCells=currentMapCells+pendingMapCells;
+    },
+    spot: (name: unknown): Vec3 | undefined => (typeof name === 'string' && Object.hasOwn(currentMap.spots, name) ? currentMap.spots[name][0] : undefined),
+    spots: (name: unknown): readonly Vec3[] => (typeof name === 'string' && Object.hasOwn(currentMap.spots, name) ? currentMap.spots[name] : NO_SPOTS),
   }));
   let roundApi: Readonly<Record<string, unknown>> = Object.freeze({});
   const refreshRound = (): void => {
@@ -512,13 +530,13 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       const row=e.kind.collider?colliderRow(e.id,e.pos,e.kind.body,e.kind.collider,e.f):null;
       if(e.kind.collider&&!row)continue;
       let at=e.pos;
-      if(!e.kind.collider && wanted<tick && before && after){charge(4*(before[1].length+after[1].length));const a=before[1].find(p=>p[0]===e.id&&p[4]===e.r),b=after[1].find(p=>p[0]===e.id&&p[4]===e.r);if(a&&b){const mix=after[0]===before[0]?0:Math.max(0,Math.min(1,(wanted-before[0])/(after[0]-before[0])));at={x:a[1]+(b[1]-a[1])*mix,y:a[2]+(b[2]-a[2])*mix,z:a[3]+(b[3]-a[3])*mix};}}
+      if(!e.kind.collider && wanted<tick && before && after){charge(4*(before[1].length+after[1].length));const a=before[1].find(p=>p[0]===e.id&&p[4]===e.r),b=after[1].find(p=>p[0]===e.id&&p[4]===e.r);if(a&&b){const mix=after[0]===before[0]?0:Math.max(0,Math.min(1,(wanted-before[0])/(after[0]-before[0])));at=blendPosition({x:a[1],y:a[2],z:a[3]},{x:b[1],y:b[2],z:b[3]},mix,currentMap.wrap);}}
       targets.push({id:e.id,kind:e.kind.name,query:e.kind.query,fields:e.f,geometry:Boolean(row),solid:row?colliderSolid(row):solidAt(at,e.kind.body),at});
     }
     return targets;
   }
   function cast3(p: Vec3, d: Vec3, shape: BodyShape, ignored: Set<string>): Hit3 | null {
-    let best = castMap3(c.map, p, d, shape);
+    let best = castMap3(currentMap, p, d, shape);
     const solid = solidAt(p, shape);
     for (const other of ents.values()) {
       if (!other.kind.body || ignored.has(other.id)) continue;
@@ -568,7 +586,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       const parent = cx, parentTouched = touched, note = G.note;
       cx = {scope:'ent',ent:e}; touched = []; dispatchDepth++;
       if (noted) G.note = (what, at, written) => noted(e.kind.name, `on.${String(ev)}`, what, at, written);
-      try { fn(world,e.self,payload); }
+      try { fn(world,e.self,payload); opts.observe?.(e.kind.name, `on.${String(ev)}`); } catch(error) { opts.observe?.(e.kind.name, `on.${String(ev)}`, errorText(error)); throw error; }
       finally { try { settle(); } finally { cx=parent; touched=parentTouched; G.note=note; dispatchDepth--; } }
       return true;
     },
@@ -651,7 +669,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       e.pos = clampIn(V(at), e.kind.body?.radius ?? 0, e.kind.body ? e.kind.body.height || 2 * e.kind.body.radius : 0);
       e.vel = vel !== undefined ? V(vel) : ZERO;
       if (heading !== undefined) e.heading = dir(heading, dims);
-      e.grounded = dims === 2 || restsOnMap(c.map, e.pos, e.kind.body ?? { shape: 'sphere', radius: 0, height: 0 });
+      e.grounded = dims === 2 || restsOnMap(currentMap, e.pos, e.kind.body ?? { shape: 'sphere', radius: 0, height: 0 });
       e.r = (e.r + 1) & 0xffff;
       e.allow = 0;
     },
@@ -662,8 +680,8 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       let cost = 0;
       for (const e of ents.values()) {
         if (k && e.kind !== k) continue;
-        const dx = e.pos.x - p.x; const dy = e.pos.y - p.y;
-        const dz = dims === 3 ? e.pos.z - p.z : 0;
+        const dx = periodicDelta(p.x,e.pos.x,currentMap.wrap?.x); const dy = periodicDelta(p.y,e.pos.y,currentMap.wrap?.y);
+        const dz = dims === 3 ? periodicDelta(p.z,e.pos.z,currentMap.wrap?.z) : 0;
         const d2 = dx * dx + dy * dy + dz * dz;
         if (d2 <= R * R) { found.push({ d: d2, e }); cost += viewCost.get(e.kind) as number; }
       }
@@ -678,12 +696,13 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       if (max.x - min.x > 2 * REACH_M || max.y - min.y > 2 * REACH_M || dims === 3 && max.z - min.z > 2 * REACH_M) throw new Error(`world.inBox reaches ${REACH_M} m from its centre at most`);
       const found: Ent[] = [];
       let cost = 0;
-      for (const e of ents.values()) if ((!k || e.kind === k) && e.pos.x >= min.x && e.pos.x <= max.x && e.pos.y >= min.y && e.pos.y <= max.y && (dims === 2 || e.pos.z >= min.z && e.pos.z <= max.z)) { found.push(e); cost += viewCost.get(e.kind) as number; }
+      const centre={x:(min.x+max.x)/2,y:(min.y+max.y)/2,z:(min.z+max.z)/2};
+      for (const e of ents.values()) {const p=relativePoint(e.pos,centre,currentMap.wrap);if ((!k || e.kind === k) && p.x >= min.x && p.x <= max.x && p.y >= min.y && p.y <= max.y && (dims === 2 || p.z >= min.z && p.z <= max.z)) { found.push(e); cost += viewCost.get(e.kind) as number; }}
       charge(cost);
       return Object.freeze(found.map(viewOf));
     },
     ray: (from: unknown, direction: unknown, max: unknown, options?: unknown): unknown => {
-      if (options !== undefined) return rayQuery(c.map, rayTargets(options), dims, from, direction, max, options, cx.ent?.id)[0];
+      if (options !== undefined || currentMap.wrap) return rayQuery(currentMap, rayTargets(options), dims, from, direction, max, options, cx.ent?.id)[0];
       // Charged before the cast, for every shape it may test: the map's, and every entity in the room.
       charge(20 + 4 * ents.size);
       const p = V(from); const d = dir(direction, dims); const far = reach(max, 'world.ray');
@@ -692,7 +711,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
         const hit = cast3(p, delta, { shape: 'sphere', radius: 0, height: 0 }, new Set(cx.ent ? [cx.ent.id] : []));
         return hit ? Object.freeze({ ...(hit.id ? { entity: hit.id } : {}), at: V({ x: p.x + delta.x * hit.t, y: p.y + delta.y * hit.t, z: p.z + delta.z * hit.t }), normal: V({ x: hit.nx, y: hit.ny, z: hit.nz }), dist: far * hit.t }) : undefined;
       }
-      const cast = castMap(c.map, p.x, p.y, d.x * far, d.y * far, 0);
+      const cast = castMap(currentMap, p.x, p.y, d.x * far, d.y * far, 0);
       let best: Hit | null = cast.hit;
       for (const e of ents.values()) {
         if (!e.kind.body || e === cx.ent) continue;
@@ -711,12 +730,17 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       const named=typeof graph==='string';if(named&&!Object.hasOwn(c.navigation,graph))throw new Error('unknown navigation graph');return routeGraph(named?c.navigation[graph]:graph,from,to,rayTargets({geometryOnly:true}).map(t=>t.solid),radius,height,named);
     },
     label: (id: unknown): string => {charge(20);const e=typeof id==='string'?ents.get(id):undefined;if(!e?.kind.player)return '';return String(opts.label?.(e.seat,e.driver)??`Player ${e.seat+1}`).slice(0,40);},
-    rays: (options?: unknown): unknown => raySnapshot(c.map,rayTargets(options),dims,options,cx.ent?.id),
-    rayAll: (from: unknown, direction: unknown, max: unknown, options?: unknown): unknown => rayQuery(c.map, rayTargets(options), dims, from, direction, max, options, cx.ent?.id, true),
+    rays: (options?: unknown): unknown => raySnapshot(currentMap,rayTargets(options),dims,options,cx.ent?.id),
+    rayAll: (from: unknown, direction: unknown, max: unknown, options?: unknown): unknown => rayQuery(currentMap, rayTargets(options), dims, from, direction, max, options, cx.ent?.id, true),
     sweep: (self: unknown, delta: unknown, o?: unknown): unknown => {
       const e = mine(self, 'world.sweep');
       charge(20 + 4 * ents.size);
       const d = V(delta);
+      if(currentMap.wrap){
+        const scene=raySnapshot(currentMap,rayTargets(undefined),dims,{radius:e.kind.body?.radius??0,height:e.kind.body?.height||2*(e.kind.body?.radius??0),shape:e.kind.body?.shape==='circle'?'sphere':e.kind.body?.shape,ignore:own(o,'ignore')},e.id);
+        const body={pos:e.pos,grounded:e.grounded};const hit=scene.sweep(body,d);
+        e.pos=V(wrapPoint(body.pos,currentMap.wrap));e.grounded=body.grounded;return hit;
+      }
       const radius = e.kind.body?.radius ?? 0;
       // The ids to pass through: the first few of a list, read as plain texts. A longer list is not searched once for every entity.
       const list = own(o, 'ignore');
@@ -733,7 +757,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
         e.grounded = Boolean(support && support.nz > 0.5);
         return hit ? Object.freeze({ ...(hit.id ? { entity: hit.id } : {}), at: e.pos, normal: V({ x: hit.nx, y: hit.ny, z: hit.nz }) }) : undefined;
       }
-      const cast = castMap(c.map, e.pos.x, e.pos.y, d.x, d.y, radius);
+      const cast = castMap(currentMap, e.pos.x, e.pos.y, d.x, d.y, radius);
       let best: Hit | null = cast.hit;
       for (const other of ents.values()) {
         if (other === e || !other.kind.body || ignore.has(other.id)) continue;
@@ -778,14 +802,15 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       const row = colliderRow(e.id,e.pos,e.kind.body,e.kind.collider,e.f,e.kind.name,e.kind.query);
       return row ? [row] : [];
     });
-    const text = JSON.stringify(rows);
-    if (!collisionPrevious || text !== collisionText) {collisionText=text;collisionPrevious=[...(collisionPrevious ? [tick,tick+1] : opts.restore?.collision ?? [tick,tick+1]) as [number,number],rows];}
+    const metadata={...(currentMap.wrap?{wrap:currentMap.wrap}:{}),...((pendingMap??mapRevision)?{map:pendingMap??mapRevision,...(pendingMap&&mapRevision?{previousMap:mapRevision}:{})}:{})};
+    const text = JSON.stringify(Object.keys(metadata).length ? [rows,metadata] : rows);
+    if (!collisionPrevious || text !== collisionText) {collisionText=text;collisionPrevious=[...(collisionPrevious ? [tick,tick+1] : opts.restore?.collision ?? [tick,tick+1]) as [number,number],rows,...(Object.keys(metadata).length?[metadata]:[])];}
     return collisionPrevious;
   };
-  let moveGeometry = c.map as import('./math.ts').MapShapes;
+  let moveGeometry = currentMap as import('./math.ts').MapShapes;
   const queries = collisionQueries(() => moveGeometry, () => moveShape, dims, () => cx.ent?.id);
   const moveWorld = brand(Object.freeze(queries));
-  const moveMap = brand(Object.freeze({ name: c.map.name, spot: mapApi.spot, spots: mapApi.spots, ...queries }));
+  const moveMap = brand(Object.freeze({ get name(){return currentMap.name;}, spot: mapApi.spot, spots: mapApi.spots, ...tileApi(()=>currentMap), ...queries }));
   let moveShape = { shape: 'sphere', radius: 0, height: 0 };
   const moveCtx = brand({} as Record<string, unknown>);
   for (const [name, get] of Object.entries({ tick: () => tick, dt: () => dt, tune: () => c.publicTune, math: () => math, map: () => moveMap, world: () => moveWorld })) Object.defineProperty(moveCtx, name, { get, enumerable: true });
@@ -1037,6 +1062,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
   /* ---------------------------------------------------------------- one tick */
 
   function inArea(a: any, p: Vec3): boolean {
+    if(currentMap.wrap) p = relativePoint(p, a.k === 'b' ? {x:(a.min.x+a.max.x)/2,y:(a.min.y+a.max.y)/2,z:(a.min.z+a.max.z)/2} : a.at, currentMap.wrap);
     if (a.k === 'b') return p.x >= a.min.x && p.x <= a.max.x && p.y >= a.min.y && p.y <= a.max.y && (dims === 2 || p.z >= a.min.z && p.z <= a.max.z);
     const dx = p.x - a.at.x; const dy = p.y - a.at.y;
     const dz = dims === 3 ? p.z - a.at.z : 0;
@@ -1049,6 +1075,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
   }
   function step(inputs: ReadonlyMap<number, StepInput> = new Map(), guides?: () => void): void {
     tick = (tick + 1) >>> 0;
+    if(pendingMap&&pendingMap[0]<=tick){currentMap=pendingGeometry!;mapRevision=pendingMap;currentMapCells=pendingMapCells;mapCells=currentMapCells;pendingMapCells=0;pendingMap=null;pendingGeometry=null;moveGeometry=currentMap;}
     // The tick pays first for the state it sends: what the last snapshot packed. A room that holds more than a tick can send has nothing left for its handlers, and ends as any room does whose budget trips on every tick.
     left = c.settings.budget.tick - SNAP * snapCells;
     cut = false; stopped = false; threw = null;
@@ -1107,7 +1134,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       }
       guides?.();
       // All movers see the same world, independent of entity iteration order.
-      if (hasColliders) { left -= 64 * ents.size; moveGeometry = collisionMap(c.map, collisionState()[2]); }
+      if (hasColliders) { left -= 64 * ents.size; moveGeometry = collisionMap(currentMap, collisionState()[2]); }
       // Phase 1: one input step and `move` for every body.
       for (const e of [...ents.values()]) {
         if (e.dead || !e.kind.body) continue;
@@ -1140,7 +1167,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
             // Owner movement: the browser says where its body is, and the server holds the claim to maxSpeed.
             e.allow = Math.min(e.allow + body.maxSpeed * dt * 1.02, body.maxSpeed * 0.25 + 0.05);
             if (claim && claim.r === e.r) {
-              const dx = claim.pos.x - e.pos.x; const dy = claim.pos.y - e.pos.y;
+              const dx = periodicDelta(e.pos.x,claim.pos.x,currentMap.wrap?.x); const dy = periodicDelta(e.pos.y,claim.pos.y,currentMap.wrap?.y);
               const dist = Math.sqrt(dx * dx + dy * dy);
               const go = Math.min(dist, e.allow);
               // The browser ran the game's own `move` and came further than `maxSpeed` allows: the body is held back.
@@ -1153,7 +1180,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
               e.grounded = dims === 2;
               // The support cast is map work even when a browser supplies the pose.
               // Keep it under the same movement quota as a server-driven body's sweep.
-              if (dims === 3) run(k.name, 'move', e, 'move', () => { e.grounded = restsOnMap(c.map, e.pos, body); }, 'body');
+              if (dims === 3) run(k.name, 'move', e, 'move', () => { e.grounded = restsOnMap(currentMap, e.pos, body); }, 'body');
             }
             continue;
           }
@@ -1245,7 +1272,8 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
   function save(): SavedCore {
     return {
       v: SAVE_REVISION, tick, epoch, rng, nextId, seq, round: [round.n, round.phase === 'live' ? 1 : 0, round.endsAt, round.startedAt], overAt, match: [playing, restartAt], trips,
-      ...(hasColliders?{collision:collisionState().slice(0,2) as [number,number]}:{}),
+      ...((hasColliders||mapRevision||pendingMap)?{collision:collisionState().slice(0,2) as [number,number]}:{}),
+      ...((mapRevision||pendingMap)?{maps:{current:mapRevision,pending:pendingMap}}:{}),
       ...(historyTicks?{history:poseHistory.map(([at,rows])=>[at,rows.map(row=>[...row])] as SavedCore['history'])}:{}),
       shared: packFields(c.shared, shared, dims), policy: { ...policy }, intent: restartAsked ? [endAsked ? 1 : 0, finishing ? 1 : 0, 1] : [endAsked ? 1 : 0, finishing ? 1 : 0], asks: pendingAsks, guideViews: [...guideViews],
       ents: [...ents.values()].map(saveEnt), spawns: spawns.map(saveEnt),
@@ -1264,8 +1292,12 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       check(Array.isArray(value) && JSON.stringify(value) === JSON.stringify(packFields(list, unpackFields(list, value, dims), dims)));
     };
     check(r.v === SAVE_REVISION);
+    if(r.maps!==undefined){
+      check(r.maps&&Object.keys(r.maps).length===2&&'current' in r.maps&&'pending' in r.maps&&Object.keys(r.maps).every(k=>k==='current'||k==='pending'));
+      for(const [name,value] of Object.entries(r.maps)){if(value===null)continue;check(Array.isArray(value)&&value.length===2&&uint(value[0])&&(name==='pending'?value[0]===r.tick+1:value[0]<=r.tick));prepareMapReplacement(value[1],c.map);}
+    }
     if(r.collision!==undefined)check(Array.isArray(r.collision)&&r.collision.length===2&&uint(r.collision[0])&&uint(r.collision[1])&&r.collision[0]<=r.tick&&r.collision[1]===r.collision[0]+1);
-    check(Object.keys(r).every(k => ['v', 'tick', 'epoch', 'rng', 'nextId', 'seq', 'round', 'overAt', 'match', 'trips', 'shared', 'policy', 'intent', 'asks', 'guideViews', 'ents', 'spawns', 'seats', 'queue', 'areas', 'ops', 'history', 'collision'].includes(k)));
+    check(Object.keys(r).every(k => ['v', 'tick', 'epoch', 'rng', 'nextId', 'seq', 'round', 'overAt', 'match', 'trips', 'shared', 'policy', 'intent', 'asks', 'guideViews', 'ents', 'spawns', 'seats', 'queue', 'areas', 'ops', 'history', 'collision', 'maps'].includes(k)));
     const askNames = new Set();
     check(Array.isArray(r.asks));
     for (const a of r.asks) {
@@ -1311,7 +1343,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       for (const i of [7, 8, 9]) check(JSON.stringify(w[i]) === JSON.stringify(packVec(unpackVec(w[i], 3), 3)));
       const goal = w[15] as any;
       if (goal !== null) check(goal && typeof goal === 'object' && !Array.isArray(goal) && Object.keys(goal).every(k => ['goal', 'args', 'from', 'at', 'asked', 'state'].includes(k)) && typeof goal.goal === 'string' && goal.args && typeof goal.args === 'object' && !Array.isArray(goal.args) && ['brain', 'floor'].includes(goal.from) && uint(goal.at) && goal.at <= r.tick && typeof goal.asked === 'boolean' && goal.state === 'active');
-      const pos = unpackVec(w[7] as number[], 3), bounds = c.map.bounds;
+      const pos = unpackVec(w[7] as number[], 3), bounds = currentMap.bounds;
       check(pos.x >= bounds.min.x && pos.x <= bounds.max.x && pos.y >= bounds.min.y && pos.y <= bounds.max.y && (dims === 3 ? pos.z >= bounds.min.z && pos.z <= bounds.max.z : pos.z === 0));
       check(Number.isInteger(w[11]) && (w[11] as number) >= -1 && (w[11] as number) < c.seats && ['person', 'bot', 'ai'].includes(w[12] as string) && typeof w[13] === 'string' && w[13].length <= 128);
       if (k.player) { check(!bodySeats.has(w[11])); bodySeats.add(w[11]); }
@@ -1398,6 +1430,12 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     }
     pendingAsks = r.asks.map(a => ({ ...a, state: deepFreeze(a.state) }));
     if ([opts.restoreEpoch].some((e) => e !== undefined && (!Number.isSafeInteger(e) || e <= 0))) throw new Error('restored epoch is invalid');
+    if(r.maps){
+      mapRevision=r.maps.current;pendingMap=r.maps.pending;
+      if(mapRevision){const p=prepareMapReplacement(mapRevision[1],c.map);mapRevision=Object.freeze([mapRevision[0],p.raw]);currentMap=p.map;currentMapCells=p.cells;mapCells=p.cells;}
+      if(pendingMap){const p=prepareMapReplacement(pendingMap[1],c.map);pendingMap=Object.freeze([pendingMap[0],p.raw]);pendingGeometry=p.map;pendingMapCells=p.cells;mapCells=currentMapCells+pendingMapCells;}
+      moveGeometry=currentMap;
+    }
     tick = r.tick; epoch = opts.restoreEpoch ?? r.epoch; rng = r.rng; nextId = r.nextId; seq = r.seq; overAt = r.overAt; playing = r.match[0]; restartAt = r.match[1]; trips = r.trips;
     endAsked = r.intent?.[0] === 1; finishing = r.intent?.[1] === 1; restartAsked = r.intent?.[2] === 1;
     round = { n: r.round[0], phase: r.round[1] === 1 ? 'live' : 'over', endsAt: r.round[2], startedAt: r.round[3] };
@@ -1416,7 +1454,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     });
     areas = r.areas.map((a: any[]) => ({ from: a[0], fromId: a[1], seq: a[2], shape: a[3], ev: a[4], data: deepFreeze(coerceFields(c.events[a[4]] ?? [], a[5], dims)) }));
     ops = r.ops as typeof ops;
-    if(hasColliders)collisionState();
+    if(hasColliders||mapRevision||pendingMap)collisionState();
   } else startMatch();
 
   function decisionResult(value: unknown): Record<string, unknown> {
@@ -1501,8 +1539,8 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       const list = [...ents.values()].map((e) => packEntity(e.kind, e, dims));
       // Include all three components of position, velocity and heading in a 3D snapshot.
       snapCells = packed.n + (dims === 3 ? 13 : 10) * list.length;
-      const collision = hasColliders ? collisionState() : null;
-      if (collision) snapCells += 3 + collision[2].length * 8;
+      const collision = hasColliders||mapRevision||pendingMap ? collisionState() : currentMap.wrap ? [0,0,[],{wrap:currentMap.wrap}] : null;
+      if (collision) snapCells += 3 + collision[2].length * 8 + mapCells;
       return [[round.n, round.phase === 'live' ? 1 : 0, round.endsAt], list, ...(collision ? [collision] : [])];
     },
     shared: () => packFields(c.shared, shared, dims),

@@ -217,3 +217,18 @@ test('chained decoding preserves earlier snapshots and rejects a partial invalid
   assert.deepEqual(decoder.decode(second),frame(2));
   assert.deepEqual(first,frame(1),'a private baseline update cannot mutate a snapshot already handed to the view');
 });
+
+test('wrapped coast decodes canonically and cell candidates do not depend on the first seat in a cell',()=>{
+ const wrap={x:[0,20.5]};
+ const make=(k,x)=>{const s=snapshot(k,[entity('own',5,0),entity('coast',x,1)]);s.d.push([0,0,[],{wrap}]);s.d[1][1][4]=[10,0,0];return s;};
+ const encoder=snapshotEncoder(Infinity,true,{hz:20,toleranceM:.01}),decoder=snapshotDecoder();
+ decoder.decode(encoder.encode(make(1,20.2),0));
+ const delta=encoder.encode(make(2,.2),0);assert.equal(delta.d.changed.length,0);
+ const result=decoder.decode(delta);assert.ok(Math.abs(result.d[1][1][3][0]-.2)<1e-6);
+ // The period is not an integer multiple of the spatial cell size.
+ const s=snapshot(1,[entity('one',.1,0),entity('two',2.9,1),entity('edge',19.9,2)]);s.d.push([0,0,[],{wrap}]);
+ for(const seat of [0,1]){
+  const expected=s.d[1].filter(e=>{let d=Math.abs(e[3][0]-s.d[1][seat][3][0]);return Math.min(d,20.5-d)<=3;}).map(e=>e[0]);
+  assert.deepEqual(interestSnapshot(s,seat,3).d[1].map(e=>e[0]),expected);
+ }
+});

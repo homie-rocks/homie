@@ -1178,3 +1178,70 @@ still snap to authority. Opt in only after measuring stop/reversal and delayed
 collision behavior for the game's mover.
 
 For multi-cast movement or scratch trajectory checks, `ctx.world.sweep(body, delta, {ground:false})` (also captured-scene `sweep`) moves and returns the same collision but leaves `body.grounded` unchanged. Use it only when your mover computes support explicitly. Omitting the option retains the existing support query and grounding behavior. This avoids paying for identical support checks after horizontal and upward probes.
+
+
+## Wrapped worlds and generated levels (0.47.0)
+
+Declare wrapping in the map, independently per axis. The period is the bounds'
+extent; an omitted axis keeps its existing bounded behaviour:
+
+```json
+{"bounds":{"min":[0,0,0],"max":[25,25,10]},"wrap":{"x":true}}
+```
+
+Bodies and hit positions use canonical coordinates in `[min,max)`. Sweeps and rays
+follow the supplied displacement through periodic copies of the geometry; they can
+cross more than one period and pay for each visited image. Near/box queries, area
+events, effect ranges, spatial delivery, rewind and drawing interpolation use the
+short way around. Exactly half a period chooses the negative direction. A renderer
+can read `room.map.wrap.x` (the pair `[min,max]`) to draw copies at the viewport's
+edges. The server does not duplicate entities. In a maze with one tunnel, keep
+solid border cells on every other row; wrapping itself is per axis, not per row.
+
+For a generated maze, replace the room's current map in `room.start` or a room
+handler. Build its data using the rules' seeded random source, then publish once:
+
+```ts
+world.map.replace({
+  bounds: { min: [0, 0], max: [25, 25] },
+  wrap: { x: true },
+  tiles: { width: 25, height: 25, size: 1, data: cells,
+    flows: { exit: [312] } },
+  spots: { start: [[12.5, 19.5]] },
+});
+```
+
+`replace` preserves the original bounds and wrapping. It validates, bakes cardinal
+navigation fields and compiles the spatial index before publishing anything. A
+failed bake leaves the previous revision intact. The last successful replacement
+in a tick becomes current at the next tick; all bodies use the same revision.
+The compact map data and activation tick travel with collision revisions and saves,
+including both current and pending maps. Prediction replays against that tick's
+compiled geometry. Late knowledge is corrected by the normal reconciliation path.
+
+Tiles are row-major integers: zero is open, nonzero is solid. `at` defaults to
+`[0,0,0]`, `size` and `solidHeight` to 1. Horizontal runs become indexed boxes,
+including in 3D. On a wrapped axis the grid must span the full map. Authored boxes,
+round shapes, terrain and spots can be included in the same replacement. The view
+reads `room.map.tiles`; rules and movement read `world.map.tile(x,y)` and
+`ctx.map.tile(x,y)`. Cell coordinates are integers, not metres. Outside an unwrapped
+grid is solid. A custom tile mover may read these cells instead of using sweeps.
+
+`flows` names lists of open destination cell indices. `map.distance(name,x,y)` gives
+cardinal hops to the nearest destination, or -1 when unreachable/unknown;
+`map.flow(name,x,y)` gives the next unit direction, zero at a destination, or
+undefined when unreachable/unknown. Each lookup is constant work (4 or 8 budget
+units). Baking uses `@homie-rocks/nav`'s shared cardinal flow implementation;
+left/up/right/down resolves ties, including tunnels. Change destinations by
+publishing new flow declarations with the map. This is a bake, not an unmetered
+path search: budget for every field and regenerate only when its goals change.
+
+Room replacement charges copying, grid scanning, index construction and each flow
+bake to the calling handler. Snapshots charge for the compact data. Existing static
+maps need no replacement and retain their previous budget charges. A few thousand
+cells regenerated a few times a round belong in one map revision; live collider
+entities remain suitable for independently moving doors, cover and platforms.
+
+`spawn` exposes a new entity before its deferred `on.arrive` handler. Pass every
+field that must be valid immediately in the spawn data; use `arrive` for subsequent
+work, not for mandatory initialization.

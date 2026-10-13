@@ -1,3 +1,4 @@
+import { imageOffsets, wrapPoint } from './topology.mjs';
 /** Bounded, data-only ray policy. Shared by rules and predicted geometry queries. */
 import { charge, brand, plainData, put } from './guard.ts';
 import { own, dir, vec3 } from './pack.ts';
@@ -37,14 +38,15 @@ export function rayQuery(map: MapShapes, targets: readonly QueryTarget[], dims: 
   const take=(h: {t:number;nx:number;ny:number;nz?:number}|null,id?:string,part?:string):void=>{
     if(!h)return; charge(32);
     if(h.t===0 && h.nx===0 && h.ny===0 && !h.nz)h={...h,nx:-d.x,ny:-d.y,nz:-d.z};
-    hits.push(Object.freeze({at:vec3({x:p.x+delta.x*h.t,y:p.y+delta.y*h.t,z:p.z+delta.z*h.t},dims),normal:vec3({x:h.nx,y:h.ny,z:h.nz??0},dims),dist:max*h.t,...(id?{entity:id}:{}),...(part?{part}:{})}));
+    hits.push(Object.freeze({at:vec3(wrapPoint({x:p.x+delta.x*h.t,y:p.y+delta.y*h.t,z:p.z+delta.z*h.t},map.wrap),dims),normal:vec3({x:h.nx,y:h.ny,z:h.nz??0},dims),dist:max*h.t,...(id?{entity:id}:{}),...(part?{part}:{})}));
   };
   if(own(options,'entitiesOnly')!==true && (layer===undefined || layer==='geometry')) {
     if(dims===3) {const found: import('./collision.ts').Hit3[]=[];const h=castMap3(map,start,delta,shape,all?found:undefined,includeInside);if(all)for(const h of found)take(h);else take(h);}
     else {const found: import('./math.ts').Hit[]=[];const h=castMap(map,p.x,p.y,delta.x,delta.y,radius,all?found:undefined,includeInside,shape.shape==='box').hit;if(all)for(const h of found)take(h);else take(h);}
   }
   const point=solidAt(start,shape);
-  for(const target of targets) {
+  const candidates=map.wrap?periodicTargets(targets,map,start,delta,radius,height,dims,profile as string | undefined):targets;
+  for(const target of candidates) {
     if(excluded.has(target.id) || own(options,'geometryOnly')===true&&!target.geometry || layer!==undefined && layer!==(target.query?.layer??(target.geometry?'geometry':'body')) || kind!==undefined && kind!==target.kind || tag!==undefined && !target.query?.tags?.includes(tag as string)) continue;
     const declared = target.at ? queryParts(target.at,target.query,profile as string | undefined) : target.parts;
     const parts=(own(options,'geometryOnly')!==true && declared?.length?declared:[{name:'',solid:target.solid}]).filter(part=>{
@@ -96,8 +98,21 @@ export function raySnapshot(map:MapShapes,targets:readonly QueryTarget[],dims:nu
  const ray=(from:unknown,direction:unknown,max:unknown)=>rayQuery(map,scene,dims,from,direction,max,policy,self)[0];
  const radius=typeof own(policy,'radius')==='number'?own(policy,'radius') as number:0,height=own(policy,'shape')==='box'||own(policy,'shape')==='capsule'?Number(own(policy,'height')??radius*2):radius*2;
  const position=(body:unknown)=>{const at=own(body,'pos');if(!at||typeof at!=='object')throw new Error('scene sweep/support takes a scratch body with a plain pos');return vec3(at,dims);};
- const support=(body:unknown,distance:unknown=.002)=>{const p=position(body);if(dims===2)return Object.freeze({at:p,normal:Object.freeze({x:0,y:0,z:1}),dist:0});if(typeof distance!=='number'||!Number.isFinite(distance)||distance<0)throw new Error('support distance is finite and nonnegative');const h=rayQuery(map,scene,dims,{x:p.x,y:p.y,z:p.z+height/2},{x:0,y:0,z:-1},distance,policy,self,false,false)[0];return h&&h.normal.z>.5?Object.freeze({...h,at:vec3({x:h.at.x,y:h.at.y,z:(h.at.z??0)-height/2},dims)}):undefined;};
+ const support=(body:unknown,distance:unknown=.002)=>{const p=position(body);if(dims===2)return Object.freeze({at:p,normal:Object.freeze({x:0,y:0,z:1}),dist:0});if(typeof distance!=='number'||!Number.isFinite(distance)||distance<0)throw new Error('support distance is finite and nonnegative');const h=rayQuery(map,scene,dims,{x:p.x,y:p.y,z:p.z+height/2},{x:0,y:0,z:-1},distance,policy,self,false,false)[0];return h&&h.normal.z>.5?Object.freeze({...h,at:vec3(wrapPoint({x:h.at.x,y:h.at.y,z:(h.at.z??0)-height/2},map.wrap),dims)}):undefined;};
  const sweep=(body:unknown,delta:unknown,options?:unknown)=>{const p=position(body),d=vec3(delta,dims),length=Math.sqrt(d.x*d.x+d.y*d.y+d.z*d.z),h=length?rayQuery(map,scene,dims,{x:p.x,y:p.y,z:p.z+height/2},d,length,policy,self,false,false)[0]:undefined;
-   const fraction=h?Math.max(0,(h.dist-.001)/length):1;put(body as object,'pos',vec3({x:p.x+d.x*fraction,y:p.y+d.y*fraction,z:p.z+d.z*fraction},dims));if(own(options,'ground')!==false)put(body as object,'grounded',dims===2||Boolean(support(body)));return h?Object.freeze({...h,at:vec3(own(body,'pos'),dims)}):undefined;};
+   const fraction=h?Math.max(0,(h.dist-.001)/length):1;put(body as object,'pos',vec3(wrapPoint({x:p.x+d.x*fraction,y:p.y+d.y*fraction,z:p.z+d.z*fraction},map.wrap),dims));if(own(options,'ground')!==false)put(body as object,'grounded',dims===2||Boolean(support(body)));return h?Object.freeze({...h,at:vec3(own(body,'pos'),dims)}):undefined;};
  return brand(Object.freeze({ray,rayAll:(from:unknown,direction:unknown,max:unknown)=>rayQuery(map,scene,dims,from,direction,max,policy,self,true),sweep,support}));
+}
+
+/** Default queries retain their original target loop; only wrapped worlds construct images. */
+function* periodicTargets(targets:readonly QueryTarget[],map:MapShapes,start:Vec3,delta:Vec3,radius:number,height:number,dims:number,profile?:string):Generator<QueryTarget> {
+  for(const source of targets) {
+    const ext={min:{x:source.solid.min.x-source.solid.r,y:source.solid.min.y-source.solid.r,z:source.solid.min.z-source.solid.r},max:{x:source.solid.max.x+source.solid.r,y:source.solid.max.y+source.solid.r,z:source.solid.max.z+source.solid.r}};
+    for(const part of (source.at ? queryParts(source.at,source.query,profile) : source.parts) ?? []) for(const k of ['x','y','z'] as const){ext.min[k]=Math.min(ext.min[k],part.solid.min[k]-part.solid.r);ext.max[k]=Math.max(ext.max[k],part.solid.max[k]+part.solid.r);}
+    for(const offset of imageOffsets(ext,map.wrap,start,delta,radius,height,dims)) {
+    charge(48);
+    const shift=(v:Vec3)=>({x:v.x+offset.x,y:v.y+offset.y,z:v.z+offset.z});
+    yield {...source,at:source.at?shift(source.at):undefined,solid:{...source.solid,min:shift(source.solid.min),max:shift(source.solid.max)},parts:source.parts?.map(part=>({...part,solid:{...part.solid,min:shift(part.solid.min),max:shift(part.solid.max)}}))};
+    }
+  }
 }

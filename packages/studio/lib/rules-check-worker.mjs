@@ -1,3 +1,4 @@
+import { boundPosition } from '../rules/topology.mjs';
 /**
  * The generated play of a rules game, in a worker thread of its own (rules-check.mjs starts it).
  *
@@ -353,7 +354,7 @@ function play(c, companions, allow) {
         error => { fault ??= `${siteOf(name, 'move')} ${name}.move: prediction failed: ${error.message}.${when()}`; });
       units += result.used;
       const r = kind.body.radius, height = kind.body.height || 2 * r, bounds = c.map.bounds;
-      result.pos = L.P.vec3({ x: Math.max(bounds.min.x + r, Math.min(bounds.max.x - r, result.pos.x)), y: Math.max(bounds.min.y + r, Math.min(bounds.max.y - r, result.pos.y)), z: c.dims === 3 ? Math.max(bounds.min.z, Math.min(bounds.max.z - height, result.pos.z)) : 0 }, c.dims);
+      result.pos = L.P.vec3(boundPosition(result.pos,geometry??c.map,r,height,c.dims),c.dims);
       delete result.used;
       if (JSON.stringify(result) !== JSON.stringify(after)) fault ??= `${siteOf(name, 'move')} ${name}.move: prediction and the server produced different bodies from the same input.${when()}`;
     }

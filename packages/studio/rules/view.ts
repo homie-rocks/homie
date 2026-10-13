@@ -1,3 +1,4 @@
+import { boundPosition, periodicDelta, blendPosition, relativePoint, wrapPoint } from './topology.mjs';
 import { rayQuery, raySnapshot, type QueryTarget } from './query.ts';
 import { solidAt } from './collision.ts';
 import type { RayQueries, RayOptions } from './types.ts';
@@ -72,7 +73,7 @@ export function blendHeading(a: Vec3, b: Vec3, t: number, dims: 2 | 3): Vec3 {
 }
 
 /** What the build hands the view library for one game: its declarations, its public tunables and its map. No code. */
-export interface GameData { vocab?: Vocabulary; id: string; schema: Schema; tune: Record<string, unknown>; map: { name?: string; bounds: { min: unknown; max: unknown }; boxes?: unknown[]; circles?: unknown[]; spheres?: unknown[]; capsules?: unknown[]; heightTiles?: unknown[]; spots?: Record<string, unknown[]> } }
+export interface GameData { vocab?: Vocabulary; id: string; schema: Schema; tune: Record<string, unknown>; map: { name?: string; bounds: { min: unknown; max: unknown }; boxes?: unknown[]; circles?: unknown[]; spheres?: unknown[]; capsules?: unknown[]; heightTiles?: unknown[]; wrap?: Partial<Record<'x'|'y'|'z',true>>; tiles?: unknown; spots?: Record<string, unknown[]> } }
 let current: { game: GameData; move: Record<string, MoveFn>; load?: () => Promise<RulesHostFactory> } | null = null;
 /** Called by the build's own two lines at the top of a view's bundle, before the view's code runs. */
 export function setGame(game: GameData, move: Record<string, MoveFn> = {}, load?: () => Promise<RulesHostFactory>): void { current = { game, move, load }; }
@@ -159,7 +160,7 @@ export interface Room<R = unknown> extends RayQueries {
   askButtons(id: string, offer?: Record<string, unknown>): AskButton[];
   readonly tune: Readonly<Record<string, unknown>>;
   /** The game's static map: its edges, its solid shapes and its named spots, in metres. */
-  readonly map: { readonly bounds: { min: Vec3; max: Vec3 }; readonly boxes: readonly { min: Vec3; max: Vec3 }[]; readonly circles: readonly { at: Vec3; r: number }[]; readonly heightTiles: readonly import('./rules.ts').MapHeightTile[]; readonly spheres: readonly { at: Vec3; r: number }[]; readonly capsules: readonly { at: Vec3; r: number; height: number }[]; readonly spots: Readonly<Record<string, readonly Vec3[]>> };
+  readonly map: import('./rules.ts').GameMap;
   readonly net: Netplay;
   /** Run the room's clock up to now (called by itself on a timer and whenever the view reads the room). */
   pump(): void;
@@ -191,6 +192,21 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const emit = (name: string, e: unknown, local = false): void => { if (Boolean(solo) !== local) return; for (const fn of listeners.get(name) ?? []) { try { fn(e); } catch (err) { console.warn(`[room] on('${name}')`, err); } } };
   const map = compileMap(game.map, game.map.name ?? 'main');
   const spots = map.spots;
+  const compiledMaps = new Map<string, typeof map>();
+  const mapOf = (revision?: CollisionRevision, atTick = Infinity) => {
+    const metadata = revision?.[3];
+    const data = metadata?.map && metadata.map[0] <= atTick ? metadata.map : metadata?.previousMap;
+    if (!data) return map;
+    const key = `${epoch}:${data[0]}`;
+    let value = compiledMaps.get(key);
+    if (!value) {
+      value = compileMap(data[1], map.name);
+      compiledMaps.set(key, value);
+      // Only replay history needs old compiled indexes; saves carry the compact data.
+      if (compiledMaps.size > 64) compiledMaps.delete(compiledMaps.keys().next().value!);
+    }
+    return value;
+  };
   const tune = Object.freeze({ ...(lab.rulesTune({ public: game.tune }).public as Record<string, unknown>) });
 
   let status: RoomStatus = 'connecting';
@@ -259,7 +275,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const quantile = (list: number[], q: number): number => [...list].sort((a, b) => a - b)[Math.floor((list.length - 1) * q)] ?? 0;
   const targetLead = (): number => 0.5 + Math.max(0, quantile(leads, 0.5) - quantile(leads, 0.05));
   const copyMine = (m: Mine): Mine => ({ ...m, motion: motionOf(m.kind, m.motion) });
-  const distance = (a: Vec3, b: Vec3): number => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+  const distance = (a: Vec3, b: Vec3): number => Math.hypot(periodicDelta(b.x,a.x,map.wrap?.x),periodicDelta(b.y,a.y,map.wrap?.y),periodicDelta(b.z,a.z,map.wrap?.z));
   const correction = { count: 0, max: 0, last: 0, catches: 0, snaps: 0, rebases: 0, rebaseReason: '', rebaseError: 0 };
   function visualOffset(now: number, path?: Vec3, settled = false): Vec3 {
     if (predict.blendMs <= 0) { offsets = []; return { x: 0, y: 0, z: 0 }; }
@@ -300,9 +316,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let collisionHistory: CollisionRevision[] = [];
   let cachedCollision: CollisionRevision | undefined;
   let geometry = map as import('./math.ts').MapShapes;
+  const mapAt = (tick:number) => mapOf(revisionAt(collisionHistory,tick) ?? collisionHistory[0],tick);
   const geometryAt = () => {
     const revision = revisionAt(collisionHistory, moveTick);
-    if (revision !== cachedCollision) { geometry = collisionMap(map, revision?.[2] ?? []); cachedCollision = revision; }
+    const activeMap=mapAt(moveTick);
+    if (revision !== cachedCollision || (geometry.staticMap??geometry)!==activeMap) { geometry = collisionMap(activeMap, revision?.[2] ?? []); cachedCollision = revision; }
     return geometry;
   };
   const moveCtx = moveContext({ tick: () => moveTick, tickHz, tune, map, geometry: geometryAt, self: () => mine?.id, name: game.map.name ?? 'main', spots, radius: () => myKind()?.radius ?? 0, shape: () => ({ terrain: myKind()?.terrain, shape: myKind()?.shape ?? 'sphere', radius: myKind()?.radius ?? 0, height: myKind()?.height ?? 0 }), dims });
@@ -342,7 +360,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const u = mine && latest?.ents.get(mine.id); if (u) adopt(u);
     if (mine) {
       history.set(stepped, copyMine(mine));
-      if (shown) offsets = [{ delta: { x: shown.x - mine.pos.x, y: shown.y - mine.pos.y, z: shown.z - mine.pos.z }, at: clock(), path: mine.pos, fade: 1, last: clock() }];
+      if (shown) offsets = [{ delta: { x: periodicDelta(mine.pos.x,shown.x,map.wrap?.x), y: periodicDelta(mine.pos.y,shown.y,map.wrap?.y), z: periodicDelta(mine.pos.z,shown.z,map.wrap?.z) }, at: clock(), path: mine.pos, fade: 1, last: clock() }];
     }
   }
   /** `motion` as this browser's own `move` may change it in place: what a snapshot carries is frozen, so every list, map and struct in it is copied. */
@@ -361,7 +379,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const out = stepMove(fn, body, input, moveCtx, Math.max(1, Math.floor(schema.settings.budget.tick / 4)), kindOf.get(kindName)?.motion ?? [], dims, (err) => { if (!(err instanceof BudgetError)) console.warn('[room] move', err); });
     const kind = kindOf.get(kindName), r = kind?.radius ?? 0;
     const height = kind?.height || 2 * r;
-    out.pos = vec3({ x: Math.max(map.bounds.min.x + r, Math.min(map.bounds.max.x - r, out.pos.x)), y: Math.max(map.bounds.min.y + r, Math.min(map.bounds.max.y - r, out.pos.y)), z: dims === 3 ? Math.max(map.bounds.min.z, Math.min(map.bounds.max.z - height, out.pos.z)) : 0 }, dims);
+    out.pos = vec3(boundPosition(out.pos,map,r,height,dims), dims);
     return out;
   }
   /* ---------------------------------------------------------------- the own actions, predicted (0.46.3) */
@@ -400,7 +418,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       judgedTick: (aimTick) => Math.max(t - rewindAllowance(), Math.min(t, Number(aimTick) || 0)),
       get viewTick() { return viewTickNow(); },
       ray: (from, direction, max, options) => viewRay(from, direction, max, options)[0],
-      rays: (options) => raySnapshot(map, viewTargets(atTickOf(options)), dims, options, id),
+      rays: (options) => raySnapshot(mapAt(t), viewTargets(atTickOf(options)), dims, options, id),
       rayAll: (from, direction, max, options) => viewRay(from, direction, max, options, true),
       ghost(kindOfGhost, at, data = {}, options = {}) {
         const k = kindOf.get(kindOfGhost);
@@ -665,7 +683,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
           // Limit the new reconciliation, not an offset already being blended (which
           // can include a clock recalibration). Clipping that carried offset would
           // turn a small new error into a visible snap.
-          const change = { x: shown.x - corrected.x - oldOffset.x, y: shown.y - corrected.y - oldOffset.y, z: shown.z - corrected.z - oldOffset.z };
+          const change = { x: periodicDelta(corrected.x,shown.x,map.wrap?.x) - oldOffset.x, y: periodicDelta(corrected.y,shown.y,map.wrap?.y) - oldOffset.y, z: periodicDelta(corrected.z,shown.z,map.wrap?.z) - oldOffset.z };
           const gap = Math.hypot(change.x, change.y, change.z);
           const ahead = Math.max(0, tickAt(clock()) - f.k) / tickHz;
           const cap = predict.snapM ?? myKind()!.maxSpeed * (2 * ahead + 0.1);
@@ -811,7 +829,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         const free = -mine.vel.z / tickHz, contact = free > 1e-6 ? Math.max(0.05, Math.min(1, (mine.pos.z - next.pos.z) / free)) : 1;
         av = Math.min(1, a / contact); landed = a >= contact;
       }
-      pos = vec3({ x: lerp(mine.pos.x, next.pos.x, a), y: lerp(mine.pos.y, next.pos.y, a), z: lerp(mine.pos.z, next.pos.z, av) }, dims);
+      pos = vec3({...blendPosition(mine.pos,next.pos,a,map.wrap), z:wrapPoint({x:0,y:0,z:mine.pos.z+periodicDelta(mine.pos.z,next.pos.z,map.wrap?.z)*av},map.wrap).z}, dims);
       heading = blendHeading(mine.heading, next.heading, a, dims);
       velocity = vec3({ x: lerp(mine.vel.x, next.vel.x, a), y: lerp(mine.vel.y, next.vel.y, a), z: lerp(mine.vel.z, next.vel.z, a) }, dims);
       // A takeoff is airborne as soon as it rises; a landing waits for its contact.
@@ -832,14 +850,14 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         // Catch-up can reach the fractional current tick before its next whole step exists.
         // Use the normal drawing preview, including its 3D pose, instead of holding then jumping.
         const t = Math.floor(catchTick), a = history.get(t), b = history.get(t + 1) ?? (t === stepped ? preview : null);
-        if (a && b) { const f = catchTick - t; pos = { x: lerp(a.pos.x, b.pos.x, f), y: lerp(a.pos.y, b.pos.y, f), z: lerp(a.pos.z, b.pos.z, f) }; heading = blendHeading(a.heading, b.heading, f, dims);
+        if (a && b) { const f = catchTick - t; pos = blendPosition(a.pos, b.pos, f, map.wrap); heading = blendHeading(a.heading, b.heading, f, dims);
           velocity = vec3({ x: lerp(a.vel.x, b.vel.x, f), y: lerp(a.vel.y, b.vel.y, f), z: lerp(a.vel.z, b.vel.z, f) }, dims);
           grounded = a.grounded && (f === 0 || b.grounded); motion = a.motion;
         } else if (a) { pos = a.pos; heading = a.heading; velocity = a.vel; grounded = a.grounded; motion = a.motion; }
       }
     }
     const offset = visualOffset(clock(), pos, settled);
-    pos = { x: pos.x + offset.x, y: pos.y + offset.y, z: pos.z + offset.z };
+    pos = wrapPoint({ x: pos.x + offset.x, y: pos.y + offset.y, z: pos.z + offset.z },map.wrap);
     if (headingBlend) {
       const t = predict.blendMs > 0 ? Math.min(1, (clock() - headingBlend.at) / predict.blendMs) : 1;
       heading = blendHeading(headingBlend.from, heading, t, dims);
@@ -859,7 +877,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (ea.r !== eb.r || a?.e !== b?.e || !s) return entityOf(eb);
     const t = s.alpha;
     const h = blendHeading(ea.heading, eb.heading, t, dims);
-    return entityOf({ ...(t < 1 ? ea : eb), grounded: t >= 1 ? eb.grounded : ea.grounded && (t === 0 || eb.grounded), pos: vec3({ x: lerp(ea.pos.x, eb.pos.x, t), y: lerp(ea.pos.y, eb.pos.y, t), z: lerp(ea.pos.z, eb.pos.z, t) }, dims), vel: vec3({ x: lerp(ea.vel.x, eb.vel.x, t), y: lerp(ea.vel.y, eb.vel.y, t), z: lerp(ea.vel.z, eb.vel.z, t) }, dims), heading: h });
+    return entityOf({ ...(t < 1 ? ea : eb), grounded: t >= 1 ? eb.grounded : ea.grounded && (t === 0 || eb.grounded), pos: vec3(blendPosition(ea.pos, eb.pos, t, map.wrap), dims), vel: vec3({ x: lerp(ea.vel.x, eb.vel.x, t), y: lerp(ea.vel.y, eb.vel.y, t), z: lerp(ea.vel.z, eb.vel.z, t) }, dims), heading: h });
   }
   function get(id: string): Entity | null { const g = ghosts.get(id); return g ? ghostEntity(g) : drawn(id); }
   function each(kind: string, fn: (e: Entity) => void): void {
@@ -948,8 +966,8 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     let before: Frame | null = null, after: Frame | null = null;
     for (const f of held2) { if (!f.ents.has(id)) continue; if (f.k <= at) before = f; if (f.k >= at && !after) after = f; }
     const a = before?.ents.get(id), b = after?.ents.get(id);
-    if (a && b) { if (before === after || a.r !== b.r) return { pos: b.pos, vel: b.vel, known: true }; const m = (at - before!.k) / (after!.k - before!.k); return { pos: vec3({ x: lerp(a.pos.x, b.pos.x, m), y: lerp(a.pos.y, b.pos.y, m), z: lerp(a.pos.z, b.pos.z, m) }, dims), vel: b.vel, known: true }; }
-    if (a) { const s = Math.min(tickHz, at - before!.k) / tickHz; return { pos: vec3({ x: a.pos.x + a.vel.x * s, y: a.pos.y + a.vel.y * s, z: a.pos.z + a.vel.z * s }, dims), vel: a.vel, known: false }; }
+    if (a && b) { if (before === after || a.r !== b.r) return { pos: b.pos, vel: b.vel, known: true }; const m = (at - before!.k) / (after!.k - before!.k); return { pos: vec3(blendPosition(a.pos, b.pos, m, map.wrap), dims), vel: b.vel, known: true }; }
+    if (a) { const s = Math.min(tickHz, at - before!.k) / tickHz; return { pos: vec3(wrapPoint({ x: a.pos.x + a.vel.x * s, y: a.pos.y + a.vel.y * s, z: a.pos.z + a.vel.z * s },map.wrap), dims), vel: a.vel, known: false }; }
     return b ? { pos: b.pos, vel: b.vel, known: false } : null;
   }
   const atTickOf = (options: unknown): number | undefined => { const v = options !== null && typeof options === 'object' ? (options as { atTick?: unknown }).atTick : undefined; return typeof v === 'number' && Number.isFinite(v) ? v : undefined; };
@@ -963,7 +981,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   }
   const viewTargets = (atTick?: number) => {
     pump();
-    const targets: QueryTarget[] = collisionTargets(collisionMap(map, collisionHistory.at(-1)?.[2] ?? []));
+    const targets: QueryTarget[] = collisionTargets(collisionMap(mapAt(latest?.k??0), collisionHistory.at(-1)?.[2] ?? []));
     for(const k of schema.kinds) {
       if(k.collider || !k.radius)continue;
       each(k.name,e=>{
@@ -974,7 +992,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     }
     return targets;
   };
-  const viewRay = (from: unknown, direction: unknown, max: number, options?: RayOptions, all=false) => rayQuery(map,viewTargets(atTickOf(options)),dims,from,direction,max,options,mine?.id,all);
+  const viewRay = (from: unknown, direction: unknown, max: number, options?: RayOptions, all=false) => rayQuery(mapAt(latest?.k??0),viewTargets(atTickOf(options)),dims,from,direction,max,options,mine?.id,all);
   return {
     get viewTick() { return solo ? solo.viewTick : viewTickNow(); },
     get status() { return solo ? 'offline' : status; },
@@ -982,7 +1000,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     get me() { pump(); return meNow(); },
     each, get,
     ray: (from,direction,max,options) => solo ? solo.ray(from,direction,max,options) : viewRay(from,direction,max,options)[0],
-    rays: options => solo ? solo.rays(options) : raySnapshot(map,viewTargets(atTickOf(options)),dims,options,mine?.id),
+    rays: options => solo ? solo.rays(options) : raySnapshot(mapAt(latest?.k??0),viewTargets(atTickOf(options)),dims,options,mine?.id),
     poseAt: (id, tick) => solo ? solo.poseAt(id, tick) : poseAt(id, tick),
     rayAll: (from,direction,max,options) => solo ? solo.rayAll(from,direction,max,options) : viewRay(from,direction,max,options,true),
     on(name, fn) { let set = listeners.get(name); if (!set) { set = new Set(); listeners.set(name, set); } set.add(fn); forwardSolo(name); return () => { set?.delete(fn); }; },
@@ -1015,7 +1033,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         if (nextShown && distance(shown, nextShown) > 0.00001) {
           const carried = visualOffset(now);
           // Coalesce the carried blend: analogue controls may change every frame.
-          offsets = [{ delta: { x: carried.x + shown.x - nextShown.x, y: carried.y + shown.y - nextShown.y, z: carried.z + shown.z - nextShown.z },
+          offsets = [{ delta: { x: carried.x + periodicDelta(nextShown.x,shown.x,map.wrap?.x), y: carried.y + periodicDelta(nextShown.y,shown.y,map.wrap?.y), z: carried.z + periodicDelta(nextShown.z,shown.z,map.wrap?.z) },
             at: now, last: now, fade: 1, path: { x: nextShown.x - carried.x, y: nextShown.y - carried.y, z: nextShown.z - carried.z } }];
         }
       }
@@ -1027,7 +1045,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     probe(x) { extra = { ...extra, ...x }; },
     ask(id, askId, args = {}) { if (solo) return; const e = latest?.ents.get(id); if (e && e.seat !== undefined) agents?.ask(e.seat, askId, args); },
     askButtons(id, offer = {}) { if (solo) return []; const e = latest?.ents.get(id); return e && e.seat !== undefined ? agents?.askButtons(e.seat, offer) ?? [] : []; },
-    tune, map: Object.freeze({ ...map, spots: Object.freeze(spots) }), net: net as Netplay,
+    tune, get map(){return mapAt(latest?.k??0);}, net: net as Netplay,
     pump,
     close() { stopSolo(); closed = true; if (timer) clearInterval(timer); if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onShow); agents?.stop(); net.close(); setStatus('closed'); },
   };
