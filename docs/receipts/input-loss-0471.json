@@ -1,7 +1,7 @@
 {
-  "runtimeCommit": "8ecff7a62b2ab2e86c43834664794272a272e9b7",
+  "runtimeCommit": "8b204d2cffec5cd8cca1e386cb0e14b8eacdf9a9",
   "version": "0.47.1",
-  "packSHA256": "e7de5e9fbc82bc457c4154cbaf485e092a01f89dd1021249d706f50d270f12b1",
+  "packSHA256": "047e1698ddde9e7898e3840da23c75f9805df8e009ec852a63f7c3f37a8cf509",
   "game": "Tiny Platformer Party",
   "originalBranch": "arcade-server-rules",
   "gameSourceUnchanged": true,
@@ -34,28 +34,44 @@
       },
       "after": {
         "activeSeconds": 34,
-        "observedSeconds": 34.682799999952316,
-        "frames": 2082,
+        "observedSeconds": 34.716900000095364,
+        "frames": 2084,
         "warps": 0,
+        "rawDrawnJerks": 0,
+        "rawJerkAudit": [],
         "rawDirectionReversals": 1,
         "reversals": [
           {
-            "seconds": 33.399,
-            "dx": -0.03817496199449977,
-            "afterPlacement": true,
+            "seconds": 6.119,
+            "dx": -0.0028833907859464603,
+            "dy": -2.088611950057384e-09,
+            "beforeDiedAt": 0,
+            "afterDiedAt": 0,
+            "placement": false,
+            "afterPlacement": false,
             "held": {
-              "ArrowRight": 0,
-              "Space": 1,
-              "ArrowLeft": 1
+              "ArrowLeft": 1,
+              "Space": 0,
+              "ArrowRight": 0
             },
-            "physicalVx": -2.4079110622406006
+            "physicalVx": 2.1185247898101807
           }
         ],
         "largeDisplacements": [
           {
-            "seconds": 33.381,
-            "beforeDiedAt": 46,
-            "afterDiedAt": 1540,
+            "seconds": 15.167,
+            "dx": -28.96383143571598,
+            "dy": -25.516271198588925,
+            "beforeDiedAt": 0,
+            "afterDiedAt": 2828,
+            "placement": true
+          },
+          {
+            "seconds": 22.467,
+            "dx": 44.88742355456147,
+            "dy": 12.945736159853965,
+            "beforeDiedAt": 2828,
+            "afterDiedAt": 2974,
             "placement": true
           }
         ],
@@ -72,9 +88,20 @@
       },
       "after": {
         "activeSeconds": 34,
-        "observedSeconds": 34.78129999995232,
-        "frames": 2088,
+        "observedSeconds": 34.749200000047686,
+        "frames": 2086,
         "warps": 0,
+        "rawDrawnJerks": 1,
+        "rawJerkAudit": [
+          {
+            "seconds": 24.75,
+            "dx": 1.2958335876328029,
+            "dy": -0.6332151249029252,
+            "beforeDiedAt": 285,
+            "afterDiedAt": 1530,
+            "placement": true
+          }
+        ],
         "rawDirectionReversals": 0,
         "reversals": [],
         "largeDisplacements": [],
@@ -91,31 +118,14 @@
       },
       "after": {
         "activeSeconds": 34,
-        "observedSeconds": 34.931400000095365,
-        "frames": 2097,
+        "observedSeconds": 34.897599999904635,
+        "frames": 2095,
         "warps": 0,
-        "rawDirectionReversals": 1,
-        "reversals": [
-          {
-            "seconds": 8.332,
-            "dx": -0.14009365785955197,
-            "afterPlacement": true,
-            "held": {
-              "ArrowRight": 0,
-              "Space": 1,
-              "ArrowLeft": 1
-            },
-            "physicalVx": -9.046948432922363
-          }
-        ],
-        "largeDisplacements": [
-          {
-            "seconds": 8.316,
-            "beforeDiedAt": 631,
-            "afterDiedAt": 1103,
-            "placement": true
-          }
-        ],
+        "rawDrawnJerks": 0,
+        "rawJerkAudit": [],
+        "rawDirectionReversals": 0,
+        "reversals": [],
+        "largeDisplacements": [],
         "errors": []
       }
     },
@@ -129,24 +139,39 @@
       },
       "after": {
         "activeSeconds": 34,
-        "observedSeconds": 35.250799999952314,
-        "frames": 2116,
+        "observedSeconds": 35.21479999995232,
+        "frames": 2114,
         "warps": 0,
-        "rawDirectionReversals": 1,
-        "reversals": [
+        "rawDrawnJerks": 0,
+        "rawJerkAudit": [],
+        "rawDirectionReversals": 0,
+        "reversals": [],
+        "largeDisplacements": [
           {
-            "seconds": 6.084,
-            "dx": -0.0026557684567478645,
-            "afterPlacement": false,
-            "held": {
-              "ArrowLeft": 1,
-              "Space": 0,
-              "ArrowRight": 0
-            },
-            "physicalVx": -0.7810500264167786
+            "seconds": 0.217,
+            "dx": -21.545215662472103,
+            "dy": -34.999999999965624,
+            "beforeDiedAt": 889,
+            "afterDiedAt": 919,
+            "placement": true
+          },
+          {
+            "seconds": 8.366,
+            "dx": 7.246283529097063,
+            "dy": 0.40262436216391695,
+            "beforeDiedAt": 919,
+            "afterDiedAt": 1078,
+            "placement": true
+          },
+          {
+            "seconds": 10.167,
+            "dx": -3.2140946688573635,
+            "dy": 34.999999989878155,
+            "beforeDiedAt": 1078,
+            "afterDiedAt": 1110,
+            "placement": true
           }
         ],
-        "largeDisplacements": [],
         "errors": []
       }
     }
@@ -159,81 +184,96 @@
       "wire": {
         "delay": 40,
         "loss": 0.005,
-        "sent": 940,
-        "received": 1646,
-        "late": 10,
+        "sent": 1703,
+        "received": 3379,
+        "late": 26,
         "sockets": 1
       },
       "runKeyFeedbackMs": {
-        "n": 6,
-        "min": 18.3,
-        "median": 33.4,
-        "p90": 39.4,
-        "max": 39.4
+        "n": 5,
+        "min": 10.7,
+        "median": 22.1,
+        "p90": 31.9,
+        "max": 31.9
       },
       "jumpKeyFeedbackMs": {
-        "n": 3,
-        "min": 14.9,
-        "median": 24.1,
-        "p90": 29.6,
-        "max": 29.6
+        "n": 1,
+        "min": 24.9,
+        "median": 24.9,
+        "p90": 24.9,
+        "max": 24.9
       },
       "jumpHeightTiles": {
-        "n": 3,
+        "n": 1,
         "min": 5.1,
         "median": 5.1,
         "p90": 5.1,
         "max": 5.1
       },
-      "jumpAirSeconds": 0.82,
-      "pressesThatFoundNoGround": 0,
+      "jumpAirSeconds": 0.83,
+      "pressesThatFoundNoGround": 3,
       "prediction": {
-        "ticks": 1559,
-        "wrongTicks": 6,
-        "placements": 2,
-        "corrections": 0,
+        "ticks": 3206,
+        "wrongTicks": 26,
+        "placements": 8,
+        "corrections": 1,
         "correctionsOverHalfATile": 0,
-        "worstTiles": 0,
-        "last": [],
+        "worstTiles": 0.7,
+        "last": [
+          {
+            "tick": 1217,
+            "d": 0.2,
+            "l": 0,
+            "r": 0,
+            "j": 0
+          },
+          {
+            "tick": 1218,
+            "d": 0.7,
+            "l": 0,
+            "r": 0,
+            "j": 0
+          }
+        ],
         "room": {
           "replaysThatMovedMe": 0,
           "largestTiles": 0,
           "catchUps": 0,
           "snaps": 0,
-          "clockResets": 3,
+          "clockResets": 10,
           "lateInputLeadTicks": 0.56
         }
       },
-      "scoreOnMyHud": 6,
-      "scoreOnTheOtherScreen": 6,
-      "seconds": 34.682799999952316,
-      "frames": 2082,
+      "scoreOnMyHud": 3,
+      "scoreOnTheOtherScreen": 3,
+      "seconds": 34.716900000095364,
+      "frames": 2084,
       "goldVanishesMs": {
-        "n": 0,
-        "min": null,
-        "median": null,
-        "p90": null,
-        "max": null
+        "n": 2,
+        "min": 33.4,
+        "median": 48.8,
+        "p90": 48.8,
+        "max": 48.8
       },
       "goldOnHudMs": {
+        "n": 2,
+        "min": 33.4,
+        "median": 48.8,
+        "p90": 48.8,
+        "max": 48.8
+      },
+      "stompedMonsterVanishesMs": {
         "n": 0,
         "min": null,
         "median": null,
         "p90": null,
         "max": null
       },
-      "stompedMonsterVanishesMs": {
-        "n": 1,
-        "min": 16.7,
-        "median": 16.7,
-        "p90": 16.7,
-        "max": 16.7
-      },
-      "catches": 1,
+      "catches": 2,
       "catchesWithNoMonsterOnScreen": 0,
       "landedOnItOnScreenButCaught": 0,
-      "caughtFromTheSide": 1,
-      "landedOnItAndStomped": 1,
+      "caughtFromTheSide": 2,
+      "landedOnItAndStomped": 0,
       "unexplainedJumpsOfMyRunner": 0,
       "drawnJerks": 0,
       "drawnBackSteps": 1,
@@ -247,24 +287,253 @@
       "wire": {
         "delay": 80,
         "loss": 0.02,
-        "sent": 2036,
-        "received": 3383,
-        "late": 98,
+        "sent": 1321,
+        "received": 1811,
+        "late": 56,
         "sockets": 1
       },
       "runKeyFeedbackMs": {
-        "n": 5,
-        "min": 15.8,
-        "median": 18.6,
-        "p90": 37.2,
-        "max": 37.2
+        "n": 6,
+        "min": 18.8,
+        "median": 30.1,
+        "p90": 36.4,
+        "max": 36.4
       },
       "jumpKeyFeedbackMs": {
         "n": 3,
-        "min": 19.3,
-        "median": 19.6,
-        "p90": 26.7,
-        "max": 26.7
+        "min": 22.7,
+        "median": 27.7,
+        "p90": 31.8,
+        "max": 31.8
+      },
+      "jumpHeightTiles": {
+        "n": 3,
+        "min": 5.1,
+        "median": 5.1,
+        "p90": 5.1,
+        "max": 5.1
+      },
+      "jumpAirSeconds": 0.82,
+      "pressesThatFoundNoGround": 0,
+      "prediction": {
+        "ticks": 1714,
+        "wrongTicks": 30,
+        "placements": 3,
+        "corrections": 7,
+        "correctionsOverHalfATile": 2,
+        "worstTiles": 1.15,
+        "last": [
+          {
+            "tick": 296,
+            "d": 0.425,
+            "l": 0,
+            "r": 0,
+            "j": 0
+          },
+          {
+            "tick": 297,
+            "d": 0.825,
+            "l": 0,
+            "r": 0,
+            "j": 0
+          },
+          {
+            "tick": 849,
+            "d": 0.025,
+            "l": 1,
+            "r": 0,
+            "j": 0
+          },
+          {
+            "tick": 850,
+            "d": 0.125,
+            "l": 1,
+            "r": 0,
+            "j": 0
+          },
+          {
+            "tick": 1094,
+            "d": 1.152,
+            "l": 0,
+            "r": 0,
+            "j": 0.156982421875
+          },
+          {
+            "tick": 1133,
+            "d": 0.017,
+            "l": 1,
+            "r": 0,
+            "j": 0
+          },
+          {
+            "tick": 1134,
+            "d": 0.125,
+            "l": 1,
+            "r": 0,
+            "j": 0
+          },
+          {
+            "tick": 1135,
+            "d": 0.275,
+            "l": 1,
+            "r": 0,
+            "j": 0
+          },
+          {
+            "tick": 1349,
+            "d": 0.818,
+            "l": 0,
+            "r": 1,
+            "j": 0.474853515625
+          },
+          {
+            "tick": 1350,
+            "d": 0.816,
+            "l": 0,
+            "r": 0.467041015625,
+            "j": 1
+          },
+          {
+            "tick": 1398,
+            "d": 0.075,
+            "l": 0,
+            "r": 0,
+            "j": 1
+          },
+          {
+            "tick": 1399,
+            "d": 0.087,
+            "l": 0,
+            "r": 0,
+            "j": 1
+          }
+        ],
+        "room": {
+          "replaysThatMovedMe": 0,
+          "largestTiles": 0,
+          "catchUps": 0,
+          "snaps": 0,
+          "clockResets": 5,
+          "lateInputLeadTicks": 0.74
+        }
+      },
+      "scoreOnMyHud": 5,
+      "scoreOnTheOtherScreen": 5,
+      "seconds": 34.749200000047686,
+      "frames": 2086,
+      "goldVanishesMs": {
+        "n": 3,
+        "min": 16.7,
+        "median": 33.9,
+        "p90": 49.9,
+        "max": 49.9
+      },
+      "goldOnHudMs": {
+        "n": 3,
+        "min": 83.2,
+        "median": 99.4,
+        "p90": 116.1,
+        "max": 116.1
+      },
+      "stompedMonsterVanishesMs": {
+        "n": 0,
+        "min": null,
+        "median": null,
+        "p90": null,
+        "max": null
+      },
+      "catches": 0,
+      "catchesWithNoMonsterOnScreen": 0,
+      "landedOnItOnScreenButCaught": 0,
+      "caughtFromTheSide": 0,
+      "landedOnItAndStomped": 0,
+      "unexplainedJumpsOfMyRunner": 0,
+      "drawnJerks": 1,
+      "drawnBackSteps": 0,
+      "firstOddFrames": [
+        {
+          "what": "jerk",
+          "dt": 15.699999809265137,
+          "beforeBody": {
+            "x": 18.704166412353516,
+            "y": 31,
+            "dx": 0,
+            "dy": 0,
+            "falling": false,
+            "jumping": false,
+            "safe": false,
+            "diedAt": 285
+          },
+          "body": {
+            "x": 20,
+            "y": 30.5386962890625,
+            "dx": 0,
+            "dy": -22.877487182617188,
+            "falling": true,
+            "jumping": true,
+            "safe": true,
+            "diedAt": 1530
+          },
+          "beforeDraw": {
+            "stepped": 1534,
+            "highest": 1534,
+            "pathTick": 1535,
+            "onSteps": true,
+            "moved": false,
+            "roomX": 18.704166412353516,
+            "roomY": 31,
+            "x": 18.704166412367197,
+            "y": 30.999999999999993
+          },
+          "draw": {
+            "stepped": 1535,
+            "highest": 1535,
+            "pathTick": 1536,
+            "onSteps": true,
+            "moved": true,
+            "roomX": 20,
+            "roomY": 30.54531478881836,
+            "x": 20,
+            "y": 30.366784875097068
+          },
+          "atS": 24.7,
+          "from": [
+            18.7,
+            31
+          ],
+          "to": [
+            20,
+            30.37
+          ]
+        }
+      ],
+      "errors": []
+    },
+    "loss150": {
+      "delayMs": 150,
+      "loss": 0.05,
+      "role": "replica",
+      "wire": {
+        "delay": 150,
+        "loss": 0.05,
+        "sent": 1594,
+        "received": 1870,
+        "late": 168,
+        "sockets": 1
+      },
+      "runKeyFeedbackMs": {
+        "n": 6,
+        "min": 20.3,
+        "median": 31.7,
+        "p90": 59.5,
+        "max": 59.5
+      },
+      "jumpKeyFeedbackMs": {
+        "n": 3,
+        "min": 13.7,
+        "median": 23.1,
+        "p90": 35.8,
+        "max": 35.8
       },
       "jumpHeightTiles": {
         "n": 3,
@@ -274,98 +543,98 @@
         "max": 5.1
       },
       "jumpAirSeconds": 0.83,
-      "pressesThatFoundNoGround": 1,
+      "pressesThatFoundNoGround": 0,
       "prediction": {
-        "ticks": 3211,
-        "wrongTicks": 34,
-        "placements": 5,
-        "corrections": 4,
-        "correctionsOverHalfATile": 1,
-        "worstTiles": 3.27,
+        "ticks": 1768,
+        "wrongTicks": 104,
+        "placements": 4,
+        "corrections": 22,
+        "correctionsOverHalfATile": 7,
+        "worstTiles": 3.52,
         "last": [
           {
-            "tick": 838,
-            "d": 1.503,
-            "l": 0,
+            "tick": 1349,
+            "d": 2.32,
+            "l": 1,
             "r": 0,
-            "j": 0.638916015625
+            "j": 0.774169921875
           },
           {
-            "tick": 839,
-            "d": 2.459,
+            "tick": 1350,
+            "d": 3.472,
+            "l": 1,
+            "r": 0,
+            "j": 0.279296875
+          },
+          {
+            "tick": 1400,
+            "d": 0.484,
+            "l": 1,
+            "r": 0,
+            "j": 0.746826171875
+          },
+          {
+            "tick": 1436,
+            "d": 0.752,
             "l": 0,
+            "r": 0,
+            "j": 0.438232421875
+          },
+          {
+            "tick": 1520,
+            "d": 0.038,
+            "l": 0,
+            "r": 0.08740234375,
+            "j": 0.09130859375
+          },
+          {
+            "tick": 1521,
+            "d": 0.075,
+            "l": 0,
+            "r": 0,
+            "j": 0.007080078125
+          },
+          {
+            "tick": 1522,
+            "d": 0.15,
+            "l": 0,
+            "r": 0,
+            "j": 1
+          },
+          {
+            "tick": 1546,
+            "d": 0.784,
+            "l": 0,
+            "r": 0,
+            "j": 1
+          },
+          {
+            "tick": 1614,
+            "d": 0.012,
+            "l": 0.85595703125,
+            "r": 0.152099609375,
+            "j": 0.16015625
+          },
+          {
+            "tick": 1615,
+            "d": 0.063,
+            "l": 1,
             "r": 0,
             "j": 0
           },
           {
-            "tick": 840,
-            "d": 3.268,
+            "tick": 1686,
+            "d": 0.021,
             "l": 0,
-            "r": 0,
-            "j": 0
+            "r": 0.524169921875,
+            "j": 1
           },
           {
-            "tick": 1530,
-            "d": 0.1,
+            "tick": 1687,
+            "d": 0.192,
             "l": 0,
             "r": 1,
-            "j": 0
-          },
-          {
-            "tick": 1531,
-            "d": 0.167,
-            "l": 0,
-            "r": 0.252685546875,
-            "j": 0
-          },
-          {
-            "tick": 1532,
-            "d": 0.083,
-            "l": 0,
-            "r": 0,
-            "j": 0
-          },
-          {
-            "tick": 2562,
-            "d": 0.784,
-            "l": 1,
-            "r": 0,
             "j": 1
-          },
-          {
-            "tick": 2563,
-            "d": 0.984,
-            "l": 1,
-            "r": 0,
-            "j": 1
-          },
-          {
-            "tick": 2564,
-            "d": 0.837,
-            "l": 1,
-            "r": 0,
-            "j": 1
-          },
-          {
-            "tick": 2652,
-            "d": 0.1,
-            "l": 0.996826171875,
-            "r": 0.00927734375,
-            "j": 0
-          },
-          {
-            "tick": 2653,
-            "d": 0.112,
-            "l": 1,
-            "r": 0,
-            "j": 0
-          },
-          {
-            "tick": 2654,
-            "d": 0.046,
-            "l": 1,
-            "r": 0,
-            "j": 0
           }
         ],
         "room": {
@@ -374,26 +643,26 @@
           "catchUps": 0,
           "snaps": 0,
           "clockResets": 6,
-          "lateInputLeadTicks": 0.66
+          "lateInputLeadTicks": 0.7
         }
       },
-      "scoreOnMyHud": 3,
-      "scoreOnTheOtherScreen": 3,
-      "seconds": 34.78129999995232,
-      "frames": 2088,
+      "scoreOnMyHud": 8,
+      "scoreOnTheOtherScreen": 8,
+      "seconds": 34.897599999904635,
+      "frames": 2095,
       "goldVanishesMs": {
         "n": 3,
-        "min": 16.5,
-        "median": 17,
-        "p90": 33.7,
-        "max": 33.7
+        "min": 50.1,
+        "median": 51,
+        "p90": 51.1,
+        "max": 51.1
       },
       "goldOnHudMs": {
         "n": 3,
-        "min": 50,
-        "median": 65.3,
-        "p90": 181.4,
-        "max": 181.4
+        "min": 68,
+        "median": 117,
+        "p90": 182.8,
+        "max": 182.8
       },
       "stompedMonsterVanishesMs": {
         "n": 0,
@@ -413,196 +682,6 @@
       "firstOddFrames": [],
       "errors": []
     },
-    "loss150": {
-      "delayMs": 150,
-      "loss": 0.05,
-      "role": "replica",
-      "wire": {
-        "delay": 150,
-        "loss": 0.05,
-        "sent": 1389,
-        "received": 1718,
-        "late": 165,
-        "sockets": 1
-      },
-      "runKeyFeedbackMs": {
-        "n": 6,
-        "min": 19.2,
-        "median": 27.4,
-        "p90": 35.1,
-        "max": 35.1
-      },
-      "jumpKeyFeedbackMs": {
-        "n": 3,
-        "min": 15.1,
-        "median": 30.2,
-        "p90": 33.2,
-        "max": 33.2
-      },
-      "jumpHeightTiles": {
-        "n": 3,
-        "min": 5.1,
-        "median": 5.1,
-        "p90": 5.1,
-        "max": 5.1
-      },
-      "jumpAirSeconds": 0.82,
-      "pressesThatFoundNoGround": 0,
-      "prediction": {
-        "ticks": 1621,
-        "wrongTicks": 88,
-        "placements": 6,
-        "corrections": 12,
-        "correctionsOverHalfATile": 1,
-        "worstTiles": 2.77,
-        "last": [
-          {
-            "tick": 669,
-            "d": 0.4,
-            "l": 0,
-            "r": 0,
-            "j": 0.62841796875
-          },
-          {
-            "tick": 721,
-            "d": 1.34,
-            "l": 0,
-            "r": 0,
-            "j": 0.91015625
-          },
-          {
-            "tick": 722,
-            "d": 2.731,
-            "l": 0,
-            "r": 0,
-            "j": 0
-          },
-          {
-            "tick": 863,
-            "d": 0.083,
-            "l": 0,
-            "r": 1,
-            "j": 0
-          },
-          {
-            "tick": 864,
-            "d": 0.233,
-            "l": 0,
-            "r": 1,
-            "j": 0
-          },
-          {
-            "tick": 865,
-            "d": 0.033,
-            "l": 0,
-            "r": 0.523193359375,
-            "j": 0
-          },
-          {
-            "tick": 866,
-            "d": 0.308,
-            "l": 0,
-            "r": 0,
-            "j": 0
-          },
-          {
-            "tick": 957,
-            "d": 0.1,
-            "l": 0,
-            "r": 0,
-            "j": 1
-          },
-          {
-            "tick": 958,
-            "d": 0.35,
-            "l": 0.323486328125,
-            "r": 0,
-            "j": 1
-          },
-          {
-            "tick": 1053,
-            "d": 0.1,
-            "l": 0,
-            "r": 0.349609375,
-            "j": 0.654296875
-          },
-          {
-            "tick": 1221,
-            "d": 0.4,
-            "l": 1,
-            "r": 0,
-            "j": 0.937744140625
-          },
-          {
-            "tick": 1222,
-            "d": 0.351,
-            "l": 1,
-            "r": 0,
-            "j": 0.01904296875
-          }
-        ],
-        "room": {
-          "replaysThatMovedMe": 0,
-          "largestTiles": 0,
-          "catchUps": 0,
-          "snaps": 0,
-          "clockResets": 7,
-          "lateInputLeadTicks": 6.38
-        }
-      },
-      "scoreOnMyHud": 7,
-      "scoreOnTheOtherScreen": 7,
-      "seconds": 34.931400000095365,
-      "frames": 2097,
-      "goldVanishesMs": {
-        "n": 3,
-        "min": 33.1,
-        "median": 49.7,
-        "p90": 51.9,
-        "max": 51.9
-      },
-      "goldOnHudMs": {
-        "n": 3,
-        "min": 32.9,
-        "median": 82.8,
-        "p90": 117.3,
-        "max": 117.3
-      },
-      "stompedMonsterVanishesMs": {
-        "n": 1,
-        "min": 33.3,
-        "median": 33.3,
-        "p90": 33.3,
-        "max": 33.3
-      },
-      "catches": 0,
-      "catchesWithNoMonsterOnScreen": 0,
-      "landedOnItOnScreenButCaught": 0,
-      "caughtFromTheSide": 0,
-      "landedOnItAndStomped": 1,
-      "unexplainedJumpsOfMyRunner": 1,
-      "drawnJerks": 0,
-      "drawnBackSteps": 1,
-      "firstOddFrames": [
-        {
-          "what": "jump",
-          "atS": 8.3,
-          "from": [
-            24.07,
-            26.55
-          ],
-          "to": [
-            57.63,
-            41.5
-          ],
-          "next": [
-            57.49,
-            41.72
-          ]
-        }
-      ],
-      "errors": []
-    },
     "loss300": {
       "delayMs": 300,
       "loss": 0.05,
@@ -610,174 +689,224 @@
       "wire": {
         "delay": 300,
         "loss": 0.05,
-        "sent": 2963,
-        "received": 3396,
-        "late": 297,
+        "sent": 1555,
+        "received": 1709,
+        "late": 161,
         "sockets": 1
       },
       "runKeyFeedbackMs": {
         "n": 6,
-        "min": 13.2,
-        "median": 28.5,
-        "p90": 32.7,
-        "max": 32.7
+        "min": 5.9,
+        "median": 30.2,
+        "p90": 42.4,
+        "max": 42.4
       },
       "jumpKeyFeedbackMs": {
-        "n": 1,
-        "min": 24.6,
-        "median": 24.6,
-        "p90": 24.6,
-        "max": 24.6
+        "n": 3,
+        "min": 21.5,
+        "median": 25.1,
+        "p90": 30.7,
+        "max": 30.7
       },
       "jumpHeightTiles": {
-        "n": 1,
+        "n": 3,
         "min": 5.1,
         "median": 5.1,
         "p90": 5.1,
         "max": 5.1
       },
-      "jumpAirSeconds": 0.82,
-      "pressesThatFoundNoGround": 2,
+      "jumpAirSeconds": 0.83,
+      "pressesThatFoundNoGround": 0,
       "prediction": {
-        "ticks": 3220,
-        "wrongTicks": 609,
+        "ticks": 1603,
+        "wrongTicks": 513,
         "placements": 8,
-        "corrections": 59,
-        "correctionsOverHalfATile": 15,
-        "worstTiles": 11.36,
+        "corrections": 24,
+        "correctionsOverHalfATile": 11,
+        "worstTiles": 46.36,
         "last": [
           {
-            "tick": 3011,
-            "d": 1.152,
+            "tick": 1589,
+            "d": 0.323,
             "l": 1,
             "r": 0,
-            "j": 1
+            "j": 0.591796875
           },
           {
-            "tick": 3012,
-            "d": 2.157,
+            "tick": 1590,
+            "d": 0.287,
             "l": 1,
             "r": 0,
-            "j": 1
+            "j": 0.46337890625
           },
           {
-            "tick": 3013,
-            "d": 3.015,
+            "tick": 1591,
+            "d": 0.242,
             "l": 1,
             "r": 0,
-            "j": 1
+            "j": 0.50732421875
           },
           {
-            "tick": 3014,
-            "d": 3.726,
-            "l": 1,
-            "r": 0,
-            "j": 1
-          },
-          {
-            "tick": 3021,
-            "d": 0.4,
+            "tick": 1592,
+            "d": 0.193,
             "l": 1,
             "r": 0,
             "j": 0
           },
           {
-            "tick": 3033,
-            "d": 0.4,
+            "tick": 1593,
+            "d": 0.144,
             "l": 1,
             "r": 0,
-            "j": 0.69970703125
+            "j": 0
           },
           {
-            "tick": 3034,
-            "d": 1,
+            "tick": 1594,
+            "d": 0.095,
             "l": 1,
             "r": 0,
-            "j": 1
+            "j": 0
           },
           {
-            "tick": 3035,
-            "d": 0.902,
+            "tick": 1595,
+            "d": 0.046,
             "l": 1,
             "r": 0,
-            "j": 1
+            "j": 0
           },
           {
-            "tick": 3036,
-            "d": 0.657,
+            "tick": 1596,
+            "d": 0.078,
             "l": 1,
             "r": 0,
-            "j": 1
+            "j": 0
           },
           {
-            "tick": 3037,
-            "d": 0.265,
-            "l": 1,
-            "r": 0,
-            "j": 1
-          },
-          {
-            "tick": 3220,
+            "tick": 1598,
             "d": 0.784,
-            "l": 0,
+            "l": 1,
             "r": 0,
             "j": 0
           },
           {
-            "tick": 3221,
+            "tick": 1599,
             "d": 0.984,
-            "l": 0,
+            "l": 1,
+            "r": 0,
+            "j": 0
+          },
+          {
+            "tick": 1600,
+            "d": 0.837,
+            "l": 1,
+            "r": 0,
+            "j": 0
+          },
+          {
+            "tick": 1601,
+            "d": 0.543,
+            "l": 1,
             "r": 0,
             "j": 0
           }
         ],
         "room": {
-          "replaysThatMovedMe": 1,
-          "largestTiles": 13.6,
+          "replaysThatMovedMe": 2,
+          "largestTiles": 23.15,
           "catchUps": 1,
           "snaps": 0,
-          "clockResets": 9,
-          "lateInputLeadTicks": 3.37
+          "clockResets": 13,
+          "lateInputLeadTicks": 6.76
         }
       },
-      "scoreOnMyHud": 4,
-      "scoreOnTheOtherScreen": 4,
-      "seconds": 35.250799999952314,
-      "frames": 2116,
+      "scoreOnMyHud": 5,
+      "scoreOnTheOtherScreen": 5,
+      "seconds": 35.21479999995232,
+      "frames": 2114,
       "goldVanishesMs": {
-        "n": 4,
-        "min": 16.9,
-        "median": 33.4,
-        "p90": 50.3,
-        "max": 50.3
+        "n": 2,
+        "min": 17.4,
+        "median": 50.6,
+        "p90": 50.6,
+        "max": 50.6
       },
       "goldOnHudMs": {
-        "n": 4,
-        "min": 117.2,
-        "median": 199.5,
-        "p90": 216.5,
-        "max": 216.5
+        "n": 2,
+        "min": 149.9,
+        "median": 185.3,
+        "p90": 185.3,
+        "max": 185.3
       },
       "stompedMonsterVanishesMs": {
-        "n": 1,
-        "min": 33.3,
-        "median": 33.3,
-        "p90": 33.3,
-        "max": 33.3
+        "n": 0,
+        "min": null,
+        "median": null,
+        "p90": null,
+        "max": null
       },
       "catches": 0,
       "catchesWithNoMonsterOnScreen": 0,
       "landedOnItOnScreenButCaught": 0,
       "caughtFromTheSide": 0,
-      "landedOnItAndStomped": 1,
-      "unexplainedJumpsOfMyRunner": 0,
+      "landedOnItAndStomped": 0,
+      "unexplainedJumpsOfMyRunner": 3,
       "drawnJerks": 0,
-      "drawnBackSteps": 1,
-      "firstOddFrames": [],
+      "drawnBackSteps": 0,
+      "firstOddFrames": [
+        {
+          "what": "jump",
+          "atS": 0.2,
+          "from": [
+            29.36,
+            41
+          ],
+          "to": [
+            7.81,
+            6
+          ],
+          "next": [
+            7.61,
+            6
+          ]
+        },
+        {
+          "what": "jump",
+          "atS": 8.4,
+          "from": [
+            8.05,
+            5.6
+          ],
+          "to": [
+            15.3,
+            6
+          ],
+          "next": [
+            15.56,
+            6
+          ]
+        },
+        {
+          "what": "jump",
+          "atS": 10.2,
+          "from": [
+            34.99,
+            6
+          ],
+          "to": [
+            31.78,
+            41
+          ],
+          "next": [
+            31.53,
+            41
+          ]
+        }
+      ],
       "errors": []
     },
-    "tag": "w",
+    "tag": "x",
     "base": "http://127.0.0.1:8798",
-    "at": "2026-10-13T20:24:54.588Z"
-  }
+    "at": "2026-10-13T20:53:52.792Z"
+  },
+  "classification": "Warps exclude explicit authoritative placements, verified by both diedAt changing and the drawing placement flag. Raw detector counts are retained. Direction reversals are audited against held keys; a reversal alone is not a move against the held key."
 }
