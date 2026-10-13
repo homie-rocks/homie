@@ -1118,6 +1118,15 @@ leaves: take the marker down quietly. `ctx.ray/rays/rayAll` query what the
 player sees (`ctx.viewTick`); `ctx.preview` says the run is between ticks. A
 predictor runs often: keep it cheap, and keep per-entity state in `me`.
 
+`ctx.each(kind, fn)` reads frozen entities from the authoritative snapshot this
+prediction started from. Use it for pickups and other snapshot-based decisions;
+it excludes provisional ghosts. Reading `room.each`, `room.get`, `room.me` or
+ray queries inside a predictor cannot advance the clock or start a nested
+preview. Other room entities retain their normal drawn poses; `room.me` reads
+the authoritative own entity during the callback. Use the callback's `me` for
+the predicted own state. Snapshot reconciliation also prevents clock pumping
+through event listeners until replay finishes.
+
 To guess a shot the server will judge with rewind, ask for what the server
 will use (0.46.5). `ctx.judgedTick(aimTick)` is the tick it will pose the others
 at: the `aimTick` the input carries, held to how far back this seat may look

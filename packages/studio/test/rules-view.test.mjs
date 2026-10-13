@@ -2114,3 +2114,40 @@ test('300 Hz substeps draw the within-tick path with two seeded 150 ms views and
   const saved=r.host.core.save(),restored=L.C.createCore(compiled,{restore:saved});
   assert.deepEqual(restored.save(),saved);
 });
+
+test('predictor room reads cannot pump or preview recursively during replay, seed 4804', async t => {
+  const {L,compiled,openRoom}=await coinDashKit('server',false,20,'wrap2');
+  const clock=virtualTime(t);
+  // Identical rooms, one observer reads during every predictor call. Snapshots land
+  // between sparse frames, after a tick edge: precisely the replay reentry window.
+  const rooms=[rig(L,compiled,false,157,150),rig(L,compiled,false,157,150)];
+  const views=[], probes=[]; let calls=0, reads=0;
+  const warnings=[]; t.mock.method(console,'warn',(...args)=>warnings.push(args.join(' ')));
+  for(let n=0;n<2;n++) {
+    let room;
+    room=openRoom({timers:false,predict:{runner(me,input,ctx){
+      calls++;
+      if(n && room) {
+        const tick=probes[n].prediction().tick;
+        room.each('runner',e=>{reads++; assert.ok(Object.isFrozen(e));});
+        const own=room.me; if(own)assert.equal(room.get(own.id).id,own.id);
+        ctx.each('runner',e=>assert.ok(Object.isFrozen(e)));
+        room.ray({x:0,y:0,z:0},{x:1,y:0,z:0},20);
+        assert.equal(probes[n].prediction().tick,tick,'a read must not advance the clock');
+      }
+    }},net:{config:cfg('Reader'),WebSocketImpl:rooms[n].socket(),post:null}});
+    views.push(room); probes.push(globalThis.__homieNet.probe);
+  }
+  t.after(()=>{for(const v of views)v.close();for(const r of rooms)r.stop();});
+  let seed=4804;
+  for(let i=0;i<600;i++) {
+    seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+    if(i%17===0)for(const v of views)v.input({ax:(seed&1)?1:-1});
+    await clock.wait(31+seed%29);
+    for(const v of views)v.pump();
+    assert.deepEqual(views[1].me?.pos,views[0].me?.pos,`frame ${i}`);
+    assert.deepEqual(probes[1].prediction(),probes[0].prediction(),`reconciliation ${i}`);
+  }
+  assert.ok(calls>100 && reads>100);
+  assert.deepEqual(warnings,[]);
+});

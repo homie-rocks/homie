@@ -114,6 +114,8 @@ export interface OpenRoomOptions {
 /** What a predictor (`openRoom({ predict })`) is handed beside the body and the tick's input. */
 export interface PredictContext extends RayQueries {
   readonly tick: number; readonly dt: number;
+  /** Read the authoritative snapshot this prediction started from, without advancing time. */
+  each(kind: string, fn: (e: Entity) => void): void;
   /** The same deterministic `math` a `move` is handed (0.46.5): a helper shared with the rules can be called with `ctx`. */
   readonly math: typeof math;
   /**
@@ -393,6 +395,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   /* ---------------------------------------------------------------- the own actions, predicted (0.46.3) */
 
   const predictors = opts.predict ?? {};
+  let predicting = false;
+  let predictionFrame: Frame | null = null;
+  function predictionEach(kind: string, fn: (e: Entity) => void): void {
+    for (const u of (predictionFrame ?? latest)?.ents.values() ?? []) if (u.kind === kind) fn(entityOf(u, u.id === mine?.id));
+  }
   interface Ghost { id: string; kind: string; tick: number; pos: Vec3; fields: Record<string, unknown>; until: number; match?: (e: Entity) => boolean; /** The server's entity that confirmed it: the ghost is drawn until that one is. */ real?: string }
   const ghosts = new Map<string, Ghost>();
   let ghostSeq = 0;
@@ -422,7 +429,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // Branded as a world is (0.46.5): a guarded helper of the rules may call its queries, so the server's own aiming
     // code can be run on it instead of being restated in the view.
     const ctx: PredictContext = brand({
-      tick: t, dt: 1 / tickHz, preview, math,
+      tick: t, dt: 1 / tickHz, preview, math, each: predictionEach,
       judgedTick: (aimTick) => Math.max(t - rewindAllowance(), Math.min(t, Number(aimTick) || 0)),
       get viewTick() { return viewTickNow(); },
       ray: (from, direction, max, options) => viewRay(from, direction, max, options)[0],
@@ -451,7 +458,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     });
     const me = Object.assign(fields, { id, kind: kindName }) as Record<string, unknown>;
     for (const [key, value] of Object.entries({ pos: body.pos, vel: body.vel, heading: body.heading, grounded: body.grounded, motion: body.motion })) Object.defineProperty(me, key, { value, enumerable: false, configurable: true, writable: true });
+    const wasPredicting = predicting, previousFrame = predictionFrame;
+    predicting = true; predictionFrame = latest;
     try { fn(me, input, ctx); } catch (err) { console.warn('[room] predict', err); }
+    finally { predicting = wasPredicting; predictionFrame = previousFrame; }
     // What it wrote is held to the declared types, as the server holds its own writes.
     for (const [name, fd] of kind.fields) fields[name] = coerce(fd, fields[name], dims);
     for (const key of Object.keys(fields)) if (!kind.fields.some(([name]) => name === key)) delete fields[key];
@@ -554,7 +564,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let pumping = false;
   function pump(): void {
     // A predictor's own queries read the room, and reading the room pumps: a step is never begun inside a step.
-    if (closed || pumping) return;
+    if (closed || pumping || predicting) return;
     pumping = true;
     try { pumpOnce(); } finally { pumping = false; }
   }
@@ -588,6 +598,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   }
 
   function onSnapshot(s: Snapshot<unknown>): void {
+    const wasPumping = pumping;
+    pumping = true;
+    try { applySnapshot(s); } finally { pumping = wasPumping; }
+  }
+  function applySnapshot(s: Snapshot<unknown>): void {
     const f = frameOf(s);
     if (!f) return;
     const before = latest;
@@ -810,6 +825,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
    * drawn frame, not on the next tick.
    */
   function meNow(): Entity | null {
+    if (predicting) { const u = mine && predictionFrame?.ents.get(mine.id); return u ? entityOf(u, true) : null; }
     if (solo) return solo.me;
     if (!mine || !latest) return null;
     const server = latest.ents.get(mine.id);
