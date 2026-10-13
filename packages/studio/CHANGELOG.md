@@ -17,9 +17,9 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
-## [0.47.1] - 2026-10-13
+## [0.48.1] - 2026-10-13
 
-**Plugin 0.47.1** · Input history under loss.
+**Plugin 0.48.1** · Input history under loss.
 
 Rules views recover missing input and acknowledge late movement scheduling.
 
@@ -52,6 +52,9 @@ Rules views recover missing input and acknowledge late movement scheduling.
   `'drop'` remains the default.
 - Seeded virtual-time coverage of 40/80/150/300 ms each way and 0.5/1/2/5% loss,
   dropped inputs and ordered stall/burst delivery, in small rooms and through Gates.
+- A seeded baked-physics-world regression at 80 ms each way and 2% loss checks
+  zero drawn warps, application receipts, 300 Hz substeps, predictor room reads
+  and exact settling for two moving bodies.
 
 ### Fixed
 

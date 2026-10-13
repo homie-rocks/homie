@@ -1384,7 +1384,7 @@ substep drawing traces remain temporary. Physics worlds are disposed when their
 host or view closes. A full solver save can exceed browser-host checkpoint caps;
 the build measures this, and server-hosted rooms retain the full save.
 
-## Input during loss and stalls (0.47.1)
+## Input during loss and stalls (0.48.1)
 
 Rules views resend recent input automatically: a 4–64 tick history follows the
 measured round trip, jitter and missing application receipts (loss or recovery
