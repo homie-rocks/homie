@@ -17,6 +17,28 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.48.3] - 2026-10-13
+
+**Plugin 0.48.3** · Restore rewind-based hits with input history.
+
+Rules input history fits the wire without starving current aim and trigger controls.
+
+### Fixed
+
+- **0.48.1 misjudged rewind-based hits.** Repeated input history and sub-tick
+  metadata could exceed the relay's 2 KB input limit, even with no latency or
+  loss. The server then kept stale aim and trigger state while the player's
+  predictor showed hits against the current aim. Input frames now fit that
+  existing byte limit, prioritizing current controls and missing receipts.
+- Optional sub-tick metadata uses only the space left after complete input
+  values and their sequence numbers. Integrated held durations, reliable
+  pulses, measured round trips and the rewind cap keep their existing meaning.
+  Bounded history recovery, application receipts and correction blending remain.
+
+### Upgrade notes
+
+- Existing games need no code changes.
+
 ## [0.48.1] - 2026-10-13
 
 **Plugin 0.48.1** · Input history under loss.

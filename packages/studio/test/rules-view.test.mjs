@@ -71,6 +71,15 @@ export default defineRules({contract:2,space:{dims:2},move,map:'./map',entities:
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
 export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{resume:{}}},entities:{runner:{player:${runaway==='pulses'?'true':`{control:'free',pulses:'${runaway==='pulse-hold'?'hold':'drop'}'}`},${runaway==='pulses'?'':`motion:{free:f.bit()},think(){return{};},commands:{resume(w,s){s.motion.free=true;}},`}input:{select:f.pulse()},fields:{actions:f.list(f.u8(),64),secret:f.text(20,{init:'brain-secret',visibility:'server'}),ammo:f.u8({init:24,visibility:'owner'}),damage:f.u16({init:52,visibility:'results'})},body:{shape:'circle',radius:.4,maxSpeed:0},tick(w,s){if(s.input.select)s.actions=[...s.actions,s.input.select];}}},room:{rounds:{seconds:60,breakSeconds:1},bots:{keep:0},join(c,p){return{kind:'runner',at:{x:p.seat*2,y:0,z:0}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(){}});`);
+    } else if (runaway === 'rewind-stream') {
+      // Stormbreak's reduction: a wide, continuously changing aim sample, a moving
+      // target, reliable pulses and a held weapon cadence. A narrow stick-only
+      // fixture never reached the relay's 2 KB cap when history was repeated.
+      writeFileSync(join(dir,'src/view.ts'), `import {openRoom} from '@homie-rocks/studio/rules/view';openRoom();`);
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-1000,-1000,0],max:[1000,1000,20]}}));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
+export default defineRules({contract:2,space:{dims:3},move,map:'./map',shapes:{effects:{shot:{aim:f.fix(),y:f.fix(),hit:f.bit()},hit:{target:f.ref()}}},entities:{runner:{player:true,input:{ax:f.held(),fire:f.bit(),tap:f.pulse(),swap:f.pulse(),aimTick:f.fix(),aimY:f.fix(),${Array.from({length:16},(_,i)=>`look${i}:f.fix()`).join(',')}},fields:{shots:f.u16(),next:f.tick(),swaps:f.list(f.u8(),64)},body:{shape:'capsule',radius:.4,height:1.8,maxSpeed:8},tick(w,s){if(s.input.swap)s.swaps=[...s.swaps,s.input.swap];if((s.input.fire||s.input.tap)&&w.tick>=s.next){s.next=w.tick+4;s.shots++;const h=w.ray({x:0,y:s.input.aimY,z:1},{x:1,y:0,z:0},18,{kind:'target',atTick:s.input.aimTick});w.emit('shot',s.id,{aim:s.input.aimTick,y:s.input.aimY,hit:!!h},{to:s.id});if(h)w.emit('hit',s.id,{target:h.entity},{to:s.id});}}},target:{body:{shape:'box',radius:.15,height:2,maxSpeed:2}}},room:{historySeconds:1,rewindSeconds:.25,bots:{keep:0},join(){return{kind:'runner',at:{x:-2,y:0,z:0}};},start(w){w.spawn('target',{x:8,y:0,z:0});}}});`);
+      writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.pos={x:b.pos.x+i.ax*6.4*c.dt,y:0,z:0};},target(b,i,c){b.pos={x:8,y:c.tick*.1,z:0};b.vel={x:0,y:2,z:0};}});`);
     } else if (runaway === 'history') {
       writeFileSync(join(dir,'src/view.ts'),`import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.command('shoot',{at:room.viewTick,y:0});`);
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-100,-100,0],max:[100,100,20]}}));
@@ -2335,3 +2344,64 @@ test('an acknowledged release does not stop recovery of the missing tap before i
   }
   assert.ok(worst >= -.001, `movement and the authoritative pause never move left, but drawing moved ${worst}`);
  });
+
+// These nine compatibility cases also run unchanged against d9985c5a (0.48.0).
+// The 0.48.1 runtime fails all nine; see docs/receipts/hit-rewind-0483.json.
+for(const [delay,loss] of [[0,0],[75,0],[75,.02]])for(const trigger of ['held','pulse'])test(`rewind stream preserves ${trigger} aimed shots and cadence: ${delay} ms each way, ${loss} loss, seed 48301`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'rewind-stream');
+ const clock=virtualTime(t),shape=predictionShaper({delay:delay*2,loss,seed:48301,jitter:false}),r=rig(L,compiled,false,shape,shape);
+ const predicted=new Map(),shots=[],feedback=[];
+ const a=openRoom({predict:{runner(me,i,c){if((i.fire||i.tap)&&c.tick>=me.next){me.next=c.tick+4;me.shots++;const judged=c.judgedTick(i.aimTick),h=c.ray({x:0,y:i.aimY,z:1},{x:1,y:0,z:0},18,{kind:'target',atTick:judged});if(!c.preview)predicted.set(c.tick,{aim:i.aimTick,y:i.aimY,judged,hit:!!h});if(h)c.effect('hit',me.id,{target:h.entity});}}},net:{config:cfg('Rewind'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(4000);
+ a.on('shot',e=>shots.push(e));a.on('hit',e=>feedback.push(e.predicted?'predicted':e.confirms?'confirmed':'unpredicted'));a.on('retract',()=>feedback.push('retracted'));
+ let target;a.each('target',e=>target=e);
+ for(let frame=0;frame<600;frame++){
+  const aimTick=a.viewTick,aimY=a.poseAt(target.id,aimTick).pos.y;
+  // Release between cadence ticks, so packet phase cannot create a boundary shot.
+  a.input({ax:0,fire:trigger==='held'&&frame<595,tap:trigger==='pulse'?Number(frame%12===0):Number(frame===0),aimTick,aimY,...Object.fromEntries(Array.from({length:16},(_,i)=>['look'+i,Math.sin(frame*.13+i)*10]))});
+  await clock.wait(frame%3===2?18:16);
+ }
+ a.input({fire:false});await clock.wait(1000);
+ const matched=shots.filter(e=>{const p=predicted.get(e.tick);return p&&p.hit===e.hit&&Math.abs(p.aim-e.aim)<.001&&Math.abs(p.y-e.y)<.001;});
+ t.diagnostic(JSON.stringify({delay,loss,trigger,shots:shots.length,matched:matched.length,feedback:Object.fromEntries(['predicted','confirmed','unpredicted','retracted'].map(k=>[k,feedback.filter(x=>x===k).length])),oversize:r.room.stats.oversize,maxBytes:Math.max(...r.sockets[0].sent.filter(m=>m.t==='in').map(m=>JSON.stringify(m).length))}));
+ assert.equal(r.room.stats.oversize,0,'history must fit the existing relay input byte limit');
+ assert.equal(shots.length,50,`${trigger} cadence: fifty shots in ten seconds, as in 0.48.0`);
+ assert.equal(a.net.stats().rtt,delay*2,'history must not change measured round trip');
+ assert.equal(r.room.lastSnap.c.find(row=>row[0]===a.seat)[5],5,'rewind bound remains RTT plus presentation and input wait, capped at five ticks');
+ for(const e of shots){const p=predicted.get(e.tick);if(p)assert.ok(Math.abs(p.judged-Math.max(e.tick-5,p.aim))<.001,'ctx.judgedTick names the same capped pose the server judges');}
+ assert.ok(matched.length>=shots.length-2,`${matched.length}/${shots.length} shots have the predicted aim and verdict`);
+ assert.ok(feedback.filter(x=>x==='confirmed').length>=49,'0.48.0 confirmed at least 49 of the 50 predicted effects on this seed');
+ assert.ok(feedback.filter(x=>x==='retracted').length<=(loss?1:0),'predicted hit binding is at least as good as 0.48.0');
+ assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+});
+
+for(const delay of [0,75])test(`wide input preserves sub-tick held durations: ${delay} ms each way, seed 48302`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'rewind-stream');
+ const clock=virtualTime(t),shape=predictionShaper({delay:delay*2,loss:0,seed:48302,jitter:false}),r=rig(L,compiled,false,shape,shape);
+ const a=openRoom({net:{config:cfg('Held audit'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();r.stop();});await clock.wait(4000);
+ let rng=48302;const random=()=>{rng=(Math.imul(rng,1664525)+1013904223)>>>0;return rng/4294967296;};
+ const send=ax=>a.input({ax,...Object.fromEntries(Array.from({length:16},(_,i)=>['look'+i,random()*20-10]))});
+ const serverX=()=>r.host.core.save().ents.find(e=>e[11]===0)[7][0];
+ for(const duration of [30,60,120])for(let i=0;i<8;i++){
+  await clock.wait(250+Math.floor(random()*50));const before=serverX();send(1);
+  for(let left=duration;left>0;){const step=Math.min(left,7);await clock.wait(step);left-=step;if(left)send(1);}
+  send(0);await clock.wait(700);
+  assert.ok(Math.abs(serverX()-before-duration/1000*6.4)<.025,`${duration} ms integrates to ${duration/1000*6.4} m, as in 0.48.0`);
+  assert.ok(Math.abs(a.me.pos.x-serverX())<.01,'client and server settle to the same held duration');
+ }
+ assert.equal(r.room.stats.oversize,0);assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+});
+
+
+test('wide input preserves every numbered swap exactly once under repeated history, seed 48303',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'rewind-stream');
+ const clock=virtualTime(t),shape=predictionShaper({delay:150,loss:.02,seed:48303,jitter:false}),r=rig(L,compiled,false,shape,shape);
+ const a=openRoom({net:{config:cfg('Swap audit'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();r.stop();});await clock.wait(4000);
+ for(let frame=0;frame<600;frame++){
+  a.input({swap:frame%12===0?frame/12+1:0,...Object.fromEntries(Array.from({length:16},(_,i)=>['look'+i,Math.sin(frame*.13+i)*10]))});
+  await clock.wait(frame%3===2?18:16);
+ }
+ await clock.wait(1000);
+ assert.deepEqual([...a.me.swaps],Array.from({length:50},(_,i)=>i+1),'same ordered swaps as 0.48.0, without losses or duplicates');
+ assert.equal(r.room.stats.oversize,0);assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+});

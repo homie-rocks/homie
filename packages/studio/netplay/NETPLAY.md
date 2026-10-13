@@ -2336,7 +2336,12 @@ A rules step keeps its `[tickOffset, ...fields, ...ownerClaim]` prefix. Current
 views append `[-471, sequence, changeCount, ...changes]`, where each change is
 `[fieldIndex, changeSequence, fractionOfTick, value]`. All components are numbers.
 Input frames repeat recent entries, sorted by tick; the retained window is
-4–64 ticks based on measured authority RTT and jitter. The host deduplicates
+4–64 ticks based on measured authority RTT and jitter. Each frame also fits the
+existing 2 KB input cap: current controls first, then missing receipts, then
+acknowledged history. Optional sub-tick metadata uses the remaining bytes; the
+complete row retains its integrated held values and sequence even when the
+metadata is omitted. Retained entries not selected for this frame remain
+available for subsequent recovery frames. The host deduplicates
 entry sequences, including history received after a missing frame. Duplicate
 history is not a fresh lead observation. Frames without the trailer keep the
 legacy input semantics.
