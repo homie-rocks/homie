@@ -158,7 +158,7 @@ function connect(room, ver, token, extra = {}) {
   return { sent, socket, conn: c, welcome: sent.find((m) => m.t === 'welcome') };
 }
 
-test('a cold room alarm awaits its optional engine before probing the saved host', async () => {
+for (const cleared of [false, true]) test(`a cold room alarm awaits its optional engine and respects concurrent cleanup (${cleared})`, async () => {
   const r = storageRig(); const build = entry();
   const first = await tableRig(r, build);
   connect(first.room, 'a'); first.t.hostRt.tickNow();
@@ -171,8 +171,9 @@ test('a cold room alarm awaits its optional engine before probing the saved host
   const pending = first.t.runRoomAlarm();
   await Promise.resolve(); assert.equal(initialized, false);
   assert.ok(roomStore(r.storage).read(), 'startup has not discarded the checkpoint');
+  if (cleared) first.t.clearRoom();
   release(); await pending;
-  assert.ok(roomStore(r.storage).read());
+  assert.equal(Boolean(roomStore(r.storage).read()), !cleared);
   await Promise.all(first.pending); r.close();
 });
 

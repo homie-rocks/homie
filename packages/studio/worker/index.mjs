@@ -1761,8 +1761,14 @@ export class Table {
         this.durable ??= this.openStore(false);
         let saved = this.cleanupPending ? null : this.readRoom();
         if (saved) {
+          const generation = this.cleanupGeneration;
           const preparing = prepareHost(saved.game);
-          if (preparing) await preparing;
+          if (preparing) {
+            await preparing;
+            // A join or office action can arrive while the optional engine loads.
+            // Re-read that lifecycle instead of writing the pre-await checkpoint.
+            if (this.room !== room || this.hostRt || this.cleanupGeneration !== generation) return this.runRoomAlarm();
+          }
           saved = this.readRoom(true, saved);
         }
         if (saved) {
