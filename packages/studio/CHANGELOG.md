@@ -54,6 +54,11 @@ Rules views recover missing input and acknowledge late movement scheduling.
 
 - Multiple pulse calls within one predicted tick queue instead of overwriting
   one another. Their application ticks are distinct from the movement entry.
+- Placements preserve the established prediction-clock phase, and the snapshot
+  body is advanced to its predicted tick instead of relabelling an old pose.
+  Projection is bounded to the server's one-second input window, and its controls
+  are stamped for that same path. Inputs from an earlier placement cannot later
+  change the respawned body.
 - A fresh control after a browser stall is recorded after resetting the stale
   prediction clock, preventing a short press from moving by the stalled backlog.
 

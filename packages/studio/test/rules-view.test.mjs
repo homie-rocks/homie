@@ -57,6 +57,11 @@ export default defineRules({contract:2,space:{dims:2},move,map:'./map',shared:{w
       writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
 export default defineRules({contract:2,space:{dims:${dims}},move,map:'./map',entities:{runner:{player:true,input:{ax:f.i8()},body:{shape:'${dims===2?'circle':'sphere'}',radius:.2,maxSpeed:4},fields:{neighbours:f.u8()},tick(w,s){s.neighbours=w.near(s.pos,3,'runner').length;}}},room:{bots:{keep:0},join(c,p){return {kind:'runner',at:{x:p.seat===0?19:1,y:10,z:${dims===2?0:10}}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax*4,y:0,z:0};c.world.sweep(b,c.math.scale(b.vel,c.dt));}});`);
+    } else if (runaway === 'placement-clock') {
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-1000,-1000],max:[1000,1000]}}));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
+export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{respawn:{}}},entities:{runner:{player:true,input:{ax:f.held()},body:{shape:'circle',radius:.2,maxSpeed:4},commands:{respawn(w,s){w.place(s,{x:100,y:0},{vel:{x:2,y:0}});}}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:0,y:0,z:0}};}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:2+2*i.ax,y:0,z:0};b.pos={x:b.pos.x+b.vel.x*c.dt,y:0,z:0};}});`);
     } else if (runaway === 'loss-physics') {
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-1000,-1000],max:[1000,1000]}}));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
@@ -2253,3 +2258,42 @@ test('missing receipts widen input history through a loss run beyond the latency
   assert.ok(Math.abs(serverX() - from - .512) < .04, `recovered tap: ${serverX() - from}`);
   assert.ok(Math.abs(a.me.pos.x - serverX()) < .001, 'the replay converges');
 });
+
+for (const via of ['small', 'Gates']) test(`a placement projects the body to its own tick without a second correction: ${via}`, async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, 20, 'placement-clock', {}, null, via === 'Gates' ? 80 : 8);
+  const clock = virtualTime(t), r = (via === 'Gates' ? gateRig : rig)(L, compiled, false, 300, 300);
+  const a = openRoom({ net: { config: cfg('Placed'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(3000);
+  const probe = globalThis.__homieNet.probe.prediction;
+  let count = probe().count, worst = 0;
+  a.command('respawn');
+  for (let n = 0; n < 150; n++) {
+    await clock.wait(16); a.pump();
+    const p = probe();
+    if (p.count !== count) worst = Math.max(worst, p.last);
+    count = p.count;
+  }
+  assert.ok(a.me.pos.x >= 100, 'the placement arrived');
+  assert.ok(worst < .002, `the new pose must not acquire a latency-sized correction: ${worst}`);
+});
+
+ test('a prior placement cannot inject held controls into the respawned body', async () => {
+  const { L, compiled } = await coinDashKit('server', false, 20, 'placement-clock');
+  let now = 0;
+  const h = L.H.createHost({ game: 'placed', compiled, random: () => .37, send() {}, clock: { now: () => now, setTimer: () => 0, clearTimer() {} } });
+  const step = () => { now += 50; h.tickNow(); };
+  try {
+    h.frame({ t: 'join', peer: { seat: 0, id: 'one', name: 'One' } }); step();
+    const oldR = h.core.bodyOf(0).r;
+    h.frame({ t: 'in', from: 0, e: h.epoch, k: h.core.tick + 6, r: oldR, s: [[0, 1, -471, 10, 0]] });
+    h.frame({ t: 'ev', from: 0, k: 'cmd', d: ['respawn', {}] }); step();
+    const r = h.core.bodyOf(0).r;
+    assert.notEqual(r, oldR);
+    const from = h.core.snapshot()[1][0][3][0];
+    h.frame({ t: 'in', from: 0, e: h.epoch, k: h.core.tick + 1, r, s: [[0, 0, -471, 11, 0]] });
+    h.frame({ t: 'in', from: 0, e: h.epoch, k: h.core.tick + 2, r: oldR, s: [[0, 1, -471, 12, 0]] });
+    for (let n = 0; n < 12; n++) step();
+    assert.ok(Math.abs(h.core.snapshot()[1][0][3][0] - from - 1.2) < .001, 'both queued and newly arriving stale controls are fenced');
+  } finally { h.stop(); }
+ });

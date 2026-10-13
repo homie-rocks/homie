@@ -369,20 +369,41 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // Recalibrating an input clock is not a placement. Keep the drawn pose while
     // the new prediction catches up, just as for a snapshot reconciliation.
     const shown = reason === 'lead' ? meNow()?.pos : null;
-    if(reason==='placement')pulseQueue.length=0;
+    const continuousTick = reason === 'placement' && base && tickAt(clock()) >= k && tickAt(clock()) - k <= tickHz ? tickAt(clock()) : null;
+    if(reason==='placement' || reason==='epoch')pulseQueue.length=0;
     correction.rebaseReason = reason; correction.rebaseError = medianLead() - targetLead();
     const rtt = authorityRtt(); calibratedRtt = rtt;
     // Lead samples refer to the clock which stamped them. Do not mix its offset with this clock's jitter.
     const target = targetLead();
     leads.length = 0;
     leadAfter = clock() + 2 * rtt + period;
-    base = { tick: k + Math.ceil(rtt / period + target) + sendEvery - 1, at: clock() };
-    stepped = Math.floor(base.tick) - 1;
+    base = { tick: continuousTick ?? k + Math.min(tickHz, Math.ceil(rtt / period + target) + sendEvery - 1), at: clock() };
+    stepped = Math.max(k, Math.floor(base.tick) - (continuousTick === null ? 1 : 0));
     entries = []; sentHistory = []; controlChanges = []; pending = []; history.clear(); replayHeld = {}; serverHeld = {}; held = {}; lastSent = ''; leads.length = 0; pressed = new Map(); pulseNumber = new Map(); heldTrack.clear(); if (reason !== 'lead') dropPredictions();
     speed = 1; phases.length = 0; phases.push({ ...base, rate: 1 }); catchTick = null; offsets = []; headingBlend = null; correction.rebases += 1;
     const u = mine && latest?.ents.get(mine.id); if (u) adopt(u);
     if (mine) {
+      // A snapshot is the body at k, not at the clock's future input tick.
+      // Project the intervening movement instead of relabelling that old pose;
+      // otherwise the next reconciliation suddenly adds a latency's worth of travel.
+      const kind = myKind()!;
+      const values: Record<string, unknown> = {};
+      for (const [name, fd] of kind.input) values[name] = fd.t === 'press' ? false : fd.t === 'pulse' ? 0 : coerce(fd, sample[name] ?? fd.init, dims);
+      held = replayHeld = Object.freeze(values);
+      history.set(k, copyMine(mine));
+      for (let t = k + 1; !kind.owner && t <= stepped; t++) {
+        Object.assign(mine, runMove(kind.name, mine, held, t));
+        runPredict(kind.name, mine, mine.fields, held, t, false, false);
+        history.set(t, copyMine(mine));
+      }
       history.set(stepped, copyMine(mine));
+      if (!kind.owner && stepped > k) {
+        // The projection used these controls from k+1. Stamp that first input too,
+        // so authority can recover the identical post-placement path.
+        const row = kind.input.map(([name]) => Number(held[name]));
+        entries.push({ t: k + 1, row: [...row, -471, ++inputSequence, 0] });
+        pending.push({ seq: inputSequence, t: k + 1, input: held });
+      }
       if (shown) offsets = [{ delta: { x: periodicDelta(mine.pos.x,shown.x,map.wrap?.x), y: periodicDelta(mine.pos.y,shown.y,map.wrap?.y), z: periodicDelta(mine.pos.z,shown.z,map.wrap?.z) }, at: clock(), path: mine.pos, fade: 1, last: clock() }];
     }
   }
@@ -659,7 +680,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       if(changedEpoch)applications.clear();
       if(row?.[6]===471){for(let i=7;i+1<row.length;i+=2)applications.set(row[i],row[i+1]);while(applications.size>128)applications.delete(applications.keys().next().value!);}
       if (placed || !base) {
-        adopt(me); rebase(f.k);
+        adopt(me); rebase(f.k, changedEpoch ? 'epoch' : 'placement');
         if (placed) emit('placed', entityOf(me, true));
       } else if (kindOf.get(me.kind)?.owner) {
         mine!.motion = motionOf(me.kind, me.motion);

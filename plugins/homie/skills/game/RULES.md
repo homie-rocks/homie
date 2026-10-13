@@ -1421,5 +1421,9 @@ previous behaviour. The game's action handler still decides its cooldown.
 Residual drawing corrections use `room.predict.blendMs` (100 ms by default),
 slowed when necessary to avoid reversing movement, with a one-second maximum
 (or the explicitly longer blendMs). `snapM` selects the large-error threshold;
-placements still snap. `idleHold` no longer keeps a stopped body displaced
+placements still snap. A placement keeps the established clock phase and
+projects the new body from the snapshot tick to the own tick; it never labels an
+old pose as a future one. Projection is bounded to one second and sends the
+controls it used. Inputs stamped before the placement cannot later change the
+new body. `idleHold` no longer keeps a stopped body displaced
 indefinitely. These drawing settings never alter server truth.
