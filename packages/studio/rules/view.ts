@@ -291,7 +291,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const sum = { x: 0, y: 0, z: 0 };
     let waiting = false;
     for (const o of offsets) {
-      o.end ??= now + Math.max(1000, predict.blendMs);
+      o.end ??= o.at + Math.max(1000, predict.blendMs);
       if (now >= o.end) o.fade = 0;
       if (path) {
         // Loss can make even a small correction longer than the distance travelled in
@@ -1105,9 +1105,13 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         const now = clock(), nextShown = meNow()?.pos;
         if (nextShown && distance(shown, nextShown) > 0.00001) {
           const carried = visualOffset(now);
-          // Coalesce the carried blend: analogue controls may change every frame.
-          offsets = [{ delta: { x: carried.x + periodicDelta(nextShown.x,shown.x,map.wrap?.x), y: carried.y + periodicDelta(nextShown.y,shown.y,map.wrap?.y), z: carried.z + periodicDelta(nextShown.z,shown.z,map.wrap?.z) },
-            at: now, last: now, fade: 1, path: { x: nextShown.x - carried.x, y: nextShown.y - carried.y, z: nextShown.z - carried.z } }];
+          // A new control must not restart the lifetime of an older correction.
+          const path = { x: nextShown.x-carried.x, y: nextShown.y-carried.y, z: nextShown.z-carried.z };
+          for(const offset of offsets){offset.path=path;offset.last=now;}
+          const delta={x:periodicDelta(nextShown.x,shown.x,map.wrap?.x),y:periodicDelta(nextShown.y,shown.y,map.wrap?.y),z:periodicDelta(nextShown.z,shown.z,map.wrap?.z)};
+          const last=offsets.at(-1);
+          if(last?.at===now && last.fade===1){last.delta={x:last.delta.x+delta.x,y:last.delta.y+delta.y,z:last.delta.z+delta.z};}
+          else offsets.push({delta,at:now,last:now,fade:1,path});
         }
       }
     },

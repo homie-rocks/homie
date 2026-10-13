@@ -33,10 +33,11 @@ Rules views recover missing input and acknowledge late movement scheduling.
   longer distort latency steering.
 - Late movement replays up to one second of body history against historical
   geometry, fenced by authoritative body writes and placements. Outside that
-  history an entry applies next tick. New views use application receipts instead
+  history an entry applies next tick. Entries with press handlers also apply
+  next tick, so historical replay cannot duplicate world actions. New views use application receipts instead
   of negative held-input compensation; old wire entries retain their behaviour.
-- Small visual corrections expire after `room.predict.blendMs`, including while
-  stationary; `idleHold` no longer holds them indefinitely. Placement counters
+- Small visual corrections use `room.predict.blendMs` and expire within one
+  second (or an explicitly longer blend), including while stationary; `idleHold` no longer holds them indefinitely. Placement counters
   still distinguish respawns from prediction corrections.
 
 ### Added

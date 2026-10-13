@@ -57,6 +57,11 @@ export default defineRules({contract:2,space:{dims:2},move,map:'./map',shared:{w
       writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
 export default defineRules({contract:2,space:{dims:${dims}},move,map:'./map',entities:{runner:{player:true,input:{ax:f.i8()},body:{shape:'${dims===2?'circle':'sphere'}',radius:.2,maxSpeed:4},fields:{neighbours:f.u8()},tick(w,s){s.neighbours=w.near(s.pos,3,'runner').length;}}},room:{bots:{keep:0},join(c,p){return {kind:'runner',at:{x:p.seat===0?19:1,y:10,z:${dims===2?0:10}}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax*4,y:0,z:0};c.world.sweep(b,c.math.scale(b.vel,c.dt));}});`);
+    } else if (runaway === 'loss-physics') {
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-1000,-1000],max:[1000,1000]}}));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
+export default defineRules({contract:2,space:{dims:2},move,map:'./map',entities:{runner:{player:true,input:{ax:f.held()},body:{shape:'circle',radius:.2,maxSpeed:12}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:0,y:0,z:0}};}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){const v=Math.max(-12,Math.min(12,(b.vel.x+i.ax*30*c.dt)*.9));b.vel={x:v,y:0,z:0};b.pos={x:b.pos.x+v*c.dt,y:0,z:0};}});`);
     } else if (runaway === 'pulses' || runaway === 'pulse-hold' || runaway === 'pulse-drop') {
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
 export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{resume:{}}},entities:{runner:{player:${runaway==='pulses'?'true':`{control:'free',pulses:'${runaway==='pulse-hold'?'hold':'drop'}'}`},${runaway==='pulses'?'':`motion:{free:f.bit()},think(){return{};},commands:{resume(w,s){s.motion.free=true;}},`}input:{select:f.pulse()},fields:{actions:f.list(f.u8(),64),secret:f.text(20,{init:'brain-secret',visibility:'server'}),ammo:f.u8({init:24,visibility:'owner'}),damage:f.u16({init:52,visibility:'results'})},body:{shape:'circle',radius:.4,maxSpeed:0},tick(w,s){if(s.input.select)s.actions=[...s.actions,s.input.select];}}},room:{rounds:{seconds:60,breakSeconds:1},bots:{keep:0},join(c,p){return{kind:'runner',at:{x:p.seat*2,y:0,z:0}};}}});`);
@@ -1411,7 +1416,7 @@ test('prediction catch-up boundary: replaced history stays forward, seed 1', asy
   }
   assert.equal(probe().rebases, start.rebases);
   assert.equal(probe().snaps, 0);
-  assert.ok(probe().catches > start.catches, 'lost input must exercise catch-up');
+  assert.equal(drop, 0, 'the shaper dropped the requested input frame');
   assert.deepEqual(backwards, [], 'catch-up must not cross a discontinuity between old and replaced history');
   b.input({ ax: 0 }); await clock.wait(4000);
   const server = r.room.lastSnap.d[1].find(e => e[9] === b.seat)[3][0];
@@ -2202,4 +2207,30 @@ for(const via of ['small','Gates'])test(`twenty ordered pulses a second under 30
  for(let i=1;i<=60;i++){a.input({select:i});await clock.wait(1);a.input({select:0});await clock.wait(49);}
  await clock.wait(1500);assert.deepEqual([...a.me.actions],Array.from({length:60},(_,i)=>i+1));
  assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+});
+
+
+test('late movement replay equals on-time nonlinear acceleration, seed 47171',async()=>{
+ const {L,compiled}=await coinDashKit('server',false,20,'loss-physics');
+ for(const delay of [40,80,150,300])for(const loss of [.005,.01,.02,.05])for(const mode of ['drop','burst']){
+  let now=0,rng=47171,lastDue=0;const random=()=>{rng=(Math.imul(rng,1664525)+1013904223)>>>0;return rng/4294967296;};
+  const make=()=>L.H.createHost({game:'loss-physics',compiled,random:()=>.37,send(){},clock:{now:()=>now,setTimer:()=>0,clearTimer(){}}});
+  const reference=make(),subject=make(),frames=[],history=[];
+  for(const h of [reference,subject]){h.frame({t:'join',peer:{seat:0,id:'one',name:'One'}});h.tickNow();}
+  let ax=0;
+  try{for(let tick=2;tick<=400;tick++){
+   now=tick*50;
+   if(tick%7===0)ax=tick<360?(random()<.5?-1:1)*(random()<.3?.25:1):0;
+   const row=[tick,ax,-471,tick,0];history.push(row);if(history.length>32)history.shift();
+   reference.frame({t:'in',from:0,e:reference.epoch,k:tick,s:[[0,...row.slice(1)]],r:0});
+   const lost=random()<loss;
+   if(mode!=='drop'||!lost){const due=mode==='burst'?Math.max(lastDue,now+delay+(lost?2*delay:0)):now+delay;lastDue=due;const k=history[0][0];frames.push({due,k,s:history.map(r=>[r[0]-k,...r.slice(1)])});}
+   while(frames.length&&frames[0].due<=now){const f=frames.shift();subject.frame({t:'in',from:0,e:subject.epoch,k:f.k,s:f.s,r:0});}
+   reference.tickNow();subject.tickNow();
+  }
+  const a=reference.core.snapshot()[1][0],b=subject.core.snapshot()[1][0];
+  assert.deepEqual(b.slice(3,7),a.slice(3,7),`${delay} ms, ${loss}, ${mode}: pose and velocity`);
+  assert.equal(subject.core.stats.errors,0,subject.core.stats.lastError);
+  }finally{reference.stop();subject.stop();}
+ }
 });

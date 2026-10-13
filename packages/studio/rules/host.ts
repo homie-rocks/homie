@@ -513,7 +513,7 @@ export function createHost(o: HostOptions): Host {
       // Late: its values hold from the next tick, and its presses fire there if that is within a quarter of a second of its stamp.
       stats.lateEntries += 1;
       if(seq){
-        if(K-j<tickHz && core.reviseMovement(seat as number,j,values))q.receipts![q.receipts!.length-1][1]=j;
+        if(!presses.length && K-j<tickHz && core.reviseMovement(seat as number,j,values))q.receipts![q.receipts!.length-1][1]=j;
         const at=K+1;
         const same=q.entries.find(e=>e.at===at);
         if(j >= (q.heldAt??0) && (!same || j >= (same.source??0))){
