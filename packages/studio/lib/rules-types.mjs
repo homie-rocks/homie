@@ -119,7 +119,7 @@ export type Room<R = never> = Omit<BaseRoom<R>, 'me' | 'each' | 'get' | 'on' | '
  each<K extends keyof Entities>(kind: K, fn: (entity: Entities[K]) => void): void;
  get(id: string): Entity | null;
  on<K extends keyof Effects>(name: K, fn: (event: Effects[K]) => void): () => void;
- input(sample: ${input}): void;
+ input(sample: ${input}, options?: {at?: number}): void;
  command<K extends keyof Commands>(name: K, ...data: {} extends Commands[K] ? [data?: Commands[K]] : [data: Commands[K]]): void;
 };
 export declare function openRoom<R = never>(options?: OpenRoomOptions): Room<R>;

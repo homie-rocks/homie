@@ -57,9 +57,19 @@ export default defineRules({contract:2,space:{dims:2},move,map:'./map',shared:{w
       writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
 export default defineRules({contract:2,space:{dims:${dims}},move,map:'./map',entities:{runner:{player:true,input:{ax:f.i8()},body:{shape:'${dims===2?'circle':'sphere'}',radius:.2,maxSpeed:4},fields:{neighbours:f.u8()},tick(w,s){s.neighbours=w.near(s.pos,3,'runner').length;}}},room:{bots:{keep:0},join(c,p){return {kind:'runner',at:{x:p.seat===0?19:1,y:10,z:${dims===2?0:10}}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax*4,y:0,z:0};c.world.sweep(b,c.math.scale(b.vel,c.dt));}});`);
-    } else if (runaway === 'pulses') {
+    } else if (runaway === 'placement-clock') {
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-1000,-1000],max:[1000,1000]}}));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
-export default defineRules({contract:2,space:{dims:2},move,map:'./map',entities:{runner:{player:true,input:{select:f.pulse()},fields:{actions:f.list(f.u8(),64),secret:f.text(20,{init:'brain-secret',visibility:'server'}),ammo:f.u8({init:24,visibility:'owner'}),damage:f.u16({init:52,visibility:'results'})},body:{shape:'circle',radius:.4,maxSpeed:0},tick(w,s){if(s.input.select)s.actions=[...s.actions,s.input.select];}}},room:{rounds:{seconds:60,breakSeconds:1},bots:{keep:0},join(c,p){return{kind:'runner',at:{x:p.seat*2,y:0,z:0}};}}});`);
+export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{respawn:{}}},entities:{runner:{player:true,input:{ax:f.held()},body:{shape:'circle',radius:.2,maxSpeed:4},commands:{respawn(w,s){w.place(s,{x:100,y:0},{vel:{x:2,y:0}});}}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:0,y:0,z:0}};}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:2+2*i.ax,y:0,z:0};b.pos={x:b.pos.x+b.vel.x*c.dt,y:0,z:0};}});`);
+    } else if (runaway === 'loss-physics') {
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-1000,-1000],max:[1000,1000]}}));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
+export default defineRules({contract:2,space:{dims:2},move,map:'./map',entities:{runner:{player:true,input:{ax:f.held()},body:{shape:'circle',radius:.2,maxSpeed:12}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:0,y:0,z:0}};}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){const v=Math.max(-12,Math.min(12,(b.vel.x+i.ax*30*c.dt)*.9));b.vel={x:v,y:0,z:0};b.pos={x:b.pos.x+v*c.dt,y:0,z:0};}});`);
+    } else if (runaway === 'pulses' || runaway === 'pulse-hold' || runaway === 'pulse-drop') {
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
+export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{resume:{}}},entities:{runner:{player:${runaway==='pulses'?'true':`{control:'free',pulses:'${runaway==='pulse-hold'?'hold':'drop'}'}`},${runaway==='pulses'?'':`motion:{free:f.bit()},think(){return{};},commands:{resume(w,s){s.motion.free=true;}},`}input:{select:f.pulse()},fields:{actions:f.list(f.u8(),64),secret:f.text(20,{init:'brain-secret',visibility:'server'}),ammo:f.u8({init:24,visibility:'owner'}),damage:f.u16({init:52,visibility:'results'})},body:{shape:'circle',radius:.4,maxSpeed:0},tick(w,s){if(s.input.select)s.actions=[...s.actions,s.input.select];}}},room:{rounds:{seconds:60,breakSeconds:1},bots:{keep:0},join(c,p){return{kind:'runner',at:{x:p.seat*2,y:0,z:0}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(){}});`);
     } else if (runaway === 'history') {
       writeFileSync(join(dir,'src/view.ts'),`import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.command('shoot',{at:room.viewTick,y:0});`);
@@ -148,11 +158,11 @@ commands:{shout(w,s,e){w.emit('ping',s.pos,{n:1});w.emit('whisper',s.pos,{n:2},{
 target:{body:{shape:'box',radius:.5,height:2,maxSpeed:0}},mover:{body:{shape:'box',radius:.15,height:2,maxSpeed:2}},cover:{body:{shape:'box',radius:.5,height:2,maxSpeed:0}}},
 room:{historySeconds:1,${runaway === 'round3' ? 'rewindSeconds:.25,' : ''}bots:{keep:0},join(c,p){return{kind:'runner',at:{x:p.seat===2?40:p.seat*3,y:0,z:0}};},start(w){w.spawn('target',{x:0,y:4,z:0});w.spawn('mover',{x:8,y:0,z:0});}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.pos={x:b.pos.x+i.ax*6.4*c.dt,y:b.pos.y,z:0};},mover(b,i,c){b.pos={x:8,y:c.tick*.1,z:0};b.vel={x:0,y:.1/c.dt,z:0};}});`);
-    } else if (runaway === 'push') {
+    } else if (runaway === 'push' || runaway === 'diagonal-push') {
       writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-1000, -1000], max: [1000, 1000] } }));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules'; import {move} from './move';
-export default defineRules({contract:2,space:{dims:2},move,shapes:{commands:{bump:{}}},entities:{runner:{player:true,motion:{push:f.ticks()},input:{ax:f.i8()},body:{shape:'circle',radius:.5,maxSpeed:6},commands:{bump(world,self){self.motion.push=world.ticks(.4);}}}},room:{bots:{keep:0},join(){return {kind:'runner',at:{x:0,y:0,z:0}}}},map:'./map'});`);
-      writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax/127*6,y:0,z:0};if(b.motion.push>0){b.motion.push-=1;b.vel={x:0,y:12,z:0};}c.map.sweep(b,c.math.scale(b.vel,c.dt));}});`);
+export default defineRules({contract:2,space:{dims:2},move,shapes:{commands:{bump:{}}},entities:{runner:{player:true,motion:{push:f.ticks()},input:{ax:f.i8()},body:{shape:'circle',radius:.5,maxSpeed:${runaway==='diagonal-push'?30:6}},commands:{bump(world,self){self.motion.push=world.ticks(.4);}}}},room:{bots:{keep:0},join(){return {kind:'runner',at:{x:0,y:0,z:0}}}},map:'./map'});`);
+      writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax/127*6,y:${runaway==='diagonal-push'?20:0},z:0};if(b.motion.push>0){b.motion.push-=1;b.vel={x:0,y:${runaway==='diagonal-push'?20:12},z:0};}c.map.sweep(b,c.math.scale(b.vel,c.dt));}});`);
     } else writeFileSync(file, readFileSync(file, 'utf8').replace('commands: {},', 'commands: { boom: {} },').replace('fields: { score:', 'commands: { boom(world, self) { self.bomb = true; } }, fields: { bomb: f.bit(), score:').replace('tick(world, self) {', 'tick(world, self) { if (self.bomb) { while (true) {} }'));
   }
   const g = { ...json('game.json'), room: { host: mode, offline, tickHz, predict, view: { radiusM } }, dir };
@@ -300,11 +310,11 @@ test('two views in one server-hosted room: own bodies, the roster and the round,
   assert.ok(frames.length >= 3 && frames.length <= 6, `${frames.length} input frames in a second: at most one a tick`);
   for (const f of frames) {
     assert.equal(f.e, r.host.epoch);
-    assert.equal(f.s.length, 1);
-    assert.equal(f.s[0].length, 1 + 2, 'an offset and two input fields: the server owns the body');
-    assert.deepEqual(f.s[0].slice(0, 3), [0, 127, 0]);
+    assert.ok(f.s.length >= 1 && f.s.length <= 64);
+    assert.equal(f.s.at(-1)[3], -471, 'versioned sequence and control-change trailer');
+    assert.deepEqual(f.s.at(-1).slice(1, 3), [127, 0]);
   }
-  assert.ok(frames.every((f, i) => i === 0 || f.k > frames[i - 1].k), 'stamps rise');
+  assert.ok(frames.every((f,i)=>i===0 || f.k+f.s.at(-1)[0]>=frames[i-1].k+frames[i-1].s.at(-1)[0]),'newest stamps rise while history repeats');
   await clock.wait(200);
   const followed = serverX() - sx0;
   assert.ok(followed > 5 && followed <= 6 * 1.25 + 0.1, `the server moved her body ${followed} m`);
@@ -1262,7 +1272,7 @@ for (const hz of [20, 60]) test(`prediction: overlapping corrections under dropp
     previous = x;
   }
   const p = globalThis.__homieNet.probe.prediction();
-  assert.ok(p.count > 1, 'the dropped steps caused overlapping corrections');
+  assert.ok(drops <= 0, 'the shaped connection dropped both input frames');
   assert.equal(backwards, 0, JSON.stringify(p));
   a.input({ ax: 0 }); await clock.wait(2000);
   const server = r.host.core.snapshot()[1].find(e => e[9] === a.seat)[3][0];
@@ -1411,14 +1421,14 @@ test('prediction catch-up boundary: replaced history stays forward, seed 1', asy
   }
   assert.equal(probe().rebases, start.rebases);
   assert.equal(probe().snaps, 0);
-  assert.ok(probe().catches > start.catches, 'lost input must exercise catch-up');
+  assert.equal(drop, 0, 'the shaper dropped the requested input frame');
   assert.deepEqual(backwards, [], 'catch-up must not cross a discontinuity between old and replaced history');
   b.input({ ax: 0 }); await clock.wait(4000);
   const server = r.room.lastSnap.d[1].find(e => e[9] === b.seat)[3][0];
   assert.ok(Math.abs(b.me.pos.x - server) < .001, 'the correction still converges to the host');
 });
 
-test('prediction clock recalibration preserves the drawn pose on a delayed browser-host input path', async t => {
+test('prediction clock slewing preserves the drawn pose on a delayed browser-host input path', async t => {
   const { L, compiled, openRoom } = await predictionKit('browser', 60);
   const clock = virtualTime(t);
   let extra = 0;
@@ -1442,7 +1452,7 @@ test('prediction clock recalibration preserves the drawn pose on a delayed brows
     assert.ok(x - previous <= 21 * .016 + .05, 'recalibration remains continuous');
     previous = x;
   }
-  assert.ok(probe().rebases > start.rebases, 'changed input delay must exercise recalibration');
+  assert.equal(probe().rebases, start.rebases, 'changed input delay must preserve the stamped input timeline');
   assert.deepEqual(backwards, [], 'a clock change must not place the drawn body back at the old snapshot');
   extra = 0; b.input({ ax: 0 }); await clock.wait(5000);
   const server = r.room.lastSnap.d[1].find(e => e[9] === b.seat)[3][0];
@@ -1501,7 +1511,7 @@ test('prediction recalibration offset survives lossy reconciliation on server ho
     assert.ok(x - previous <= 21 * .016 + .05, 'recalibration remains continuous');
     previous = x;
   }
-  assert.ok(probe().rebases > start.rebases, 'changed input delay must exercise recalibration');
+  assert.equal(probe().rebases, start.rebases, 'changed input delay must preserve the stamped input timeline');
   assert.ok(probe().max <= .5, 'new errors stay inside the explicit snap limit');
   assert.equal(probe().snaps, 0, 'small reconciliation must not clip an existing clock correction');
   assert.deepEqual(backwards, [], 'a clock change must not place the drawn body back at the old snapshot');
@@ -1720,7 +1730,7 @@ for(const delayed of [false,true]) test(`solid Stormbreak terrain: six bodies, t
  let inputSeed=743;const inputRandom=()=>{inputSeed=(Math.imul(inputSeed,1664525)+1013904223)>>>0;return inputSeed/4294967296;};
  const r=rig(L,compiled,false,shaper,shaper);
  const open=name=>openRoom({net:{config:cfg(name),WebSocketImpl:r.socket(),post:null}});
- let a=open('Runner');const others=Array.from({length:5},(_,i)=>open('Neighbour'+i));
+ let a=open('Runner');const runnerProbe=globalThis.__homieNet.probe.prediction;const others=Array.from({length:5},(_,i)=>open('Neighbour'+i));
  t.after(()=>{a.close();for(const b of others)b.close();r.stop();});await clock.wait(2500);
  const place=async(at)=>{a.input({ax:0,ay:0});await clock.wait(700);a.command('place',{at});await clock.wait(1100);};
  await place({x:-4,y:7,z:0});a.command('shoot',{direction:1});await clock.wait(1100);assert.ok(Math.abs(a.me.ray-1.5)<.002,`weapon/camera/blast ray hits solid side: ${a.me.ray}, pose ${JSON.stringify(a.me.pos)}, ${JSON.stringify(r.host.core.stats)}`);
@@ -1729,7 +1739,7 @@ for(const delayed of [false,true]) test(`solid Stormbreak terrain: six bodies, t
  await place({x:30,y:0,z:0});a.command('edit',{mode:6});await clock.wait(1100);a.input({ax:4});await clock.wait(1000);assert.ok(Math.abs(a.me.pos.x-31.099)<.003,'live cover in the full terrain');a.input({ax:0});a.command('edit',{mode:0});await clock.wait(1100);a.input({ax:4});await clock.wait(800);assert.ok(a.me.pos.x>32.5,'disabled cover permits traversal');a.input({ax:0});a.command('edit',{mode:1});await clock.wait(1100);
  await place({x:0,y:18,z:0});a.input({ay:-4});await clock.wait(1500);assert.ok(a.me.pos.z>1,'walk up ramp');
  a.input({ay:4});await clock.wait(1500);assert.ok(a.me.pos.z<.2,'walk down ramp');
- await place({x:-3.2,y:14,z:0});a.input({ax:3,jump:true});await clock.wait(550);a.input({ax:0});await clock.wait(1200);assert.ok(a.me.pos.z>.4,'jump onto ramp');
+ await place({x:-3.2,y:14,z:0});a.input({ax:3,jump:true});await clock.wait(550);a.input({ax:0});await clock.wait(1200);assert.ok(a.me.pos.z>.4,`jump onto ramp: ${JSON.stringify({pos:a.me.pos,prediction:runnerProbe(),host:r.host.core.stats})}`);
  a.input({jump:true});await clock.wait(200);assert.ok(a.me.pos.z>1.5,'jump off ramp');a.input({ax:0});
  // Dense hill rims from real-game movement failures, under the same network clock.
  for(const at of [{x:-10.89543,y:26.09822,z:.129555},{x:-19.84526,y:20.9344,z:.511}]){
@@ -2151,3 +2161,177 @@ test('predictor room reads cannot pump or preview recursively during replay, see
   assert.ok(calls>100 && reads>100);
   assert.deepEqual(warnings,[]);
 });
+
+for(const via of ['small','Gates'])for(const mode of ['drop','burst'])test(`input history under loss: ${via}, ${mode}, seed 47101`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'round3',{},null,via==='Gates'?80:8),clock=virtualTime(t);
+ for(const delay of [40,80,150,300])for(const loss of [.005,.01,.02,.05]){
+  let rng=47101,last=0;const random=()=>{rng=(Math.imul(rng,1664525)+1013904223)>>>0;return rng/4294967296;};
+  const up=m=>{if(m.t!=='in')return delay;const lost=random()<loss;if(mode==='drop')return lost?null:delay;const at=Math.max(last,Date.now()+delay+(lost?2*delay:0));last=at;return at-Date.now();};
+  const r=(via==='Gates'?gateRig:rig)(L,compiled,false,delay,up),a=openRoom({net:{config:cfg('Loss'),WebSocketImpl:r.socket(),post:null}});
+  let previous=null,warps=[],measuring=false;
+  const frame=async ms=>{for(let left=ms;left>0;){const dt=Math.min(left,16);a.pump();await clock.wait(dt);const next=a.me?.pos.x;if(measuring&&previous!==null&&next!==undefined&&Math.abs(next-previous)>8*dt/1000+.05)warps.push([dt,previous,next,globalThis.__homieNet.probe.prediction()]);previous=next??null;left-=dt;}a.pump();};
+  try{
+   await frame(3000);measuring=true;previous=a.me?.pos.x??null;const server=()=>r.host.core.save().ents.find(e=>e[11]===0)[7][0];
+   const distances=[];
+   for(let i=0;i<12;i++){await frame(71+i*3);const from=server();a.input({ax:1});await frame(80);a.input({ax:0});await frame(1800);distances.push(server()-from);}
+   assert.ok(distances.every(d=>Math.abs(d-.512)<.04),`${delay} ms ${loss}: ${distances}`);
+   assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+   const row=r.room.lastSnap.c.find(row=>row[0]===0);assert.equal(row[6],471,'applied ticks survive relay projection');
+   const received=globalThis.__homieNet.probe.prediction().applications;
+   assert.ok(received.length>0,'the client retained applied tick receipts');
+   for(const [seq,tick] of received){const i=row.indexOf(seq,7);if(i>=7&&i%2===1)assert.equal(tick,row[i+1],'client and authority agree on the applied tick');}
+   assert.equal(warps.length,0,`${delay} ms ${loss}: drawn warps ${JSON.stringify(warps.slice(0,5))}`);
+  }finally{a.close();r.stop();}
+ }
+});
+
+
+for(const policy of ['hold','drop'])test(`taken pulses use explicit ${policy} policy`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'pulse-'+policy),clock=virtualTime(t),r=rig(L,compiled),a=openRoom({net:{config:cfg('Taken'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(1000);
+ for(let i=1;i<=5;i++){a.input({select:i});await clock.wait(60);a.input({select:0});}
+ await clock.wait(300);assert.deepEqual([...a.me.actions],[]);
+ a.command('resume');await clock.wait(700);
+ assert.deepEqual([...a.me.actions],policy==='hold'?[1,2,3,4,5]:[]);
+});
+
+test('a fresh held press after ten seconds without view frames has no backlog',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'round3'),clock=virtualTime(t),r=rig(L,compiled),a=openRoom({timers:false,net:{config:cfg('Stall'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(1000);a.pump();
+ await clock.wait(10000);const from=a.me.pos.x;a.input({ax:1});
+ for(let i=0;i<10;i++){await clock.wait(15);a.pump();}a.input({ax:0});
+ for(let i=0;i<60;i++){await clock.wait(16);a.pump();}
+ assert.ok(Math.abs(a.me.pos.x-from-.96)<.05,`150 ms moves .96 m, got ${a.me.pos.x-from}`);
+});
+
+for(const via of ['small','Gates'])test(`twenty ordered pulses a second under 300 ms and 5% stalls: ${via}, seed 47120`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'pulses',{},null,via==='Gates'?80:8),clock=virtualTime(t);
+ let rng=47120,last=0;const up=m=>{if(m.t!=='ev'&&m.t!=='in')return 300;rng=(Math.imul(rng,1664525)+1013904223)>>>0;const due=Math.max(last,Date.now()+300+(rng/4294967296<.05?600:0));last=due;return due-Date.now();};
+ const r=(via==='Gates'?gateRig:rig)(L,compiled,false,300,up),a=openRoom({net:{config:cfg('Mash'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);
+ for(let i=1;i<=60;i++){a.input({select:i});await clock.wait(1);a.input({select:0});await clock.wait(49);}
+ await clock.wait(1500);assert.deepEqual([...a.me.actions],Array.from({length:60},(_,i)=>i+1));
+ assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+});
+
+
+test('late movement replay equals on-time nonlinear acceleration, seed 47171',async()=>{
+ const {L,compiled}=await coinDashKit('server',false,20,'loss-physics');
+ for(const delay of [40,80,150,300])for(const loss of [.005,.01,.02,.05])for(const mode of ['drop','burst']){
+  let now=0,rng=47171,lastDue=0;const random=()=>{rng=(Math.imul(rng,1664525)+1013904223)>>>0;return rng/4294967296;};
+  const make=()=>L.H.createHost({game:'loss-physics',compiled,random:()=>.37,send(){},clock:{now:()=>now,setTimer:()=>0,clearTimer(){}}});
+  const reference=make(),subject=make(),frames=[],history=[];
+  for(const h of [reference,subject]){h.frame({t:'join',peer:{seat:0,id:'one',name:'One'}});h.tickNow();}
+  let ax=0;
+  try{for(let tick=2;tick<=400;tick++){
+   now=tick*50;
+   if(tick%7===0)ax=tick<360?(random()<.5?-1:1)*(random()<.3?.25:1):0;
+   const row=[tick,ax,-471,tick,0];history.push(row);if(history.length>32)history.shift();
+   reference.frame({t:'in',from:0,e:reference.epoch,k:tick,s:[[0,...row.slice(1)]],r:0});
+   const lost=random()<loss;
+   if(mode!=='drop'||!lost){const due=mode==='burst'?Math.max(lastDue,now+delay+(lost?2*delay:0)):now+delay;lastDue=due;const k=history[0][0];frames.push({due,k,s:history.map(r=>[r[0]-k,...r.slice(1)])});}
+   while(frames.length&&frames[0].due<=now){const f=frames.shift();subject.frame({t:'in',from:0,e:subject.epoch,k:f.k,s:f.s,r:0});}
+   reference.tickNow();subject.tickNow();
+  }
+  const a=reference.core.snapshot()[1][0],b=subject.core.snapshot()[1][0];
+  assert.deepEqual(b.slice(3,7),a.slice(3,7),`${delay} ms, ${loss}, ${mode}: pose and velocity`);
+  assert.equal(subject.core.stats.errors,0,subject.core.stats.lastError);
+  }finally{reference.stop();subject.stop();}
+ }
+});
+
+test('missing receipts widen input history through a loss run beyond the latency window', async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, 20, 'round3');
+  const clock = virtualTime(t);
+  let blackoutUntil = 0;
+  const r = rig(L, compiled, false, 40, m => m.t === 'in' && Date.now() < blackoutUntil ? null : 40);
+  const a = openRoom({ net: { config: cfg('Recovery'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(3000);
+  const serverX = () => r.host.core.save().ents.find(e => e[11] === 0)[7][0];
+  const from = serverX();
+  blackoutUntil = Date.now() + 650;
+  a.input({ ax: 1 }); await clock.wait(80); a.input({ ax: 0 });
+  await clock.wait(2000);
+  // At 6.4 m/s an 80 ms tap travels .512 m. The 4 cm allowance covers
+  // clock phase/held quantization; it is less than one 20 Hz physics step.
+  assert.ok(Math.abs(serverX() - from - .512) < .04, `recovered tap: ${serverX() - from}`);
+  assert.ok(Math.abs(a.me.pos.x - serverX()) < .001, 'the replay converges');
+});
+
+for (const via of ['small', 'Gates']) test(`a placement projects the body to its own tick without a second correction: ${via}`, async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, 20, 'placement-clock', {}, null, via === 'Gates' ? 80 : 8);
+  const clock = virtualTime(t), r = (via === 'Gates' ? gateRig : rig)(L, compiled, false, 300, 300);
+  const a = openRoom({ net: { config: cfg('Placed'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(3000);
+  const probe = globalThis.__homieNet.probe.prediction;
+  let count = probe().count, worst = 0;
+  a.command('respawn');
+  for (let n = 0; n < 150; n++) {
+    await clock.wait(16); a.pump();
+    const p = probe();
+    if (p.count !== count) worst = Math.max(worst, p.last);
+    count = p.count;
+  }
+  assert.ok(a.me.pos.x >= 100, 'the placement arrived');
+  assert.ok(worst < .002, `the new pose must not acquire a latency-sized correction: ${worst}`);
+});
+
+ test('a prior placement cannot inject held controls into the respawned body', async () => {
+  const { L, compiled } = await coinDashKit('server', false, 20, 'placement-clock');
+  let now = 0;
+  const h = L.H.createHost({ game: 'placed', compiled, random: () => .37, send() {}, clock: { now: () => now, setTimer: () => 0, clearTimer() {} } });
+  const step = () => { now += 50; h.tickNow(); };
+  try {
+    h.frame({ t: 'join', peer: { seat: 0, id: 'one', name: 'One' } }); step();
+    const oldR = h.core.bodyOf(0).r;
+    h.frame({ t: 'in', from: 0, e: h.epoch, k: h.core.tick + 6, r: oldR, s: [[0, 1, -471, 10, 0]] });
+    h.frame({ t: 'ev', from: 0, k: 'cmd', d: ['respawn', {}] }); step();
+    const r = h.core.bodyOf(0).r;
+    assert.notEqual(r, oldR);
+    const from = h.core.snapshot()[1][0][3][0];
+    h.frame({ t: 'in', from: 0, e: h.epoch, k: h.core.tick + 1, r, s: [[0, 0, -471, 11, 0]] });
+    h.frame({ t: 'in', from: 0, e: h.epoch, k: h.core.tick + 2, r: oldR, s: [[0, 1, -471, 12, 0]] });
+    for (let n = 0; n < 12; n++) step();
+    assert.ok(Math.abs(h.core.snapshot()[1][0][3][0] - from - 1.2) < .001, 'both queued and newly arriving stale controls are fenced');
+  } finally { h.stop(); }
+ });
+
+test('an acknowledged release does not stop recovery of the missing tap before it', async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, 20, 'round3');
+  const clock = virtualTime(t), r = rig(L, compiled, false, 40, 40);
+  const Socket = r.socket();
+  let recoverAt = 0;
+  class HoleSocket extends Socket {
+    send(text) {
+      const m = JSON.parse(text);
+      if (m.t === 'in' && Date.now() < recoverAt) m.s = m.s.filter(row => row[1] === 0);
+      super.send(JSON.stringify(m));
+    }
+  }
+  const a = openRoom({ net: { config: cfg('Hole'), WebSocketImpl: HoleSocket, post: null } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(3000);
+  const serverX = () => r.host.core.save().ents.find(e => e[11] === 0)[7][0];
+  const from = serverX();
+  recoverAt = Date.now() + 200;
+  a.input({ ax: 1 }); await clock.wait(80); a.input({ ax: 0 });
+  await clock.wait(240);
+  assert.ok(Math.abs(serverX() - from - .512) < .04, `the earlier hole is recovered before an idle keepalive: ${serverX() - from}`);
+});
+
+ test('vertical travel cannot blend a horizontal correction against the held direction', async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, 20, 'diagonal-push');
+  const clock = virtualTime(t), r = rig(L, compiled, false, 300, 300);
+  const a = openRoom({ net: { config: cfg('Diagonal'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(3000); a.input({ ax: 127 }); await clock.wait(1500);
+  a.command('bump');
+  let previous = a.me.pos.x, worst = 0;
+  for (let i = 0; i < 180; i++) {
+    await clock.wait(16);
+    const x = a.me.pos.x; worst = Math.min(worst, x - previous); previous = x;
+  }
+  assert.ok(worst >= -.001, `movement and the authoritative pause never move left, but drawing moved ${worst}`);
+ });

@@ -158,6 +158,7 @@ export interface Core {
   readonly tick: number;
   readonly epoch: number;
   step(inputs?: ReadonlyMap<number, StepInput>, guides?: () => void): void;
+  reviseMovement(seat: number, at: number, values: Record<string, unknown>): boolean;
   guide(seat: number, floor?: unknown): Record<string, unknown> | null;
   vocabulary(value: Vocabulary | null): void;
   goal(seat: number, value?: unknown): unknown;
@@ -177,7 +178,7 @@ export interface Core {
   listeners(): { seat: number; id: string; pos: Vec3 }[];
   /** The body in a seat, as the host runtime needs it for the input protocol. */
   character(seat: number): import('./rules.ts').Character | null;
-  bodyOf(seat: number): { id: string; kind: KindTable; r: number; away: boolean; driver: Driver } | null;
+  bodyOf(seat: number): { id: string; kind: KindTable; r: number; away: boolean; controlled: boolean; driver: Driver } | null;
   /** What happened since the last call: rounds, effects, a changed roster, changed shared state, a new epoch, a failure. */
   drain(): CoreOut[];
   save(): SavedCore;
@@ -1091,7 +1092,46 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     // Inside the cone: the angle to its axis is at most half its opening, compared by cosine.
     return (dx * a.dir.x + dy * a.dir.y + dz * a.dir.z) / l >= exact.cos(a.half);
   }
+  // Movement-only rewind never repeats effects or commands. External body writes fence history.
+  type MovementState = {pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean; motion: Record<string, unknown>};
+  type MovementFrame = {tick: number; r: number; before: MovementState; after: MovementState; input: Readonly<Record<string, unknown>>; geometry: typeof moveGeometry; map: typeof currentMap};
+  const movementHistory = new Map<string, MovementFrame[]>();
+  const movementState = (e: Ent): MovementState => ({pos:e.pos,vel:e.vel,heading:e.heading,grounded:e.grounded,motion:{...e.m}});
+  const sameMovement = (a: MovementState,b: MovementState): boolean => JSON.stringify(a) === JSON.stringify(b);
+  function putMovement(e: Ent, b: MovementState): void {
+    e.pos=b.pos;e.vel=b.vel;e.heading=b.heading;e.grounded=b.grounded;
+    Object.assign(e.m,b.motion);
+  }
+  function reviseMovement(seat: number, at: number, values: Record<string, unknown>): boolean {
+    const id=seats.get(seat)?.id, e=id?ents.get(id):null;
+    if(!e || !e.kind.move || e.kind.body?.owner || e.away || e.driver!=='person') return false;
+    const frames=movementHistory.get(e.id), start=frames?.findIndex(f=>f.tick===at)??-1;
+    if(!frames || start<0 || frames.at(-1)!.tick!==tick || frames[start].r!==e.r || !sameMovement(frames.at(-1)!.after,movementState(e)))return false;
+    const control=e.kind.player?.control;
+    if(control && frames.slice(start).some(f=>!f.before.motion[control] || !f.after.motion[control]))return false;
+    for(let i=start+1;i<frames.length;i++)if(frames[i].r!==e.r || !sameMovement(frames[i-1].after,frames[i].before))return false;
+    const saved=movementState(e), savedTick=tick, geometry=moveGeometry, map=currentMap;
+    const old=frames.map(f=>({...f}));
+    try {
+      putMovement(e,frames[start].before);
+      for(let i=start;i<frames.length;i++){
+        const f=frames[i];tick=f.tick;moveGeometry=f.geometry;currentMap=f.map;moveShape=e.kind.body!;
+        f.before=movementState(e);
+        // An entry holds until the next explicitly different input.
+        if(i===start || JSON.stringify(old[i].input)===JSON.stringify(old[i-1].input))f.input=Object.freeze(coerceFields(e.kind.input,values,dims));else values={...f.input};
+        const b={pos:e.pos,vel:e.vel,heading:e.heading,grounded:e.grounded,motion:e.mself};
+        const errors=stats.errors, stops=stats.budgetStops;
+        if(!run(e.kind.name,'move',e,'move',()=>e.kind.move!(b,f.input,moveCtx),'body'))throw new Error('rewind budget');
+        if(stats.errors!==errors || stats.budgetStops!==stops)throw new Error('rewind failed');
+        e.pos=clampIn(V(own(b,'pos')),e.kind.body!.radius,e.kind.body!.height||2*e.kind.body!.radius);e.vel=V(own(b,'vel'));e.heading=dir(own(b,'heading'),dims);e.grounded=own(b,'grounded')===true;
+        f.after=movementState(e);
+      }
+      return true;
+    } catch {putMovement(e,saved);movementHistory.set(e.id,old);return false;}
+    finally {tick=savedTick;moveGeometry=geometry;currentMap=map;}
+  }
   function step(inputs: ReadonlyMap<number, StepInput> = new Map(), guides?: () => void): void {
+    for(const id of movementHistory.keys())if(!ents.has(id))movementHistory.delete(id);
     tick = (tick + 1) >>> 0;
     if(pendingMap&&pendingMap[0]<=tick){currentMap=pendingGeometry!;mapRevision=pendingMap;currentMapCells=pendingMapCells;mapCells=currentMapCells;pendingMapCells=0;pendingMap=null;pendingGeometry=null;moveGeometry=currentMap;}
     // The tick pays first for the state it sends: what the last snapshot packed. A room that holds more than a tick can send has nothing left for its handlers, and ends as any room does whose budget trips on every tick.
@@ -1205,6 +1245,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
         }
         if (!k.move) continue;
         const b = { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: e.mself };
+        const rewindBefore = k.player && e.driver === 'person' && !e.away ? movementState(e) : null;
         const beforeMove = opts.moved ? { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: { ...e.m } } : null;
         moveShape = body;
         run(k.name, 'move', e, 'move', () => (k.move as NonNullable<KindTable['move']>)(b, e.input, moveCtx), 'body');
@@ -1215,6 +1256,11 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
         naming('body', 'pos'); e.pos = clampIn(V(own(b, 'pos')), body.radius, body.height || 2 * body.radius); naming('body', 'vel'); e.vel = V(own(b, 'vel')); naming('body', 'heading'); e.heading = dir(own(b, 'heading'), dims); naming();
         G.note = null;
         e.grounded = own(b, 'grounded') === true;
+        if (rewindBefore) {
+          let frames=movementHistory.get(e.id);if(!frames){frames=[];movementHistory.set(e.id,frames);}
+          frames.push({tick,r:e.r,before:rewindBefore,after:movementState(e),input:e.input,geometry:moveGeometry,map:currentMap});
+          while(frames.length>tickHz)frames.shift();
+        }
         if (beforeMove) opts.moved!(k.name, tick, e.input, beforeMove, { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: { ...e.m } }, moveGeometry, e.id);
       }
       // Phase 2: for every entity, its commands and then its tick, starting from a different entity each tick.
@@ -1492,6 +1538,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
   return {
     round: () => ({ t: 'round', ...round, ...(round.phase === 'over' && !overAt ? { results: results() } : {}) }),
     get tick() { return tick; },
+    reviseMovement,
     get epoch() { return epoch; },
     step,
     answer: (n, result) => { const a = pendingAsks.find((x) => x.n === n); if (a && !a.result) a.result = decisionResult(result); },
@@ -1568,7 +1615,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     character: (seat) => { const e = playerBodies().find(e => e.seat === seat); return e ? JSON.parse(JSON.stringify({ kind: e.kind.name, at: e.pos, heading: e.heading, fields: e.f, motion: e.m })) : null; },
     bodies: () => playerBodies().map((e) => ({ seat: e.seat, id: e.id, kind: e.kind.name, driver: e.driver, owner: e.owner, away: e.away, score: e.kind.score ? Number(e.f[e.kind.score]) || 0 : 0, r: e.r })),
     listeners: () => playerBodies().filter((e) => e.driver === 'person').map((e) => ({ seat: e.seat, id: e.id, pos: e.pos })),
-    bodyOf: (seat) => { const s = seats.get(seat); const e = s?.id ? ents.get(s.id) : null; return e ? { id: e.id, kind: e.kind, r: e.r, away: e.away, driver: e.driver } : null; },
+    bodyOf: (seat) => { const s = seats.get(seat); const e = s?.id ? ents.get(s.id) : null; return e ? { id: e.id, kind: e.kind, r: e.r, away: e.away, controlled: !e.kind.player?.control || Boolean(e.m[e.kind.player.control]), driver: e.driver } : null; },
     drain: () => { const o = out; out = []; return o; },
     save,
     dispose: () => physics?.dispose(),

@@ -17,6 +17,58 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.48.1] - 2026-10-13
+
+**Plugin 0.48.1** · Input history under loss.
+
+Rules views recover missing input and acknowledge late movement scheduling.
+
+### Changed
+
+- Snapshots that precede a predicted input's application receipt retain the live
+  movement prediction within the replay window; explicit placements still apply.
+- Prediction clock steering is limited to 0.5% instead of 5%; it slews without
+  repeatedly rebasing stamped input when the jitter estimate changes.
+- Rules input frames repeat a bounded history sized from measured latency and
+  jitter and missing application receipts, with input sequence numbers and sub-tick control changes. Snapshot
+  control rows report application ticks, including pulses. Retransmissions no
+  longer distort latency steering. A newer tick acknowledgement cannot stop
+  retries for an earlier missing input; only its own receipt does.
+- Late movement replays up to one second of body history against historical
+  geometry, fenced by authoritative body writes and placements. Outside that
+  history an entry applies next tick. Entries with press handlers also apply
+  next tick, so historical replay cannot duplicate world actions. New views use application receipts instead
+  of negative held-input compensation; old wire entries retain their behaviour.
+- Small visual corrections use `room.predict.blendMs` and expire within one
+  second (or an explicitly longer blend), including while stationary; `idleHold` no longer holds them indefinitely. Placement counters
+  still distinguish respawns from prediction corrections. Vertical travel cannot
+  erase a horizontal correction fast enough to reverse the held direction.
+  Remaining offsets drain over the final 250 ms rather than snapping at expiry.
+
+### Added
+
+- `room.input(sample, {at})` timestamps a control inside the current predicted
+  tick. `player.pulses: 'hold'` queues actions while control is taken;
+  `'drop'` remains the default.
+- Seeded virtual-time coverage of 40/80/150/300 ms each way and 0.5/1/2/5% loss,
+  dropped inputs and ordered stall/burst delivery, in small rooms and through Gates.
+- A seeded baked-physics-world regression at 80 ms each way and 2% loss checks
+  zero drawn warps, application receipts, 300 Hz substeps, predictor room reads
+  and exact settling for two moving bodies.
+
+### Fixed
+
+- Multiple pulse calls within one predicted tick queue instead of overwriting
+  one another. Their application ticks are distinct from the movement entry.
+- Placements preserve the established prediction-clock phase, and the snapshot
+  body is advanced to its predicted tick instead of relabelling an old pose.
+  Projection is bounded to the server's one-second input window, and its controls
+  are stamped for that same path. Queued held state from an earlier placement
+  cannot later change the respawned body; discrete presses received before the
+  browser learns of the placement still belong to the player.
+- A fresh control after a browser stall is recorded after resetting the stale
+  prediction clock, preventing a short press from moving by the stalled backlog.
+
 ## [0.48.0] - 2026-10-13
 
 **Plugin 0.48.0** · Baked physics worlds for server rules and local prediction.

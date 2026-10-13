@@ -469,3 +469,12 @@ save contract are in that section. Prefer kernel collision for its primitive
 maps; use physics for arbitrary static triangle levels. Initialization is awaited
 before the first room tick, calls in handlers are synchronous, and the complete
 physics snapshot is saved with the room. No opt-in means no physics load or cost.
+
+### Input under loss
+
+Rules games inherit redundant sequenced input, late movement replay and applied-tick
+receipts. Do not add a game-side resend loop or interpret negative held values as
+late-release repayment. Use `f.held()` for duration, sampled fields for latest
+state and `f.pulse()` for ordered actions. Choose `player.pulses: 'hold'` when a
+knock should buffer an action; the default drops it. See RULES.md, “Input during
+loss and stalls”, for timestamps, replay boundaries and visual correction settings.
