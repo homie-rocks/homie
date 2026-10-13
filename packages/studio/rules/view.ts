@@ -1,3 +1,4 @@
+import { disposeMoveContext } from './math.ts';
 import { boundPosition, periodicDelta, blendPosition, relativePoint, wrapPoint } from './topology.mjs';
 import { rayQuery, raySnapshot, type QueryTarget } from './query.ts';
 import { solidAt } from './collision.ts';
@@ -114,6 +115,8 @@ export interface OpenRoomOptions {
 /** What a predictor (`openRoom({ predict })`) is handed beside the body and the tick's input. */
 export interface PredictContext extends RayQueries {
   readonly tick: number; readonly dt: number;
+  /** Read the authoritative snapshot this prediction started from, without advancing time. */
+  each(kind: string, fn: (e: Entity) => void): void;
   /** The same deterministic `math` a `move` is handed (0.46.5): a helper shared with the rules can be called with `ctx`. */
   readonly math: typeof math;
   /**
@@ -377,7 +380,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     mine = { id: u.id, kind: u.kind, r: u.r, pos: u.pos, vel: u.vel, heading: u.heading, grounded: u.grounded, motion: motionOf(u.kind, u.motion), fields: predictors[u.kind] ? thawFields(kindOf.get(u.kind)?.fields ?? [], u.fields) : u.fields };
   }
   /** The game's guarded `move` for one tick, counted as the server counts it, with the result rounded as the server rounds it. */
-  function runMove(kindName: string, body: { pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean; motion: Record<string, unknown> }, input: Readonly<Record<string, unknown>>, t: number): typeof body {
+  function runMove(kindName: string, body: { pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean; motion: Record<string, unknown> }, input: Readonly<Record<string, unknown>>, t: number): typeof body & {steps?: readonly import('./substeps.ts').StepPose[]} {
     const fn = moves[kindName];
     if (!fn || (kindOf.get(kindName)?.control && !body.motion[kindOf.get(kindName)!.control!])) return body;
     moveTick = t;
@@ -393,6 +396,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   /* ---------------------------------------------------------------- the own actions, predicted (0.46.3) */
 
   const predictors = opts.predict ?? {};
+  let predicting = false;
+  let predictionFrame: Frame | null = null;
+  function predictionEach(kind: string, fn: (e: Entity) => void): void {
+    for (const u of (predictionFrame ?? latest)?.ents.values() ?? []) if (u.kind === kind) fn(entityOf(u, u.id === mine?.id));
+  }
   interface Ghost { id: string; kind: string; tick: number; pos: Vec3; fields: Record<string, unknown>; until: number; match?: (e: Entity) => boolean; /** The server's entity that confirmed it: the ghost is drawn until that one is. */ real?: string }
   const ghosts = new Map<string, Ghost>();
   let ghostSeq = 0;
@@ -422,7 +430,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // Branded as a world is (0.46.5): a guarded helper of the rules may call its queries, so the server's own aiming
     // code can be run on it instead of being restated in the view.
     const ctx: PredictContext = brand({
-      tick: t, dt: 1 / tickHz, preview, math,
+      tick: t, dt: 1 / tickHz, preview, math, each: predictionEach,
       judgedTick: (aimTick) => Math.max(t - rewindAllowance(), Math.min(t, Number(aimTick) || 0)),
       get viewTick() { return viewTickNow(); },
       ray: (from, direction, max, options) => viewRay(from, direction, max, options)[0],
@@ -451,7 +459,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     });
     const me = Object.assign(fields, { id, kind: kindName }) as Record<string, unknown>;
     for (const [key, value] of Object.entries({ pos: body.pos, vel: body.vel, heading: body.heading, grounded: body.grounded, motion: body.motion })) Object.defineProperty(me, key, { value, enumerable: false, configurable: true, writable: true });
+    const wasPredicting = predicting, previousFrame = predictionFrame;
+    predicting = true; predictionFrame = latest;
     try { fn(me, input, ctx); } catch (err) { console.warn('[room] predict', err); }
+    finally { predicting = wasPredicting; predictionFrame = previousFrame; }
     // What it wrote is held to the declared types, as the server holds its own writes.
     for (const [name, fd] of kind.fields) fields[name] = coerce(fd, fields[name], dims);
     for (const key of Object.keys(fields)) if (!kind.fields.some(([name]) => name === key)) delete fields[key];
@@ -554,7 +565,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let pumping = false;
   function pump(): void {
     // A predictor's own queries read the room, and reading the room pumps: a step is never begun inside a step.
-    if (closed || pumping) return;
+    if (closed || pumping || predicting) return;
     pumping = true;
     try { pumpOnce(); } finally { pumping = false; }
   }
@@ -588,6 +599,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   }
 
   function onSnapshot(s: Snapshot<unknown>): void {
+    const wasPumping = pumping;
+    pumping = true;
+    try { applySnapshot(s); } finally { pumping = wasPumping; }
+  }
+  function applySnapshot(s: Snapshot<unknown>): void {
     const f = frameOf(s);
     if (!f) return;
     const before = latest;
@@ -810,6 +826,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
    * drawn frame, not on the next tick.
    */
   function meNow(): Entity | null {
+    if (predicting) { const u = mine && predictionFrame?.ents.get(mine.id); return u ? entityOf(u, true) : null; }
     if (solo) return solo.me;
     if (!mine || !latest) return null;
     const server = latest.ents.get(mine.id);
@@ -842,6 +859,14 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       velocity = vec3({ x: lerp(mine.vel.x, next.vel.x, a), y: lerp(mine.vel.y, next.vel.y, a), z: lerp(mine.vel.z, next.vel.z, a) }, dims);
       // A takeoff is airborne as soon as it rises; a landing waits for its contact.
       grounded = landed || mine.grounded && (a === 0 || next.grounded);
+      if (next.steps?.length) {
+        const n = next.steps.length - 1, at = a * n, index = Math.min(n - 1, Math.floor(at)), f = at - index;
+        const before = next.steps[index], after = next.steps[index + 1];
+        pos = vec3(blendPosition(before.pos, after.pos, f, map.wrap), dims);
+        heading = blendHeading(before.heading, after.heading, f, dims);
+        velocity = vec3({x:lerp(before.vel.x,after.vel.x,f),y:lerp(before.vel.y,after.vel.y,f),z:lerp(before.vel.z,after.vel.z,f)},dims);
+        grounded = f === 1 ? after.grounded : before.grounded && after.grounded;
+      }
       preview = next;
       if (predictors[kind.name]) {
         // The own actions between ticks: the predictor on a copy of the fields, for the tick about to be stepped.
@@ -1055,6 +1080,6 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     askButtons(id, offer = {}) { if (solo) return []; const e = latest?.ents.get(id); return e && e.seat !== undefined ? agents?.askButtons(e.seat, offer) ?? [] : []; },
     tune, get map(){return solo ? solo.map : mapAt(latest?.k??0);}, net: net as Netplay,
     pump,
-    close() { stopSolo(); closed = true; if (timer) clearInterval(timer); if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onShow); agents?.stop(); net.close(); setStatus('closed'); },
+    close() { stopSolo(); disposeMoveContext(moveCtx as object); closed = true; if (timer) clearInterval(timer); if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onShow); agents?.stop(); net.close(); setStatus('closed'); },
   };
 }

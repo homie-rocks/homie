@@ -28,6 +28,7 @@ export interface MapView { tile(x:number,y:number):number; distance(flow:string,
 export interface Clock { readonly tick: number; readonly dt: number; ticks(seconds: number): number; readonly math: typeof math }
 export interface Round { readonly n: number; readonly phase: 'live' | 'over'; readonly endsAt: number }
 export type World<E, F, S, V, C, A, T, Room extends boolean = false> = Clock & {
+  readonly physics: import('./physics.ts').RulesPhysics;
   readonly tune: ReadonlyState<T>; readonly map: MapView & (Room extends true ? {replace(data:Record<string,unknown>):void} : {}); readonly stage: string; readonly level: number; readonly levelMax: number; readonly guideLevel: number; readonly guideSeats: readonly number[]; readonly kids: boolean; readonly levelSet: boolean;
   readonly shared: Room extends true ? S : ReadonlyState<S>;
   readonly round: Round & (Room extends true ? { end(): void; restart(): void } : {});
@@ -76,4 +77,4 @@ export type Entity<W, S, I, E, C, V, Answer = BuiltIns['answer'], G = Goal, A = 
 };
 export interface MoveBody<M> { get pos(): Vec3; set pos(value: Point); get vel(): Vec3; set vel(value: Point); get heading(): Vec3; set heading(value: Point); grounded: boolean; readonly motion: M }
 export interface MoveCollision<M> extends RayQueries { sweep(body: MoveBody<M>, delta: Point, options?: {ground?: boolean}): Hit | undefined; support(body: MoveBody<M>, distance?: number): (Hit & {dist: number}) | undefined; overlaps(body: MoveBody<M>): boolean }
-export type MoveContext<T, M> = Clock & { readonly tune: ReadonlyState<T>; readonly map: MapView & MoveCollision<M>; readonly world: MoveCollision<M> };
+export type MoveContext<T, M> = Clock & { readonly physics: import('./physics.ts').PhysicsMovement; substeps(body: MoveBody<M>, hz: number, step: (context: import('./substeps.ts').Substep) => void): void; readonly tune: ReadonlyState<T>; readonly map: MapView & MoveCollision<M>; readonly world: MoveCollision<M> };

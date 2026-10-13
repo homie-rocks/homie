@@ -1754,6 +1754,26 @@ export class PhysicsWorld {
     }
     return hit;
   }
+  /** Sweep an upright capsule with a skin, ignoring separating contacts.
+   * A stateless query for applications that own their integration and replay.
+   * Position is the capsule centre; height includes both caps.
+   */
+  castCapsule(position: Vec3, delta: Vec3, radius: number, height: number, skin = 0.001): ShapeHit | null {
+    positive(radius, "radius"); positive(height, "height"); positive(skin, "skin", true);
+    if (height < 2 * radius) throw new RangeError("physics: capsule height is smaller than its diameter");
+    const desc = this.#colliderDesc({shape: {kind: "capsule", radius, halfHeight: height / 2 - radius}}, "static");
+    const p = vector(position), d = vector(delta), shape = desc.shape, q = desc.rotation;
+    this.#sync();
+    const hit = this.#characterCast(p, q, d, shape, skin, 1, false,
+      this.#r.QueryFilterFlags.EXCLUDE_SENSORS, undefined, undefined, undefined,
+      other => {
+        const contact = characterContact(this.#r, other, shape, p, q, skin * 1.1);
+        return !contact || contact.normal1.x*d.x + contact.normal1.y*d.y + contact.normal1.z*d.z < -1e-7;
+      });
+    if (!hit) return null;
+    const c = this.#byRaw.get(hit.collider.handle)!;
+    return {collider:c.id, body:c.body, fraction:Math.max(0,hit.time_of_impact), point:copy(hit.witness1), normal:copy(hit.normal1)};
+  }
   #slideCharacter(c: CharacterRecord, position: Vec3, desired: Vec3) {
     const capsule = this.#collider(c.collider);
     return solveCharacter(

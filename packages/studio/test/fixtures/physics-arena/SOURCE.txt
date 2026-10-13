@@ -1,0 +1,2 @@
+source: https://github.com/mrdoob/three.js (examples/games_fps.html and the files it imports)  commit: b1061fb8b5a040414719fc342f404eb5f63ea795  fetched: 2026-09-29T17:55:34Z
+Standalone: examples/games_fps.html copied to index.html with its four relative paths pointed at this folder (./build, ./examples/jsm, ./examples/main.css, ./examples/models). Nothing else changed.

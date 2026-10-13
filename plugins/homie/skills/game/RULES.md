@@ -404,6 +404,46 @@ map.spots, and `world.sweep/support/overlaps` (also on map). Sweeps test static 
 `20 + 4S` plus copying, writes body.pos, and returns an optional hit.
 Movement may write pos, vel, heading, grounded and declared motion; never return
 an updated body. Normalize diagonals and respect maxSpeed. Collision movement needs a sweep; setting velocity alone does not move a body.
+
+### Integrating at the game's own rate
+
+Opt in from `move` with `ctx.substeps(body, hz, step)`. For a 20 Hz room,
+300 Hz runs fifteen integrations inside each tick; 60 Hz runs three. The rate
+must be a positive integer multiple of the room rate. Existing movement is
+unchanged unless it calls this method.
+
+```ts
+export const move = defineMove({
+  runner(body, input, ctx) {
+    ctx.substeps(body, 300, step => {
+      if (step.first && input.jump && body.grounded)
+        body.vel = { ...body.vel, z: 8 };
+      body.vel = { ...body.vel, z: body.vel.z - 30 * step.dt };
+      ctx.map.sweep(body, ctx.math.scale(body.vel, step.dt));
+    });
+  }
+});
+```
+
+The callback receives `dt` (seconds), zero-based `index`, `count`, `first`
+and end-of-step `fraction`. Use `step.dt` for integration; `ctx.dt` remains
+the full tick. A pulse belongs to the tick: consume it on `step.first` when
+it should act once. Held inputs retain their existing tick-mean semantics;
+this API does not recover the timestamp of changes within a tick. A game
+that already reconstructs held transitions can keep that policy in the
+callback. It does not change Stormbreak's existing integration.
+
+One body may be integrated once per move. The call charges 8 units plus
+64 per pose (the initial pose and each completed substep), before allocating
+the trace. Guarded callback operations and collision queries charge the
+same movement-handler budget as usual. There is no separate quota or
+implicit rate cap.
+
+The browser predicts the identical callback and draws between the recorded
+substep poses, including a path that leaves and returns to the same tick
+endpoint. The trace is temporary drawing data: it adds no wire fields or
+save fields. The final body and declared motion fields are saved as before.
+This helper does not add triangle collision or a physics world.
 Put freezes, boost expiry and knockback in declared motion. Initialize a late arrival
 in on.arrive too: onRoom.roundStart already happened before it joined.
 
@@ -1078,6 +1118,15 @@ leaves: take the marker down quietly. `ctx.ray/rays/rayAll` query what the
 player sees (`ctx.viewTick`); `ctx.preview` says the run is between ticks. A
 predictor runs often: keep it cheap, and keep per-entity state in `me`.
 
+`ctx.each(kind, fn)` reads frozen entities from the authoritative snapshot this
+prediction started from. Use it for pickups and other snapshot-based decisions;
+it excludes provisional ghosts. Reading `room.each`, `room.get`, `room.me` or
+ray queries inside a predictor cannot advance the clock or start a nested
+preview. Other room entities retain their normal drawn poses; `room.me` reads
+the authoritative own entity during the callback. Use the callback's `me` for
+the predicted own state. Snapshot reconciliation also prevents clock pumping
+through event listeners until replay finishes.
+
 To guess a shot the server will judge with rewind, ask for what the server
 will use (0.46.5). `ctx.judgedTick(aimTick)` is the tick it will pose the others
 at: the `aimTick` the input carries, held to how far back this seat may look
@@ -1245,3 +1294,94 @@ entities remain suitable for independently moving doors, cover and platforms.
 `spawn` exposes a new entity before its deferred `on.arrive` handler. Pass every
 field that must be valid immediately in the spawn data; use `arrive` for subsequent
 work, not for mandatory initialization.
+
+## Physics
+
+Use the opt-in `@homie-rocks/physics` bridge when the level is an arbitrary triangle
+mesh: caves, ramps, stairs and the static environment of a game such as Octree
+Arena. Keep `ctx.map` for the kernel's boxes, circles, capsules and height tiles.
+Install `@homie-rocks/physics` 0.1.2 in the studio. A game that does not
+ask for physics loads no physics engine and pays no physics units.
+
+In `map/main.json`, name a static GLB relative to the game directory:
+
+```json
+{
+  "bounds": { "min": [-100, -100, -100], "max": [100, 100, 100] },
+  "physics": { "level": "assets/level.glb" }
+}
+```
+
+The build bakes the default scene's node transforms and triangles into the
+physics package's indexed mesh format. It converts glTF Y-up to rules Z-up
+(`x, -z, y`), preserves reflected winding, and ships the baked mesh with the
+server rules and the browser movement bundle. Skins, animations and morph targets
+need a separate static collision GLB. The server never loads or parses a GLB.
+
+The smallest moving capsule uses the same guarded movement on both sides:
+
+```ts
+// src/move.ts
+import { defineMove } from '@homie-rocks/studio/rules';
+export const move = defineMove({ runner(body, input, ctx) {
+  ctx.substeps(body, 300, step => {
+    if (step.first && input.jump && body.grounded)
+      body.vel = { x: body.vel.x, y: body.vel.y, z: 10 };
+    body.vel = { x: input.ax * 5, y: 0, z: body.vel.z - 30 * step.dt };
+    ctx.physics.sweep(body, ctx.math.scale(body.vel, step.dt), .35, 1.35);
+  });
+} });
+
+// src/rules.ts
+import { defineRules, f } from '@homie-rocks/studio/rules';
+import { move } from './move';
+export default defineRules({
+  contract: 2, space: { dims: 3 }, move,
+  entities: { runner: {
+    player: true,
+    input: { ax: f.held(), jump: f.press() },
+    body: { shape: 'capsule', radius: .35, height: 1.35, maxSpeed: 30 }
+  } },
+  room: { bots: { keep: 0 }, join() {
+    return { kind: 'runner', at: { x: 0, y: 0, z: 8 } };
+  } }
+});
+```
+
+Use `"room": {"host":"server","offline":false}` in `game.json`. Physics
+initialization is awaited once per isolate before any room can tick; calls inside
+a handler are synchronous. `sweep(body, delta, radius, height)` sweeps and slides
+an upright capsule whose `body.pos` is its centre and whose height includes its
+caps. It writes position, velocity and grounded state. `ctx.physics.cast`,
+`ray`, and `overlap` expose the package's convex shape cast, raycast and overlap
+queries; query shapes are boxes, spheres or capsules. Room/entity handlers have
+these operations at `world.physics` and can call `world.physics.step(seconds)`
+to advance the collision world's solver clock. Movement owns capsule integration;
+its queries do not create persistent physics bodies or advance another player's
+world. This bridge exposes the baked collision world, not rigid-body ownership or
+predicted dynamic-body interactions.
+
+Every operation is charged before its engine work. On a 1,754-triangle level:
+
+| Operation | Budget units |
+| --- | ---: |
+| Capsule/convex cast | 768 |
+| Ray | 640 |
+| Overlap | 640 |
+| Solver step | 8 + 2,400 per 1/300 second |
+| Capsule sweep and slide | 64 + 768 per cast, at most four casts |
+
+Mesh-query and solver charges scale by `ceil(triangles / 1754)`, at least one.
+Substeps retain their usual pose and guarded callback charges. There is no new
+room budget, player cap or rate quota. The reproducible calibration is
+`scripts/calibrate-rules-physics.mjs`; its receipt compares physics on the real
+mesh with kernel operations on a box, since the kernel has no arbitrary-mesh
+or solver-step equivalent.
+
+A room save includes the package's complete binary world snapshot as JSON bytes,
+including solver state and its time remainder. The capsule's position, velocity,
+grounded flag and declared motion are saved by rules as usual. Browser prediction
+creates the same baked world and replays pending guarded movement against it;
+substep drawing traces remain temporary. Physics worlds are disposed when their
+host or view closes. A full solver save can exceed browser-host checkpoint caps;
+the build measures this, and server-hosted rooms retain the full save.

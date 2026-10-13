@@ -1,0 +1,149 @@
+{
+  "root": "/tmp/homie-physics-arena-0BQfxe",
+  "receipts": [
+    {
+      "oneWayMs": 0,
+      "players": [
+        {
+          "corrections": 0,
+          "maxCorrectionM": 0,
+          "snaps": 0,
+          "inputToMotionMs": [
+            11.400000095367432,
+            11.200000047683716,
+            14
+          ],
+          "latencySamples": [
+            {
+              "action": "walk",
+              "ms": 11.400000095367432
+            },
+            {
+              "action": "jump",
+              "ms": 11.200000047683716
+            },
+            {
+              "action": "walk",
+              "ms": 14
+            }
+          ],
+          "maxFrameDisplacementM": 0.21208806182963258,
+          "airborneFrames": 43
+        },
+        {
+          "corrections": 0,
+          "maxCorrectionM": 0,
+          "snaps": 0,
+          "inputToMotionMs": [
+            9.900000095367432,
+            9.100000143051147,
+            11.099999904632568
+          ],
+          "latencySamples": [
+            {
+              "action": "walk",
+              "ms": 9.900000095367432
+            },
+            {
+              "action": "jump",
+              "ms": 9.100000143051147
+            },
+            {
+              "action": "walk",
+              "ms": 11.099999904632568
+            }
+          ],
+          "maxFrameDisplacementM": 0.215486489534378,
+          "airborneFrames": 84
+        }
+      ],
+      "stats": {
+        "handlers": 1506,
+        "errors": 0,
+        "budgetStops": 0,
+        "skipped": 0,
+        "ticksCut": 0,
+        "maxUnits": 48136,
+        "worst": "runner.move",
+        "lastError": "",
+        "failing": "",
+        "lost": 0,
+        "held": 0,
+        "tickUnits": 63269,
+        "maxTickUnits": 111653
+      }
+    },
+    {
+      "oneWayMs": 150,
+      "players": [
+        {
+          "corrections": 0,
+          "maxCorrectionM": 0,
+          "snaps": 0,
+          "inputToMotionMs": [
+            12.400000095367432,
+            14,
+            7.700000047683716
+          ],
+          "latencySamples": [
+            {
+              "action": "walk",
+              "ms": 12.400000095367432
+            },
+            {
+              "action": "jump",
+              "ms": 14
+            },
+            {
+              "action": "walk",
+              "ms": 7.700000047683716
+            }
+          ],
+          "maxFrameDisplacementM": 0.159926176071167,
+          "airborneFrames": 44
+        },
+        {
+          "corrections": 0,
+          "maxCorrectionM": 0,
+          "snaps": 0,
+          "inputToMotionMs": [
+            4.8999998569488525,
+            6.699999809265137,
+            16.100000143051147
+          ],
+          "latencySamples": [
+            {
+              "action": "walk",
+              "ms": 4.8999998569488525
+            },
+            {
+              "action": "jump",
+              "ms": 6.699999809265137
+            },
+            {
+              "action": "walk",
+              "ms": 16.100000143051147
+            }
+          ],
+          "maxFrameDisplacementM": 0.1964760521055881,
+          "airborneFrames": 89
+        }
+      ],
+      "stats": {
+        "handlers": 1530,
+        "errors": 0,
+        "budgetStops": 0,
+        "skipped": 0,
+        "ticksCut": 0,
+        "maxUnits": 48136,
+        "worst": "runner.move",
+        "lastError": "",
+        "failing": "",
+        "lost": 0,
+        "held": 0,
+        "tickUnits": 63269,
+        "maxTickUnits": 109349
+      }
+    }
+  ]
+}

@@ -5,8 +5,9 @@ export function inspectWorld(w: GameWorld, s: GameSelf<'pawn'>, g: GameGoal, a: 
   const members: Record<keyof GameWorld, true> = {
     tick:true,dt:true,unitsLeft:true,ticks:true,math:true,tune:true,map:true,stage:true,level:true,levelMax:true,guideLevel:true,guideSeats:true,kids:true,levelSet:true,shared:true,round:true,
     random:true,label:true,route:true,send:true,dispatch:true,sendRoom:true,sendArea:true,after:true,emit:true,spawn:true,near:true,inBox:true,ray:true,rayAll:true,rays:true,ask:true,
-    goalDone:true,despawn:true,place:true,sweep:true,
+    goalDone:true,despawn:true,place:true,sweep:true,physics:true,
   };
+  w.physics.ray({x:0,y:0,z:1},{x:0,y:0,z:-1},3)?.distance;w.physics.step(w.dt);
   const time:number=w.tick+w.dt+w.ticks(1)+w.random()+w.level+w.levelMax+w.round.n+w.round.endsAt;
   const stage:string=w.stage+w.map.name+w.round.phase;
   const guideLevel:number=w.guideLevel;const guideSeats:readonly number[]=w.guideSeats;const policy:boolean=w.kids||w.levelSet;
@@ -71,10 +72,11 @@ export function inspectView(){
 }
 export const movement:NonNullable<Def['move']>={pawn(body,input,ctx){
  const members:Record<keyof typeof body,true>={pos:true,vel:true,heading:true,grounded:true,motion:true};
- const context:Record<keyof typeof ctx,true>={tick:true,dt:true,ticks:true,math:true,tune:true,map:true,world:true};
+ const context:Record<keyof typeof ctx,true>={tick:true,dt:true,ticks:true,math:true,tune:true,map:true,world:true,substeps:true,physics:true};
  body.pos={x:body.pos.x+input.ax*ctx.dt,y:body.pos.y};body.vel={x:0,y:0};body.heading={x:1,y:0};body.grounded=true;
  const scratch={pos:{...body.pos},grounded:body.grounded};const scene=ctx.world.rays({geometryOnly:true,shape:'capsule',radius:.4,height:1.8});scene.sweep(scratch,{x:0,y:0,z:-1});scene.support(scratch)?.dist;
  ctx.world.ray(body.pos,body.heading,3,{ignoreSelf:true})?.dist;ctx.map.rayAll(body.pos,body.heading,3,{geometryOnly:true}).map(hit=>hit.normal);
+ ctx.substeps(body,300,step=>{const dt:number=step.dt;const first:boolean=step.first;});
  ctx.ticks(1);ctx.map.name.toUpperCase();ctx.map.spot('camp')?.x;ctx.map.spots('camp').map(p=>p.y);ctx.map.sweep(body,body.vel)?.normal.x;ctx.world.support(body,2)?.dist;const blocked:boolean=ctx.world.overlaps(body);ctx.world.sweep(body,body.vel)?.entity?.toUpperCase();
 }};
 export const guide:NonNullable<Def['entities']['pawn']['guide']>={

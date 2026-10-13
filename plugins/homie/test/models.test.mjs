@@ -166,7 +166,7 @@ test('models: a generated character: the A-pose concept, then Meshy with its aut
 
 test('models: no local key is said apart from a connector\'s sign-in, and a connector job is imported under the same budget, receipts and provenance', async () => {
   // No key and no network: every address a call could reach is a closed port, so a request would fail the test.
-  const env = { ...process.env, FAL_QUEUE_URL: 'http://127.0.0.1:9', FAL_API_URL: 'http://127.0.0.1:9', FAL_STORAGE_URL: 'http://127.0.0.1:9', HOMIE_STUDIO_CLI: CLI };
+  const env = { ...process.env, HOME: scratch, FAL_QUEUE_URL: 'http://127.0.0.1:9', FAL_API_URL: 'http://127.0.0.1:9', FAL_STORAGE_URL: 'http://127.0.0.1:9', HOMIE_STUDIO_CLI: CLI };
   delete env.FAL_KEY; delete env.HOMIE_SPEND_LEDGER;
   const models = (args, cwd) => new Promise((ok) => {
     const p = spawn(process.execPath, [MODELS, ...args, '--json'], { cwd, env });

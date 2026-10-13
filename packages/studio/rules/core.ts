@@ -1,3 +1,5 @@
+import { physicsWorld } from './physics.ts';
+import { substeps } from './substeps.ts';
 import { prepareMapReplacement, type MapRevision } from './map-state.ts';
 import { tileApi } from './tiles.ts';
 import { boundPosition, periodicDelta, relativePoint, blendPosition, wrapPoint } from './topology.mjs';
@@ -143,6 +145,7 @@ export interface SavedCore {
   v: number; tick: number; epoch: number; rng: number; nextId: number; seq: number;
   round: [number, number, number, number]; overAt: number; match: [number, number]; trips: number;
   shared: unknown[]; policy: CorePolicy; intent?: [number, number, number?];
+  physics?: number[];
   collision?: [number,number];
   maps?: {current:MapRevision|null;pending:MapRevision|null};
   history?: [number, [string, number, number, number, number][]][];
@@ -178,6 +181,7 @@ export interface Core {
   /** What happened since the last call: rounds, effects, a changed roster, changed shared state, a new epoch, a failure. */
   drain(): CoreOut[];
   save(): SavedCore;
+  dispose(): void;
   /** The `world` object rules are handed (a test walks it to prove nothing else is reachable). */
   readonly world: object;
   /**
@@ -195,6 +199,8 @@ export interface Core {
  * `Adjusted`; also `effect`, `think` and `decision`): the handler, what was done, the field's name and what was written.
  */
 export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number) => import('./rules.ts').Character | null | undefined; characterSaved?: (seat: number, character: import('./rules.ts').Character) => void; rewindTicks?: (seat: number)=>number; label?: (seat:number,driver:Driver)=>string; moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes, id: string) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
+  if (opts.restore && (c.map.physics !== undefined) !== (opts.restore.physics !== undefined)) throw new Error('physics: save and game differ');
+  const physics = physicsWorld(c.map.physics, opts.restore?.physics);
   let currentMap=c.map;
   let mapRevision:MapRevision|null=null,pendingMap:MapRevision|null=null;
   let pendingGeometry:typeof currentMap|null=null,mapCells=0,currentMapCells=0,pendingMapCells=0;
@@ -553,6 +559,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     tick: () => tick, dt: () => dt, round: () => roundApi, shared: sharedView, level: () => policy.level, levelMax: () => policy.levelMax, guideLevel: () => policy.guideLevel ?? policy.level, guideSeats: () => policy.guideSeats ?? EMPTY_GUIDE_SEATS, kids: () => Boolean(policy.kids), levelSet: () => Boolean(policy.levelSet),
     // What the running handler may still spend (0.46.3): a handler that plans can stop short of its share instead of being stopped.
     unitsLeft: () => Math.max(0, Math.min(2147483647, Math.floor(G.left))),
+    ...(physics ? {physics: () => physics.api} : {}),
     stage: () => stage, tune: () => c.tune, math: () => math, map: () => mapApi,
   };
   for (const [name, get] of Object.entries(getters)) Object.defineProperty(world, name, { get, enumerable: true });
@@ -824,7 +831,8 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
   let moveShape = { shape: 'sphere', radius: 0, height: 0 };
   const moveCtx = brand({} as Record<string, unknown>);
   for (const [name, get] of Object.entries({ tick: () => tick, dt: () => dt, tune: () => c.publicTune, math: () => math, map: () => moveMap, world: () => moveWorld })) Object.defineProperty(moveCtx, name, { get, enumerable: true });
-  Object.assign(moveCtx, { ticks: (seconds: unknown): number => { charge(1); return ticks(seconds); } });
+  Object.assign(moveCtx, { substeps: substeps(c.settings.tickHz), ticks: (seconds: unknown): number => { charge(1); return ticks(seconds); } });
+  if (physics) Object.assign(moveCtx, {physics: physics.movement});
   Object.freeze(moveCtx);
   const joinCtx = brand({} as Record<string, unknown>);
   for (const [name, get] of Object.entries({ map: () => mapApi, shared: sharedView, tune: () => c.tune, math: () => math, round: () => roundApi })) Object.defineProperty(joinCtx, name, { get, enumerable: true });
@@ -1281,6 +1289,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
   }
   function save(): SavedCore {
     return {
+      ...(physics ? {physics: physics.save()} : {}),
       v: SAVE_REVISION, tick, epoch, rng, nextId, seq, round: [round.n, round.phase === 'live' ? 1 : 0, round.endsAt, round.startedAt], overAt, match: [playing, restartAt], trips,
       ...((hasColliders||mapRevision||pendingMap)?{collision:collisionState().slice(0,2) as [number,number]}:{}),
       ...((mapRevision||pendingMap)?{maps:{current:mapRevision,pending:pendingMap}}:{}),
@@ -1307,7 +1316,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       for(const [name,value] of Object.entries(r.maps)){if(value===null)continue;check(Array.isArray(value)&&value.length===2&&uint(value[0])&&(name==='pending'?value[0]===r.tick+1:value[0]<=r.tick));prepareMapReplacement(value[1],c.map);}
     }
     if(r.collision!==undefined)check(Array.isArray(r.collision)&&r.collision.length===2&&uint(r.collision[0])&&uint(r.collision[1])&&r.collision[0]<=r.tick&&r.collision[1]===r.collision[0]+1);
-    check(Object.keys(r).every(k => ['v', 'tick', 'epoch', 'rng', 'nextId', 'seq', 'round', 'overAt', 'match', 'trips', 'shared', 'policy', 'intent', 'asks', 'guideViews', 'ents', 'spawns', 'seats', 'queue', 'areas', 'ops', 'history', 'collision', 'maps'].includes(k)));
+    check(Object.keys(r).every(k => ['v', 'tick', 'epoch', 'rng', 'nextId', 'seq', 'round', 'overAt', 'match', 'trips', 'shared', 'policy', 'intent', 'asks', 'guideViews', 'ents', 'spawns', 'seats', 'queue', 'areas', 'ops', 'history', 'collision', 'maps', 'physics'].includes(k)));
     const askNames = new Set();
     check(Array.isArray(r.asks));
     for (const a of r.asks) {
@@ -1429,6 +1438,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     }
   }
   const r = opts.restore;
+  try {
   if (r) {
     if (r.v !== SAVE_REVISION) throw new Error('this save was written by another version of the runtime');
     validateSave(r);
@@ -1466,6 +1476,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     ops = r.ops as typeof ops;
     if(hasColliders||mapRevision||pendingMap)collisionState();
   } else startMatch();
+  } catch (error) { physics?.dispose(); throw error; }
 
   function decisionResult(value: unknown): Record<string, unknown> {
     const v = plainData(value, { n: ANSWER_MAX });
@@ -1560,6 +1571,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     bodyOf: (seat) => { const s = seats.get(seat); const e = s?.id ? ents.get(s.id) : null; return e ? { id: e.id, kind: e.kind, r: e.r, away: e.away, driver: e.driver } : null; },
     drain: () => { const o = out; out = []; return o; },
     save,
+    dispose: () => physics?.dispose(),
     world,
     stats,
   };

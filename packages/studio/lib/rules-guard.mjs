@@ -69,9 +69,10 @@ export const HOOK_NAMES = ['valueOf', 'toString', 'toJSON'];
 export const WORLD_METHODS = ['ticks', 'random', 'route', 'label', 'send', 'dispatch', 'sendRoom', 'announce', 'sendArea', 'after', 'emit', 'spawn', 'despawn', 'place', 'near', 'inBox', 'ray', 'rayAll', 'rays', 'sweep', 'ask', 'goalDone', 'finish', 'end', 'restart', 'spot', 'spots', 'replace', 'tile', 'distance', 'flow'];
 export const MATH_METHODS = ['sin', 'cos', 'tan', 'atan', 'atan2', 'asin', 'acos', 'exp', 'log', 'pow', 'hypot', 'rad', 'deg', 'clamp', 'lerp', 'vec', 'add', 'sub', 'scale', 'dot', 'cross', 'len', 'dist', 'norm', 'clampLen', 'lerpVec', 'dir', 'angle'];
 const VALUE_METHODS = new Set([...ARRAY_METHODS, ...STRING_METHODS, ...MAPSET_METHODS]);
-export const MOVE_METHODS = ['support', 'overlaps'];
-const NEW_METHODS = new Set(['route','label','dispatch','rayAll','rays','restart','replace','tile','distance','flow']);
-const CALLABLE = new Set([...VALUE_METHODS, ...WORLD_METHODS, ...MOVE_METHODS, ...MATH_METHODS]);
+export const MOVE_METHODS = ['substeps', 'support', 'overlaps'];
+export const PHYSICS_METHODS = ['step', 'cast', 'overlap'];
+const NEW_METHODS = new Set(['step','cast','overlap','substeps','route','label','dispatch','rayAll','rays','restart','replace','tile','distance','flow']);
+const CALLABLE = new Set([...VALUE_METHODS, ...WORLD_METHODS, ...MOVE_METHODS, ...PHYSICS_METHODS, ...MATH_METHODS]);
 const refusedName = (k) => REFUSED_NAMES.includes(k) || k.startsWith('toLocale');
 /** Operators that turn each operand into a number or a text. (`+` is handled beside them; `==` and `!=` are refused.) */
 const CONVERTING = new Set(['-', '*', '/', '%', '&', '|', '^', '<<', '>>', '>>>', '<', '>', '<=', '>=']);

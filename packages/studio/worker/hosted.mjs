@@ -19,6 +19,7 @@ import { compileMap, compileRules } from '../rules/rules.ts';
 /** game id → { rules, tune, map, settings, seats, build } as the build wrote it, and what compiling each gave. */
 const games = new Map();
 const compiled = new Map();
+const readiness = new WeakMap();
 
 /** The table of this studio's server-hosted games (the build's site/src/rules/index.mjs). Called once, at load. */
 export function hostRules(table) {
@@ -32,6 +33,21 @@ export function hostRules(table) {
 /** Whether this Worker holds rules for a game. */
 export const hostedGame = (id) => games.has(id);
 export const hostedBuild = (id) => games.get(id);
+
+/** Optional engines load at room start. Ordinary games keep their synchronous startup path. */
+export function prepareHost(id) {
+  const entry = games.get(id);
+  if (!entry?.initialize) return;
+  const previous = readiness.get(entry);
+  if (previous === true) return;
+  if (previous) return previous;
+  const pending = Promise.resolve().then(() => entry.initialize()).then(
+    () => { readiness.set(entry, true); },
+    error => { readiness.delete(entry); throw error; },
+  );
+  readiness.set(entry, pending);
+  return pending;
+}
 
 /** A game's rules, compiled once per isolate. Throws, naming the declaration, when they do not fit the contract. */
 export function compiledFor(id) {

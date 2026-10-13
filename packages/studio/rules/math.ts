@@ -1,3 +1,5 @@
+import { physicsWorld } from './physics.ts';
+import { substeps } from './substeps.ts';
 import { wrapPoint } from './topology.mjs';
 import { tileApi } from './tiles.ts';
 import { nearbyMap } from './map-index.ts';
@@ -299,15 +301,22 @@ export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: 
  * map. One function, so that the browser (view.ts) and the person the build check plays hold the same one. The
  * server's own (core.ts `moveCtx`) is made beside the rest of its world, and charges as that does.
  */
+const physicsContexts = new WeakMap<object, () => void>();
+export function disposeMoveContext(context: object): void { physicsContexts.get(context)?.(); physicsContexts.delete(context); }
 export function moveContext(o: { tick: () => number; tickHz: number; tune: unknown; map: MapShapes; name: string; spots: Readonly<Record<string, readonly unknown[]>>; radius: () => number; shape?: () => BodyShape; dims: number; geometry?: () => MapShapes; self?: () => string | undefined }): unknown {
+  const physics = physicsWorld((o.map as import('./rules.ts').GameMap).physics);
   const none = Object.freeze([]);
   const currentMap = () => (o.geometry?.()?.staticMap ?? o.geometry?.() ?? o.map) as import('./rules.ts').GameMap;
   const queries = collisionQueries(() => o.geometry?.() ?? o.map, () => o.shape?.() ?? {shape: 'sphere', radius: o.radius(), height: 2 * o.radius()}, o.dims, o.self);
-  return brand(Object.freeze({
+  const context = brand(Object.freeze({
+    ...(physics ? {physics: physics.movement} : {}),
+    substeps: substeps(o.tickHz),
     get tick() { return o.tick(); }, dt: 1 / o.tickHz, tune: o.tune, math,
     // As the server's `ctx.ticks` reads it: a plain number, or nothing.
     ticks: (seconds: unknown): number => { const s = num(seconds); const n = Math.round(s * o.tickHz); return s > 0 && Number.isFinite(n) ? Math.max(1, n) : 0; },
     world: brand(Object.freeze(queries)),
     map: brand(Object.freeze({ ...tileApi(currentMap), name: o.name, spot: (name: string) => (own(currentMap().spots ?? o.spots, name) as readonly unknown[] | undefined)?.[0], spots: (name: string) => own(currentMap().spots ?? o.spots, name) ?? none, ...queries })),
   }));
+  if (physics) physicsContexts.set(context, physics.dispose);
+  return context;
 }

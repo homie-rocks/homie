@@ -9,7 +9,7 @@ import { stateHash } from '../lib/rules-build.mjs';
 import { roomStore, restoreDelay } from '../worker/room-store.mjs';
 import { Table, roomEndAt } from '../worker/index.mjs';
 import { MeasuredTable } from './fixtures/rooms-saving.mjs';
-import { hostRules } from '../worker/hosted.mjs';
+import { hostRules, prepareHost } from '../worker/hosted.mjs';
 import { shell } from './fixtures/page-shell.mjs';
 import { fakeClock } from './rules-kit.mjs';
 
@@ -18,6 +18,22 @@ const rules = () => defineRules({ contract: 2, move: defineMove({ runner() {} })
 const settings = roomSettings({}).settings;
 const compiled = (def = rules()) => compileRules(def, { map: compileMap(map), settings, seats: 8 });
 const entry = (build = 'a', def = rules()) => ({ rules: def, map, settings, seats: 8, build, stateHash: stateHash(compiled(def)) });
+
+test('optional room engines initialize lazily, share concurrent startup, and retry failure', async () => {
+  let calls = 0; let release;
+  const initialized = { ...entry(), initialize: () => { calls++; return new Promise(resolve => { release = resolve; }); } };
+  hostRules({ ordinary: entry(), physics: initialized });
+  assert.equal(calls, 0);
+  assert.equal(prepareHost('ordinary'), undefined);
+  const first = prepareHost('physics');
+  assert.equal(prepareHost('physics'), first);
+  await Promise.resolve(); assert.equal(calls, 1);
+  release(); await first;
+  assert.equal(prepareHost('physics'), undefined);
+  hostRules({ physics: { ...entry(), initialize() { if (++calls === 2) throw Error('retry'); } } });
+  await assert.rejects(prepareHost('physics'), /retry/);
+  await prepareHost('physics'); assert.equal(calls, 3);
+});
 
 function storageRig() {
   const db = new DatabaseSync(':memory:');
@@ -141,6 +157,25 @@ function connect(room, ver, token, extra = {}) {
   const socket = room.attach(c); socket.onMessage(JSON.stringify({ t: 'hello', v: 1, ver, token, want: 'play', name: 'Player', ...extra }));
   return { sent, socket, conn: c, welcome: sent.find((m) => m.t === 'welcome') };
 }
+
+for (const cleared of [false, true]) test(`a cold room alarm awaits its optional engine and respects concurrent cleanup (${cleared})`, async () => {
+  const r = storageRig(); const build = entry();
+  const first = await tableRig(r, build);
+  connect(first.room, 'a'); first.t.hostRt.tickNow();
+  first.t.saveRoom(first.t.hostRt.save()); first.t.hostRt.stop();
+  first.t.hostRt = null; first.t.room = null;
+  let release; let initialized = false;
+  hostRules({ test: { ...build, initialize: () => new Promise(resolve => { release = () => { initialized = true; resolve(); }; }) } });
+  const read = first.t.readRoom.bind(first.t);
+  first.t.readRoom = (validate, saved) => { if (validate) assert.ok(initialized, 'engine precedes save validation'); return read(validate, saved); };
+  const pending = first.t.runRoomAlarm();
+  await Promise.resolve(); assert.equal(initialized, false);
+  assert.ok(roomStore(r.storage).read(), 'startup has not discarded the checkpoint');
+  if (cleared) first.t.clearRoom();
+  release(); await pending;
+  assert.equal(Boolean(roomStore(r.storage).read()), !cleared);
+  await Promise.all(first.pending); r.close();
+});
 
 test('Table restores seats and whole state across unchanged and same-shape builds, rejects old code, advances epochs, and rematches incompatible saves', async () => {
   const r = storageRig(); const build = entry();

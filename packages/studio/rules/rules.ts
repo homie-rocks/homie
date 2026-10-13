@@ -291,7 +291,7 @@ export interface MapBox { readonly min: Vec3; readonly max: Vec3 }
 export interface MapCircle { readonly at: Vec3; readonly r: number }
 export interface MapHeightTile { readonly base?: number; readonly diagonal?: '00-11' | '10-01'; readonly at: Vec3; readonly size: Readonly<{ x: number; y: number }>; readonly heights: readonly [number, number, number, number] }
 export type MapWrap = Readonly<Partial<Record<'x' | 'y' | 'z', readonly [number, number]>>>;
-export interface GameMap { readonly tiles?: Tiles; readonly wrap?: MapWrap; readonly name: string; readonly heightTiles: readonly MapHeightTile[]; readonly bounds: MapBox; readonly boxes: readonly MapBox[]; readonly circles: readonly MapCircle[]; readonly spheres: readonly MapCircle[]; readonly capsules: readonly (MapCircle & { height: number })[]; readonly spots: Readonly<Record<string, readonly Vec3[]>> }
+export interface GameMap { readonly physics?: import('./physics.ts').PhysicsMesh; readonly tiles?: Tiles; readonly wrap?: MapWrap; readonly name: string; readonly heightTiles: readonly MapHeightTile[]; readonly bounds: MapBox; readonly boxes: readonly MapBox[]; readonly circles: readonly MapCircle[]; readonly spheres: readonly MapCircle[]; readonly capsules: readonly (MapCircle & { height: number })[]; readonly spots: Readonly<Record<string, readonly Vec3[]>> }
 
 const vecOf = (a: unknown, what: string): Vec3 => {
   const p = Array.isArray(a) ? { x: a[0], y: a[1], z: a[2] ?? 0 } : a as { x?: unknown; y?: unknown; z?: unknown } | null;
@@ -340,7 +340,16 @@ export function compileMap(raw: unknown, name = 'main'): GameMap {
   }
   const tiled=compileTiles(m.tiles,wrap);
   if(tiled) for(const k of ['x','y'] as const) if(wrap?.[k] && (tiled.tiles.at[k]!==bounds.min[k] || tiled.tiles.at[k]+tiled.tiles.size*(k==='x'?tiled.tiles.width:tiled.tiles.height)!==bounds.max[k])) throw new Error(`${where}: tiles must span each wrapped axis`);
+  let physics: import('./physics.ts').PhysicsMesh | undefined;
+  if (m.physics !== undefined) {
+    const {vertices, indices} = m.physics ?? {};
+    if (!Array.isArray(vertices) || !Array.isArray(indices) || !vertices.length || vertices.length % 3 || !indices.length || indices.length % 3 ||
+      vertices.some((n: unknown) => typeof n !== 'number' || !Number.isFinite(n) || !Number.isFinite(Math.fround(n))) ||
+      indices.some((n: unknown) => !Number.isSafeInteger(n) || (n as number) < 0 || (n as number) >= vertices.length / 3)) throw new Error(`${where}: physics needs a build-time baked triangle mesh`);
+    physics = Object.freeze({vertices:Object.freeze([...vertices]),indices:Object.freeze([...indices])});
+  }
   const result = Object.freeze({
+    ...(m.physics ? {physics: physics!} : {}),
     ...(tiled?{tiles:tiled.tiles}:{}),
     name, ...(wrap ? {wrap} : {}),
     heightTiles: Object.freeze((m.heightTiles ?? []).map((t: any, i: number) => {

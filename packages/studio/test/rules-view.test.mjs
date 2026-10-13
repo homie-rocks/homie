@@ -38,7 +38,12 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
   if (runaway) {
     dir = join(scratch, `variant-${runaway}`); cpSync(COIN_DASH, dir, { recursive: true });
     const file = join(dir, 'src/rules.ts');
-    if (runaway === 'generated') {
+    if (runaway === 'substeps') {
+      writeFileSync(join(dir,'src/view.ts'), "import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.input({ax:1});");
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-20,-20],max:[20,20]}}));
+      writeFileSync(file, "import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';export default defineRules({contract:2,space:{dims:2},move,entities:{runner:{player:true,input:{ax:f.i8()},body:{shape:'circle',radius:.2,maxSpeed:6}}},room:{bots:{keep:0},join(c,p){return{kind:'runner',at:{x:0,y:p.seat*2,z:0}};}}});");
+      writeFileSync(join(dir,'src/move.ts'), "import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){c.substeps(b,300,s=>{const vx=i.ax*(s.index<7?6:s.index>7?-6:0);b.vel={x:vx,y:0,z:0};c.map.sweep(b,{x:vx*s.dt,y:0,z:0});});}});");
+    } else if (runaway === 'generated') {
       writeFileSync(join(dir,'src/view.ts'),`import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.command('regenerate');`);
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[0,0],max:[25,25]},wrap:{x:true}}));
       writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
@@ -2089,4 +2094,60 @@ test('generated map activates immediately when its pending snapshot was lost',as
  for(let ms=0;ms<500&&!received;ms++)await clock.wait(1);
  assert.ok(dropped>0,'the pending revision was lost');assert.ok(received,'the active revision arrived');
  assert.equal(a.map.tiles.data[255],0,'map activation uses its own tick, not the live collider revision tick');
+});
+
+test('300 Hz substeps draw the within-tick path with two seeded 150 ms views and restore',async t=>{
+  const {L,compiled,openRoom}=await coinDashKit('server',false,20,'substeps');
+  const clock=virtualTime(t),shape=predictionShaper({delay:150,loss:0,seed:480});
+  const r=rig(L,compiled,false,shape,shape);
+  const a=openRoom({net:{config:cfg('Ada'),WebSocketImpl:r.socket(),post:null}});
+  const b=openRoom({net:{config:cfg('Bo'),WebSocketImpl:r.socket(),post:null}});
+  t.after(()=>{a.close();b.close();r.stop();});
+  await clock.wait(2500);a.input({ax:1});b.input({ax:1});
+  await clock.wait(1500);
+  const samples=[];
+  for(let i=0;i<100;i++){await clock.wait(5);samples.push(a.me.pos.x);assert.ok(b.me);}
+  assert.ok(Math.max(...samples)-Math.min(...samples)>.09,'draw the out-and-back path whose tick endpoints coincide');
+  assert.ok(Math.max(...samples)<.17,'substeps stay on their integrated path');
+  assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+  assert.equal(r.host.core.stats.budgetStops,0);
+  const saved=r.host.core.save(),restored=L.C.createCore(compiled,{restore:saved});
+  assert.deepEqual(restored.save(),saved);
+});
+
+test('predictor room reads cannot pump or preview recursively during replay, seed 4804', async t => {
+  const {L,compiled,openRoom}=await coinDashKit('server',false,20,'wrap2');
+  const clock=virtualTime(t);
+  // Identical rooms, one observer reads during every predictor call. Snapshots land
+  // between sparse frames, after a tick edge: precisely the replay reentry window.
+  const rooms=[rig(L,compiled,false,157,150),rig(L,compiled,false,157,150)];
+  const views=[], probes=[]; let calls=0, reads=0;
+  const warnings=[]; t.mock.method(console,'warn',(...args)=>warnings.push(args.join(' ')));
+  for(let n=0;n<2;n++) {
+    let room;
+    room=openRoom({timers:false,predict:{runner(me,input,ctx){
+      calls++;
+      if(n && room) {
+        const tick=probes[n].prediction().tick;
+        room.each('runner',e=>{reads++; assert.ok(Object.isFrozen(e));});
+        const own=room.me; if(own)assert.equal(room.get(own.id).id,own.id);
+        ctx.each('runner',e=>assert.ok(Object.isFrozen(e)));
+        room.ray({x:0,y:0,z:0},{x:1,y:0,z:0},20);
+        assert.equal(probes[n].prediction().tick,tick,'a read must not advance the clock');
+      }
+    }},net:{config:cfg('Reader'),WebSocketImpl:rooms[n].socket(),post:null}});
+    views.push(room); probes.push(globalThis.__homieNet.probe);
+  }
+  t.after(()=>{for(const v of views)v.close();for(const r of rooms)r.stop();});
+  let seed=4804;
+  for(let i=0;i<600;i++) {
+    seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+    if(i%17===0)for(const v of views)v.input({ax:(seed&1)?1:-1});
+    await clock.wait(31+seed%29);
+    for(const v of views)v.pump();
+    assert.deepEqual(views[1].me?.pos,views[0].me?.pos,`frame ${i}`);
+    assert.deepEqual(probes[1].prediction(),probes[0].prediction(),`reconciliation ${i}`);
+  }
+  assert.ok(calls>100 && reads>100);
+  assert.deepEqual(warnings,[]);
 });

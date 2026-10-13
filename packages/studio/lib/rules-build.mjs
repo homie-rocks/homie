@@ -23,8 +23,8 @@ import { seatsOf } from '../worker/seats.mjs';
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { join, resolve, relative, isAbsolute } from 'node:path';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import { GUARD_MODULE, RULES_MODULE, guardRules, guardedPlugin, problemLine } from './rules-guard.mjs';
 import { capOf, RULES_FRAMES, rulesRates } from '../worker/limits.mjs';
 import { PACKAGE_ROOT, isRulesGame, rulesIndex } from './studio.mjs';
@@ -66,15 +66,15 @@ function readMap(g) {
  * `W` (guard.ts, the wall), `P` (pack.ts) and `M` (math.ts). They are one instance together, apart from any other
  * copy of the runtime in this process, so the guard's budget counter is theirs alone.
  */
-export async function loadRules(esbuild, root, id, code, { bundleOnly = false } = {}) {
+export async function loadRules(esbuild, root, id, code, { bundleOnly = false, physics = false } = {}) {
   const dir = join(root, '.studio', 'rules');
   mkdirSync(dir, { recursive: true });
   const gen = join(dir, `${id}-${process.pid}-${++loads}.linked.mjs`);
   writeFileSync(gen, code);
   const lib = (name) => JSON.stringify(join(PACKAGE_ROOT, 'rules', name));
-  const entry = `import def from ${JSON.stringify(gen)};\nimport * as R from ${lib('rules.ts')};\nimport * as H from ${lib('host.ts')};\nimport * as C from ${lib('core.ts')};\nimport * as W from ${lib('guard.ts')};\nimport * as P from ${lib('pack.ts')};\nimport * as M from ${lib('math.ts')};\nexport { def, R, H, C, W, P, M };\n`;
+  const entry = `import def from ${JSON.stringify(gen)};\nimport * as R from ${lib('rules.ts')};\nimport * as H from ${lib('host.ts')};\nimport * as C from ${lib('core.ts')};\nimport * as W from ${lib('guard.ts')};\nimport * as P from ${lib('pack.ts')};\nimport * as M from ${lib('math.ts')};\nexport { def, R, H, C, W, P, M };\n${physics ? `export { initializePhysics } from ${lib('physics-engine.ts')};` : ''}`;
   try {
-  const res = await esbuild.build({ stdin: { contents: entry, resolveDir: root, loader: 'js' }, bundle: true, format: bundleOnly ? 'cjs' : 'esm', target: 'es2022', platform: 'neutral', write: false, logLevel: 'silent', plugins: [rulesModulesPlugin()] });
+  const res = await esbuild.build({ stdin: { contents: entry, resolveDir: root, loader: 'js' }, bundle: true, format: bundleOnly ? 'cjs' : 'esm', target: 'es2022', platform: 'neutral', ...(physics ? {mainFields: ['module','main']} : {}), write: false, logLevel: 'silent', plugins: [rulesModulesPlugin()] });
   const text = res.outputFiles[0].text;
   if (bundleOnly) { rmSync(gen, { force: true }); return text; }
   const out = join(dir, `${id}.check-${createHash('sha256').update(text).digest('hex').slice(0, 12)}-${process.pid}-${(loads += 1)}.mjs`);
@@ -146,8 +146,15 @@ export async function prepareRules(esbuild, root, g, { log = () => {}, longCheck
   if (!guarded.ok) throw new Error(`${g.kind === 'app' ? 'apps' : 'games'}/${g.id}: its rules were refused.\n${guarded.problems.slice(0, 20).map((p) => `  ${problemLine(p)}`).join('\n')}${guarded.problems.length > 20 ? `\n  … and ${guarded.problems.length - 20} more` : ''}`);
   const tune = readJson(join(g.dir, 'tunables.json')) ?? {};
   const map = readMap(g);
+  if (map.physics !== undefined) {
+    const { bakePhysicsMesh } = await import('./physics-mesh.mjs');
+    if (!map.physics || typeof map.physics.level !== 'string') throw new Error('map.physics.level must name the game’s static GLB');
+    const path = resolve(g.dir, map.physics.level), rel = relative(g.dir, path);
+    if (rel.startsWith('..') || isAbsolute(rel)) throw new Error('physics level must be inside the game');
+    map.physics = await bakePhysicsMesh(path);
+  }
   const seats = seatsOf(g);
-  const bundle = await loadRules(esbuild, root, g.id, guarded.code, { bundleOnly: true });
+  const bundle = await loadRules(esbuild, root, g.id, guarded.code, { bundleOnly: true, physics: Boolean(map.physics) });
   const data = { id: g.id, tune, map, room: g.room, seats, vocab: readJson(join(g.dir, 'agents.json')), sites: guarded.sites };
   // The declarations first, for the type check: a wrong program is named by the compiler before anything is played.
   await typecheckRules(root, g, await runRulesWorker(bundle, data, { declarationsOnly: true }), tune, { log });
@@ -158,7 +165,8 @@ export async function prepareRules(esbuild, root, g, { log = () => {}, longCheck
   const trial = RULES_CAPACITY_TRIAL;
   log(`info: rules runtime reference trial: ${trial.game}, ${trial.seats} players at ${trial.tickHz} Hz for ${trial.minutes} minutes on ${trial.host} (${trial.platform}). Cloudflare capacity and billing are unmeasured.`);
   if (settings.tickHz > trial.tickHz) log(`info: ${g.kind === 'app' ? 'apps' : 'games'}/${g.id} asks for ${settings.tickHz} Hz, above the completed local reference trial's ${trial.tickHz} Hz. This game's generated check does not establish live room capacity.`);
-  const { def, R, H } = await loadRules(esbuild, root, g.id, guarded.code);
+  const { def, R, H, initializePhysics } = await loadRules(esbuild, root, g.id, guarded.code, {physics: Boolean(map.physics)});
+  if (initializePhysics) await initializePhysics(readFileSync(new URL(import.meta.resolve('@homie-rocks/physics/vendor/rapier.wasm'))));
   const compiled = R.compileRules(def, { tune, map: R.compileMap(map, map.name), settings, seats });
   const stats = smokeRun(H, compiled, g.id, { timer: () => 0, vocab: data.vocab });
   const snapshotCap = capOf('snap', seats); const checkpointCap = capOf('ckpt', seats);
@@ -207,8 +215,8 @@ export function viewPlugin(g, rules, entry, { lab = false } = {}) {
         if (a.path === 'homie:rules') return { contents: rules.code, resolveDir: g.dir, loader: 'js' };
         if (a.path === 'homie:host') return { contents: `import def from 'homie:rules';\nimport { browserHost } from ${JSON.stringify(join(PACKAGE_ROOT, 'rules', 'browser.ts'))};\nexport const makeHost = browserHost(def, ${JSON.stringify({ id: g.id, build: rules.build, tune: rules.tune, map: rules.map, settings: rules.settings, seats: rules.seats, vocab: game.vocab })});\n`, resolveDir: g.dir, loader: 'js' };
         return (a.path === 'homie:view'
-        ? { contents: `import 'homie:game';\nimport ${JSON.stringify(entry)};\n`, resolveDir: g.dir, loader: 'js' }
-        : { contents: `${existsSync(move) ? `import { move } from ${JSON.stringify(move)};` : 'const move = {};'}\nimport { setGame${game.vocab ? ', setAgentFactory' : ''} } from '${RULES_MODULE}/view';\n${game.vocab ? `import { useAgents } from ${JSON.stringify(join(PACKAGE_ROOT, 'agents/agents.ts'))}; setAgentFactory(useAgents);` : ''}\n${factory}\nsetGame(${JSON.stringify(game)}, move, loadHost);\n`, resolveDir: g.dir, loader: 'js' });
+        ? { contents: `import 'homie:game';\n${rules.map.physics ? `await import(${JSON.stringify(entry)});` : `import ${JSON.stringify(entry)};`}\n`, resolveDir: g.dir, loader: 'js' }
+        : { contents: `${existsSync(move) ? `import { move } from ${JSON.stringify(move)};` : 'const move = {};'}\nimport { setGame${game.vocab ? ', setAgentFactory' : ''} } from '${RULES_MODULE}/view';\n${game.vocab ? `import { useAgents } from ${JSON.stringify(join(PACKAGE_ROOT, 'agents/agents.ts'))}; setAgentFactory(useAgents);` : ''}\n${factory}\n${rules.map.physics ? `import {initializePhysics} from ${JSON.stringify(join(PACKAGE_ROOT, 'rules', 'physics-engine.ts'))}; import bytes from ${JSON.stringify(fileURLToPath(new URL('./dist/vendor/bytes.js', import.meta.resolve('@homie-rocks/physics/package.json'))))}; await initializePhysics(Uint8Array.from(atob(bytes), c => c.charCodeAt(0)));` : ''}\nsetGame(${JSON.stringify(game)}, move, loadHost);\n`, resolveDir: g.dir, loader: 'js' });
       });
       rulesModulesPlugin().setup(b);
       guarded.setup(b);
@@ -228,7 +236,7 @@ export function writeRules(root, built, ids) {
   mkdirSync(dir, { recursive: true });
   for (const r of built.filter((r) => r.settings.host === 'server')) {
     writeFileSync(join(dir, `${r.id}.mjs`), `${HEADER}// The rules of games/${r.id}, checked and guarded (build ${r.build}).\n${r.code}`);
-    writeFileSync(join(dir, `${r.id}.data.mjs`), `${HEADER}export default ${JSON.stringify({ tune: r.tune, map: r.map, settings: r.settings, seats: r.seats, build: r.build, stateHash: r.stateHash }, null, 2)};\n`);
+    writeFileSync(join(dir, `${r.id}.data.mjs`), `${HEADER}${r.map.physics ? `import {initializePhysics} from '@homie-rocks/studio/rules/physics-engine';\nimport wasm from '@homie-rocks/physics/vendor/rapier.wasm';\n` : ''}export default ${r.map.physics ? '{initialize: () => initializePhysics(wasm), ...' : ''}${JSON.stringify({ tune: r.tune, map: r.map, settings: r.settings, seats: r.seats, build: r.build, stateHash: r.stateHash }, null, 2)}${r.map.physics ? '}' : ''};\n`);
   }
   const have = ids.filter((id) => existsSync(join(dir, `${id}.mjs`)) && existsSync(join(dir, `${id}.data.mjs`)));
   for (const name of readdirSync(dir)) {

@@ -1,3 +1,4 @@
+import { takeSubsteps, type StepPose } from './substeps.ts';
 /*
  * pack.ts — declared state in and out: holding a value to its declared type, and packing it for the wire and the save.
  * =============================================================================
@@ -262,7 +263,7 @@ export interface MoveBody { pos: Vec3; vel: Vec3; heading: Vec3; grounded: boole
  * left rounded to 32-bit floats and held to the declared shapes as the server does it, so both hold the same numbers.
  * `used` is the units it took. What it throws goes to `failed` (the budget's own stop too) and the body is still read.
  */
-export function stepMove(fn: (body: MoveBody, input: unknown, ctx: unknown) => void, body: MoveBody, input: Readonly<Record<string, unknown>>, ctx: unknown, quota: number, motion: FieldList, dims: number, failed: (error: unknown) => void): MoveBody & { used: number } {
+export function stepMove(fn: (body: MoveBody, input: unknown, ctx: unknown) => void, body: MoveBody, input: Readonly<Record<string, unknown>>, ctx: unknown, quota: number, motion: FieldList, dims: number, failed: (error: unknown) => void): MoveBody & { used: number; steps?: readonly StepPose[] } {
   G.queryEpoch++; G.left = quota;
   const bag = coerceFields(motion, body.motion, dims);
   const target: Record<string, unknown> = {};
@@ -296,7 +297,8 @@ export function stepMove(fn: (body: MoveBody, input: unknown, ctx: unknown) => v
   const used = quota - (G.left > 0 ? G.left : 0);
   G.left = Infinity;
   naming('body', 'pos'); const pos = vec3(body.pos, dims); naming('body', 'vel'); const vel = vec3(body.vel, dims); naming('body', 'heading'); const heading = dir(body.heading, dims); naming();
-  return { pos, vel, heading, grounded: body.grounded === true, motion: thawFields(motion, bag), used };
+  const steps = takeSubsteps(body);
+  return { pos, vel, heading, grounded: body.grounded === true, motion: thawFields(motion, bag), used, ...(steps ? {steps} : {}) };
 }
 
 /** How many values `pack` has packed since this was last set to 0: the core reads it to charge a tick for the state it sends. */

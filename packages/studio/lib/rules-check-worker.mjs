@@ -20,6 +20,7 @@ import { boundPosition } from '../rules/topology.mjs';
  * units used by the room and by the browsers' `move`, bytes of save rebuilt), never by a clock, so the same source gives
  * the same verdict and the same lines on every computer.
  */
+import { readFileSync } from 'node:fs';
 import { parentPort, workerData } from 'node:worker_threads';
 import { compileFunction } from 'node:vm';
 import { checkDecide } from '../worker/brain.mjs';
@@ -356,6 +357,7 @@ function play(c, companions, allow) {
       const r = kind.body.radius, height = kind.body.height || 2 * r, bounds = c.map.bounds;
       result.pos = L.P.vec3(boundPosition(result.pos,geometry??c.map,r,height,c.dims),c.dims);
       delete result.used;
+      delete result.steps; // Drawing traces are not authoritative body fields.
       if (JSON.stringify(result) !== JSON.stringify(after)) fault ??= `${siteOf(name, 'move')} ${name}.move: prediction and the server produced different bodies from the same input.${when()}`;
     }
     if (A.core.stats.tickUnits > peak) peak = A.core.stats.tickUnits;
@@ -390,6 +392,7 @@ try {
     let at = null; try { const g = linked.exports.W.G; if (g.line) at = `${g.file}:${g.line}`; } catch { /* the guard itself did not load */ }
     throw new Error(`${at ?? here()}: ${diagnostic(String(error?.message ?? error))}`);
   }
+  if (L.initializePhysics) await L.initializePhysics(readFileSync(new URL(import.meta.resolve('@homie-rocks/physics/vendor/rapier.wasm'))));
   const { c, problems } = compile();
   const result = { vocab: data.vocab, schema: L.R.schemaOf(c), publicTune: c.publicTune, settings: c.settings, problems, rounds: c.rounds, stateHash: stateHash(c),
     declarations: { events: c.events, asks: Object.fromEntries(Object.entries(c.asks).map(([n, a]) => [n, { state: a.stateFields, questions: a.questions }])), view: L.def.shapes?.view ?? {} } };
