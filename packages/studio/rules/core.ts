@@ -586,8 +586,16 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       const parent = cx, parentTouched = touched, note = G.note;
       cx = {scope:'ent',ent:e}; touched = []; dispatchDepth++;
       if (noted) G.note = (what, at, written) => noted(e.kind.name, `on.${String(ev)}`, what, at, written);
-      try { fn(world,e.self,payload); opts.observe?.(e.kind.name, `on.${String(ev)}`); } catch(error) { opts.observe?.(e.kind.name, `on.${String(ev)}`, errorText(error)); throw error; }
-      finally { try { settle(); } finally { cx=parent; touched=parentTouched; G.note=note; dispatchDepth--; } }
+      let failure: unknown;
+      try { fn(world,e.self,payload); }
+      catch(error) { failure=error; throw error; }
+      finally {
+        try { settle(); } catch(error) { failure=error; throw error; }
+        finally {
+          cx=parent; touched=parentTouched; G.note=note; dispatchDepth--;
+          opts.observe?.(e.kind.name, `on.${String(ev)}`, failure===undefined?undefined:errorText(failure));
+        }
+      }
       return true;
     },
     sendRoom: (ev: unknown, data?: unknown): void => {
@@ -737,7 +745,9 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       charge(20 + 4 * ents.size);
       const d = V(delta);
       if(currentMap.wrap){
-        const scene=raySnapshot(currentMap,rayTargets(undefined),dims,{radius:e.kind.body?.radius??0,height:e.kind.body?.height||2*(e.kind.body?.radius??0),shape:e.kind.body?.shape==='circle'?'sphere':e.kind.body?.shape,ignore:own(o,'ignore')},e.id);
+        const list=own(o,'ignore'),ignore:string[]=[];
+        if(Array.isArray(list))for(let i=0;i<list.length&&i<IGNORE_MAX;i++){const id=own(list,i);if(typeof id==='string')ignore.push(id);}
+        const scene=raySnapshot(currentMap,rayTargets(undefined),dims,{radius:e.kind.body?.radius??0,height:e.kind.body?.height||2*(e.kind.body?.radius??0),shape:e.kind.body?.shape==='circle'?'sphere':e.kind.body?.shape??'sphere',ignore},e.id);
         const body={pos:e.pos,grounded:e.grounded};const hit=scene.sweep(body,d);
         e.pos=V(wrapPoint(body.pos,currentMap.wrap));e.grounded=body.grounded;return hit;
       }

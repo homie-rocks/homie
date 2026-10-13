@@ -2062,3 +2062,13 @@ for(const delayed of [false,true])test(`generated map: atomic collision revision
  const saved=r.host.core.save(),restored=L.C.createCore(compiled,{restore:saved});assert.deepEqual(restored.save(),saved);assert.deepEqual(restored.snapshot(),r.host.core.snapshot());
  assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);assert.equal(r.host.core.stats.ticksCut,0);t.diagnostic(JSON.stringify({delayed,mapBytes:JSON.stringify(saved.maps).length,stats:r.host.core.stats}));
 });
+
+test('generated map follows offline fallback and returns to the server revision',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',true,20,'generated');
+ const clock=virtualTime(t),r=rig(L,compiled),a=openRoom({net:{config:cfg('Dog'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(1000);assert.equal(a.map.tiles.data[255],1);
+ r.network.up=false;r.sockets[0].cut();await clock.wait(6500);assert.equal(a.status,'playing');
+ a.command('regenerate');await clock.wait(1200);assert.equal(a.map.tiles.data[255],0);assert.equal(a.map.tiles.data[258],1);
+ r.network.up=true;await clock.wait(30000);assert.equal(a.net.connected,true);assert.equal(a.net.rulesHosting,false);
+ assert.equal(a.map.tiles.data[255],1,'offline map never replaces the authoritative room map');
+});

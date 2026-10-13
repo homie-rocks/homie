@@ -98,3 +98,17 @@ export default defineRules({contract:2,space:{dims:2},shapes:{events:{large:{}}}
  const L=await loadGame(scratch,dir),core=L.C.createCore(L.R.compileRules(L.def,{map:L.R.compileMap({bounds:large.bounds})}),{seed:470});
  core.step();const before=core.save().maps.current;core.step();assert.equal(core.stats.budgetStops,1);assert.deepEqual(core.save().maps.current,before);assert.equal(core.save().maps.pending,null);
 });
+
+test('wrapped entity rays, sweeps and proximity agree on the same nearby image',async()=>{
+ const dir=writeGame(scratch,'wrapped-entities',{rules:`import {defineRules,f} from '@homie-rocks/studio/rules';
+export default defineRules({contract:2,space:{dims:2},entities:{target:{body:{shape:'circle',radius:.3,maxSpeed:0},collider:true},seeker:{body:{shape:'circle',radius:.2,maxSpeed:100},fields:{ray:f.ref(),sweep:f.ref(),near:f.u8(),box:f.u8()},tick(w,s){if(w.tick!==2)return;s.near=w.near(s.pos,3,'target').length;s.box=w.inBox({min:{x:19,y:4,z:0},max:{x:21,y:6,z:0}},'target').length;s.ray=w.ray(s.pos,{x:1,y:0,z:0},4)?.entity??'';s.sweep=w.sweep(s,{x:4,y:0,z:0})?.entity??'';}}},room:{start(w){w.spawn('target',{x:1,y:5,z:0});w.spawn('seeker',{x:19,y:5,z:0});}}});`});
+ const L=await loadGame(scratch,dir),compiled=L.R.compileRules(L.def,{map:L.R.compileMap({bounds:{min:[0,0],max:[20,20]},wrap:{x:true}})}),core=L.C.createCore(compiled,{seed:472});
+ core.step();core.step();const rows=core.snapshot()[1].map(row=>L.P.unpackEntity(compiled.kinds,row,2)),target=rows.find(e=>e.kind==='target'),seeker=rows.find(e=>e.kind==='seeker');
+ assert.equal(core.stats.errors,0,core.stats.lastError);assert.equal(seeker.fields.ray,target.id);assert.equal(seeker.fields.sweep,target.id);assert.equal(seeker.fields.near,1);assert.equal(seeker.fields.box,1);close(seeker.pos.x,.499);
+});
+
+test('wrapped vertical support finds a ceiling image beneath the body',async()=>{
+ const L=await kit(),map=L.R.compileMap({bounds:{min:[0,0,0],max:[20,20,20]},wrap:{z:true},boxes:[{min:[9,9,19],max:[11,11,20]}]});
+ const ctx=L.M.moveContext({tick:()=>1,tickHz:20,tune:{},map,name:'main',spots:{},radius:()=>.2,dims:3});
+ const hit=ctx.map.support({pos:{x:10,y:10,z:0}});assert.ok(hit);close(hit.at.z,0);assert.equal(hit.normal.z,1);
+});

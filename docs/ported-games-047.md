@@ -81,7 +81,8 @@ the copy. The source studios and their saves remain unchanged.
 Release tests include:
 
 - `rules-view.test.mjs`: seeded two-view 2D/3D seam, interest, prediction and restore
-  cases; generated collision and mid-round replacement, with delay/loss.
+  cases; generated collision and mid-round replacement, with delay/loss; offline
+  regeneration isolated from the server on reconnect.
 - `rules-maps.test.mjs`: casts, overlaps, multi-period travel, atomic rejection,
   pending/current restore, 3,072 cells/eight players, and typed room-only replacement.
 - 240 seeded ticks with eight players, repeated generation and restore, comparing
