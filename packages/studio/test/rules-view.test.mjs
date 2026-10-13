@@ -2072,3 +2072,21 @@ test('generated map follows offline fallback and returns to the server revision'
  r.network.up=true;await clock.wait(30000);assert.equal(a.net.connected,true);assert.equal(a.net.rulesHosting,false);
  assert.equal(a.map.tiles.data[255],1,'offline map never replaces the authoritative room map');
 });
+
+test('generated map activates immediately when its pending snapshot was lost',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'generated');
+ const clock=virtualTime(t);let dropped=0,received=null;
+ const r=rig(L,compiled,false,m=>{
+  const meta=m.d?.[2]?.[3];
+  if(meta?.previousMap&&meta.map?.[1]?.tiles?.data[255]===0){dropped++;return null;}
+  return 0;
+ });
+ const a=openRoom({net:{config:cfg('Dog'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(1000);assert.equal(a.map.tiles.data[255],1);
+ const socket=r.sockets[0],deliver=socket.onmessage;
+ socket.onmessage=e=>{const m=JSON.parse(e.data);deliver.call(socket,e);if(m.t==='snap'&&m.d?.[2]?.[3]?.map?.[1]?.tiles?.data[255]===0)received=m;};
+ a.command('regenerate');
+ for(let ms=0;ms<500&&!received;ms++)await clock.wait(1);
+ assert.ok(dropped>0,'the pending revision was lost');assert.ok(received,'the active revision arrived');
+ assert.equal(a.map.tiles.data[255],0,'map activation uses its own tick, not the live collider revision tick');
+});

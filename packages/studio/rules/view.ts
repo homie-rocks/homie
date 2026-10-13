@@ -193,9 +193,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const map = compileMap(game.map, game.map.name ?? 'main');
   const spots = map.spots;
   const compiledMaps = new Map<string, typeof map>();
-  const mapOf = (revision?: CollisionRevision, atTick = Infinity) => {
-    const metadata = revision?.[3];
-    const data = metadata?.map && metadata.map[0] <= atTick ? metadata.map : metadata?.previousMap;
+  const mapOf = (data?: import('./map-state.ts').MapRevision | null) => {
     if (!data) return map;
     const key = `${epoch}:${data[0]}`;
     let value = compiledMaps.get(key);
@@ -316,7 +314,17 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let collisionHistory: CollisionRevision[] = [];
   let cachedCollision: CollisionRevision | undefined;
   let geometry = map as import('./math.ts').MapShapes;
-  const mapAt = (tick:number) => mapOf(revisionAt(collisionHistory,tick) ?? collisionHistory[0],tick);
+  const mapAt = (tick:number) => {
+    if (!collisionHistory.at(-1)?.[3]?.map) return map;
+    // Map activation and live collider projection have independent effective ticks.
+    // A lost pending snapshot must not postpone a map already active in its successor.
+    for (let i=collisionHistory.length-1;i>=0;i--) {
+      const metadata=collisionHistory[i][3];
+      if (metadata?.map && metadata.map[0]<=tick) return mapOf(metadata.map);
+      if (metadata?.previousMap && metadata.previousMap[0]<=tick) return mapOf(metadata.previousMap);
+    }
+    return map;
+  };
   const geometryAt = () => {
     const revision = revisionAt(collisionHistory, moveTick);
     const activeMap=mapAt(moveTick);
