@@ -121,7 +121,8 @@ try {
       return null;
     };
     const open = async path => {
-      const page = await browser.newPage(); pages.push(page);
+      const context = await browser.createBrowserContext();
+      const page = await context.newPage(); pages.push(page);
       await waitFor(async () => {
         try {
           const live = await fetch(origin + '/api/games').then(r => r.json());
@@ -155,6 +156,6 @@ try {
       await waitFor(async () => await current(tv) && await current(phone, true), 'paired screens did not recover after schema change');
       for (const page of [tv, phone]) assert.equal(new URL(page.url()).searchParams.get('room'), 'family-night');
       console.log(JSON.stringify({ browserToServer: true, firstVisitorSeated: true, privateTvAndPhone: true, schemaChange: true }));
-    } finally { for (const page of pages) await page.close(); }
+    } finally { for (const page of pages) await page.browserContext().close(); }
   }
 } finally { writeFileSync(source, original); writeFileSync(manifestPath, originalManifest); await browser.close(); }
