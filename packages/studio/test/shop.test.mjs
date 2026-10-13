@@ -869,7 +869,10 @@ test('shop catalog: the read, then exactly the writes Stripe still needs; in syn
   assert.match(JSON.stringify(JSON.parse(run(['shop', 'check'], dir).stdout).errors), /catalog/);
 });
 
-test('referrals: an arrival from another site, a new player\'s sale, a held line, a signed statement the referrer checks', async () => {
+test('referrals: an arrival from another site, a new player\'s sale, a held line, a signed statement the referrer checks', async t => {
+  // Arrival, account age, hold and statement month are one scenario, not a race
+  // with the wall clock crossing a second/day/month boundary on a loaded runner.
+  t.mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 9, 15, 12) });
   const s = await site();
   const realFetch = globalThis.fetch;
   // The referrer's and the seller's own manifests, as each site answers them (the referrer is another studio).

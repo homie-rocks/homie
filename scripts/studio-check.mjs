@@ -166,10 +166,41 @@ try {
   }
   let controlled = true;
   if (process.argv.includes('--controls')) {
-    const cr = spawnSync(cli, ['port', 'check', game, '--url', `http://127.0.0.1:${port}`, '--only', 'owner-desk,owner-phone,life', '--json'], { cwd: studio, encoding: 'utf8', env: { ...process.env, ...env }, timeout: 5 * 60_000, maxBuffer: 16 * 1024 * 1024 });
-    let cj = null; try { cj = JSON.parse(cr.stdout); } catch { /* missing report fails */ }
-    controlled = Boolean(cj?.ok) && ['owner-desk', 'owner-phone', 'host-kill', 'late-join'].every((name) => cj.rows?.some((r) => r.name === name && r.ok === true));
-    lines.push(`- controls: ${controlled ? 'keys, touch, browser disconnect and late joining passed' : JSON.stringify(cj ?? cr.stderr)}`);
+    const controls = only => {
+      const cr = spawnSync(cli, ['port', 'check', game, '--url', `http://127.0.0.1:${port}`, '--only', only, '--json'], { cwd: studio, encoding: 'utf8', env: { ...process.env, ...env }, timeout: 5 * 60_000, maxBuffer: 16 * 1024 * 1024 });
+      let report = null; try { report = JSON.parse(cr.stdout); } catch { /* missing report fails */ }
+      return { report, stderr: cr.stderr };
+    };
+    // Keep the original starter's bots for authority, disconnection and bot-seat
+    // handoff. Random enemy knockback is not a keyboard/touch direction oracle.
+    const life = controls('life');
+    let originalRules = null;
+    if (game === 'gem-rush') {
+      await stopDev();
+      const rules = join(studio, 'games', game, 'src', 'rules.ts');
+      const original = readFileSync(rules, 'utf8');
+      originalRules = { path: rules, text: original };
+      const botFill = 'bots: { keep: 3 }';
+      if (original.split(botFill).length !== 2) throw new Error('Gem Rush control fixture changed: review its bot-fill isolation');
+      writeFileSync(rules, original.replace(botFill, 'bots: { keep: 0 }'));
+      sh(cli, ['build', '--json'], studio, env);
+      await startDev();
+      lines.push('- input accuracy: temporary Gem Rush fixture without random enemy knockback; original bot round, handoff and knockback lab checked separately');
+    }
+    const input = controls('owner-desk,owner-phone');
+    if (originalRules) {
+      await stopDev();
+      writeFileSync(originalRules.path, originalRules.text);
+      // A subsequent drive check must also exercise the unmodified starter.
+      if (process.argv.includes('--drive')) {
+        sh(cli, ['build', '--json'], studio, env);
+        await startDev();
+      }
+    }
+    controlled = Boolean(life.report?.ok) && Boolean(input.report?.ok)
+      && ['host-kill', 'late-join'].every(name => life.report.rows?.some(r => r.name === name && r.ok === true))
+      && ['owner-desk', 'owner-phone'].every(name => input.report.rows?.some(r => r.name === name && r.ok === true));
+    lines.push(`- controls: ${controlled ? 'keys, touch, browser disconnect and late joining passed' : JSON.stringify({ life, input })}`);
   }
   let driven = true;
   if (process.argv.includes('--drive')) {
