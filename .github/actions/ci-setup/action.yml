@@ -32,10 +32,17 @@ runs:
     - shell: bash
       run: npm run prepare --workspaces --if-present
     - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      id: build
       with:
         path: |
           packages/*/dist
           packages/*/tsconfig.tsbuildinfo
-        key: tsc-${{ runner.os }}-node${{ inputs.node }}-${{ hashFiles('package-lock.json', 'tsconfig*.json', 'packages/*/tsconfig.json', 'packages/*/src/**') }}
+        key: tsc-${{ runner.os }}-${{ runner.arch }}-node${{ inputs.node }}-${{ hashFiles('package-lock.json', 'package.json', 'tsconfig*.json', 'packages/*/package.json', 'packages/*/tsconfig.json', 'packages/*/src/**', 'packages/*/scripts/**') }}
     - shell: bash
       run: npm run build
+    # The package contracts require emitted files to be newer than their source.
+    # An exact content-key hit has matching bytes, but retains the previous job's
+    # mtimes. Materialize them now, after tsc has validated the project graph.
+    - if: steps.build.outputs.cache-hit == 'true'
+      shell: bash
+      run: find packages/*/dist -type f -exec touch {} +

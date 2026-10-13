@@ -8,9 +8,18 @@ export function inventory() {
     try { return readdirSync(`packages/${p}/test`).filter(f => f.endsWith('.test.mjs')).map(f => `packages/${p}/test/${f}`); } catch { return []; }
   }), ...readdirSync('scripts').filter(f => f.endsWith('.test.mjs')).map(f => `scripts/${f}`)].sort();
 }
+// Observed failure locations in the audited Actions logs, including PR #78's
+// Node 24/npm 11 MCP resolution failure (run 37992524039). Keep regressions on 24
+// even if their names no longer match a broad runtime-integration category.
+export const node24Regressions = new Set([
+  'changelog', 'cloud', 'machine-payments', 'paid-parts-review4-mcp',
+  'paid-parts-review5-agent', 'paid-parts-workerd', 'player-image', 'port-input',
+  'purchase-deploy', 'rooms-pages', 'rules-3d-prediction-chrome',
+  'rules-prediction-chrome', 'selling-entry', 'settlement-crash', 'shop', 'upgrade',
+].map(name => `packages/studio/test/${name}.test.mjs`));
 export function compatible(file) {
   // npm/ESM resolution, native modules, SQLite, subprocess/stdio and packed installs.
-  return !file.startsWith('packages/studio/') || /(?:mcp|paid-parts|purchase|wallet|payment|shop|standalone|desktop|first-run|studio\.test|schema\.test|upgrade|identity|authoring|build(?:-[a-z]+)?\.test|dev-deploy|parts\.test|starter-3d|changelog|rooms-pages|apps-browser)/.test(file);
+  return node24Regressions.has(file) || !file.startsWith('packages/studio/') || /(?:mcp|paid-parts|purchase|wallet|payment|shop|standalone|desktop|first-run|studio\.test|schema\.test|upgrade|identity|authoring|build(?:-[a-z]+)?\.test|dev-deploy|parts\.test|starter-3d|changelog|rooms-pages|apps-browser)/.test(file);
 }
 export function balance(files, timings, count) {
   const bins = Array.from({ length: count }, () => ({ seconds: 0, files: [] }));
@@ -24,13 +33,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const args = process.argv.slice(2);
   const timingFile = 'scripts/ci-timings.json';
   const data = JSON.parse(readFileSync(timingFile));
+  const subset = args.includes('--compat');
   if (args[0] === '--rebalance') {
-    for (const input of args.slice(1)) Object.assign(data.seconds, JSON.parse(readFileSync(input)).seconds);
+    for (const input of args.slice(1).filter(a => a !== '--compat')) Object.assign(subset ? (data.compatSeconds ??= {}) : data.seconds, JSON.parse(readFileSync(input)).seconds);
     data.source = 'Measured per-file wall time from CI shard artifacts; unmeasured files retain their baseline estimate.';
     writeFileSync(timingFile, JSON.stringify(data, null, 2) + '\n');
   }
-  const subset = args.includes('--compat');
-  const bins = balance(inventory().filter(f => !subset || compatible(f)), data.seconds, subset ? 5 : 12);
+  const bins = balance(inventory().filter(f => !subset || compatible(f)), subset ? { ...data.seconds, ...data.compatSeconds } : data.seconds, subset ? 6 : 12);
   if (args.includes('--list') || args[0] === '--rebalance') {
     console.log(JSON.stringify(bins, null, 2));
   } else {

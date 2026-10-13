@@ -42,6 +42,7 @@ jobs:
           - { node: 24, shard: 2, mode: '--compat' }
           - { node: 24, shard: 3, mode: '--compat' }
           - { node: 24, shard: 4, mode: '--compat' }
+          - { node: 24, shard: 5, mode: '--compat' }
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:

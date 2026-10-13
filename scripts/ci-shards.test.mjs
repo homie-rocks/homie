@@ -1,13 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { balance, compatible, inventory } from './ci-shards.mjs';
+import { balance, compatible, inventory, node24Regressions } from './ci-shards.mjs';
 import { verified, gates } from './ci-verified.mjs';
 test('shards include every discovered file exactly once, including new unmeasured files', () => {
   const files = [...inventory(), 'packages/new/test/new.test.mjs'];
   const bins = balance(files, {}, 12);
   assert.deepEqual(bins.flatMap(b => b.files).sort(), files.sort());
   assert.equal(new Set(bins.flatMap(b => b.files)).size, files.length);
-  for (const f of ['scripts/mcp-stdio.test.mjs', 'packages/studio/test/studio-mcp-workerd.test.mjs', 'packages/studio/test/shop.test.mjs', 'packages/studio/test/paid-parts-review4-mcp.test.mjs']) assert.ok(compatible(f));
+  for (const f of [...node24Regressions, 'scripts/mcp-stdio.test.mjs', 'packages/studio/test/studio-mcp-workerd.test.mjs', 'packages/studio/test/shop.test.mjs', 'packages/studio/test/paid-parts-review4-mcp.test.mjs']) assert.ok(compatible(f));
 });
 test('release verification rejects missing, skipped, forged, wrong-SHA and mixed-run checks', () => {
   const sha = 'a'.repeat(40);
