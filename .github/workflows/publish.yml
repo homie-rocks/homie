@@ -4,7 +4,7 @@
 #
 # A release is a tag named release-*, pushed directly or made with a GitHub release:
 #   git tag release-2026-10-01 && git push origin release-2026-10-01
-# The job builds and tests everything, then publishes
+# The job verifies successful CI on the exact commit, builds, checks packaging, then publishes
 # each package whose package.json version is not on npm yet, in dependency order
 # (scripts/publish.mjs). Versions already on npm are skipped, so re-running a release
 # is safe. A studio version with no section in CHANGELOG.md is refused before anything
@@ -19,6 +19,13 @@
 name: Publish to npm
 
 on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Verify CI and packaging without publishing or attaching a release
+        type: boolean
+        required: true
+        default: true
   push:
     tags: ['release-*']
   release:
@@ -26,6 +33,8 @@ on:
 
 permissions:
   contents: read
+  checks: read
+  actions: read
   id-token: write # trusted publishing and provenance
 
 concurrency:
@@ -34,27 +43,39 @@ concurrency:
 
 jobs:
   publish:
-    if: startsWith(github.ref, 'refs/tags/release-')
+    if: startsWith(github.ref, 'refs/tags/release-') || (github.event_name == 'workflow_dispatch' && inputs.dry-run)
     runs-on: ubuntu-latest
-    environment: npm
+    timeout-minutes: 8
+    environment: ${{ github.event_name == 'workflow_dispatch' && 'ci-dry-run' || 'npm' }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           # The rolling-upgrade tests need preceding release tags and their ancestry.
           fetch-depth: 0
+      - name: Require successful CI on this exact commit (Checks API, fail closed)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          export TARGET_SHA=$(git rev-parse HEAD)
+          node scripts/ci-verified.mjs
+      - uses: ./.github/actions/ci-setup
+        with:
+          node: 24
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
       - name: npm 11 (trusted publishing needs 11.5.1 or later)
         run: npm install -g npm@11
-      - run: npm ci
-      - run: npm test
       - name: CHANGELOG.md has this studio version's section
         run: node scripts/changelog.mjs --check
       - name: What goes out
         run: node scripts/publish.mjs --check
+      - name: Dry run (same strict packaging rules, no publication)
+        if: github.event_name == 'workflow_dispatch'
+        run: node scripts/publish.mjs --dry-run --strict
       - name: Publish
+        if: github.event_name != 'workflow_dispatch'
         run: node scripts/publish.mjs
 
   desktop:
@@ -62,9 +83,10 @@ jobs:
     # and attached to the tag's GitHub release (made when the tag has none), as homie-studio-<version>.mcpb and as
     # homie-studio.mcpb, which releases/latest/download/homie-studio.mcpb always names. The release's notes are the
     # version's CHANGELOG.md section with the extension's line under it (scripts/changelog.mjs --notes).
-    if: startsWith(github.ref, 'refs/tags/release-')
+    if: startsWith(github.ref, 'refs/tags/release-') || (github.event_name == 'workflow_dispatch' && inputs.dry-run)
     needs: publish
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: write
     steps:
@@ -74,7 +96,8 @@ jobs:
           node-version: 24
       - name: Pack and check the extension
         run: node scripts/desktop.mjs --check
-      - name: Attach it to the release, with the version's CHANGELOG.md section as its notes
+      - if: github.event_name != 'workflow_dispatch'
+        name: Attach it to the release, with the version's CHANGELOG.md section as its notes
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
@@ -86,3 +109,25 @@ jobs:
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --notes-file "$notes"
           gh release edit "$TAG" --notes-file "$notes"
           gh release upload "$TAG" "desktop/dist/homie-studio-$v.mcpb" desktop/dist/homie-studio.mcpb --clobber
+
+  queue-watchdog:
+    name: Fail a release stuck waiting for a runner or environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    permissions:
+      actions: write
+    steps:
+      - name: Bound the publish job's waiting time to four minutes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          for i in $(seq 1 24); do
+            state=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" --jq '.jobs[] | select(.name == "publish") | .status')
+            if [ "$state" = in_progress ] || [ "$state" = completed ]; then exit 0; fi
+            sleep 10
+          done
+          echo '::error::Publish waited four minutes for a runner/environment. Check Actions capacity and the npm environment approval/tag rules, then rerun this release.'
+          gh api --method POST "repos/$REPO/actions/runs/$RUN_ID/cancel"
+          exit 1
