@@ -372,3 +372,21 @@ test('a human deploy request approves task retries, stays scoped, and can be rev
     assert.ok(await pre(bash(s,'npm run deploy'),{dir:s.data}));
   } finally {s.done();}
 });
+
+test('recorded codex exec transcript authorizes the original task without a prompt event', async () => {
+  const s = studio();
+  try {
+    const transcript = join(s.root, 'session.jsonl');
+    writeFileSync(transcript, [
+      { type: 'session_meta', payload: { id: 'session-1', cwd: s.root } },
+      { type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'The owner asked for this studio to be deployed: run `npm run deploy` when it builds and checks clean.' }] } },
+      { type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Build passed.' }] } },
+      { type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Fix the remaining check.' }] } },
+    ].map(x => JSON.stringify(x)).join('\n'));
+    assert.equal(await pre(bash(s, 'npm run deploy', { transcript_path: transcript }), { dir: s.data }), null);
+    assert.equal(await pre(bash(s, 'npm run deploy', { transcript_path: transcript }), { dir: s.data }), null, 'retry');
+    assert.ok(await pre(bash(s, 'npm run deploy', { session_id: 'different', transcript_path: transcript }), { dir: s.data }), 'another task is not approved');
+    writeFileSync(transcript, readFileSync(transcript, 'utf8') + '\n' + JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Do not deploy.' }] } }));
+    assert.ok(await pre(bash(s, 'npm run deploy', { transcript_path: transcript }), { dir: s.data }), 'revocation wins');
+  } finally { s.done(); }
+});

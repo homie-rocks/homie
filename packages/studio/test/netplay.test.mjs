@@ -1892,3 +1892,25 @@ test('forgetting a failed server room never elects a browser', () => {
   assert.equal(room.hostFailed, 'rules could not load');
   assert.equal(room.elect(null, 'test'), null);
 });
+
+test('deploy retires persisted rooms the current server build cannot run before matching a fresh visitor', async t => {
+  const { Lobby } = await import('../worker/index.mjs');
+  const clock = virtualTime(t); const store = new Map(); let ready;
+  const ctx = { storage: { get: async k => store.get(k), put: async (k, v) => store.set(k, structuredClone(v)) }, blockConcurrencyWhile(fn) { ready = fn(); }, waitUntil() {} };
+  const old = new Lobby(ctx, {}); await ready;
+  const join = async (lobby, query) => (await lobby.fetch(new Request('https://lobby/join?max=4&' + query, { method: 'POST' }))).json();
+  const previous = await join(old, 'server=club&rooms=1&ver=browser-v1');
+  await old.fetch(new Request('https://lobby/report?game=test', { method: 'POST', body: JSON.stringify({ room: previous.room, players: 1, ver: 'browser-v1' }) }));
+  const publicOld = await join(old, 'ver=browser-v1');
+  const current = new Lobby(ctx, {}); await ready;
+  const fresh = await join(current, 'server=club&rooms=1&ver=server-v2&host=server');
+  assert.notEqual(fresh.room, previous.room, 'never fall back to the retired browser host when the server room count is full');
+  assert.equal(fresh.full, undefined);
+  assert.equal(current.rooms.has(previous.room), false);
+  assert.equal(current.rooms.get(fresh.room).ver, 'server-v2');
+  await current.fetch(new Request('https://lobby/report?game=test', { method: 'POST', body: JSON.stringify({ room: previous.room, players: 1, ver: 'browser-v1' }) }));
+  assert.equal(current.rooms.has(previous.room), false, 'an old isolate cannot revive its retired room with a late report');
+  const publicFresh = await join(current, 'ver=server-v2&host=server');
+  assert.notEqual(publicFresh.room, publicOld.room, 'public quick play also selects the current build');
+
+});

@@ -68,6 +68,7 @@ export function asCodex(p) {
     tool_input: input,
     cwd,
     session_id: sessionOf(p),
+    transcript_path: p.transcript_path ?? p.transcriptPath,
     prompt: p.prompt ?? p.user_prompt ?? p.userPrompt ?? p.message ?? '',
     tool_response: p.toolResult ?? p.tool_response ?? p.toolResponse ?? p.tool_output ?? p.toolOutput,
   };

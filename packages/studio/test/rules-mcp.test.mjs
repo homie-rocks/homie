@@ -16,6 +16,9 @@ test('MCP check refuses a planted rules fault before opening either browser, eve
     mkdirSync(join(root, 'node_modules/@homie-rocks'), { recursive: true });
     symlinkSync(PKG, join(root, 'node_modules/@homie-rocks/studio'));
     symlinkSync(join(REPO_NM, 'esbuild'), join(root, 'node_modules/esbuild'));
+    // Keep the Worker valid so this fixture isolates the planted rules fault.
+    mkdirSync(join(root, 'site/src'), { recursive: true });
+    writeFileSync(join(root, 'site/src/worker.mjs'), "import { hostRules } from '@homie-rocks/studio/worker';\nimport rules from './rules/index.mjs';\nhostRules(rules);\n");
     const dir = writeGame(join(root, 'games'), 'fault', { rules: "import { defineRules } from '@homie-rocks/studio/rules';\nexport default defineRules({ contract: 2, space: { dims: 2 }, entities: { dot: { tick() { Date.now(); } } } });" });
     writeFileSync(join(dir, 'game.json'), JSON.stringify({ id: 'fault', name: 'Fault', entry: 'src/view.ts', room: { host: 'server' } }));
     writeFileSync(join(dir, 'src/view.ts'), 'export {};');

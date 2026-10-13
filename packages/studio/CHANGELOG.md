@@ -17,6 +17,23 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.48.4] - 2026-10-13
+
+**Plugin 0.48.4** · Deploys go right.
+
+Requested deploys proceed, visitors reach the current build, and paired screens keep their private room.
+
+### Fixed
+
+- An owner's task to run the studio's deploy authorizes it and its retries in Claude, Codex and Grok. Codex also recovers the original user request from its session transcript when a prompt event is absent; unrelated follow-ups do not erase it. Unrequested deploys still explain how to approve them.
+- The Lobby retires rooms that the current hosting kind or server build cannot run before matching visitors, including after storage recovery and at a server's room allowance. Late reports cannot bring those rooms back.
+- A TV and its paired phone keep their private room name through an incompatible build. The room starts its new match immediately, and page rematching preserves private room addresses instead of choosing quick play.
+- Building the first server-rules game wires an untouched generated Worker or stops with the exact hostRules fix for a custom Worker. Live check reports that same fix before opening browsers instead of waiting for seats.
+
+### Upgrade notes
+
+Update the toolkit and plugin together. A custom site/src/worker.mjs must import the generated rules table and call hostRules at module scope; build prints the two lines when needed. No new studio limits or owner confirmation steps.
+
 ## [0.48.3] - 2026-10-13
 
 **Plugin 0.48.3** · Restore rewind-based hits with input history.

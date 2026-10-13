@@ -860,3 +860,33 @@ test('character token recovery retains current seats, not every account that eve
   rig.t.accountTokens.next='future';
   assert.deepEqual(rig.t.roomSave.accountTokens,{current:'kept'},'committed envelope does not alias the mutable lookup');
 });
+
+test('a private TV and paired phone keep their named room after an incompatible deploy', async () => {
+  const r = storageRig(); const clock = tableClock(); let live;
+  try {
+    live = await tableRig(r, entry(), { code: 'family-night' });
+    const phone = connect(live.room, 'a');
+    connect(live.room, 'a', null, { want: 'screen', device: 'tv' });
+    live.t.hostRt.tickNow(); live.t.saveRoom(live.t.hostRt.save()); live.t.hostRt.stop();
+    live = await tableRig(r, { ...entry('b'), stateHash: 'changed' }, { code: 'family-night' });
+    for (const screen of [true, false]) {
+      const page = await shell('?room=family-night', { screen, room: 'family-night', timers: { setTimeout: clock.setTimer, clearTimeout: clock.clearTimer } });
+      page.fromGame({ what: 'token', token: screen ? 'screen-token' : phone.welcome.token, seat: screen ? null : 0 });
+      const refused = connect(live.room, 'a', screen ? 'screen-token' : phone.welcome.token, { want: screen ? 'screen' : 'play', device: screen ? 'tv' : 'phone' });
+      assert.equal(refused.sent[0].code, 'stale', 'both old pages get the update, not a public rematch');
+      const frame = page.el('iframe.game'); frame.src = 'old';
+      page.fromGame({ what: 'stale', ver: 'b', immediate: true, final: true });
+      clock.advance(1);
+      const target = new URL(frame.src, 'https://studio.test');
+      assert.equal(target.searchParams.get('room'), 'family-night');
+      assert.equal(target.searchParams.get('k'), screen ? 'screen-token' : phone.welcome.token);
+      assert.equal(page.fetched.some(([url]) => url.includes('/api/lobby')), false);
+    }
+    const returning = connect(live.room, 'b', phone.welcome.token);
+    assert.ok(returning.welcome, 'the named room starts the new match immediately, without sending its phone to quick play');
+    const tv = connect(live.room, 'b', null, { want: 'screen', device: 'tv' });
+    assert.ok(tv.welcome);
+    assert.equal(live.room.code, 'family-night');
+    assert.equal(live.reports.some(r => r.room !== 'family-night'), false);
+  } finally { live?.t.hostRt?.stop(); clock.restore(); r.close(); }
+});

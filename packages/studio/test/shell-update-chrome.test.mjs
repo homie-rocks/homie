@@ -113,9 +113,10 @@ test('real Chrome: a play page older than the game is brought up to date once, k
     {
       const old = await open('legacy', (html) => html.replace(/"sh":"[^"]*",?/, '').replace(/"t":"[^"]*",?/, ''));
       for (let i = 0; i < 200 && old.loads.length < 2; i += 1) await sleep(200);
-      assert.match(old.loads[1] ?? '', /\/coin-dash\/play\?not=legacy$/, 'the old page was replaced by a whole new one: ' + old.loads.join(' '));
+      assert.match(old.loads[1] ?? '', /\/coin-dash\/play\?room=legacy$/, 'the old page was replaced in its private room: ' + old.loads.join(' '));
       const now = await seated(old.page);
-      // The new page settles on the room the lobby gave it (its address is rewritten once): from here it must not load again.
+      assert.equal(now.room, 'legacy', 'updating an old shell does not choose public quick play');
+      // The new page keeps the named room: from here it must not load again.
       const settled = old.loads.length;
       assert.equal(now.ticket, true, 'the new page holds the player\'s ticket'); assert.ok(now.sh);
       // The next round's result is kept, with the player doing nothing.

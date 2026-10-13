@@ -23,3 +23,8 @@ test('a failed deploy destination is a report, while an explicit retry remains a
     'Deploy to Cloudflare (the previous attempt failed).',
   ])assert.equal(deployIntent(text),true,text);
 });
+
+test('an owner task to run the deploy command is approval', () => {
+  assert.equal(deployIntent('The owner asked for this studio to be deployed: run `npm run deploy` when it builds and checks clean.'), true);
+  assert.equal(deployIntent('Run `npm run deploy` when checks pass.'), true);
+});

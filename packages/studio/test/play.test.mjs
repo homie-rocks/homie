@@ -398,7 +398,7 @@ test('a rules deploy reloads immediately with the seat token, or rematches an in
   h.fromGame({ what: 'rematch', room: 'owl-party' });
   assert.equal(redirects.length, 1);
   const next = new URL(redirects[0]);
-  assert.equal(next.searchParams.has('room'), false); assert.equal(next.searchParams.get('not'), 'owl-party');
+  assert.equal(next.searchParams.get('room'), 'owl-party'); assert.equal(next.searchParams.has('not'), false);
   assert.equal(next.searchParams.get('cam'), 'wide');
 });
 

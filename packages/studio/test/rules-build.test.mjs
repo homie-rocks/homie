@@ -322,3 +322,27 @@ test('an injected port toolkit alone does not turn a static page into a netplay 
   await assert.rejects(buildGameFiles(esbuild, dir, g, join(dir, 'out')), /neither rules plus view nor a browser-hosted netplay game/);
   await buildGameFiles(esbuild, dir, { ...g, netplay: { v: 1 } }, join(dir, 'out'));
 });
+
+test('first server game refuses an unwired custom Worker before publishing', async () => {
+  const dir = studio('custom-worker-first-server');
+  assert.equal(run(['game', 'new', 'coin-dash', '--from', 'coin-dash'], dir).status, 0);
+  const custom = "// My studio's custom routing\nexport { default, Table, Lobby } from '@homie-rocks/studio/worker';\n";
+  writeFileSync(join(dir, 'site/src/worker.mjs'), custom);
+  const result = run(['build'], dir);
+  assert.notEqual(result.status, 0, 'an unwired server game must never ship');
+  assert.match(result.stdout + result.stderr, /site\/src\/worker.mjs/);
+  assert.match(result.stdout + result.stderr, /hostRules/);
+  assert.match(result.stdout + result.stderr, /import rules from/);
+  assert.equal(read(dir, 'site/src/worker.mjs'), custom);
+});
+
+test('first server game wires an untouched historical generated Worker', () => {
+  const dir = studio('generated-worker-first-server');
+  assert.equal(run(['game', 'new', 'coin-dash', '--from', 'coin-dash'], dir).status, 0);
+  const old = readFileSync(new URL('./fixtures/deploy-recovery/generated-worker.mjs', import.meta.url), 'utf8');
+  writeFileSync(join(dir, 'site/src/worker.mjs'), old);
+  const result = run(['build'], dir);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(read(dir, 'site/src/worker.mjs'), /hostRules\(rules\)/);
+  assert.match(read(dir, 'site/src/rules/index.mjs'), /coin-dash/);
+});
