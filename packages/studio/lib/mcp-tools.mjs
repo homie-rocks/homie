@@ -1,3 +1,4 @@
+import { providerKey } from './provider-key.mjs';
 /**
  * THE LOCAL MCP SERVER'S TOOLS (`homie-studio mcp`, lib/mcp.mjs): the studio toolkit as MCP tools, so the Claude
  * desktop app (through the Homie extension), Claude Code or any MCP client builds games in the SAME chat that shows
@@ -1497,7 +1498,7 @@ export function toolDefs(ctx, avail = {}) {
 
 /** What the media tools need, cheaply (no network): ffmpeg on the PATH, ElevenLabs' CLI or key. */
 export function availability(env = process.env) {
-  return { node: true, ffmpeg: Boolean(which(process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')), elevenlabs: Boolean(env.ELEVENLABS_API_KEY || which(process.platform === 'win32' ? 'elevenlabs.exe' : 'elevenlabs')) };
+  return { node: true, ffmpeg: Boolean(which(process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')), elevenlabs: Boolean(providerKey('elevenlabs', env).key || which(process.platform === 'win32' ? 'elevenlabs.exe' : 'elevenlabs')) };
 }
 
 /** The codex page small enough to hand a card (a tool result over ~150,000 characters is not shown). */

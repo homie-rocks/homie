@@ -1,3 +1,4 @@
+import { providerKey } from './provider-key.mjs';
 /**
  * `homie-studio setup status` (also `homie-studio doctor`): what this computer and this person's accounts have for
  * a studio, as one checklist, before anything is made. For each thing: green, missing, or "do this now", what it
@@ -231,16 +232,16 @@ export async function setupStatus({
         const s = await exec(cliBin, ['auth', 'status', '--format', 'json'], { timeout: 10_000 });
         try { signedIn = Boolean(JSON.parse(s.stdout)?.schemes?.some((x) => x.logged_in)); } catch { signedIn = false; }
       }
-      return { cli: v.code === 0, signedIn, key: Boolean(env.ELEVENLABS_API_KEY), projects: root ? projectsElevenLabs(root) : false };
+      return { cli: v.code === 0, signedIn, key: Boolean(providerKey('elevenlabs', env).key), source: providerKey('elevenlabs', env).source, projects: root ? projectsElevenLabs(root) : false };
     })(),
     (async () => {
-      const key = String(env.FAL_KEY ?? '').trim();
+      const { key, source } = providerKey('fal', env);
       if (!key) return { key: false };
       const base = String(env.FAL_API_URL || 'https://api.fal.ai').replace(/\/+$/, '');
       try {
         const res = await fetchFn(`${base}/v1/models/pricing?endpoint_id=fal-ai/flux/dev`, { headers: { Authorization: `Key ${key}` }, signal: AbortSignal.timeout(6000) });
-        return { key: true, valid: res.ok ? true : res.status === 401 || res.status === 403 ? false : null };
-      } catch { return { key: true, valid: null }; }
+        return { key: true, source, valid: res.ok ? true : res.status === 401 || res.status === 403 ? false : null };
+      } catch { return { key: true, source, valid: null }; }
     })(),
   ]);
 
@@ -386,7 +387,7 @@ export async function setupStatus({
   // ElevenLabs.
   rows.push({
     id: 'elevenlabs', label: 'ElevenLabs', need: 'optional', state: eleven.signedIn || eleven.key || eleven.projects ? 'ok' : 'optional',
-    detail: eleven.signedIn ? 'the elevenlabs CLI is signed in' : eleven.key ? 'ELEVENLABS_API_KEY is set' : eleven.projects ? 'through Stripe Projects (its key, in the studio\'s git-ignored .env; never shown)' : eleven.cli ? 'the elevenlabs CLI is here, not signed in' : 'not connected',
+    detail: eleven.signedIn ? 'the elevenlabs CLI is signed in' : eleven.key ? `key from ${eleven.source}` : eleven.projects ? 'through Stripe Projects (its key, in the studio\'s git-ignored .env; never shown)' : eleven.cli ? 'the elevenlabs CLI is here, not signed in' : 'not connected',
     unlocks: 'songs and game scores (the music skill), billed to your own ElevenLabs plan; every render is quoted first',
     fix: eleven.signedIn || eleven.key || eleven.projects ? null : eleven.cli
       ? { who: 'ai', run: 'elevenlabs auth login', say: 'ElevenLabs opens in your browser; sign in once. No key is pasted anywhere.' }
@@ -396,7 +397,7 @@ export async function setupStatus({
   // fal.
   rows.push({
     id: 'fal', label: 'fal', need: 'optional', state: fal.key ? (fal.valid === false ? 'act' : 'ok') : 'optional',
-    detail: !fal.key ? 'no FAL_KEY in this environment' : fal.valid === true ? 'FAL_KEY is set and fal accepts it' : fal.valid === false ? 'fal refused the FAL_KEY that is set (wrong or revoked)' : 'FAL_KEY is set (fal did not answer just now)',
+    detail: !fal.key ? 'no fal key in the environment or Homie key files' : `key from ${fal.source}; ${fal.valid === true ? 'fal accepts it' : fal.valid === false ? 'fal refused it (wrong or revoked)' : 'fal did not answer just now'}`,
     unlocks: 'painted art and backdrops (the art skill) and generated video clips (the video skill), on your own fal account under a budget; covers from a real frame and captured trailers are free',
     fix: fal.key && fal.valid !== false ? null : { who: 'ai', say: 'Use local art and captured footage. Paid fal scripts need an already connected account; never ask the person to find or set a key. Offer the provider browser connection only when generated media is requested.', open: 'https://fal.ai/dashboard' },
   });
