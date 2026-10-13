@@ -2234,3 +2234,22 @@ test('late movement replay equals on-time nonlinear acceleration, seed 47171',as
   }finally{reference.stop();subject.stop();}
  }
 });
+
+test('missing receipts widen input history through a loss run beyond the latency window', async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, 20, 'round3');
+  const clock = virtualTime(t);
+  let blackoutUntil = 0;
+  const r = rig(L, compiled, false, 40, m => m.t === 'in' && Date.now() < blackoutUntil ? null : 40);
+  const a = openRoom({ net: { config: cfg('Recovery'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(3000);
+  const serverX = () => r.host.core.save().ents.find(e => e[11] === 0)[7][0];
+  const from = serverX();
+  blackoutUntil = Date.now() + 650;
+  a.input({ ax: 1 }); await clock.wait(80); a.input({ ax: 0 });
+  await clock.wait(2000);
+  // At 6.4 m/s an 80 ms tap travels .512 m. The 4 cm allowance covers
+  // clock phase/held quantization; it is less than one 20 Hz physics step.
+  assert.ok(Math.abs(serverX() - from - .512) < .04, `recovered tap: ${serverX() - from}`);
+  assert.ok(Math.abs(a.me.pos.x - serverX()) < .001, 'the replay converges');
+});

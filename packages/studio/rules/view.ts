@@ -569,8 +569,13 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       const old = sentHistory.findIndex(e => e.t === entry.t);
       if (old >= 0) sentHistory[old] = entry; else sentHistory.push(entry);
     }
-    // Cover an authority round trip and the observed jitter, with a bounded wire window.
-    const windowTicks = Math.min(64, Math.max(4, Math.ceil((2 * authorityRtt() + 250) / period + targetLead())));
+    // Cover an authority round trip and jitter. Missing application receipts measure
+    // recovery delay (whether a dropped frame or a TCP stall): widen the history
+    // until they return, without allowing an unbounded packet or retained history.
+    const marker = myKind()!.input.length + (myKind()!.owner ? 9 : 0);
+    const missing = sentHistory.find(e => e.t <= (latest?.k ?? 0) && !applications.has(e.row[marker + 1]));
+    const recoveryTicks = missing ? t - missing.t + 2 * sendEvery : 0;
+    const windowTicks = Math.min(64, Math.max(4, recoveryTicks, Math.ceil((2 * authorityRtt() + 250) / period + targetLead())));
     sentHistory = sentHistory.filter(e => e.t >= t - windowTicks).slice(-64);
     const first = Math.min(k, sentHistory[0]?.t ?? k);
     const rows: StepEntry[] = sentHistory.map((e) => [e.t - first, ...e.row]);

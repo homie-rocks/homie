@@ -30,7 +30,7 @@ Rules views recover missing input and acknowledge late movement scheduling.
 - Prediction clock steering is limited to 0.5% instead of 5%; it slews without
   repeatedly rebasing stamped input when the jitter estimate changes.
 - Rules input frames repeat a bounded history sized from measured latency and
-  jitter, with input sequence numbers and sub-tick control changes. Snapshot
+  jitter and missing application receipts, with input sequence numbers and sub-tick control changes. Snapshot
   control rows report application ticks, including pulses. Retransmissions no
   longer distort latency steering.
 - Late movement replays up to one second of body history against historical

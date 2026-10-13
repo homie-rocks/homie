@@ -1387,7 +1387,8 @@ the build measures this, and server-hosted rooms retain the full save.
 ## Input during loss and stalls (0.47.1)
 
 Rules views resend recent input automatically: a 4–64 tick history follows the
-measured round trip and jitter. Each tick entry carries a sequence number; each
+measured round trip, jitter and missing application receipts (loss or recovery
+delay). Each tick entry carries a sequence number; each
 control change carries a field index, sequence and fraction of the predicted tick.
 Duplicates neither execute again nor count as fresh latency measurements. Both
 missing application frames and ordered TCP stalls are covered.
