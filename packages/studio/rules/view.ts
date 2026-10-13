@@ -359,7 +359,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   function steer(now: number): void {
     if (!base || !leads.length) return;
     base = { tick: tickAt(now), at: now };
-    speed = 1 + Math.max(-0.05, Math.min(0.05, (targetLead() - medianLead()) * 0.05));
+    // Input replay absorbs delivery jitter. Keep the physical tick cadence close to
+    // wall time: aggressive steering makes fixed-step custom renderers bunch ticks.
+    speed = 1 + Math.max(-0.005, Math.min(0.005, (targetLead() - medianLead()) * 0.005));
     if (phases[phases.length - 1]?.rate !== speed) phases.push({ ...base, rate: speed });
     while (phases.length > 2 && phases[1].at < now - Math.max(1000, 2 * authorityRtt() + period)) phases.shift();
   }

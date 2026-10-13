@@ -1395,7 +1395,8 @@ missing application frames and ordered TCP stalls are covered.
 The server retains up to one second of movement history and replays late movement
 against the geometry of those ticks. It never repeats commands or effects. An
 external body/motion write or placement fences that history. Beyond a fence or
-the retained history, input applies on the next tick instead. Snapshot control
+the retained history, input applies on the next tick instead. Entries carrying
+press handlers also apply next tick: world actions are never rerun as movement. Snapshot control
 rows report the application tick and the view uses it for replay. Within the
 replay window a snapshot still missing a predicted input does not replace live
 movement; an explicit placement always does. Legacy wire
@@ -1406,7 +1407,8 @@ Held controls integrate their duration, sampled controls coalesce to the latest
 value per tick, presses coalesce per field per tick, and valued pulses execute
 in order, one per tick. More sampled input never buys extra simulation steps.
 The clock resets before a fresh control after a long browser stall, so the press
-cannot inherit ten seconds of elapsed time.
+cannot inherit ten seconds of elapsed time. The prediction clock slews by at
+most 0.5%, preserving the cadence for fixed-step renderers.
 
 `room.input(sample, {at: event.timeStamp})` accepts the event's monotonic time
 (same origin as `performance.now()`), clamped to this predicted tick and now.

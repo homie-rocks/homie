@@ -27,6 +27,8 @@ Rules views recover missing input and acknowledge late movement scheduling.
 
 - Snapshots that precede a predicted input's application receipt retain the live
   movement prediction within the replay window; explicit placements still apply.
+- Prediction clock steering is limited to 0.5% instead of 5%; it slews without
+  repeatedly rebasing stamped input when the jitter estimate changes.
 - Rules input frames repeat a bounded history sized from measured latency and
   jitter, with input sequence numbers and sub-tick control changes. Snapshot
   control rows report application ticks, including pulses. Retransmissions no
