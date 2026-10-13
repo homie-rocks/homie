@@ -1,6 +1,6 @@
 {
   "name": "@homie-rocks/nav",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Portable tiled navigation meshes, seeded queries, fixed-step crowds and grid paths with exact state restore.",
   "license": "Apache-2.0",
   "type": "module",
@@ -84,6 +84,5 @@
   "devDependencies": {
     "recast-navigation": "0.43.1",
     "workerd": "1.20261007.1"
-  },
-  "private": true
+  }
 }
