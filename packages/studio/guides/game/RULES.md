@@ -1396,7 +1396,9 @@ The server retains up to one second of movement history and replays late movemen
 against the geometry of those ticks. It never repeats commands or effects. An
 external body/motion write or placement fences that history. Beyond a fence or
 the retained history, input applies on the next tick instead. Snapshot control
-rows report the application tick and the view uses it for replay. Legacy wire
+rows report the application tick and the view uses it for replay. Within the
+replay window a snapshot still missing a predicted input does not replace live
+movement; an explicit placement always does. Legacy wire
 entries retain their old compensation; current views do not receive negative
 held values to repay late releases.
 

@@ -261,7 +261,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let sentHistory: { t: number; row: number[] }[] = [];
   let hiddenSent = false;
   const history = new Map<number, Mine>();
-  let pending: { seq?: number; applied?: number; t: number; input: Readonly<Record<string, unknown>>; pulses?: Record<string, number> }[] = [];
+  let pending: { seq?: number; applied?: number; t: number; input: Readonly<Record<string, unknown>>; pulses?: Record<string, number>; pulseTicks?: Record<string, number> }[] = [];
   /** Valued pulses sent, numbered: the server's control row names the newest it has acted on (0.46.3). */
   let pulseCount = 0;
   const pulseQueue: {name:string; value:number; n:number; t:number}[] = [];
@@ -547,7 +547,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     }
     const claim = kind.owner ? [mine.pos.x, mine.pos.y, mine.pos.z, mine.vel.x, mine.vel.y, mine.vel.z, mine.heading.x, mine.heading.y, mine.heading.z] : [];
     const sig = JSON.stringify([values, claim]);
-    if (sig !== lastSent || press) { entries.push({ t, row: [...values, ...claim, -471, ++inputSequence, controlChanges.length, ...controlChanges.flat()] }); pending.push({ seq: inputSequence, t, input: held, ...(numbered ? { pulses: numbered } : {}) }); lastSent = sig; }
+    if (sig !== lastSent || press || controlChanges.length) { entries.push({ t, row: [...values, ...claim, -471, ++inputSequence, controlChanges.length, ...controlChanges.flat()] }); pending.push({ seq: inputSequence, t, input: held, ...(numbered ? { pulses: numbered } : {}) }); lastSent = sig; }
     controlChanges = [];
     history.set(t, copyMine(mine));
     for (const k of history.keys()) if (k < t - tickHz && (catchTick === null || k < Math.floor(catchTick))) history.delete(k);
@@ -657,7 +657,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       } else if (kindOf.get(me.kind)?.owner) {
         mine!.motion = motionOf(me.kind, me.motion);
         if (predictors[me.kind]) mine!.fields = thawFields(kindOf.get(me.kind)?.fields ?? [], me.fields);
-      } else {
+      } else if (!pending.some(entry => entry.seq !== undefined && entry.t <= f.k && f.k - entry.t < tickHz && (applications.get(entry.seq) ?? Infinity) > f.k)) {
+        // This snapshot predates an input we already predicted. Within the rewind
+        // window it is provisional movement truth: wait for its application receipt
+        // rather than briefly adopting the path made with the missing control.
         const previous = mine!.pos;
         const shownBody = meNow();
         const shown = shownBody?.pos ?? previous;
@@ -668,7 +671,8 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         const ack = row?.[2] ?? 0;
         const scheduled = row?.[6] === 471;
         if (scheduled) for(let i=7;i+1<row.length;i+=2){
-          const entry=pending.find(e=>row[i]>0?e.seq===row[i]:Object.values(e.pulses??{}).includes(-row[i]));if(entry)entry.applied=row[i+1];
+          if(row[i]>0){const entry=pending.find(e=>e.seq===row[i]);if(entry)entry.applied=row[i+1];}
+          else for(const entry of pending)for(const [name,n] of Object.entries(entry.pulses??{}))if(n===-row[i]){entry.pulseTicks??={};entry.pulseTicks[name]=row[i+1];}
         }
         const appliedAt = (entry: (typeof pending)[number]): number => entry.applied ?? entry.t;
         // A numbered pulse is still to come while the server's row has not reached its number (0.46.3): its own message
@@ -703,9 +707,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         if (!Object.keys(input).length) { const zero: Record<string, unknown> = {}; for (const [name, fd] of myKind()!.input) zero[name] = fd.t === 'press' ? false : fd.t === 'pulse' ? 0 : coerce(fd, fd.init, dims); input = Object.freeze(zero); }
         for (let t = f.k + 1; t <= stepped; t++) {
           const presses = new Map(t === f.k + 1 ? late : []);
-          for (const entry of pending) if (appliedAt(entry) === t) {
-            input = entry.input;
-            for (const [name, fd] of myKind()!.input) if ((fd.t === 'press' || fd.t === 'pulse') && entry.input[name]) presses.set(name, entry.input[name]);
+          for (const entry of pending) {
+            if(appliedAt(entry)===t)input = entry.input;
+            for (const [name, fd] of myKind()!.input) if ((fd.t === 'press' || fd.t === 'pulse') && entry.input[name] && (fd.t==='pulse' ? (entry.pulseTicks?.[name]??entry.t)===t : appliedAt(entry)===t)) presses.set(name, entry.input[name]);
           }
           const stepInput = { ...input };
           for (const [name, fd] of myKind()!.input) if (fd.t === 'press' || fd.t === 'pulse') stepInput[name] = presses.get(name) ?? (fd.t === 'press' ? false : 0);
@@ -714,7 +718,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
           runPredict(me.kind, mine!, mine!.fields, stepInput, t, false, false);
           history.set(t, copyMine(mine!));
         }
-        pending = pending.filter(e => appliedAt(e) > f.k || (scheduled && e.applied === undefined) || !scheduled && fresh(e) && (e.t > ack || Object.keys(e.pulses ?? {}).some((name) => owed(e, name))));
+        pending = pending.filter(e => appliedAt(e) > f.k || (scheduled && ((e.applied === undefined && f.k-e.t<tickHz) || Object.keys(e.pulses??{}).some(name=>owed(e,name)))) || !scheduled && fresh(e) && (e.t > ack || Object.keys(e.pulses ?? {}).some((name) => owed(e, name))));
         if (shownBody && distance(oldHeading, mine!.heading) > 0.0001) headingBlend = { from: shownBody.heading, at: clock() };
         const error = distance(previous, mine!.pos);
         correction.last = error;

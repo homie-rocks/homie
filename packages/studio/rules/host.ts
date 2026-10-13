@@ -135,8 +135,9 @@ export interface Host {
   readonly core: Core;
 }
 
-interface Entry { at: number; values: Record<string, unknown>; presses: (string | [string, number])[]; claim: StepInput['claim']; /** How many ticks before its own tick it arrived (0.46.3): the time the input itself waited here. */ early?: number }
+interface Entry { source?: number; at: number; values: Record<string, unknown>; presses: (string | [string, number])[]; claim: StepInput['claim']; /** How many ticks before its own tick it arrived (0.46.3): the time the input itself waited here. */ early?: number }
 interface SeatIn {
+  heldAt?: number;
   receipts?: [number, number][];
   received?: number[];
   /** A valued pulse, and the tick its browser predicted it on (0: none given, act at once). */
@@ -508,14 +509,18 @@ export function createHost(o: HostOptions): Host {
       const claim = kind.body?.owner && raw.length >= i + 9 ? { pos: unpackVec([raw[i], raw[i + 1], raw[i + 2]], c.dims), vel: unpackVec([raw[i + 3], raw[i + 4], raw[i + 5]], c.dims), heading: unpackVec([raw[i + 6], raw[i + 7], raw[i + 8]], c.dims), r } : null;
       q.stamps.push(j);
       if(seq){q.receipts??=[];q.receipts.push([seq,j>K?j:K+1]);if(q.receipts.length>64)q.receipts.shift();}
-      if (j > K) { q.entries.push({ at: j, values, presses, claim, early: Math.min(lateTicks, j - K) }); continue; }
+      if (j > K) { q.entries.push({ source: j, at: j, values, presses, claim, early: Math.min(lateTicks, j - K) }); continue; }
       // Late: its values hold from the next tick, and its presses fire there if that is within a quarter of a second of its stamp.
       stats.lateEntries += 1;
       if(seq){
         if(K-j<tickHz && core.reviseMovement(seat as number,j,values))q.receipts![q.receipts!.length-1][1]=j;
         const at=K+1;
         const same=q.entries.find(e=>e.at===at);
-        if(same){same.values=values;same.claim=claim;same.presses.push(...presses);}else q.entries.push({at,values,claim,presses});
+        if(j >= (q.heldAt??0) && (!same || j >= (same.source??0))){
+          if(same){same.source=j;same.values=values;same.claim=claim;same.presses.push(...presses);}else q.entries.push({source:j,at,values,claim,presses});
+        } else if(presses.length){
+          if(same)same.presses.push(...presses);else q.entries.push({source:q.heldAt,at,values:{...q.held},claim:q.claim,presses});
+        }
         q.entries.sort((a,b)=>a.at-b.at);
         continue;
       }
@@ -721,7 +726,7 @@ export function createHost(o: HostOptions): Host {
       const presses: (string | [string, number])[] = [];
       while (q.entries.length && q.entries[0].at <= t) {
         const e = q.entries.shift() as Entry;
-        q.held = e.values; q.claim = e.claim; q.early = e.early ?? 1;
+        q.heldAt=e.source??e.at; q.held = e.values; q.claim = e.claim; q.early = e.early ?? 1;
         if (e.at === t) for (const p of e.presses) presses.push(p);
       }
       // Silence: no frame for a second. Its input is neutral until the next entry.

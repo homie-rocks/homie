@@ -25,6 +25,8 @@ Rules views recover missing input and acknowledge late movement scheduling.
 
 ### Changed
 
+- Snapshots that precede a predicted input's application receipt retain the live
+  movement prediction within the replay window; explicit placements still apply.
 - Rules input frames repeat a bounded history sized from measured latency and
   jitter, with input sequence numbers and sub-tick control changes. Snapshot
   control rows report application ticks, including pulses. Retransmissions no
@@ -47,6 +49,8 @@ Rules views recover missing input and acknowledge late movement scheduling.
 
 ### Fixed
 
+- Multiple pulse calls within one predicted tick queue instead of overwriting
+  one another. Their application ticks are distinct from the movement entry.
 - A fresh control after a browser stall is recorded after resetting the stale
   prediction clock, preventing a short press from moving by the stalled backlog.
 
