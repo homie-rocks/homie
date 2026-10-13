@@ -63,10 +63,10 @@ Local run on macOS, 20 Hz:
 
 | Proof | Result | Peak handler / tick units |
 |---|---|---|
-| Asteroids' original 1200×840 field, 30 ms movement unit, 266.667 px/s speed cap, original ship/rock outlines and four moving rocks | Both players see each other across x=0; seam crossing in 67 drawn frames, largest minimum-image step 7.672 px | 167 / 1,108 |
-| Bone Burglar's actual 625-cell maze algorithm, using the rules' seeded random source | Wall stop x=9.201; 125 cells change during the same round; both views receive the replacement | 59,935 / 66,185 |
-| Actual Bone generator on virtual time, normal and 300 ms delay + 12% loss, seed 4725 | First wall at cell 8, regenerated wall at cell 6; correct stops, flow lookup and exact restore | 59,941 / 66,286 |
-| Synthetic 64×48 maze, eight players, repeated replacement | 3,072 cells; no errors, budget stops or cut ticks | 170,323 / 199,440 |
+| Asteroids' original 1200×840 field, 30 ms movement unit, 266.667 px/s speed cap, original ship/rock outlines and four moving rocks | Both players see each other across x=0; seam crossing in 66 drawn frames, largest minimum-image step 6.039 px | 167 / 1,108 |
+| Bone Burglar's actual 625-cell maze algorithm, using the rules' seeded random source | Wall stop x=9.201; 125 cells change during the same round; both views receive the replacement | 59,981 / 66,231 |
+| Actual Bone generator on virtual time, normal and 300 ms delay + 12% loss, seed 4725 | First wall at cell 8, regenerated wall at cell 6; correct stops, flow lookup and exact restore | 59,991 / 66,336 |
+| Synthetic 64×48 maze, eight players, repeated replacement | 3,072 cells; no errors, budget stops or cut ticks | 170,369 / 199,486 |
 
 The 3,072-cell test explicitly declares a 1,000,000-unit tick budget (250,000 per
 handler); it does **not** fit the default 125,000-unit handler allowance. The actual

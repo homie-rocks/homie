@@ -7,7 +7,11 @@ export type MapRevision = readonly [
 ];
 function copy(value: unknown, depth = 0): unknown {
     charge(6);
-    if (value === null || typeof value === 'boolean' || typeof value === 'string')
+    if (typeof value === 'string') {
+        charge(value.length);
+        return value;
+    }
+    if (value === null || typeof value === 'boolean')
         return value;
     if (typeof value === 'number' && Number.isFinite(value))
         return value;
@@ -20,8 +24,10 @@ function copy(value: unknown, depth = 0): unknown {
         return Object.freeze(out);
     }
     const out: Record<string, unknown> = Object.create(null);
-    for (const key of Object.keys(value))
+    for (const key of Object.keys(value)) {
+        charge(key.length);
         out[key] = copy(own(value, key), depth + 1);
+    }
     return Object.freeze(out);
 }
 export function prepareMapReplacement(value: unknown, base: GameMap): {
