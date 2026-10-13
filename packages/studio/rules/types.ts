@@ -76,4 +76,4 @@ export type Entity<W, S, I, E, C, V, Answer = BuiltIns['answer'], G = Goal, A = 
 };
 export interface MoveBody<M> { get pos(): Vec3; set pos(value: Point); get vel(): Vec3; set vel(value: Point); get heading(): Vec3; set heading(value: Point); grounded: boolean; readonly motion: M }
 export interface MoveCollision<M> extends RayQueries { sweep(body: MoveBody<M>, delta: Point, options?: {ground?: boolean}): Hit | undefined; support(body: MoveBody<M>, distance?: number): (Hit & {dist: number}) | undefined; overlaps(body: MoveBody<M>): boolean }
-export type MoveContext<T, M> = Clock & { readonly tune: ReadonlyState<T>; readonly map: MapView & MoveCollision<M>; readonly world: MoveCollision<M> };
+export type MoveContext<T, M> = Clock & { substeps(body: MoveBody<M>, hz: number, step: (context: import('./substeps.ts').Substep) => void): void; readonly tune: ReadonlyState<T>; readonly map: MapView & MoveCollision<M>; readonly world: MoveCollision<M> };

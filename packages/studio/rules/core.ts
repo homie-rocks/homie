@@ -1,3 +1,4 @@
+import { substeps } from './substeps.ts';
 import { prepareMapReplacement, type MapRevision } from './map-state.ts';
 import { tileApi } from './tiles.ts';
 import { boundPosition, periodicDelta, relativePoint, blendPosition, wrapPoint } from './topology.mjs';
@@ -824,7 +825,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
   let moveShape = { shape: 'sphere', radius: 0, height: 0 };
   const moveCtx = brand({} as Record<string, unknown>);
   for (const [name, get] of Object.entries({ tick: () => tick, dt: () => dt, tune: () => c.publicTune, math: () => math, map: () => moveMap, world: () => moveWorld })) Object.defineProperty(moveCtx, name, { get, enumerable: true });
-  Object.assign(moveCtx, { ticks: (seconds: unknown): number => { charge(1); return ticks(seconds); } });
+  Object.assign(moveCtx, { substeps: substeps(c.settings.tickHz), ticks: (seconds: unknown): number => { charge(1); return ticks(seconds); } });
   Object.freeze(moveCtx);
   const joinCtx = brand({} as Record<string, unknown>);
   for (const [name, get] of Object.entries({ map: () => mapApi, shared: sharedView, tune: () => c.tune, math: () => math, round: () => roundApi })) Object.defineProperty(joinCtx, name, { get, enumerable: true });

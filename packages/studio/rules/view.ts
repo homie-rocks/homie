@@ -377,7 +377,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     mine = { id: u.id, kind: u.kind, r: u.r, pos: u.pos, vel: u.vel, heading: u.heading, grounded: u.grounded, motion: motionOf(u.kind, u.motion), fields: predictors[u.kind] ? thawFields(kindOf.get(u.kind)?.fields ?? [], u.fields) : u.fields };
   }
   /** The game's guarded `move` for one tick, counted as the server counts it, with the result rounded as the server rounds it. */
-  function runMove(kindName: string, body: { pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean; motion: Record<string, unknown> }, input: Readonly<Record<string, unknown>>, t: number): typeof body {
+  function runMove(kindName: string, body: { pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean; motion: Record<string, unknown> }, input: Readonly<Record<string, unknown>>, t: number): typeof body & {steps?: readonly import('./substeps.ts').StepPose[]} {
     const fn = moves[kindName];
     if (!fn || (kindOf.get(kindName)?.control && !body.motion[kindOf.get(kindName)!.control!])) return body;
     moveTick = t;
@@ -842,6 +842,14 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       velocity = vec3({ x: lerp(mine.vel.x, next.vel.x, a), y: lerp(mine.vel.y, next.vel.y, a), z: lerp(mine.vel.z, next.vel.z, a) }, dims);
       // A takeoff is airborne as soon as it rises; a landing waits for its contact.
       grounded = landed || mine.grounded && (a === 0 || next.grounded);
+      if (next.steps?.length) {
+        const n = next.steps.length - 1, at = a * n, index = Math.min(n - 1, Math.floor(at)), f = at - index;
+        const before = next.steps[index], after = next.steps[index + 1];
+        pos = vec3(blendPosition(before.pos, after.pos, f, map.wrap), dims);
+        heading = blendHeading(before.heading, after.heading, f, dims);
+        velocity = vec3({x:lerp(before.vel.x,after.vel.x,f),y:lerp(before.vel.y,after.vel.y,f),z:lerp(before.vel.z,after.vel.z,f)},dims);
+        grounded = f === 1 ? after.grounded : before.grounded && after.grounded;
+      }
       preview = next;
       if (predictors[kind.name]) {
         // The own actions between ticks: the predictor on a copy of the fields, for the tick about to be stepped.

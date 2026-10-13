@@ -404,6 +404,46 @@ map.spots, and `world.sweep/support/overlaps` (also on map). Sweeps test static 
 `20 + 4S` plus copying, writes body.pos, and returns an optional hit.
 Movement may write pos, vel, heading, grounded and declared motion; never return
 an updated body. Normalize diagonals and respect maxSpeed. Collision movement needs a sweep; setting velocity alone does not move a body.
+
+### Integrating at the game's own rate
+
+Opt in from `move` with `ctx.substeps(body, hz, step)`. For a 20 Hz room,
+300 Hz runs fifteen integrations inside each tick; 60 Hz runs three. The rate
+must be a positive integer multiple of the room rate. Existing movement is
+unchanged unless it calls this method.
+
+```ts
+export const move = defineMove({
+  runner(body, input, ctx) {
+    ctx.substeps(body, 300, step => {
+      if (step.first && input.jump && body.grounded)
+        body.vel = { ...body.vel, z: 8 };
+      body.vel = { ...body.vel, z: body.vel.z - 30 * step.dt };
+      ctx.map.sweep(body, ctx.math.scale(body.vel, step.dt));
+    });
+  }
+});
+```
+
+The callback receives `dt` (seconds), zero-based `index`, `count`, `first`
+and end-of-step `fraction`. Use `step.dt` for integration; `ctx.dt` remains
+the full tick. A pulse belongs to the tick: consume it on `step.first` when
+it should act once. Held inputs retain their existing tick-mean semantics;
+this API does not recover the timestamp of changes within a tick. A game
+that already reconstructs held transitions can keep that policy in the
+callback. It does not change Stormbreak's existing integration.
+
+One body may be integrated once per move. The call charges 8 units plus
+64 per pose (the initial pose and each completed substep), before allocating
+the trace. Guarded callback operations and collision queries charge the
+same movement-handler budget as usual. There is no separate quota or
+implicit rate cap.
+
+The browser predicts the identical callback and draws between the recorded
+substep poses, including a path that leaves and returns to the same tick
+endpoint. The trace is temporary drawing data: it adds no wire fields or
+save fields. The final body and declared motion fields are saved as before.
+This helper does not add triangle collision or a physics world.
 Put freezes, boost expiry and knockback in declared motion. Initialize a late arrival
 in on.arrive too: onRoom.roundStart already happened before it joined.
 

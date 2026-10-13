@@ -1,3 +1,4 @@
+import { substeps } from './substeps.ts';
 import { wrapPoint } from './topology.mjs';
 import { tileApi } from './tiles.ts';
 import { nearbyMap } from './map-index.ts';
@@ -304,6 +305,7 @@ export function moveContext(o: { tick: () => number; tickHz: number; tune: unkno
   const currentMap = () => (o.geometry?.()?.staticMap ?? o.geometry?.() ?? o.map) as import('./rules.ts').GameMap;
   const queries = collisionQueries(() => o.geometry?.() ?? o.map, () => o.shape?.() ?? {shape: 'sphere', radius: o.radius(), height: 2 * o.radius()}, o.dims, o.self);
   return brand(Object.freeze({
+    substeps: substeps(o.tickHz),
     get tick() { return o.tick(); }, dt: 1 / o.tickHz, tune: o.tune, math,
     // As the server's `ctx.ticks` reads it: a plain number, or nothing.
     ticks: (seconds: unknown): number => { const s = num(seconds); const n = Math.round(s * o.tickHz); return s > 0 && Number.isFinite(n) ? Math.max(1, n) : 0; },

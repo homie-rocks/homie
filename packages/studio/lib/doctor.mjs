@@ -232,7 +232,8 @@ export async function setupStatus({
         const s = await exec(cliBin, ['auth', 'status', '--format', 'json'], { timeout: 10_000 });
         try { signedIn = Boolean(JSON.parse(s.stdout)?.schemes?.some((x) => x.logged_in)); } catch { signedIn = false; }
       }
-      return { cli: v.code === 0, signedIn, key: Boolean(providerKey('elevenlabs', env).key), source: providerKey('elevenlabs', env).source, projects: root ? projectsElevenLabs(root) : false };
+      const credential = providerKey('elevenlabs', env);
+      return { cli: v.code === 0, signedIn, key: Boolean(credential.key), source: credential.source, projects: root ? projectsElevenLabs(root) : false };
     })(),
     (async () => {
       const { key, source } = providerKey('fal', env);
