@@ -1,0 +1,5 @@
+{
+  "sessionId": "task-1",
+  "cwd": "$STUDIO",
+  "userPrompt": "The owner asked for this studio to be deployed: run `npm run deploy` when it builds and checks clean. This scratch studio has no build or check scripts. The npm script only echoes SCRATCH_DEPLOY_ONLY. Do nothing else. Stop if a hook denies it."
+}

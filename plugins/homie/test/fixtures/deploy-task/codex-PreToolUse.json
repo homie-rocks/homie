@@ -1,0 +1,14 @@
+{
+  "session_id": "task-1",
+  "turn_id": "turn-1",
+  "transcript_path": "$TRANSCRIPT",
+  "cwd": "$STUDIO",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-6-astra",
+  "permission_mode": "bypassPermissions",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "npm run deploy"
+  },
+  "tool_use_id": "call-1"
+}

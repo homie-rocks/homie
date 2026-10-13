@@ -387,7 +387,7 @@ export async function deployDecision(io, root, what, known = {}) {
       lines: short,
       detail: { lines: long },
       no: 'The person cancelled this deploy, so nothing went live. Do not retry it unless they ask; say what is ready and what they would get.',
-      nobody: 'This deploy needs the person\'s go-ahead and nobody could be asked here, so it did not run. Ask them in chat first.',
+      nobody: 'This deploy needs the person\'s go-ahead and nobody could be asked here, so it did not run. They can say “Please deploy this studio.” to approve this task and its retries.',
     },
   };
 }

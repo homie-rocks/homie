@@ -129,10 +129,6 @@ export function judgeRounds(browsers, missed = new Map()) {
 
 export async function check({ url, game, roundTimeoutMs = 150_000, rounds = 3, shots = null, userAgentTag = 'homie-studio-check', log = () => {}, report = null }) {
   if (!url || !game) throw new Error('usage: homie-studio check <game> --url <site url>');
-  const chrome = findChrome();
-  if (!chrome) return { ok: false, command: 'check', why: noChrome() };
-  let puppeteer;
-  try { puppeteer = (await import('puppeteer-core')).default; } catch { return { ok: false, command: 'check', why: 'puppeteer-core is not installed (it comes with @homie-rocks/studio; run npm install)' }; }
   const base = String(url).replace(/\/+$/, '');
   const play = `${base}/${game}/play`;
   // One preflight from this process, in the same words as perf, shoot and port check (lib/net.mjs siteRefusal).
@@ -143,7 +139,15 @@ export async function check({ url, game, roundTimeoutMs = 150_000, rounds = 3, s
   const cannotAsk = siteRefusal(await reachSite(base, { path: `/${game}/play`, timeout: 15_000 }), { command: 'check', play });
   if (cannotAsk?.preflight === 'local') return cannotAsk;
   let appMeta = null;
-  try { appMeta = (await (await fetch(`${base}/api/games`)).json()).games?.find((g) => g.id === game && g.kind === 'app'); } catch { /* browser preflight below still names failures */ }
+  try {
+    const meta = (await (await fetch(`${base}/api/games`, { signal: AbortSignal.timeout(5000) })).json()).games?.find(g => g.id === game);
+    if (meta?.rulesError) return { ok: false, command: 'check', why: meta.rulesError };
+    if (meta?.kind === 'app') appMeta = meta;
+  } catch { /* browser preflight below still names failures */ }
+  const chrome = findChrome();
+  if (!chrome) return { ok: false, command: 'check', why: noChrome() };
+  let puppeteer;
+  try { puppeteer = (await import('puppeteer-core')).default; } catch { return { ok: false, command: 'check', why: 'puppeteer-core is not installed (it comes with @homie-rocks/studio; run npm install)' }; }
   if (appMeta) return checkApp({ url: base, game, meta: appMeta, shots, log, report, puppeteer, chrome });
   if (shots) mkdirSync(shots, { recursive: true });
   const profiles = [];

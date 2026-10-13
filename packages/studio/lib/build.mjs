@@ -510,6 +510,7 @@ export function orderGames(games, order, log = () => {}) {
 export async function build(root, { only = null, log = () => {}, deploy = process.env.WORKERS_CI === '1', maps = false, types = false, beforePublish = async () => {}, longCheck = false } = {}) {
   const esbuild = await studioEsbuild(root);
   const studio = readStudio(root);
+  if (listGames(root).some(g => isRulesGame(g) && g.room?.host !== 'browser' && g.room?.host !== 'offline')) await (await import('./rules-wiring.mjs')).ensureRulesWiring(root);
   await (await import('./tools-build.mjs')).buildTools(root, esbuild);
   await (await import('./functions-build.mjs')).buildFunctions(root, esbuild);
   // The shop first (shop/SHOP.md): invalid shop settings stop the build before anything is built.

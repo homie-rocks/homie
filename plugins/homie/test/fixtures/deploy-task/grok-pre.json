@@ -1,0 +1,8 @@
+{
+  "sessionId": "task-1",
+  "cwd": "$STUDIO",
+  "toolName": "run_terminal_command",
+  "toolInput": {
+    "command": "npm run deploy"
+  }
+}

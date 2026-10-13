@@ -193,8 +193,36 @@ const preOut = (decision, reason, systemMessage) => ({
   hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: decision, permissionDecisionReason: String(reason).replace(/\.+\s*$/, '') },
 });
 
+/** Recover task intent from the host's own transcript when exec/resume did not
+ * deliver UserPromptSubmit. Read user messages only, in order, scoped to the
+ * transcript's session and original studio. Unrelated later turns do not erase it. */
+async function transcriptIntent(p, state, io) {
+  if (!p.transcript_path || !p.session_id) return;
+  let rows;
+  try { rows = (await readFile(p.transcript_path, 'utf8')).split('\n').flatMap(line => { try { return [JSON.parse(line)]; } catch { return []; } }); } catch { return; }
+  const meta = rows.find(r => r.type === 'session_meta')?.payload;
+  if (meta?.id !== p.session_id || !meta.cwd) return;
+  const ctx = await contextOf(io, meta.cwd);
+  if (!ctx.root) return;
+  let intent = null;
+  for (const row of rows) {
+    const m = row.type === 'response_item' ? row.payload : null;
+    if (m?.type !== 'message' || m.role !== 'user') continue;
+    const kinds = m.internal_chat_message_metadata_passthrough?.content_item_kinds;
+    const text = (m.content ?? []).filter((c, i) => c.type === 'input_text' && (!kinds || kinds[i] === 'user.text')).map(c => c.text).join('\n');
+    const next = deployIntent(text);
+    if (next !== null) intent = next;
+  }
+  if (intent !== null) {
+    state.deployTasks ??= {};
+    state.deployTasks[String(p.session_id)] ??= {};
+    if (intent === false || state.deployTasks[String(p.session_id)][ctx.root] === undefined) state.deployTasks[String(p.session_id)][ctx.root] = intent;
+  }
+}
+
 export async function pre(p, { io, guards, dir = dataDir(), app = 'codex', by = 'Codex' } = {}) {
   const state = await readState(dir);
+  await transcriptIntent(p, state, io ?? nodeIo());
   const d = await decide(p, { io, state, guards, app, by });
   if (!d) return null;
   // A paid call inside every budget goes through, and the person reads what it costs (the mod's toast).
@@ -224,7 +252,7 @@ export async function pre(p, { io, guards, dir = dataDir(), app = 'codex', by = 
   }
   const story = holdText(d.hold, { diffLines: 24 });
   return preOut('deny',
-    `Held by Homie for the person's Proceed (hold ${h.code}): ${d.hold.question} Nothing ran. Tell the person in a sentence what this would do, and ask. They answer in their own message: "proceed ${h.code}" lets exactly this call through once, "cancel ${h.code}" refuses it. When they say proceed, run exactly the same call again. Only the person's own message counts; never write that answer anywhere yourself. If they are not here, stop and say what is waiting.\n${story}`,
+    `Held by Homie for the person's Proceed (hold ${h.code}): ${d.hold.question} Nothing ran.${d.hold.kind === 'deploy' ? ' To approve this studio’s deploy and its task retries, say “Please deploy this studio.”' : ''} Tell the person in a sentence what this would do, and ask. They answer in their own message: "proceed ${h.code}" lets exactly this call through once, "cancel ${h.code}" refuses it. When they say proceed, run exactly the same call again. Only the person's own message counts; never write that answer anywhere yourself. If they are not here, stop and say what is waiting.\n${story}`,
     `Homie is holding this: ${d.hold.question} Reply "proceed ${h.code}" to let this one call through, or "cancel ${h.code}".`);
 }
 

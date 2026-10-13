@@ -1,3 +1,4 @@
+import { RULES_WIRING_MESSAGE } from './rules-wiring.mjs';
 import { characterStore, characterRequest } from './characters.mjs';
 export { useFunctions } from './functions.mjs';
 import { appAccess, appRecordsRoute } from './app-records.mjs';
@@ -763,7 +764,7 @@ async function route(request, env, ctx) {
   }
   if (path === '/api/games') {
     const cat = await getCat();
-    return json({ studio: cat.studio, games: cat.games, live: await liveCounts(env, cat.games ?? []) });
+    return json({ studio: cat.studio, games: (cat.games ?? []).map(g => g.room?.host === 'server' && !hostedGame(g.id) ? { ...g, rulesError: RULES_WIRING_MESSAGE } : g), live: await liveCounts(env, cat.games ?? []) });
   }
   if (path === '/api/rooms') {
     const cat = await getCat();
@@ -1051,7 +1052,7 @@ async function route(request, env, ctx) {
         // The big screen picks its room now, so the QR it shows puts every phone in that same room.
         let room = asked;
         if (!room) {
-          try { room = (await (await lobby().fetch(`https://lobby/join?max=${humanSeats(pol)}&server=${srv.id}&rooms=${srv.roomsMax}${versionOf(meta?.netplay?.version) ? `&ver=${encodeURIComponent(versionOf(meta.netplay.version))}` : ''}`, { method: 'POST' })).json()).room ?? null; } catch { room = null; }
+          try { room = (await (await lobby().fetch(`https://lobby/join?host=${meta?.room?.host === 'server' ? 'server' : 'browser'}&max=${humanSeats(pol)}&server=${srv.id}&rooms=${srv.roomsMax}${versionOf(meta?.netplay?.version) ? `&ver=${encodeURIComponent(versionOf(meta.netplay.version))}` : ''}`, { method: 'POST' })).json()).room ?? null; } catch { room = null; }
         }
         const joinUrl = `${url.origin}${openPath(meta)}${room ? `?room=${encodeURIComponent(room)}` : ''}`;
         // Local development: no phone can open this computer's own address, so no code for it; the card says to deploy.
@@ -1124,7 +1125,7 @@ async function route(request, env, ctx) {
         if (not.split(',').includes(room)) return json({ ok: false, error: 'world-unavailable', message: 'This world is unavailable. Choose another named world.' }, 409);
         return json({ room, players: 0, max: humanSeats(pol), server: srv.id });
       }
-      return lobby().fetch(`https://lobby/join?max=${humanSeats(pol)}&server=${srv.id}&rooms=${srv.roomsMax}${not ? `&not=${encodeURIComponent(not)}` : ''}${ver ? `&ver=${encodeURIComponent(ver)}` : ''}${app ? '&app=1' : ''}`, { method: 'POST' });
+      return lobby().fetch(`https://lobby/join?host=${meta?.room?.host === 'server' ? 'server' : 'browser'}&max=${humanSeats(pol)}&server=${srv.id}&rooms=${srv.roomsMax}${not ? `&not=${encodeURIComponent(not)}` : ''}${ver ? `&ver=${encodeURIComponent(ver)}` : ''}${app ? '&app=1' : ''}`, { method: 'POST' });
     }
     if (sub === 'api/agent') {
       // An AI's seat (worker/agents.mjs): its pass, the server's policy, a room with people in it, a ticket.
@@ -1136,7 +1137,7 @@ async function route(request, env, ctx) {
         join: async (srv, pol) => {
           try {
             const reserve = pol.aiSeats + pol.guides;
-            const r = await (await lobby().fetch(`https://lobby/join?max=${max}&server=${srv.id}&agent=1&ai=${reserve}${versionOf(meta?.netplay?.version) ? `&ver=${encodeURIComponent(versionOf(meta.netplay.version))}` : ''}`, { method: 'POST' })).json();
+            const r = await (await lobby().fetch(`https://lobby/join?host=${meta?.room?.host === 'server' ? 'server' : 'browser'}&max=${max}&server=${srv.id}&agent=1&ai=${reserve}${versionOf(meta?.netplay?.version) ? `&ver=${encodeURIComponent(versionOf(meta.netplay.version))}` : ''}`, { method: 'POST' })).json();
             return r.room ?? null;
           } catch { return null; }
         },
@@ -1429,7 +1430,7 @@ export class Table {
   ensureHost(room, hosted) {
     if (this.hostRt || !this.game) return;
     if (!hostedGame(this.game)) {
-      if (hosted) room.failServerHost('This game runs its rules on the server, and this build of the site does not hold them. Build and deploy it again.');
+      if (hosted) room.failServerHost(RULES_WIRING_MESSAGE);
       return;
     }
     let restoring = false;
@@ -1461,7 +1462,7 @@ export class Table {
         this.finishRoom(why);
         room.forget(); room.ended = null;
         // Only a holder returning to the old match is rematched. A new visitor uses this name immediately.
-        if (!expired) room.endedMatch = { why, ver: build.build, tokens, until: Date.now() + ROOM_PAUSE_MS };
+        if (!expired && pooledRoom(this.code)) room.endedMatch = { why, ver: build.build, tokens, until: Date.now() + ROOM_PAUSE_MS };
         this.room = room; saved = null; restoring = false; boot = { epoch: 0, count: 0 };
       }
       this.roomSave = saved;
@@ -2469,7 +2470,7 @@ export class Table {
     const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName(this.game));
     // The build this room runs (section 23): the Lobby sends a visitor only to a room of the live build.
     const ver = room.gameVer === undefined ? undefined : room.gameVer ?? '';
-    this.ctx.waitUntil(lobby.fetch(`https://lobby/report?game=${encodeURIComponent(this.game)}`, { method: 'POST', body: JSON.stringify({ room: this.code, players, people, agents, ai, ...(ver !== undefined ? { ver } : {}) }) }).catch(() => {}));
+    this.ctx.waitUntil(lobby.fetch(`https://lobby/report?game=${encodeURIComponent(this.game)}`, { method: 'POST', body: JSON.stringify({ room: this.code, players, people, agents, ai, host: room.server ? 'server' : 'browser', ...(ver !== undefined ? { ver } : {}) }) }).catch(() => {}));
   }
 
   /** A round the host called over becomes one D1 row (once per round number). */
@@ -2523,6 +2524,7 @@ export class Lobby {
     ctx.blockConcurrencyWhile(async () => {
       const saved = await ctx.storage.get('lobby');
       if (saved) {
+        this.current = saved.current ?? null;
         this.next = typeof saved.next === 'number' ? { public: saved.next } : saved.next && typeof saved.next === 'object' ? { public: 1, ...saved.next } : { public: 1 };
         for (const r of saved.rooms ?? []) this.rooms.set(r.name, { ...r, server: r.server ?? roomServer(r.name), agents: r.agents ?? 0, ai: r.ai ?? 0, ver: typeof r.ver === 'string' ? r.ver : '', pending: [], agentPending: [] });
         for (const [name, until] of saved.closed ?? []) if (until > Date.now()) this.closed.set(name, until);
@@ -2550,7 +2552,7 @@ export class Lobby {
     if (list.length) this.ctx.waitUntil(this.env.DB.batch(list).catch(() => {}));
   }
 
-  save() { this.ctx.storage.put('lobby', { next: this.next, rooms: [...this.rooms.values()].map(({ name, players, agents, ai, server, at, ver }) => ({ name, players, agents, ai, server, at, ...(ver ? { ver } : {}) })), closed: [...this.closed] }).catch(() => {}); }
+  save() { this.ctx.storage.put('lobby', { current: this.current ?? null, next: this.next, rooms: [...this.rooms.values()].map(({ name, players, agents, ai, server, at, ver, host }) => ({ name, players, agents, ai, server, at, ...(host ? { host } : {}), ...(ver ? { ver } : {}) })), closed: [...this.closed] }).catch(() => {}); }
 
   prune(now) {
     for (const [name, r] of this.rooms) {
@@ -2578,6 +2580,17 @@ export class Lobby {
     // the build of a game that names none ('').
     const ver = versionOf(url.searchParams.get('ver')) ?? '';
     if (url.pathname === '/join') {
+      // A server build can run only its current rules. Persisted browser rooms
+      // (including pre-kind records) and old server revisions must not consume
+      // the pool or become the fallback of a server with roomsMax=1.
+      const host = url.searchParams.get('host');
+      if ((host === 'server' || host === 'browser') && (this.current?.host !== host || this.current?.ver !== ver)) {
+        this.current = { host, ver };
+        for (const [name, r] of this.rooms) if (
+          host === 'server' ? (r.host ?? 'browser') !== host || (r.ver ?? '') !== ver : r.host === 'server'
+        ) { this.rooms.delete(name); this.seen.delete(name); this.live.delete(name); }
+        this.save();
+      }
       const max = seatCount(url.searchParams.get('max'));
       const sid = url.searchParams.get('server') ?? 'public';
       const server = sid === 'public' || SERVER_ID.test(sid) ? sid : 'public';
@@ -2640,7 +2653,7 @@ export class Lobby {
       if (!room) {
         let n = this.next[server] ?? 1;
         while (not.has(roomCode(server, n)) || this.closed.has(roomCode(server, n)) || this.rooms.has(roomCode(server, n))) n += 1;
-        room = { name: roomCode(server, n), server, players: 0, agents: 0, ai: 0, at: now, ver, pending: [], agentPending: [] };
+        room = { name: roomCode(server, n), server, players: 0, agents: 0, ai: 0, at: now, ver, ...(host ? { host } : {}), pending: [], agentPending: [] };
         this.next[server] = n + 1;
         this.rooms.set(room.name, room);
       }
@@ -2659,6 +2672,11 @@ export class Lobby {
         this.save();
         return json({ ok: true, closed: body.closed > now });
       }
+      // A retiring isolate may send its last report after the new pool was
+      // selected. It cannot resurrect an incompatible public room.
+      if (pooledRoom(body.room) && this.current && (this.current.host === 'server'
+        ? (body.host ?? 'browser') !== 'server' || (body.ver ?? '') !== this.current.ver
+        : body.host === 'server')) return json({ ok: true, retired: true });
       const seated = Math.max(0, Math.floor(Number(body.players) || 0));
       const agents = Math.max(0, Math.floor(Number(body.agents) || 0));
       const ai = Math.max(agents, Math.floor(Number(body.ai) || 0));
@@ -2674,6 +2692,7 @@ export class Lobby {
       const rver = typeof body.ver === 'string' ? versionOf(body.ver) ?? '' : r.ver ?? '';
       const changed = !this.rooms.has(r.name) || r.players !== seated || (r.agents ?? 0) !== agents || (r.ai ?? 0) !== ai || (r.ver ?? '') !== rver;
       r.ver = rver;
+      if (body.host === 'server' || body.host === 'browser') r.host = body.host;
       r.pending.splice(0, grew);
       if ((r.agents ?? 0) < agents) (r.agentPending ?? []).splice(0, agents - (r.agents ?? 0));
       r.players = seated;

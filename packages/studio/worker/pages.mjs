@@ -597,7 +597,8 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
       // playing in its own room: it loads again at the round's break, or at once on a big screen (nothing to lose).
       if (m.what === 'rematch' && m.room === room) {
         var fresh = new URL(location.href);
-        fresh.searchParams.delete('room'); fresh.searchParams.set('not', room);
+        if (/^(?:pub-[1-9][0-9]*|s-[a-z0-9][a-z0-9-]*-[1-9][0-9]*)$/.test(room)) { fresh.searchParams.delete('room'); fresh.searchParams.set('not', room); }
+        else { fresh.searchParams.set('room', room); fresh.searchParams.delete('not'); }
         location.replace(fresh.href);
         return;
       }
@@ -1357,7 +1358,8 @@ const WATCH_JS = String.raw`${BUILD_RETRY_JS}(function () {
       var m = ev.data;
       if (!m || typeof m !== 'object' || m.t !== 'homie-net') return;
       if (m.what === 'rematch' && m.room === room) {
-        var fresh = new URL(location.href); fresh.searchParams.delete('room'); fresh.searchParams.set('not', room);
+        var fresh = new URL(location.href); if (/^(?:pub-[1-9][0-9]*|s-[a-z0-9][a-z0-9-]*-[1-9][0-9]*)$/.test(room)) { fresh.searchParams.delete('room'); fresh.searchParams.set('not', room); }
+        else { fresh.searchParams.set('room', room); fresh.searchParams.delete('not'); }
         location.replace(fresh.href); return;
       }
       if (m.what === 'wait') updating.stop();

@@ -12,6 +12,8 @@ import { findChrome, chromeArgs } from '../lib/chrome.mjs';
 const origin = process.argv[2]; const studio = resolve(process.argv[3]);
 assert.ok(['localhost', '127.0.0.1', '[::1]'].includes(new URL(origin).hostname));
 const source = resolve(studio, 'games/coin-dash/src/rules.ts');
+const manifestPath = resolve(studio, 'games/coin-dash/game.json');
+const originalManifest = readFileSync(manifestPath, 'utf8');
 const original = readFileSync(source, 'utf8'); assert.ok(original.includes('self.score += 1;'));
 const meta = () => JSON.parse(readFileSync(resolve(studio, 'site/dist/games.json'), 'utf8')).games.find(g => g.id === 'coin-dash').room;
 const sleep = ms => new Promise(r => setTimeout(r, Math.max(0, ms)));
@@ -23,7 +25,7 @@ try {
   for (const [count, gap] of sequences) {
     const room = `updates-${Date.now().toString(36)}`; const clients = []; const errors = []; let sent = 0;
     try {
-      for (const mode of ['play', 'play', 'watch']) {
+      for (const mode of ['tv', 'play', 'watch']) {
         const context = await browser.createBrowserContext(); const page = await context.newPage();
         page.setDefaultTimeout(0); page.setDefaultNavigationTimeout(0);
         page.on('pageerror', e => errors.push(e.message));
@@ -102,4 +104,57 @@ try {
       console.log(JSON.stringify({ updates: count, gapMs: gap, roomKept: true, seatsKept: true, current: true, longestDeadMs: clients.map(c => Math.round(c.longest)) }));
     } finally { for (const c of clients) await c.context.close(); }
   }
-} finally { writeFileSync(source, original); await browser.close(); }
+  if (release) {
+    // A real browser-hosted build and its persisted Lobby/Table, followed by a
+    // server build on that same local state. The TV's address is the phone's pair.
+    const pages = [];
+    const waitFor = async (read, label) => {
+      const deadline = performance.now() + 45000;
+      while (performance.now() < deadline) { if (await read()) return; await sleep(100); }
+      throw new Error(label);
+    };
+    const facts = async page => {
+      for (const f of page.frames().filter(f => f !== page.mainFrame())) {
+        const value = await f.evaluate(() => { const n = window.__homieNet; return n && { link: n.link, version: n.version, seat: n.seat, tick: n.lastSnapshot?.k }; }).catch(() => null);
+        if (value) return value;
+      }
+      return null;
+    };
+    const open = async path => {
+      const page = await browser.newPage(); pages.push(page);
+      await waitFor(async () => {
+        try {
+          const live = await fetch(origin + '/api/games').then(r => r.json());
+          if (live.games.find(g => g.id === 'coin-dash')?.room?.build !== meta().build) return false;
+          return (await page.goto(origin + path))?.ok();
+        } catch { return false; }
+      }, 'local Worker did not finish replacing its listener');
+      return page;
+    };
+    const current = async (page, seated = false) => { const f = await facts(page); return f?.link === 'online' && f.version === meta().build && (!seated || typeof f.seat === 'number'); };
+    try {
+      const manifest = JSON.parse(originalManifest); manifest.room.host = 'browser';
+      const previous = meta().build; writeFileSync(manifestPath, JSON.stringify(manifest));
+      await waitFor(() => meta().build !== previous && meta().host === 'browser', 'browser build did not publish');
+      const oldPublic = await open('/coin-dash/play');
+      await waitFor(() => current(oldPublic, true), 'old public browser never seated');
+      const oldRoom = new URL(oldPublic.url()).searchParams.get('room');
+      const tv = await open('/coin-dash/tv?room=family-night');
+      const phone = await open('/coin-dash/play?room=' + new URL(tv.url()).searchParams.get('room'));
+      await waitFor(async () => await current(tv) && await current(phone, true), 'TV and phone did not pair');
+      const browserBuild = meta().build; manifest.room.host = 'server'; writeFileSync(manifestPath, JSON.stringify(manifest));
+      await waitFor(() => meta().build !== browserBuild && meta().host === 'server', 'server build did not publish');
+      const fresh = await open('/coin-dash/play');
+      await waitFor(() => current(fresh, true), 'first visitor to new server build never seated');
+      assert.notEqual(new URL(fresh.url()).searchParams.get('room'), oldRoom);
+      await waitFor(async () => await current(tv) && await current(phone, true), 'paired screens did not recover on server build');
+      for (const page of [tv, phone]) assert.equal(new URL(page.url()).searchParams.get('room'), 'family-night');
+      const beforeShape = meta().build;
+      writeFileSync(source, original.replace('score: f.u16({ score: true })', 'score: f.u32({ score: true })'));
+      await waitFor(() => meta().build !== beforeShape, 'incompatible build did not publish');
+      await waitFor(async () => await current(tv) && await current(phone, true), 'paired screens did not recover after schema change');
+      for (const page of [tv, phone]) assert.equal(new URL(page.url()).searchParams.get('room'), 'family-night');
+      console.log(JSON.stringify({ browserToServer: true, firstVisitorSeated: true, privateTvAndPhone: true, schemaChange: true }));
+    } finally { for (const page of pages) await page.close(); }
+  }
+} finally { writeFileSync(source, original); writeFileSync(manifestPath, originalManifest); await browser.close(); }

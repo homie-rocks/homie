@@ -1,0 +1,10 @@
+{
+  "session_id": "task-1",
+  "turn_id": "turn-1",
+  "transcript_path": "$TRANSCRIPT",
+  "cwd": "$STUDIO",
+  "hook_event_name": "UserPromptSubmit",
+  "model": "gpt-6-astra",
+  "permission_mode": "bypassPermissions",
+  "prompt": "The owner asked for this studio to be deployed: run `npm run deploy` when it builds and checks clean. This scratch studio has no build or check scripts. The npm script only echoes SCRATCH_DEPLOY_ONLY. Do nothing else. Stop if a hook denies it."
+}
