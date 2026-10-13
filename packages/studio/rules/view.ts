@@ -583,8 +583,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   function flush(now: number, t: number): void {
     if (!mine) { entries = []; return; }
     if (!entries.length && now - lastSendAt >= 250) keepalive(t);
-    const ack = latest?.rows.find(r=>r[0]===net.seat)?.[2] ?? 0;
-    if (!entries.length && !sentHistory.some(e=>e.t>ack)) return;
+    const marker = myKind()!.input.length + (myKind()!.owner ? 9 : 0);
+    // A newer tick's acknowledgement cannot acknowledge a hole in the history.
+    if (!entries.length && !sentHistory.some(e => !applications.has(e.row[marker + 1]))) return;
     const k = Math.min(entries[0]?.t ?? t, t - (t % sendEvery));
     for (const entry of entries) {
       const old = sentHistory.findIndex(e => e.t === entry.t);
@@ -593,7 +594,6 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // Cover an authority round trip and jitter. Missing application receipts measure
     // recovery delay (whether a dropped frame or a TCP stall): widen the history
     // until they return, without allowing an unbounded packet or retained history.
-    const marker = myKind()!.input.length + (myKind()!.owner ? 9 : 0);
     const missing = sentHistory.find(e => e.t <= (latest?.k ?? 0) && !applications.has(e.row[marker + 1]));
     const recoveryTicks = missing ? t - missing.t + 2 * sendEvery : 0;
     const windowTicks = Math.min(64, Math.max(4, recoveryTicks, Math.ceil((2 * authorityRtt() + 250) / period + targetLead())));

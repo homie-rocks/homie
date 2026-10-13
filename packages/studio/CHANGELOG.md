@@ -32,7 +32,8 @@ Rules views recover missing input and acknowledge late movement scheduling.
 - Rules input frames repeat a bounded history sized from measured latency and
   jitter and missing application receipts, with input sequence numbers and sub-tick control changes. Snapshot
   control rows report application ticks, including pulses. Retransmissions no
-  longer distort latency steering.
+  longer distort latency steering. A newer tick acknowledgement cannot stop
+  retries for an earlier missing input; only its own receipt does.
 - Late movement replays up to one second of body history against historical
   geometry, fenced by authoritative body writes and placements. Outside that
   history an entry applies next tick. Entries with press handlers also apply

@@ -2297,3 +2297,26 @@ for (const via of ['small', 'Gates']) test(`a placement projects the body to its
     assert.ok(Math.abs(h.core.snapshot()[1][0][3][0] - from - 1.2) < .001, 'both queued and newly arriving stale controls are fenced');
   } finally { h.stop(); }
  });
+
+test('an acknowledged release does not stop recovery of the missing tap before it', async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, 20, 'round3');
+  const clock = virtualTime(t), r = rig(L, compiled, false, 40, 40);
+  const Socket = r.socket();
+  let recoverAt = 0;
+  class HoleSocket extends Socket {
+    send(text) {
+      const m = JSON.parse(text);
+      if (m.t === 'in' && Date.now() < recoverAt) m.s = m.s.filter(row => row[1] === 0);
+      super.send(JSON.stringify(m));
+    }
+  }
+  const a = openRoom({ net: { config: cfg('Hole'), WebSocketImpl: HoleSocket, post: null } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(3000);
+  const serverX = () => r.host.core.save().ents.find(e => e[11] === 0)[7][0];
+  const from = serverX();
+  recoverAt = Date.now() + 200;
+  a.input({ ax: 1 }); await clock.wait(80); a.input({ ax: 0 });
+  await clock.wait(240);
+  assert.ok(Math.abs(serverX() - from - .512) < .04, `the earlier hole is recovered before an idle keepalive: ${serverX() - from}`);
+});
