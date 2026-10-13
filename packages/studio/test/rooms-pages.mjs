@@ -27,10 +27,14 @@ try {
         const context = await browser.createBrowserContext(); const page = await context.newPage();
         page.setDefaultTimeout(0); page.setDefaultNavigationTimeout(0);
         page.on('pageerror', e => errors.push(e.message));
+        // Keep observations in the test process: updates may navigate the top page
+        // between CDP's context lookup and evaluate. A binding survives navigation
+        // and records each snapshot when it arrives, without polling a dying context.
+        const snapshots = [];
+        await page.exposeFunction('recordRoomProof', frame => snapshots.push(frame));
         await page.evaluateOnNewDocument(() => {
           if (window === top) {
-            window.roomProof = [];
-            addEventListener('message', ev => { if (ev.source === document.querySelector('iframe.game')?.contentWindow && ev.data?.proof === 'room-snapshot') window.roomProof.push(ev.data.frame); });
+            addEventListener('message', ev => { if (ev.source === document.querySelector('iframe.game')?.contentWindow && ev.data?.proof === 'room-snapshot') window.recordRoomProof(ev.data.frame); });
           } else {
             const Socket = WebSocket;
             window.WebSocket = class extends Socket {
@@ -46,11 +50,11 @@ try {
         });
         const recovery = { epoch: null, firstEpoch: null, tick: null, samples: 0 };
         await page.goto(`${origin}/coin-dash/${mode}?room=${room}`);
-        clients.push({ context, page, mode, recovery, seat: undefined, tick: 0, dead: 0, longest: 0, current: false });
+        clients.push({ context, page, mode, recovery, snapshots, seat: undefined, tick: 0, dead: 0, longest: 0, current: false });
       }
       const inspect = async (client, version) => {
         assert.equal(new URL(client.page.url()).searchParams.get('room'), room, 'the top page retains its room');
-        for (const m of await client.page.evaluate(() => window.roomProof.splice(0))) {
+        for (const m of client.snapshots.splice(0)) {
           if (m.t === 'error' && m.code === 'room-over') errors.push('The room ended.');
           if (m.t !== 'snap' || !Number.isSafeInteger(m.e)) continue;
           const r = client.recovery;

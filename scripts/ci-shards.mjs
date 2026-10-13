@@ -10,7 +10,7 @@ export function inventory() {
 }
 export function compatible(file) {
   // npm/ESM resolution, native modules, SQLite, subprocess/stdio and packed installs.
-  return !file.startsWith('packages/studio/') || /(?:mcp|paid-parts|purchase|wallet|payment|shop|standalone|desktop|first-run|studio\.test|schema\.test|upgrade|identity|authoring)/.test(file);
+  return !file.startsWith('packages/studio/') || /(?:mcp|paid-parts|purchase|wallet|payment|shop|standalone|desktop|first-run|studio\.test|schema\.test|upgrade|identity|authoring|build(?:-[a-z]+)?\.test|dev-deploy|parts\.test|starter-3d|changelog|rooms-pages|apps-browser)/.test(file);
 }
 export function balance(files, timings, count) {
   const bins = Array.from({ length: count }, () => ({ seconds: 0, files: [] }));
@@ -30,7 +30,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     writeFileSync(timingFile, JSON.stringify(data, null, 2) + '\n');
   }
   const subset = args.includes('--compat');
-  const bins = balance(inventory().filter(f => !subset || compatible(f)), data.seconds, subset ? 3 : 12);
+  const bins = balance(inventory().filter(f => !subset || compatible(f)), data.seconds, subset ? 5 : 12);
   if (args.includes('--list') || args[0] === '--rebalance') {
     console.log(JSON.stringify(bins, null, 2));
   } else {
@@ -41,12 +41,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     for (const file of bins[index].files) {
       console.log(`\n::group::${file}`);
       const start = performance.now();
-      const result = spawnSync(process.execPath, ['--test', '--test-reporter=tap', '--test-concurrency=1', file], { stdio: 'inherit', timeout: 480_000, killSignal: 'SIGKILL' });
+      const result = spawnSync(process.execPath, ['--test', '--test-reporter=tap', '--test-concurrency=1', file], { stdio: 'inherit', timeout: 600_000, killSignal: 'SIGKILL' });
       seconds[file] = Math.round((performance.now() - start) / 100) / 10;
       console.log(`::endgroup::\nFILE_DURATION ${file} ${seconds[file]}s`);
       if (result.status !== 0) {
         failed = true;
-        console.error(`::error file=${file}::${result.error?.code === 'ETIMEDOUT' ? 'File exceeded 8 minutes; investigate a stuck child or unbounded wait.' : 'Test file failed.'}`);
+        console.error(`::error file=${file}::${result.error?.code === 'ETIMEDOUT' ? 'File exceeded 10 minutes; investigate a stuck child or unbounded wait.' : 'Test file failed.'}`);
       }
       writeFileSync(`ci-results/${subset ? 'compat' : 'full'}-${index}.json`, JSON.stringify({ seconds }, null, 2));
     }

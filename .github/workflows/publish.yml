@@ -37,16 +37,15 @@ permissions:
   actions: read
   id-token: write # trusted publishing and provenance
 
-concurrency:
-  group: npm-publish
-  cancel-in-progress: false
-
 jobs:
   publish:
-    if: startsWith(github.ref, 'refs/tags/release-') || (github.event_name == 'workflow_dispatch' && inputs.dry-run)
+    if: github.event_name != 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/release-')
     runs-on: ubuntu-latest
     timeout-minutes: 8
-    environment: ${{ github.event_name == 'workflow_dispatch' && 'ci-dry-run' || 'npm' }}
+    concurrency:
+      group: npm-publish
+      cancel-in-progress: false
+    environment: npm
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -71,20 +70,44 @@ jobs:
         run: node scripts/changelog.mjs --check
       - name: What goes out
         run: node scripts/publish.mjs --check
-      - name: Dry run (same strict packaging rules, no publication)
-        if: github.event_name == 'workflow_dispatch'
-        run: node scripts/publish.mjs --dry-run --strict
       - name: Publish
-        if: github.event_name != 'workflow_dispatch'
         run: node scripts/publish.mjs
+
+  dry-run:
+    if: github.event_name == 'workflow_dispatch' && inputs.dry-run
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - name: Require successful CI on this exact commit (Checks API, fail closed)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          export TARGET_SHA=$(git rev-parse HEAD)
+          node scripts/ci-verified.mjs
+      - uses: ./.github/actions/ci-setup
+        with:
+          node: 24
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: npm 11 (same toolchain as publishing)
+        run: npm install -g npm@11
+      - run: node scripts/changelog.mjs --check
+      - run: node scripts/publish.mjs --check
+      - name: Strict publish dry run (no npm publication, release upload or environment deployment)
+        run: node scripts/publish.mjs --dry-run --strict
 
   desktop:
     # Homie for Claude Desktop: this release's .mcpb (desktop/, scripts/desktop.mjs), checked as the app starts it,
     # and attached to the tag's GitHub release (made when the tag has none), as homie-studio-<version>.mcpb and as
     # homie-studio.mcpb, which releases/latest/download/homie-studio.mcpb always names. The release's notes are the
     # version's CHANGELOG.md section with the extension's line under it (scripts/changelog.mjs --notes).
-    if: startsWith(github.ref, 'refs/tags/release-') || (github.event_name == 'workflow_dispatch' && inputs.dry-run)
-    needs: publish
+    if: always() && (needs.publish.result == 'success' || needs.dry-run.result == 'success')
+    needs: [publish, dry-run]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -111,6 +134,7 @@ jobs:
           gh release upload "$TAG" "desktop/dist/homie-studio-$v.mcpb" desktop/dist/homie-studio.mcpb --clobber
 
   queue-watchdog:
+    if: github.event_name != 'workflow_dispatch'
     name: Fail a release stuck waiting for a runner or environment
     runs-on: ubuntu-latest
     timeout-minutes: 6
