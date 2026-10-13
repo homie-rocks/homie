@@ -27,6 +27,10 @@ runs:
           ~/.cache/homie-studio/chrome
           ~/.cache/puppeteer
         key: chrome-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', 'packages/studio/lib/chrome.mjs') }}
+    # Workspace prepare generates sources outside node_modules (nav and physics).
+    # Run it even on a dependency hit, before calculating the build cache key.
+    - shell: bash
+      run: npm run prepare --workspaces --if-present
     - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: |
