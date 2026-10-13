@@ -1421,7 +1421,8 @@ previous behaviour. The game's action handler still decides its cooldown.
 Residual drawing corrections use `room.predict.blendMs` (100 ms by default),
 slowed on each moving axis to avoid reversing movement (jumping cannot spend
 horizontal correction faster), with a one-second maximum
-(or the explicitly longer blendMs). `snapM` selects the large-error threshold;
+(or the explicitly longer blendMs). Any remainder drains over the final 250 ms
+rather than disappearing on the deadline. `snapM` selects the large-error threshold;
 placements still snap. A placement keeps the established clock phase and
 projects the new body from the snapshot tick to the own tick; it never labels an
 old pose as a future one. Projection is bounded to one second and sends the

@@ -43,6 +43,7 @@ Rules views recover missing input and acknowledge late movement scheduling.
   second (or an explicitly longer blend), including while stationary; `idleHold` no longer holds them indefinitely. Placement counters
   still distinguish respawns from prediction corrections. Vertical travel cannot
   erase a horizontal correction fast enough to reverse the held direction.
+  Remaining offsets drain over the final 250 ms rather than snapping at expiry.
 
 ### Added
 

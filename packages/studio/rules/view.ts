@@ -292,7 +292,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     let waiting = false;
     for (const o of offsets) {
       o.end ??= o.at + Math.max(1000, predict.blendMs);
-      if (now >= o.end) o.fade = 0;
+      const deadlineFade = Math.max(0, Math.min(1, (o.end - now) / 250));
       if (path) {
         // Loss can make even a small correction longer than the distance travelled in
         // 100 ms. Bound its fade by actual progress, or it pulls steady movement backwards.
@@ -319,6 +319,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         }
         o.path = path; o.last = now;
       }
+      // Drain any remaining correction over the final quarter second, including
+      // queued offsets. Expiring it in one frame would itself create a warp.
+      o.fade = Math.min(o.fade, deadlineFade);
       waiting = true;
       sum.x += o.delta.x * o.fade; sum.y += o.delta.y * o.fade; sum.z += o.delta.z * o.fade;
     }
