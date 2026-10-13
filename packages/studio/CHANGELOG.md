@@ -58,8 +58,9 @@ Rules views recover missing input and acknowledge late movement scheduling.
 - Placements preserve the established prediction-clock phase, and the snapshot
   body is advanced to its predicted tick instead of relabelling an old pose.
   Projection is bounded to the server's one-second input window, and its controls
-  are stamped for that same path. Inputs from an earlier placement cannot later
-  change the respawned body.
+  are stamped for that same path. Queued held state from an earlier placement
+  cannot later change the respawned body; discrete presses received before the
+  browser learns of the placement still belong to the player.
 - A fresh control after a browser stall is recorded after resetting the stale
   prediction clock, preventing a short press from moving by the stalled backlog.
 

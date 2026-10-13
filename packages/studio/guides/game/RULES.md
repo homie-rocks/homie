@@ -1424,6 +1424,7 @@ slowed when necessary to avoid reversing movement, with a one-second maximum
 placements still snap. A placement keeps the established clock phase and
 projects the new body from the snapshot tick to the own tick; it never labels an
 old pose as a future one. Projection is bounded to one second and sends the
-controls it used. Inputs stamped before the placement cannot later change the
-new body. `idleHold` no longer keeps a stopped body displaced
+controls it used. Queued held state from an earlier placement cannot later
+change the new body. Newly received discrete presses still belong to the player
+when the browser has not yet learned of that placement. `idleHold` no longer keeps a stopped body displaced
 indefinitely. These drawing settings never alter server truth.

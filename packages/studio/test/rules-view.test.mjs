@@ -1730,7 +1730,7 @@ for(const delayed of [false,true]) test(`solid Stormbreak terrain: six bodies, t
  let inputSeed=743;const inputRandom=()=>{inputSeed=(Math.imul(inputSeed,1664525)+1013904223)>>>0;return inputSeed/4294967296;};
  const r=rig(L,compiled,false,shaper,shaper);
  const open=name=>openRoom({net:{config:cfg(name),WebSocketImpl:r.socket(),post:null}});
- let a=open('Runner');const others=Array.from({length:5},(_,i)=>open('Neighbour'+i));
+ let a=open('Runner');const runnerProbe=globalThis.__homieNet.probe.prediction;const others=Array.from({length:5},(_,i)=>open('Neighbour'+i));
  t.after(()=>{a.close();for(const b of others)b.close();r.stop();});await clock.wait(2500);
  const place=async(at)=>{a.input({ax:0,ay:0});await clock.wait(700);a.command('place',{at});await clock.wait(1100);};
  await place({x:-4,y:7,z:0});a.command('shoot',{direction:1});await clock.wait(1100);assert.ok(Math.abs(a.me.ray-1.5)<.002,`weapon/camera/blast ray hits solid side: ${a.me.ray}, pose ${JSON.stringify(a.me.pos)}, ${JSON.stringify(r.host.core.stats)}`);
@@ -1739,7 +1739,7 @@ for(const delayed of [false,true]) test(`solid Stormbreak terrain: six bodies, t
  await place({x:30,y:0,z:0});a.command('edit',{mode:6});await clock.wait(1100);a.input({ax:4});await clock.wait(1000);assert.ok(Math.abs(a.me.pos.x-31.099)<.003,'live cover in the full terrain');a.input({ax:0});a.command('edit',{mode:0});await clock.wait(1100);a.input({ax:4});await clock.wait(800);assert.ok(a.me.pos.x>32.5,'disabled cover permits traversal');a.input({ax:0});a.command('edit',{mode:1});await clock.wait(1100);
  await place({x:0,y:18,z:0});a.input({ay:-4});await clock.wait(1500);assert.ok(a.me.pos.z>1,'walk up ramp');
  a.input({ay:4});await clock.wait(1500);assert.ok(a.me.pos.z<.2,'walk down ramp');
- await place({x:-3.2,y:14,z:0});a.input({ax:3,jump:true});await clock.wait(550);a.input({ax:0});await clock.wait(1200);assert.ok(a.me.pos.z>.4,'jump onto ramp');
+ await place({x:-3.2,y:14,z:0});a.input({ax:3,jump:true});await clock.wait(550);a.input({ax:0});await clock.wait(1200);assert.ok(a.me.pos.z>.4,`jump onto ramp: ${JSON.stringify({pos:a.me.pos,prediction:runnerProbe(),host:r.host.core.stats})}`);
  a.input({jump:true});await clock.wait(200);assert.ok(a.me.pos.z>1.5,'jump off ramp');a.input({ax:0});
  // Dense hill rims from real-game movement failures, under the same network clock.
  for(const at of [{x:-10.89543,y:26.09822,z:.129555},{x:-19.84526,y:20.9344,z:.511}]){

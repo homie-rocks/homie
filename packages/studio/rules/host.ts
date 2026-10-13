@@ -492,7 +492,10 @@ export function createHost(o: HostOptions): Host {
       // A duplicate: not above the newest stamp this seat has sent. It still counted as the player being there.
       const marker = 1 + kind.input.length + (kind.body?.owner ? 9 : 0);
       const seq = raw[marker] === -471 && Number.isSafeInteger(raw[marker+1]) && raw[marker+1] > 0 ? raw[marker+1] as number : 0;
-      if (seq && r !== body.r) continue; // A previous body placement cannot supply controls to this one.
+      // A discrete action sent before the client learns of a placement still
+      // belongs to its player. Held state from that old placement does not.
+      const action = kind.input.some(([, fd], index) => fd.t === 'press' && raw[index + 1] === 1);
+      if (seq && r !== body.r && !action) continue;
       if (seq ? q.received?.includes(seq) : j <= q.newest) continue;
       // Too early: more than a second ahead. This entry and the rest of the frame are dropped.
       if (j > K + tickHz) { stats.dropped += 1; break; }
@@ -510,7 +513,7 @@ export function createHost(o: HostOptions): Host {
       const claim = kind.body?.owner && raw.length >= i + 9 ? { pos: unpackVec([raw[i], raw[i + 1], raw[i + 2]], c.dims), vel: unpackVec([raw[i + 3], raw[i + 4], raw[i + 5]], c.dims), heading: unpackVec([raw[i + 6], raw[i + 7], raw[i + 8]], c.dims), r } : null;
       q.stamps.push(j);
       if(seq){q.receipts??=[];q.receipts.push([seq,j>K?j:K+1]);if(q.receipts.length>64)q.receipts.shift();}
-      if (j > K) { q.entries.push({ ...(seq ? { placement: r } : {}), source: j, at: j, values, presses, claim, early: Math.min(lateTicks, j - K) }); continue; }
+      if (j > K) { q.entries.push({ ...(seq ? { placement: body.r } : {}), source: j, at: j, values, presses, claim, early: Math.min(lateTicks, j - K) }); continue; }
       // Late: its values hold from the next tick, and its presses fire there if that is within a quarter of a second of its stamp.
       stats.lateEntries += 1;
       if(seq){
@@ -518,9 +521,9 @@ export function createHost(o: HostOptions): Host {
         const at=K+1;
         const same=q.entries.find(e=>e.at===at);
         if(j >= (q.heldAt??0) && (!same || j >= (same.source??0))){
-          if(same){same.placement=r;same.source=j;same.values=values;same.claim=claim;same.presses.push(...presses);}else q.entries.push({placement:r,source:j,at,values,claim,presses});
+          if(same){same.placement=body.r;same.source=j;same.values=values;same.claim=claim;same.presses.push(...presses);}else q.entries.push({placement:body.r,source:j,at,values,claim,presses});
         } else if(presses.length){
-          if(same)same.presses.push(...presses);else q.entries.push({placement:r,source:q.heldAt,at,values:{...q.held},claim:q.claim,presses});
+          if(same)same.presses.push(...presses);else q.entries.push({placement:body.r,source:q.heldAt,at,values:{...q.held},claim:q.claim,presses});
         }
         q.entries.sort((a,b)=>a.at-b.at);
         continue;
