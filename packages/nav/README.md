@@ -347,3 +347,14 @@ neutral platform and ESM output. It imports neither navcat nor three.js.
 
 Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). Bundled third-party
 licenses accompany the generated backend.
+
+
+### Cardinal flow tables
+
+`bakeGridFlow` from `@homie-rocks/nav/Flow.js` bakes a multi-source, four-neighbour
+field for tile games. Pass `{width,height,data,wrapX?,wrapY?}` (zero cells are open)
+and a list of goal cell indices. It returns `Int32Array` tables `distance` and
+`next`; -1 means unreachable, and a goal points to itself. Ties use left/up/right/down.
+An optional third callback receives deterministic work charges before allocation
+and during traversal. The rules toolkit ships this same dependency-free source
+with its standalone runtime; `node scripts/studio-nav.mjs --check` checks parity.

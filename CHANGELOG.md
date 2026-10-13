@@ -17,9 +17,52 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.47.0] - 2026-10-13
+
+**Plugin 0.47.0** · Wrapped worlds and generated collision maps.
+
+Games can wrap across map edges and replace seeded tile levels during play, with the same collision geometry in server rules and prediction.
+
+### Added
+
+- Maps may opt into wrapping independently on x, y and z with `wrap: {x:true}`;
+  periods come from bounds. Bodies, sweeps, rays, overlaps, support, near/box queries,
+  area events, ranged effects, spatial delivery, rewind and view interpolation use
+  periodic geometry. Crossing an edge wraps rather than clamps. Sweeps/rays retain
+  their supplied direction and pay for each periodic image they visit.
+- Room handlers can call `world.map.replace(data)`. A replacement is validated,
+  indexed and activated atomically at the next tick, preserving bounds and wrapping.
+  Compact current/pending revisions are saved and sent once per collision revision;
+  local prediction replays the same compiled map by activation tick.
+- Maps accept row-major `tiles` with width, height, size, optional origin and solid
+  height. Nonzero cells compile to indexed horizontal runs. Rules and movement can
+  query `map.tile(x,y)`; views read `room.map.tiles`.
+- Named multi-source cardinal `tiles.flows` bake during map compilation. Rules and
+  movement use constant-work `map.distance(name,x,y)` and `map.flow(name,x,y)`.
+  The standalone rules runtime ships the nav package's new `Flow.js` baker, checked
+  against its source in the release gate. Generation, copying, indexing and baking
+  are charged to the rules handler; ordinary static-map budget charges are unchanged.
+- Seeded virtual-time release cases cover two-view seam crossing in 2D/3D and
+  generated-map collision, mid-round regeneration and restore, including 300 ms
+  delay and 12% loss. Geometry and navigation tests cover periodic casts,
+  multi-period movement, atomic failure and independently checked shortest paths.
+  Eight-player generation/restore replays also match every save and snapshot
+  across Node, Chrome and workerd for 240 seeded ticks.
+
+### Fixed
+
+- Handlers reached synchronously by `world.dispatch` now report their coverage to
+  the build checker, including failures, without opening a second handler budget.
+- The rewrite guide specifies named helper re-exports (`export *` is refused), and
+  the rules guide explains that mandatory spawn fields precede deferred `arrive`.
+
+This release covers wrapped worlds and generated levels. Arbitrary triangle-mesh
+collision, the measured Rapier-versus-kernel decision, first-class integration
+substeps, and the assisted rewrite command remain follow-up work.
+
 ## [0.46.6] - 2026-10-11
 
-**Plugin 0.46.6** · Big rooms: what one room carries, measured.
+**Plugin 0.46.6** · Big rooms: what one room carries, measured. · [release-2026-10-11-studio-0.46.6](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-11-studio-0.46.6)
 
 What one room object carries on Cloudflare, measured in six trials and stated: with a light game at 20 ticks a second, 300 players with margin, 600 at the edge, 800 to 1,000 only by luck.
 

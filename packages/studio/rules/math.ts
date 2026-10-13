@@ -1,3 +1,5 @@
+import { wrapPoint } from './topology.mjs';
+import { tileApi } from './tiles.ts';
 import { nearbyMap } from './map-index.ts';
 import { collisionQueries } from './live.ts';
 /*
@@ -184,7 +186,7 @@ export const exact = Object.freeze({ sin, cos, atan, atan2, exp, log, pow });
 /* ------------------------------------------------------------------ the ground plane: a point or a circle against the map */
 
 /** The shapes of a map the sweep reads (rules.ts `GameMap` has them). */
-export interface MapShapes { staticMap?: MapShapes; bounds: { min: Vec3; max: Vec3 }; boxes: readonly { min: Vec3; max: Vec3 }[]; circles: readonly { at: Vec3; r: number }[]; spheres?: readonly { at: Vec3; r: number }[]; capsules?: readonly { at: Vec3; r: number; height: number }[]; heightTiles?: readonly import('./rules.ts').MapHeightTile[] }
+export interface MapShapes { wrap?: import('./rules.ts').MapWrap; staticMap?: MapShapes; bounds: { min: Vec3; max: Vec3 }; boxes: readonly { min: Vec3; max: Vec3 }[]; circles: readonly { at: Vec3; r: number }[]; spheres?: readonly { at: Vec3; r: number }[]; capsules?: readonly { at: Vec3; r: number; height: number }[]; heightTiles?: readonly import('./rules.ts').MapHeightTile[] }
 /** How close a swept body stops to what it hit, in metres. */
 export const SKIN = 0.001;
 
@@ -278,16 +280,16 @@ export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: 
     const h = castMap3(map, p, d, shape);
     const length = Math.sqrt(dx * dx + dy * dy + d.z * d.z);
     const t = h ? Math.max(0, h.t - (length > 0 ? SKIN / length : 0)) : 1;
-    const at = v(fr(px + dx * t), fr(py + dy * t), fr(p.z + d.z * t));
+    const at = wrapPoint(v(fr(px + dx * t), fr(py + dy * t), fr(p.z + d.z * t)), map.wrap);
     put(body, 'pos', at); if (own(options, 'ground') !== false) put(body, 'grounded', restsOnMap(map, at, shape));
     return h ? Object.freeze({ at, normal: v(h.nx, h.ny, h.nz), ...(h.id ? { entity: h.id } : {}) }) : undefined;
   }
   const { hit: h } = castMap(map, px, py, dx, dy, radius);
   put(body, 'grounded', true);
-  if (!h) { put(body, 'pos', v(fr(px + dx), fr(py + dy), 0)); return undefined; }
+  if (!h) { put(body, 'pos', wrapPoint(v(fr(px + dx), fr(py + dy), 0), map.wrap)); return undefined; }
   const l = Math.sqrt(dx * dx + dy * dy);
   const t = l > 0 ? Math.max(0, h.t - SKIN / l) : 0;
-  const at = v(fr(px + dx * t), fr(py + dy * t), 0);
+  const at = wrapPoint(v(fr(px + dx * t), fr(py + dy * t), 0), map.wrap);
   put(body, 'pos', at);
   return Object.freeze({ at, normal: v(h.nx, h.ny, 0), ...(h.id ? { entity: h.id } : {}) });
 }
@@ -299,12 +301,13 @@ export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: 
  */
 export function moveContext(o: { tick: () => number; tickHz: number; tune: unknown; map: MapShapes; name: string; spots: Readonly<Record<string, readonly unknown[]>>; radius: () => number; shape?: () => BodyShape; dims: number; geometry?: () => MapShapes; self?: () => string | undefined }): unknown {
   const none = Object.freeze([]);
+  const currentMap = () => (o.geometry?.()?.staticMap ?? o.geometry?.() ?? o.map) as import('./rules.ts').GameMap;
   const queries = collisionQueries(() => o.geometry?.() ?? o.map, () => o.shape?.() ?? {shape: 'sphere', radius: o.radius(), height: 2 * o.radius()}, o.dims, o.self);
   return brand(Object.freeze({
     get tick() { return o.tick(); }, dt: 1 / o.tickHz, tune: o.tune, math,
     // As the server's `ctx.ticks` reads it: a plain number, or nothing.
     ticks: (seconds: unknown): number => { const s = num(seconds); const n = Math.round(s * o.tickHz); return s > 0 && Number.isFinite(n) ? Math.max(1, n) : 0; },
     world: brand(Object.freeze(queries)),
-    map: brand(Object.freeze({ name: o.name, spot: (name: string) => (own(o.spots, name) as readonly unknown[] | undefined)?.[0], spots: (name: string) => own(o.spots, name) ?? none, ...queries })),
+    map: brand(Object.freeze({ ...tileApi(currentMap), name: o.name, spot: (name: string) => (own(currentMap().spots ?? o.spots, name) as readonly unknown[] | undefined)?.[0], spots: (name: string) => own(currentMap().spots ?? o.spots, name) ?? none, ...queries })),
   }));
 }

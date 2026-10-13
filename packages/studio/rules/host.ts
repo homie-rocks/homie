@@ -1,3 +1,4 @@
+import { periodicDelta } from './topology.mjs';
 import { stageTimings } from './timing.mjs';
 /*
  * host.ts — the host runtime: a rules module playing the host's part on the wire.
@@ -675,7 +676,7 @@ export function createHost(o: HostOptions): Host {
           const watching = all.filter((_, n) => { const a = x.list[n][3]; return !a || a[0] >= 0; });
           for (const seat of present.keys()) {
             const l = bodies.get(seat);
-            const mine = !l ? watching : all.filter((_, n) => { const a = x.list[n][3]; return !a || a[1].includes(l.id) || (a[0] >= 0 && a[2] !== null && Math.hypot(a[2][0] - l.pos.x, a[2][1] - l.pos.y, a[2][2] - l.pos.z) <= a[0]); });
+            const mine = !l ? watching : all.filter((_, n) => { const a = x.list[n][3]; return !a || a[1].includes(l.id) || (a[0] >= 0 && a[2] !== null && Math.hypot(periodicDelta(l.pos.x,a[2][0],o.compiled.map.wrap?.x), periodicDelta(l.pos.y,a[2][1],o.compiled.map.wrap?.y), periodicDelta(l.pos.z,a[2][2],o.compiled.map.wrap?.z)) <= a[0]); });
             if (mine.length) o.send({ t: 'ev', from: null, k: 'fx', d: [x.tick, mine], to: seat });
           }
           if (watching.length) o.send({ t: 'ev', from: null, k: 'fx', d: [x.tick, watching], to: -1 });

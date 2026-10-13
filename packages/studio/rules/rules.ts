@@ -1,3 +1,4 @@
+import { compileTiles, type Tiles } from './tiles.ts';
 import {prepareGraph,type RouteNode} from './navigation.ts';
 import { prepareTile as prepareExactTile } from './terrain.ts';
 import { prepareTile as prepareLegacyTile } from './terrain-legacy.ts';
@@ -289,7 +290,8 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
 export interface MapBox { readonly min: Vec3; readonly max: Vec3 }
 export interface MapCircle { readonly at: Vec3; readonly r: number }
 export interface MapHeightTile { readonly base?: number; readonly diagonal?: '00-11' | '10-01'; readonly at: Vec3; readonly size: Readonly<{ x: number; y: number }>; readonly heights: readonly [number, number, number, number] }
-export interface GameMap { readonly name: string; readonly heightTiles: readonly MapHeightTile[]; readonly bounds: MapBox; readonly boxes: readonly MapBox[]; readonly circles: readonly MapCircle[]; readonly spheres: readonly MapCircle[]; readonly capsules: readonly (MapCircle & { height: number })[]; readonly spots: Readonly<Record<string, readonly Vec3[]>> }
+export type MapWrap = Readonly<Partial<Record<'x' | 'y' | 'z', readonly [number, number]>>>;
+export interface GameMap { readonly tiles?: Tiles; readonly wrap?: MapWrap; readonly name: string; readonly heightTiles: readonly MapHeightTile[]; readonly bounds: MapBox; readonly boxes: readonly MapBox[]; readonly circles: readonly MapCircle[]; readonly spheres: readonly MapCircle[]; readonly capsules: readonly (MapCircle & { height: number })[]; readonly spots: Readonly<Record<string, readonly Vec3[]>> }
 
 const vecOf = (a: unknown, what: string): Vec3 => {
   const p = Array.isArray(a) ? { x: a[0], y: a[1], z: a[2] ?? 0 } : a as { x?: unknown; y?: unknown; z?: unknown } | null;
@@ -323,8 +325,24 @@ export function compileMap(raw: unknown, name = 'main'): GameMap {
   };
   if ([m.boxes, m.circles, m.spheres, m.capsules, m.heightTiles].some(list => list !== undefined && !Array.isArray(list))) throw new Error(`${where}: shapes are lists`);
   if ([m.boxes, m.circles, m.spheres, m.capsules, m.heightTiles].reduce((n, list) => n + (list?.length ?? 0), 0) > 100000) throw new Error(`${where}: at most 100000 static shapes`);
+  const bounds = box(m.bounds, `${where} bounds`);
+  let wrap: MapWrap | undefined;
+  if (m.wrap !== undefined) {
+    if (!m.wrap || typeof m.wrap !== 'object' || Array.isArray(m.wrap)) throw new Error(`${where}: wrap names axes x, y, z`);
+    const axes: Partial<Record<'x'|'y'|'z', readonly [number,number]>> = {};
+    for (const key of Object.keys(m.wrap)) {
+      if (!['x','y','z'].includes(key) || m.wrap[key] !== true) throw new Error(`${where}: wrap axes are true (period comes from bounds)`);
+      const k = key as 'x'|'y'|'z';
+      if (!(bounds.max[k] > bounds.min[k]) || !Number.isFinite(bounds.max[k]-bounds.min[k])) throw new Error(`${where}: wrapped axis needs finite positive extent`);
+      axes[k] = Object.freeze([bounds.min[k], bounds.max[k]]);
+    }
+    if(Object.keys(axes).length) wrap = Object.freeze(axes);
+  }
+  const tiled=compileTiles(m.tiles,wrap);
+  if(tiled) for(const k of ['x','y'] as const) if(wrap?.[k] && (tiled.tiles.at[k]!==bounds.min[k] || tiled.tiles.at[k]+tiled.tiles.size*(k==='x'?tiled.tiles.width:tiled.tiles.height)!==bounds.max[k])) throw new Error(`${where}: tiles must span each wrapped axis`);
   const result = Object.freeze({
-    name,
+    ...(tiled?{tiles:tiled.tiles}:{}),
+    name, ...(wrap ? {wrap} : {}),
     heightTiles: Object.freeze((m.heightTiles ?? []).map((t: any, i: number) => {
       const what = `${where} heightTiles[${i}]`;
       const at = vecOf(t?.at, `${what}.at`);
@@ -342,8 +360,8 @@ export function compileMap(raw: unknown, name = 'main'): GameMap {
       if (!Number.isFinite(c.height) || c.height < 2 * shape.r) throw new Error(`${where} capsules[${i}]: height is at least twice the radius`);
       return Object.freeze({ ...shape, height: c.height });
     })),
-    bounds: box(m.bounds, `${where} bounds`),
-    boxes: Object.freeze((Array.isArray(m.boxes) ? m.boxes : []).map((b: unknown, i: number) => box(b, `${where} boxes[${i}]`))),
+    bounds,
+    boxes: Object.freeze([...(tiled?.boxes??[]),...(Array.isArray(m.boxes) ? m.boxes : [])].map((b: unknown, i: number) => box(b, `${where} boxes[${i}]`))),
     circles: Object.freeze((Array.isArray(m.circles) ? m.circles : []).map((c: any, i: number) => {
       const r = Number(c?.r);
       if (!Number.isFinite(r) || !(r > 0)) throw new Error(`${where} circles[${i}] needs "r", its radius in metres`);

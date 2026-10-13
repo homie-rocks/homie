@@ -22,6 +22,7 @@ export function auditDeclarations(sources) {
         const line=tree.getLineAndCharacterOfPosition(node.getStart()).line+1;
         const source=text.split('\n')[line-1];
         let reason='UNEXPLAINED';
+        if(file==='rules/types.ts' && declaration==='World' && source.includes('replace(data:Record<string,unknown>)'))reason='Raw replacement map data is copied, metered and compiled at the map.replace admission boundary before activation.';
         if(['Goal','GuideRequest'].includes(declaration))reason='Generic fallback without a vocabulary; generated GameGoal and GameRequest replace it when names and argument shapes exist.';
         if(declaration==='GuideDecision')reason='Untrusted floor result; the admission boundary validates goal, line and argument names and values together.';
         if(runtime && file==='rules/rules.ts' && ['RuntimeWorld','RuntimeSelf','Handler','RoomHandler','MoveFn','GuideDef','EntityDef','AskDef','RulesDef'].includes(declaration)) reason='Raw runtime declaration; replaced by the generated Definition, Entity and Moves callback signatures before game code is checked.';

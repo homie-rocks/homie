@@ -75,6 +75,12 @@ Cloudflare or physical-phone capacity guarantees.
 
 ## Write and change rules plus view
 
+For wrapping worlds or generated levels, use the map's opt-in `wrap` and room-scoped
+`world.map.replace` APIs described in RULES.md's **Wrapped worlds and generated levels**.
+Prefer one indexed map revision for a generated maze; keep independently moving
+doors and platforms as live colliders. Generation and navigation baking spend the
+room handler's budget.
+
 **Read [RULES.md](RULES.md) before writing code.** All five starters use this contract.
 Work in few, large edits: read each source file once, decide its changes, then
 make every change it needs in ONE file_edit with an edits list. Build after each

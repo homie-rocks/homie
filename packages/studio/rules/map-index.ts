@@ -1,3 +1,4 @@
+import { imageOffsets } from './topology.mjs';
 /** Immutable build-time BVH. Queries charge nodes visited and narrow-phase work,
  * never the number of shapes in the level. Live geometry is a separate overlay. */
 import { charge } from './guard.ts';
@@ -31,6 +32,29 @@ export function indexMap(map: MapShapes): void {
 }
 /** The segment of a body's reference point against bounds expanded by its extents. */
 export function nearbyMap(map: MapShapes, p:Vec3, d:Vec3, radius:number, height:number, dims=3):MapShapes {
+  if (!map.wrap) return nearbyFlatMap(map,p,d,radius,height,dims);
+  const bounds={min:{...map.bounds.min},max:{...map.bounds.max}};
+  for(const k of axes)if(map.wrap[k]){bounds.min[k]=-Infinity;bounds.max[k]=Infinity;}
+  const out:any={bounds,boxes:[],circles:[],spheres:[],capsules:[],heightTiles:[]};
+  const extent={min:{...map.bounds.min},max:{...map.bounds.max}};
+  const root=indexes.get(map.staticMap??map);
+  if(root) for(const k of axes){if(Number.isFinite(root.min[k]))extent.min[k]=Math.min(extent.min[k],root.min[k]);if(Number.isFinite(root.max[k]))extent.max[k]=Math.max(extent.max[k],root.max[k]);}
+  if(map.staticMap)for(const key of ['boxes','circles','spheres','capsules'] as const)for(const raw of map[key]??[]){
+    charge(12);const v:any=raw;
+    for(const k of axes){const low=key==='boxes'?v.min[k]:v.at[k]-v.r,high=key==='boxes'?v.max[k]:v.at[k]+(k==='z'&&key==='capsules'?v.height:v.r);extent.min[k]=Math.min(extent.min[k],low);extent.max[k]=Math.max(extent.max[k],high);}
+  }
+  for(const offset of imageOffsets(extent,map.wrap,p,d,radius,height,dims)){
+    charge(48);
+    const found=nearbyFlatMap(map,{x:p.x-offset.x,y:p.y-offset.y,z:p.z-offset.z},d,radius,height,dims);
+    const shift=(v:Vec3)=>({x:v.x+offset.x,y:v.y+offset.y,z:v.z+offset.z});
+    for(const key of ['boxes','circles','spheres','capsules','heightTiles'] as const)for(const value of found[key]??[]){
+      charge(24);const v:any=value;
+      out[key].push(key==='boxes'?{...v,min:shift(v.min),max:shift(v.max)}:{...v,at:shift(v.at)});
+    }
+  }
+  return out;
+}
+function nearbyFlatMap(map: MapShapes, p:Vec3, d:Vec3, radius:number, height:number, dims=3):MapShapes {
   const parent=map.staticMap;
   const root=indexes.get(parent??map);
   if(!root)return map;

@@ -3,5 +3,5 @@
 import { testEnginePackage } from './contract.mjs';
 
 testEnginePackage(new URL('..', import.meta.url), {
-  publicModules: ['Bake', 'Crowd', 'Grid', 'Mesh', 'Query', 'Random', 'State', 'Three'],
+  publicModules: ['Bake', 'Crowd', 'Flow', 'Grid', 'Mesh', 'Query', 'Random', 'State', 'Three'],
 });

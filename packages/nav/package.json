@@ -46,6 +46,10 @@
     "./Three.js": {
       "types": "./dist/Three.d.ts",
       "default": "./dist/Three.js"
+    },
+    "./Flow.js": {
+      "types": "./dist/Flow.d.ts",
+      "default": "./dist/Flow.js"
     }
   },
   "files": [

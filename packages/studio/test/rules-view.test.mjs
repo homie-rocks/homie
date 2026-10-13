@@ -38,7 +38,21 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
   if (runaway) {
     dir = join(scratch, `variant-${runaway}`); cpSync(COIN_DASH, dir, { recursive: true });
     const file = join(dir, 'src/rules.ts');
-    if (runaway === 'pulses') {
+    if (runaway === 'generated') {
+      writeFileSync(join(dir,'src/view.ts'),`import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.command('regenerate');`);
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[0,0],max:[25,25]},wrap:{x:true}}));
+      writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
+function level(w){const data=[];for(let y=0;y<25;y++){for(let x=0;x<25;x++){data.push(y===12?0:x===0||x===24||y===0||y===24||x===w.shared.wall?1:0);}}w.map.replace({bounds:{min:[0,0],max:[25,25]},wrap:{x:true},tiles:{width:25,height:25,size:1,data,flows:{home:[301]}}});}
+export default defineRules({contract:2,space:{dims:2},move,map:'./map',shared:{wall:f.u8({init:5})},shapes:{commands:{regenerate:{}},events:{regenerate:{}}},entities:{runner:{player:true,input:{ax:f.i8()},motion:{tile:f.u16(),distance:f.i16()},body:{shape:'circle',radius:.2,maxSpeed:4},commands:{regenerate(w){w.sendRoom('regenerate');}}}},room:{bots:{keep:0},start(w){level(w);},on:{regenerate(w){w.shared.wall=8;level(w);}},join(c,p){return{kind:'runner',at:{x:2,y:10+p.seat,z:0}};}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.motion.tile=c.map.tile(5,10);b.motion.distance=c.map.distance('home',Math.floor(b.pos.x),Math.floor(b.pos.y));c.world.sweep(b,{x:i.ax*4*c.dt,y:0,z:0});}});`);
+    } else if (runaway === 'wrap2' || runaway === 'wrap3') {
+      const dims=runaway==='wrap2'?2:3;
+      writeFileSync(join(dir,'src/view.ts'),`import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.input({ax:1});`);
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[0,0,0],max:[20,20,20]},wrap:{x:true,y:true,...(dims===3?{z:true}:{})}}));
+      writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
+export default defineRules({contract:2,space:{dims:${dims}},move,map:'./map',entities:{runner:{player:true,input:{ax:f.i8()},body:{shape:'${dims===2?'circle':'sphere'}',radius:.2,maxSpeed:4},fields:{neighbours:f.u8()},tick(w,s){s.neighbours=w.near(s.pos,3,'runner').length;}}},room:{bots:{keep:0},join(c,p){return {kind:'runner',at:{x:p.seat===0?19:1,y:10,z:${dims===2?0:10}}};}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax*4,y:0,z:0};c.world.sweep(b,c.math.scale(b.vel,c.dt));}});`);
+    } else if (runaway === 'pulses') {
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
 export default defineRules({contract:2,space:{dims:2},move,map:'./map',entities:{runner:{player:true,input:{select:f.pulse()},fields:{actions:f.list(f.u8(),64),secret:f.text(20,{init:'brain-secret',visibility:'server'}),ammo:f.u8({init:24,visibility:'owner'}),damage:f.u16({init:52,visibility:'results'})},body:{shape:'circle',radius:.4,maxSpeed:0},tick(w,s){if(s.input.select)s.actions=[...s.actions,s.input.select];}}},room:{rounds:{seconds:60,breakSeconds:1},bots:{keep:0},join(c,p){return{kind:'runner',at:{x:p.seat*2,y:0,z:0}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(){}});`);
@@ -2019,4 +2033,60 @@ for(const [each,expect] of [[0,'hits'],[75,'mixed'],[150,'misses']])test(`a pred
  if(expect==='hits')assert.ok(n('confirmed')>=38,'inside the allowance every shot at the drawn target lands');
  if(expect==='misses')assert.ok(n('predicted')<=2,'far past the cap the drawn target is not where the server looks, and the predictor shows no hit');
  assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+});
+
+for (const dims of [2,3]) for (const delayed of [false,true]) test(`wrapped world ${dims}D: two spatial views, seam interpolation, replay and restore${delayed?' with 300 ms loss':''}`,async t=>{
+  const {L,compiled,openRoom}=await coinDashKit('server',false,20,'wrap'+dims,{},3);
+  const clock=virtualTime(t),shape=predictionShaper({delay:delayed?300:0,loss:delayed?.12:0,seed:4700+dims});
+  const r=gateRig(L,compiled,false,shape,shape);
+  const a=openRoom({net:{config:cfg('Left'),WebSocketImpl:r.socket(),post:null}}),b=openRoom({net:{config:cfg('Right'),WebSocketImpl:r.socket(),post:null}});
+  t.after(()=>{a.close();b.close();r.stop();});await clock.wait(2500);
+  assert.ok(a.get(b.me.id),'player is visible across the edge');assert.ok(b.get(a.me.id),'visibility is symmetric');
+  assert.equal(a.me.neighbours,2);assert.equal(b.me.neighbours,2);
+  let prev=a.me.pos.x,crossed=false,maxStep=0; a.input({ax:1});
+  for(let i=0;i<70;i++){await clock.wait(16);const x=a.me.pos.x,d=((x-prev+30)%20)-10;maxStep=Math.max(maxStep,Math.abs(d));if(x<prev-10)crossed=true;assert.ok(Math.abs(d)<.35,`seam streak ${prev} -> ${x}`);prev=x;}
+  a.input({ax:0});await clock.wait(2000);assert.ok(crossed,'body wraps instead of clamping');
+  const restored=L.C.createCore(compiled,{restore:r.host.core.save()});assert.deepEqual(restored.snapshot(),r.host.core.snapshot());
+  assert.equal(r.host.core.stats.errors,0);t.diagnostic(JSON.stringify({dims,delayed,maxDrawStep:maxStep,stats:r.host.core.stats}));
+});
+
+for(const delayed of [false,true])test(`generated map: atomic collision revision, flow lookup, mid-round regeneration and restore${delayed?' at 300 ms loss':''}`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'generated');
+ const clock=virtualTime(t),shape=predictionShaper({delay:delayed?300:0,loss:delayed?.12:0,seed:4725}),r=rig(L,compiled,false,shape,shape);
+ const a=openRoom({net:{config:cfg('Dog'),WebSocketImpl:r.socket(),post:null}}),b=openRoom({net:{config:cfg('Hunter'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();b.close();r.stop();});
+ await clock.wait(2500);assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+ assert.equal(a.map.tiles.data[255],1);assert.equal(a.me.motion.tile,1);assert.ok(a.me.motion.distance>=0);
+ a.input({ax:1});await clock.wait(1800);assert.ok(Math.abs(a.me.pos.x-4.799)<.003,`wall at 5: ${a.me.pos.x}`);
+ const n=a.round.n;a.command('regenerate');await clock.wait(2200);assert.equal(a.round.n,n);assert.equal(a.map.tiles.data[255],0);assert.equal(b.map.tiles.data[258],1);assert.equal(a.me.motion.tile,0);
+ assert.ok(Math.abs(a.me.pos.x-7.799)<.003,`new wall at 8: ${a.me.pos.x}`);
+ const saved=r.host.core.save(),restored=L.C.createCore(compiled,{restore:saved});assert.deepEqual(restored.save(),saved);assert.deepEqual(restored.snapshot(),r.host.core.snapshot());
+ assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);assert.equal(r.host.core.stats.ticksCut,0);t.diagnostic(JSON.stringify({delayed,mapBytes:JSON.stringify(saved.maps).length,stats:r.host.core.stats}));
+});
+
+test('generated map follows offline fallback and returns to the server revision',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',true,20,'generated');
+ const clock=virtualTime(t),r=rig(L,compiled),a=openRoom({net:{config:cfg('Dog'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(1000);assert.equal(a.map.tiles.data[255],1);
+ r.network.up=false;r.sockets[0].cut();await clock.wait(6500);assert.equal(a.status,'playing');
+ a.command('regenerate');await clock.wait(1200);assert.equal(a.map.tiles.data[255],0);assert.equal(a.map.tiles.data[258],1);
+ r.network.up=true;await clock.wait(30000);assert.equal(a.net.connected,true);assert.equal(a.net.rulesHosting,false);
+ assert.equal(a.map.tiles.data[255],1,'offline map never replaces the authoritative room map');
+});
+
+test('generated map activates immediately when its pending snapshot was lost',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'generated');
+ const clock=virtualTime(t);let dropped=0,received=null;
+ const r=rig(L,compiled,false,m=>{
+  const meta=m.d?.[2]?.[3];
+  if(meta?.previousMap&&meta.map?.[1]?.tiles?.data[255]===0){dropped++;return null;}
+  return 0;
+ });
+ const a=openRoom({net:{config:cfg('Dog'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(1000);assert.equal(a.map.tiles.data[255],1);
+ const socket=r.sockets[0],deliver=socket.onmessage;
+ socket.onmessage=e=>{const m=JSON.parse(e.data);deliver.call(socket,e);if(m.t==='snap'&&m.d?.[2]?.[3]?.map?.[1]?.tiles?.data[255]===0)received=m;};
+ a.command('regenerate');
+ for(let ms=0;ms<500&&!received;ms++)await clock.wait(1);
+ assert.ok(dropped>0,'the pending revision was lost');assert.ok(received,'the active revision arrived');
+ assert.equal(a.map.tiles.data[255],0,'map activation uses its own tick, not the live collider revision tick');
 });

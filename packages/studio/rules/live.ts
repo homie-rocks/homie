@@ -1,3 +1,4 @@
+import {wrapPoint} from './topology.mjs';
 import { rayQuery, raySnapshot, type QueryTarget } from './query.ts';
 import { overlapsTerrain } from './terrain.ts';
 import { nearbyMap } from './map-index.ts';
@@ -10,7 +11,7 @@ import { castMap3, solidAt, type BodyShape } from './collision.ts';
 import { sweepMap, rayBox, rayCircle } from './math.ts';
 
 export type ColliderRow = [string, string, number, number, number, number, number, number, {kind: string; query?: QueryDef; fields: Record<string, number | string | boolean>}?];
-export type CollisionRevision = [number, number, ColliderRow[]];
+export type CollisionRevision = [number, number, ColliderRow[], {wrap?: import('./rules.ts').MapWrap; map?: import('./map-state.ts').MapRevision | null; previousMap?: import('./map-state.ts').MapRevision | null}?];
 export function colliderRow(id: string, at: Vec3, body: BodyShape, def: ColliderDef, fields: Record<string, unknown>, kind?: string, query?: QueryDef): ColliderRow | null {
   const opts = def === true ? {} : def;
   if (opts.enabled && fields[opts.enabled] !== true) return null;
@@ -44,7 +45,7 @@ export function collisionMap(map: MapShapes, rows: readonly ColliderRow[]): MapS
     else if (shape === 'sphere') spheres.push({ at: { x, y, z: z + w / 2 }, r: w / 2, id } as any);
     else capsules.push({ at, r: w / 2, height: h, id } as any);
   }
-  const combined = { bounds: map.bounds, staticMap: map, boxes, circles, spheres, capsules };
+  const combined = { ...(map.wrap?{wrap:map.wrap}:{}), bounds: map.bounds, staticMap: map, boxes, circles, spheres, capsules };
   rowsOf.set(combined, rows);
   return combined;
 }
@@ -71,7 +72,7 @@ export function collisionQueries(map: () => MapShapes, shape: () => BodyShape, d
       const d = typeof distance === 'number' && Number.isFinite(distance) ? Math.max(0, Math.min(10000, distance)) : 0;
       if (dims === 2) return Object.freeze({ at: Object.freeze(p), normal: Object.freeze({ x: 0, y: 0, z: 1 }), dist: 0 });
       const h = castMap3(m, p, { x: 0, y: 0, z: -d }, shape());
-      return h && h.nz > 0.5 ? Object.freeze({ at: Object.freeze({ ...p, z: p.z - d * h.t }), normal: Object.freeze({ x: h.nx, y: h.ny, z: h.nz }), dist: d * h.t, ...(h.id ? { entity: h.id } : {}) }) : undefined;
+      return h && h.nz > 0.5 ? Object.freeze({ at: Object.freeze(wrapPoint({ ...p, z: p.z - d * h.t },m.wrap)), normal: Object.freeze({ x: h.nx, y: h.ny, z: h.nz }), dist: d * h.t, ...(h.id ? { entity: h.id } : {}) }) : undefined;
     },
     overlaps: (body: unknown) => {
       const p = position(body), s = shape(), a = solidAt(p, s), m = nearbyMap(map(), p, {x:0,y:0,z:0}, s.radius, s.height || 2*s.radius, dims);
