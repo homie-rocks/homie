@@ -307,7 +307,13 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
           // Fading the offset must not add another fraction of that accelerated speed.
           const allowance = length ? (myKind()?.maxSpeed ?? 0) * elapsed / 1000 / length : 1;
           const release = settled && catchTick === null ? Math.min(allowance, elapsed / predict.blendMs) : 0;
-          const progress = length ? Math.min(allowance, distance(path, o.path) * 0.8 / length) : 1;
+          let progress = length ? Math.min(allowance, distance(path, o.path) * 0.8 / length) : 1;
+          // Travel on one axis cannot pay for a correction on another. In particular,
+          // a jump must not erase a horizontal offset faster than running advances it.
+          for (const axis of ['x', 'y', 'z'] as const) {
+            const travelled = periodicDelta(o.path[axis], path[axis], map.wrap?.[axis]);
+            if (o.delta[axis] * travelled > 0) progress = Math.min(progress, .8 * Math.abs(travelled / o.delta[axis]));
+          }
           const nominal = now >= o.end ? 0 : Math.max(0, Math.min(1, 1 - (now - o.at) / predict.blendMs));
           o.fade = Math.max(nominal, o.fade - Math.max(release, progress));
         }

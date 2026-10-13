@@ -158,11 +158,11 @@ commands:{shout(w,s,e){w.emit('ping',s.pos,{n:1});w.emit('whisper',s.pos,{n:2},{
 target:{body:{shape:'box',radius:.5,height:2,maxSpeed:0}},mover:{body:{shape:'box',radius:.15,height:2,maxSpeed:2}},cover:{body:{shape:'box',radius:.5,height:2,maxSpeed:0}}},
 room:{historySeconds:1,${runaway === 'round3' ? 'rewindSeconds:.25,' : ''}bots:{keep:0},join(c,p){return{kind:'runner',at:{x:p.seat===2?40:p.seat*3,y:0,z:0}};},start(w){w.spawn('target',{x:0,y:4,z:0});w.spawn('mover',{x:8,y:0,z:0});}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.pos={x:b.pos.x+i.ax*6.4*c.dt,y:b.pos.y,z:0};},mover(b,i,c){b.pos={x:8,y:c.tick*.1,z:0};b.vel={x:0,y:.1/c.dt,z:0};}});`);
-    } else if (runaway === 'push') {
+    } else if (runaway === 'push' || runaway === 'diagonal-push') {
       writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-1000, -1000], max: [1000, 1000] } }));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules'; import {move} from './move';
-export default defineRules({contract:2,space:{dims:2},move,shapes:{commands:{bump:{}}},entities:{runner:{player:true,motion:{push:f.ticks()},input:{ax:f.i8()},body:{shape:'circle',radius:.5,maxSpeed:6},commands:{bump(world,self){self.motion.push=world.ticks(.4);}}}},room:{bots:{keep:0},join(){return {kind:'runner',at:{x:0,y:0,z:0}}}},map:'./map'});`);
-      writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax/127*6,y:0,z:0};if(b.motion.push>0){b.motion.push-=1;b.vel={x:0,y:12,z:0};}c.map.sweep(b,c.math.scale(b.vel,c.dt));}});`);
+export default defineRules({contract:2,space:{dims:2},move,shapes:{commands:{bump:{}}},entities:{runner:{player:true,motion:{push:f.ticks()},input:{ax:f.i8()},body:{shape:'circle',radius:.5,maxSpeed:${runaway==='diagonal-push'?30:6}},commands:{bump(world,self){self.motion.push=world.ticks(.4);}}}},room:{bots:{keep:0},join(){return {kind:'runner',at:{x:0,y:0,z:0}}}},map:'./map'});`);
+      writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax/127*6,y:${runaway==='diagonal-push'?20:0},z:0};if(b.motion.push>0){b.motion.push-=1;b.vel={x:0,y:${runaway==='diagonal-push'?20:12},z:0};}c.map.sweep(b,c.math.scale(b.vel,c.dt));}});`);
     } else writeFileSync(file, readFileSync(file, 'utf8').replace('commands: {},', 'commands: { boom: {} },').replace('fields: { score:', 'commands: { boom(world, self) { self.bomb = true; } }, fields: { bomb: f.bit(), score:').replace('tick(world, self) {', 'tick(world, self) { if (self.bomb) { while (true) {} }'));
   }
   const g = { ...json('game.json'), room: { host: mode, offline, tickHz, predict, view: { radiusM } }, dir };
@@ -2320,3 +2320,18 @@ test('an acknowledged release does not stop recovery of the missing tap before i
   await clock.wait(240);
   assert.ok(Math.abs(serverX() - from - .512) < .04, `the earlier hole is recovered before an idle keepalive: ${serverX() - from}`);
 });
+
+ test('vertical travel cannot blend a horizontal correction against the held direction', async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, 20, 'diagonal-push');
+  const clock = virtualTime(t), r = rig(L, compiled, false, 300, 300);
+  const a = openRoom({ net: { config: cfg('Diagonal'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(3000); a.input({ ax: 127 }); await clock.wait(1500);
+  a.command('bump');
+  let previous = a.me.pos.x, worst = 0;
+  for (let i = 0; i < 180; i++) {
+    await clock.wait(16);
+    const x = a.me.pos.x; worst = Math.min(worst, x - previous); previous = x;
+  }
+  assert.ok(worst >= -.001, `movement and the authoritative pause never move left, but drawing moved ${worst}`);
+ });

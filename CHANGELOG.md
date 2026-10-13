@@ -41,7 +41,8 @@ Rules views recover missing input and acknowledge late movement scheduling.
   of negative held-input compensation; old wire entries retain their behaviour.
 - Small visual corrections use `room.predict.blendMs` and expire within one
   second (or an explicitly longer blend), including while stationary; `idleHold` no longer holds them indefinitely. Placement counters
-  still distinguish respawns from prediction corrections.
+  still distinguish respawns from prediction corrections. Vertical travel cannot
+  erase a horizontal correction fast enough to reverse the held direction.
 
 ### Added
 
