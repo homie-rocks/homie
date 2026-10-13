@@ -137,6 +137,8 @@ export interface Host {
 
 interface Entry { at: number; values: Record<string, unknown>; presses: (string | [string, number])[]; claim: StepInput['claim']; /** How many ticks before its own tick it arrived (0.46.3): the time the input itself waited here. */ early?: number }
 interface SeatIn {
+  receipts?: [number, number][];
+  received?: number[];
   /** A valued pulse, and the tick its browser predicted it on (0: none given, act at once). */
   pulses?: [string,number,number?,number?][];
   /** The wait of the entry now held, in ticks (see Entry.early). */
@@ -259,6 +261,8 @@ export function createHost(o: HostOptions): Host {
       check(Array.isArray(saved.inputs) && saved.inputs.length <= c.seats);
       for (const [seat, q] of saved.inputs) {
         check(uint(seat) && seat < c.seats && q && valuesOk(seat, q.held) && claimOk(q.claim) && uint(q.newest) && uint(q.ack) && uint(q.lastFrameTick) && Number.isInteger(q.lead) && q.lead >= -127 && q.lead <= 127);
+        if(q.received!==undefined)check(Array.isArray(q.received)&&q.received.length<=256&&q.received.every(uint));
+        if(q.receipts!==undefined)check(Array.isArray(q.receipts)&&q.receipts.length<=64&&q.receipts.every(r=>Array.isArray(r)&&r.length===2&&Number.isSafeInteger(r[0])&&r[0]!==0&&uint(r[1])));
         check(Array.isArray(q.stamps) && q.stamps.length <= 256 && q.stamps.every(uint) && Array.isArray(q.entries) && q.entries.length <= c.settings.tickHz + 1);
         if(q.pulses!==undefined)check(Array.isArray(q.pulses)&&q.pulses.length<=16&&q.pulses.every(p=>Array.isArray(p)&&(p.length===2||p.length>=3&&p.length<=4&&uint(p[2])&&(p[3]===undefined||uint(p[3])))&&c.kinds.some(k=>k.input.some(([n,f])=>n===p[0]&&f.t==='pulse'))&&Number.isInteger(p[1])&&p[1]>0&&p[1]<=255));
         for (const e of q.entries) check(uint(e.at) && valuesOk(seat, e.values) && claimOk(e.claim) && Array.isArray(e.presses) && e.presses.every((p) => c.kinds.some((k) => k.input.some(([name, fd]) => (typeof p === 'string' ? name === p && fd.t === 'press' : Array.isArray(p) && p.length === 2 && name === p[0] && fd.t === 'pulse' && Number.isInteger(p[1]) && p[1] > 0 && p[1] <= 255)))));
@@ -474,8 +478,8 @@ export function createHost(o: HostOptions): Host {
     stats.ins += 1;
     q.lastFrameTick = K;
     // Lead: from this frame's arrival to the moment its first tick was due, in sixteenths of a tick. Negative is late.
-    const lead = Math.max(-127, Math.min(126, Math.round(((base.ms + (k - base.tick) * period - o.clock.now()) / period) * 16)));
-    if (lead < q.lead) q.lead = lead;
+    const lead = Math.max(-127, Math.min(126, Math.round(((base.ms + (k + num(m.s.at(-1)?.[0]) - base.tick) * period - o.clock.now()) / period) * 16)));
+
     const r = num(m.r) & 0xffff;
     let before = -1;
     for (const raw of (m.s as unknown[]).slice(0, 64)) {
@@ -485,10 +489,14 @@ export function createHost(o: HostOptions): Host {
       before = off;
       const j = (k + off) >>> 0;
       // A duplicate: not above the newest stamp this seat has sent. It still counted as the player being there.
-      if (j <= q.newest) continue;
+      const marker = 1 + kind.input.length + (kind.body?.owner ? 9 : 0);
+      const seq = raw[marker] === -471 && Number.isSafeInteger(raw[marker+1]) && raw[marker+1] > 0 ? raw[marker+1] as number : 0;
+      if (seq ? q.received?.includes(seq) : j <= q.newest) continue;
       // Too early: more than a second ahead. This entry and the rest of the frame are dropped.
       if (j > K + tickHz) { stats.dropped += 1; break; }
-      q.newest = j;
+      if(j >= q.newest && lead < q.lead)q.lead=lead;
+      q.newest = Math.max(q.newest,j);
+      if(seq){q.received??=[];q.received.push(seq);if(q.received.length>256)q.received.shift();}
       const values: Record<string, unknown> = {};
       const presses: (string | [string, number])[] = [];
       let i = 1;
@@ -499,9 +507,18 @@ export function createHost(o: HostOptions): Host {
       }
       const claim = kind.body?.owner && raw.length >= i + 9 ? { pos: unpackVec([raw[i], raw[i + 1], raw[i + 2]], c.dims), vel: unpackVec([raw[i + 3], raw[i + 4], raw[i + 5]], c.dims), heading: unpackVec([raw[i + 6], raw[i + 7], raw[i + 8]], c.dims), r } : null;
       q.stamps.push(j);
+      if(seq){q.receipts??=[];q.receipts.push([seq,j>K?j:K+1]);if(q.receipts.length>64)q.receipts.shift();}
       if (j > K) { q.entries.push({ at: j, values, presses, claim, early: Math.min(lateTicks, j - K) }); continue; }
       // Late: its values hold from the next tick, and its presses fire there if that is within a quarter of a second of its stamp.
       stats.lateEntries += 1;
+      if(seq){
+        if(K-j<tickHz && core.reviseMovement(seat as number,j,values))q.receipts![q.receipts!.length-1][1]=j;
+        const at=K+1;
+        const same=q.entries.find(e=>e.at===at);
+        if(same){same.values=values;same.claim=claim;same.presses.push(...presses);}else q.entries.push({at,values,claim,presses});
+        q.entries.sort((a,b)=>a.at-b.at);
+        continue;
+      }
       const book = heldBook.get(seat as number);
       if (book) for (const row of book.ran) if (row[0] >= j) { for (const name of heldOf(kind)) { const meant = Number(values[name]) || 0; book.debt[name] = (book.debt[name] ?? 0) + meant - (row[1][name] ?? 0); row[1][name] = meant; } book.until = K + 1 + lateTicks; }
       const at = (K + 1) >>> 0;
@@ -723,7 +740,7 @@ export function createHost(o: HostOptions): Host {
       }
       for (const p of presses) { if (typeof p === 'string') values[p] = true; else values[p[0]] = p[1]; }
       // One pulse a tick, in order: the head waits for its own tick when that is no more than a quarter of a second ahead.
-      const head=q.pulses?.[0];if(head&&!((head[2]??0)>t&&(head[2] as number)-t<=Math.ceil(tickHz/4))){q.pulses!.shift();values[head[0]]=head[1];if(head[3])pulsesTaken.set(seat,head[3]);}
+      const head=q.pulses?.[0];if(head&&(body.controlled||body.kind.player?.pulses!=='hold')&&(head[2]??0)<=t){q.pulses!.shift();values[head[0]]=head[1];if(head[3]){pulsesTaken.set(seat,head[3]);q.receipts??=[];q.receipts.push([-head[3],t]);if(q.receipts.length>64)q.receipts.shift();}}
       inputs.set(seat, { values, claim: q.claim });
     }
     if (roundRebasePending) publishRebase(now);
@@ -760,6 +777,7 @@ export function createHost(o: HostOptions): Host {
       // ray may look right now, so its browser can predict against the pose the server will judge, not a guess at it.
       if (historyTicks) row.push(taken ?? 0, Math.min(historyTicks, rewindTicks(b.seat)));
       else if (taken !== undefined) row.push(taken);
+      if(q?.receipts){while(row.length<6)row.push(0);row.push(471,...q.receipts.flat());}
       rows.push(row);
       if (q) q.lead = 127;
     }

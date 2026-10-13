@@ -17,6 +17,39 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.47.1] - 2026-10-13
+
+**Plugin 0.47.1** · Input history under loss.
+
+Rules views recover missing input and acknowledge late movement scheduling.
+
+### Changed
+
+- Rules input frames repeat a bounded history sized from measured latency and
+  jitter, with input sequence numbers and sub-tick control changes. Snapshot
+  control rows report application ticks, including pulses. Retransmissions no
+  longer distort latency steering.
+- Late movement replays up to one second of body history against historical
+  geometry, fenced by authoritative body writes and placements. Outside that
+  history an entry applies next tick. New views use application receipts instead
+  of negative held-input compensation; old wire entries retain their behaviour.
+- Small visual corrections expire after `room.predict.blendMs`, including while
+  stationary; `idleHold` no longer holds them indefinitely. Placement counters
+  still distinguish respawns from prediction corrections.
+
+### Added
+
+- `room.input(sample, {at})` timestamps a control inside the current predicted
+  tick. `player.pulses: 'hold'` queues actions while control is taken;
+  `'drop'` remains the default.
+- Seeded virtual-time coverage of 40/80/150/300 ms each way and 0.5/1/2/5% loss,
+  dropped inputs and ordered stall/burst delivery, in small rooms and through Gates.
+
+### Fixed
+
+- A fresh control after a browser stall is recorded after resetting the stale
+  prediction clock, preventing a short press from moving by the stalled backlog.
+
 ## [0.48.0] - 2026-10-13
 
 **Plugin 0.48.0** · Baked physics worlds for server rules and local prediction.

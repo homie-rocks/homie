@@ -2329,3 +2329,23 @@ private round imports no room save, match score or simulation state into the onl
 room. When a body is assigned, the private round closes and the view joins the
 online match. Ember Vale retains its separate cloud hero: experience earned in
 solo play still belongs to that hero, whose level is sent through the usual command.
+
+### Rules input history trailer (studio 0.47.1)
+
+A rules step keeps its `[tickOffset, ...fields, ...ownerClaim]` prefix. Current
+views append `[-471, sequence, changeCount, ...changes]`, where each change is
+`[fieldIndex, changeSequence, fractionOfTick, value]`. All components are numbers.
+Input frames repeat recent entries, sorted by tick; the retained window is
+4–64 ticks based on measured authority RTT and jitter. The host deduplicates
+entry sequences, including history received after a missing frame. Duplicate
+history is not a fresh lead observation. Frames without the trailer keep the
+legacy input semantics.
+
+Control rows keep their first six columns and append
+`[471, sequence, appliedTick, ...]`. Positive sequences identify input entries;
+negative sequences identify the independently numbered reliable pulse stream.
+The last 64 receipts repeat in snapshots, including projected Gate snapshots.
+An on-time entry names its predicted tick; a safely rewound movement entry names
+that historical tick; an entry beyond retained movement history or an authority
+boundary names the next tick. Entry receipts describe coalesced per-tick input;
+command/effect handlers are not rerun in the past.

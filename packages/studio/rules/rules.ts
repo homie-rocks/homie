@@ -144,7 +144,7 @@ export interface BodyDef { shape: 'circle' | 'sphere' | 'capsule' | 'box'; radiu
 export interface GuideDef { view: (world: RuntimeWorld, self: RuntimeSelf) => unknown; floor?: (world: RuntimeWorld, self: RuntimeSelf, view: any) => unknown }
 export interface RoundRecords {key:string; identity:string; eligible?:string; fields:Readonly<Record<string,string>>}
 export interface EntityDef {
-  player?: true | { away?: 'neutral' | 'think'; leave?: 'despawn' | 'bot'; control?: string; takeover?: string };
+  player?: true | { away?: 'neutral' | 'think'; leave?: 'despawn' | 'bot'; control?: string; pulses?: 'drop' | 'hold'; takeover?: string };
   fields?: Fields;
   motion?: Fields;
   input?: Fields;
@@ -388,7 +388,7 @@ export type FieldList = readonly (readonly [string, Field])[];
 export interface KindTable {
   name: string;
   index: number;
-  player: null | { away: 'neutral' | 'think'; leave: 'despawn' | 'bot'; control?: string; takeover?: string };
+  player: null | { away: 'neutral' | 'think'; leave: 'despawn' | 'bot'; control?: string; pulses?: 'drop' | 'hold'; takeover?: string };
   fields: FieldList;
   motion: FieldList;
   input: FieldList;
@@ -589,10 +589,11 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
       if (!p || typeof p !== 'object') throw new Error(`${at}.player is true, or { away, leave }`);
       if (p.away !== undefined && p.away !== 'neutral' && p.away !== 'think') throw new Error(`${at}.player.away is 'neutral' or 'think'`);
       if (p.leave !== undefined && p.leave !== 'despawn' && p.leave !== 'bot') throw new Error(`${at}.player.leave is 'despawn' or 'bot'`);
+      if (p.pulses !== undefined && !['drop','hold'].includes(p.pulses)) throw new Error(`${at}.player.pulses is 'drop' or 'hold'`);
       if (p.control !== undefined && !motion.some(([key, field]) => key === p.control && field.t === 'bit')) throw new Error(`${at}.player.control names a bit in motion`);
       if (p.takeover !== undefined && !fields.some(([key, field]) => key === p.takeover && ['fix','i8','i16','i32','u8','u16','u32'].includes(field.t))) throw new Error(`${at}.player.takeover names a numeric field`);
       if (p.control && typeof e.think !== 'function') throw new Error(`${at}.player.control needs think`);
-      player = { away: p.away ?? 'neutral', leave: p.leave ?? 'despawn', ...(p.control ? {control:p.control}:{}), ...(p.takeover ? {takeover:p.takeover}:{}) };
+      player = { ...(p.pulses ? {pulses:p.pulses}:{}), away: p.away ?? 'neutral', leave: p.leave ?? 'despawn', ...(p.control ? {control:p.control}:{}), ...(p.takeover ? {takeover:p.takeover}:{}) };
       if ((player.away === 'think' || player.leave === 'bot') && typeof e.think !== 'function') throw new Error(`${at}: away: 'think' and leave: 'bot' need a think(world, self) handler to steer the body`);
     }
     let body: KindTable['body'] = null;

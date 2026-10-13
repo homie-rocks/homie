@@ -1221,10 +1221,8 @@ occupied terrain nodes out of the graph, and choose reachable endpoints.
 `@homie-rocks/nav` is the richer mesh/crowd API for applications that own that
 runtime; rules graphs avoid importing mutable navigation state into handlers.
 
-`room.predict.idleHold: true` holds small visual reconciliation offsets while
-input and body are stationary. Movement resumes smoothing. Large invalid poses
-still snap to authority. Opt in only after measuring stop/reversal and delayed
-collision behavior for the game's mover.
+Small reconciliation offsets expire even while stationary; see “Input during loss
+and stalls” below for the visual correction settings.
 
 For multi-cast movement or scratch trajectory checks, `ctx.world.sweep(body, delta, {ground:false})` (also captured-scene `sweep`) moves and returns the same collision but leaves `body.grounded` unchanged. Use it only when your mover computes support explicitly. Omitting the option retains the existing support query and grounding behavior. This avoids paying for identical support checks after horizontal and upward probes.
 
@@ -1385,3 +1383,38 @@ creates the same baked world and replays pending guarded movement against it;
 substep drawing traces remain temporary. Physics worlds are disposed when their
 host or view closes. A full solver save can exceed browser-host checkpoint caps;
 the build measures this, and server-hosted rooms retain the full save.
+
+## Input during loss and stalls (0.47.1)
+
+Rules views resend recent input automatically: a 4–64 tick history follows the
+measured round trip and jitter. Each tick entry carries a sequence number; each
+control change carries a field index, sequence and fraction of the predicted tick.
+Duplicates neither execute again nor count as fresh latency measurements. Both
+missing application frames and ordered TCP stalls are covered.
+
+The server retains up to one second of movement history and replays late movement
+against the geometry of those ticks. It never repeats commands or effects. An
+external body/motion write or placement fences that history. Beyond a fence or
+the retained history, input applies on the next tick instead. Snapshot control
+rows report the application tick and the view uses it for replay. Legacy wire
+entries retain their old compensation; current views do not receive negative
+held values to repay late releases.
+
+Held controls integrate their duration, sampled controls coalesce to the latest
+value per tick, presses coalesce per field per tick, and valued pulses execute
+in order, one per tick. More sampled input never buys extra simulation steps.
+The clock resets before a fresh control after a long browser stall, so the press
+cannot inherit ten seconds of elapsed time.
+
+`room.input(sample, {at: event.timeStamp})` accepts the event's monotonic time
+(same origin as `performance.now()`), clamped to this predicted tick and now.
+Omit it to use the call time. A player can declare
+`player: {control: 'canMove', pulses: 'hold'}` to keep pulses during a knock or
+stun and deliver them when control returns. The default `'drop'` preserves the
+previous behaviour. The game's action handler still decides its cooldown.
+
+Residual drawing corrections use `room.predict.blendMs` (100 ms by default),
+slowed when necessary to avoid reversing movement, with a one-second maximum
+(or the explicitly longer blendMs). `snapM` selects the large-error threshold;
+placements still snap. `idleHold` no longer keeps a stopped body displaced
+indefinitely. These drawing settings never alter server truth.
