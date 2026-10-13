@@ -6,7 +6,7 @@ import type { RayQueries, RayOptions } from './types.ts';
 import { snapshotDecoder } from './interest.mjs';
 import { collisionMap, collisionTargets, revisionAt, type CollisionRevision } from './live.ts';
 import { rulesOutput } from '../netplay/rules-output.mjs';
-import { rulesCaps, rulesRates } from '../worker/limits.mjs';
+import { LIMITS, rulesCaps, rulesRates } from '../worker/limits.mjs';
 /*
  * view.ts — what a rules game's view imports: the room, as a browser sees it.
  * =============================================================================
@@ -608,7 +608,33 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const windowTicks = Math.min(64, Math.max(4, recoveryTicks, Math.ceil((2 * authorityRtt() + 250) / period + targetLead())));
     sentHistory = sentHistory.filter(e => e.t >= t - windowTicks).slice(-64);
     const first = Math.min(k, sentHistory[0]?.t ?? k);
-    const rows: StepEntry[] = sentHistory.map((e) => [e.t - first, ...e.row]);
+    // Repeated history must fit the relay's existing byte cap, including its
+    // envelope and snapshot acknowledgement. Always carry the newest controls;
+    // spend the remaining space on missing receipts before acknowledged history.
+    // Sub-tick samples are optional metadata: the row already contains the held
+    // duration integrated by heldMean. Never truncate its values or sequence.
+    const budget = LIMITS.in - 128;
+    const selected = new Map<number, StepEntry>();
+    let bytes = 2;
+    const newest = sentHistory.at(-1);
+    const candidates = [...(newest ? [newest] : []),
+      ...sentHistory.filter(e => e !== newest && !applications.has(e.row[marker + 1])),
+      ...sentHistory.filter(e => e !== newest && applications.has(e.row[marker + 1])).reverse()];
+    for (const e of candidates) {
+      const row = [e.t - first, ...e.row.slice(0, marker + 2), 0];
+      const size = JSON.stringify(row).length + (selected.size ? 1 : 0);
+      if (bytes + size > budget) continue;
+      selected.set(e.t, row); bytes += size;
+    }
+    // Use spare bytes for sample metadata only after reserving control history.
+    for (const e of candidates) {
+      const compact = selected.get(e.t);
+      if (!compact) continue;
+      const row = [e.t - first, ...e.row];
+      const extra = JSON.stringify(row).length - JSON.stringify(compact).length;
+      if (bytes + extra <= budget) { selected.set(e.t, row); bytes += extra; }
+    }
+    const rows = [...selected].sort((a, b) => a[0] - b[0]).map(([, row]) => row);
     entries = [];
     if (net.steps(epoch, first, rows, mine.r)) lastSendAt = now;
   }

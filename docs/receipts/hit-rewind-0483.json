@@ -1,0 +1,630 @@
+{
+  "release": "0.48.3",
+  "cause": "0.48.1 bounded repeated input history by ticks but not by the relay's 2048-byte input cap. Wide changing aim samples and sub-tick metadata caused entire frames to be rejected, leaving authority on stale aim/trigger state while prediction advanced.",
+  "fix": "Reserve space for the envelope, select complete current controls first and missing-receipt history next, then spend spare bytes on optional sub-tick metadata. Retain unselected history for subsequent frames; do not change relay limits, rewind math, pulse transport or movement recovery.",
+  "studio": {
+    "sourceFilesByteCompared": 544,
+    "sourceDifferences": [],
+    "pin": "0.48.0",
+    "install": "npm ci; npm install --no-save @homie-rocks/studio@0.48.1; npm install --no-save <npm-pack tarball>",
+    "test": "node --experimental-strip-types --import ./tests/toolkit-ts.mjs --test tests/stormbreak-hit-prediction.test.ts",
+    "runs": [
+      {
+        "toolkit": "0.48.0",
+        "shotsWanted": 300,
+        "runs": [
+          {
+            "delay": 0,
+            "loss": 0,
+            "shots": 308,
+            "realHits": 202,
+            "predicted": 205,
+            "confirmed": 202,
+            "notPredicted": 0,
+            "retracted": 3,
+            "feedback": {
+              "numbersShown": 205,
+              "numbersConfirmed": 202,
+              "numbersTakenBack": 3,
+              "hitsWithTickOnly": 0,
+              "ticksTakenBack": 0,
+              "hitsWithNothingUntilTheServer": 0,
+              "numbersTakenBackPct": 1.5,
+              "hitsWithoutAnImmediateNumberPct": 0
+            },
+            "wrongTarget": 0,
+            "neverFired": 0,
+            "toolkit": {
+              "hits": 0,
+              "confirmed": 0,
+              "retracted": 0,
+              "unpredicted": 0
+            },
+            "shieldGuess": {
+              "same": 190,
+              "wrong": 12,
+              "guessedUpWasDown": 6,
+              "regainedUnseen": 6,
+              "wrongPct": 5.9
+            },
+            "judgedAge": {
+              "p50": 2.54,
+              "p90": 2.66,
+              "max": 5
+            },
+            "rtt": 0,
+            "seconds": 180,
+            "notPredictedPct": 0,
+            "retractedPct": 1.5,
+            "realSeconds": 17
+          },
+          {
+            "delay": 75,
+            "loss": 0,
+            "shots": 309,
+            "realHits": 145,
+            "predicted": 156,
+            "confirmed": 145,
+            "notPredicted": 0,
+            "retracted": 11,
+            "feedback": {
+              "numbersShown": 156,
+              "numbersConfirmed": 145,
+              "numbersTakenBack": 11,
+              "hitsWithTickOnly": 0,
+              "ticksTakenBack": 0,
+              "hitsWithNothingUntilTheServer": 0,
+              "numbersTakenBackPct": 7.1,
+              "hitsWithoutAnImmediateNumberPct": 0
+            },
+            "wrongTarget": 0,
+            "neverFired": 1,
+            "toolkit": {
+              "hits": 0,
+              "confirmed": 0,
+              "retracted": 0,
+              "unpredicted": 0
+            },
+            "shieldGuess": {
+              "same": 127,
+              "wrong": 18,
+              "guessedUpWasDown": 9,
+              "regainedUnseen": 8,
+              "wrongPct": 12.4
+            },
+            "judgedAge": {
+              "p50": 5,
+              "p90": 5,
+              "max": 5
+            },
+            "rtt": 150,
+            "seconds": 185,
+            "notPredictedPct": 0,
+            "retractedPct": 7.1,
+            "realSeconds": 25
+          }
+        ]
+      },
+      {
+        "toolkit": "0.48.1",
+        "shotsWanted": 300,
+        "runs": [
+          {
+            "delay": 0,
+            "loss": 0,
+            "shots": 102,
+            "realHits": 8,
+            "predicted": 50,
+            "confirmed": 8,
+            "notPredicted": 0,
+            "retracted": 42,
+            "feedback": {
+              "numbersShown": 50,
+              "numbersConfirmed": 8,
+              "numbersTakenBack": 42,
+              "hitsWithTickOnly": 0,
+              "ticksTakenBack": 0,
+              "hitsWithNothingUntilTheServer": 0,
+              "numbersTakenBackPct": 84,
+              "hitsWithoutAnImmediateNumberPct": 0
+            },
+            "wrongTarget": 0,
+            "neverFired": 1310,
+            "toolkit": {
+              "hits": 0,
+              "confirmed": 0,
+              "retracted": 0,
+              "unpredicted": 0
+            },
+            "shieldGuess": {
+              "same": 8,
+              "wrong": 0,
+              "guessedUpWasDown": 0,
+              "regainedUnseen": 0,
+              "wrongPct": 0
+            },
+            "judgedAge": {
+              "p50": 2.32,
+              "p90": 2.64,
+              "max": 2.84
+            },
+            "rtt": 0,
+            "seconds": 602,
+            "notPredictedPct": 0,
+            "retractedPct": 84,
+            "realSeconds": 51
+          },
+          {
+            "delay": 75,
+            "loss": 0,
+            "shots": 69,
+            "realHits": 11,
+            "predicted": 40,
+            "confirmed": 11,
+            "notPredicted": 0,
+            "retracted": 29,
+            "feedback": {
+              "numbersShown": 40,
+              "numbersConfirmed": 11,
+              "numbersTakenBack": 29,
+              "hitsWithTickOnly": 0,
+              "ticksTakenBack": 0,
+              "hitsWithNothingUntilTheServer": 0,
+              "numbersTakenBackPct": 72.5,
+              "hitsWithoutAnImmediateNumberPct": 0
+            },
+            "wrongTarget": 0,
+            "neverFired": 1004,
+            "toolkit": {
+              "hits": 0,
+              "confirmed": 0,
+              "retracted": 0,
+              "unpredicted": 0
+            },
+            "shieldGuess": {
+              "same": 9,
+              "wrong": 2,
+              "guessedUpWasDown": 0,
+              "regainedUnseen": 2,
+              "wrongPct": 18.2
+            },
+            "judgedAge": {
+              "p50": 5,
+              "p90": 5,
+              "max": 5
+            },
+            "rtt": 150,
+            "seconds": 602,
+            "notPredictedPct": 0,
+            "retractedPct": 72.5,
+            "realSeconds": 78
+          }
+        ]
+      },
+      {
+        "toolkit": "0.48.3",
+        "shotsWanted": 300,
+        "runs": [
+          {
+            "delay": 0,
+            "loss": 0,
+            "shots": 308,
+            "realHits": 205,
+            "predicted": 206,
+            "confirmed": 205,
+            "notPredicted": 0,
+            "retracted": 1,
+            "feedback": {
+              "numbersShown": 206,
+              "numbersConfirmed": 205,
+              "numbersTakenBack": 1,
+              "hitsWithTickOnly": 0,
+              "ticksTakenBack": 0,
+              "hitsWithNothingUntilTheServer": 0,
+              "numbersTakenBackPct": 0.5,
+              "hitsWithoutAnImmediateNumberPct": 0
+            },
+            "wrongTarget": 0,
+            "neverFired": 0,
+            "toolkit": {
+              "hits": 0,
+              "confirmed": 0,
+              "retracted": 0,
+              "unpredicted": 0
+            },
+            "shieldGuess": {
+              "same": 191,
+              "wrong": 14,
+              "guessedUpWasDown": 6,
+              "regainedUnseen": 8,
+              "wrongPct": 6.8
+            },
+            "judgedAge": {
+              "p50": 2.54,
+              "p90": 2.68,
+              "max": 5
+            },
+            "rtt": 0,
+            "seconds": 219,
+            "notPredictedPct": 0,
+            "retractedPct": 0.5,
+            "realSeconds": 16
+          },
+          {
+            "delay": 75,
+            "loss": 0,
+            "shots": 309,
+            "realHits": 160,
+            "predicted": 170,
+            "confirmed": 159,
+            "notPredicted": 1,
+            "retracted": 11,
+            "feedback": {
+              "numbersShown": 170,
+              "numbersConfirmed": 159,
+              "numbersTakenBack": 11,
+              "hitsWithTickOnly": 0,
+              "ticksTakenBack": 0,
+              "hitsWithNothingUntilTheServer": 1,
+              "numbersTakenBackPct": 6.5,
+              "hitsWithoutAnImmediateNumberPct": 0.6
+            },
+            "wrongTarget": 0,
+            "neverFired": 0,
+            "toolkit": {
+              "hits": 0,
+              "confirmed": 0,
+              "retracted": 0,
+              "unpredicted": 0
+            },
+            "shieldGuess": {
+              "same": 137,
+              "wrong": 22,
+              "guessedUpWasDown": 8,
+              "regainedUnseen": 14,
+              "wrongPct": 13.8
+            },
+            "judgedAge": {
+              "p50": 5,
+              "p90": 5,
+              "max": 5
+            },
+            "rtt": 150,
+            "seconds": 186,
+            "notPredictedPct": 0.6,
+            "retractedPct": 6.5,
+            "realSeconds": 17
+          }
+        ]
+      }
+    ],
+    "tarballSha256": "3301ad5d386a968111bd29e931c9070b736928888eb874233727ff65366ab821",
+    "suite": {
+      "command": "STORMBREAK_TOOLKIT=0.48.3 npm test",
+      "passed": 455,
+      "failed": 0,
+      "setup": "Copy the studio including .git (the effects audit reads a historical commit), excluding node_modules; npm ci, then install the local pack with --no-save. STORMBREAK_TOOLKIT is the unchanged studio test harness's explicit unreleased-version option."
+    }
+  },
+  "audit": {
+    "command": "node --test --test-name-pattern='rewind stream|wide input' packages/studio/test/rules-view.test.mjs",
+    "baselineCommit": "d9985c5aefbbb09793338271af972256caf3826d",
+    "regressedCommit": "fa1d691dadb4b33c587919c3ebfb8f67c0e88d75",
+    "seeds": [
+      48301,
+      48302,
+      48303
+    ],
+    "cases": [
+      {
+        "runtime": "0480",
+        "passed": 9,
+        "failed": 0,
+        "shooting": [
+          {
+            "delay": 0,
+            "loss": 0,
+            "trigger": "held",
+            "shots": 50,
+            "matched": 50,
+            "feedback": {
+              "predicted": 50,
+              "confirmed": 50,
+              "unpredicted": 0,
+              "retracted": 0
+            },
+            "oversize": 0,
+            "maxBytes": 341
+          },
+          {
+            "delay": 0,
+            "loss": 0,
+            "trigger": "pulse",
+            "shots": 50,
+            "matched": 50,
+            "feedback": {
+              "predicted": 50,
+              "confirmed": 50,
+              "unpredicted": 0,
+              "retracted": 0
+            },
+            "oversize": 0,
+            "maxBytes": 341
+          },
+          {
+            "delay": 75,
+            "loss": 0,
+            "trigger": "held",
+            "shots": 50,
+            "matched": 50,
+            "feedback": {
+              "predicted": 50,
+              "confirmed": 50,
+              "unpredicted": 0,
+              "retracted": 0
+            },
+            "oversize": 0,
+            "maxBytes": 340
+          },
+          {
+            "delay": 75,
+            "loss": 0,
+            "trigger": "pulse",
+            "shots": 50,
+            "matched": 50,
+            "feedback": {
+              "predicted": 50,
+              "confirmed": 50,
+              "unpredicted": 0,
+              "retracted": 0
+            },
+            "oversize": 0,
+            "maxBytes": 340
+          },
+          {
+            "delay": 75,
+            "loss": 0.02,
+            "trigger": "held",
+            "shots": 50,
+            "matched": 48,
+            "feedback": {
+              "predicted": 50,
+              "confirmed": 49,
+              "unpredicted": 0,
+              "retracted": 1
+            },
+            "oversize": 0,
+            "maxBytes": 341
+          },
+          {
+            "delay": 75,
+            "loss": 0.02,
+            "trigger": "pulse",
+            "shots": 50,
+            "matched": 48,
+            "feedback": {
+              "predicted": 50,
+              "confirmed": 49,
+              "unpredicted": 0,
+              "retracted": 1
+            },
+            "oversize": 0,
+            "maxBytes": 341
+          }
+        ]
+      },
+      {
+        "runtime": "0481",
+        "passed": 0,
+        "failed": 9,
+        "shooting": [
+          {
+            "delay": 0,
+            "loss": 0,
+            "trigger": "held",
+            "shots": 5,
+            "matched": 1,
+            "feedback": {
+              "predicted": 50,
+              "confirmed": 1,
+              "unpredicted": 0,
+              "retracted": 0
+            },
+            "oversize": 219,
+            "maxBytes": 163100
+          },
+          {
+            "delay": 0,
+            "loss": 0,
+            "trigger": "pulse",
+            "shots": 50,
+            "matched": 1,
+            "feedback": {
+              "predicted": 50,
+              "confirmed": 1,
+              "unpredicted": 0,
+              "retracted": 0
+            },
+            "oversize": 219,
+            "maxBytes": 163566
+          },
+          {
+            "delay": 75,
+            "loss": 0,
+            "trigger": "held",
+            "shots": 1,
+            "matched": 0,
+            "feedback": {
+              "predicted": 50,
+              "confirmed": 0,
+              "unpredicted": 0,
+              "retracted": 0
+            },
+            "oversize": 219,
+            "maxBytes": 162578
+          },
+          {
+            "delay": 75,
+            "loss": 0,
+            "trigger": "pulse",
+            "shots": 50,
+            "matched": 0,
+            "feedback": {
+              "predicted": 50,
+              "confirmed": 0,
+              "unpredicted": 0,
+              "retracted": 0
+            },
+            "oversize": 219,
+            "maxBytes": 163028
+          },
+          {
+            "delay": 75,
+            "loss": 0.02,
+            "trigger": "held",
+            "shots": 1,
+            "matched": 0,
+            "feedback": {
+              "predicted": 50,
+              "confirmed": 0,
+              "unpredicted": 0,
+              "retracted": 0
+            },
+            "oversize": 212,
+            "maxBytes": 162358
+          },
+          {
+            "delay": 75,
+            "loss": 0.02,
+            "trigger": "pulse",
+            "shots": 50,
+            "matched": 0,
+            "feedback": {
+              "predicted": 50,
+              "confirmed": 0,
+              "unpredicted": 0,
+              "retracted": 0
+            },
+            "oversize": 212,
+            "maxBytes": 162808
+          }
+        ]
+      },
+      {
+        "runtime": "fixed",
+        "passed": 9,
+        "failed": 0,
+        "shooting": [
+          {
+            "delay": 0,
+            "loss": 0,
+            "trigger": "held",
+            "shots": 50,
+            "matched": 50,
+            "feedback": {
+              "predicted": 50,
+              "confirmed": 50,
+              "unpredicted": 0,
+              "retracted": 0
+            },
+            "oversize": 0,
+            "maxBytes": 1835
+          },
+          {
+            "delay": 0,
+            "loss": 0,
+            "trigger": "pulse",
+            "shots": 50,
+            "matched": 50,
+            "feedback": {
+              "predicted": 50,
+              "confirmed": 50,
+              "unpredicted": 0,
+              "retracted": 0
+            },
+            "oversize": 0,
+            "maxBytes": 1835
+          },
+          {
+            "delay": 75,
+            "loss": 0,
+            "trigger": "held",
+            "shots": 50,
+            "matched": 50,
+            "feedback": {
+              "predicted": 50,
+              "confirmed": 50,
+              "unpredicted": 0,
+              "retracted": 0
+            },
+            "oversize": 0,
+            "maxBytes": 1837
+          },
+          {
+            "delay": 75,
+            "loss": 0,
+            "trigger": "pulse",
+            "shots": 50,
+            "matched": 50,
+            "feedback": {
+              "predicted": 50,
+              "confirmed": 50,
+              "unpredicted": 0,
+              "retracted": 0
+            },
+            "oversize": 0,
+            "maxBytes": 1837
+          },
+          {
+            "delay": 75,
+            "loss": 0.02,
+            "trigger": "held",
+            "shots": 50,
+            "matched": 50,
+            "feedback": {
+              "predicted": 50,
+              "confirmed": 50,
+              "unpredicted": 0,
+              "retracted": 0
+            },
+            "oversize": 0,
+            "maxBytes": 1835
+          },
+          {
+            "delay": 75,
+            "loss": 0.02,
+            "trigger": "pulse",
+            "shots": 50,
+            "matched": 50,
+            "feedback": {
+              "predicted": 50,
+              "confirmed": 50,
+              "unpredicted": 0,
+              "retracted": 0
+            },
+            "oversize": 0,
+            "maxBytes": 1835
+          }
+        ]
+      }
+    ]
+  },
+  "otherChecks": {
+    "rulesView": {
+      "passed": 261,
+      "failed": 0,
+      "includes": "0.48.1 small-room/Gate input loss matrices, ordered pulses, pulse hold/drop, stall and late nonlinear movement recovery"
+    },
+    "physicsPrediction": {
+      "passed": 3,
+      "failed": 0
+    }
+  },
+  "auditFindings": [
+    "The same byte-cap failure starved held durations and aim fields; optional sub-tick samples must not displace their already-integrated input values.",
+    "Both held fire and reliable fire pulses retain the 0.48.0 cadence: 50 shots in ten seconds, at 0 ms, 75 ms each way and 2% loss.",
+    "Numbered swaps retain the 0.48.0 order and count: 50 once-only values despite repeated input history and 2% loss.",
+    "Measured RTT remains 0/150 ms and the declared 0.25 s rewind bound remains five ticks. ctx.judgedTick, poseAt and authoritative shot aim/verdict agree.",
+    "Effect confirmation remains bound to the shot: the baseline confirmed at least 49/50 on this seed and the fix confirms all 50; held 30/60/120 ms taps retain their integrated distance."
+  ]
+}
