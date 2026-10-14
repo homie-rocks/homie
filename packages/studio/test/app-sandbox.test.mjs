@@ -15,7 +15,7 @@ const browserLifetime=new AbortController();
 let browser;
 after(async()=>{try{await browser?.close();}finally{browserLifetime.abort();}});
 before(async()=>{
- browser=await puppeteer.launch({executablePath:findChrome(),headless:true,args:[...chromeArgs(),'--disable-webgl'],signal:browserLifetime.signal});
+ browser=await puppeteer.launch({executablePath:findChrome(),headless:true,dumpio:true,args:[...chromeArgs(),'--disable-gpu','--disable-webgl'],signal:browserLifetime.signal});
 },{timeout:30000});
 async function fixture(t,html,shop=null){
  const cat={studio:{name:'Test'},games:[meta]},env={ASSETS:{fetch:async req=>new URL(req.url).pathname.endsWith('index.html')?new Response(html,{headers:{'content-type':'text/html'}}):Response.json(cat)}};
