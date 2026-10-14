@@ -51,7 +51,7 @@ test('room events survive D1 failure and interrupted acknowledgement without rep
  const sql={exec(q,...args){if(interruptDelete&&q.startsWith('DELETE FROM function_outbox')){interruptDelete=false;throw new Error('interrupted acknowledgement');}const statement=room.prepare(q);const rows=statement.columns().length?statement.all(...args):(statement.run(...args),[]);return {toArray:()=>rows};}};
  useFunctions(async()=>[{name:'joined',event:'player.joined'}]);t.after(()=>useFunctions(async()=>[]));
  await syncFunctions({DB},[{name:'joined',event:'player.joined'}]);
- const table=Object.create(Table.prototype);table.env={DB:{prepare:q=>{if(offline)throw new Error('D1 unavailable');return DB.prepare(q);}}};table.ctx={storage:{sql,getAlarm:async()=>alarm,setAlarm:async value=>{alarm=value;}},waitUntil:p=>pending.push(p)};
+ const table=Object.create(Table.prototype);table.env={ASSETS:{fetch:async()=>Response.json({games:[]})},DB:{batch:DB.batch,prepare:q=>{if(offline)throw new Error('D1 unavailable');return DB.prepare(q);}}};table.ctx={storage:{sql,getAlarm:async()=>alarm,setAlarm:async value=>{alarm=value;}},waitUntil:p=>pending.push(p)};
  useFunctions(async()=>[]);table.queueFunctionEvent('unused',{});await Promise.all(pending);assert.equal(room.prepare("SELECT count(*) n FROM sqlite_master WHERE name='function_outbox'").get().n,0);useFunctions(async()=>[{name:'joined',event:'player.joined'}]);
  table.queueFunctionEvent('player.joined',{game:'seeded-game',room:'seeded-room',player:'seeded-player',seat:0});await Promise.all(pending);
  const saved=room.prepare('SELECT * FROM function_outbox').get();assert.ok(saved);assert.equal(alarm,clock.now()+100,'keep the room alarm');

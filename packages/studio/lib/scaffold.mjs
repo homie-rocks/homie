@@ -68,7 +68,7 @@ export function slugify(name) {
  * No `database_id` until one is known: Wrangler (4.45.0+) and the Deploy to Cloudflare flow create the database
  * the binding names and keep it linked.
  */
-export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layout = 'root', main = null, ai = false, routes = null, paidParts = false, partsRateLimit = null, triggers = null }) {
+export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layout = 'root', main = null, ai = false, routes = null, paidParts = false, partsRateLimit = null, triggers = null, eventFeeds = null }) {
   const at = layout === 'site' ? { schema: '../node_modules', main: 'src/runtime/worker.js', dist: './dist', migrations: 'migrations' }
     : { schema: 'node_modules', main: 'site/src/runtime/worker.js', dist: './site/dist', migrations: 'site/migrations' };
   const rooms = [{ name: 'TABLE', class_name: 'Table' }, { name: 'LOBBY', class_name: 'Lobby' }, { name: 'GATE', class_name: 'Gate' }, { name: 'CONCENTRATOR', class_name: 'Concentrator' }];
@@ -100,7 +100,7 @@ export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layou
     // Workers AI, only when a server's AI guides think with it (agents_brain workers-ai; deploy adds it, 0.17.0).
     // Never in Previews: they do not inherit it, so a Preview's guides answer from the game's script.
     ...(ai ? { ai: { binding: 'AI' } } : {}),
-    vars: { STUDIO_NAME: name },
+    vars: { STUDIO_NAME: name, ...(eventFeeds&&Object.keys(eventFeeds).length?{STUDIO_EVENT_FEEDS:JSON.stringify(eventFeeds)}:{}) },
     observability: { enabled: true },
     previews: { vars: { STUDIO_NAME: name, HOMIE_PREVIEW: '1' }, durable_objects: { bindings: rooms } },
   };

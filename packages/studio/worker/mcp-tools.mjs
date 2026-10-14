@@ -38,10 +38,10 @@ export function services(env, cat, origin, caller, namespace, definition = {}) {
     if (!meta || !/^[a-z][a-z0-9-]{0,39}$/.test(collection) || (id!==undefined && !/^[A-Za-z0-9_-]{1,64}$/.test(id))) throw new Error('unknown app, collection or record');
     if (!caller.owner && launchOf(meta,await settingsOf(env,{fresh:true}),env)!=='public') throw new Error('app is private');
     const url = new URL(`/${app}/api/app/records/${collection}${id ? '/'+id : ''}`,origin);if(role)url.searchParams.set('role',role);
-    const method = {read:'GET',create:'POST',update:'PUT'}[operation];if (!method) throw new Error('unsupported operation');
+    const method = {read:'GET',create:'POST',update:'PUT',delete:'DELETE'}[operation];if (!method) throw new Error('unsupported operation');
     const request = withToolIdentity(new Request(url,{method,headers:{origin,'content-type':'application/json'},...(method==='GET'?{}:{body:JSON.stringify({data,version})})}),caller);
     const response = await appRecordsRoute(request,env,meta,url,url.pathname.slice(app.length+2));
-    const result = await response.json(); if(!response.ok) throw new Error(result.error);return result;
+    const result = await response.json(); if(!response.ok) {const error=new Error(result.error);error.name='StudioOperationError';throw error;}return result;
   };
   const office = async (path, body, query={}) => {
     const delegated=definition.delegateOffice && await allowed(definition.audience,caller,env);
@@ -91,6 +91,16 @@ export function builtins(env,cat,origin) {
     tool('studio_info','The public studio, apps, games and posts.','public',object(),async()=>{const pub=publicCatalogue(cat,await settingsOf(env),env);return {studio:pub.studio?.name,games:pub.games.map(g=>({id:g.id,name:g.name,kind:g.kind??'game'})),posts:pub.posts};}),
     tool('studio_office','Live rooms and the players as shown in the office.','owner',object(),(_,ctx)=>ctx.office('/_studio/api/office')),
     tool('studio_shop','Orders, refunds and the shop state.','owner',object(),(_,ctx)=>ctx.shop()),
+    tool('app_role','Grant or revoke a staff role by verified email or exact sign-in name.','owner',object({app:str,role:str,signIn:{type:'string',maxLength:254},revoke:{type:'boolean'}},['app','role','signIn']),async({app,role,signIn,revoke})=>{
+      const meta=cat.games.find(g=>g.id===app&&g.kind==='app');
+      if(!meta?.roles?.[role]?.signIn)throw new Error('Name a sign-in role');
+      const people=signIn.includes('@')
+        ? (await env.DB.prepare('SELECT p.id FROM players p JOIN player_emails e ON e.player=p.id WHERE e.email=?1 AND e.verified_at IS NOT NULL AND p.guest=0').bind(signIn.trim().toLowerCase()).all()).results
+        : (await env.DB.prepare('SELECT id FROM players WHERE name=?1 AND guest=0').bind(signIn).all()).results;
+      if(people.length!==1){const error=new Error(people.length?'Sign-in is ambiguous; use a verified email':'No signed-in account matches; ask the person to sign in first');error.name='StudioOperationError';throw error;}
+      await env.DB.prepare(revoke?'DELETE FROM app_roles WHERE app=?1 AND role=?2 AND player=?3':'INSERT OR IGNORE INTO app_roles(app,role,player) VALUES(?1,?2,?3)').bind(app,role,people[0].id).run();
+      return {ok:true,app,role,revoked:revoke===true};
+    }),
     tool('studio_players','The studio accounts as shown in the office.','owner',object({query:str}),({query})=>players.list(env,{q:query})),
     tool('studio_stats','Studio visits and plays.','owner',object(),()=>readStats(env,cat,{range:rangeOf(new URLSearchParams())})),
     tool('studio_posts','Published posts.','public',object(),()=>({posts:cat.posts??[]})),
@@ -102,7 +112,7 @@ export function builtins(env,cat,origin) {
       const collections=new Set(Object.values(roles).flatMap(r=>r.can.map(cap=>cap.split(':')[1])));
       return {app,roles,collections:Object.fromEntries(Object.entries(meta.records?.collections??{}).filter(([name])=>collections.has(name)))};
     }),
-    tool('app_records','List, read, create or update app records with the app role and record version.','public',object({app:str,role:str,collection:str,id:str,operation:{enum:['read','create','update']},data:{type:'object'},version:{type:'integer',minimum:1}},['app','collection']), (args,ctx)=>ctx.records(args)),
+    tool('app_records','List, read, create, update or delete app records with the app role and record version.','public',object({app:str,role:str,collection:str,id:str,operation:{enum:['read','create','update','delete']},data:{type:'object'},version:{type:'integer',minimum:1}},['app','collection']), (args,ctx)=>ctx.records(args)),
   ];
   for(const [name,path,description] of [
     ['room_announce','announce','Announce to a room.'],['room_kick','kick','Ask the owner to remove a player.'],['room_mute','mute','Ask the owner to mute a player.'],['room_close','close','Ask the owner to close a room.'],['studio_game','game','Ask the owner to change game access or room size.'],['shop_refund','shop/refund','Ask the owner to refund an order.'],
