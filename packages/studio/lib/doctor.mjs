@@ -415,7 +415,7 @@ export async function setupStatus({
       unlocks: 'Connect the studio’s own Stripe with browser approval; shop connect syncs Payment Links and the webhook without a Worker API key. Verify a test purchase before calling the shop ready.',
       fix: {
         who: 'ai', run: version ? 'npx --no-install homie-studio shop connect' : 'npm install -g @stripe/cli@latest',
-        say: 'Use stripe_login or shop connect. Never ask for a key in chat. Sync Products, Prices, Payment Links and the webhook through the approved CLI. The Worker needs only the signing secret; repeat connect after edits.',
+        say: 'Use stripe_shop_plan with Stripe’s official MCP for catalog and links, then stripe_webhook for private signing-secret installation. Never ask for a key. Repeat plan and verify after edits.',
         open: 'https://dashboard.stripe.com/register',
       },
     });

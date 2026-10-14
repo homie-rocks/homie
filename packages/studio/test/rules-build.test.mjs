@@ -346,3 +346,16 @@ test('first server game wires an untouched historical generated Worker', () => {
   assert.match(read(dir, 'site/src/worker.mjs'), /hostRules\(rules\)/);
   assert.match(read(dir, 'site/src/rules/index.mjs'), /coin-dash/);
 });
+
+test('quick rebuild retains rules compilation and types, marks skipped play checks and reports progress with JSON', () => {
+  const dir=studio('quick-rebuild');
+  assert.equal(run(['game','new','coin-dash','--from','coin-dash'],dir).status,0);
+  const result=run(['build','--quick'],dir);
+  assert.equal(result.status,0,result.stdout+result.stderr);
+  assert.equal(out(result).games.find(g=>g.id==='coin-dash').rulesChecksSkipped,true);
+  assert.ok(result.stderr.length>0);
+  const rules=join(dir,'games','coin-dash','src','rules.ts');
+  writeFileSync(rules,readFileSync(rules,'utf8').replace('self.score += 1;', 'self.score = "wrong";'));
+  const bad=run(['build','--quick'],dir);
+  assert.notEqual(bad.status,0,bad.stdout+bad.stderr);
+});

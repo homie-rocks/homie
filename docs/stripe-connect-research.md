@@ -1,3 +1,76 @@
+## Default: Stripe's official plugin
+
+Use Stripe's official plugin, authenticated with its browser OAuth approval, for Products,
+Prices, Payment Links, menu links, per-slot booking links, monthly giving and the customer
+portal. Install with `stripe agent setup` if needed; the MCP URL is
+`https://mcp.stripe.com`. Current tools are `stripe_api_search`, `stripe_api_details`,
+`stripe_api_read` and `stripe_api_write`. Discover the operation and its schema before
+calling it; tool argument shapes can change. See https://docs.stripe.com/mcp.
+
+1. Create/check `shop.json`. Read the app's published slot records and supply the complete
+   slot manifest described below. Select the owner's account and sandbox in Stripe's plugin;
+   read `/v1/account` to record its account ID. Live mode only after the owner requests it.
+2. Call Homie's `stripe_shop_plan` with `account`, `mode: "test"`, `slots` and
+   `observations: []`. CLI equivalent: `homie-studio shop plan --have plan-input.json`.
+   That JSON file contains the same fields. A returned `next` is the exact operation:
+   method, API path, parameters, API version and (for creates) idempotency key. Updates set desired fields; read before retrying. Metadata
+   scopes objects to this studio and origin; prices and links have content revisions.
+3. Perform each `next` through Stripe's official MCP. For GET, append
+   `{ "path": "…", "params": {…}, "body": <Stripe response> }` to `observations`
+   and plan again. Follow every pagination request. After a write, discard observations
+   and read fresh. Replanning resolves real Stripe IDs; never invent IDs or substitute
+   a different price. Reuse the supplied idempotency key where the tool supports it;
+   otherwise read before retrying and match the stable product ID/revision metadata.
+4. When no writes remain, use fresh reads with `stripe_shop_plan` `verify: true`
+   (CLI `homie-studio shop verify --have plan-input.json`). It checks the catalog,
+   actual link fields and line items, menus, slot limits and portal settings against
+   shop.json and the slot manifest. A mismatch blocks verification. It saves only public
+   configuration to `.studio/stripe-mcp.json`; local test configuration goes to `.dev.vars`.
+5. For a deployed HTTPS studio, run `stripe_webhook` (CLI `homie-studio shop webhook`).
+   Follow `studio_job`. This uses Stripe CLI only for private webhook installation,
+   checks the same account as the MCP, and installs the signing secret and verified
+   links through Wrangler stdin. The CLI needs one separate browser approval if its
+   studio profile is not already connected. MCP approval cannot be reused or exported.
+   Cloudflare authorization and an existing deployment are prerequisites.
+6. After installation, perform the returned `retire` operations through Stripe MCP to
+   archive replaced catalog objects, then verify fresh reads again. Test a sandbox
+   purchase and its signed event, order grant, booking capacity or recurring invoice;
+   a browser return is never proof. Stripe CLI `trigger` can send a test event, and
+   `events resend <event> --webhook-endpoint <endpoint>` retries a delivery. Check the
+   endpoint's delivery result and the app's verified records. Do not type a card into
+   a page for an automated proof; use Stripe's documented test PaymentMethods/fixtures.
+
+Never create a webhook through model-visible Stripe MCP: its response exposes the signing secret.
+
+The owner never handles an API key or signing secret. No Homie backend handles payments.
+The Worker needs only public link configuration and the signing secret; buyers pay
+Stripe directly even when the AI and the owner's computer are offline. The old
+`stripe_login` / `shop connect` flow remains an alternative that syncs everything
+through Stripe CLI browser approval. `--renew` renews that approval; `--live` requires
+the owner's go-live request. Never read CLI config or print login-completion output.
+
+For local checkout, pass `url: "http://localhost:8787"` (or the private Wi-Fi address)
+and `mode: "test"` to the same plan/verify flow; the official plugin makes the links.
+Run `homie-studio shop listen --profile <sandbox-profile>` in a background terminal.
+Stripe CLI is required for forwarding; one browser approval is enough if needed.
+The command captures and saves the listener secret privately. Start/restart
+`homie-studio dev --lan` once it reports ready and keep the listener running.
+Never copy the listener's raw output into the conversation.
+
+For a faster local iteration, `homie-studio build --quick` skips generated rules play
+and the snapshot smoke-run, while retaining compilation, guards and type checks.
+Run a full build before release; quick output is not evidence that play checks passed.
+
+## Route decision, 2026-10-14
+
+The current [MCP documentation](https://docs.stripe.com/mcp) exposes generic API read/write tools and browser OAuth. The sandbox proof used those tools directly, with only `Homie sandbox` selected. [CLI login](https://docs.stripe.com/cli/login) supports browser pairing; a studio-specific CLI grant is separate from the model-visible MCP grant. Homie uses that existing private transport for webhook creation, never exports its credentials, and sends the signing secret directly to Wrangler stdin.
+
+[Stripe Apps OAuth](https://docs.stripe.com/stripe-apps/api-authentication/oauth) requires an uploaded app, registered redirect URIs, an install grant and token exchange/refresh handling. That is additional application infrastructure and lifecycle to maintain. It offers no benefit for this single private setup call, so this change does not introduce it or a Homie payment backend.
+
+The proof is in `proof/stripe-official-plugin/sandbox.json`: actual MCP-created catalog, menu, slot, recurring link and portal; actual private sandbox endpoint creation; actual signed CLI-forwarded test event verified by Homie's signature verifier. No deployment was authorized, so the Wrangler stdin boundary used a test receiver rather than changing a Cloudflare Worker. The temporary endpoint was deleted. The event proof checks delivery/signature, not a completed browser purchase or application fulfillment; those continue to be covered by the shop fixtures.
+
+## Historical research (superseded where noted)
+
 # Current 0.51.0 decision and evidence
 
 The historical runtime-credential investigation below is retained as background,
@@ -164,7 +237,7 @@ Researched 2026-10-08 against Stripe's fetched documentation, CLI source and pub
 4. Cloudflare must already have a deployed HTTPS address before webhook creation. If connection starts first, finish Stripe approval and return “deploy your studio, then run shop connect again”; reuse that profile afterwards. If Cloudflare is not connected, `cloudflare_login`, one separate Cloudflare approval, then `studio_deploy`. A configured domain is not proof of deployment: the AI must check the deploy result. No webhook points at localhost.
 5. With a usable test key, validate access with a read, create the endpoint at `<site>/api/shop/hook`, capture its signing secret, and write the pair in one `wrangler secret bulk` call over stdin. No credentials enter tool results, command arguments or Homie services. List all existing endpoints; reuse the recorded endpoint when it still matches and the stored connection is unchanged. On renewal or lost local state, create a replacement because Stripe returns its signing secret only on creation. Disable only older Homie-created endpoints for that exact URL after the new pair is saved. A failed save leaves old endpoints active and allows retry.
 6. The AI can make Products/Prices through Stripe's official CLI or optional MCP, using the existing `shop catalog` reconciliation. Inline product data already works without a separate catalog. Verify a purchase on the deployed test shop with Stripe's test card, signed webhook delivery, item grant and office refund/revocation. “Secrets installed” is **not** this end-to-end verification; report that acceptance as the next step. This checkout's tests use a stand-in Stripe and real local browser, never a real account.
-7. When the person says “go live”, use `shop connect --live`. Do not export a redacted live CLI key or assume live writes are enabled. The implemented flow names the unsupported credential step. The closest generally available independent live path is **the owner explicitly chooses `shop connect --manual --live`, creates a restricted live key in Stripe's Dashboard, and pastes it into the loopback page**. The page creates the webhook and sends both secrets directly to the Worker. This is exactly the remaining manual step and fails the owner's never-see-a-key target. Do not silently switch to it or ask for a key in chat. Then reconcile the live catalog and verify a real purchase/refund only with the owner's authorization. Stripe account activation remains Stripe's own requirement.
+7. When the person says “go live”, use `shop connect --live`. Do not export a redacted live CLI key or assume live writes are enabled. The implemented flow names the unsupported credential step. The closest generally available independent live path is **a developer-only legacy credential integration (not offered to owners)**. The page creates the webhook and sends both secrets directly to the Worker. This is exactly the remaining manual step and fails the owner's never-see-a-key target. Do not silently switch to it or ask for a key in chat. Then reconcile the live catalog and verify a real purchase/refund only with the owner's authorization. Stripe account activation remains Stripe's own requirement.
 8. Rerun connect to check/renew. Legacy expiry or an authentication failure starts another browser approval; a valid session is reused. CLI OAuth refreshes its own session silently, but this does not refresh the Worker's API key. Return the recorded expiry and renewal command, including when connection is already installed. No background service or silently renewed long-lived legacy key is claimed. Manually supplied keys follow the owner's Stripe expiry/rotation settings and are renewed with the chosen fallback.
 
 ## Mechanisms compared

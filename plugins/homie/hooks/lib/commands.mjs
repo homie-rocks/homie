@@ -364,7 +364,7 @@ export function cloudflareMcpChangeOf(tool, input = {}) {
  * the secret goes straight to the studio's Worker. An update of an existing endpoint (we_…) carries no secret.
  */
 export function stripeSecretWriteOf(tool, input) {
-  if (!/^mcp__.*stripe.*__stripe_api_write$/i.test(String(tool ?? ''))) return null;
+  if (!/^mcp__.*stripe.*(?:__|_)stripe_api_write$/i.test(String(tool ?? ''))) return null;
   let text = '';
   try { text = JSON.stringify(input ?? {}); } catch { text = String(input ?? ''); }
   // A path (/v1/webhook_endpoints), an operation's name (PostWebhookEndpoints) or a resource word: all the same here.
@@ -372,7 +372,7 @@ export function stripeSecretWriteOf(tool, input) {
   const newEndpoint = flat.includes('webhookendpoint') && !flat.includes('eventdestination') && !/\bwe_[A-Za-z0-9]{6,}/.test(text);
   const destinationSecret = flat.includes('eventdestination') && flat.includes('signingsecret');
   if (!newEndpoint && !destinationSecret) return null;
-  return 'Refused by the Homie mod: Stripe answers a new webhook\'s signing secret in this call, and it would land in the conversation. A studio\'s shop webhook is made on the owner\'s computer instead: run `npx --no-install homie-studio shop connect` for Stripe browser approval and private webhook setup; follow the remaining step it names. Only if the owner chooses the fallback use --manual. (Reading or turning off an existing endpoint through Stripe\'s MCP is fine.)';
+  return 'Refused by the Homie mod: Stripe answers a new webhook\'s signing secret in this call, and it would land in the conversation. A studio\'s shop webhook is made on the owner\'s computer instead: run `npx --no-install homie-studio shop webhook` for Stripe browser approval and private webhook setup; follow the remaining step it names. (Reading or turning off an existing endpoint through Stripe\'s MCP is fine.)';
 }
 
 // git's own options before the subcommand that take a value, and the subcommands' (a value is never a path).

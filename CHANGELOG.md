@@ -17,6 +17,22 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.51.5] - 2026-10-14
+
+**Plugin 0.51.5** · Stripe's official plugin is the default shop setup.
+
+An owner's AI configures and verifies shop, bookings and monthly giving through Stripe's own MCP, while Homie installs the webhook secret privately.
+
+### Added
+
+- Exact, incremental Stripe MCP plans and fixture-backed verification for Products, Prices, item/menu/booking links, monthly giving and the customer portal. The AI uses Stripe's own tools; Homie adds no Stripe API client.
+- Private webhook installation with an account-match check, Stripe CLI browser approval and Wrangler stdin. Local forwarding captures its secret privately too. No owner-facing API-key setup fallback.
+- Build progress on stderr, a heartbeat during generated rules play, and `build --quick` for iterations that keep type/guard checks but skip play and snapshot smoke checks.
+
+### Upgrade notes
+
+- Use `stripe_shop_plan` with Stripe's official OAuth plugin, then `stripe_webhook`. The CLI grant is separate from MCP and needs one browser approval if not already connected. `shop connect` remains the full CLI alternative. Run a full build before release.
+
 ## [0.51.4] - 2026-10-14
 
 **Plugin 0.51.4** · Studio events through experimental MCP Events.

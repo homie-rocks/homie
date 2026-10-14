@@ -83,8 +83,21 @@ export async function shopConnect(root, options = {}) {
   const checked = readShop(root);
   if (!checked.ok || checked.absent) return failure('shop', 'Create and check shop.json first: homie-studio shop init, then shop check.');
   if (options.managed === true && checked.shop.till !== 'stripe-managed') return failure('shop-settings', 'For Managed Payments, set shop.json till to stripe-managed and deploy that choice before connecting. Stripe’s own eligibility and terms still apply.');
+  let catalog, mcpAccount;
+  if (options.webhookOnly) {
+    try {
+      const {saveMcpVerification} = await import('./shop-mcp.mjs');
+      const saved=JSON.parse(readFileSync(join(root,'.studio','stripe-mcp.json'),'utf8'));
+      if(!saved.result?.verifiedAt || Date.now()-Date.parse(saved.result.verifiedAt)>15*60_000) return failure('verify','Run shop verify with fresh Stripe MCP reads before installing the webhook (verification is valid for 15 minutes).');
+      const verified=await saveMcpVerification(root,saved.options);
+      if(!verified.verified || verified.local || verified.mode!==mode || verified.site!==new URL(siteUrl(root)).origin) return failure('verify','Run shop verify with fresh Stripe MCP reads for this site and mode first.');
+      mcpAccount=saved.options.account;
+      if(!/^acct_[A-Za-z0-9]+$/.test(mcpAccount??''))return failure('account','Verify with the Stripe MCP account ID first.');
+      catalog={config:verified.config,retire:verified.retire};
+    } catch { return failure('verify','Run shop verify with fresh Stripe MCP reads for this site first.'); }
+  }
   const id = hash(realpathSync(root)).slice(0, 24);
-  const profile = `homie-${id}`;
+  const profile = options.profile ?? `homie-${id}`;
   const dir = join(storage, id);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   // Reuse the toolkit’s process-aware lock, in the private receipt folder. Dead processes do not strand setup.
@@ -112,6 +125,10 @@ export async function shopConnect(root, options = {}) {
       probe = await cli(['get', '/v1/products', '-d', 'limit=1', ...(live ? ['--live'] : [])]);
       if (probe.code !== 0 || !Array.isArray(json(probe.stdout)?.data)) return failure('stripe-access', 'Stripe is signed in but cannot read Products in the requested mode. Review the account, sandbox and permissions in Stripe, then run shop connect --renew again.' + stripeReason(probe, 'GET /v1/products'));
     }
+    if (options.webhookOnly) {
+      const accountResult=await cli(['get','/v1/account',...(live?['--live']:[])]);
+      if(accountResult.code!==0 || json(accountResult.stdout)?.id!==mcpAccount) return failure('account','Stripe CLI and MCP must select the same account. Verify with the MCP account ID first.');
+    }
     const site = siteUrl(root);
     if (!site) return failure('deploy', 'Stripe is connected on this computer. Deploy the studio with studio_deploy (Cloudflare approval first if needed), then run shop connect again.', { mode, connected: true });
     let target;
@@ -133,13 +150,13 @@ export async function shopConnect(root, options = {}) {
     const w = wrangler ?? runner(root, studio.cloudflare?.accountId ? { CLOUDFLARE_ACCOUNT_ID: studio.cloudflare.accountId } : {});
     const receiptFile = join(dir, `${mode}.json`);
     const receipt = existsSync(receiptFile) ? json(readFileSync(receiptFile, 'utf8')) : null;
-    const result = await syncPaymentLinks({ root, api, shop: checked.shop, slug: studio.slug, site: target.origin, mode, w, receipt,
+    const result = await syncPaymentLinks({ catalog, root, api, shop: checked.shop, slug: studio.slug, site: target.origin, mode, w, receipt,
       bookingSlots: options.bookingSlots ?? (existsSync(join(root,'.studio','booking-slots.json')) ? JSON.parse(readFileSync(join(root,'.studio','booking-slots.json'),'utf8')) : []),
       saveReceipt: (record) => {
         writeFileSync(`${receiptFile}.tmp`, JSON.stringify(record), { mode: 0o600 });
         renameSync(`${receiptFile}.tmp`, receiptFile);
       } });
-    return { ...result, profile };
+    return { ...result, command:options.webhookOnly?'shop webhook':result.command, profile };
   } catch (e) {
     const said = e?.stripeReason ?? '';
     return failure('stripe-setup', 'Stripe setup could not finish. Check the studio’s Stripe session and Products, Prices, Payment Links and Webhook Endpoints write permissions, and the Cloudflare login, then run shop connect again. No credentials were printed.' + said);

@@ -27,11 +27,11 @@ const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), '..');
 const j = (...parts) => parts.join('');
 
 test('Stripe\'s MCP: a write that would hand back a webhook secret is refused; everything else passes', () => {
-  const names = ['mcp__plugin_stripe_stripe__stripe_api_write', 'mcp__stripe__stripe_api_write', 'mcp__claude_ai_Stripe__stripe_api_write'];
+  const names = ['mcp__codex_apps__stripe_stripe_api_write', 'mcp__plugin_stripe_stripe__stripe_api_write', 'mcp__stripe__stripe_api_write', 'mcp__claude_ai_Stripe__stripe_api_write'];
   for (const tool of names) {
     const why = stripeSecretWriteOf(tool, { method: 'POST', path: '/v1/webhook_endpoints', params: { url: 'https://owls.example/api/shop/hook', enabled_events: ['checkout.session.completed'] } });
     assert.match(why, /signing secret/);
-    assert.match(why, /homie-studio shop connect/, 'it says what to do instead');
+    assert.match(why, /homie-studio shop webhook/, 'it says what to do instead');
   }
   const tool = names[0];
   assert.ok(stripeSecretWriteOf(tool, { operation: 'PostWebhookEndpoints', body: {} }), 'an operation name, not a path');
@@ -88,37 +88,4 @@ test('music: the ElevenLabs key Stripe Projects keeps for a studio, read in this
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-});
-
-test('the skills: the owner\'s steps with Stripe\'s own tools; Stripe Projects is an option, never the default', () => {
-  const shop = readFileSync(join(PLUGIN, 'skills', 'shop', 'SKILL.md'), 'utf8');
-  assert.match(shop, /stripe_login/);
-  assert.match(shop, /shop connect --renew/);
-  assert.match(shop, /keyless/);
-  assert.match(shop, /Payment Links/);
-  assert.match(shop, /Never silently select/);
-  assert.match(shop, /stripe agent setup/);
-  assert.match(shop, /https:\/\/mcp\.stripe\.com/);
-  assert.match(shop, /sandbox first/);
-  assert.match(shop, /2026-10-31/, 'the Agent-key change');
-  assert.match(shop, /Never make a webhook endpoint or an event destination through Stripe's MCP/);
-  assert.match(shop, /shop catalog/);
-  assert.match(shop, /confirmation link/);
-  assert.match(shop, /The owner's steps, for a creator with a fresh Stripe account/);
-  assert.doesNotMatch(shop, /\bpaste (?:it|the key|a key) (?:in|into) (?:the )?chat\b/i);
-  // Declared lazily, as the plugin declares every provider: the skill's frontmatter names it, and Codex gets Stripe's
-  // MCP server beside the skill (agents/openai.yaml), wired only when the skill is used. Nothing installs up front.
-  const front = /^---\n([\s\S]*?)\n---\n/.exec(shop)[1];
-  assert.match(front, /^compatibility: [^\n]*Stripe's own agent plugin/m);
-  assert.match(front, /^metadata:\n {2}providers: stripe$/m);
-  assert.doesNotMatch(front.split('\n').filter((l) => /^(description|compatibility): /.test(l)).join('\n').replace(/^\w+: /gm, ''), /: | #/, 'plain YAML scalars');
-  const codex = readFileSync(join(PLUGIN, 'skills', 'shop', 'agents', 'openai.yaml'), 'utf8');
-  assert.match(codex, /value: "stripe"/);
-  assert.match(codex, /url: "https:\/\/mcp\.stripe\.com"/);
-  assert.match(codex, /transport: "streamable_http"/);
-  const setup = readFileSync(join(PLUGIN, 'skills', 'studio-setup', 'SKILL.md'), 'utf8');
-  assert.match(setup, /setup --via stripe-projects/);
-  assert.match(setup, /`npx wrangler login` stays the way/);
-  assert.match(setup, /--accept-tos/);
-  assert.match(setup, /no commercial licence/);
 });

@@ -384,7 +384,7 @@ function pointAtBundle(html, bundle) {
  * game is served (/games/<id>/ on the site, /<id>/__game/ in its frame, the lab). A game with no dynamic import is
  * one file, as before. `hashed` (the site's build) names the bundle by its content too: see the top of this file.
  */
-export async function buildGameFiles(esbuild, root, g, out, { maps = false, sourcemap = null, cache = {}, log = () => {}, hashed = false, lab = false, longCheck = false } = {}) {
+export async function buildGameFiles(esbuild, root, g, out, { maps = false, sourcemap = null, cache = {}, log = () => {}, hashed = false, lab = false, longCheck = false, quick = false } = {}) {
   rmSync(out, { recursive: true, force: true });
   mkdirSync(join(out, 'assets'), { recursive: true });
   const mode = g.build?.mode ?? 'bundle';
@@ -411,7 +411,7 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
     }
   }
   const { prepareRules, viewPlugin } = ruled ? await rulesBuild() : {};
-  const rules = ruled ? await prepareRules(esbuild, root, g, { log, longCheck }) : null;
+  const rules = ruled ? await prepareRules(esbuild, root, g, { log, longCheck, quick }) : null;
   const bundle = async (entryRel) => {
     const entry = join(g.dir, entryRel);
     if (!existsSync(entry)) throw new Error(`${label}: entry ${entryRel} not found`);
@@ -509,7 +509,8 @@ export function orderGames(games, order, log = () => {}) {
   return [...games].sort((a, b) => (at.get(a.id) ?? Infinity) - (at.get(b.id) ?? Infinity) || a.id.localeCompare(b.id));
 }
 
-export async function build(root, { only = null, log = () => {}, deploy = process.env.WORKERS_CI === '1', maps = false, types = false, beforePublish = async () => {}, longCheck = false } = {}) {
+export async function build(root, { only = null, log = () => {}, deploy = process.env.WORKERS_CI === '1', maps = false, types = false, beforePublish = async () => {}, longCheck = false, quick = false } = {}) {
+  log(`Building studio${quick?' (quick: rules play checks skipped)':''}…`);
   const esbuild = await studioEsbuild(root);
   const studio = readStudio(root);
   if (Object.hasOwn(studio, 'referrals')) log('studio.json referrals: ignored; Homie has no referral system.');
@@ -535,13 +536,13 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
   // from the site as it is.
   const dist = openStage(root, { from: only ? live : null });
   try {
-    return await buildInto(dist, { esbuild, studio, shop, live, games, before, typed, root, only, log, deploy, maps, beforePublish, longCheck });
+    return await buildInto(dist, { esbuild, studio, shop, live, games, before, typed, root, only, log, deploy, maps, beforePublish, longCheck, quick });
   } finally {
     rmSync(dist, { recursive: true, force: true });
   }
 }
 
-async function buildInto(dist, { esbuild, studio, shop, live, games, before, typed, root, only, log, deploy, maps, beforePublish, longCheck }) {
+async function buildInto(dist, { esbuild, studio, shop, live, games, before, typed, root, only, log, deploy, maps, beforePublish, longCheck, quick }) {
   const built = [];
   const retired = [];
   const cache = {};
@@ -549,8 +550,9 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
   const browserHosted = [];
   for (const g of games) {
     const out = join(dist, 'games', g.id);
+    log(`Building ${g.id}…`);
     const started = Date.now();
-    const { mode, warnings, bundle, chunks, rules } = await buildGameFiles(esbuild, root, g, out, { maps, cache, log, hashed: true, longCheck });
+    const { mode, warnings, bundle, chunks, rules } = await buildGameFiles(esbuild, root, g, out, { maps, cache, log, hashed: true, longCheck, quick });
     if (rules) ruled.push({ id: g.id, ...rules }); else browserHosted.push(g.id);
     // The guides' vocabulary (NETPLAY.md section 18): checked here, so a room never meets a line it cannot say.
     vocabFor(g, out);
@@ -571,14 +573,14 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
     if (seats.asked > SEAT_MAX && !rules) log(`games/${g.id} asks for ${seats.asked} players; browser-hosted netplay rooms retain their ${SEAT_MAX}-player limit, so this build uses ${SEAT_MAX} seats. For larger rooms, rewrite as rules plus view: node_modules/@homie-rocks/studio/guides/game/REWRITE.md`);
     built.push({
       id: g.id, name: g.name, mode, bytes, ms: Date.now() - started, warnings, seats: seats.max,
-      ...(rules ? { capacityTrial: rules.check.capacityTrial } : {}),
+      ...(rules ? { capacityTrial: rules.check.capacityTrial, rulesChecksSkipped: rules.check.skipped === true } : {}),
       ...(bundle ? { bundle } : {}), ...(chunks.length ? { chunks: chunks.length, chunkBytes: later } : {}),
     });
     log(`built ${g.id} (${mode}, ${Math.round(bytes / 1024)} KB${chunks.length ? ` + ${chunks.length} additional ${chunks.length === 1 ? 'chunk' : 'chunks'}, ${Math.max(1, Math.round(later / 1024))} KB` : ''})`);
     if (rules && (rules.settings.offline || rules.settings.host === 'browser')) log(`${g.id}: this ${g.kind === 'app' ? 'app' : 'game'}'s rules and tunables are sent to players' devices so it can be played offline`);
-    if (rules) log(`  ${g.id}: its rules run ${rules.settings.host === 'browser' ? "in a player's browser" : 'on the server'} (checked and guarded, ${Math.max(1, Math.round(rules.code.length / 1024))} KB, build ${rules.build}; ${rules.check.ticks} ticks played, the room rebuilt from its save ${rules.check.restores} times: the busiest tick used ${rules.tickUnits} of ${rules.settings.budget.tick} budget units, ${rules.units} of them in one handler; the largest save was ${rules.check.largestSaveBytes} bytes)`);
+    if (rules && !quick) log(`  ${g.id}: its rules run ${rules.settings.host === 'browser' ? "in a player's browser" : 'on the server'} (checked and guarded, ${Math.max(1, Math.round(rules.code.length / 1024))} KB, build ${rules.build}; ${rules.check.ticks} ticks played, the room rebuilt from its save ${rules.check.restores} times: the busiest tick used ${rules.tickUnits} of ${rules.settings.budget.tick} budget units, ${rules.units} of them in one handler; the largest save was ${rules.check.largestSaveBytes} bytes)`);
     if (rules && rules.settings.host === 'server' && (rules.snapshotBytes > rules.snapshotCap || rules.checkpointBytes > rules.checkpointCap)) log(`  ${g.id}: this state fits server and offline play but exceeds browser hosting limits.`);
-    if (rules) log(`  ${g.id}: smoke-run largest snapshot ${rules.snapshotBytes} B / ${rules.snapshotCap} B browser cap; checkpoint ${rules.checkpointBytes} B / ${rules.checkpointCap} B browser cap (measured, not an upper bound)`);
+    if (rules && !quick) log(`  ${g.id}: smoke-run largest snapshot ${rules.snapshotBytes} B / ${rules.snapshotCap} B browser cap; checkpoint ${rules.checkpointBytes} B / ${rules.checkpointCap} B browser cap (measured, not an upper bound)`);
   }
   // A game written before rules (its own code is the host) builds and runs exactly as it did. Said in one line.
   if (browserHosted.length) log(`hosted by a player's browser, as before (no room object; nothing to do): ${browserHosted.join(', ')}`);
@@ -752,6 +754,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
   // site, never before: a game that did not build has left both as they were.
   await beforePublish();
   const hosted = (await rulesBuild()).writeRules(root, ruled, all.filter((g) => rulesOf.get(g.id)?.host === 'server').map((g) => g.id));
+  log('Building site Worker…');
   await (await import('./worker-build.mjs')).buildWorker(root, esbuild);
   // All of it is there: now, and only now, it becomes site/dist (lib/stage.mjs).
   const swapped = swapIn(dist, live);

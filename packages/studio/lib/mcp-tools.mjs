@@ -1031,13 +1031,13 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'build', title: 'Build the site',
-      description: 'Bundle every game or app and the site into site/dist. Rules builds always run strict types, the guard and deterministic generated play, including save/restore and prediction checks. Read full diagnostics and repair the named handler; info lines do not fail. Never bypass checks or switch to browser hosting to escape a failure. A running preview shows the new build on reload.',
-      inputSchema: { type: 'object', properties: { game: str('Optional: only this game'), ...STUDIO_ARG } },
+      description: 'Bundle every game or app and the site into site/dist. Rules builds run strict types, the guard and deterministic generated play. quick:true skips generated play and snapshot smoke checks for local iteration; full build before release. Read full diagnostics and repair the named handler; info lines do not fail. Never bypass checks or switch to browser hosting to escape a failure. A running preview shows the new build on reload.',
+      inputSchema: { type: 'object', properties: { game: str('Optional: only this game'), quick:{type:'boolean'}, ...STUDIO_ARG } },
       annotations: { title: 'Build', ...RW },
       run: async (a) => {
         const root = ctx.root(a.studio);
         const need = needsInstall(ctx, root); if (need) return need;
-        const r = await cli(ctx, root, 'build', ['build', ...(a.game ? [String(a.game)] : [])]);
+        const r = await cli(ctx, root, 'build', ['build', ...(a.game ? [String(a.game)] : []), ...(a.quick?['--quick']:[])]);
         if (!r.ended) return stillRunning(r.job, 'The build');
         if (r.job.code !== 0) return fail(`The build failed: ${whyOf(r.job)}`);
         const g = r.result?.games ?? [];
@@ -1178,8 +1178,30 @@ export function toolDefs(ctx, avail = {}) {
       },
     },
     {
+      name: 'stripe_shop_plan', title: 'Plan or verify the Stripe shop',
+      description: 'Default setup with Stripe official MCP. Supply public API observations as {path,params,body}, account ID, mode, and complete booking slots. Returns the exact next read/write with metadata and idempotency. Execute via Stripe stripe_api_search/details/read/write, clear observations after writes, repeat until verified. verify:true saves the public config for stripe_webhook. Never pass webhook creation responses or secrets.',
+      inputSchema: {type:'object',properties:{...STUDIO_ARG,account:{type:'string'},mode:{enum:['test','live']},url:{type:'string'},slots:{type:'array',items:{type:'object'}},observations:{type:'array',items:{type:'object'}},verify:{type:'boolean'}}},
+      annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:false},
+      run:async a=>{
+        const {shopMcpPlan,saveMcpVerification}=await import('./shop-mcp.mjs');
+        const result=await (a.verify?saveMcpVerification:shopMcpPlan)(ctx.root(a.studio),a);
+        return ok(JSON.stringify(result),result);
+      },
+    },
+    {
+      name:'stripe_webhook',title:'Install Stripe webhook privately',
+      description:'After stripe_shop_plan verify:true, create/install only the webhook and verified public links. Uses a separate official CLI browser approval if needed; never shows secrets. Follow studio_job. Never create a webhook through model-visible Stripe MCP.',
+      inputSchema:{type:'object',properties:{...STUDIO_ARG,live:{type:'boolean'},renew:{type:'boolean'}}},
+      annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:true},
+      run:async a=>{
+        const job=cliJob(ctx.root(a.studio),'Private Stripe webhook',['shop','webhook',...(a.live?['--live']:[]),...(a.renew?['--renew']:[])],{cli:join(PACKAGE_ROOT,'bin','homie-studio.mjs'),keep:false});
+        await waitJob(job,Math.min(ctx.waitMs,1000));
+        return ok('Follow studio_job; approve Stripe in the browser if requested.',{kind:'job',...jobView(job)});
+      },
+    },
+    {
       name:'stripe_bookings_sync', title:'Sync published booking slots to Stripe',
-      description:'Owner AI: after reading published slot records, supply the complete slot manifest. Creates/updates Stripe Payment Links with completed-session capacity limits through the approved CLI profile. Before moving a booking, sync target active:false to deactivate and expire open sessions. After the versioned staff move, sync current confirmed counts for affected slots to restore the remaining budget. Removed slots deactivate and expire open sessions. No Worker API key. Follow studio_job. Never increase capacity merely to reopen a full slot.',
+      description:'CLI alternative to stripe_shop_plan with Stripe official MCP: after reading published slot records, supply the complete slot manifest. Creates/updates Stripe Payment Links with completed-session capacity limits through the approved CLI profile. Before moving a booking, sync target active:false to deactivate and expire open sessions. After the versioned staff move, sync current confirmed counts for affected slots to restore the remaining budget. Removed slots deactivate and expire open sessions. No Worker API key. Follow studio_job. Never increase capacity merely to reopen a full slot.',
       inputSchema:{type:'object',properties:{...STUDIO_ARG,slots:{type:'array',items:{type:'object',properties:{app:{type:'string'},collection:{type:'string'},slots:{type:'string'},slot:{type:'string'},item:{type:'string'},capacity:{type:'integer',minimum:0},confirmed:{type:'integer',minimum:0},active:{type:'boolean'}},required:['app','collection','slots','slot','item','capacity'],additionalProperties:false}},live:{type:'boolean'}},required:['slots']},
       annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:true},
       run:async a=>{
@@ -1193,12 +1215,12 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'stripe_login', title: 'Connect the studio to Stripe',
-      description: 'Connect and sync shop.json through Stripe’s official CLI with one browser approval if needed. Creates Products, Prices, Payment Links and the webhook; installs only links and signing secret, no API key in the Worker. Repeat after edits. Follow studio_job. An existing key supports fuller checkout; manual only if explicitly chosen for those features. live only when the owner says go live.',
-      inputSchema: { type: 'object', properties: { ...STUDIO_ARG, live: { type: 'boolean' }, renew: { type: 'boolean' }, manual: { type: 'boolean' } } },
+      description: 'Connect and sync shop.json through Stripe’s official CLI with one browser approval if needed. Creates Products, Prices, Payment Links and the webhook; installs only links and signing secret, no API key in the Worker. Repeat after edits. Follow studio_job. Alternative to the default Stripe official MCP plan and private stripe_webhook flow. live only when the owner says go live.',
+      inputSchema: { type: 'object', properties: { ...STUDIO_ARG, live: { type: 'boolean' }, renew: { type: 'boolean' } } },
       annotations: { title: 'Connect Stripe', readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       run: async (a) => {
         const root = ctx.root(a.studio);
-        const args = ['shop', 'connect', ...(a.live ? ['--live'] : []), ...(a.renew ? ['--renew'] : []), ...(a.manual ? ['--manual'] : [])];
+        const args = ['shop', 'connect', ...(a.live ? ['--live'] : []), ...(a.renew ? ['--renew'] : [])];
         const job = cliJob(root, 'Stripe connection', args, { cli: join(PACKAGE_ROOT, 'bin', 'homie-studio.mjs'), keep: false });
         const ended = await waitJob(job, Math.min(ctx.waitMs, 1000));
         ctx.status = null;
