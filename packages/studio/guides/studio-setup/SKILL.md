@@ -338,7 +338,7 @@ existing Cloudflare sign-in to create DNS and TLS. Never ask the person for a zo
 or wildcard route already on that domain belongs to another site there, and the deploy's warning gives the
 one line to add instead (the `publish` skill has the rest).
 
-**The directory, only when asked.** Going online never lists a studio: listing in the homie.rocks directory
+**The directory, only when asked.** A deploy never opts a studio in by itself: listing in the homie.rocks directory
 is its own step, it is public, and it is the person's to ask for. When they asked to be listed (in their first
 message or now), or say yes when you offer it once the site is live, call the Homie MCP tool `studio_publish`
 with the live site address (without the connector, `npx --no-install homie-studio publish`). It lists the
@@ -417,3 +417,11 @@ there (checked by SHA-256, at the same addresses); `homie-studio media move --dr
 Every studio serves its own MCP at `<site>/mcp`. Use the `tools` skill for studio-defined business actions, signed integrations and staff AI access. Reuse office and app-record built-ins first. After an authorized deploy, hand over the MCP address and `<site>/_studio/office/connections`: the person approves with the studio account they already have, with no key to copy. Staff connect their own account and retain only their app grants. Client connector setup is separate from the studio approval. Never deploy merely to set up a local tool test.
 
 For a business or cause, use `studio_scaffold {name, kind:"business"}` or `homie-studio new <folder> --kind cause`. Continue directly with the app skill and the appropriate `app new --from` starter; no game demo or planning interview unless requested.
+
+## Resuming setup (0.51.1)
+
+If `homie-studio new` was interrupted, rerun it in the same folder with the same name
+and slug. It fills missing generated files and retries installation, preserving files
+already there. A different studio or unrelated nonempty folder is still refused.
+New studios do not request a directory listing by default; set `homie.directory: true`
+or a directory URL only when the person chooses listing.

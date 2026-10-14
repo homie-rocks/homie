@@ -70,9 +70,10 @@
         C.add(C.el('div', 'cb'), C.el('b', '', x.kind + ' ' + x.name), C.el('span', '', x.state + (x.plan ? ' · ' + x.plan : '')))));
     });
     card.appendChild(ul);
-    if (p.cost) card.appendChild(C.el('p', 'note', p.cost));
+    if (p.cost) card.appendChild(C.el('p', 'note billing', p.cost));
     card.appendChild(C.el('p', 'fine', 'Cloudflare asks you to approve once in your browser if this computer is not signed in (a free account works).'));
-    if (p.directory && p.directory.stores) card.appendChild(C.el('p', 'fine', 'The Homie directory stores ' + p.directory.stores));
+    if (p.directory && p.directory.choice) card.appendChild(C.el('p', 'directory-choice', p.directory.choice));
+    if (p.directory && p.directory.site && p.directory.stores) card.appendChild(C.el('p', 'fine', 'The Homie directory stores ' + p.directory.stores));
     if (p.never) card.appendChild(C.el('p', 'fine', p.never));
     return card;
   }

@@ -834,8 +834,10 @@ test('local dev with a custom-domain route in wrangler.jsonc: the route never re
   const dir = studio('dev-routes');
   const rt = localRuntime(dir);
   legacyGame(dir, 'crown-thief');
-  // A fresh studio runs from its own wrangler.jsonc, as it always did.
-  assert.deepEqual(devConfig(dir, false), { args: [], note: null, stripped: [] });
+  // Every local server retains its binding snapshot for CLI writes after deploy.
+  const localConfig=devConfig(dir,false);
+  assert.equal(localConfig.args[1],localConfig.copy);
+  assert.deepEqual(localConfig.stripped,[]);
   // The studio is live on its own domain: a custom domain and the exact-host route its zone needed.
   const routes = [{ pattern: 'play.example.com', custom_domain: true }, { pattern: 'play.example.com/*', zone_name: 'example.com' }];
   editConfig(dir, (c) => { c.routes = routes; });
@@ -1068,4 +1070,67 @@ test('committed studio stays clean after npm build and dry deploy, with and with
    assert.equal(git('status','--porcelain'),'','dry deploy leaves committed studio clean');
    assert.match(cf.calls().filter(c=>c.startsWith('deploy ')).at(-1),/runtime\/[a-f0-9]{24}\/worker\.js/,'deployment selects one immutable generation');
  }
+});
+
+test('boolean listing choice publishes without crashing', async () => {
+  const dir = studio('boolean-directory');
+  const s=readStudio(dir);s.homie.directory=true;writeStudio(dir,s);
+  let sent;
+  const result=await publish(dir,{site:'https://example.test',fetchFn:async(u,init)=>{sent={url:String(u),body:JSON.parse(init.body)};return Response.json({ok:true});}});
+  assert.equal(result.ok,true);
+  assert.equal(sent.url,'https://homie.rocks/api/studio/publish');
+  s.cloudflare.domain='canonical-publish.example';writeStudio(dir,s);
+  for(const site of ['https://canonical-publish.example','https://alias.acct.workers.dev']) {
+    await publish(dir,{site,fetchFn:async(u,init)=>{assert.equal(JSON.parse(init.body).site,'https://canonical-publish.example');return Response.json({ok:true});}});
+  }
+});
+
+test('rerunning new completes missing files without overwriting studio edits', () => {
+ const dir=studio('resume-new');
+ rmSync(join(dir,'site/README.md'));
+ writeFileSync(join(dir,'README.md'),'My own notes\n');
+ const result=run(['new',dir,'--name','Test Studio','--no-install'],scratch);
+ assert.equal(result.status,0,result.stdout+result.stderr);
+ assert.equal(readFileSync(join(dir,'README.md'),'utf8'),'My own notes\n');
+ assert.equal(existsSync(join(dir,'site/README.md')),true);
+});
+
+test('local D1 commands retain the dev binding after deploy changes the real database id', async () => {
+ const dir=studio('local-d1-binding');const cf=account(dir);
+ editConfig(dir,c=>{c.routes=[{pattern:'local-test.example',custom_domain:true}];});
+ const before=devConfig(dir,false);const active=JSON.parse(readFileSync(before.copy,'utf8'));
+ const {runner}=await import('../lib/cloudflare.mjs');
+ editConfig(dir,c=>{c.d1_databases[0].database_id='22222222-2222-2222-2222-222222222222';});
+ runner(dir)(['d1','execute','test-studio-db','--local','--command','SELECT 1']);
+ const call=cf.calls().at(-1);
+ const args=call.split(' ');
+ assert.equal(args[args.indexOf('--config')+1],before.copy);
+ assert.equal(JSON.parse(readFileSync(before.copy,'utf8')).d1_databases[0].database_id,active.d1_databases[0].database_id);
+});
+
+test('deploy reports app open and wall addresses', async () => {
+ const dir=studio('app-addresses');account(dir);
+ const app=run(['app','new','cards','--from','welcome','--name','Cards'],dir);
+ assert.equal(app.status,0,app.stdout+app.stderr);
+ const file=join(dir,'apps/cards/app.json');const meta=JSON.parse(readFileSync(file,'utf8'));meta.room={host:'browser'};meta.entry='src/main.ts';writeFileSync(file,JSON.stringify(meta));writeFileSync(join(dir,'apps/cards/src/main.ts'),'document.body.textContent="Cards";');
+ const result=await deploy(dir);
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.games[0].open,result.url+'/cards/open');
+ assert.equal(result.games[0].wall,result.url+'/cards/tv');
+ assert.equal(result.games[0].play,undefined);
+});
+
+test('explicit publish opts an unlisted studio in without an extra deploy', async () => {
+ const dir=studio('explicit-publish-choice'),cf=account(dir);
+ const studioConfig=readStudio(dir);delete studioConfig.homie.directory;writeStudio(dir,studioConfig);
+ const requests=[];
+ const result=await publish(dir,{site:'https://publish-choice.example',fetchFn:async(u,init)=>{
+  requests.push([String(u),init?.method??'GET']);
+  return Response.json(String(u).includes('/claim?')?{claim:'a'.repeat(40)}:{ok:true});
+ }});
+ assert.equal(result.ok,true);
+ assert.equal(requests[0][0],'https://homie.rocks/api/studio/claim?site=https%3A%2F%2Fpublish-choice.example');
+ assert.ok(cf.calls().some(call=>call.includes('homie_claim:https://publish-choice.example')));
+ assert.equal(readStudio(dir).homie.directory,'https://homie.rocks');
+ assert.equal(requests.at(-1)[0],'https://homie.rocks/api/studio/publish');
 });

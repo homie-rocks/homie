@@ -245,8 +245,8 @@ studio's pinned copy, never a registry lookup of the bare name.
 - **Workers Builds** (Cloudflare's own CI, set up by the "Deploy to Cloudflare" button or in the dashboard): on
   every push to \`main\` it runs \`npm run build\` and \`npm run deploy\`, which in Workers Builds only applies
   the D1 migrations and deploys (it never creates or refuses anything); on every other branch it runs
-  \`npm run build\` and \`npx wrangler preview\`, a Preview URL with its own rooms. The live site claims itself
-  in the homie.rocks directory the first time it is read, so nothing is stored by hand.
+  \`npm run build\` and \`npx wrangler preview\`, a Preview URL with its own rooms. A live site requests a directory claim only with
+  studio.json \`homie.directory: true\` (homie.rocks) or a directory URL. Existing claims stay honoured.
 - \`npx --no-install homie-studio storage add\` — only when the studio has songs or videos: an R2
   bucket on the studio's own Cloudflare account. Cloudflare asks for a payment method on the account
   before R2 works, so this is a separate step the person agrees to; nothing else needs it. R2 has no
@@ -1085,14 +1085,17 @@ export function newStudio(folder, { name, homie, slug: askedSlug, install = true
   if (real) {
     if (!statSync(real).isDirectory()) throw new Error(`${real} is a file. Nothing was written.`);
     const entries = readdirSync(real).filter((n) => n !== '.DS_Store' && n !== '.git');
-    if (entries.length) throw new Error(`${real} is not empty (${entries.slice(0, 5).join(', ')}${entries.length > 5 ? ', …' : ''}). A new studio goes in a new or empty folder. Nothing was written.`);
+    let resume = false;
+    try { const existing = JSON.parse(readFileSync(join(real, 'studio.json'), 'utf8')); resume = existing.name === String(name).trim() && existing.slug === slugify(askedSlug || name) && Boolean(existing.homie?.studio); } catch {}
+    if (entries.length && !resume) throw new Error(`${real} is not empty (${entries.slice(0, 5).join(', ')}${entries.length > 5 ? ', …' : ''}). A new studio goes in a new or empty folder. Nothing was written.`);
   }
   const slug = slugify(askedSlug || name);
-  const files = studioFiles({ name: String(name).trim(), slug, homie: homie || 'https://homie.rocks', template, kind });
+  const files = studioFiles({ name: String(name).trim(), slug, homie: homie ?? null, template, kind });
   mkdirSync(dir, { recursive: true });
   const wrote = [];
   for (const [rel, content] of Object.entries(files)) {
     const path = join(dir, rel);
+    if (existsSync(path)) continue;
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, content);
     wrote.push(rel);

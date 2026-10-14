@@ -100,8 +100,9 @@ Before the first deploy, tell the person what it creates and what it costs:
 one D1 database, two SQLite-backed Durable Objects; R2 only when requested).
 
 `deploy` builds every game, creates the Worker and D1 database named in `studio.json`,
-applies migrations, deploys, and reads the live site once (the site then claims itself
-in the homie.rocks directory; nothing is stored by hand). It never creates R2. It refuses
+applies migrations, deploys, and reads the live site once. Listing is the studio’s choice: `homie.directory: true`
+means homie.rocks; a directory URL chooses that directory. An omitted, null or false
+value makes no new claim. Existing stored claims stay honoured. It never creates R2. It refuses
 to use a Worker, database or bucket of the same name that this studio did not create;
 then rename it in `studio.json` and `wrangler.jsonc` (an older studio's is
 `site/wrangler.jsonc`). Never
@@ -167,8 +168,12 @@ landing page" makes one epic). Every page ends with "Made with Homie"; restyle i
 
 ## List in the directory
 
-Going online never lists a studio. Listing is this separate step, public, and the person's to ask for: do it when
-they asked to be listed or said yes to your offer, never as part of a deploy.
+Listing is public and the studio chooses it. When the person asks to be listed, set
+`studio.json` `homie.directory: true` (homie.rocks) or their directory URL before the
+requested deploy, then publish. Deployment alone never opts an unlisted studio in.
+Existing claims stay honoured. `deploy --plan` states this choice. An explicit
+`publish` can also opt in after deploy: it records the choice and stores the claim
+in the studio’s D1, without requiring another deploy.
 
 Licences first: `publish` refuses to list a studio while a public game ships an asset with no licence record, a
 licence that forbids a web game, or a credit it owes but does not show (`npx --no-install homie-studio assets check
@@ -255,3 +260,18 @@ from here (`homie_feedback`, above).
 ## Connect an AI to this studio
 
 Every studio serves its own MCP at `<site>/mcp`. Use the `tools` skill for studio-defined business actions, signed integrations and staff AI access. Reuse office and app-record built-ins first. After an authorized deploy, hand over the MCP address and `<site>/_studio/office/connections`: the person approves with the studio account they already have, with no key to copy. Staff connect their own account and retain only their app grants. Client connector setup is separate from the studio approval. Never deploy merely to set up a local tool test.
+
+## Deploy and listing addresses (0.51.1)
+
+The manifest and its public links use `cloudflare.domain` when configured, otherwise
+workers.dev. Browser GET/HEAD pages on workers.dev redirect to the custom domain,
+keeping path and query. Discovery (`/.well-known`), API, MCP, OAuth and webhook
+transports keep working on the alias. Do not disable workers.dev when tools use it.
+This uses the Worker redirect pattern in [Cloudflare’s redirect guide](https://developers.cloudflare.com/workers/examples/redirect/).
+Publish from either address in the studio folder uses the configured custom domain.
+
+Deploy prints app `/<id>/open`, game `/<id>/play`, and wall `/<id>/tv` addresses.
+It prints no unmeasured Cloudflare plan or price. A running local dev server retains
+its binding configuration; local role and office commands use that same database
+after a first deploy. Restart only to load a changed runtime, not to repair a role grant.
+For staff AI connections use `<site>/mcp/auth`; `<site>/mcp` remains public.

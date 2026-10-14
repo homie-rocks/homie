@@ -4,8 +4,9 @@
  * claim the directory gave it (`homie-studio deploy` stores it in D1), so
  * nobody can list games under someone else's site.
  */
+import { directoryUrl } from '../worker/directory-choice.mjs';
 import { request } from './net.mjs';
-import { listExperiences as listGames, readLocal, readStudio, siteUrl, writeLocal } from './studio.mjs';
+import { domainOrigin, listExperiences as listGames, readLocal, readStudio, siteUrl, writeLocal, writeStudio } from './studio.mjs';
 import { licenceProblems, readManifest } from './asset-manifest.mjs';
 import { partsPlanLines, partsPublishReport } from './parts-build.mjs';
 
@@ -103,8 +104,8 @@ function licenceRefusals(root) {
  */
 export async function publishBefore(root, { homie, site, log = () => {}, fetchFn } = {}) {
   const studio = readStudio(root);
-  const directory = (homie || studio.homie?.directory || 'https://homie.rocks').replace(/\/+$/, '');
-  const url = site || siteUrl(root, studio);
+  const directory = directoryUrl(homie ?? studio.homie?.directory) ?? 'https://homie.rocks';
+  const url = domainOrigin(studio.cloudflare?.domain) || site || siteUrl(root, studio);
   const refused = licenceRefusals(root);
   const parts = partsForListing(root);
   const local = publishesSoFar(root);
@@ -140,8 +141,8 @@ export async function publishBefore(root, { homie, site, log = () => {}, fetchFn
 
 export async function publish(root, { homie, site, log = () => {}, fetchFn } = {}) {
   const studio = readStudio(root);
-  const directory = (homie || studio.homie?.directory || 'https://homie.rocks').replace(/\/+$/, '');
-  const url = site || siteUrl(root, studio);
+  const directory = directoryUrl(homie ?? studio.homie?.directory) ?? 'https://homie.rocks';
+  const url = domainOrigin(studio.cloudflare?.domain) || site || siteUrl(root, studio);
   // Licences first: a public game may ship only assets with a licence record that allows it.
   const refused = licenceRefusals(root);
   if (refused.length) return { ok: false, command: 'publish', refused, why: `not listed: ${refused.length} asset licence problem${refused.length === 1 ? '' : 's'}:\n${refused.map((p) => `  ${p.game}/${p.asset}: ${p.problem}${p.fix ? ` (${p.fix})` : ''}`).join('\n')}\nhomie-studio assets check <id> says the same; fix them, deploy, then publish again.` };
@@ -149,6 +150,22 @@ export async function publish(root, { homie, site, log = () => {}, fetchFn } = {
   // Parts from other studios in the games about to be listed: their licences and credits, and plainly when two
   // cannot be combined, in the same lines the deploy plan gave (lib/parts-build.mjs). Said before anything is sent.
   // It does not stop the listing: the person decides, having been told.
+  // An explicit publish is itself the choice to list. Seed the same D1 claim the
+  // Worker uses, so a studio deployed without opt-in does not need another deploy.
+  if (!directoryUrl(studio.homie?.directory)) {
+    let origin;
+    try { origin = new URL(url).origin; } catch { return {ok:false,command:'publish',why:'Invalid studio address'}; }
+    const claimed = await request(`${directory}/api/studio/claim?site=${encodeURIComponent(origin)}`, {}, {timeout:15_000,...(fetchFn?{fetchFn}:{})});
+    const token = claimed.body?.claim;
+    if (!claimed.ok || !/^[a-f0-9]{16,128}$/.test(token ?? '')) return {ok:false,command:'publish',why:claimed.why ?? 'The directory did not return a claim; nothing was listed.'};
+    const {runner} = await import('./cloudflare.mjs');
+    const {loopback} = await import('./stats.mjs');
+    const local = loopback(origin);
+    const w = runner(root, !local && studio.cloudflare?.accountId ? {CLOUDFLARE_ACCOUNT_ID:studio.cloudflare.accountId} : {});
+    const saved = w(['d1','execute',studio.cloudflare.d1,local?'--local':'--remote','--command',`INSERT OR REPLACE INTO meta (key,value) VALUES ('homie_claim:${origin.replaceAll("'", "''")}','${token}');`]);
+    if(saved.code!==0)return {ok:false,command:'publish',why:'Could not store the directory claim in the studio database: '+saved.out};
+    writeStudio(root,{...studio,homie:{...studio.homie,directory}});
+  }
   const parts = partsForListing(root);
   for (const line of partsPlanLines(parts, { at: 'publish' })) log(line);
   const before = publishesSoFar(root);

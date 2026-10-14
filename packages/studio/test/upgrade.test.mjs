@@ -287,3 +287,42 @@ test('what\'s new since the studio\'s version, from this package\'s CHANGELOG.md
   save(dir, 'studio.json', s);
   assert.deepEqual(out(run(['upgrade'], dir)).whatsNew.versions.map((v) => v.version), listed.filter((v) => compareVersions(v, '0.18.2') > 0));
 });
+
+test('upgrade refreshes untouched app preset files and defaults, preserving studio edits', async () => {
+ const {cpSync,mkdirSync}=await import('node:fs');
+ const {dir}=oldStudio('app-preset-upgrade');
+ const app=join(dir,'apps','gifts');mkdirSync(app,{recursive:true});
+ cpSync(join(PKG,'test/fixtures/app-giving-0.50.6'),app,{recursive:true});
+ const old=JSON.parse(readFileSync(join(app,'app.json'),'utf8'));
+ old.id='gifts';old.name='Our cause';old.words.thanks='Our own thank-you';
+ writeFileSync(join(app,'app.json'),JSON.stringify(old));
+ const custom=join(dir,'apps','custom');cpSync(app,custom,{recursive:true});
+ writeFileSync(join(custom,'app.json'),JSON.stringify({...old,id:'custom'}));
+ writeFileSync(join(custom,'src/view.ts'),'// studio-authored scene\n');
+ const result=run(['upgrade','--apply'],dir);assert.equal(result.status,0,result.stdout+result.stderr);
+ const current=JSON.parse(readFileSync(join(PKG,'app-starters/giving/app.json'),'utf8'));
+ const upgraded=JSON.parse(readFileSync(join(app,'app.json'),'utf8'));
+ assert.equal(upgraded.words.action,current.words.action);
+ assert.equal(upgraded.words.total,current.words.total);
+ assert.equal(upgraded.words.thanks,'Our own thank-you');
+ assert.equal(upgraded.name,'Our cause');assert.equal(upgraded.id,'gifts');
+ assert.deepEqual(upgraded.starter.choices,current.starter.choices);
+ assert.equal(readFileSync(join(app,'src/view.ts'),'utf8'),readFileSync(join(PKG,'app-starters/giving/src/view.ts'),'utf8'));
+ assert.equal(readFileSync(join(custom,'src/view.ts'),'utf8'),'// studio-authored scene\n');
+});
+
+test('upgrade refreshes the old giving preset but preserves a studio-edited item list', async () => {
+ const {shopInit}=await import('../lib/shop.mjs');
+ for(const customized of [false,true]) {
+  const {dir}=oldStudio('giving-preset-'+customized);
+  assert.equal(shopInit(dir,{giving:true,currency:'cad'}).ok,true);
+  const current=json(dir,'shop.json');
+  const old={...current,giving:{receiptText:'Our receipt wording'},items:current.items.filter(i=>i.price!==2000)};
+  if(customized)old.items[0].price=1700;
+  save(dir,'shop.json',old);
+  const upgraded=run(['upgrade','--apply'],dir);assert.equal(upgraded.status,0,upgraded.stdout+upgraded.stderr);
+  const actual=json(dir,'shop.json');
+  assert.deepEqual(actual.items,customized?old.items:current.items);
+  assert.equal(actual.giving.receiptText,'Our receipt wording');assert.equal(actual.currency,'cad');
+ }
+});

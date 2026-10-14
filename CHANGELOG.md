@@ -17,6 +17,26 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.51.2] - 2026-10-14
+
+**Plugin 0.51.2** · Deploying and listing do what the studio chose, under one address.
+
+Your studio follows your listing choice, shares one public address, and keeps its apps and tools working after deploy and upgrade.
+
+### Fixed
+
+- Your studio only joins the directory when you choose to list it. Existing claims remain honoured, and you can publish a listing after an unlisted deploy.
+- Your custom domain is the shared address for pages and app links. Visitors arriving at the workers.dev address reach that domain, while app APIs, multiplayer connections and AI tools keep working.
+- Deploy shows your app, game and wall links without guessing your bill. Local database tools keep working after deploy, interrupted setup can resume, and office sign-in takes you straight to the page you requested.
+- Upgrades refresh untouched app presets and defaults while preserving your edits, including giving choices. App walls use the app's own join wording.
+- Decorative app hero frames let visitors scroll the page; apps can share and download files while keeping their sandbox protection.
+- Signed-in AI connectors can discover how to connect through `/mcp/auth`; public tools remain available through `/mcp`.
+
+### Upgrade notes
+
+- Ask Homie to upgrade your studio, install dependencies and rebuild. Existing directory claims remain honoured. To list a new studio, choose `homie.directory: true` or a directory URL before deploy.
+- Use `/mcp/auth` for staff AI connectors and `/mcp` for public connectors.
+
 ## [0.51.1] - 2026-10-14
 
 **Plugin 0.51.1** · A player's own runner never jumps across the screen.

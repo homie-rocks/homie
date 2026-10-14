@@ -1,3 +1,4 @@
+import {appPresetChanges} from './upgrade-app-presets.mjs';
 import {refreshWorkerConfig} from './worker-config.mjs';
 /**
  * `homie-studio upgrade [--apply] [--diff]` — an existing studio takes what this version's template adds, and
@@ -174,7 +175,7 @@ export function upgradePlan(root, { history = readHistory() } = {}) {
   const who = { name, slug };
   const tmpl = studioFiles({ name, slug, homie: studio.homie?.directory ?? 'https://homie.rocks' });
   const { files: oldFiles, secs: oldSecs } = known(history, who);
-  const changes = [];
+  const changes = appPresetChanges(root);
   const kept = [];
 
   // package.json: the pin, and the scripts the template's studios have.

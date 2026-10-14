@@ -43,7 +43,7 @@ function files(dir) {
 const scratch = mkdtempSync(join(tmpdir(), 'homie-template-'));
 try {
   const made = join(scratch, 'my-studio');
-  newStudio(made, { name: 'My Studio', homie: 'https://homie.rocks', install: false, template: true });
+  newStudio(made, { name: 'My Studio', install: false, template: true });
   rmSync(join(made, '.git'), { recursive: true, force: true });
   const want = files(made);
   if (process.argv.includes('--check')) {

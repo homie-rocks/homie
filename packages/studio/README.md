@@ -110,10 +110,21 @@ is put in a studio unless the person asks for one), and its Home has a
 In the session that works in the repository, `homie-studio setup attach <hs_…> [--client claude|codex|grok]` then gives the studio
 the name chosen in the chat and removes the band.
 
-**The site claims itself in the directory.** The homie.rocks directory lists a studio only when its site serves
-the claim the directory handed out for that address. From 0.10.0 the site asks for it the first time its
-`/.well-known/homie-studio.json` is read (by `studio_publish`, or by `deploy` reading it once) and keeps it in
-its D1; nothing is stored by hand. studio.json `homie.directory: false` keeps a studio out.
+**Listing is the studio’s choice.** Set `homie.directory: true` for homie.rocks or a
+chosen directory URL before deploying. Omitted, null or false makes no new claim;
+existing stored claims remain honoured. An explicit `publish` also records the choice
+and stores the directory claim without requiring a second deploy. The manifest and
+publish use the custom domain when configured. Workers.dev browser pages redirect to
+it; discovery and tool routes remain accessible on both addresses.
+
+Deploy prints `/<id>/open` for apps, `/<id>/play` for games and `/<id>/tv` for walls.
+It reports no unmeasured Cloudflare plan. Local tools retain their dev database binding
+after the first deploy. Rerunning an interrupted `new` fills missing files without
+overwriting the matching studio’s edits. Office links sign in directly and retain
+`--to` destinations, including app and connection pages.
+
+For signed-in staff AI connectors use `/mcp/auth`; it returns a 401 OAuth discovery
+challenge without a token. `/mcp` continues to serve public tools anonymously.
 
 ## The site: the hub's shape, and a landing for every game
 

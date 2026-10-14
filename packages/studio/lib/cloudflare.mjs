@@ -1,3 +1,4 @@
+import { directoryUrl } from '../worker/directory-choice.mjs';
 import { roomLayout } from '../worker/gate.mjs';
 import {workerEntry} from './worker-build.mjs';
 import { seatCount } from '../worker/seats.mjs';
@@ -51,6 +52,11 @@ import { projectsCloudflareEnv } from './projects-env.mjs';
 
 const ANSI = /\u001b\[[0-9;]*m/g;
 
+export function experienceAddresses(root, id, url) {
+  const app = listGames(root).find(g => g.id === id)?.kind === 'app';
+  return { [app ? 'open' : 'play']: url ? `${url}/${id}/${app ? 'open' : 'play'}` : null, wall: url ? `${url}/${id}/tv` : null };
+}
+
 export function wranglerBin(root) {
   const local = join(root, 'node_modules', '.bin', 'wrangler');
   return existsSync(local) ? local : null;
@@ -65,6 +71,8 @@ export function runner(root, env) {
   const bin = wranglerBin(root);
   if (!bin) throw new Error('Wrangler is not installed in this studio yet: run `npm install` in the studio folder first');
   return (args, { cwd = workerDir(root), input } = {}) => {
+    const dev = join(workerDir(root), '.wrangler', 'homie-dev.wrangler.json');
+    if (args.includes('--local') && !args.includes('--config') && existsSync(dev)) args = [...args, '--config', dev, '--persist-to', join(workerDir(root), '.wrangler', 'state')];
     const res = spawnSync(bin, args, {
       cwd, env: { ...process.env, ...projectsCloudflareEnv(root), ...env, WRANGLER_SEND_METRICS: 'false', CI: '1' }, encoding: 'utf8',
       input, maxBuffer: 64 * 1024 * 1024, timeout: 10 * 60_000,
@@ -211,11 +219,13 @@ export function deployPlan(root) {
         ? { kind: 'R2 bucket', name: storage, what: 'the studio\'s big media: songs and videos over the size studio.json media.r2Over names (1 MiB unless set) or that git leaves out, uploaded and checked by SHA-256 before the site stops carrying them, served at their same addresses', state: 'exists (this studio made it)', plan: 'R2 (payment method on the account; 10 GB-month free)' }
         : { kind: 'R2 bucket', name: null, what: 'none: a new studio needs no storage. `homie-studio storage add` adds it later, for large media only', state: 'not created', plan: null },
     ],
-    cost: 'Account subscription not queried. Cloudflare bills usage under the account’s current plan; estimates are not a billing quote.',
+    cost: null,
     login: 'One approval: `npx wrangler login` opens Cloudflare in the person\'s browser (a free account works; a new one verifies its email address first).',
     address: `https://${cf.worker}.<the account's workers.dev subdomain>.workers.dev`,
     directory: {
-      site: studio.homie?.directory || 'https://homie.rocks',
+      site: directoryUrl(studio.homie?.directory),
+      requested: Boolean(directoryUrl(studio.homie?.directory)),
+      choice: 'A deploy claims a listing only when homie.directory is true or a directory URL. Existing claims stay honoured; studios that never asked are not listed.',
       stores: 'the site\'s address and a claim token, the studio\'s name and slug, the @homie-rocks/studio version, and each game\'s id, name, blurb and Play/page links. Never code, media, keys or accounts.',
     },
     never: 'It never touches a Worker, database or bucket this studio did not create, and it never adds a payment method or buys anything.',
@@ -302,8 +312,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
     const account = who.accounts.find((a) => a.id === accountId)?.name ?? 'the signed-in account';
     announced.push(
       `First deploy of ${studio.name} to the Cloudflare account "${account}". It creates: the Worker ${cf.worker} (the site and its rooms), the D1 database ${cf.d1} (rounds, and the studio's own stats: counts for the owner, never a visitor's identity), and the Durable Objects Table and Lobby (SQLite-backed).`,
-      'Account subscription not queried; usage is billed under the account’s current Cloudflare plan.',
-      `The directory (${homie || studio.homie?.directory || 'https://homie.rocks'}) will store the site's address and claim, the studio's name, and each game's name, blurb and Play link.`,
+      deployPlan(root).directory.choice,
     );
     for (const line of announced) log(line);
   }
@@ -425,7 +434,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
     if (!synced.ok) return refuse('Site deployed, but open part Checkouts could not be closed. Retry deploy: ' + (synced.message ?? synced.why ?? 'no answer'));
     step(`closed ${synced.expired} obsolete part Checkouts`);
   }
-  const directory = homie || studio.homie?.directory || 'https://homie.rocks';
+  const directory = directoryUrl(homie ?? studio.homie?.directory);
   recordDeploy(root, builtNow);
   let claim = null;
   if (url) {
@@ -441,10 +450,10 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
     } else if (read.state === 'unreachable') {
       // This computer could not ask (its own name lookup, no connection): a network preflight failure, never a
       // verdict on the site that was just deployed.
-      const said = `deployed, but this computer could not read ${url} back to check it: ${read.why}. ${read.preflight === 'dns' ? 'That is this computer\'s name lookup (a browser here may still open the site), not the deploy.' : 'That is this computer\'s connection, not the deploy.'} The site claims itself when the directory first reads it.`;
+      const said = `deployed, but this computer could not read ${url} back to check it: ${read.why}. ${read.preflight === 'dns' ? 'That is this computer\'s name lookup (a browser here may still open the site), not the deploy.' : 'That is this computer\'s connection, not the deploy.'} Listing follows the studio’s directory choice.`;
       notes.push(said);
       step(said, { preflight: read.preflight ?? 'network' });
-    } else step('the directory claim is not there yet (the site claims itself when the directory first reads it)');
+    } else step(directory ? 'the requested directory claim is not there yet' : 'no new listing requested; existing claims are honoured');
   }
 
   // The deploy before this one came from a toolkit that still had remix, and left games open to be taken whole. No
@@ -454,7 +463,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   let reread = null;
   if (url && delta.withdrawn.length) {
     const which = delta.withdrawn.join(', ');
-    const dir = String(directory).replace(/\/+$/, '');
+    const dir = directory ?? readLocal(root).listed?.directory;
     if (listedHere(root, { site: url, directory: dir })) {
       const again = await publish(root, { homie: dir, site: url, ...(fetchFn ? { fetchFn } : {}) });
       reread = { ok: again.ok, games: delta.withdrawn, ...(again.ok ? {} : { why: again.why }), ...(again.publishes ? { publishes: again.publishes } : {}) };
@@ -474,7 +483,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   return {
     ok: true, command: 'deploy', url, mcp: url ? `${url}/mcp` : null, connectAI: url ? `${url}/_studio/office/connections` : null, ...(workersDev ? { workersDev, local: LOCAL_STATE } : {}), worker: cf.worker, d1: cf.d1, r2, account: accountId, announced, steps,
     ...(media ? { media: { moved: media.moved ?? [], failed: media.failed ?? [], inR2: media.inR2 ?? null } } : {}),
-    games: b.catalogue.map((id) => { const g = delta.games.find((x) => x.id === id); return { id, page: url ? `${url}/${id}/` : null, play: url ? `${url}/${id}/play` : null, hash: g?.hash ?? null, change: delta.first ? 'first deploy from this computer' : g?.change ?? null }; }),
+    games: b.catalogue.map((id) => { const g = delta.games.find((x) => x.id === id); return { id, page: url ? `${url}/${id}/` : null, ...experienceAddresses(root, id, url), hash: g?.hash ?? null, change: delta.first ? 'first deploy from this computer' : g?.change ?? null }; }),
     ...(delta.removed.length ? { removed: delta.removed } : {}),
     ...(routes ? { routes: routes.map((r) => r.pattern) } : {}),
     ...(zone ? { zone: zoneView(zone) } : {}),
@@ -643,7 +652,7 @@ export async function ciDeploy(root, { log = () => {} } = {}) {
     ok: true, command: 'deploy', ci: true, url, mcp: url ? `${url}/mcp` : null, connectAI: url ? `${url}/_studio/office/connections` : null, worker: names.worker, d1: names.d1, r2: null, steps, announced: [],
     commit: process.env.WORKERS_CI_COMMIT_SHA ?? null, branch: process.env.WORKERS_CI_BRANCH ?? null,
     // A CI checkout has no earlier deploy to compare with: each game's content hash only (lib/deploy-state.mjs).
-    games: games.map((id) => ({ id, page: url ? `${url}/${id}/` : null, play: url ? `${url}/${id}/play` : null, hash: hashes[id]?.hash ?? null })), songs: [], videos: [],
+    games: games.map((id) => ({ id, page: url ? `${url}/${id}/` : null, ...experienceAddresses(root, id, url), hash: hashes[id]?.hash ?? null })), songs: [], videos: [],
     claim: Boolean(claim),
   };
 }

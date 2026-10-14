@@ -158,7 +158,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
       });
       return s;
     };
-    return createMcpHandler(server)(request,env,ctx);
+    return createMcpHandler(server,{route:path === '/mcp/auth' ? '/mcp/auth' : '/mcp'})(request,env,ctx);
   };
   if(localIdentity)return api(request,scoped,ctx);
   const provider=new OAuthProvider({
@@ -211,7 +211,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
         const rows=(await env.DB.prepare(owner?'SELECT c.*,p.name FROM mcp_connections c LEFT JOIN players p ON p.id=c.person ORDER BY c.created DESC LIMIT 100 OFFSET ?1':'SELECT c.*,p.name FROM mcp_connections c LEFT JOIN players p ON p.id=c.person WHERE c.person=?1 ORDER BY c.created DESC LIMIT 100 OFFSET ?2').bind(...(owner?[offset]:[person,offset])).all()).results;
         const events=owner?(await env.DB.prepare('SELECT a.*,p.name FROM mcp_audit a LEFT JOIN players p ON p.id=a.person ORDER BY a.id DESC LIMIT 100 OFFSET ?1').bind(offset).all()).results:[];
         const names=new Map(await Promise.all([...new Set([...rows,...events].map(r=>r.client).filter(Boolean))].map(async id=>[id,(await oauth.lookupClient(id).catch(()=>null))?.clientName??id])));
-        return html(`<h1>Your studio's AI connections</h1><p>MCP address: <code>${esc(origin)}/mcp</code></p><ul>${rows.map(r=>`<li>${esc(r.name??(r.person.startsWith('office-')?'Owner browser':r.person))} · ${esc(names.get(r.client))} · ${r.revoked?'Revoked':`<form method="post"><input type="hidden" name="connection" value="${esc(r.id)}"><button>Revoke</button></form>`}</li>`).join('')}</ul><h2>Recent tool calls</h2><ul>${events.map(r=>`<li>${esc(new Date(r.at).toISOString())} · ${esc(r.name??(r.person?.startsWith('office-')?'Owner browser':r.person)??'Public')} · ${esc(names.get(r.client)??'Anonymous')} · ${esc(r.tool)} · ${esc(r.outcome)}</li>`).join('')}</ul><nav>${page?`<a href="?page=${page-1}">Newer</a>`:''}${rows.length===100||events.length===100?`<a href="?page=${page+1}">Older</a>`:''}</nav>`);
+        return html(`<h1>Your studio's AI connections</h1><p>Signed-in MCP address: <code>${esc(origin)}/mcp/auth</code> · Public: <code>${esc(origin)}/mcp</code></p><ul>${rows.map(r=>`<li>${esc(r.name??(r.person.startsWith('office-')?'Owner browser':r.person))} · ${esc(names.get(r.client))} · ${r.revoked?'Revoked':`<form method="post"><input type="hidden" name="connection" value="${esc(r.id)}"><button>Revoke</button></form>`}</li>`).join('')}</ul><h2>Recent tool calls</h2><ul>${events.map(r=>`<li>${esc(new Date(r.at).toISOString())} · ${esc(r.name??(r.person?.startsWith('office-')?'Owner browser':r.person)??'Public')} · ${esc(names.get(r.client)??'Anonymous')} · ${esc(r.tool)} · ${esc(r.outcome)}</li>`).join('')}</ul><nav>${page?`<a href="?page=${page-1}">Newer</a>`:''}${rows.length===100||events.length===100?`<a href="?page=${page+1}">Older</a>`:''}</nav>`);
       }
       return json({error:'not found'},404);
     }},

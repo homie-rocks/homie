@@ -210,8 +210,9 @@ test('the deploy plan\'s card shows the plan, and no card stays on "Loading" onc
     assert.match(shown, /Night Owls/);
     assert.match(shown, /Worker/);
     assert.match(shown, /D1 database/);
-    assert.match(shown, /Account subscription not queried/);
-    assert.doesNotMatch(shown, /Workers Free/);
+    assert.equal(plan.structuredContent.cost,null);
+    assert.equal(await host.card.evaluate(() => document.querySelectorAll('.billing').length),0);
+    assert.equal(await host.card.$eval('.directory-choice',el=>el.textContent),plan.structuredContent.directory.choice);
     assert.equal(await host.card.evaluate(() => document.querySelectorAll('.skel').length), 0, 'no grey skeleton is left');
     assert.deepEqual(host.errors, []);
     await host.close(); host = null;

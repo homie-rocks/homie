@@ -268,3 +268,17 @@ Use the Manage my gifts link for the buyer-owned Stripe portal in the shop.
 For a records-only booking app, use `createShop({target: parent})` inside its
 sandboxed view. The shell includes the authenticated shop bridge; do not add a
 room simulation merely to make a payment button work.
+
+## Frames and upgrades (0.51.1)
+
+App frames permit Web Share and downloads, while keeping their opaque-origin
+sandbox. Share still requires the guest’s click and browser support; offer a download
+or copy link too. Both the iframe permissions and the served frame’s CSP matter.
+Use `.hero-media` for a decorative iframe in a site hero: it lets scroll gestures
+reach the page. An intentionally interactive hero frame opts in with `data-interactive`.
+App shells allow normal touch scrolling and selection.
+
+Upgrade compares copied app presets with recorded toolkit versions. Unchanged
+preset files and default values take the new version; custom scene files, names and
+edited labels remain the studio’s. An app wall uses its join label rather than game
+instructions. Rebuild after upgrade and inspect both the wall and giving page.

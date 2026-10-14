@@ -651,3 +651,14 @@ test('the office tells the owner that room saves are failing while play continue
   assert.equal(room.durability?.ok, false);
   assert.match(room.durability.message, /SQLITE_FULL/);
 });
+
+test('office sign-in honours app and connection destinations', async () => {
+ const {fetchSite,DB}=await site();
+ for(const to of ['/postcards/open?room=party','/_studio/office/connections','/about/']) {
+  const key='hsk_'+crypto.randomUUID().replaceAll('-','').padEnd(48,'a');
+  DB.sql.prepare('INSERT INTO stats_keys (hash,kind,expires_at) VALUES (?,?,?)').run(sha(key),'signin',Date.now()+60000);
+  const response=await fetchSite('/_studio/signin?k='+key+'&to='+encodeURIComponent(to),{method:'POST',headers:{origin:'https://owls.example'}});
+  assert.equal(response.status,303);
+  assert.equal(response.headers.get('location'),to);
+ }
+});

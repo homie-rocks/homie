@@ -1,3 +1,4 @@
+import { directoryUrl } from './directory-choice.mjs';
 import {APP_STORAGE_JS} from './app-frame.mjs';
 import {recordsPage} from './records-page.mjs';
 import { RULES_WIRING_MESSAGE } from './rules-wiring.mjs';
@@ -235,13 +236,7 @@ const repoOf = (env) => { const r = String(env.HOMIE_REPO ?? '').trim(); return 
 const repoSaid = new Map();
 
 export function directoryOf(cat) {
-  const d = cat?.studio?.directory;
-  if (d === null || d === false) return null;
-  const at = String(d ?? 'https://homie.rocks').replace(/\/+$/, '');
-  try {
-    const u = new URL(at);
-    return u.protocol === 'https:' || (u.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(u.hostname)) ? u.origin : null;
-  } catch { return null; }
+  return directoryUrl(cat?.studio?.directory);
 }
 
 /** This address's claim: kept, else asked of the directory now (and kept), else an older studio's single claim. */
@@ -251,6 +246,7 @@ async function claimOf(env, cat, url) {
   if (claimed.has(origin) && (!repo || repoSaid.get(origin) === repo)) return claimed.get(origin);
   const kept = await storedClaim(env, origin);
   if (kept?.own && (!repo || kept.repo === repo)) { claimed.set(origin, kept.own); if (repo) repoSaid.set(origin, repo); return kept.own; }
+  if (kept?.older) return kept.older;
   const directory = directoryOf(cat);
   const local = url.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname);
   const may = directory && env.DB && env.HOMIE_PREVIEW !== '1' && (url.protocol === 'https:' || (local && directory.startsWith('http://')))
@@ -543,7 +539,7 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
       'cache-control': 'no-store, no-transform',
       'access-control-allow-origin': '*',
       // The game runs in an opaque origin: it cannot read this site's storage or cookies.
-      'content-security-policy': `sandbox allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups; frame-ancestors ${embedded ? `'self' ${embedAncestors(cat, url.origin, env.HOMIE_EMBED_PREVIEW === '1').replace("'none'", '')}` : frameAncestors(cat)}`,
+      'content-security-policy': `sandbox allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups${meta.kind === 'app' ? ' allow-downloads' : ''}; frame-ancestors ${embedded ? `'self' ${embedAncestors(cat, url.origin, env.HOMIE_EMBED_PREVIEW === '1').replace("'none'", '')}` : frameAncestors(cat)}`,
     },
   });
 }
@@ -678,9 +674,18 @@ async function route(request, env, ctx) {
   const getAll = () => (catP ??= catalogue(env, url.origin).then((cat) => named(cat, env)));
   const getCat = () => (pubP ??= Promise.all([getAll(), settingsOf(env)]).then(([cat, settings]) => publicCatalogue(cat, settings, env)));
 
+  // Keep tool transports and discovery on the alias; redirect browser pages only.
+  if (read && url.hostname.endsWith('.workers.dev') && env.HOMIE_PREVIEW !== '1'
+      && request.headers.get('upgrade')?.toLowerCase() !== 'websocket'
+      && !/\/(?:api|__[a-z]+)(?:\/|$)/.test(path)
+      && !/^\/(?:\.well-known(?:\/|$)|api(?:\/|$)|mcp(?:\/|$)|oauth(?:\/|$)|hooks(?:\/|$)|_studio(?:\/|$))/.test(path)) {
+    const canonical = (await getAll()).studio?.canonical;
+    if (canonical && canonical !== url.origin) return Response.redirect(canonical + url.pathname + url.search, 308);
+  }
+
   if (path === '/_studio/office/functions') return (await import('./functions.mjs')).functionsRoute(request,env,await getAll());
 
-  if (path === '/mcp' || path.startsWith('/hooks/tools/') || path.startsWith('/oauth/') || path.startsWith('/.well-known/oauth-') || path === '/_studio/office/connections') {
+  if (path === '/mcp' || path === '/mcp/auth' || path.startsWith('/hooks/tools/') || path.startsWith('/oauth/') || path.startsWith('/.well-known/oauth-') || path === '/_studio/office/connections') {
     const { remoteMcp } = await import('./mcp.mjs');
     return remoteMcp(request, env, ctx, { catalogueOf: getAll, definitions: await studioTools() });
   }
@@ -726,6 +731,10 @@ async function route(request, env, ctx) {
   }
   if (path === '/.well-known/homie-studio.json') {
     const cat = await getCat();
+    const canonical = cat.studio?.canonical;
+    if (canonical && env.HOMIE_PREVIEW !== '1' && url.protocol === 'https:') {
+      const address = new URL(canonical); url.protocol = address.protocol; url.host = address.host;
+    }
     const sharing = Boolean(cat.studio?.stats?.share);
     const [played, byGame] = sharing ? await Promise.all([playedThisWeek(env), playedByGame(env)]) : [null, null];
     // studio.json `"rooms": { "share": false }` keeps the rooms off the hub: a manifest that names no `rooms` shares none.
