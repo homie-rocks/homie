@@ -218,7 +218,7 @@ export function rayBox(px: number, py: number, dx: number, dy: number, min: Vec3
     if (Math.abs(d[i]) < 1e-12) { if (p[i] <= lo[i] || p[i] >= hi[i]) return null; continue; }
     let ta = (lo[i] - p[i]) / d[i]; let tb = (hi[i] - p[i]) / d[i];
     if (ta > tb) { const s = ta; ta = tb; tb = s; }
-    if (ta > t0) { t0 = ta; nx = i === 0 ? (d[i] > 0 ? -1 : 1) : 0; ny = i === 1 ? (d[i] > 0 ? -1 : 1) : 0; }
+    if (ta >= t0) { t0 = ta; nx = i === 0 ? (d[i] > 0 ? -1 : 1) : 0; ny = i === 1 ? (d[i] > 0 ? -1 : 1) : 0; }
     if (tb < t1) t1 = tb;
     if (t0 > t1) return null;
   }
@@ -286,7 +286,7 @@ export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: 
     put(body, 'pos', at); if (own(options, 'ground') !== false) put(body, 'grounded', restsOnMap(map, at, shape));
     return h ? Object.freeze({ at, normal: v(h.nx, h.ny, h.nz), ...(h.id ? { entity: h.id } : {}) }) : undefined;
   }
-  const { hit: h } = castMap(map, px, py, dx, dy, radius);
+  const { hit: h } = castMap(map, px, py, dx, dy, radius, undefined, false, shape.shape === 'box');
   put(body, 'grounded', true);
   if (!h) { put(body, 'pos', wrapPoint(v(fr(px + dx), fr(py + dy), 0), map.wrap)); return undefined; }
   const l = Math.sqrt(dx * dx + dy * dy);

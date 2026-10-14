@@ -1,4 +1,4 @@
-import { disposeMoveContext } from './math.ts';
+import { disposeMoveContext, sweepMap } from './math.ts';
 import { boundPosition, periodicDelta, blendPosition, relativePoint, wrapPoint } from './topology.mjs';
 import { rayQuery, raySnapshot, type QueryTarget } from './query.ts';
 import { solidAt } from './collision.ts';
@@ -422,6 +422,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     mine = { id: u.id, kind: u.kind, r: u.r, pos: u.pos, vel: u.vel, heading: u.heading, grounded: u.grounded, motion: motionOf(u.kind, u.motion), fields: predictors[u.kind] ? thawFields(kindOf.get(u.kind)?.fields ?? [], u.fields) : u.fields };
   }
   /** The game's guarded `move` for one tick, counted as the server counts it, with the result rounded as the server rounds it. */
+  const substepKinds = new Set<string>();
   function runMove(kindName: string, body: { pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean; motion: Record<string, unknown> }, input: Readonly<Record<string, unknown>>, t: number): typeof body & {steps?: readonly import('./substeps.ts').StepPose[]} {
     const fn = moves[kindName];
     if (!fn || (kindOf.get(kindName)?.control && !body.motion[kindOf.get(kindName)!.control!])) return body;
@@ -430,6 +431,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // quota. Authority debits projection once per tick, not once per mover.
     geometryAt();
     const out = stepMove(fn, body, input, moveCtx, Math.max(1, Math.floor(schema.settings.budget.tick / 4)), kindOf.get(kindName)?.motion ?? [], dims, (err) => { if (!(err instanceof BudgetError)) console.warn('[room] move', err); });
+    if (out.steps?.length) substepKinds.add(kindName);
     const kind = kindOf.get(kindName), r = kind?.radius ?? 0;
     const height = kind?.height || 2 * r;
     out.pos = vec3(boundPosition(out.pos,map,r,height,dims), dims);
@@ -930,6 +932,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const kind = kindOf.get(mine.kind);
     if (kind?.control && !server.motion[kind.control]) return entityOf(server, true);
     let pos = mine.pos;
+    let safeOrigin = mine.pos;
     let heading = mine.heading;
     let velocity = mine.vel, grounded = mine.grounded, motion = mine.motion;
     let settled = true;
@@ -940,7 +943,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       // A held field previews as its mean over the part of the tick that has passed. The body is drawn that fraction of
       // the way to the preview, so it stands exactly where the control has carried it: it starts from rest at a press
       // and stops dead at a release, with nothing to blend away afterwards.
-      for (const [name, fd] of kind.input) now[name] = (fd.t === 'press' || fd.t === 'pulse') ? (pressed.get(name) ?? (fd.t === 'pulse' && pulseQueue[0]?.name===name ? pulseQueue[0].value : fd.t === 'press' ? false : 0)) : fd.t === 'held' ? coerce(fd, heldMean(name, fd.init, Math.min(clock(), edgeOf(stepped + 1)), false), dims) : coerce(fd, sample[name] ?? fd.init, dims);
+      // A recorded substep path needs the whole tick's forecast instead: include
+      // the remaining duration of controls held now, then sample its actual steps.
+      for (const [name, fd] of kind.input) now[name] = (fd.t === 'press' || fd.t === 'pulse') ? (pressed.get(name) ?? (fd.t === 'pulse' && pulseQueue[0]?.name===name ? pulseQueue[0].value : fd.t === 'press' ? false : 0)) : fd.t === 'held' ? coerce(fd, heldMean(name, fd.init, Math.min(clock(), edgeOf(stepped + 1)), false, substepKinds.has(kind.name) ? edgeOf(stepped + 1) : Math.min(clock(), edgeOf(stepped + 1))), dims) : coerce(fd, sample[name] ?? fd.init, dims);
       const next = runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: motionOf(mine.kind, mine.motion) }, Object.freeze(now), stepped + 1);
       // A landing does not take the whole tick (0.46.5): the body met the ground part way through it. How far through is
       // read from the fall it would have made at the speed it entered the tick with; it is drawn down to the ground by
@@ -958,6 +963,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       if (next.steps?.length) {
         const n = next.steps.length - 1, at = a * n, index = Math.min(n - 1, Math.floor(at)), f = at - index;
         const before = next.steps[index], after = next.steps[index + 1];
+        safeOrigin = before.pos;
         pos = vec3(blendPosition(before.pos, after.pos, f, map.wrap), dims);
         heading = blendHeading(before.heading, after.heading, f, dims);
         velocity = vec3({x:lerp(before.vel.x,after.vel.x,f),y:lerp(before.vel.y,after.vel.y,f),z:lerp(before.vel.z,after.vel.z,f)},dims);
@@ -979,14 +985,25 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         // Catch-up can reach the fractional current tick before its next whole step exists.
         // Use the normal drawing preview, including its 3D pose, instead of holding then jumping.
         const t = Math.floor(catchTick), a = history.get(t), b = history.get(t + 1) ?? (t === stepped ? preview : null);
-        if (a && b) { const f = catchTick - t; pos = blendPosition(a.pos, b.pos, f, map.wrap); heading = blendHeading(a.heading, b.heading, f, dims);
+        if (a && b) { safeOrigin = a.pos; const f = catchTick - t; pos = blendPosition(a.pos, b.pos, f, map.wrap); heading = blendHeading(a.heading, b.heading, f, dims);
           velocity = vec3({ x: lerp(a.vel.x, b.vel.x, f), y: lerp(a.vel.y, b.vel.y, f), z: lerp(a.vel.z, b.vel.z, f) }, dims);
           grounded = a.grounded && (f === 0 || b.grounded); motion = a.motion;
-        } else if (a) { pos = a.pos; heading = a.heading; velocity = a.vel; grounded = a.grounded; motion = a.motion; }
+        } else if (a) { safeOrigin = a.pos; pos = a.pos; heading = a.heading; velocity = a.vel; grounded = a.grounded; motion = a.motion; }
       }
     }
+    // Two-dimensional presentation follows collision too: interpolation and reconciliation are not
+    // permission to cross a floor. Sweep from a valid movement pose, never feed
+    // the clipped drawing back into prediction or authority.
+    const constrain = (from: Vec3, to: Vec3): Vec3 => {
+      if (dims !== 2 || !kind || kind.owner) return to;
+      const body = {pos: from};
+      sweepMap(geometryAt(), body, {x:periodicDelta(from.x,to.x,map.wrap?.x),y:periodicDelta(from.y,to.y,map.wrap?.y),z:periodicDelta(from.z,to.z,map.wrap?.z)}, kind.radius, dims,
+        {shape:kind.shape ?? 'circle',radius:kind.radius,height:kind.height || 2*kind.radius,terrain:kind.terrain});
+      return body.pos;
+    };
+    pos = constrain(safeOrigin, pos);
     const offset = visualOffset(clock(), pos, settled);
-    pos = wrapPoint({ x: pos.x + offset.x, y: pos.y + offset.y, z: pos.z + offset.z },map.wrap);
+    pos = constrain(pos, wrapPoint({ x: pos.x + offset.x, y: pos.y + offset.y, z: pos.z + offset.z },map.wrap));
     if (headingBlend) {
       const t = predict.blendMs > 0 ? Math.min(1, (clock() - headingBlend.at) / predict.blendMs) : 1;
       heading = blendHeading(headingBlend.from, heading, t, dims);

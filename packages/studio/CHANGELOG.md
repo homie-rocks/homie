@@ -17,6 +17,21 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.50.2] - 2026-10-13
+
+**Plugin 0.50.2** · Keep your own runner out of solid ground.
+
+Your player's own runner stays outside declared solid terrain in a 2D game on server rules, even on a lossy connection.
+
+### Fixed
+
+- Own-runner drawing now checks interpolation and correction against the solid map, stopping at contact instead of drawing the runner inside terrain. In Homie Arcade's Tiny Platformer, measurements went from 250 penetrating frames in 12 lossy runs before the fix to 0 frames penetrating more than 0.1 tile in 30 runs and 77,368 frames after it.
+- Square 2D runners can declare a box body, and custom movement using substeps previews the remaining duration of held controls along the same movement path.
+
+### Upgrade notes
+
+- Follow [RULES.md](plugins/homie/skills/game/RULES.md): declare `map: './map'` in rules, put solid geometry in `map/main.json`, and keep it consistent with custom movement. Declare a square 2D runner with `body.shape: 'box'`, `radius` (its half-width) and `maxSpeed`. Use `ctx.substeps` for custom integration so the toolkit draws that path without a second view-side displacement. Blocked visual corrections do not change authoritative movement.
+
 ## [0.50.1] - 2026-10-13
 
 **Plugin 0.50.1** · Studio events reach their functions and the owner's AI.
