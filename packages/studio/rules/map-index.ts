@@ -61,15 +61,15 @@ function nearbyFlatMap(map: MapShapes, p:Vec3, d:Vec3, radius:number, height:num
   const out:any={bounds:map.bounds,boxes:[],circles:[],spheres:[],capsules:[],heightTiles:[]};
   function touches(n:{min:Vec3;max:Vec3}):boolean {
     charge(12);let near=0,far=1;
-    for(const k of dims===2?['x','y'] as const:axes){const lo=n.min[k]-(k==='z'?height:radius),hi=n.max[k]+(k==='z'?0:radius);
+    for(let axis=0;axis<(dims===2?2:3);axis++){const k=axes[axis],lo=n.min[k]-(k==='z'?height:radius),hi=n.max[k]+(k==='z'?0:radius);
       if(d[k]===0){if(p[k]<lo-1e-7||p[k]>hi+1e-7)return false;}
-      else {let a=(lo-p[k])/d[k],b=(hi-p[k])/d[k];if(a>b)[a,b]=[b,a];near=Math.max(near,a);far=Math.min(far,b);if(near>far+1e-7)return false;}
+      else {let a=(lo-p[k])/d[k],b=(hi-p[k])/d[k];if(a>b){const swap=a;a=b;b=swap;}near=Math.max(near,a);far=Math.min(far,b);if(near>far+1e-7)return false;}
     }return true;
   }
   const found:Entry[]=[];
-  function visit(n:Node){if(!touches(n))return;if(n.entries){for(const e of n.entries)if(touches(e))found.push(e);}else{visit(n.left!);visit(n.right!);}}
+  function visit(n:Node){if(!touches(n))return;if(n.entries){for(let i=0;i<n.entries.length;i++){const e=n.entries[i];if(touches(e))found.push(e);}}else{visit(n.left!);visit(n.right!);}}
   visit(root);charge(found.length*Math.ceil(Math.log2(found.length+1)));
-  found.sort((a,b)=>a.order-b.order);for(const e of found)out[e.key].push(e.value);
+  found.sort((a,b)=>a.order-b.order);for(let i=0;i<found.length;i++){const e=found[i];out[e.key].push(e.value);}
   if(parent)for(const key of ['boxes','circles','spheres','capsules','heightTiles'] as const)for(const raw of map[key]??[]){
     const v:any=raw;let min:Vec3,max:Vec3;
     if(key==='boxes'){min=v.min;max=v.max;}

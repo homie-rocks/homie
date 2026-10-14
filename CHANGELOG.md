@@ -17,6 +17,15 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## Unreleased — runner correction and client frame cost
+
+This section is renumbered at release; no package version is changed here.
+
+### Fixed
+- Spatial collision queries avoid temporary axis and leaf iterators while preserving candidate order and every execution-budget charge. Transient interpolated entity views are no longer retained in the snapshot cache.
+- A rules player's box-bodied 2D drawing now sweeps from its previous displayed position and bounds correction travel by elapsed time and per rendered frame, so a delayed render cannot spend its entire backlog in one jump. Corrections blocked by a platform can route around it in bounded work across frames, without reversing continuing horizontal movement or following a stale destination. Stationary vertical corrections use blend speed rather than terminal fall speed; recorded substep velocities preserve normal jump arcs. Explicit placements still reset the presentation immediately. `correctionDirection` lets a platformer retain held horizontal intent when contact sets velocity to zero, while neutral input permits convergence.
+- Rules views reuse unchanged substep forecasts and identical deterministic movement replays, cache snapshot latency statistics, reuse unchanged decoded snapshot rows and static entity views, and sample each entity group at one presentation time. Extra probe callbacks no longer require a proxy. Physics-world operations are excluded from replay caching. Synchronous readers share a presentation without repeating movement or collision work.
+
 ## [0.51.0] - 2026-10-14
 
 **Plugin 0.51.0** · Take the money through your own Stripe, keyless by default.
