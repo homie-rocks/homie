@@ -6,7 +6,7 @@ import { LINKS_STRIPE_VERSION, linkSettings, paymentLinkURL } from '../worker/sh
 import { HOOK_EVENTS, SHOP_HOOK_EVENTS } from './shop.mjs';
 const hash = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const same = (a, b) => Object.keys(a ?? {}).length === Object.keys(b).length && Object.entries(b).every(([k, v]) => a?.[k] === v);
-export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, receipt, saveReceipt }) {
+export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, receipt, saveReceipt, bookingSlots = [] }) {
   const list = async (path, params = {}) => {
     const all = []; let cursor;
     do {
@@ -28,6 +28,7 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
   const links = await list('/v1/payment_links');
   const own = (o) => o.metadata?.homie === 'shop-links-v1' && o.metadata?.studio === slug && o.metadata?.origin === site;
   const config = { v: 1, mode, settings: linkSettings(shop), items: [] };
+  const catalogPrices = new Map();
   const keepPrices = new Set(), keepLinks = new Set(), keepProducts = new Set();
   for (const item of shop.items) {
     const id = await productIdOf(slug, item.id);
@@ -47,6 +48,7 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     if (!price) price = await api('POST', '/v1/prices', { ...priceFields, metadata: { ...metadata, revision } }, `price-${hash({ priceFields, metadata })}`);
     if (!price.active) await api('POST', `/v1/prices/${price.id}`, { active: true });
     keepPrices.add(price.id);
+    catalogPrices.set(item.id, price.id);
     if ((product.default_price?.id ?? product.default_price) !== price.id) await api('POST', `/v1/products/${id}`, { default_price: price.id });
     if (item.price === 0) continue; // Free orders never leave the studio.
     const params = { line_items: [{ price: price.id, quantity: 1, ...(item.price !== 'choose' ? { adjustable_quantity: { enabled: shop.policy.repeatPurchases, minimum: 1, maximum: 999999 } } : {}) }],
@@ -60,7 +62,52 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     if (!link.active) await api('POST', `/v1/payment_links/${link.id}`, { active: true });
     if (!paymentLinkURL(link.url) || !/^plink_\w+$/.test(link.id)) throw new Error('Invalid Payment Link');
     keepLinks.add(link.id);
-    config.items.push({ item: item.id, id: link.id, url: link.url, revision: linkRevision });
+    config.items.push({ item: item.id, id: link.id, url: link.url, price: price.id, revision: linkRevision });
+  }
+  // Menus use paid invoice snapshots: Checkout events omit their line items.
+  // Stripe allows 20 Payment Link lines; split larger catalogues into menus.
+  config.menus = [];
+  const menuItems = shop.items.filter(i => typeof i.price === 'number' && i.price > 0 && !i.interval);
+  const metadata = { homie: 'shop-links-v1', studio: slug, origin: site };
+  for (let offset = 0; offset < menuItems.length; offset += 20) {
+    const items = menuItems.slice(offset, offset + 20);
+    if (items.length < 2) continue;
+    const params = { line_items: items.map(i => ({price:catalogPrices.get(i.id),quantity:1,adjustable_quantity:{enabled:true,minimum:0,maximum:999999}})),
+      invoice_creation:{enabled:true,invoice_data:{metadata}},
+      after_completion:{type:'redirect',redirect:{url:`${site}/shop/thanks?session_id={CHECKOUT_SESSION_ID}`}},
+      automatic_tax:{enabled:shop.automaticTax}, payment_intent_data:{metadata} };
+    const revision=hash(params);
+    let link=links.find(p=>own(p)&&p.metadata?.revision===revision);
+    if(!link)link=await api('POST','/v1/payment_links',{...params,metadata:{...metadata,revision}},`menu-${revision}`);
+    if(!link.active)await api('POST',`/v1/payment_links/${link.id}`,{active:true});
+    keepLinks.add(link.id);
+    config.menus.push({id:link.id,url:link.url,revision,items:items.map(i=>({item:i.id,price:catalogPrices.get(i.id)}))});
+  }
+  config.slots=[];
+  for(const slot of bookingSlots) {
+    if(!['app','collection','slots','slot','item'].every(k=>typeof slot[k]==='string'&&/^[a-zA-Z0-9_-]{1,64}$/.test(slot[k])) || !Number.isSafeInteger(slot.capacity) || slot.capacity<0)throw new Error('Invalid booking slot manifest');
+    const item=shop.items.find(i=>i.id===slot.item);
+    if(!item || item.interval || item.price==='choose')throw new Error('Bookings require a fixed one-time service price');
+    if(!item.price || !slot.capacity || slot.active===false)continue;
+    const identity=hash({app:slot.app,collection:slot.collection,slots:slot.slots,slot:slot.slot});
+    const params={line_items:[{price:catalogPrices.get(item.id),quantity:1}],payment_method_types:['card'],
+      restrictions:{completed_sessions:{limit:slot.capacity}},after_completion:{type:'redirect',redirect:{url:`${site}/shop/thanks?session_id={CHECKOUT_SESSION_ID}`}}};
+    let link=links.find(p=>own(p)&&p.metadata?.slot===identity);
+    // Reuse the link and its lifetime completion count when capacity changes.
+    if(!link)link=await api('POST','/v1/payment_links',{...params,metadata:{...metadata,slot:identity,revision:identity}},`slot-${identity}`);
+    else {
+      const count=link.restrictions?.completed_sessions?.count??0;
+      link=await api('POST',`/v1/payment_links/${link.id}`,{restrictions:params.restrictions,active:count<slot.capacity});
+    }
+    keepLinks.add(link.id);
+    config.slots.push({...slot,id:link.id,url:link.url,price:catalogPrices.get(item.id),revision:identity,active:link.active,count:link.restrictions?.completed_sessions?.count??0});
+  }
+  if(shop.items.some(i=>i.interval)) {
+    const portals=await list('/v1/billing_portal/configurations');
+    let portal=portals.find(p=>own(p));
+    const params={features:{subscription_cancel:{enabled:true},payment_method_update:{enabled:true},invoice_history:{enabled:true}},login_page:{enabled:true},business_profile:{headline:'Manage your membership or giving'},default_return_url:`${site}/shop/`,metadata};
+    portal=await api('POST',portal?`/v1/billing_portal/configurations/${portal.id}`:'/v1/billing_portal/configurations',params);
+    config.portal=portal.login_page?.url;
   }
   const purchases = root ? await (await import('./purchase-links.mjs')).syncPurchaseLinks({ root, api, slug, site, mode, list, till: shop.purchasesTill ?? shop.till }) : null;
   const purchaseSecrets = {};

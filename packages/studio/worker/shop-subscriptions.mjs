@@ -1,3 +1,4 @@
+import { linkConfig } from './shop-links.mjs';
 import { KEY_SHAPE, stripeCall } from './stripe.mjs';
 /** Only verified shop Checkout sessions establish ownership. Provider customer IDs
  * stay private, and are never accepted from a browser. */
@@ -31,6 +32,13 @@ export async function bindSubscription(env, order, session, shop) {
       VALUES(?1,?2,'subscription.started',NULL,?3,?4,?5)`).bind(`started:${subscription}`,subscription,order.amount,order.currency,order.paid_at),
   ]);
   await reconcileMembership(env, subscription, shop);
+  if(!KEY_SHAPE.test(String(env.STRIPE_KEY??''))) {
+    const invoice=typeof session.invoice==='string'?session.invoice:session.invoice?.id;
+    if(invoice) {
+      const saved=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-invoice:${invoice}`).first();
+      if(saved)await invoiceMembership(env,subscription,JSON.parse(saved.value));
+    }
+  }
 }
 
 /** Stripe retries unknown subscriptions until their Checkout has established ownership.
@@ -55,6 +63,7 @@ export async function subscriptionEvent(env, event, shop) {
   }
   if (event.livemode !== (row.mode === 'live')) return 'ignored';
   await reconcileMembership(env, subscription, shop);
+  if(event.type==='invoice.paid' && !KEY_SHAPE.test(String(env.STRIPE_KEY??'')))await invoiceMembership(env,subscription,obj);
   const at=(event.created ?? 0)*1000;
   let type, state;
   if (event.type === 'customer.subscription.deleted') { type='subscription.cancelled'; state='cancelled'; }
@@ -75,6 +84,10 @@ export async function subscriptionEvent(env, event, shop) {
 export async function subscriptionPortal(env, player, subscription, origin) {
   const row=await env.DB.prepare(`SELECT s.customer FROM shop_subscriptions s JOIN shop_orders o ON o.id=s.order_id WHERE s.id=?1 AND o.player=?2`).bind(subscription,player).first();
   if (!row) return null;
+  if(!KEY_SHAPE.test(String(env.STRIPE_KEY??''))) {
+    const url=linkConfig(env)?.portal;
+    return typeof url==='string' && /^https:\/\/billing\.stripe\.com\/p\/login\//.test(url)?url:null;
+  }
   const portal=await stripeCall(env,'POST','/v1/billing_portal/sessions',{customer:row.customer,return_url:`${origin}/shop/`});
   if (typeof portal?.url !== 'string' || new URL(portal.url).origin !== 'https://billing.stripe.com') throw new Error('Invalid Stripe portal response');
   return portal.url;
@@ -164,4 +177,22 @@ async function allPages(env, path, params = {}) {
     if (!next || next===after) throw new Error('Stripe pagination did not advance');
     after=next;
   }
+}
+
+/** Paid signed invoices grant only their stated periods. Failure never extends access. */
+async function invoiceMembership(env,subscription,invoice) {
+  if(invoice.status!=='paid' || invoice.lines?.has_more)throw new Error('Complete paid invoice required');
+  const row=await env.DB.prepare('SELECT s.*,o.player,o.status order_status FROM shop_subscriptions s JOIN shop_orders o ON o.id=s.order_id WHERE s.id=?1').bind(subscription).first();
+  if(!row || row.state==='cancelled' || row.order_status!=='paid')return;
+  const lines=(await env.DB.prepare('SELECT * FROM shop_order_lines WHERE order_id=?1').bind(row.order_id).all()).results;
+  const writes=[];
+  for(const l of lines) {
+    const item=JSON.parse(l.snapshot);
+    if(!item.interval)continue;
+    const paid=invoice.lines.data.find(x=>(x.price?.id??x.pricing?.price_details?.price)===item.stripePrice && x.quantity===l.quantity && x.amount>=0);
+    const end=Number(paid?.period?.end)*1000;
+    if(!Number.isSafeInteger(end)||end<=0)continue;
+    writes.push(env.DB.prepare('UPDATE shop_entitlement_lines SET ends_at=MAX(COALESCE(ends_at,0),?2) WHERE line_id=?1').bind(l.id,end));
+  }
+  if(writes.length)await env.DB.batch(writes);
 }

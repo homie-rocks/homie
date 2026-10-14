@@ -512,12 +512,21 @@ export async function reconcileOrders(env, shop, player = null, { expireOpen = f
 async function startCheckout(env, url, cat, shop, item, { player, game, amount, parent = false, lines = null, reference = null, booking = null, requestAt = Date.now() }) {
   lines ??= [{ item, amount, quantity: 1 }];
   const keyless = (amount > 0 || lines.some(l => l.item.interval)) && !hasStripeKey(env);
-  if (booking && keyless) return { error: fail(503, 'booking-connection', 'Paid seat holds require a Stripe Checkout connection.') };
-  if (keyless && (lines.length !== 1 || fullerReason(shop))) return { error: fail(409, 'one-item', fullerReason(shop) ?? 'Buy one item at a time. A combined cart needs the fuller checkout connection.') };
-  const link = keyless ? linkConfig(env)?.items.find((l) => l.item === item.id) : null;
-  if (keyless && (!link || !paymentLinkURL(link.url))) return { error: fail(503, 'payment-links', MISSING_WORDS['payment-links']) };
-  if (keyless && item.price === 'choose' && lines[0].quantity !== 1) return { error: fail(400, 'quantity', 'A tip is one chosen amount; choose it on Stripe.') };
-  if (keyless) lines = lines.map((l) => ({ ...l, item: { ...l.item, paymentLink: link } }));
+  const config=linkConfig(env);
+  const menu=keyless && !booking && lines.length>1 ? config?.menus?.find(m=>lines.every(l=>m.items.some(i=>i.item===l.item.id))) : null;
+  const link=keyless ? booking ? config?.slots?.find(l=>l.app===game&&l.collection===booking.collection&&l.slot===booking.slot&&l.item===item.id) : menu ?? config?.items.find(l=>l.item===item.id) : null;
+  if(keyless && lines.length>1 && !menu)return {error:fail(409,'menu','These items need separate Stripe menus. Custom amounts and monthly gifts use their own links.')};
+  if(keyless && (!link || !paymentLinkURL(link.url)))return {error:fail(503,'payment-links','Ask the owner’s AI to sync the shop and published booking slots.')};
+  if(keyless && booking) {
+    if(booking.quantity!==1)return {error:fail(400,'quantity','Book one seat per checkout; Stripe counts completed sessions.')};
+    const slot=await env.DB.prepare('SELECT value FROM app_records WHERE app=?1 AND collection=?2 AND id=?3').bind(booking.app,booking.slots,booking.slot).first();
+    if(!slot || JSON.parse(slot.value).capacity!==link.capacity)return {error:fail(409,'slot-sync','This slot changed; ask the owner’s AI to sync its Stripe link.')};
+    const confirmed=await env.DB.prepare("SELECT COALESCE(SUM(quantity),0) n FROM shop_bookings WHERE app=?1 AND slots=?2 AND slot=?3 AND state='confirmed'").bind(booking.app,booking.slots,booking.slot).first();
+    if(!link.active || link.count>=link.capacity || confirmed.n>=link.capacity)return {error:fail(409,'capacity','That slot is full. Choose another slot.')};
+  }
+  if(keyless && item.price==='choose' && lines[0].quantity!==1)return {error:fail(400,'quantity','A tip is one chosen amount; choose it on Stripe.')};
+  if(menu)lines=menu.items.map(entry=>{const i=shop.items.find(i=>i.id===entry.item);return {item:i,quantity:1,amount:i.price};});
+  if(keyless)lines=lines.map(l=>({...l,item:{...l.item,paymentLink:link,stripePrice:menu?.items.find(i=>i.item===l.item.id)?.price??link.price}}));
   const order = { id: newOrderId(), player: player.id, amount, currency: shop.currency };
   if (booking && reference === null) reference = order.id;
   const now = Date.now();
@@ -529,8 +538,9 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
   lines = lines.map((line, i) => ({ ...line, id: `${order.id}_${i}` }));
   const reserve = async () => {
     const results = await env.DB.batch([reservation(),
-      ...(booking ? [bookingStatement(env, { ...booking, id: order.id, app: booking.app ?? game, order: order.id })] : []),
+      ...(booking ? [bookingStatement(env, { ...booking, pending: keyless, id: order.id, app: booking.app ?? game, order: order.id })] : []),
       ...(reference === null ? [] : [env.DB.prepare("INSERT INTO meta(key,value) SELECT ?1,?2 WHERE EXISTS (SELECT 1 FROM shop_orders WHERE id=?3)").bind(`shop-reference:${order.id}`, reference, order.id)]),
+      ...(menu ? [env.DB.prepare('INSERT INTO meta(key,value) VALUES(?1,?2)').bind(`shop-menu:${order.id}`,JSON.stringify(lines))] : []),
       ...lines.map((line, i) => env.DB.prepare("INSERT INTO shop_order_lines (id, order_id, position, item, quantity, unit_amount, amount, snapshot) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8 WHERE EXISTS (SELECT 1 FROM shop_orders WHERE id = ?2)")
         .bind(line.id, order.id, i, line.item.id, line.quantity, line.amount, line.amount * line.quantity, JSON.stringify(line.item))),
       env.DB.prepare('UPDATE shop_orders SET checkout_player = player WHERE id = ?1').bind(order.id),
@@ -819,6 +829,9 @@ async function hook(request, env, cat, shop, ready) {
   if (!needed.includes(ev.type)) return json({ ok: true, did: 'ignored' });
   if (typeof ev.livemode === 'boolean' && (hasStripeKey(env) || linkConfig(env)) && ev.livemode !== (shopMode(env) === 'live')) return json({ ok: true, ignored: 'mode' });
   try {
+    if(ev.type==='invoice.paid' && obj.status==='paid' && obj.metadata?.homie==='shop-links-v1') {
+      await env.DB.prepare('INSERT INTO meta(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(`shop-invoice:${obj.id}`,JSON.stringify(obj)).run();
+    }
     const subscriptionResult = await subscriptionEvent(env, ev, shop);
     if (subscriptionResult !== null) return json({ ok: true, did: subscriptionResult });
     const sessionEvent = ev.type.startsWith('checkout.session.');
@@ -914,7 +927,12 @@ async function bindLinkSession(env, session, mode) {
   const source = await orderById(env, session.client_reference_id);
   if (!source || source.mode !== mode) return false;
   const lines = await orderLines(env, source.id);
-  if (lines.length !== 1 || !lines[0].snapshot) return false;
+  if (!lines.length || !lines[0].snapshot) return false;
+  if(JSON.parse(lines[0].snapshot).paymentLink?.items) {
+    const saved=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-menu:${source.id}`).first();
+    const original=saved?JSON.parse(saved.value).map(l=>({item:l.item.id,snapshot:JSON.stringify(l.item),unit_amount:l.amount})):lines;
+    return bindMenuSession(env,session,source,original);
+  }
   const item = JSON.parse(lines[0].snapshot), link = item.paymentLink;
   if (!link || (session.payment_link?.id ?? session.payment_link) !== link.id || session.metadata?.revision !== link.revision || session.currency !== source.currency) return false;
   const amount = session.amount_subtotal;
@@ -938,6 +956,40 @@ async function bindLinkSession(env, session, mode) {
   if (order.paid_at === null) await env.DB.batch([
     env.DB.prepare('UPDATE shop_orders SET amount = ?2 WHERE id = ?1 AND paid_at IS NULL').bind(order.id, amount),
     env.DB.prepare('UPDATE shop_order_lines SET quantity = ?2, unit_amount = ?3, amount = ?4 WHERE order_id = ?1 AND EXISTS (SELECT 1 FROM shop_orders WHERE id = ?1 AND paid_at IS NULL)').bind(order.id, quantity, amount / quantity, amount),
+  ]);
+  return true;
+}
+
+/** Menu totals are never decoded into quantities. Only signed invoice lines are authoritative. */
+async function bindMenuSession(env,session,source,lines) {
+  const first=JSON.parse(lines[0].snapshot),link=first.paymentLink;
+  if((session.payment_link?.id??session.payment_link)!==link.id || session.metadata?.revision!==link.revision || session.currency!==source.currency)return false;
+  if(!['paid','no_payment_required'].includes(session.payment_status))return false;
+  const invoiceId=typeof session.invoice==='string'?session.invoice:session.invoice?.id;
+  const saved=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-invoice:${invoiceId}`).first();
+  if(!saved)throw new Error('Waiting for signed paid invoice');
+  const invoice=JSON.parse(saved.value);
+  if(invoice.livemode!==(source.mode==='live') || invoice.currency!==source.currency || invoice.total!==session.amount_total || invoice.lines?.has_more)throw new Error('Incomplete or mismatched signed invoice');
+  const paidLines=[];
+  for(const l of invoice.lines?.data??[]) {
+    const line=lines.find(x=>JSON.parse(x.snapshot).stripePrice===(l.price?.id??l.pricing?.price_details?.price));
+    if(!line || !Number.isSafeInteger(l.quantity) || l.quantity<1 || l.amount!==JSON.parse(line.snapshot).price*l.quantity)throw new Error('Unknown invoice line');
+    paidLines.push({...line,quantity:l.quantity,amount:l.amount});
+  }
+  if(!paidLines.length || paidLines.reduce((n,l)=>n+l.amount,0)!==session.amount_subtotal)throw new Error('Invoice subtotal mismatch');
+  await env.DB.prepare('UPDATE shop_orders SET session=?2 WHERE id=?1 AND session IS NULL').bind(source.id,session.id).run();
+  let order=await orderBySession(env,session.id);
+  if(!order) {
+    const id=`ord_${(await sha256Hex(session.id)).slice(0,20)}`;
+    await env.DB.batch([
+      env.DB.prepare("INSERT OR IGNORE INTO shop_orders(id,player,checkout_player,item,game,amount,currency,till,mode,status,parent,created_at,updated_at,session) SELECT ?2,player,checkout_player,item,game,?4,currency,till,mode,'started',parent,?5,?5,?3 FROM shop_orders WHERE id=?1").bind(source.id,id,session.id,session.amount_subtotal,Date.now()),
+      env.DB.prepare('INSERT OR IGNORE INTO meta(key,value) SELECT ?1,value FROM meta WHERE key=?2').bind(`shop-reference:${id}`,`shop-reference:${source.id}`),
+    ]);order=await orderBySession(env,session.id);
+  }
+  if(order.paid_at===null)await env.DB.batch([
+    env.DB.prepare('DELETE FROM shop_order_lines WHERE order_id=?1').bind(order.id),
+    ...paidLines.map((l,i)=>env.DB.prepare('INSERT INTO shop_order_lines(id,order_id,position,item,quantity,unit_amount,amount,snapshot) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)').bind(`${order.id}_${i}`,order.id,i,l.item,l.quantity,l.unit_amount,l.amount,l.snapshot)),
+    env.DB.prepare('UPDATE shop_orders SET amount=?2 WHERE id=?1').bind(order.id,session.amount_subtotal),
   ]);
   return true;
 }
@@ -971,12 +1023,18 @@ export async function paid(env, shop, session, paidAt = Date.now()) {
   if (!Number.isSafeInteger(total) || !Number.isSafeInteger(tax) || total < 0 || tax < 0 || total !== Number(o.amount) + tax) return 'mismatch';
   let stripeLines = null;
   if (lines.length > 1 && tax) {
-    if (!hasStripeKey(env)) return 'needs-keyed-recovery';
+    if (!hasStripeKey(env)) {
+      const saved=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-invoice:${typeof session.invoice==='string'?session.invoice:session.invoice?.id}`).first();
+      const invoice=saved&&JSON.parse(saved.value);
+      if(!invoice || invoice.lines?.has_more)throw new Error('Waiting for complete signed invoice');
+      stripeLines=invoice.lines.data.map(l=>({quantity:l.quantity,amount_subtotal:l.amount,amount_total:l.amount+(l.taxes??l.tax_amounts??[]).reduce((n,t)=>n+t.amount,0),price:{id:l.price?.id??l.pricing?.price_details?.price,product:JSON.parse(lines.find(x=>JSON.parse(x.snapshot).stripePrice===(l.price?.id??l.pricing?.price_details?.price))?.snapshot??'{}').stripeProduct}}));
+    } else {
     // Use Stripe's actual tax per line, never spread tax across products with different tax codes.
     // https://docs.stripe.com/api/checkout/sessions/line_items
     const response = await stripeCall(env, 'GET', `/v1/checkout/sessions/${encodeURIComponent(session.id)}/line_items`, { limit: 100, expand: ['data.price.product'] });
     if (response.has_more || response.data?.length !== lines.length) throw new Error('Stripe line totals are incomplete');
     stripeLines = [...response.data];
+    }
   }
   const writes = [];
   let lineTotal = 0;
@@ -991,7 +1049,7 @@ export async function paid(env, shop, session, paidAt = Date.now()) {
     let gross = lines.length === 1 ? total : Number(line.amount);
     if (stripeLines) {
       const index = stripeLines.findIndex((l) => l.quantity === line.quantity && l.amount_subtotal === line.amount &&
-        (l.price?.product?.metadata?.line === line.id || item.stripeProduct && (l.price?.product?.id ?? l.price?.product) === item.stripeProduct || l.price?.product?.metadata?.homie_item === line.item || l.price?.product?.metadata?.item === line.item));
+        (l.price?.id && l.price.id === item.stripePrice || l.price?.product?.metadata?.line === line.id || item.stripeProduct && (l.price?.product?.id ?? l.price?.product) === item.stripeProduct || l.price?.product?.metadata?.homie_item === line.item || l.price?.product?.metadata?.item === line.item));
       if (index < 0) throw new Error('Stripe line identity mismatch');
       gross = stripeLines.splice(index, 1)[0].amount_total;
     }

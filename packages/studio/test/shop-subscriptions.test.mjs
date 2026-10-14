@@ -7,17 +7,17 @@ import { fullerReason } from '../worker/shop-links.mjs';
 import { checkShop } from '../worker/shop-rules.mjs';
 function fixture(t) {
  const sql=new DatabaseSync(':memory:');t.after(()=>sql.close());
- sql.exec(`CREATE TABLE shop_orders(id TEXT PRIMARY KEY,player TEXT,game TEXT,mode TEXT);
+ sql.exec(`CREATE TABLE shop_orders(id TEXT PRIMARY KEY,player TEXT,game TEXT,mode TEXT,status TEXT);
  CREATE TABLE shop_entitlement_lines(order_id TEXT,line_id TEXT,ends_at INTEGER);
  CREATE TABLE shop_order_lines(id TEXT,order_id TEXT,snapshot TEXT);
  CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT);
  CREATE TABLE studio_events(id TEXT PRIMARY KEY,type TEXT,data TEXT,at INTEGER);
  CREATE TABLE function_subscriptions(type TEXT);
  INSERT INTO function_subscriptions VALUES('subscription.started'),('subscription.renewed'),('subscription.failed'),('subscription.cancelled');
- INSERT INTO shop_orders VALUES('order','giver','pantry','test');
+ INSERT INTO shop_orders VALUES('order','giver','pantry','test','paid');
  INSERT INTO meta VALUES('shop-reference:order','gift-20');`);
  sql.exec(SUBSCRIPTIONS_MIGRATION);
- const prepare=(q,args=[])=>({bind:(...a)=>prepare(q,a),first:async()=>sql.prepare(q).get(...args)??null,run:async()=>({meta:{changes:sql.prepare(q).run(...args).changes}})});
+ const prepare=(q,args=[])=>({bind:(...a)=>prepare(q,a),first:async()=>sql.prepare(q).get(...args)??null,all:async()=>({results:sql.prepare(q).all(...args)}),run:async()=>({meta:{changes:sql.prepare(q).run(...args).changes}})});
  const DB={prepare,batch:async ss=>{sql.exec('BEGIN');try{const out=[];for(const s of ss)out.push(await s.run());sql.exec('COMMIT');return out;}catch(e){sql.exec('ROLLBACK');throw e;}}};
  return {sql,env:{DB}};
 }
@@ -30,7 +30,7 @@ test('subscription lifecycle is durable and renewal is deduplicated by invoice',
  const {sql,env}=fixture(t);const session={subscription:'sub_test',customer:'cus_test'};const order={id:'order',amount:2000,currency:'usd',paid_at:1};
  await bindSubscription(env,order,session);await bindSubscription(env,order,session);
  const ev=(id,type,created,obj)=>({id,type,created,livemode:false,data:{object:obj}});
- const invoice={id:'in_month2',parent:{subscription_details:{subscription:'sub_test'}},billing_reason:'subscription_cycle',amount_paid:2000,currency:'usd'};
+ const invoice={status:'paid',lines:{data:[],has_more:false},id:'in_month2',parent:{subscription_details:{subscription:'sub_test'}},billing_reason:'subscription_cycle',amount_paid:2000,currency:'usd'};
  await subscriptionEvent(env,ev('evt_1','invoice.paid',2,invoice));await subscriptionEvent(env,ev('evt_duplicate','invoice.paid',2,invoice));
  await subscriptionEvent(env,ev('evt_2','invoice.payment_failed',3,{...invoice,id:'in_month3',amount_paid:0,amount_due:2000}));
  sql.exec(`INSERT INTO shop_order_lines VALUES('monthly-line','order','{"interval":"month"}'),('once-line','order','{}'); INSERT INTO shop_entitlement_lines VALUES('order','monthly-line',NULL),('order','once-line',NULL);`);
@@ -91,8 +91,8 @@ test('membership periods follow paid invoices, current status and portal plans w
  assert.equal(ends('member:plus'),0);assert.equal(sql.prepare('SELECT state FROM shop_subscriptions').get().state,'canceled');
 });
 
-test('keyless setup refuses paid membership grants that require runtime reconciliation',()=>{
+test('keyless setup accepts fixed-price memberships',()=>{
  const {shop}=checkShop({till:'stripe',currency:'usd',items:[{id:'member',name:'Member',price:2000,interval:'month',gives:['member:basic']}]});
- assert.ok(fullerReason(shop));
+ assert.equal(fullerReason(shop),null);
  assert.equal(fullerReason({...shop,items:[{...shop.items[0],gives:[]}]}),null);
 });

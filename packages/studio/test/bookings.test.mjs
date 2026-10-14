@@ -10,6 +10,7 @@ function fixture(t) {
     CREATE TABLE function_subscriptions(type TEXT);
     INSERT INTO function_subscriptions VALUES('booking.held'),('booking.confirmed'),('booking.released'),('booking.moved');`);
   sql.exec(BOOKINGS_MIGRATION);
+  sql.exec('DROP TRIGGER shop_orders_function_paid');
   const prepare = (q, args = []) => ({ bind: (...a) => prepare(q, a), run: async () => ({ meta: { changes: sql.prepare(q).run(...args).changes } }) });
   const env = { DB: { prepare } };
   const slot = (id, capacity) => sql.prepare('INSERT INTO app_records VALUES(?,?,?,?,1,1)').run('tuning','slots',id,JSON.stringify({ capacity }));

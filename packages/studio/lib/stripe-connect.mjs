@@ -134,6 +134,7 @@ export async function shopConnect(root, options = {}) {
     const receiptFile = join(dir, `${mode}.json`);
     const receipt = existsSync(receiptFile) ? json(readFileSync(receiptFile, 'utf8')) : null;
     const result = await syncPaymentLinks({ root, api, shop: checked.shop, slug: studio.slug, site: target.origin, mode, w, receipt,
+      bookingSlots: options.bookingSlots ?? (existsSync(join(root,'.studio','booking-slots.json')) ? JSON.parse(readFileSync(join(root,'.studio','booking-slots.json'),'utf8')) : []),
       saveReceipt: (record) => {
         writeFileSync(`${receiptFile}.tmp`, JSON.stringify(record), { mode: 0o600 });
         renameSync(`${receiptFile}.tmp`, receiptFile);

@@ -20,7 +20,7 @@ import { providerKey } from './provider-key.mjs';
 import { prepareNode } from './prepare.mjs';
 import { studioDomain } from './domain.mjs';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { renderCodex, newCodex } from './codex.mjs';
@@ -1175,6 +1175,20 @@ export function toolDefs(ctx, avail = {}) {
         }
         const studio = readStudio(root);
         return startRun(ctx, root, { kind: 'deploy', game: null, title: `${studio.name}: online`, steps: [{ label: 'deploy', args: ['deploy', ...(a.ownRoute === true ? ['--own-route'] : [])] }] });
+      },
+    },
+    {
+      name:'stripe_bookings_sync', title:'Sync published booking slots to Stripe',
+      description:'Owner AI: after reading published slot records, supply the complete slot manifest. Creates/updates Stripe Payment Links with completed-session capacity limits through the approved CLI profile. Removed slots are deactivated. No Worker API key. Follow studio_job. Never increase capacity merely to reopen a full slot.',
+      inputSchema:{type:'object',properties:{...STUDIO_ARG,slots:{type:'array',items:{type:'object',properties:{app:{type:'string'},collection:{type:'string'},slots:{type:'string'},slot:{type:'string'},item:{type:'string'},capacity:{type:'integer',minimum:0},active:{type:'boolean'}},required:['app','collection','slots','slot','item','capacity'],additionalProperties:false}},live:{type:'boolean'}},required:['slots']},
+      annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:true},
+      run:async a=>{
+        const root=ctx.root(a.studio);
+        mkdirSync(join(root,'.studio'),{recursive:true});
+        writeFileSync(join(root,'.studio','booking-slots.json'),JSON.stringify(a.slots,null,2));
+        const job=cliJob(root,'Sync Stripe booking links',['shop','connect',...(a.live?['--live']:[])],{cli:join(PACKAGE_ROOT,'bin','homie-studio.mjs'),keep:false});
+        await waitJob(job,Math.min(ctx.waitMs,1000));
+        return ok('Booking link sync started. Check studio_job for completion.',{kind:'job',...jobView(job)});
       },
     },
     {
