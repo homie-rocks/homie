@@ -17,6 +17,10 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## Unreleased — renumbered at release
+
+- Keep the app checkout bridge available for free services in a mixed free/paid shop before Stripe is connected. Free volunteer bookings remain local and capacity-limited; paid checkout remains unavailable until connected.
+
 ## [0.51.4] - 2026-10-14
 
 **Plugin 0.51.4** · Studio events through experimental MCP Events.

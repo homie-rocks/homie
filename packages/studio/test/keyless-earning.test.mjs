@@ -23,7 +23,7 @@ function fixture(t){
  const buy=(body,id='alice')=>route('/api/shop/buy',body,{},id);
  let seq=0;const hook=(type,object)=>{const at=Math.floor(Date.now()/1000);const body=JSON.stringify({id:'evt_'+(++seq),type,livemode:false,created:at,data:{object}});const signature=createHmac('sha256',env.STRIPE_WEBHOOK_SECRET).update(at+'.'+body).digest('hex');return route('/api/shop/hook',body,{'stripe-signature':`t=${at},v1=${signature}`});};
  const session=(order,kind,extra={})=>({id:'cs_test_'+order.order,client_reference_id:order.order,payment_link:'plink_'+kind,metadata:{revision:kind},currency:'cad',amount_subtotal:5000,amount_total:5000,payment_status:'paid',payment_intent:'pi_'+order.order,...extra});
- return{sql,env,config,buy,hook,session};
+ return{sql,env,cat,config,buy,hook,session};
 }
 test('dotenv-safe keyless bindings preserve unicode and punctuation',()=>{const config={v:1,mode:'test',items:[],settings:"Maya’s #1 tune's \"shop\""};assert.deepEqual(linkConfig({STRIPE_SHOP_LINKS:'base64:'+Buffer.from(JSON.stringify(config)).toString('base64')}),config);});
 test('key alone does not select sessions',()=>{assert.equal(hasStripeKey({STRIPE_KEY:'rk_test_fixture'}),false);assert.equal(hasStripeKey({STRIPE_KEY:'rk_test_fixture',STRIPE_CHECKOUT_MODE:'sessions'}),true);});
@@ -87,4 +87,13 @@ test('keyed giving renewals resolve the verified invoice product back to the ori
  globalThis.fetch=async url=>Response.json(String(url).includes('/subscriptions/')?{id:'sub_keyed',customer:'cus_keyed',livemode:false,status:'active',items:{data:[]}}:invoice);
  assert.equal((await f.hook('invoice.paid',invoice)).status,200);
  const paid=f.sql.prepare("SELECT data FROM studio_events WHERE type='order.paid'").all().map(r=>JSON.parse(r.data));assert.equal(paid.length,2);assert.equal(paid[1].reference,'meal-table');
+});
+
+test('free volunteer booking confirms locally without a Stripe connection',async t=>{
+ const f=fixture(t);delete f.env.STRIPE_SHOP_LINKS;delete f.env.STRIPE_WEBHOOK_SECRET;
+ shopOf(f.cat).items[0].price=0;
+ const r=await f.buy({item:'tune',game:'tune',booking:{collection:'bookings',slot:'morning'}});
+ assert.equal(r.ok,true,JSON.stringify(r));
+ assert.equal(f.sql.prepare('SELECT state FROM shop_bookings WHERE id=?').get(r.booking).state,'confirmed');
+ assert.equal((await f.buy({item:'tune',game:'tune',booking:{collection:'bookings',slot:'morning'}},'bob')).status,409);
 });
