@@ -17,36 +17,37 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.51.2] - 2026-10-14
+
+**Plugin 0.51.2** · Deploying and listing do what the studio chose, under one address.
+
+Your studio follows your listing choice, shares one public address, and keeps its apps and tools working after deploy and upgrade.
+
+### Fixed
+
+- Your studio only joins the directory when you choose to list it. Existing claims remain honoured, and you can publish a listing after an unlisted deploy.
+- Your custom domain is the shared address for pages and app links. Visitors arriving at the workers.dev address reach that domain, while app APIs, multiplayer connections and AI tools keep working.
+- Deploy shows your app, game and wall links without guessing your bill. Local database tools keep working after deploy, interrupted setup can resume, and office sign-in takes you straight to the page you requested.
+- Upgrades refresh untouched app presets and defaults while preserving your edits, including giving choices. App walls use the app's own join wording.
+- Decorative app hero frames let visitors scroll the page; apps can share and download files while keeping their sandbox protection.
+- Signed-in AI connectors can discover how to connect through `/mcp/auth`; public tools remain available through `/mcp`.
+
+### Upgrade notes
+
+- Ask Homie to upgrade your studio, install dependencies and rebuild. Existing directory claims remain honoured. To list a new studio, choose `homie.directory: true` or a directory URL before deploy.
+- Use `/mcp/auth` for staff AI connectors and `/mcp` for public connectors.
+
 ## [0.51.1] - 2026-10-14
 
 **Plugin 0.51.1** · A player's own runner never jumps across the screen.
 
 Your platformer keeps a player's runner moving smoothly through network corrections and reconnects, with less work per frame on slower phones.
 
-Studios choose listing, share one public address, and keep their apps and tools working after deploy and upgrade.
-
 ### Fixed
 
 - In server-rules platformers, a player's own box-shaped 2D runner now moves smoothly through network corrections, even after a delayed frame. It goes around blocking platforms without being pulled backwards against the player's held direction, and normal jumps keep their shape.
 - After a dropped connection, the runner glides from its last visible position to where the server moved it. Real respawns and other deliberate placements still happen immediately; games can identify placements made during an outage with `respawned`.
 - Rules games do less repeated movement, collision and drawing preparation each frame, helping play stay smooth on slower phones. These changes preserve the server's movement, hits and scoring.
-- Directory listing is opt-in, accepts `homie.directory: true`, preserves existing
-  claims and uses one canonical custom-domain address from either hostname.
-- Deploy reports app, game and wall links without an unmeasured billing claim;
-  local D1 tools keep their binding after deploy. Interrupted setup can resume,
-  and office links sign in directly at their requested same-site destination.
-- Upgrade refreshes untouched app preset files and defaults while preserving
-  studio edits; app walls use their join wording.
-- Decorative app hero frames allow page scrolling; app frames permit Web Share
-  and downloads without removing sandbox isolation.
-- `/mcp/auth` challenges anonymous connectors with OAuth discovery while `/mcp`
-  keeps public tools available anonymously.
-
-### Upgrade notes
-
-- Run upgrade, install and rebuild. Existing directory claims remain honoured.
-  For a new listing choose `homie.directory: true` or a directory URL before deploy.
-  Staff connectors should use `/mcp/auth`; public connectors keep `/mcp`.
 
 ## [0.51.0] - 2026-10-14
 
