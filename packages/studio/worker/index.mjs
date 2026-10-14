@@ -66,7 +66,6 @@ import { appRole, openPath } from './app-format.mjs';
  *   /shop/, /api/shop/...      the studio's shop (worker/shop.mjs, shop/SHOP.md): its items in real money, the studio's
  *                              OWN Stripe Checkout, the signed webhook, what a player owns (/api/player/owns), refunds;
  *                              closed until the owner's restricted key is in; never on a kids server or a television
- *   /api/referrals/statement   another studio's signed referral statement to this one (worker/referrals.mjs)
  *
  * A page in the studio's site/pages wins over the generated one at the same address. Every HTML answer is
  * `no-transform` (an edge in front of a custom domain injects nothing) and is never framed by another site.
@@ -130,7 +129,6 @@ import { STUDIO_VERSION_TAG } from './version.mjs';
 import { reconcileOrders, readiness, roomBadge, shellShop, shopOf, shopRoutes } from './shop.mjs';
 import { DISCOVERY_FILES, discoveryResponse, llmsTxt, robotsTxt, sitemapXml } from './discover.mjs';
 import { ldScript, studioNode } from './schema.mjs';
-import { arrivalCookie, manifestReferrals } from './referrals.mjs';
 import { licenseOf } from './license.mjs';
 // GAME PARTS (parts/PARTS.md section 4): three call-outs below, everything else is worker/parts.mjs.
 import { PART_FILES, isPartsPath, partsRoutes, withPartsBand } from './parts.mjs';
@@ -647,15 +645,6 @@ export default {
       }
     }
     if (appLobby || appRecords) return appCors(request, res);
-    // A referral's arrival (worker/referrals.mjs): only a person's page load with ?via= of another site, on a studio
-    // that pays referrals. The page is answered first; a cookie is added to it only then.
-    if (url.searchParams.has('via') && res && res.status === 200 && /text\/html/i.test(res.headers.get('content-type') ?? '')) {
-      try {
-        const cat = await catalogue(env, url.origin);
-        const cookie = await arrivalCookie(request, env, url, shopOf(cat));
-        if (cookie) { const out = new Response(res.body, res); out.headers.append('set-cookie', cookie); return out; }
-      } catch { /* an arrival is never worth a failed page */ }
-    }
     return res;
   },
 };
@@ -770,10 +759,8 @@ async function route(request, env, ctx) {
       ...(cat.studio?.lounge ? { lounge: { name: cat.studio.lounge.name, page: `${url.origin}/lounge/`, now: `${url.origin}/lounge/api/now` } } : {}),
       // Shared only when studio.json says `stats.share`: two numbers for the whole studio, for the hub.
       ...(played ? { played } : {}),
-      // The shop (0.24.0): whether it sells and its till, never a key or a sale; and referrals: this studio takes
-      // signed statements as a referrer, with the public half of its statement key and, if it sells, its terms.
+      // The shop: whether it sells and its till, never a key or a sale.
       ...(shopOf(cat)?.open ? { shop: { open: true, till: shopOf(cat).till, currency: shopOf(cat).currency, page: `${url.origin}/shop/` } } : {}),
-      ...(await manifestReferrals(env, url.origin, shopOf(cat), cat.studio).then((r) => (r ? { referrals: r } : {})).catch(() => ({}))),
     }, 200, { 'access-control-allow-origin': '*' });
   }
   if (path === '/api/games') {

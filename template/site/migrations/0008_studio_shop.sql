@@ -18,7 +18,6 @@ CREATE TABLE IF NOT EXISTS shop_orders (
   refund TEXT,
   dispute TEXT,
   parent INTEGER NOT NULL DEFAULT 0,
-  via TEXT,
   note TEXT,
   created_at INTEGER NOT NULL,
   paid_at INTEGER,
@@ -57,28 +56,4 @@ CREATE TABLE IF NOT EXISTS shop_parent_links (
   game TEXT,
   order_id TEXT,
   expires_at INTEGER NOT NULL
-) WITHOUT ROWID;
-CREATE TABLE IF NOT EXISTS referral_lines (
-  order_id TEXT PRIMARY KEY,
-  via TEXT NOT NULL,
-  net INTEGER NOT NULL,
-  rate REAL NOT NULL,
-  share INTEGER NOT NULL,
-  currency TEXT NOT NULL,
-  state TEXT NOT NULL,
-  period TEXT NOT NULL,
-  hold_until INTEGER NOT NULL,
-  settled_ref TEXT,
-  created_at INTEGER NOT NULL
-) WITHOUT ROWID;
-CREATE INDEX IF NOT EXISTS referral_lines_via ON referral_lines (via, period);
-CREATE TABLE IF NOT EXISTS referral_statements (
-  seller TEXT NOT NULL,
-  period TEXT NOT NULL,
-  owed INTEGER NOT NULL,
-  pending INTEGER NOT NULL,
-  currency TEXT NOT NULL,
-  body TEXT NOT NULL,
-  received_at INTEGER NOT NULL,
-  PRIMARY KEY (seller, period)
 ) WITHOUT ROWID;

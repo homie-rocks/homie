@@ -17,6 +17,22 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.50.5] - Unreleased
+
+**Plugin 0.50.5** · Homie has no referral system.
+
+Your studio no longer tracks sales referrals or manages referral payments. Visit-source statistics remain available in your studio’s own stats.
+
+### Changed
+
+- Removed referral terms, sales attribution, referral statements and office books, along with the referral commands and routes. Homie no longer sets an arrival cookie. `?via=` links still count as visit sources, without attributing sales.
+- Referral payment arrangements now belong in your own Stripe Connect setup or Stripe-based affiliate service.
+
+### Upgrade notes
+
+- Existing `shop.json` fields `referrals` and `referralNewPlayersOnly`, and `studio.json` `referrals`, are ignored with a one-line build note per field. They do not prevent a build; you can remove them from your configuration.
+- The next deploy applies `0022_remove_referrals.sql`, deleting referral tables, stored referral keys and sales-attribution columns from orders. Orders, payments, refunds and entitlements remain intact. Old referral cookies are ignored, and the removed referral features are no longer available.
+
 ## [0.50.4] - 2026-10-13
 
 **Plugin 0.50.4** · Send studio events by signed webhook.

@@ -20,7 +20,7 @@ import { experienceDir, experienceFile } from './studio.mjs';
  * NOTHING HERE IS A PACKAGE MANAGER: packages are npm's (lib/parts-store.mjs hands them to npm), and a part is copied
  * in and then the studio's own. There are no version ranges, no resolver and no lockfile of Homie's.
  */
-import { canonicalJson } from '../worker/referrals.mjs';
+import { canonicalJson } from '../worker/canonical-json.mjs';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const parseSpdx = (value) => require('spdx-expression-parse')(value);

@@ -3,10 +3,9 @@
  * from worker/shop.mjs so player accounts (worker/players.mjs) can export and forget a player's purchases without
  * importing the routes.
  *
- * WHAT IS STORED: orders (the item, the price, the state, Stripe's ids, the referrer's host), entitlements (what a
+ * WHAT IS STORED: orders (the item, the price, the state, Stripe's ids), entitlements (what a
  * player owns, by the keys the game reads), the age question's answer as a BAND only (adult, teen or child; never a
- * date), one-time links a teenager hands a parent, the webhook events already handled (ids only), referral lines
- * (the seller's books) and the statements other studios sent this one. NO card, NO address, NO email, NO name:
+ * date), one-time links a teenager hands a parent, the webhook events already handled (ids only). NO card, NO address, NO email, NO name:
  * Stripe keeps the buyer's details and sends the receipt.
  */
 
@@ -31,7 +30,6 @@ CREATE TABLE IF NOT EXISTS shop_orders (
   refund TEXT,
   dispute TEXT,
   parent INTEGER NOT NULL DEFAULT 0,
-  via TEXT,
   note TEXT,
   created_at INTEGER NOT NULL,
   paid_at INTEGER,
@@ -71,30 +69,6 @@ CREATE TABLE IF NOT EXISTS shop_parent_links (
   order_id TEXT,
   expires_at INTEGER NOT NULL
 ) WITHOUT ROWID;
-CREATE TABLE IF NOT EXISTS referral_lines (
-  order_id TEXT PRIMARY KEY,
-  via TEXT NOT NULL,
-  net INTEGER NOT NULL,
-  rate REAL NOT NULL,
-  share INTEGER NOT NULL,
-  currency TEXT NOT NULL,
-  state TEXT NOT NULL,
-  period TEXT NOT NULL,
-  hold_until INTEGER NOT NULL,
-  settled_ref TEXT,
-  created_at INTEGER NOT NULL
-) WITHOUT ROWID;
-CREATE INDEX IF NOT EXISTS referral_lines_via ON referral_lines (via, period);
-CREATE TABLE IF NOT EXISTS referral_statements (
-  seller TEXT NOT NULL,
-  period TEXT NOT NULL,
-  owed INTEGER NOT NULL,
-  pending INTEGER NOT NULL,
-  currency TEXT NOT NULL,
-  body TEXT NOT NULL,
-  received_at INTEGER NOT NULL,
-  PRIMARY KEY (seller, period)
-) WITHOUT ROWID;
 `;
 
 export const SHOP_RESERVATIONS_FILE = '0010_shop_reservations.sql';
@@ -102,26 +76,6 @@ export const SHOP_RESERVATIONS = `-- Checkout expiry in milliseconds; only sessi
 ALTER TABLE shop_orders ADD COLUMN expires_at INTEGER;
 -- Previously opened sessions used the same explicit 31-minute lifetime.
 UPDATE shop_orders SET expires_at = (CAST(created_at / 1000 AS INTEGER) + 31 * 60) * 1000 WHERE status IN ('started', 'processing');
-CREATE INDEX IF NOT EXISTS referral_lines_book ON referral_lines (via, currency, order_id);
-`;
-
-export const SHOP_STATEMENTS_FILE = '0011_shop_statements.sql';
-export const SHOP_STATEMENTS = `-- Statements retain independent currencies and an immutable edition while sending.
-ALTER TABLE referral_statements RENAME TO referral_statements_old;
-CREATE TABLE referral_statements (
-  seller TEXT NOT NULL, period TEXT NOT NULL, owed INTEGER NOT NULL, pending INTEGER NOT NULL,
-  currency TEXT NOT NULL, body TEXT NOT NULL, received_at INTEGER NOT NULL,
-  PRIMARY KEY (seller, period, currency)
-) WITHOUT ROWID;
-INSERT INTO referral_statements SELECT * FROM referral_statements_old;
-DROP TABLE referral_statements_old;
-CREATE TABLE referral_editions (id TEXT PRIMARY KEY, period TEXT NOT NULL, issued INTEGER NOT NULL) WITHOUT ROWID;
-CREATE TABLE referral_edition_lines (
-  edition TEXT NOT NULL, order_id TEXT NOT NULL, via TEXT NOT NULL, currency TEXT NOT NULL,
-  net INTEGER NOT NULL, rate REAL NOT NULL, share INTEGER NOT NULL, state TEXT NOT NULL,
-  period TEXT NOT NULL, hold_until INTEGER NOT NULL, created_at INTEGER NOT NULL, item TEXT, paid_at INTEGER,
-  PRIMARY KEY (edition, via, currency, order_id)
-) WITHOUT ROWID;
 `;
 
 export const SHOP_LINES_FILE = '0012_shop_lines.sql';
@@ -150,7 +104,6 @@ END;
 UPDATE shop_order_lines SET refunded_amount = COALESCE(total, amount), refunded_net = amount WHERE status = 'refunded';
 ALTER TABLE shop_parent_links ADD COLUMN cart TEXT;
 ALTER TABLE shop_orders ADD COLUMN whole_refund TEXT;
-ALTER TABLE shop_orders ADD COLUMN referral_terms TEXT;
 ALTER TABLE shop_orders ADD COLUMN checkout_player TEXT;
 UPDATE shop_orders SET checkout_player = player;
 CREATE TRIGGER shop_checkout_player_insert AFTER INSERT ON shop_orders BEGIN
@@ -159,8 +112,6 @@ END;
 CREATE TRIGGER shop_forget_checkout_player AFTER UPDATE OF player ON shop_orders WHEN NEW.player IS NULL BEGIN
   UPDATE shop_orders SET checkout_player = NULL WHERE id = NEW.id;
 END;
-ALTER TABLE referral_lines ADD COLUMN original_share INTEGER;
-UPDATE referral_lines SET original_share = share;
 ALTER TABLE shop_orders ADD COLUMN attention INTEGER NOT NULL DEFAULT 1;
 UPDATE shop_orders SET attention = 0 WHERE status = 'paid' AND EXISTS (SELECT 1 FROM entitlements WHERE order_id = shop_orders.id);
 ALTER TABLE shop_orders ADD COLUMN refunded_amount INTEGER NOT NULL DEFAULT 0;
@@ -190,13 +141,10 @@ export async function migrationNeeded(env) {
   for (const [file, query] of [
     [SHOP_MIGRATION_FILE, 'SELECT 1 FROM shop_orders LIMIT 1'],
     [SHOP_RESERVATIONS_FILE, 'SELECT expires_at FROM shop_orders LIMIT 1'],
-    [SHOP_STATEMENTS_FILE, 'SELECT issued FROM referral_editions LIMIT 1'],
-    [SHOP_STATEMENTS_FILE, 'SELECT edition FROM referral_edition_lines LIMIT 1'],
     [SHOP_LINES_FILE, 'SELECT snapshot, total, refunded_amount FROM shop_order_lines LIMIT 1'],
     [SHOP_LINES_FILE, 'SELECT line_id, quantity FROM shop_entitlement_lines LIMIT 1'],
-    [SHOP_LINES_FILE, 'SELECT referral_terms, checkout_player, attention, refunded_amount, refund_revision FROM shop_orders LIMIT 1'],
+    [SHOP_LINES_FILE, 'SELECT checkout_player, attention, refunded_amount, refund_revision FROM shop_orders LIMIT 1'],
     [SHOP_LINES_FILE, 'SELECT cart FROM shop_parent_links LIMIT 1'],
-    [SHOP_LINES_FILE, 'SELECT original_share FROM referral_lines LIMIT 1'],
   ]) {
     try { await env.DB.prepare(query).first(); } catch { return file; }
   }
@@ -296,7 +244,7 @@ export const orderByPayment = (env, payment) => env.DB.prepare('SELECT * FROM sh
 export function orderView(r) {
   return {
     id: r.id, refundedAmount: Number(r.refunded_amount ?? 0), item: r.item, game: r.game ?? null, amount: Number(r.amount), currency: r.currency, tax: r.tax === null ? null : Number(r.tax), total: r.total === null ? null : Number(r.total),
-    status: r.status, till: r.till, mode: r.mode, parent: Number(r.parent) === 1, via: r.via ?? null,
+    status: r.status, till: r.till, mode: r.mode, parent: Number(r.parent) === 1,
     createdAt: Number(r.created_at), paidAt: r.paid_at === null ? null : Number(r.paid_at), refundedAt: r.refunded_at === null ? null : Number(r.refunded_at),
   };
 }
@@ -368,3 +316,75 @@ export async function adoptShopStatements(env, guest, player) {
     env.DB.prepare('DELETE FROM player_age WHERE player = ?1').bind(guest),
   ];
 }
+
+export const SHOP_REMOVE_REFERRALS_FILE = '0022_remove_referrals.sql';
+export const SHOP_REMOVE_REFERRALS = `-- Remove referral bookkeeping; no studio we run has data in these tables.
+DROP TABLE IF EXISTS referral_lines;
+DROP TABLE IF EXISTS referral_statements;
+DROP TABLE IF EXISTS referral_statements_old;
+DROP TABLE IF EXISTS referral_editions;
+DROP TABLE IF EXISTS referral_edition_lines;
+DELETE FROM meta WHERE key IN ('referral_cookie_key', 'referral_signing_key') OR key GLOB 'referral-*';
+UPDATE shop_parent_links SET cart = json_remove(cart, '$[0].via') WHERE json_valid(cart);
+-- Rebuild orders to remove sales attribution, on both old and fresh schemas.
+CREATE TABLE shop_orders_clean (
+  id TEXT PRIMARY KEY,
+  player TEXT,
+  item TEXT NOT NULL,
+  game TEXT,
+  amount INTEGER NOT NULL,
+  currency TEXT NOT NULL,
+  tax INTEGER,
+  total INTEGER,
+  till TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  status TEXT NOT NULL,
+  session TEXT UNIQUE,
+  payment TEXT,
+  refund TEXT,
+  dispute TEXT,
+  parent INTEGER NOT NULL DEFAULT 0,
+  note TEXT,
+  created_at INTEGER NOT NULL,
+  paid_at INTEGER,
+  refunded_at INTEGER,
+  updated_at INTEGER NOT NULL,
+  expires_at INTEGER,
+  whole_refund TEXT,
+  checkout_player TEXT,
+  attention INTEGER NOT NULL DEFAULT 1,
+  refunded_amount INTEGER NOT NULL DEFAULT 0,
+  refunded_net INTEGER NOT NULL DEFAULT 0,
+  refund_revision INTEGER NOT NULL DEFAULT 0
+);
+INSERT INTO shop_orders_clean (id, player, item, game, amount, currency, tax, total, till, mode, status, session, payment, refund, dispute, parent, note, created_at, paid_at, refunded_at, updated_at, expires_at, whole_refund, checkout_player, attention, refunded_amount, refunded_net, refund_revision) SELECT id, player, item, game, amount, currency, tax, total, till, mode, status, session, payment, refund, dispute, parent, note, created_at, paid_at, refunded_at, updated_at, expires_at, whole_refund, checkout_player, attention, refunded_amount, refunded_net, refund_revision FROM shop_orders;
+DROP TABLE shop_orders;
+ALTER TABLE shop_orders_clean RENAME TO shop_orders;
+CREATE INDEX IF NOT EXISTS shop_orders_player ON shop_orders (player, created_at);
+CREATE INDEX IF NOT EXISTS shop_orders_status ON shop_orders (status, created_at);
+CREATE INDEX IF NOT EXISTS shop_orders_payment ON shop_orders (payment);
+CREATE INDEX shop_orders_attention_player ON shop_orders (mode, player, status, updated_at, id) WHERE attention = 1;
+CREATE INDEX shop_orders_attention ON shop_orders (mode, status, updated_at, id) WHERE attention = 1;
+CREATE TRIGGER shop_checkout_player_insert AFTER INSERT ON shop_orders BEGIN
+  UPDATE shop_orders SET checkout_player = NEW.player WHERE id = NEW.id;
+END;
+CREATE TRIGGER shop_forget_checkout_player AFTER UPDATE OF player ON shop_orders WHEN NEW.player IS NULL BEGIN
+  UPDATE shop_orders SET checkout_player = NULL WHERE id = NEW.id;
+END;
+-- Restore durable paid and refunded events after rebuilding the order table.
+
+DROP TRIGGER IF EXISTS shop_orders_function_paid;
+CREATE TRIGGER shop_orders_function_paid AFTER UPDATE ON shop_orders
+WHEN EXISTS (SELECT 1 FROM function_subscriptions WHERE type='order.paid')
+ AND OLD.paid_at IS NULL AND NEW.paid_at IS NOT NULL
+ AND NOT EXISTS (SELECT 1 FROM purchase_orders WHERE id=NEW.id) BEGIN
+ INSERT OR IGNORE INTO studio_events(id,type,data,at)
+ VALUES('shop_orders:' || NEW.id || ':paid','order.paid',
+ json_object('order',NEW.id,'source','shop_orders','amount',NEW.amount,'currency',NEW.currency,'mode',NEW.mode,
+ 'app',NEW.game,'reference',(SELECT value FROM meta WHERE key='shop-reference:' || NEW.id)),NEW.paid_at);
+END;
+
+CREATE TRIGGER shop_orders_function_refund AFTER UPDATE ON shop_orders WHEN EXISTS (SELECT 1 FROM function_subscriptions WHERE type='order.refunded') AND OLD.status != 'refunded' AND NEW.status = 'refunded' AND NOT EXISTS (SELECT 1 FROM purchase_orders WHERE id=NEW.id) BEGIN
+ INSERT OR IGNORE INTO studio_events(id,type,data,at) VALUES('shop_orders:' || NEW.id || ':refund:' || COALESCE(NEW.refund,''),'order.refunded',json_object('order',NEW.id,'source','shop_orders','refund',NEW.refund,'mode',NEW.mode),NEW.updated_at);
+END;
+`;

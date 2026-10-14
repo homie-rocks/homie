@@ -4,7 +4,7 @@ You sell with your own Stripe account. Money goes directly to you; Homie takes n
 The studio is the seller and is responsible for the law where it sells and for Stripe's terms.
 
 Your `shop.json` chooses items, wording, prices, currency, tax integration, sale dates, entitlements,
-referral terms, optional spending caps and optional refund windows. Nothing requires an account or age
+optional spending caps and optional refund windows. Nothing requires an account or age
 question by default. Guests can buy repeatedly and keep their purchases when signing in later.
 
 You can choose `policy.preset: "protective"` or `"adults-only"`, or set individual options.

@@ -522,8 +522,8 @@ export const OFFICE_SHOP_SCRIPT = String.raw`(function () {
   function cents(n, c) { var scale = zeroDecimal.indexOf(String(c || 'usd').toLowerCase()) >= 0 ? 1 : ['bhd', 'jod', 'kwd', 'omr', 'tnd'].indexOf(String(c).toLowerCase()) >= 0 ? 1000 : 100; try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: String(c || 'usd').toUpperCase(), minimumFractionDigits: scale === 1 || ['isk', 'ugx'].indexOf(c) >= 0 ? 0 : Math.log10(scale), maximumFractionDigits: scale === 1 || ['isk', 'ugx'].indexOf(c) >= 0 ? 0 : Math.log10(scale) }).format(n / scale); } catch (e) { return (n / scale).toFixed(scale === 1 ? 0 : Math.log10(scale)); } }
   function toast(t) { var x = $('#toast'); x.textContent = t; x.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { x.hidden = true; }, 4000); }
   function link(href, text) { var a = el('a', { href: href, target: '_blank', rel: 'noopener' }, text); return a; }
-  function load(cursor, orderCursor) {
-    api('GET', '/_studio/api/shop?cursor=' + encodeURIComponent(cursor || '') + '&orderCursor=' + encodeURIComponent(orderCursor || '')).then(function (s) {
+  function load(orderCursor) {
+    api('GET', '/_studio/api/shop?orderCursor=' + encodeURIComponent(orderCursor || '')).then(function (s) {
       var top = $('#state'); top.textContent = '';
       if (!s.ok) { top.appendChild(el('p', { class: 'empty' }, s.message || 'The shop did not answer.')); return; }
       top.appendChild(el('p', null, s.ready ? ('Open' + (s.mode === 'test' ? ' in TEST MODE (no real money)' : ', live') + (s.shop ? ', till: ' + s.shop.till : '')) : 'Not selling yet.'));
@@ -542,7 +542,7 @@ export const OFFICE_SHOP_SCRIPT = String.raw`(function () {
         var row = el('div', { class: 'row' });
         row.appendChild(el('span', null, new Date(o.createdAt).toISOString().slice(0, 16).replace('T', ' ')));
         row.appendChild(el('b', null, o.name + ' · ' + o.shown));
-        row.appendChild(el('span', null, (o.player && o.player.name ? o.player.name : o.resourceKind ? 'a studio purchase' : 'a deleted account') + (o.parent ? ' (a parent paid)' : '') + (o.via ? ' · sent by ' + o.via : '')));
+        row.appendChild(el('span', null, (o.player && o.player.name ? o.player.name : o.resourceKind ? 'a studio purchase' : 'a deleted account') + (o.parent ? ' (a parent paid)' : '')));
         row.appendChild(el('span', { class: 'st st-' + o.status }, o.status + (o.mode === 'test' ? ' · test' : '') + (o.note ? ' · ' + o.note : '')));
         if (o.stripe) row.appendChild(link(o.stripe, 'In Stripe'));
         if (o.dispute) row.appendChild(link(o.dispute, 'The dispute'));
@@ -578,70 +578,7 @@ export const OFFICE_SHOP_SCRIPT = String.raw`(function () {
         });
         ord.appendChild(row);
       });
-      if (s.nextOrdersCursor) { var nextOrders = el('button', { type: 'button' }, 'Next orders'); nextOrders.onclick = function () { load('', s.nextOrdersCursor); }; ord.appendChild(nextOrders); }
-      var ref = $('#referrals'); ref.textContent = '';
-      if (s.referrals.nextCursor) { var next = el('button', { type: 'button' }, 'Next referrers'); next.onclick = function () { load(s.referrals.nextCursor); }; ref.appendChild(next); }
-      (s.referrals.failures || []).forEach(function (x) { ref.appendChild(el('p', null, 'Statement failed for ' + x.via + ': ' + (x.why || x.status) + '. Start again after completion to retry.')); });
-      var owe = s.referrals.owe || [];
-      ref.appendChild(el('h3', null, 'You owe referrers'));
-      if (!owe.length) ref.appendChild(el('p', { class: 'dim' }, 'Nothing: no sale came from another site\'s link yet.'));
-      owe.forEach(function (b) {
-        var detail = el('details'); detail.appendChild(el('summary', null, 'Sales'));
-        var sales = el('div'); detail.appendChild(sales);
-        var more = el('button', { type: 'button' }, 'Show sales'); detail.appendChild(more);
-        var lineCursor = '';
-        more.onclick = function () {
-          more.disabled = true;
-          api('GET', '/_studio/api/shop/lines?via=' + encodeURIComponent(b.via) + '&currency=' + b.currency + '&cursor=' + encodeURIComponent(lineCursor)).then(function (page) {
-            sales.textContent = '';
-            page.lines.forEach(function (line) { sales.appendChild(el('p', null, line.date + ' · ' + line.item + ' · ' + cents(line.share, b.currency) + ' · ' + line.state)); });
-            lineCursor = page.nextCursor; more.hidden = !lineCursor; more.disabled = false; more.textContent = 'Next sales';
-          }).catch(function () { more.disabled = false; toast('Sales did not answer.'); });
-        };
-        var row = el('div', { class: 'row' });
-        row.appendChild(el('b', null, b.via));
-        row.appendChild(el('span', null, 'due ' + cents(b.due, b.currency) + ' · held ' + cents(b.pending, b.currency) + ' · ' + b.lineCount + ' sale(s)'));
-        if (b.due > 0) {
-          var m = el('button', { type: 'button', class: 'ghost small' }, 'Mark paid');
-          m.addEventListener('click', function () {
-            var ref0 = prompt('What paid it (an invoice number, a PayPal reference)?'); if (ref0 === null) return;
-            api('POST', '/_studio/api/shop/settle', { via: b.via, currency: b.currency, ref: ref0 }).then(function (r) { if (!r.ok) throw new Error(r.message); toast('Marked paid.'); load(); }).catch(function (e) { toast(e.message); });
-          });
-          row.appendChild(m);
-        }
-        ref.appendChild(row); ref.appendChild(detail);
-      });
-      var send = el('button', { type: 'button', class: 'ghost small' }, 'Send last month\'s signed statements');
-      send.addEventListener('click', async function () {
-        send.disabled = true; send.textContent = 'Sending; keep this tab open. Close it and press again to resume safely.';
-        var cursor = '', period = null, sent = 0, failed = [];
-        try {
-          do {
-            var r = await api('POST', '/_studio/api/shop/statements/send', { cursor: cursor, period: period });
-            if (!r.ok) throw new Error(r.message || 'Not sent.');
-            sent += r.sent.filter(function (x) { return x.ok; }).length;
-            failed = failed.concat(r.sent.filter(function (x) { return !x.ok; }).map(function (x) { return x.via + ': ' + (x.why || x.status); }));
-            send.textContent = 'Sent ' + sent + ' pages. Keep open; press again after closing to resume safely.';
-            cursor = r.nextCursor; period = r.period;
-            if (r.retryAfter) { send.textContent = 'Retrying with backoff; keep open, or press again later to resume safely.'; await new Promise(function (resolve) { setTimeout(resolve, r.retryAfter * 1000); }); }
-          } while (cursor !== null);
-          if (r.failures) failed = r.failures.map(function (x) { return x.via + ': ' + (x.why || x.status); });
-          toast('Sent ' + sent + ' statement pages; ' + failed.length + ' failed.' + (failed.length ? ' ' + failed.join('; ') : ''));
-        } catch (e) { toast(e.message); }
-        send.disabled = false; send.textContent = 'Send last month’s signed statements';
-      });
-      ref.appendChild(send);
-      ref.appendChild(el('h3', null, 'Owed to you'));
-      var inn = s.referrals.owedToUs || [];
-      if (!inn.length) ref.appendChild(el('p', { class: 'dim' }, 'No statements yet. When another studio sells to a player you sent, it sends a signed statement here.'));
-      inn.forEach(function (x) {
-        var row = el('div', { class: 'row' });
-        row.appendChild(el('b', null, x.seller.replace(/^https:\/\//, '')));
-        row.appendChild(el('span', null, x.period + ': due ' + cents(x.due, x.currency) + ', held ' + cents(x.pending, x.currency)));
-        row.appendChild(link('/_studio/api/shop/received?seller=' + encodeURIComponent(x.seller) + '&period=' + encodeURIComponent(x.period), 'Signed statement pages'));
-        if (x.due > 0) row.appendChild(link(s.referrals.invoice, 'Invoice them in Stripe'));
-        ref.appendChild(row);
-      });
+      if (s.nextOrdersCursor) { var nextOrders = el('button', { type: 'button' }, 'Next orders'); nextOrders.onclick = function () { load(s.nextOrdersCursor); }; ord.appendChild(nextOrders); }
     }).catch(function () { $('#state').textContent = 'The shop did not answer.'; });
   }
   load();
@@ -661,9 +598,8 @@ export async function officeShopPage(cat) {
 <style>.row{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}.row b{font-weight:700}.st{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--line2)}.st-refunded,.st-lost{opacity:.7}.st-disputed{border-color:#ff8a80;color:#ff8a80}h3{margin:22px 0 6px;font-size:15px}.links a{margin-right:2px}</style>
 <div class="game" style="padding:14px 16px" id="state"><p class="empty">Reading the shop…</p></div>
 <div class="game" style="padding:6px 16px 12px"><h3>Orders</h3><div id="orders"></div></div>
-<div class="game" style="padding:6px 16px 12px" id="referrals"></div>
 <div class="toast" id="toast" role="status" hidden></div>
-<p class="note">You are the seller. Money goes from players to your own Stripe account; Homie never sees it and takes nothing. Refunds are handled in Stripe or by your connected AI; shops with the fuller checkout connection also offer Refund here. A card dispute never touches the player's account: answer it in Stripe; if you lose it, that one item is taken back. Tax: when enabled, Stripe Tax works out and collects tax where you told Stripe you are registered${cat.shop?.till === 'stripe-managed' ? '; with Managed Payments Stripe is the seller of record and files it for you' : ''}. Payouts, the balance and receipts are Stripe's own pages, linked above. Referrals: you pay referrers yourself (they invoice you); nothing moves through Homie. This is not legal or tax advice.</p>`;
+<p class="note">You are the seller. Money goes from players to your own Stripe account; Homie never sees it and takes nothing. Refunds are handled in Stripe or by your connected AI; shops with the fuller checkout connection also offer Refund here. A card dispute never touches the player's account: answer it in Stripe; if you lose it, that one item is taken back. Tax: when enabled, Stripe Tax works out and collects tax where you told Stripe you are registered${cat.shop?.till === 'stripe-managed' ? '; with Managed Payments Stripe is the seller of record and files it for you' : ''}. Payouts, the balance and receipts are Stripe's own pages, linked above. This is not legal or tax advice.</p>`;
   return new Response(shell(cat, `Shop · ${name}`, body, { script }), {
     headers: { ...PRIVATE, 'content-security-policy': `default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src '${officeHash}'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'` },
   });

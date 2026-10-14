@@ -20,6 +20,7 @@ for (const f of files) {
 const log = read('CHANGELOG.md');
 const start = log.indexOf('## ['); const end = log.indexOf('\n## [', start + 1);
 const section = log.slice(start, end < 0 ? undefined : end).replace('<!-- pending-release: renumber before publishing -->\n\n', '').replace(/^## \[\d+\.\d+\.\d+\]/, `## [${studio}]`)
+  .replace(/^(## \[\d+\.\d+\.\d+\] - )Unreleased/m, (_, heading) => heading + new Date().toISOString().slice(0, 10))
   .replace(/(\*\*Plugin )\d+\.\d+\.\d+(\*\*)/, (_, before, after) => before + plugin + after);
 writeFileSync('CHANGELOG.md', log.slice(0, start) + section + (end < 0 ? '' : log.slice(end)));
 const history = json('packages/studio/lib/template-history.json');

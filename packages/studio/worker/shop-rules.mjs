@@ -47,18 +47,6 @@ export function amountError(amount, currency) {
   return null;
 }
 
-/** Round a decimal rate times integer money exactly, including exponent notation. */
-export function referralShare(amount, rate) {
-  const [digits, exponent = '0'] = String(rate).toLowerCase().split('e');
-  const [whole, fraction = ''] = digits.split('.');
-  const scale = fraction.length - Number(exponent);
-  let numerator = BigInt(whole + fraction), denominator = 1n;
-  if (scale > 0) denominator = 10n ** BigInt(scale); else numerator *= 10n ** BigInt(-scale);
-  const share = Number((2n * BigInt(amount) * numerator + denominator) / (2n * denominator));
-  if (!Number.isSafeInteger(share)) throw new RangeError('Referral share exceeds safe integer arithmetic');
-  return share;
-}
-
 /** Checkout wording is shared by validation and the request path. */
 export function checkoutMessage(shop, studio = 'this studio', parent = false) {
   return `${parent ? "This is for your child's account. " : ''}Delivered at once to the player's account on ${studio}. ${shop.policy.withdrawalAcknowledgement ? 'By paying you ask for it now, which ends the 14-day withdrawal right;' : 'Your statutory rights still apply.'} ${shop.refundDays === null ? (shop.policy.withdrawalAcknowledgement ? 'ask the studio about refunds.' : 'Ask the studio about refunds.') : `${shop.policy.refundUsedItems ? 'an item' : 'an unused item'} can still be refunded within ${shop.refundDays} days.`}`;
@@ -138,7 +126,7 @@ export function checkShop(raw, { games = null, audience = 'general', studioName 
   const purchaseAttemptsPerMinute = ratePolicy('purchaseAttemptsPerMinute');
   const purchaseAttemptsPerAddressPerMinute = ratePolicy('purchaseAttemptsPerAddressPerMinute');
 
-  for (const key of ['automaticTax', 'referralNewPlayersOnly']) if (raw[key] !== undefined && typeof raw[key] !== 'boolean') err(key, 'use a boolean');
+  if (raw.automaticTax !== undefined && typeof raw.automaticTax !== 'boolean') err('automaticTax', 'use a boolean');
   const items = [];
   const list = Array.isArray(raw.items) ? raw.items : [];
   if (raw.items !== undefined && !Array.isArray(raw.items)) err('items', 'items is a list');
@@ -209,24 +197,8 @@ export function checkShop(raw, { games = null, audience = 'general', studioName 
     });
   });
 
-  let referrals = null;
-  if (raw.referrals !== undefined && raw.referrals !== null && raw.referrals !== 0 && raw.referrals !== false) {
-    const r = raw.referrals;
-    if (!isObj(r)) err('referrals', 'referrals is { "rate": 0.10, "windowDays": 30, "capPerPlayer": 1000, "holdDays": 30, "minimumInvoice": 2500 } (or leave it out: nobody is paid for sending players)');
-    else {
-      const rate = optionalNumber(r.rate ?? 0, 'referrals.rate', { integer: false });
-      const windowDays = optionalNumber(r.windowDays, 'referrals.windowDays');
-      const capPerPlayer = optionalNumber(r.capPerPlayer, 'referrals.capPerPlayer');
-      const holdDays = optionalNumber(r.holdDays, 'referrals.holdDays');
-      const minimumInvoice = optionalNumber(r.minimumInvoice, 'referrals.minimumInvoice');
-      const accept = Array.isArray(r.accept) ? r.accept.map(String) : [];
-      const billing = r.billingEmail === undefined ? null : String(r.billingEmail);
-      if (billing !== null && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billing)) err('referrals.billingEmail', 'billingEmail is where referrers send their invoices (an address the studio reads)');
-      referrals = { rate, windowDays, capPerPlayer, holdDays, minimumInvoice, basis: 'pre-tax', accept, ...(billing ? { billingEmail: billing } : {}) };
-    }
-  }
-
-  // Where `homie-studio shop catalog` made the items' Products in Stripe (0.24.3): the Worker's checkouts then name them.
+  for (const key of ['referrals', 'referralNewPlayersOnly']) if (Object.hasOwn(raw, key)) warnings.push({ at: key, message: 'ignored; Homie has no referral system.' });
+  // Where `homie-studio shop catalog` made the items' Products in Stripe: checkouts then name them.
   let catalog = [];
   if (raw.catalog !== undefined && raw.catalog !== null) {
     if (!Array.isArray(raw.catalog) || raw.catalog.some((m) => m !== 'test' && m !== 'live')) err('catalog', 'catalog lists where the items are Products in Stripe: ["test"], ["test", "live"] (homie-studio shop catalog writes it)');
@@ -237,7 +209,7 @@ export function checkShop(raw, { games = null, audience = 'general', studioName 
   const finalTill = kids ? 'off' : TILLS.includes(till) ? till : 'off';
   if (kids && till !== 'off') warnings.push({ at: 'till', message: 'studio.json says "audience": "kids": the studio sells nothing in its games (the till is off under policy.kidsStudio).' });
   const shop = {
-    v: 1, ...(isObj(raw.giving) ? { giving: { receiptText: String(raw.giving.receiptText ?? '') } } : {}), policy, purchasesTill: TILLS.includes(raw.purchasesTill ?? till) ? (raw.purchasesTill ?? till) : 'off', ...(/^https:\/\/billing\.stripe\.com\/p\/login\/[A-Za-z0-9_]+$/.test(raw.purchasesPortalLogin ?? '') ? { purchasesPortalLogin: raw.purchasesPortalLogin } : {}), checkoutMinutes, requestBytes, automaticTax: raw.automaticTax === true, referralNewPlayersOnly: raw.referralNewPlayersOnly === true, guestBuyersPerAddressPerHour, purchaseAttemptsPerMinute, purchaseAttemptsPerAddressPerMinute, till: finalTill, currency: CURRENCY.test(currency) ? currency : 'usd', refundDays, capPerPlayerMonth: cap, items, referrals,
+    v: 1, ...(isObj(raw.giving) ? { giving: { receiptText: String(raw.giving.receiptText ?? '') } } : {}), policy, purchasesTill: TILLS.includes(raw.purchasesTill ?? till) ? (raw.purchasesTill ?? till) : 'off', ...(/^https:\/\/billing\.stripe\.com\/p\/login\/[A-Za-z0-9_]+$/.test(raw.purchasesPortalLogin ?? '') ? { purchasesPortalLogin: raw.purchasesPortalLogin } : {}), checkoutMinutes, requestBytes, automaticTax: raw.automaticTax === true, guestBuyersPerAddressPerHour, purchaseAttemptsPerMinute, purchaseAttemptsPerAddressPerMinute, till: finalTill, currency: CURRENCY.test(currency) ? currency : 'usd', refundDays, capPerPlayerMonth: cap, items,
     open: finalTill !== 'off' && items.length > 0, ...(kids ? { audience: 'kids' } : {}), ...(catalog.length ? { catalog } : {}),
   };
   // https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-custom_text-submit-message
@@ -305,7 +277,7 @@ export function wayFor(item, { open = true, kids = false, beginner = false, play
 /** The public face of a shop (for the directory manifest and the shop page): never a secret, never a person. */
 export function publicShop(shop) {
   if (!shop) return null;
-  return { policy: shop.policy, till: shop.till, currency: shop.currency, refundDays: shop.refundDays, capPerPlayerMonth: shop.capPerPlayerMonth, open: Boolean(shop.open), items: shop.items.length, ...(shop.referrals ? { referrals: shop.referrals } : {}) };
+  return { policy: shop.policy, till: shop.till, currency: shop.currency, refundDays: shop.refundDays, capPerPlayerMonth: shop.capPerPlayerMonth, open: Boolean(shop.open), items: shop.items.length };
 }
 
 /** A price for people: 500 usd → "$5.00", 300 eur → "€3.00", 1250 cad → "CA$12.50". */

@@ -1,4 +1,4 @@
-import { canonicalJson } from "./referrals.mjs";
+import { canonicalJson } from "./canonical-json.mjs";
 export const GRANT_TYPE = 'homie-purchase-grant+jwt';
 export const PROOF_TYPE = 'homie-purchase-proof+jwt';
 export const PROOF_AUDIENCE = 'homie-purchase-evidence';

@@ -1,7 +1,7 @@
 import { amountError } from './shop-rules.mjs';
 import { digest, manifestHash } from "./purchase-crypto.mjs";
 /** Paid-part metadata shared by the builder, buyer and Worker. No payment policy ceilings. */
-import { canonicalJson } from './referrals.mjs';
+import { canonicalJson } from './canonical-json.mjs';
 
 export const quoteHash = async (part, quantity = 1, game = null, offer = part.sale) => digest(canonicalJson({ manifest: await manifestHash(part), part: part.id, release: part.version, scope: offer.scope, quantity, game, interval: offer.billing, currency: offer.currency, amount: offer.amount * quantity, offer }));
 export const legalTerms = (p) => ({ license: p.license, terms: p.files?.find((f) => f.path === p.licenseTerms)?.sha256, scope: p.sale?.scope, source: p.sale?.source, commercialUse: p.sale?.commercialUse, transferable: p.sale?.transferable, onRefund: p.sale?.onRefund, onExpiry: p.sale?.onExpiry, refund: p.sale?.refund, updates: p.sale?.updates });

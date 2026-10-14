@@ -1,6 +1,6 @@
 import { experienceDir, experienceFile } from './studio.mjs';
 import { createHash } from 'node:crypto';
-import { canonicalJson } from '../worker/referrals.mjs';
+import { canonicalJson } from '../worker/canonical-json.mjs';
 import { publicFiles, saleProblems } from "../worker/parts-sale.mjs";
 /**
  * GAME PARTS IN THE BUILD (parts/PARTS.md). Three small things lib/build.mjs and the deploy plan call, so the build

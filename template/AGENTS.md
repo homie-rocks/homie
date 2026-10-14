@@ -389,7 +389,7 @@ Your shop, your choices. The studio sells through its own Stripe account and is 
 where it sells and for Stripe's terms. Homie takes no cut.
 
 - `shop.json` lists items, wording, kinds, prices, quantities and entitlements. Optional settings include
-  sale dates, tips, currency, `automaticTax`, refund windows, spending caps and referral terms.
+  sale dates, tips, currency, `automaticTax`, refund windows, spending caps.
 - The default is open: guests can buy repeatedly, without age questions, from any page. Signing in keeps
   guest purchases. `shop init --supporter` writes an example item without a policy, cap or refund window.
 - Choose `policy.preset: "protective"` or `"adults-only"` to enable an account and age policy. Omitted
@@ -413,7 +413,7 @@ where it sells and for Stripe's terms. Homie takes no cut.
   Stripe's approval links belong to the owner. `checkoutMinutes` is optional (Stripe: 30 to 1440 minutes,
   default 1440; values below 31 use 31 for transport margin); cancelling a named checkout, or replacing one at least a minute old, expires the open session on Stripe's confirmation.
 - `shop orders` and `/_studio/office/shop` show sales. `shop refund <order>` asks the owner to confirm.
-  `shop statements` records optional referral shares; studios pay their referrers directly.
+  For referrals, use Stripe Connect to split payments or a Stripe-based affiliate service; Homie builds none.
 
 The guide is `node_modules/@homie-rocks/studio/shop/SHOP.md`.
 

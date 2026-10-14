@@ -21,7 +21,7 @@ test('a transaction hash or unrelated successful receipt cannot authorize delive
 
 test('an expired-order cleanup cannot orphan accepted settlement or provider work', async () => {
   const { DatabaseSync } = await import('node:sqlite');
-  const { SHOP_MIGRATION, SHOP_RESERVATIONS, SHOP_STATEMENTS } = await import('../worker/shop-store.mjs');
+  const { SHOP_MIGRATION, SHOP_RESERVATIONS } = await import('../worker/shop-store.mjs');
   const { PURCHASE_MIGRATION, PURCHASE_STATE } = await import('../worker/purchase-store.mjs');
   const db = new DatabaseSync(':memory:');
   try {

@@ -3,7 +3,7 @@ import { problem } from './purchase-problem.mjs';
 /** Resource purchases share the studio's Stripe webhook and refund office. */
 import { offerVersion } from "./purchase-core.mjs";
 
-import { canonicalJson } from "./referrals.mjs";
+import { canonicalJson } from "./canonical-json.mjs";
 
 import { modeOf } from "./stripe.mjs";
 

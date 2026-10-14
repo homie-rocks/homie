@@ -1,7 +1,7 @@
 import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * @homie-rocks/studio 0.24.0: the shop kit (worker/shop.mjs, shop-rules.mjs, shop-store.mjs, stripe.mjs,
- * referrals.mjs, shop-page.mjs; lib/shop.mjs; shop/shop.ts). A studio sells with ITS OWN Stripe.
+ * shop-page.mjs; lib/shop.mjs; shop/shop.ts). A studio sells with ITS OWN Stripe.
  *
  *   - studio settings: optional amounts without ceilings and editable presets; the protective policy closes kids studios; who may buy (guest, the age question, under 13, 13-17, adult);
  *   - Stripe: the form encoding, the webhook signature (good, wrong, old, a rolled secret), test or live by the key;
@@ -12,8 +12,7 @@ import { browserRulesGame } from './browser-rules-game.mjs';
  *     each event once, a test event never on a live shop; what the player owns; a supporter's badge in a room;
  *     a refund is the owner's one tap, from an office key only an ASK; a dispute never touches the account; the
  *     player's own refund of an unused item; deleting an account asks first and keeps the orders without the player;
- *     the export; the office view and CSV; the TV's code and the play shell; referrals end to end with a signed
- *     statement checked against the seller's manifest;
+ *     the export; the office view and CSV; the TV's code and the play shell;
  *   - stripe-mock (Stripe's open-source mock, which checks every parameter against Stripe's API description), when
  *     STRIPE_MOCK_URL names one (CI starts it): both tills' Checkout Sessions and a refund are accepted;
  *   - the CLI: init, check, the build refusing a bad shop.json, and `shop connect`'s page: the key goes to the
@@ -25,7 +24,7 @@ import { browserRulesGame } from './browser-rules-game.mjs';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -34,8 +33,8 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { POLICY_PRESETS, parseAmount, amountError, currencyScale, money, bandOf, checkShop, wayFor } from '../worker/shop-rules.mjs';
 import { formEncode, modeOf, apiBase, signPayload, verifyWebhook } from '../worker/stripe.mjs';
-import { SHOP_MIGRATION_FILE, SHOP_RESERVATIONS_FILE, SHOP_STATEMENTS_FILE, SHOP_LINES_FILE } from '../worker/shop-store.mjs';
-import { canonicalJson, resetReferrers, verifyStatement } from '../worker/referrals.mjs';
+import { SHOP_MIGRATION_FILE, SHOP_RESERVATIONS_FILE, SHOP_LINES_FILE } from '../worker/shop-store.mjs';
+import { canonicalJson } from '../worker/canonical-json.mjs';
 import { stripeValidation } from './stripe-validation.mjs';
 import { resetShopLimits } from '../worker/shop.mjs';
 
@@ -69,11 +68,10 @@ test('the studio chooses its amounts, catalog and policy; only provider units an
     assert.equal(r.ok, true, JSON.stringify(r.errors));
     assert.equal(r.shop[field], value);
   }
-  const written = checkShop({ ...raw, capPerPlayerMonth: '5000', refundDays: '14', referrals: { rate: '0.1', windowDays: '30', capPerPlayer: '1000', holdDays: '30', minimumInvoice: '2500' } });
+  const written = checkShop({ ...raw, capPerPlayerMonth: '5000', refundDays: '14' });
   assert.equal(written.ok, true);
   assert.equal(written.shop.capPerPlayerMonth, 5000);
   assert.equal(written.shop.refundDays, 14);
-  assert.equal(written.shop.referrals.capPerPlayer, 1000);
   const large = { ...SUPPORTER, id: 'a'.repeat(500), name: 'A'.repeat(500), blurb: 'B'.repeat(1000), badge: 'C'.repeat(100), price: 1000000, days: 20000, gives: Array.from({ length: 20 }, (_, i) => `key:${i}:${'x'.repeat(100)}`) };
   const big = checkShop({ items: Array.from({ length: 100 }, (_, i) => ({ ...large, id: large.id + i })) });
   assert.equal(big.ok, true, JSON.stringify(big.errors));
@@ -96,9 +94,7 @@ test('the studio chooses its amounts, catalog and policy; only provider units an
   assert.equal(checkShop(raw, { audience: 'kids' }).shop.open, true);
   assert.equal(checkShop({ ...raw, policy: { preset: 'protective', kidsStudio: true } }, { audience: 'kids' }).shop.open, true);
   assert.equal(checkShop({ ...raw, policy: { preset: 'typo' } }).ok, false);
-  const referrals = { rate: 2, windowDays: 1000, capPerPlayer: 1000000, holdDays: 1000, minimumInvoice: 1000000, accept: ['bank-transfer'] };
-  assert.deepEqual(checkShop({ ...raw, referrals }).shop.referrals, { ...referrals, basis: 'pre-tax' });
-  assert.equal(checkShop({ ...raw, refundDays: 1000, referrals: { rate: 0.1, holdDays: 0 } }).ok, true);
+  assert.equal(checkShop({ ...raw, refundDays: 1000 }).ok, true);
   for (const currency of ['usd', 'jpy', 'krw', 'isk', 'ugx']) {
     assert.equal(checkShop({ currency, items: [{ ...SUPPORTER, price: 50000 }] }).ok, true, currency);
   }
@@ -186,7 +182,7 @@ function studio(name) {
 
 function fakeD1(dir) {
   const sql = new DatabaseSync(':memory:');
-  for (const f of ['0001_studio.sql', '0002_studio_stats.sql', '0004_players.sql', '0005_studio_office.sql', '0006_studio_servers.sql', SHOP_MIGRATION_FILE, SHOP_RESERVATIONS_FILE, SHOP_STATEMENTS_FILE, SHOP_LINES_FILE]) sql.exec(readFileSync(join(dir, 'site', 'migrations', f), 'utf8'));
+  for (const f of ['0001_studio.sql', '0002_studio_stats.sql', '0004_players.sql', '0005_studio_office.sql', '0006_studio_servers.sql', SHOP_MIGRATION_FILE, SHOP_RESERVATIONS_FILE, SHOP_LINES_FILE]) sql.exec(readFileSync(join(dir, 'site', 'migrations', f), 'utf8'));
   const stmt = (query, args = []) => ({
     bind: (...a) => stmt(query, a),
     first: async () => sql.prepare(query).get(...args) ?? null,
@@ -336,14 +332,13 @@ async function site({ key = true, managed = false, catalog = null, settings = nu
     const dir = studio('worker');
     browserRulesGame(dir, 'owl-run', 'Owl Run');
     writeFileSync(join(dir, 'shop.json'), JSON.stringify({
-      till: 'stripe', currency: 'usd', policy: { preset: 'protective' }, automaticTax: true, referralNewPlayersOnly: true, refundDays: 14, capPerPlayerMonth: 2000,
+      till: 'stripe', currency: 'usd', policy: { preset: 'protective' }, automaticTax: true, refundDays: 14, capPerPlayerMonth: 2000,
       items: [
         SUPPORTER,
         { id: 'ember', kind: 'cosmetic', game: 'owl-run', name: `Ember hull ${EVIL}`, price: 300, gives: ['skin:ember'] },
         { id: 'boost', kind: 'unlock', game: 'owl-run', name: 'Turbo wings', price: 400, gives: ['wings:turbo'], advantage: true },
         { id: 'tip', kind: 'tip', name: 'A coffee', price: 'choose', min: 200, max: 1000 },
       ],
-      referrals: { rate: 0.1, windowDays: 30, capPerPlayer: 1000, holdDays: 30, minimumInvoice: 0 },
     }, null, 2));
     const b = run(['build'], dir);
     assert.equal(JSON.parse(b.stdout).ok, true, b.stdout + b.stderr);
@@ -364,7 +359,6 @@ async function site({ key = true, managed = false, catalog = null, settings = nu
   }
   const { default: worker, Table, Lobby } = await import('../worker/index.mjs');
   resetShopLimits();
-  resetReferrers();
   const stripe = await fakeStripe();
   const waits = [];
   const ref = {};
@@ -738,10 +732,6 @@ test('the office: what is missing, the last 30 days, links to the studio\'s own 
   assert.match(await (await s.fetchSite('/shop/refunds/')).text(), /never deletes or locks your account/);
   const man = await (await s.fetchSite('/.well-known/homie-studio.json')).json();
   assert.equal(man.shop.open, true);
-  assert.equal(man.referrals.accepts, true);
-  assert.equal(man.referrals.terms.rate, 0.1);
-  assert.equal(man.referrals.key.crv, 'Ed25519');
-  assert.equal(man.referrals.key.d, undefined, 'never the private half');
   assert.doesNotMatch(JSON.stringify(man), /rk_test|whsec_/);
   s.stripe.close();
 });
@@ -869,85 +859,6 @@ test('shop catalog: the read, then exactly the writes Stripe still needs; in syn
   assert.match(JSON.stringify(JSON.parse(run(['shop', 'check'], dir).stdout).errors), /catalog/);
 });
 
-test('referrals: an arrival from another site, a new player\'s sale, a held line, a signed statement the referrer checks', async t => {
-  // Arrival, account age, hold and statement month are one scenario, not a race
-  // with the wall clock crossing a second/day/month boundary on a loaded runner.
-  t.mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 9, 15, 12) });
-  const s = await site();
-  const realFetch = globalThis.fetch;
-  // The referrer's and the seller's own manifests, as each site answers them (the referrer is another studio).
-  globalThis.fetch = async (input, init) => {
-    const u = new URL(typeof input === 'string' ? input : input.url);
-    if (u.host === 'friends.example' && u.pathname === '/.well-known/homie-studio.json') return Response.json({ v: 1, kind: 'homie-studio', referrals: { accepts: true, statements: 'https://friends.example/api/referrals/statement' } });
-    if (u.host === 'owls.example') return s.fetchAt('owls.example', u.pathname + u.search, init);
-    if (u.host === 'friends.example' && u.pathname === '/api/referrals/statement') return s.fetchAt('friends.example', u.pathname, init);
-    return realFetch(input, init);
-  };
-  try {
-    const nav = { 'sec-fetch-dest': 'document', accept: 'text/html' };
-    // A prefetch is never an arrival; a person's page load is.
-    let r = await s.fetchSite('/?via=friends.example', { headers: { ...nav, 'sec-purpose': 'prefetch' } });
-    assert.equal(r.headers.get('set-cookie'), null);
-    r = await s.fetchSite('/?via=owls.example', { headers: nav });
-    assert.equal(r.headers.get('set-cookie'), null, 'a site is never its own referrer');
-    r = await s.fetchSite('/owl-run/s/x/?via=friends.example', { headers: nav });
-    assert.equal(r.headers.get('set-cookie'), null, 'never on a server\'s page');
-    r = await s.fetchSite('/?via=friends.example', { headers: nav });
-    const cookie = /studio_via=[^;]+/.exec(r.headers.get('set-cookie') ?? '')?.[0];
-    assert.ok(cookie, 'an arrival: a signed cookie');
-    assert.match(r.headers.get('set-cookie'), /HttpOnly/);
-    assert.equal((await s.fetchSite('/?via=friends.example', { headers: { ...nav, cookie: 'studio_player=x' } })).headers.get('set-cookie'), null, 'a browser that has a player here is not new');
-    // A player made after the arrival buys: a held line for the referrer.
-    const p = s.player(0, { band: 'adult' });
-    p.cookie = `${p.cookie}; ${cookie}`;
-    const b = await s.buyPaid(p);
-    assert.equal(b.call.form.get('metadata[via]'), 'friends.example');
-    const line = s.DB.sql.prepare('SELECT * FROM referral_lines WHERE order_id = ?').get(b.order);
-    assert.equal(line.via, 'friends.example');
-    assert.equal(line.share, 50, '10% of the pre-tax price');
-    assert.equal(line.state, 'pending');
-    // A forged cookie, or an older player, brings nobody.
-    const old = s.player(400, { band: 'adult' });
-    old.cookie = `${old.cookie}; ${cookie}`;
-    const o = await s.buyPaid(old);
-    assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM referral_lines WHERE order_id = ?').get(o.order).n, 0, 'an account older than the arrival');
-    const forged = s.player(0, { band: 'adult' });
-    forged.cookie = `${forged.cookie}; studio_via=friends.example.${Math.floor(Date.now() / 1000)}.${'A'.repeat(22)}`;
-    const fo = await s.buyPaid(forged);
-    assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM referral_lines WHERE order_id = ?').get(fo.order).n, 0, 'a forged arrival');
-    // The hold passes: owed. A signed statement; the referrer checks it against the seller's manifest.
-    s.DB.sql.prepare('UPDATE referral_lines SET hold_until = ? WHERE order_id = ?').run(Date.now() - 1000, b.order);
-    const period = new Date().toISOString().slice(0, 7);
-    const st = await (await s.fetchSite(`/_studio/api/shop/statements?period=${period}`, { headers: s.key0 })).json();
-    assert.equal(st.statements.length, 1);
-    const env0 = st.statements[0];
-    assert.equal(env0.statement.referrer, 'friends.example');
-    assert.equal(env0.statement.totals.due, 50);
-    assert.doesNotMatch(JSON.stringify(env0), /pl_|Player|ord_/, 'no player, name or order id: order hashes only');
-    const man = await (await s.fetchSite('/.well-known/homie-studio.json')).json();
-    assert.equal(await verifyStatement(env0, man.referrals.key.x), true);
-    assert.equal(await verifyStatement({ ...env0, statement: { ...env0.statement, totals: { ...env0.statement.totals, due: 5000 } } }, man.referrals.key.x), false, 'a changed statement fails');
-    assert.ok(canonicalJson({ b: 1, a: [2, { d: 1, c: 2 }] }) === '{"a":[2,{"c":2,"d":1}],"b":1}');
-    const sent = await (await s.fetchSite('/_studio/api/shop/statements/send', { method: 'POST', headers: s.key0, body: JSON.stringify({ period }) })).json();
-    assert.equal(sent.sent[0].ok, true, JSON.stringify(sent));
-    // The referrer kept it (the same Worker, answering as friends.example: its own D1 here).
-    const got = s.DB.sql.prepare('SELECT * FROM referral_statements').get();
-    assert.equal(got.seller, 'https://owls.example');
-    assert.equal(got.owed, 50);
-    // A statement signed by anyone else, or naming another referrer, is refused.
-    const bad = await s.fetchAt('friends.example', '/api/referrals/statement', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...env0, sig: env0.sig.replace(/^./, (c) => (c === 'A' ? 'B' : 'A')) }) });
-    assert.equal(bad.status, 401);
-    assert.equal((await s.fetchAt('elsewhere.example', '/api/referrals/statement', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(env0) })).status, 400);
-    // A refund after the hold: a settled line becomes a clawback. Marking paid is an ask from an office key.
-    const settle = await s.fetchSite('/_studio/api/shop/settle', { method: 'POST', headers: s.key0, body: JSON.stringify({ via: 'friends.example', currency: 'usd', ref: 'INV-1' }) });
-    assert.equal(settle.status, 202);
-    const done = await s.fetchSite('/_studio/api/shop/settle', { method: 'POST', headers: s.owner, body: JSON.stringify({ via: 'friends.example', currency: 'usd', ref: 'INV-1' }) });
-    assert.equal((await done.json()).ok, true);
-    assert.equal(s.DB.sql.prepare('SELECT state FROM referral_lines WHERE order_id = ?').get(b.order).state, 'settled');
-    await s.fetchSite('/_studio/api/shop/refund', { method: 'POST', headers: s.owner, body: JSON.stringify({ order: b.order }) });
-    assert.equal(s.DB.sql.prepare('SELECT state FROM referral_lines WHERE order_id = ?').get(b.order + '_refund_0').state, 'clawback');
-  } finally { globalThis.fetch = realFetch; s.stripe.close(); }
-});
 
 /* ------------------------------------------------------------------ stripe-mock */
 
@@ -1311,24 +1222,6 @@ test('long identifiers and entitlement keys survive checkout, catalog generation
   s.stripe.close();
 });
 
-test('referral terms have no ceilings and omission leaves no per-player cap or hold', async () => {
-  const s = await site();
-  const { lineFor, booksOf } = await import('../worker/referrals.mjs');
-  const shop = checkShop({ referrals: { rate: 1.5 } }).shop;
-  const order = { id: 'ord_referral_large', player: 'player-ref', via: 'friends.example', amount: 1000000, currency: 'usd' };
-  await s.DB.batch(await lineFor(s.env, order, shop));
-  const line = s.DB.sql.prepare('SELECT * FROM referral_lines WHERE order_id = ?').get(order.id);
-  assert.equal(line.share, 1500000);
-  assert.ok(line.hold_until <= Date.now());
-  const capped = checkShop({ referrals: { rate: 1.5, capPerPlayer: 200000 } }).shop;
-  await s.DB.batch(await lineFor(s.env, { ...order, id: 'ord_referral_capped' }, capped));
-  assert.equal(s.DB.sql.prepare('SELECT share FROM referral_lines WHERE order_id = ?').get('ord_referral_capped').share, 200000);
-  const fixed = s.DB.sql.prepare("INSERT INTO shop_orders (id, player, item, amount, currency, till, mode, status, created_at, updated_at) VALUES (?, 'player-ref', 'supporter', 1, 'usd', 'stripe', 'test', 'paid', 1, 1)");
-  const referred = s.DB.sql.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, currency, state, period, hold_until, created_at) VALUES (?, 'friends.example', 1, 1, 1, 'usd', 'owed', '2026-10', 1, 1)");
-  for (let i = 0; i < 2001; i++) { fixed.run('order-many-' + i); referred.run('order-many-' + i); }
-  assert.equal((await booksOf(s.env)).books[0].due, 1702001, 'the books do not stop at 2000 sales');
-  s.stripe.close();
-});
 
 
 test('the studio can permit parent checkout for children, including a tip chosen by the parent', async () => {
@@ -1423,80 +1316,9 @@ test('free orders can be revoked without Stripe and mismatched webhook currency 
   s.stripe.close();
 });
 
-test('200000 referral rows have exact SQL totals and bounded pages and heap', async (t) => {
-  const { booksOf } = await import('../worker/referrals.mjs');
-  const s = await site();
-  const order = s.DB.sql.prepare("INSERT INTO shop_orders (id, item, amount, currency, till, mode, status, created_at, updated_at) VALUES (?, 'supporter', 500, 'usd', 'stripe', 'test', 'paid', 1, 1)");
-  const line = s.DB.sql.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, currency, state, period, hold_until, created_at) VALUES (?, ?, 500, 0.1, 50, 'usd', 'pending', '2026-10', ?, 1)");
-  s.DB.sql.exec('BEGIN');
-  for (let i = 0; i < 200000; i++) { const id = `order-${String(i).padStart(6, '0')}`; order.run(id); line.run(id, `ref${i % 50}.example`, Date.now() + DAY); }
-  s.DB.sql.exec('COMMIT');
-  const { linesOf } = await import('../worker/referrals.mjs');
-  const before = process.memoryUsage().heapUsed;
-  // Measure work, not time this test process is descheduled by the full suite.
-  const started = process.cpuUsage();
-  const { books, nextCursor } = await booksOf(s.env);
-  assert.equal(books.length, 50);
-  assert.equal(nextCursor, null);
-  assert.equal(books.reduce((n, b) => n + b.pending, 0), 10000000);
-  let count = 0, sum = 0;
-  for (const book of books) {
-    let cursor = '';
-    do {
-      const page = await linesOf(s.env, { via: book.via, currency: book.currency, cursor });
-      count += page.lines.length;
-      sum += page.lines.reduce((n, l) => n + l.share, 0);
-      assert.ok(JSON.stringify(page).length < 100000);
-      cursor = page.nextCursor;
-    } while (cursor);
-  }
-  assert.equal(count, 200000);
-  assert.equal(sum, 10000000);
-  const cpu = process.cpuUsage(started);
-  const elapsed = (cpu.user + cpu.system) / 1000;
-  assert.ok(elapsed < 15000, `full read took ${elapsed} CPU ms`);
-  const heapDelta = process.memoryUsage().heapUsed - before;
-  assert.ok(heapDelta < 48 * 1024 * 1024);
-  t.diagnostic(`200000 rows: exact total ${sum}; full read ${Math.round(elapsed)} CPU ms; heap delta ${heapDelta} bytes.`);
-  const { statementPage } = await import('../worker/referrals.mjs');
-  let statementCursor = '', statementLines = 0, statementTotal = 0;
-  const statementStart = performance.now();
-  do {
-    const page = await statementPage(s.env, 'https://seller.example', null, '2026-10', statementCursor);
-    for (const e of page.statements) {
-      assert.ok(e.statement.lines.length <= 100);
-      statementLines += e.statement.lines.length;
-      statementTotal += e.statement.totals?.pending ?? 0;
-    }
-    statementCursor = page.nextCursor;
-  } while (statementCursor);
-  assert.equal(statementLines, 200000);
-  assert.equal(statementTotal, sum);
-  t.diagnostic(`Immutable statement edition: ${statementLines} lines, ${Math.round(performance.now() - statementStart)}ms.`);
-  s.stripe.close();
-});
 
-test('referral flood settings keep a global bound and cookies have persistent integer lifetimes', async () => {
-  const { receiveStatement, resetReferralLimits, arrivalCookie } = await import('../worker/referrals.mjs');
-  for (const setting of [undefined, -1, 0, 'text', '0x10', '1.5']) {
-    resetReferralLimits();
-    const statuses = [];
-    for (let i = 0; i < 200; i++) statuses.push((await receiveStatement(new Request('https://owls.example/api/referrals/statement', { method: 'POST', headers: { 'cf-connecting-ip': `198.51.100.${i}` }, body: '{}' }), { REFERRAL_STATEMENTS_PER_MINUTE: setting, REFERRAL_STATEMENT_BYTES: setting }, new URL('https://owls.example/api/referrals/statement'))).status);
-    assert.equal(statuses.filter((s) => s === 400).length, setting === undefined ? 30 : 0);
-    assert.equal(statuses.filter((s) => s === 429).length, setting === undefined ? 170 : 0);
-    if (setting !== undefined) assert.ok(statuses.every((s) => s === 503));
-  }
-  resetReferralLimits();
-  const s = await site();
-  const url = new URL('https://owls.example/?via=friends.example');
-  for (const windowDays of [null, 0.07, 1000000]) {
-    const cookie = await arrivalCookie(new Request(url, { headers: { 'user-agent': BROWSER, accept: 'text/html' } }), s.env, url, { open: true, referrals: { windowDays } });
-    assert.match(cookie, /; Max-Age=\d+(?:;|$)/);
-  }
-  s.stripe.close();
-});
 
-test('catalog and referral cursor traversal exposes every row once', async () => {
+test('catalog cursor traversal exposes every row once', async () => {
   const s = await site({ settings: { policy: { preset: 'custom' }, items: Array.from({ length: 251 }, (_, i) => ({ id: `item-${i}`, kind: 'service', name: `Item ${i}`, price: 100, gives: [] })) } });
   const seen = new Set();
   let cursor = '';
@@ -1517,7 +1339,7 @@ test('fractional amount errors stop publication and name every amount setting', 
   const result = run(['build'], dir);
   assert.notEqual(result.status, 0);
   assert.match(result.stdout + result.stderr, /capPerPlayerMonth.*2500.*2500\.7/s);
-  for (const settings of [{ items: [{ ...SUPPORTER, price: 1.1 }] }, { items: [{ id: 'tip', kind: 'tip', name: 'Tip', min: 1.1 }] }, { items: [{ id: 'tip', kind: 'tip', name: 'Tip', max: 1.1 }] }, { referrals: { capPerPlayer: 1.1 } }, { referrals: { minimumInvoice: 1.1 } }]) assert.equal(checkShop(settings).ok, false);
+  for (const settings of [{ items: [{ ...SUPPORTER, price: 1.1 }] }, { items: [{ id: 'tip', kind: 'tip', name: 'Tip', min: 1.1 }] }, { items: [{ id: 'tip', kind: 'tip', name: 'Tip', max: 1.1 }] }]) assert.equal(checkShop(settings).ok, false);
 });
 
 test('processing payments reserve until expiry or failure; refunds release paid spending', async () => {
@@ -1559,39 +1381,6 @@ test('catalog ETags reuse validation and a changed asset invalidates it', async 
   s.stripe.close();
 });
 
-test('signed statement cursor pages expose all referral lines without duplicating totals', async () => {
-  const { receiveStatement, resetReferralLimits, receivedPages } = await import('../worker/referrals.mjs');
-  resetReferralLimits();
-  const s = await site();
-  const order = s.DB.sql.prepare("INSERT INTO shop_orders (id, item, amount, currency, till, mode, status, created_at, updated_at) VALUES (?, 'supporter', 500, 'usd', 'stripe', 'test', 'paid', 1, 1)");
-  const line = s.DB.sql.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, currency, state, period, hold_until, created_at) VALUES (?, 'friends.example', 500, 0.1, 50, 'usd', 'owed', '2026-10', 1, 1)");
-  for (let i = 0; i < 251; i++) { const id = `order-${String(i).padStart(6, '0')}`; order.run(id); line.run(id); }
-  let cursor = '';
-  const seen = new Set();
-  do {
-    const page = await (await s.fetchSite('/_studio/api/shop/statements?period=2026-10&cursor=' + encodeURIComponent(cursor), { headers: s.owner })).json();
-    assert.equal(page.ok, true);
-    for (const envelope of page.statements) {
-      assert.equal(await verifyStatement(envelope, envelope.key), true);
-      const received = await receiveStatement(new Request('https://friends.example/api/referrals/statement', { method: 'POST', body: JSON.stringify(envelope) }), s.env, new URL('https://friends.example/api/referrals/statement'), { fetcher: async () => Response.json({ referrals: { key: { x: envelope.key } } }) });
-      assert.equal(received.status, 200);
-      if (!envelope.statement.page.cursor) assert.equal(envelope.statement.totals.due, 12550);
-      else assert.equal(envelope.statement.totals, undefined);
-      for (const line of envelope.statement.lines) { assert.ok(!seen.has(line.order)); seen.add(line.order); }
-    }
-    cursor = page.nextCursor;
-  } while (cursor);
-  assert.equal(seen.size, 251);
-  cursor = '';
-  let storedLines = 0;
-  do {
-    const page = await receivedPages(s.env, 'https://owls.example', '2026-10', cursor);
-    storedLines += page.statements[0].statement.lines.length;
-    cursor = page.nextCursor;
-  } while (cursor);
-  assert.equal(storedLines, 251, 'receiving a later page preserves earlier signed lines');
-  s.stripe.close();
-});
 
 test('expired, sessionless and test-mode reservations are resolved without guessing', async () => {
   const { spentThisMonth } = await import('../worker/shop-store.mjs');
@@ -1635,22 +1424,6 @@ test('pruning progresses past 25 owners and removes the other 500 idle guests', 
   s.stripe.close();
 });
 
-test('2000 referrers are listed once and their displayed totals equal SQL exactly', async () => {
-  const { booksOf } = await import('../worker/referrals.mjs');
-  const s = await site();
-  const line = s.DB.sql.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, currency, state, period, hold_until, created_at) VALUES (?, ?, 500, 0.5, 250, 'usd', 'owed', '2026-10', 1, 1)");
-  for (let i = 0; i < 2000; i++) line.run(`order-${i}`, `ref${String(i).padStart(4, '0')}.example`);
-  const seen = new Set();
-  let cursor = '', sum = 0;
-  do {
-    const page = await booksOf(s.env, { cursor });
-    for (const b of page.books) { assert.ok(!seen.has(b.via)); seen.add(b.via); sum += b.due; assert.equal(b.lineCount, 1); }
-    cursor = page.nextCursor;
-  } while (cursor);
-  assert.equal(seen.size, 2000);
-  assert.equal(sum, s.DB.sql.prepare('SELECT SUM(share) AS n FROM referral_lines').get().n);
-  s.stripe.close();
-});
 
 test('address churn cannot reset an account, and new guest rates are configurable and positive', async () => {
   for (const value of [0, -1, false, '', '0x10', 1.5]) assert.equal(checkShop({ guestBuyersPerAddressPerHour: value }).ok, false);
@@ -1698,64 +1471,11 @@ test('free items and zero tips work above a lowered cap; partial refunds retain 
   s.stripe.close();
 });
 
-test('simultaneous referral lines share one atomic per-player cap', async () => {
-  const { lineFor } = await import('../worker/referrals.mjs');
-  const s = await site();
-  const shop = checkShop({ referrals: { rate: 1, capPerPlayer: 800 } }).shop;
-  const orders = Array.from({ length: 40 }, (_, i) => ({ id: `order-ref-concurrent-${i}`, player: 'ref-player', via: 'friends.example', amount: 300, currency: 'usd' }));
-  for (const o of orders) s.DB.sql.prepare("INSERT INTO shop_orders (id, player, item, amount, currency, till, mode, status, created_at, updated_at) VALUES (?, ?, 'supporter', 300, 'usd', 'stripe', 'test', 'paid', 1, 1)").run(o.id, o.player);
-  const writes = await Promise.all(orders.map((o) => lineFor(s.env, o, shop)));
-  await Promise.all(writes.map((w) => s.DB.batch(w)));
-  assert.equal(s.DB.sql.prepare('SELECT SUM(share) AS n FROM referral_lines').get().n, 800);
-  s.stripe.close();
-});
 
-test('statement delivery continues after receiver throttling and a replacement removes stale pages', async () => {
-  const { sendStatements, receiveStatement, resetReferralLimits, receivedPages, statementFor } = await import('../worker/referrals.mjs');
-  const s = await site();
-  resetReferralLimits();
-  const line = s.DB.sql.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, currency, state, period, hold_until, created_at) VALUES (?, 'friends.example', 100, 1, 100, 'usd', 'owed', '2026-10', 1, 1)");
-  for (let i = 0; i < 251; i++) line.run(`order-${String(i).padStart(5, '0')}`);
-  const envelopes = [];
-  let throttle = true;
-  const fetcher = async (url, init) => {
-    if (!init?.body) return Response.json({ referrals: { statements: 'https://friends.example/api/referrals/statement' } });
-    if (throttle) { throttle = false; return new Response('', { status: 429 }); }
-    const envelope = JSON.parse(init.body);
-    envelopes.push(envelope);
-    return receiveStatement(new Request(url, init), s.env, new URL(url), { fetcher: async () => Response.json({ referrals: { key: { x: envelope.key } } }) });
-  };
-  let cursor = '', total = 0;
-  do {
-    s.DB.sql.exec("UPDATE meta SET value = json_set(value, '$.nextAt', 0) WHERE key LIKE 'referral-send:%'");
-    const page = await sendStatements(s.env, 'https://owls.example', {}, '2026-10', { cursor, fetcher });
-    if (page.retryAfter === 60) { assert.equal(page.nextCursor, 'resume'); assert.equal(page.sent.length, 0); }
-    for (const result of page.sent) assert.equal(result.ok, true);
-    cursor = page.nextCursor;
-  } while (cursor !== null);
-  assert.equal(envelopes.length, 3);
-  assert.equal(envelopes.reduce((n, e) => n + (e.statement.totals?.due ?? 0), 0), 25100);
-  assert.equal(envelopes.reduce((n, e) => n + e.statement.lines.length, 0), 251);
-  const book = { via: 'friends.example', currency: 'usd', pending: 0, owed: 100, clawback: 0, due: 100, lines: [] };
-  const replacement = await statementFor(s.env, 'https://owls.example', book, '2026-10', null);
-  const receive = (envelope) => receiveStatement(new Request('https://friends.example/api/referrals/statement', { method: 'POST', body: JSON.stringify(envelope) }), s.env, new URL('https://friends.example/api/referrals/statement'), { fetcher: async () => Response.json({ referrals: { key: { x: envelope.key } } }) });
-  assert.equal((await receive(envelopes[0])).status, 200);
-  assert.equal(s.DB.sql.prepare("SELECT COUNT(*) AS n FROM meta WHERE key LIKE 'referral-page:%'").get().n, 3, 'a late first-page replay never discards continuations');
-  assert.equal((await receive(replacement)).status, 200);
-  const page = await receivedPages(s.env, 'https://owls.example', '2026-10');
-  assert.equal(page.nextCursor, null);
-  assert.equal(page.statements[0].statement.totals.due, 100);
-  assert.equal(s.DB.sql.prepare("SELECT COUNT(*) AS n FROM meta WHERE key LIKE 'referral-page:%'").get().n, 1);
-  const hostile = await statementFor(s.env, 'https://owls.example', { ...book, page: { cursor: 'x'.repeat(257), nextCursor: null } }, '2026-10', null);
-  assert.equal((await receive(hostile)).status, 400);
-  const invented = await statementFor(s.env, 'https://owls.example', { ...book, page: { cursor: 'invented', nextCursor: null } }, '2026-10', null);
-  assert.equal((await receive(invented)).status, 409);
-  s.stripe.close();
-});
 
-test('the game sheet reaches item 101 and one office click drains queued statement pages', async () => {
+test('the game sheet reaches item 101', async () => {
   const { runInNewContext } = await import('node:vm');
-  const { SHOP_SHELL_JS, OFFICE_SHOP_SCRIPT } = await import('../worker/shop-page.mjs');
+  const { SHOP_SHELL_JS } = await import('../worker/shop-page.mjs');
   const nodes = [];
   const element = () => {
     const node = { children: [], events: {}, setAttribute() {}, appendChild(child) { this.children.push(child); return child; }, addEventListener(name, fn) { this.events[name] = fn; }, remove() {} };
@@ -1786,21 +1506,7 @@ test('the game sheet reaches item 101 and one office click drains queued stateme
   assert.ok(paths.some((p) => p.includes('cursor=100')));
   assert.ok(nodes.some((n) => n.textContent === 'Item 101'));
   assert.ok(nodes.some((n) => n.textContent === 'Buy on Stripe'), 'cap refusals still permit a purchase retry');
-  const calls = [], waits = [];
-  runInNewContext(OFFICE_SHOP_SCRIPT, { document, clearTimeout() {}, setTimeout(fn, ms) { waits.push(ms); fn(); }, fetch: async (path, init) => {
-    if (init.method === 'GET') return Response.json({ ok: true, ready: true, mode: 'test', missing: [], stripe: {}, orders: [], referrals: { owe: [{ via: 'friends.example', currency: 'usd', due: 1, pending: 0, lineCount: 251 }], owedToUs: [] } });
-    calls.push(JSON.parse(init.body));
-    return Response.json({ ok: true, period: '2026-10', sent: calls.length === 2 ? [] : [{ ok: true }], nextCursor: calls.length === 1 || calls.length === 2 ? 'next' : null, retryAfter: calls.length === 2 ? 60 : undefined });
-  } });
-  await new Promise(setImmediate);
-  const send = nodes.find((n) => n.textContent === "Send last month's signed statements");
-  assert.ok(send);
-  await send.events.click();
-  assert.equal(calls.length, 3);
-  assert.deepEqual(calls.map((c) => c.cursor), ['', 'next', 'next']);
-  assert.equal(calls[1].period, '2026-10');
-  assert.ok(waits.includes(60000));
-  assert.equal(send.disabled, false);
+
 });
 
 test('four late-webhook windows and bank-debit windows never overspend; duplicate events do nothing', async () => {
@@ -1839,70 +1545,7 @@ test('four late-webhook windows and bank-debit windows never overspend; duplicat
   }
 });
 
-test('statement failures retry identical pages, resume without caller cursors, and preserve an edition during settlement', async () => {
-  const { sendStatements, receiveStatement, resetReferralLimits, settle, pendingStatementPeriod, statementsIn, statementPage } = await import('../worker/referrals.mjs');
-  const s = await site();
-  const receiver = await site();
-  resetReferralLimits();
-  const insert = s.DB.sql.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, currency, state, period, hold_until, created_at) VALUES (?, ?, 100, 1, 100, ?, 'owed', '2026-10', 1, 1)");
-  for (const host of ['a.example', 'b.example', 'c.example']) for (let i = 0; i < 201; i++) insert.run(`${host}-${i.toString().padStart(3, '0')}`, host, 'usd');
-  insert.run('euro', 'c.example', 'eur');
-  const bodies = [], failures = [], received = [];
-  let once = true, lostReply = true, settled = false;
-  const fetcher = async (url, init) => {
-    assert.equal(init.redirect, 'manual');
-    const host = new URL(url).hostname;
-    if (!init?.body) return Response.json({ referrals: { statements: `https://${host}/api/referrals/statement` } });
-    bodies.push(init.body);
-    const e = JSON.parse(init.body);
-    if (host === 'a.example' && e.statement.page.cursor && once) { once = false; return new Response('', { status: 500 }); }
-    if (host === 'b.example') return new Response('', { status: 500 });
-    const result = await receiveStatement(new Request(url, init), host === 'a.example' ? receiver.env : s.env, new URL(url), { fetcher: async () => Response.json({ referrals: { key: { x: e.key } } }) });
-    if (result.ok) received.push(e);
-    if (host === 'a.example' && !settled) { settled = true; assert.equal((await settle(s.env, host, 'invoice', { currency: 'usd' })).ok, true); }
-    if (host === 'a.example' && !e.statement.page.cursor && lostReply) { lostReply = false; throw new Error('response lost after acceptance'); }
-    return result;
-  };
-  let page, calls = 0;
-  do {
-    s.DB.sql.exec("UPDATE meta SET value = json_set(value, '$.nextAt', 0) WHERE key LIKE 'referral-send:%'");
-    // Restart with an empty or hostile cursor each time: only persisted server progress is used.
-    page = await sendStatements(s.env, 'https://seller.example', {}, '2026-10', { cursor: calls++ % 2 ? '["","victim.example","usd",""]' : '', fetcher });
-    failures.push(...page.sent.filter((x) => !x.ok));
-    assert.equal(await pendingStatementPeriod(s.env, 'https://seller.example'), page.nextCursor === null ? null : '2026-10');
-    assert.ok(calls < 25);
-  } while (page.nextCursor !== null);
-  assert.deepEqual(failures.map((x) => x.via), ['b.example']);
-  assert.equal(bodies[0], bodies[1], 'a lost reply replays the exact first page');
-  assert.equal(bodies[2], bodies[3], 'a failed continuation retries the exact page');
-  const summaries = [...await statementsIn(s.env), ...await statementsIn(receiver.env)];
-  assert.equal(summaries.length, 3, 'a USD, c EUR, c USD; failed b does not prevent c');
-  assert.equal(summaries.find((r) => r.seller === 'https://seller.example' && r.currency === 'eur').due, 100);
-  // Different receiver hosts share this test DB: inspect signed a pages separately in the observed traffic.
-  const aPages = new Map(received.filter((e) => e.statement.referrer === 'a.example').map((e) => [e.statement.page.cursor, e]));
-  assert.equal([...aPages.values()].flatMap((e) => e.statement.lines).length, 201);
-  assert.equal([...aPages.values()][0].statement.totals.due, 20100);
-  assert.equal(s.DB.sql.prepare("SELECT COUNT(*) AS n FROM referral_lines WHERE via = 'a.example' AND state = 'settled'").get().n, 201);
-  for (const cursor of ['[1e308,1e308]', '["","victim.example","usd",""]', '["",5,"usd",""]']) {
-    const result = await statementPage(s.env, 'https://seller.example', null, '2026-10', cursor);
-    assert.equal(result.statements.length, 0);
-  }
-  s.stripe.close(); receiver.stripe.close();
-});
 
-test('two received currencies and currency-specific settlement remain independent', async () => {
-  const { statementFor, receiveStatement, statementsIn, settle, resetReferralLimits } = await import('../worker/referrals.mjs');
-  const s = await site(); resetReferralLimits();
-  for (const [currency, due] of [['eur', 100], ['usd', 70]]) {
-    const e = await statementFor(s.env, 'https://seller.example', { via: 'friends.example', currency, pending: 0, owed: due, clawback: 0, due, lines: [] }, '2026-10', null);
-    assert.equal((await receiveStatement(new Request('https://friends.example/api/referrals/statement', { method: 'POST', body: JSON.stringify(e) }), s.env, new URL('https://friends.example'), { fetcher: async () => Response.json({ referrals: { key: { x: e.key } } }) })).status, 200);
-    s.DB.sql.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, currency, state, period, hold_until, created_at) VALUES (?, 'friends.example', ?, 1, ?, ?, 'owed', '2026-10', 1, 1)").run(currency, due, due, currency);
-  }
-  assert.equal((await statementsIn(s.env)).length, 2);
-  await settle(s.env, 'friends.example', 'invoice', { currency: 'eur' });
-  assert.deepEqual(s.DB.sql.prepare('SELECT currency, state FROM referral_lines ORDER BY currency').all().map((x) => [x.currency, x.state]), [['eur', 'settled'], ['usd', 'owed']]);
-  s.stripe.close();
-});
 
 test('missing reservation schema closes the shop; no cap avoids spending SUM; future entitlements survive pruning', async () => {
   const { pruneGuests, players } = await import('../worker/players.mjs');
@@ -1935,38 +1578,6 @@ test('guest shopping leaves the ordinary new-player address allowance intact', a
   s.stripe.close();
 });
 
-test('statement CLI mints one key, renews it, reports progress and drops it once', async () => {
-  const { shopStatements } = await import('../lib/shop.mjs');
-  const dir = studio('statement-cli-key');
-  const callsFile = join(dir, 'wrangler-calls.jsonl');
-  mkdirSync(join(dir, 'node_modules', '.bin'), { recursive: true });
-  const fake = join(dir, 'node_modules', '.bin', 'wrangler');
-  writeFileSync(fake, `#!${process.execPath}\nrequire('node:fs').appendFileSync(${JSON.stringify(callsFile)}, JSON.stringify(process.argv.slice(2)) + '\\n');\n`);
-  chmodSync(fake, 0o755);
-  const originalFetch = globalThis.fetch, originalNow = Date.now, originalError = console.error;
-  let now = originalNow(), pages = 0;
-  const progress = [], keys = new Set();
-  try {
-    Date.now = () => now;
-    console.error = (s) => progress.push(s);
-    globalThis.fetch = async (url, init) => {
-      keys.add(init.headers.authorization);
-      pages++;
-      if (pages === 1) now += 9.5 * 60000;
-      return Response.json({ ok: true, period: '2026-10', sent: [{ via: 'friends.example', ok: pages !== 2, status: pages === 2 ? 500 : 200 }], nextCursor: pages < 3 ? 'resume' : null });
-    };
-    const result = await shopStatements(dir, { url: 'http://127.0.0.1:8787', send: true });
-    assert.equal(result.ok, true);
-    assert.equal(pages, 3);
-    assert.equal(keys.size, 1);
-    assert.ok(progress.some((s) => /resume safely/.test(s)));
-    assert.ok(progress.some((s) => /friends.example: failed: 500/.test(s)));
-    const commands = readFileSync(callsFile, 'utf8').trim().split('\n').map(JSON.parse).map((args) => args.at(-1));
-    assert.equal(commands.filter((s) => s.includes('INSERT INTO stats_keys')).length, 1);
-    assert.equal(commands.filter((s) => s.startsWith('UPDATE stats_keys')).length, 1);
-    assert.equal(commands.filter((s) => s.startsWith('DELETE FROM stats_keys WHERE hash')).length, 1);
-  } finally { globalThis.fetch = originalFetch; Date.now = originalNow; console.error = originalError; }
-});
 
 // Unresolved orders whose original checkout window has passed; no fake passage of only expires_at.
 function unresolved(s, p, count, { status = 'processing', amount = 200, age = DAY } = {}) {
@@ -2118,14 +1729,9 @@ test('office pages old unresolved orders and records an owner release; office ke
   s.stripe.close();
 });
 
-test('read-only statements never allocate editions; complete schema probes run once and missing schemas retry', async () => {
+test('complete schema probes run once and missing schemas retry', async () => {
   const { migrationNeeded } = await import('../worker/shop-store.mjs');
   const s = await site();
-  const line = s.DB.sql.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, currency, state, period, hold_until, created_at) VALUES (?, 'referrer.example', 100, 1, 100, 'usd', 'owed', '2026-09', 1, 1)");
-  for (let i = 0; i < 280; i++) line.run(`line-${i}`);
-  for (let i = 0; i < 10; i++) assert.equal((await s.fetchSite('/_studio/api/shop/statements?period=2026-09', { headers: s.key0 })).status, 200);
-  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM referral_editions').get().n, 0);
-  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM referral_edition_lines').get().n, 0);
   let probes = 0;
   const DB = { prepare: (...args) => { probes++; return s.DB.prepare(...args); } };
   assert.equal(await migrationNeeded({ DB }), null);
@@ -2276,7 +1882,7 @@ test('open default: only items and working payment setup sell a three-line cart 
     { id: 'advantage', kind: 'supporter', name: 'Pay to win', advantage: true, price: 101, gives: ['power:win'], game: 'owl-run' },
     { id: 'free', kind: 'virtual currency', name: 'Free gems', price: 0, gives: ['gems:free'] },
   ];
-  const s = await site({ settings: { items, policy: undefined, automaticTax: undefined, capPerPlayerMonth: undefined, refundDays: undefined, referrals: undefined } });
+  const s = await site({ settings: { items, policy: undefined, automaticTax: undefined, capPerPlayerMonth: undefined, refundDays: undefined } });
   let cookie = '';
   for (const page of ['/owl-run/tv', '/another-game/play']) {
     const buy = await s.post('/api/shop/buy', { game: 'another-game', lines: [{ item: 'loot', quantity: 2 }, { item: 'advantage', quantity: 3 }, { item: 'free', quantity: 4 }] }, { ...s.same, cookie, referer: `https://owls.example${page}` });
@@ -2372,12 +1978,10 @@ test('cart grants roll back with payment, snapshots survive edits, each line ref
   s.stripe.close();
 });
 
-test('cart caps reserve exact totals concurrently; partial refunds release only their line; referral allocation is exact', async () => {
-  const { referralShare } = await import('../worker/shop-rules.mjs');
-  assert.equal(referralShare(50, 0.29), 15, 'decimal multiplication rounds exactly');
+test('cart caps reserve exact totals concurrently; partial refunds release only their line', async () => {
   const s = await site({ settings: { policy: undefined, automaticTax: false, purchaseAttemptsPerMinute: 100, capPerPlayerMonth: 1206, items: [
     { id: 'a', name: 'A', price: 101 }, { id: 'b', name: 'B', price: 200 }, { id: 'c', name: 'C', price: 0 },
-  ], referrals: { rate: 0.29 } } });
+  ] } });
   const p = s.player();
   const cart = { lines: [{ item: 'a', quantity: 2 }, { item: 'b' }, { item: 'c' }] };
   const responses = await Promise.all(Array.from({ length: 8 }, () => s.post('/api/shop/buy', cart, s.as(p))));
@@ -2385,16 +1989,12 @@ test('cart caps reserve exact totals concurrently; partial refunds release only 
   const orders = s.DB.sql.prepare('SELECT * FROM shop_orders').all();
   assert.equal(orders.reduce((n, o) => n + o.amount, 0), 1206);
   const o = orders[0];
-  s.DB.sql.prepare("UPDATE shop_orders SET via = 'friends.example' WHERE id = ?").run(o.id);
   const truth = { ...s.stripe.behave.sessions.get(o.session), payment_status: 'paid', payment_intent: 'pi_exact', amount_total: 402 };
   await Promise.all([s.hook('checkout.session.completed', truth), s.hook('checkout.session.async_payment_succeeded', truth)]);
-  assert.equal(s.DB.sql.prepare('SELECT share FROM referral_lines WHERE order_id = ?').get(o.id).share, 117);
   assert.equal((await s.post('/_studio/api/shop/refund', { order: o.id, line: o.id + '_0' }, s.owner)).status, 200);
   const { spentThisMonth } = await import('../worker/shop-store.mjs');
   assert.equal(await spentThisMonth(s.env, p.id), 1004);
-  assert.equal(s.DB.sql.prepare('SELECT share FROM referral_lines WHERE order_id = ?').get(o.id).share, 58);
   assert.equal((await s.post('/_studio/api/shop/refund', { order: o.id }, s.owner)).status, 200);
-  assert.equal(s.DB.sql.prepare('SELECT share FROM referral_lines WHERE order_id = ?').get(o.id).share, 0);
   s.stripe.close();
 });
 
@@ -2428,9 +2028,9 @@ test('Stripe tax totals stay with their lines and pending refunds wait for verif
 });
 
 test('missing line schema names its step and old order rows become one line', async () => {
-  const { SHOP_MIGRATION, SHOP_RESERVATIONS, SHOP_STATEMENTS, SHOP_LINES, migrationNeeded } = await import('../worker/shop-store.mjs');
+  const { SHOP_MIGRATION, SHOP_RESERVATIONS, SHOP_LINES, migrationNeeded } = await import('../worker/shop-store.mjs');
   const db = new DatabaseSync(':memory:');
-  db.exec(SHOP_MIGRATION + SHOP_RESERVATIONS + SHOP_STATEMENTS);
+  db.exec(SHOP_MIGRATION + SHOP_RESERVATIONS);
   const DB = { prepare: (q) => ({ first: async () => db.prepare(q).get() }) };
   assert.equal(await migrationNeeded({ DB }), '0012_shop_lines.sql');
   db.prepare("INSERT INTO shop_orders (id, player, item, amount, currency, till, mode, status, created_at, updated_at) VALUES ('ord_old', 'buyer', 'skin', 501, 'usd', 'stripe', 'test', 'paid', 1, 1)").run();
@@ -2444,31 +2044,22 @@ test('missing line schema names its step and old order rows become one line', as
 });
 
 test('an optional parent step also checks out a cart and a fixed-price tip stays a tip', async () => {
-  const s = await site({ settings: { policy: { preset: 'protective' }, referralNewPlayersOnly: false, referrals: { rate: 0.1 }, items: [SUPPORTER,
+  const s = await site({ settings: { policy: { preset: 'protective' }, items: [SUPPORTER,
     { id: 'tip', kind: 'tip', name: 'Fixed gift', price: 200 }, { id: 'free', name: 'Free', price: 0, gives: ['free'] },
   ] } });
   const teen = s.player(20, { band: 'teen' });
-  const { arrivalCookie } = await import('../worker/referrals.mjs');
-  const arrivalUrl = new URL('https://owls.example/?via=friends.example');
-  const cookie = await arrivalCookie(new Request(arrivalUrl, { headers: { 'user-agent': BROWSER, accept: 'text/html' } }), s.env, arrivalUrl, { open: true, referrals: { windowDays: null } });
-  teen.cookie += '; ' + cookie.split(';')[0];
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url, init) => String(url).startsWith('https://friends.example/') ? Response.json({ kind: 'homie-studio', referrals: { accepts: true, statements: 'https://friends.example/api/referrals/statement' } }) : originalFetch(url, init);
-  let link;
-  try { link = await (await s.post('/api/shop/parent', { lines: [{ item: 'supporter' }, { item: 'tip' }, { item: 'free' }] }, s.as(teen))).json(); } finally { globalThis.fetch = originalFetch; }
+  const link = await (await s.post('/api/shop/parent', { lines: [{ item: 'supporter' }, { item: 'tip' }, { item: 'free' }] }, s.as(teen))).json();
   assert.ok(link.link);
   const response = await s.fetchSite(new URL(link.link).pathname, { method: 'POST', headers: { origin: 'https://owls.example', 'content-type': 'application/x-www-form-urlencoded' }, body: 'grownup=yes' });
   assert.equal(response.status, 303);
   const form = s.stripe.calls.at(-1).form;
   assert.equal(form.get('line_items[0][price_data][unit_amount]'), '500');
   assert.equal(form.get('line_items[1][price_data][unit_amount]'), '200');
-  assert.equal(form.get('metadata[via]'), 'friends.example');
   assert.equal(form.get('line_items[2][price_data][unit_amount]'), '0');
   s.stripe.close();
 });
 
-test('default shop accepts a configured preview and has no unwritten referral rate or fixed tip price restriction', async () => {
-  assert.equal(checkShop({ referrals: {}, items: [{ id: 'tip', kind: 'tip', name: 'Tip', price: 100 }] }).shop.referrals.rate, 0);
+test('default shop accepts a configured preview and a fixed-price tip', async () => {
   const s = await site({ settings: { policy: undefined, capPerPlayerMonth: undefined, items: [{ id: 'tip', kind: 'tip', name: 'Tip', price: 100 }] } });
   s.env.HOMIE_PREVIEW = '1';
   assert.equal((await s.post('/api/shop/buy', { item: 'tip' }, s.same)).status, 200);
@@ -2503,105 +2094,6 @@ test('failed Stripe refunds can be retried without repeating a pending refund', 
 // before the additive step 0012), each when this checkout has its tag. A checkout without tags (a shallow clone,
 // a source archive) has no released code to build, so the test is skipped and says why; CI's Packages job checks
 // out with tags (fetch-depth: 0), so it runs there.
-const ROLLING_REPO = join(PKG, '..', '..');
-const RELEASE_TAG = /^release-\d{4}-\d\d-\d\d-studio-(\d+)\.(\d+)\.(\d+)$/;
-const releaseTags = (() => {
-  // Tags are shared by worktrees. An unrelated branch's release or temporary tag
-  // is not an upgrade baseline for this checkout.
-  const r = spawnSync('git', ['tag', '--merged', 'HEAD', '--list', 'release-*-studio-*'], { cwd: ROLLING_REPO, encoding: 'utf8' });
-  const inRepo = spawnSync('git', ['rev-parse', '--show-cdup'], { cwd: ROLLING_REPO, encoding: 'utf8' });
-  if (r.status !== 0 || inRepo.status !== 0 || inRepo.stdout.trim()) return [];
-  const version = (t) => RELEASE_TAG.exec(t).slice(1).map(Number);
-  // Newest version first; of two tags for one version, the later date.
-  // Only releases older than this checkout's own version are code to upgrade FROM: on the commit a release is tagged
-  // at, its own tag is this very code.
-  const own = JSON.parse(readFileSync(join(PKG, 'package.json'), 'utf8')).version.split('.').map(Number);
-  const older = (t) => { const v = version(t); return v[0] - own[0] || v[1] - own[1] || v[2] - own[2]; };
-  return r.stdout.split('\n').map((t) => t.trim()).filter((t) => RELEASE_TAG.test(t) && older(t) < 0)
-    // Tags are shared by local worktrees: an unpublished sibling branch is not a released predecessor.
-    .filter((t) => spawnSync('git', ['merge-base', '--is-ancestor', t, 'HEAD'], { cwd: ROLLING_REPO }).status === 0)
-    .sort((x, y) => { const a = version(x), b = version(y); return b[0] - a[0] || b[1] - a[1] || b[2] - a[2] || (x < y ? 1 : -1); });
-})();
-const rollingFrom = [...new Set([releaseTags[0], ...['0.33.0', '0.32.1'].map((v) => releaseTags.find((t) => t.endsWith(`-studio-${v}`)))].filter(Boolean))];
-const ROLLING = 'rolling schema upgrade: released checkout, payment and refund; new code before and after the additive step';
-if (!rollingFrom.length) test(ROLLING, { skip: 'this checkout has no release-*-studio-* tag, so there is no released code to upgrade from (fetch the tags: git fetch --tags; in CI, actions/checkout with fetch-depth: 0)' }, () => {});
-for (const tag of rollingFrom) test(`${ROLLING} (from ${tag})`, async () => {
-  // Build the real release, not a copied reconstruction of its SQL or grant path.
-  const repo = ROLLING_REPO;
-  const released = join(scratch, `released-${tag}`);
-  mkdirSync(released);
-  const archive = spawnSync('git', ['archive', tag], { cwd: repo, maxBuffer: 128 * 1024 * 1024 });
-  assert.equal(archive.status, 0);
-  assert.equal(spawnSync('tar', ['-x', '-C', released], { input: archive.stdout }).status, 0);
-  symlinkSync(REPO_NM, join(released, 'node_modules'), 'dir');
-  // An archive has no install lifecycle: prepare generated workspace sources just as npm ci does.
-  const prepare = spawnSync('npm', ['run', 'prepare', '--workspaces', '--if-present'], { cwd: released, encoding: 'utf8' });
-  assert.equal(prepare.status, 0, prepare.stdout + prepare.stderr);
-  const build = spawnSync('npm', ['run', 'build'], { cwd: released, encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=1536' } });
-  assert.equal(build.status, 0, build.stdout + build.stderr);
-  const { default: old } = await import(join(released, 'packages/studio/worker/index.mjs'));
-  const releasedStore = await import(join(released, 'packages/studio/worker/shop-store.mjs'));
-  const s = await site();
-  const p = s.player(400, { band: 'adult' });
-  const oldFetch = (path, init) => old.fetch(new Request('https://owls.example' + path, init), s.env, { waitUntil() {} });
-  const oldBuy = async () => {
-    const r = await oldFetch('/api/shop/buy', { method: 'POST', headers: s.as(p), body: JSON.stringify({ item: 'supporter' }) });
-    assert.equal(r.status, 200, await r.clone().text());
-    return s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get((await r.json()).order);
-  };
-  const truth = (o) => ({ id: o.session, payment_status: 'paid', payment_intent: 'pi_' + o.id, client_reference_id: p.id, metadata: { order: o.id, item: o.item }, currency: 'usd', amount_subtotal: o.amount, amount_total: o.amount });
-  const oldPaid = async (o) => {
-    const payload = JSON.stringify({ id: 'evt_old_' + o.id, type: 'checkout.session.completed', livemode: false, data: { object: truth(o) } });
-    const t = Math.floor(Date.now() / 1000);
-    const r = await oldFetch('/api/shop/hook', { method: 'POST', headers: { 'stripe-signature': `t=${t},v1=${await signPayload(payload, HOOK_SECRET, t)}` }, body: payload });
-    assert.equal(r.status, 200, await r.clone().text());
-  };
-  // E: the released code opens and grants after the step. Its original primary key still works.
-  let o = await oldBuy();
-  await oldPaid(o);
-  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM entitlements WHERE order_id = ?').get(o.id).n, 2);
-  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(o.id).status, 'paid');
-  assert.equal((await s.hook('checkout.session.completed', truth(o))).status, 200);
-  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM shop_order_lines WHERE order_id = ?').get(o.id).n, 1);
-  const oldRefund = await oldFetch('/_studio/api/shop/refund', { method: 'POST', headers: s.owner, body: JSON.stringify({ order: o.id }) });
-  assert.equal(oldRefund.status, 200, await oldRefund.clone().text());
-  // F: older releases have no line rows; releases with the additive schema already create one.
-  o = await oldBuy();
-  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM shop_order_lines WHERE order_id = ?').get(o.id).n, releasedStore.SHOP_LINES_FILE ? 1 : 0);
-  assert.equal((await s.hook('checkout.session.completed', truth(o))).status, 200);
-  assert.equal((await s.post('/_studio/api/shop/refund', { order: o.id }, s.owner)).status, 200);
-  // Repair a paid legacy order missing its entitlement, and prove duplicate delivery cannot add it twice.
-  const fixed = await s.buyPaid(p, 'supporter');
-  s.DB.sql.prepare('DELETE FROM entitlements WHERE order_id = ?').run(fixed.order);
-  const repair = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(fixed.order);
-  for (let i = 0; i < 3; i++) await s.hook('checkout.session.completed', { ...truth(repair), amount_total: 540, total_details: { amount_tax: 40 } });
-  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM entitlements WHERE order_id = ?').get(repair.id).n, 2);
-  assert.equal((await (await s.fetchSite('/api/player/owns', { headers: s.as(p) })).json()).detail[0].quantity, 1);
-  // Roll back after a new cart: the released whole-order refund revokes every line's ownership.
-  const cartBuyer = s.player(400, { band: 'adult' });
-  const cart = await (await s.post('/api/shop/buy', { lines: [{ item: 'supporter' }, { item: 'ember' }, { item: 'boost' }] }, s.as(cartBuyer))).json();
-  const cartRow = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(cart.order);
-  await s.hook('checkout.session.completed', { ...truth(cartRow), client_reference_id: cartBuyer.id });
-  assert.equal((await oldFetch('/_studio/api/shop/refund', { method: 'POST', headers: s.owner, body: JSON.stringify({ order: cart.order }) })).status, 200);
-  assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: s.as(cartBuyer) })).json()).owns, []);
-  // New code first: old schema keeps ownership and office refunds, but refuses new sales by named step.
-  const before = await site();
-  const buyer = before.player(400, { band: 'adult' });
-  const purchase = await before.buyPaid(buyer);
-  before.DB.sql.exec('DROP INDEX shop_orders_attention; DROP INDEX shop_orders_attention_player; ALTER TABLE shop_orders DROP COLUMN attention; ALTER TABLE shop_orders DROP COLUMN refunded_amount; ALTER TABLE shop_orders DROP COLUMN refunded_net; ALTER TABLE shop_orders DROP COLUMN refund_revision; DROP TRIGGER IF EXISTS shop_checkout_player_insert; DROP TRIGGER shop_entitlements_delete; DROP TRIGGER shop_entitlements_adopt; DROP TRIGGER shop_forget_checkout_player; DROP TABLE shop_entitlement_lines; DROP TABLE shop_order_lines; ALTER TABLE shop_orders DROP COLUMN whole_refund; ALTER TABLE shop_orders DROP COLUMN checkout_player; ALTER TABLE shop_orders DROP COLUMN referral_terms; ALTER TABLE shop_parent_links DROP COLUMN cart; ALTER TABLE referral_lines DROP COLUMN original_share;');
-  before.env.DB = { ...before.DB };
-  const list = await (await before.fetchSite('/api/shop', { headers: before.as(buyer) })).json();
-  assert.equal(list.open, false); assert.equal(list.migration, SHOP_LINES_FILE);
-  assert.equal((await (await before.fetchSite('/api/player/owns', { headers: before.as(buyer) })).json()).owns.length, 2);
-  assert.equal((await (await before.fetchSite('/api/shop/mine', { headers: before.as(buyer) })).json()).orders.length, 1);
-  assert.equal((await before.post('/api/shop/buy', { item: 'supporter' }, before.as(buyer))).status, 503);
-  assert.equal((await before.post('/_studio/api/shop/refund', { order: purchase.order }, before.owner)).status, 200);
-  assert.equal(before.DB.sql.prepare('SELECT state FROM entitlements LIMIT 1').get().state, 'revoked');
-  before.DB.sql.exec(readFileSync(join(repo, 'template/site/migrations', SHOP_LINES_FILE), 'utf8'));
-  assert.equal((await (await before.fetchSite('/api/player/owns', { headers: before.as(buyer) })).json()).owns.length, 0);
-  s.stripe.close(); before.stripe.close();
-});
-
 test('working setup, unseen paid orders, cancellation, free carts and redacted Stripe errors', async () => {
   const s = await site({ settings: { policy: undefined, capPerPlayerMonth: null, items: [SUPPORTER, { id: 'free', name: 'Free', price: 0, gives: ['free'] }] } });
   const p = s.player(400);
@@ -2660,11 +2152,9 @@ test('early and partial Dashboard refunds converge, large carts refund in one ca
   assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM shop_events WHERE id = ?').get('evt_early').n, 0);
   const truth = { ...s.stripe.behave.sessions.get(o.session), payment_status: 'paid', payment_intent: 'pi_early', amount_total: 10000 };
   await s.hook('checkout.session.completed', truth);
-  s.DB.sql.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, original_share, currency, state, period, hold_until, created_at) VALUES (?, 'ref.example', 10000, 0.1, 1000, 1000, 'usd', 'pending', '2026-10', 1, 1)").run(o.id);
   assert.equal((await s.hook('charge.refunded', early, { id: 'evt_early' })).status, 200);
   await s.hook('charge.refunded', early);
   assert.equal(await spentThisMonth(s.env, p.id), 9950);
-  assert.equal(s.DB.sql.prepare('SELECT share FROM referral_lines WHERE order_id = ?').get(o.id).share, 995);
   const count = s.stripe.calls.filter((c) => c.path === '/v1/refunds' && c.method === 'POST').length;
   assert.equal((await s.post('/_studio/api/shop/refund', { order: o.id }, s.owner)).status, 200);
   assert.equal(s.stripe.calls.filter((c) => c.path === '/v1/refunds' && c.method === 'POST').length - count, 1);
@@ -2916,7 +2406,7 @@ test('unrecorded payments recover Stripe refunds and lost disputes through every
   const { reconcileOrders, shopOf } = await import('../worker/shop.mjs');
   const { spentThisMonth } = await import('../worker/shop-store.mjs');
   const settings = { policy: undefined, automaticTax: false, capPerPlayerMonth: null, purchaseAttemptsPerMinute: 10000,
-    referrals: { rate: 0.1, holdDays: 0 }, items: [{ id: 'a', name: 'Hat', price: 300, gives: ['a'] }, { id: 'b', name: 'Cape', price: 999, gives: ['b'] }] };
+    items: [{ id: 'a', name: 'Hat', price: 300, gives: ['a'] }, { id: 'b', name: 'Cape', price: 999, gives: ['b'] }] };
   const s = await site({ settings });
   try {
     for (const lost of [false, true]) for (const route of ['event-first', 'charge-first', 'update-first', 'payment-first', 'buyer', 'thanks', 'scheduled', 'office', 'release']) {
@@ -2928,7 +2418,7 @@ test('unrecorded payments recover Stripe refunds and lost disputes through every
       s.stripe.behave.payments.set(pi, payment);
       const session = s.stripe.behave.sessions.get(o.session);
       Object.assign(session, { payment_status: 'paid', payment_intent: payment, amount_total: 1299, created: at });
-      s.DB.sql.prepare("UPDATE shop_orders SET via = 'ref.example', created_at = ?, updated_at = 1 WHERE id = ?").run(at * 1000, o.id);
+      s.DB.sql.prepare('UPDATE shop_orders SET created_at = ?, updated_at = 1 WHERE id = ?').run(at * 1000, o.id);
       const refund = { id: `re_${o.id}`, payment_intent: pi, amount: 1299, status: 'succeeded', metadata: {} };
       if (!lost) s.stripe.behave.refunds.set(refund.id, refund);
       s.stripe.behave.disputes = lost ? [{ id: `du_${o.id}`, payment_intent: pi, status: 'lost' }] : [];
@@ -2947,7 +2437,6 @@ test('unrecorded payments recover Stripe refunds and lost disputes through every
         assert.equal(row.refunded_amount, lost ? 0 : 1299);
         assert.equal(row.refunded_net, lost ? 0 : 1299);
         assert.equal(s.DB.sql.prepare("SELECT COUNT(*) n FROM entitlements WHERE order_id = ? AND state = 'active'").get(o.id).n, 0);
-        assert.equal(s.DB.sql.prepare('SELECT state FROM referral_lines WHERE order_id = ?').get(o.id).state, 'void');
         if (lost) assert.equal(s.DB.sql.prepare('SELECT COUNT(*) n FROM entitlements WHERE order_id = ?').get(o.id).n, 0, 'lost charges never grant');
       };
       check();
@@ -3565,8 +3054,84 @@ test('an app checkout carries its booking reference to the durable paid event', 
 });
 
 function subscribeAppPayments(s) {
-  for (const file of ['0014_studio_apps.sql','0015_purchases.sql','0016_purchase_facts.sql','0017_studio_mcp.sql','0018_studio_functions.sql','0019_function_cursors.sql','0020_function_meta.sql','0021_app_payment_reference.sql']) {
+  for (const file of ['0014_studio_apps.sql','0015_purchases.sql','0016_purchase_facts.sql','0017_studio_mcp.sql','0018_studio_functions.sql','0019_function_cursors.sql','0020_function_meta.sql','0021_app_payment_reference.sql','0022_remove_referrals.sql']) {
     s.DB.sql.exec(readFileSync(join(s.dir, 'site/migrations', file), 'utf8'));
   }
   s.DB.sql.exec("INSERT INTO function_subscriptions(name,type,started) VALUES('booking-paid','order.paid',0)");
 }
+
+test('removed settings build with notes and are absent from the published catalogue', () => {
+  const dir = studio('removed-settings');
+  const file = join(dir, 'studio.json');
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file)), referrals: { accepts: true } }));
+  writeFileSync(join(dir, 'shop.json'), JSON.stringify({ items: [SUPPORTER], referrals: 'no longer validated', referralNewPlayersOnly: 'also ignored' }));
+  const result = spawnSync(process.execPath, [CLI, 'build'], { cwd: dir, encoding: 'utf8', env: { ...process.env, HOMIE_STUDIO_WARM: '0' } });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const output = result.stdout + result.stderr;
+  for (const field of ['studio.json referrals', 'shop.json referrals', 'shop.json referralNewPlayersOnly']) {
+    assert.equal(output.split('\n').filter((line) => line.includes(field + ': ignored;')).length, 1);
+  }
+  const cat = JSON.parse(readFileSync(join(dir, 'site/dist/games.json')));
+  assert.equal(Object.hasOwn(cat.studio, 'referrals'), false);
+  assert.equal(Object.hasOwn(cat.shop, 'referrals'), false);
+  assert.equal(Object.hasOwn(cat.shop, 'referralNewPlayersOnly'), false);
+});
+
+test('an incoming via link counts a visit but creates no cookie, sale attribution or referral endpoints', async () => {
+  const s = await site();
+  try {
+    const page = await s.fetchSite('/?via=friends.example', { headers: { accept: 'text/html' } });
+    assert.equal(page.status, 200);
+    assert.equal(page.headers.get('set-cookie'), null);
+    const visit = s.DB.sql.prepare("SELECT SUM(n) AS n FROM stats_daily WHERE metric = 'visit' AND source = 'via:friends.example'").get();
+    assert.equal(visit.n, 1);
+    const p = s.player(1, { band: 'adult' });
+    p.cookie += '; studio_via=an-old-signed-cookie';
+    const sale = await s.buyPaid(p);
+    const order = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(sale.order);
+    assert.equal(Object.hasOwn(order, 'via'), false);
+    assert.equal(Object.hasOwn(order, 'referral_terms'), false);
+    const checkout = s.stripe.calls.find((c) => c.path === '/v1/checkout/sessions' && c.method === 'POST');
+    assert.equal(checkout.form.get('metadata[via]'), null);
+    const manifest = await (await s.fetchSite('/.well-known/homie-studio.json')).json();
+    assert.equal(Object.hasOwn(manifest, 'referrals'), false);
+    for (const path of ['/api/referrals/statement', '/_studio/api/shop/statements', '/_studio/api/shop/statements/send', '/_studio/api/shop/settle', '/_studio/api/shop/lines', '/_studio/api/shop/received']) {
+      const response = await s.fetchSite(path, { method: path.endsWith('statement') || path.endsWith('send') || path.endsWith('settle') ? 'POST' : 'GET', headers: s.owner });
+      assert.equal(response.status, 404, path);
+    }
+    const office = await (await s.fetchSite('/_studio/api/shop', { headers: s.owner })).json();
+    assert.equal(Object.hasOwn(office, 'referrals'), false);
+    assert.equal((await s.post('/_studio/api/shop/refund', { order: sale.order }, s.owner)).status, 200);
+  } finally { s.stripe.close(); }
+});
+
+test('removal migration preserves paid and pending orders, grants and refund facts and removes old bookkeeping', async () => {
+  const { SHOP_MIGRATION, SHOP_RESERVATIONS, SHOP_LINES, SHOP_REMOVE_REFERRALS } = await import('../worker/shop-store.mjs');
+  for (const old of [false, true]) {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const migrations = join(PKG, '../../template/site/migrations');
+      for (const file of readdirSync(migrations).sort()) {
+        if (file === '0008_studio_shop.sql') db.exec(old ? readFileSync(join(PKG, 'test/fixtures/shop-before-removal.sql'), 'utf8') : SHOP_MIGRATION + SHOP_RESERVATIONS + SHOP_LINES);
+        else if (!['0010_shop_reservations.sql', '0012_shop_lines.sql', '0022_remove_referrals.sql'].includes(file)) db.exec(readFileSync(join(migrations, file), 'utf8'));
+      }
+      db.exec("INSERT INTO shop_orders(id,player,item,amount,currency,till,mode,status,session,payment,created_at,paid_at,updated_at,refunded_amount,refunded_net,refund_revision) VALUES ('paid','buyer','hat',500,'usd','stripe','test','paid','cs_paid','pi_paid',1,2,3,100,100,2), ('pending','buyer','cape',900,'usd','stripe','test','processing','cs_pending',NULL,1,NULL,3,0,0,0);");
+      db.exec("INSERT INTO entitlements(player,key,item,order_id,starts_at,state) VALUES ('buyer','hat','hat','paid',2,'active'); INSERT INTO shop_order_lines(id,order_id,position,item,quantity,unit_amount,amount,snapshot,status,refunded_amount,refunded_net) VALUES ('line','paid',0,'hat',1,500,500,'{}','paid',100,100);");
+      db.exec("INSERT INTO shop_entitlement_lines(player,key,item,order_id,line_id,quantity,starts_at,state) VALUES ('buyer','hat','hat','paid','line',1,2,'active');");
+      db.prepare('INSERT INTO shop_parent_links(hash,player,item,expires_at,cart) VALUES (?,?,?,?,?)').run('parent','buyer','hat',999,JSON.stringify([{ item: 'hat', via: 'friend.example' }]));
+      for (const key of ['referral_cookie_key', 'referral_signing_key', 'referral-send:seller|month', 'referral-page:seller|month|usd|', 'shop-reference:paid']) db.prepare('INSERT INTO meta VALUES (?,?)').run(key, 'kept-value');
+      const snapshots = Object.fromEntries(['shop_orders', 'entitlements', 'shop_order_lines', 'shop_entitlement_lines'].map((table) => [table, db.prepare('SELECT * FROM ' + table).all().map(({ via, referral_terms, ...row }) => row)]));
+      db.exec(SHOP_REMOVE_REFERRALS);
+      for (const [table, rows] of Object.entries(snapshots)) assert.deepEqual(db.prepare('SELECT * FROM ' + table).all().map((row) => ({ ...row })), rows);
+      for (const table of ['referral_lines', 'referral_statements', 'referral_editions', 'referral_edition_lines']) assert.equal(db.prepare('SELECT name FROM sqlite_master WHERE name = ?').get(table), undefined);
+      assert.deepEqual(db.prepare('SELECT key FROM meta').all().map((r) => r.key), ['shop-reference:paid']);
+      assert.deepEqual(JSON.parse(db.prepare('SELECT cart FROM shop_parent_links').get().cart), [{ item: 'hat' }]);
+      db.exec("INSERT INTO function_subscriptions(name,type,started) VALUES ('paid','order.paid',0),('refunded','order.refunded',0); UPDATE shop_orders SET paid_at = 4, status = 'paid' WHERE id = 'pending'; UPDATE shop_orders SET status = 'refunded' WHERE id = 'paid';");
+      assert.deepEqual(db.prepare('SELECT type FROM studio_events ORDER BY seq').all().map(r => r.type), ['order.paid', 'order.refunded']);
+      db.exec("UPDATE shop_orders SET player = NULL WHERE id = 'paid';");
+      assert.equal(db.prepare("SELECT checkout_player FROM shop_orders WHERE id = 'paid'").get().checkout_player, null);
+      db.exec("DELETE FROM entitlements WHERE order_id = 'paid';");
+      assert.equal(db.prepare('SELECT COUNT(*) AS n FROM shop_entitlement_lines').get().n, 0);
+    } finally { db.close(); }
+  }
+});

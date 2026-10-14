@@ -393,7 +393,7 @@ are not legal advice, and Homie does not enforce them.
 
 **The shop** (`worker/shop-rules.mjs`, `worker/shop.mjs`, `shop/SHOP.md`). The limit removal
 ships independently in 0.33.0. The studio chooses prices, kinds, catalogue size, entitlement
-keys and optional spending, refund and referral terms without a Homie ceiling. Stripe's
+keys and optional spending and refund terms without a Homie ceiling. Stripe's
 currency units and documented minimum charges remain; currencies without minor units work.
 Purchase attempts have separate per-account and per-address rates the studio can change.
 
@@ -427,7 +427,6 @@ tills or multi-currency prices; those remain separate proposals later in this de
 | The age question; under 13 never buys; 13 to 17 buy through a parent's own checkout | `shop-rules.mjs:244-279` | Homie's choice | Delivered: protective, adults-only and custom presets with editable account, age, child and teen policies. |
 | A studio marked for kids sells nothing | `shop-rules.mjs:216-217` | Homie's choice | Delivered: editable `policy.kidsStudio`, protective by default. |
 | A kids server shows no shop; an item with a play advantage is not offered on beginner or kids servers; a supporter pack may not carry an advantage | `shop-rules.mjs:175,269-270` | Homie's choice | Delivered: editable kids-server, beginner, kids and supporter advantage policies. |
-| Referrals: rate at most 50%, window at most 90 days, at most US$100 per referred player (default US$10), hold at most 120 days, invoice floor at most US$1,000 | `shop-rules.mjs:192-201` | Homie's choice | Delivered: each term is optional and without a toolkit ceiling. |
 
 **AI, chat and communities** (`worker/agents.mjs`, `chat.mjs`, `brain.mjs`, `servers.mjs`,
 `lounge-store.mjs`). Milestone 5 for the server and room caps; milestone 6 for the rest. The two AI budgets need no other milestone and can change at any time.
