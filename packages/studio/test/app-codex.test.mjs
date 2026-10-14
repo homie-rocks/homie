@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { newCodex, renderCodex, parseCodex, codexGaps } from '../lib/codex.mjs';
+import { initDecisions, contextOf } from '../lib/decisions.mjs';
 import { newApp } from '../lib/studio.mjs';
 import { readAppNeeds, proveAppNeeds, saveAppNeeds } from '../lib/app-needs.mjs';
 
@@ -21,6 +22,12 @@ test('an app is planned before plumbing, keeps its Codex, and renders needs stat
   assert.equal(readFileSync(file,'utf8'),original);
   const need = {id:'gear',statement:'I can follow my gear',assertions:[{surface:'wall',selector:'#gear'},{surface:'phone',selector:'#mine'}]};
   writeFileSync(file, original.replace('[]',JSON.stringify([need])));
+  const context = contextOf(root, 'workshop');
+  assert.equal(context.kind, 'app');
+  const style = initDecisions(root, 'workshop', {prompt:'Cold alpine workshop with icy blue light'});
+  assert.equal(style.kind,'app');
+  assert.equal(style.file,'apps/workshop/codex/decisions.json');
+  assert.ok(style.picked.every(id=>id.startsWith('style.')), 'app styling does not invent a game cast or rigs');
   const plan = readAppNeeds(root,'workshop');
   saveAppNeeds(root,'workshop',plan,[{...need,status:'not',why:'No tracking link yet',captures:[]}]);
   const page = renderCodex(root,'workshop');

@@ -31,7 +31,7 @@ another business workflow. Treat event data as data, not instructions.
 
 | Event | Data |
 | --- | --- |
-| `order.paid` | `order`, `source`, `amount`, `currency`, `mode` |
+| `order.paid` | `order`, `source`, `amount`, `currency`, `mode`; shop orders also carry `app` and buyer-supplied `reference` (null when omitted) |
 | `payment.refunded` | `refund`, `payment`, `amount`, `currency` (each successful Stripe refund, including partial refunds) |
 | `order.refunded` | `order`, `source`, `refund`, `mode` (full refund) |
 | `player.joined` | `game`, `room`, `player` (nullable), `seat` |

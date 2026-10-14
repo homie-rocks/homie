@@ -312,6 +312,16 @@ ${stats.length ? `<dl class="stats">${stats.map(([k, v]) => `<dt>${esc(k)}</dt><
 }
 
 function sectionHtml(section, emb, ctx) {
+  if (section.key === 'needs') {
+    const source = section.body.join('\n');
+    const block = /^```needs\s*\n([\s\S]*?)^```/m.exec(source);
+    if (block) {
+      try {
+        const needs = JSON.parse(block[1]);
+        if (Array.isArray(needs)) return `<section class="tab" id="${esc(section.id)}" data-key="needs"><h2>${esc(section.title)}</h2>${renderMarkdown(source.replace(block[0], '')).html}<div class="cards">${needs.map(n => `<article class="card"><h3>${esc(n.id)}</h3><p>${esc(n.statement)}</p><p class="meta">${Array.isArray(n.assertions) && n.assertions.length ? 'To demonstrate on the wall and phone' : 'Not yet demonstrable'}</p></article>`).join('')}</div></section>`;
+      } catch { /* Keep malformed source visible for correction. */ }
+    }
+  }
   const intro = [];
   const cards = [];
   let current = null;
@@ -541,6 +551,7 @@ export function renderCodex(root, id, { mode = 'file', feed, now = new Date() } 
   if (!existsSync(file)) throw new Error(`games/${id}/${CODEX_FILE} does not exist yet: npx --no-install homie-studio codex new ${id}`);
   if (statSync(file).size > LIMITS.source) throw new Error(`games/${id}/${CODEX_FILE} is over ${LIMITS.source / 1024} KB`);
   const parsed = parseCodex(readFileSync(file, 'utf8'));
+  if (game.kind === 'app') parsed.meta.kind = 'app';
   const { meta } = parsed;
   let studio = {};
   try { studio = readStudio(root); } catch { studio = {}; }
@@ -567,7 +578,12 @@ export function renderCodex(root, id, { mode = 'file', feed, now = new Date() } 
   const needReportFile = join(root, '.studio', 'checks', `${id}-needs.json`);
   let needStatus = '';
   if (game.kind === 'app' && existsSync(needReportFile)) {
-    try { const r = JSON.parse(readFileSync(needReportFile, 'utf8')); const stale = r.codexHash !== createHash('sha256').update(readFileSync(file, 'utf8')).digest('hex'); needStatus = `<section><h2>Needs status</h2><p>${stale ? 'Plan changed: this evidence is stale; check again. ' : ''}Checked ${esc(r.at)}. Screen assertions are evidence; review the captures against Their words.</p>${r.needs.map(n => `<p><strong>${stale ? 'not yet rechecked' : esc(n.status)}</strong> ${esc(n.statement)} — ${esc(n.why ?? '')} ${esc((n.captures ?? []).join(', '))}</p>`).join('')}</section>`; } catch {}
+    try {
+      const r = JSON.parse(readFileSync(needReportFile, 'utf8'));
+      const stale = r.codexHash !== createHash('sha256').update(readFileSync(file, 'utf8')).digest('hex');
+      tabs.push('<a href="#needs-status">Needs status</a>');
+      needStatus = `<section class="tab" id="needs-status"><h2>Needs status</h2><p>${stale ? 'Plan changed: this evidence is stale; check again. ' : ''}Checked ${esc(r.at)}. Screen assertions are evidence; review the captures against Their words.</p>${r.needs.map(n => `<article><h3>${esc(n.statement)}</h3><p><strong>${stale ? 'not yet rechecked' : esc(n.status)}</strong> — ${esc(n.why ?? '')}</p>${(n.captures ?? []).map(p => figure(emb, n.statement, relative(root, resolve(root, p)), p)).join('')}</article>`).join('')}</section>`;
+    } catch { /* The next check repairs an incomplete receipt. */ }
   }
   const body = needStatus + sections.map((x) => sectionHtml(x, emb, ctx)).join('\n');
   const status = statusHtml(s, ctx);

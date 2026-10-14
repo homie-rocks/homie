@@ -16,7 +16,7 @@
  * games/<id>/style.json (public, tiny) carries the palette and fonts a game, its landing and its title cards draw with.
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { relative, dirname, join } from 'node:path';
 import { HEX, deltaHex, hexToRgb, luminance, mix, nudge } from './colour.mjs';
 import { CAMERAS, FAMILIES, FONT_SETS, GENRES, LIGHTS, MOODS, PALETTES, PALETTE_KEYS, RENDERS, SHAPES } from './style-presets.mjs';
 import { readTheme } from './site.mjs';
@@ -39,7 +39,8 @@ export function contextOf(root, id, { prompt = '' } = {}) {
   let codex = '';
   try { codex = readFileSync(join(dir, 'CODEX.md'), 'utf8').replace(/<!--[\s\S]*?-->/g, ''); } catch { codex = ''; }
   let game = {};
-  try { game = JSON.parse(readFileSync(join(dir, 'game.json'), 'utf8')); } catch { game = {}; }
+  try { game = JSON.parse(readFileSync(experienceFile(root, id), 'utf8')); } catch { game = {}; }
+  const kind = existsSync(join(dir, 'app.json')) || /^kind: app$/m.test(codex) ? 'app' : 'game';
   const fm = /^---\n([\s\S]*?)\n---/.exec(codex)?.[1] ?? '';
   const pal = {};
   for (const k of [...PALETTE_KEYS, 'panel']) { const m = new RegExp(`^\\s+${k}:\\s*"?(#[0-9a-fA-F]{3,6})"?`, 'm').exec(fm); if (m) pal[k] = m[1]; }
@@ -50,9 +51,9 @@ export function contextOf(root, id, { prompt = '' } = {}) {
   for (const [key, re] of [['characters', '(?:characters|cast|heroes|creatures|enemies)'], ['items', '(?:items|props|pickups|collectibles)'], ['places', '(?:world|places|setting|zones?|levels?)']]) {
     for (const m of section(re).matchAll(/^###\s+(.+?)\s*$/gm)) cards.push({ section: key, title: clean(m[1], 60) });
   }
-  const words = [prompt, game.name, game.blurb, section('(?:concept|the game|pitch|overview)'), section('(?:art|look|style|visual)'), section('(?:world|setting)')].filter(Boolean).join(' \n ');
+  const words = [prompt, game.name, game.blurb, section('(?:concept|the game|pitch|overview)'), section('(?:art|look|style|visual)'), section('(?:world|setting)'), ...(kind === 'app' ? [section('(?:their words|dream)'), section('scene'), section('people')] : [])].filter(Boolean).join(' \n ');
   const score = (re) => (words.match(new RegExp(re.source, 'gi')) ?? []).length;
-  const genre = Object.entries(GENRES).map(([g, v]) => [g, score(v.words)]).filter(([, n]) => n).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'party';
+  const genre = kind === 'app' ? 'app' : Object.entries(GENRES).map(([g, v]) => [g, score(v.words)]).filter(([, n]) => n).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'party';
   const mood = Object.fromEntries(Object.entries(MOODS).map(([m, re]) => [m, score(re)]));
   let theme = {};
   try { theme = readTheme(root); } catch { theme = {}; }
@@ -76,7 +77,7 @@ export function contextOf(root, id, { prompt = '' } = {}) {
     const hs = assets.filter((a) => a.kind === 'character' && Number(a.measured?.heightM) > 0).map((a) => Number(a.measured.heightM)).sort((a, b) => a - b);
     if (hs.length) castHeightM = Math.round(hs[Math.floor(hs.length / 2)] * 100) / 100;
   } catch { clipVerbs = []; }
-  return { id, prompt: clean(prompt, 600), words, score, genre, mood, codexPalette: pal, codexFonts: fonts, theme, cards, players: Number(game.players?.max ?? game.netplay?.maxPlayers ?? 8) || 8, name: game.name ?? id, codexArt: clean(section('(?:art|look|style|visual)'), 400), drawn, clipVerbs, castHeightM };
+  return { id, kind, prompt: clean(prompt, 600), words, score, genre, mood, codexPalette: pal, codexFonts: fonts, theme, cards, players: Number(game.players?.max ?? game.netplay?.maxPlayers ?? 8) || 8, name: game.name ?? id, codexArt: clean(section('(?:art|look|style|visual)'), 400), drawn, clipVerbs, castHeightM };
 }
 
 /** The best match in a preset table by word score: [key, score] or null. */
@@ -356,7 +357,7 @@ function change(rec, patch, { by = 'ai', words = null, reason = null } = {}) {
 export function initDecisions(root, id, { prompt = '', path = null, budget = null } = {}) {
   gameDirOf(root, id);
   const ctx = contextOf(root, id, { prompt });
-  const doc = readDecisions(root, id) ?? { v: 1, scope: 'game', game: id, path: path ?? 'automatic', budget: null, prompt: '', decisions: {}, board: null, golden: [] };
+  const doc = readDecisions(root, id) ?? { v: 1, scope: ctx.kind, game: id, path: path ?? 'automatic', budget: null, prompt: '', decisions: {}, board: null, golden: [] };
   if (path) doc.path = path === 'hands-on' ? 'hands-on' : 'automatic';
   if (budget !== null && budget !== undefined) doc.budget = { usd: Math.max(0, Number(budget) || 0), provider: 'fal', approvedBy: 'the person, in chat', at: now() };
   if (prompt) doc.prompt = clean(prompt, 600);
@@ -367,6 +368,7 @@ export function initDecisions(root, id, { prompt = '', path = null, budget = nul
   const kept = [];
   const made = [];
   for (const [did] of CATALOGUE) {
+    if (ctx.kind === 'app' && !did.startsWith('style.')) continue;
     const def = CAT.get(did);
     const rec = doc.decisions[did];
     // Kept: anything the person steered or locked, anything pinned, and what a starter's style.json already draws.
@@ -380,7 +382,7 @@ export function initDecisions(root, id, { prompt = '', path = null, budget = nul
     made.push(did);
   }
   writeDecisions(root, id, doc);
-  return { ok: true, command: 'style init', id, picked: made, kept, genre: ctx.genre, summary: oneLine(doc), file: `games/${id}/${DECISIONS_FILE}` };
+  return { ok: true, command: 'style init', id, picked: made, kept, kind: ctx.kind, genre: ctx.genre, summary: oneLine(doc), file: relative(root, fileOf(root, id)) };
 }
 
 /** The one line the automatic path says: "Look: flat low-poly, autumn grove palette, high three-quarter camera". */
