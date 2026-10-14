@@ -1,0 +1,17 @@
+{
+  "conflict": 409,
+  "poses": [
+    {
+      "label": "Demo · powder board · Base repairDemo · powder boardCS-31CC9239",
+      "transform": "translate(300px, 310px)"
+    },
+    {
+      "label": "Demo · sunset board · WaxDemo · sunset boardCS-15211886",
+      "transform": "translate(780px, 310px)"
+    },
+    {
+      "label": "Demo · glacier skis · Ready to collectDemo · glacier skisCS-1745A12A",
+      "transform": "translate(1030px, 310px)"
+    }
+  ]
+}

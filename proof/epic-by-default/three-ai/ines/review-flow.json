@@ -1,0 +1,24 @@
+{
+  "person": "ines",
+  "origin": "http://127.0.0.1:8833",
+  "at": "2026-10-14T03:32:16.960Z",
+  "browser": "real Google Chrome, emulated phone viewport",
+  "checks": [
+    {
+      "need": "log a send",
+      "receipt": "Send saved · First LightRef E73C8B79 · Review climberYour send is on the wall.Open your saved sendCopy return link"
+    }
+  ],
+  "phoneUrl": "http://127.0.0.1:8833/climb/open?room=highline&ticket=e73c8b79d042533dd76d305160e9fbca",
+  "wallText": "∧\nHIGHLINE\nBOULDERING\nLIVE AT HIGHLINE\nTHE WEEKLY RESET\nFresh lines. Go find yours.\n\nNew routes glow when the setters give the all-clear.\n\n5\nNEW THIS WEEK\n7\nSENDS LOGGED\nTHE SLAB\nBALANCE & BELIEF\nTHE PROW\nCOMMIT TO THE MOVE\nTHE CAVE\nFIND YOUR FLOW\nV1 · 01\nFirst Light\nOPEN\nV3 · 02\nSide Quest\nOPEN\nV4 · 03\nPocket Rocket\nOPEN\nV5 · 04\nMoon Walker\nOPEN\nV2 · 05\nGolden Hour\nOPEN\nV6 · 06\nQuiet Storm\nSETTING\nPROVISIONAL WALL LAYOUT · SAMPLE ROUTES\nJUST TOPPED OUT · LOCAL DEMO\nReview climber sent First Light V1\nDay pass $22\nName a route $15\nCAD · payment not connected\nYour climb.\nOn the big wall.\n192.168.1.250:8833 · scan to join\nHIGHLINE BOULDERING / EVERY LINE IS A NEW POSSIBILITY / LOCAL PREVIEW",
+  "phoneText": "∧\nHIGHLINE\nBOULDERING\nLIVE AT HIGHLINE\nTHE WEEKLY RESET\nYour next high.\n\nNew routes glow when the setters give the all-clear.\n\n5\nNEW THIS WEEK\nTHE SLAB\nBALANCE & BELIEF\nTHE PROW\nCOMMIT TO THE MOVE\nTHE CAVE\nFIND YOUR FLOW\nV1 · 01\nFirst Light\nOPEN\nV3 · 02\nSide Quest\nOPEN\nV4 · 03\nPocket Rocket\nOPEN\nV5 · 04\nMoon Walker\nOPEN\nV2 · 05\nGolden Hour\nOPEN\nV6 · 06\nQuiet Storm\nSETTING\nPROVISIONAL WALL LAYOUT · SAMPLE ROUTES\nJUST TOPPED OUT · LOCAL DEMO\nReview climber sent First Light V1\nDay pass $22\nName a route $15\nCAD · payment not connected\nMade the top?\nCHOOSE YOUR ROUTE\nFirst Light · V1 · 01\nSide Quest · V3 · 02\nPocket Rocket · V4 · 03\nMoon Walker · V5 · 04\nGolden Hour · V2 · 05\nWALL NAME · OPTIONAL, PUBLIC\nLog send ↗\nSend saved · First Light\n\nRef E73C8B79 · Review climber\nYour send is on the wall.\n\nOpen your saved send\nCopy return link\nSaved. Everyone’s wall is up to date.\nHIGHLINE BOULDERING / EVERY LINE IS A NEW POSSIBILITY / LOCAL PREVIEW",
+  "afterReload": "∧\nHIGHLINE\nBOULDERING\nConnecting…\nTHE WEEKLY RESET\nYour next high.\n\nNew routes glow when the setters give the all-clear.\n\n5\nNEW THIS WEEK\nTHE SLAB\nBALANCE & BELIEF\nTHE PROW\nCOMMIT TO THE MOVE\nTHE CAVE\nFIND YOUR FLOW\nV1 · 01\nFirst Light\nOPEN\nV3 · 02\nSide Quest\nOPEN\nV4 · 03\nPocket Rocket\nOPEN\nV5 · 04\nMoon Walker\nOPEN\nV2 · 05\nGolden Hour\nOPEN\nV6 · 06\nQuiet Storm\nSETTING\nPROVISIONAL WALL LAYOUT · SAMPLE ROUTES\nJUST TOPPED OUT · LOCAL DEMO\nReview climber sent First Light V1\nDay pass $22\nName a route $15\nCAD · payment not connected\nMade the top?\nCHOOSE YOUR ROUTE\nFirst Light · V1 · 01\nSide Quest · V3 · 02\nPocket Rocket · V4 · 03\nMoon Walker · V5 · 04\nGolden Hour · V2 · 05\nWALL NAME · OPTIONAL, PUBLIC\nLog send ↗\nSend saved · First Light\n\nRef E73C8B79 · Review climber\nYour send is on the wall.\n\nOpen your saved send\nCopy return link\nHIGHLINE BOULDERING / EVERY LINE IS A NEW POSSIBILITY / LOCAL PREVIEW",
+  "wallLayout": {
+    "width": 1920,
+    "height": 1080,
+    "scrollWidth": 1920,
+    "scrollHeight": 1091
+  },
+  "secondPhone": "∧\nHIGHLINE\nBOULDERING\nLIVE AT HIGHLINE\nTHE WEEKLY RESET\nYour next high.\n\nNew routes glow when the setters give the all-clear.\n\n5\nNEW THIS WEEK\nTHE SLAB\nBALANCE & BELIEF\nTHE PROW\nCOMMIT TO THE MOVE\nTHE CAVE\nFIND YOUR FLOW\nV1 · 01\nFirst Light\nOPEN\nV3 · 02\nSide Quest\nOPEN\nV4 · 03\nPocket Rocket\nOPEN\nV5 · 04\nMoon Walker\nOPEN\nV2 · 05\nGolden Hour\nOPEN\nV6 · 06\nQuiet Storm\nSETTING\nPROVISIONAL WALL LAYOUT · SAMPLE ROUTES\nJUST TOPPED OUT · LOCAL DEMO\nReview climber sent First Light V1\nDay pass $22\nName a route $15\nCAD · payment not connected\nMade the top?\nCHOOSE YOUR ROUTE\nFirst Light · V1 · 01\nSide Quest · V3 · 02\nPocket Rocket · V4 · 03\nMoon Walker · V5 · 04\nGolden Hour · V2 · 05\nWALL NAME · OPTIONAL, PUBLIC\nLog send ↗\nSend saved · First Light\n\nRef E73C8B79 · Review climber\nYour send is on the wall.\n\nOpen your saved send\nCopy return link\nHIGHLINE BOULDERING / EVERY LINE IS A NEW POSSIBILITY / LOCAL PREVIEW",
+  "errors": []
+}

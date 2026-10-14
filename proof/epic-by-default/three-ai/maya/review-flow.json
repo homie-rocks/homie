@@ -1,0 +1,24 @@
+{
+  "person": "maya",
+  "origin": "http://127.0.0.1:8893",
+  "at": "2026-10-14T03:32:45.458Z",
+  "browser": "real Google Chrome, emulated phone viewport",
+  "checks": [
+    {
+      "need": "phone booking",
+      "receipt": "YOUR GEAR / CS-624A0532My blue boardReview blue skisRequestedYour request is saved. Bring your gear on the requested date; staff confirm the work at intake.RequestedChecked inWaxReady to collectCollectedBasic wax · $25 CADRequested drop-off: 2026-10-13Unpaid · Payment in shopCopy my tracking linkOpen & bookmark my gear ↗"
+    }
+  ],
+  "phoneUrl": "http://127.0.0.1:8893/workshop/open?room=shop&ticket=624a0532e6f45f9246da1eae66f863c8",
+  "wallText": "COLDSMOKE\nTUNING WORKSHOP\nGOOD DAYS START WITH GOOD EDGES.\nWorkshop live\nTHE WORKSHOP / LIVE\nNext stop.\nFresh snow.\n4 gear requests · 1 ready\n01 / ARRIVAL\nCheck-in\n02 / WORKBENCH\nBase repair\n03 / WORKBENCH\nEdge\n04 / WORKBENCH\nWax\n05 / NEXT RUN\nReady rack\nDemo · powder board\nCS-31CC9239\nDemo · sunset board\nCS-15211886\nDemo · glacier skis\nCS-1745A12A\nMy blue boardReview blue skis\nCS-624A0532\nBasic wax $25\nFull tune $65\nBase repair from $40\nYOUR GEAR. EVERY STEP.\n\nScan to request a tune & follow your gear.\n\nCAD · Pay in shop · Repairs quoted after inspection\n\nColdsmoke Tuning · Local preview · Service catalogue · Credits · Made with Homie",
+  "phoneText": "COLDSMOKE\nTUNING WORKSHOP\nWorkshop live\nTHE WORKSHOP / LIVE\n4 gear requests · 1 ready\nBasic wax $25\nFull tune $65\nBase repair from $40\nYOUR GEAR / CS-624A0532\nMy blue boardReview blue skis\nREQUESTED\n\nYour request is saved. Bring your gear on the requested date; staff confirm the work at intake.\n\nRequested\nChecked in\nWax\nReady to collect\nCollected\nBasic wax · $25 CAD\n\nRequested drop-off: 2026-10-13\nUnpaid · Payment in shop\n\nCopy my tracking link\nOpen & bookmark my gear ↗\n\nRequest saved. Keep your tracking link.\n\nBook another tune\nAlready booked? Find your gear\nFind\nColdsmoke Tuning · Local preview · Service catalogue · Credits · Made with Homie",
+  "afterReload": "COLDSMOKE\nTUNING WORKSHOP\nWorkshop live\nTHE WORKSHOP / LIVE\n4 gear requests · 1 ready\nBasic wax $25\nFull tune $65\nBase repair from $40\nYOUR GEAR / CS-624A0532\nMy blue boardReview blue skis\nREQUESTED\n\nYour request is saved. Bring your gear on the requested date; staff confirm the work at intake.\n\nRequested\nChecked in\nWax\nReady to collect\nCollected\nBasic wax · $25 CAD\n\nRequested drop-off: 2026-10-13\nUnpaid · Payment in shop\n\nCopy my tracking link\nOpen & bookmark my gear ↗\n\nBook another tune\nAlready booked? Find your gear\nFind\nColdsmoke Tuning · Local preview · Service catalogue · Credits · Made with Homie",
+  "wallLayout": {
+    "width": 1920,
+    "height": 1080,
+    "scrollWidth": 1920,
+    "scrollHeight": 1135
+  },
+  "secondPhone": "COLDSMOKE\nTUNING WORKSHOP\nWorkshop live\nTHE WORKSHOP / LIVE\n4 gear requests · 1 ready\nBasic wax $25\nFull tune $65\nBase repair from $40\nYOUR GEAR / CS-624A0532\nMy blue boardReview blue skis\nREQUESTED\n\nYour request is saved. Bring your gear on the requested date; staff confirm the work at intake.\n\nRequested\nChecked in\nWax\nReady to collect\nCollected\nBasic wax · $25 CAD\n\nRequested drop-off: 2026-10-13\nUnpaid · Payment in shop\n\nCopy my tracking link\nOpen & bookmark my gear ↗\n\nBook another tune\nAlready booked? Find your gear\nFind\nColdsmoke Tuning · Local preview · Service catalogue · Credits · Made with Homie",
+  "errors": []
+}

@@ -1,0 +1,2 @@
+Read https://homie.rocks/business.md
+I’m Maya, and I run Coldsmoke Tuning, a ski and snowboard tuning shop. I want a wall showing boards and skis moving through wax, edge and base repair; customers book a tune from their phone and watch their own gear. Basic wax is $25, full tune $65, and base repair from $40. Decide for me and keep going; do not put it online; show me it running locally.
