@@ -86,8 +86,7 @@
  *   homie-studio look [<path>...] [--url <site>] [--shots <dir>] [--only computer,phone,sideways]
  *                                         (the site's pages on a computer and a phone, as pictures, with what is wrong)
  *   homie-studio port plan <game folder>
- *   homie-studio port import { importMedia } from '../lib/media-import.mjs';
-import <game folder> --id <id> [--name "<Name>"] [--mode static|bundle|command]
+ *   homie-studio port import <game folder> --id <id> [--name "<Name>"] [--mode static|bundle|command]
  *   homie-studio port check <id> [--url <site>] [--only owner-desk,owner-phone,owner-iphone,round,life,tv] [--shots <dir>]
  *   homie-studio deploy [--plan]          (--plan: what it will create on Cloudflare and what it costs; changes nothing)
  *                                         One deploy of a studio at a time (a lock in .studio/); it says which games changed
@@ -321,6 +320,7 @@ import <game folder> --id <id> [--name "<Name>"] [--mode static|bundle|command]
  *
  * Every command prints a few lines for a person; --json prints the result.
  */
+import { importMedia } from '../lib/media-import.mjs';
 // FIRST, before any other file of the toolkit is evaluated: a Node.js that is too old ends here, with the reason.
 import '../lib/node-version.mjs';
 import { spawn, spawnSync } from 'node:child_process';
