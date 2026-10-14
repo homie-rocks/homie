@@ -1,0 +1,15 @@
+Author against toolkit 0.50.6: node_modules/@homie-rocks/studio/guides/app/SKILL.md
+Homie Claude Code plugin 0.25.2 is older than toolkit 0.50.6. Its guidance may be stale. Read node_modules/@homie-rocks/studio/guides/app/SKILL.md. claude plugin update homie@homie.
+types: apps/tune: rules, move and view checked with the toolkit's strict compiler
+info: apps/tune/src/rules.ts:5: the generated play covered 18000 ticks (900 seconds of the room's clock), 0 rounds finished, the room rebuilt from its save and compared 813 times, stopped at its allowance of 18000 ticks; it ended holding 10 entities and 6 waiting events in a save of 3319 bytes. `homie-studio build --long-check` plays eight times as much. Play it did not reach is not checked.
+info: rules runtime reference trial: hero-rush-3d, 32 players at 30 Hz for 20 minutes on Node (macOS arm64). Cloudflare capacity and billing are unmeasured.
+  tune: rules apps use their build hash as the revision; netplay.version is not read
+built tune (bundle, 51 KB + 2 additional chunks, 221 KB)
+tune: this app's rules and tunables are sent to players' devices so it can be played offline
+  tune: its rules run on the server (checked and guarded, 2 KB, build 1af093257d3a1052c259fd435e962819; 18000 ticks played, the room rebuilt from its save 813 times: the busiest tick used 1772 of 500000 budget units, 20 of them in one handler; the largest save was 10367 bytes)
+  tune: smoke-run largest snapshot 166 B / 16384 B browser cap; checkpoint 599 B / 131072 B browser cap (measured, not an upper bound)
+Built tune (51 KB) into site/dist
+  tune: changed, build 6c1a3b7934324772 (assets/main-QXGXKZPQ.js + 2 additional chunks)
+Landing /tune/: hero from the studio's colours (it has no picture or footage yet)
+  give it one: apps/tune/hero/wide.jpg (16:9, 1280×720 or larger) and apps/tune/hero/tall.jpg (9:16, 720×1280, for an upright phone); footage beside them as hero/wide.mp4 and hero/tall.mp4 (the same shapes, a silent loop of 8 to 15 s, under 3 MB each); or "cover" in its app.json
+Game Codex (the owner's private pages; codex link <id> opens one): /_studio/codex/tune/

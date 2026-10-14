@@ -1,0 +1,14 @@
+{
+  "currency": "cad",
+  "checkoutMinutes": 31,
+  "items": [
+    {
+      "id": "full-tune",
+      "name": "Full ski tune",
+      "price": 8500,
+      "game": "tune",
+      "blurb": "Edge sharpen and hot wax. One pair of skis. Demo price.",
+      "gives": []
+    }
+  ]
+}

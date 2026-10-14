@@ -1,0 +1,137 @@
+{
+  "id": "tune",
+  "name": "Coldsmoke Tuning",
+  "blurb": "A sharper edge. A reserved place on the rail.",
+  "entry": "src/view.ts",
+  "roles": {
+    "customer": {
+      "signIn": false,
+      "can": [
+        "read:slots",
+        "read:bookings"
+      ]
+    },
+    "wall": {
+      "signIn": false,
+      "can": [
+        "read:slots",
+        "read:bookings"
+      ]
+    },
+    "staff": {
+      "signIn": true,
+      "can": [
+        "read:slots",
+        "create:slots",
+        "update:slots",
+        "read:bookings",
+        "update:bookings"
+      ]
+    }
+  },
+  "surfaces": {
+    "phone": "customer",
+    "wall": "wall",
+    "kiosk": "customer",
+    "tablet": "staff"
+  },
+  "words": {
+    "open": "Open",
+    "join": "Scan to join",
+    "one": "person",
+    "many": "people",
+    "action": "Request booking",
+    "total": "Requests",
+    "choice": "Choose an option",
+    "monthly": "Gift frequency",
+    "once": "One time",
+    "month": "Monthly",
+    "give": "Give securely on Stripe",
+    "goal": "Intention goal \u00b7 not payments received",
+    "prompt": "Choose what works for you.",
+    "finished": "All three answers are in. Thank you!",
+    "complete": "Mark complete",
+    "done": "Complete",
+    "pending": "Requested",
+    "thanks": "Thank you \u2014 the wall is up to date.",
+    "live": "Together \u00b7 live",
+    "reconnecting": "Reconnecting\u2026"
+  },
+  "records": {
+    "persist": true,
+    "collections": {
+      "slots": {
+        "fields": {
+          "label": {
+            "type": "string",
+            "required": true
+          },
+          "capacity": {
+            "type": "number",
+            "required": true
+          }
+        }
+      },
+      "bookings": {
+        "booking": {
+          "slots": "slots",
+          "item": "full-tune"
+        },
+        "fields": {
+          "slot": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "state": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "parts": [],
+  "netplay": {
+    "v": 1,
+    "public": true,
+    "version": "1",
+    "params": [
+      "role",
+      "surface",
+      "ticket"
+    ]
+  },
+  "playerCard": false,
+  "chat": false,
+  "agents": {
+    "vote": false
+  },
+  "watch": "overview",
+  "screen": {
+    "join": "bottom-right",
+    "share": "top-right",
+    "shop": false
+  },
+  "needs": {
+    "three": "0.185.1",
+    "@homie-rocks/camera": "0.2.1",
+    "@homie-rocks/geom": "0.1.1",
+    "@types/three": "0.185.1"
+  },
+  "check": {
+    "action": "#book",
+    "observe": "#count"
+  },
+  "landing": {
+    "pitch": "A sharper edge. A reserved place on the rail."
+  },
+  "room": {
+    "host": "server"
+  },
+  "players": {
+    "min": 1,
+    "max": 32
+  },
+  "saves": true
+}
