@@ -1,3 +1,4 @@
+import {eventHookSubscriptions} from './mcp-events.mjs';
 import {webhookSubscriptions,webhookFailure,webhookBackoff} from './event-webhooks.mjs';
 import {parseSchedule,scheduleStatus} from './function-schedule.mjs';
 import {redactText} from '../lib/redact.mjs';
@@ -15,7 +16,7 @@ export async function syncFunctions(env, definitions = null, now = Date.now()) {
   // Deploy owns the production registry; an old in-flight Worker must not overwrite it.
   if(await env.DB.prepare("SELECT 1 FROM meta WHERE key='function-registry-deployed'").first())return definitions;
   const statements=definitions.map(fn=>env.DB.prepare(`INSERT INTO function_subscriptions(name,type,cursor,started) VALUES(?1,?2,(SELECT COALESCE(MAX(seq),0) FROM studio_events),?3) ON CONFLICT(name) DO UPDATE SET type=excluded.type,cursor=excluded.cursor,started=excluded.started WHERE type!=excluded.type`).bind(fn.name,fn.event,now));
-  statements.push(env.DB.prepare(`DELETE FROM function_subscriptions WHERE name NOT IN (SELECT value FROM json_each(?1))`).bind(JSON.stringify(definitions.map(f=>f.name))));
+  statements.push(env.DB.prepare(`DELETE FROM function_subscriptions WHERE name NOT LIKE '@mcp-webhook/%' AND name NOT IN (SELECT value FROM json_each(?1))`).bind(JSON.stringify(definitions.map(f=>f.name))));
   await env.DB.batch(statements);
   return definitions;
 }
@@ -33,7 +34,7 @@ export async function pruneEvents(env) {
   const cursor=Number((await env.DB.prepare("SELECT value FROM meta WHERE key='function-prune-cursor'").first())?.value??0);
   const rows=(await env.DB.prepare('SELECT seq,id FROM studio_events WHERE seq>?1 ORDER BY seq LIMIT 100').bind(cursor).all()).results;
   const statements=rows.flatMap(({id})=>[
-    env.DB.prepare(`DELETE FROM function_deliveries WHERE event=?1 AND ((state='complete' AND function NOT LIKE '@webhook/%') OR NOT EXISTS (SELECT 1 FROM function_subscriptions s WHERE s.name=function_deliveries.function))`).bind(id),
+    env.DB.prepare(`DELETE FROM function_deliveries WHERE event=?1 AND ((state='complete' AND function NOT LIKE '@webhook/%' AND function NOT LIKE '@mcp-webhook/%') OR NOT EXISTS (SELECT 1 FROM function_subscriptions s WHERE s.name=function_deliveries.function))`).bind(id),
     env.DB.prepare(`DELETE FROM studio_events WHERE id=?1 AND NOT EXISTS (SELECT 1 FROM function_subscriptions s WHERE s.type=studio_events.type AND s.cursor<studio_events.seq) AND NOT EXISTS (SELECT 1 FROM function_deliveries d WHERE d.event=studio_events.id)`).bind(id),
   ]);
   statements.push(env.DB.prepare("INSERT INTO meta(key,value) VALUES('function-prune-cursor',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(String(rows.at(-1)?.seq??0)));
@@ -42,9 +43,8 @@ export async function pruneEvents(env) {
 /** A lease is for retry after a crashed Worker, not a deadline imposed on studio code. */
 export async function runFunctions(env, cat, origin, {definitions, now = Date.now, leaseMs = 60000, webhookOptions = {}} = {}) {
   definitions = await syncFunctions(env,definitions,now());
-  if(!definitions.length)return;
   if(typeof cat==='function')cat=await cat();
-  definitions=definitions.filter(fn=>!fn.webhook).concat(webhookSubscriptions(env,cat,webhookOptions));
+  definitions=definitions.filter(fn=>!fn.webhook).concat(webhookSubscriptions(env,cat,webhookOptions),await eventHookSubscriptions(env,cat,{...webhookOptions,now}));
   // An AI notification must not wait behind a slow function handler.
   const notify=()=>pushEvents(env,cat,origin).catch(error=>console.error('Event notification wake failed',error));
   const notifications=notify();
@@ -72,18 +72,21 @@ export async function runFunctions(env, cat, origin, {definitions, now = Date.no
           env.DB.prepare("INSERT INTO function_runs(id,function,event,trigger,started,outcome,attempt) SELECT ?1,?2,?3,?4,?5,'running',attempts FROM function_deliveries WHERE event=?3 AND function=?2 AND lease=?1").bind(lease,fn.name,row.event,row.event.startsWith(`schedule:${fn.name}:`)?`schedule: ${JSON.parse(row.data).cron}`:row.type,started),
         ]);
         if (!claimed.meta.changes) continue;
-        let failure=null;
+        let failure=null,permanent=false;
         try {
           const stored=JSON.parse(row.data);
           const isolated=env.HOMIE_LOCAL_TEST_SECRET && /^([a-z][a-z0-9-]*):check:([a-zA-Z0-9-]+)$/.exec(stored?.app??'');
           const event=Object.freeze({id:row.event,type:row.type,at:row.at,data:isolated?{...stored,app:isolated[1]}:stored,attempt:row.attempts+1});
           const testScope=isolated?isolated[2]:null;
           await fn.handler(event,services(env,cat,origin,{id:'studio-function',owner:true,client:null,...(testScope?{testScope}:{})},'function:'+fn.name+(testScope?':check:'+testScope:''),fn));
-        } catch(error) {failure=fn.webhook?webhookFailure(error):functionError(error,env);}
+        } catch(error) {permanent=error.permanent===true;failure=fn.webhook?webhookFailure(error):functionError(error,env);}
         const finished=now();
+        const firstAttempt=fn.mcpEvent?(await env.DB.prepare('SELECT MIN(started) at FROM function_runs WHERE event=?1 AND function=?2').bind(row.event,fn.name).first()).at:finished;
+        const abandoned=fn.mcpEvent&&failure!==null&&(permanent||row.attempts+1>=5||finished-firstAttempt>=900000); 
         await env.DB.batch([
           failure===null
             ? env.DB.prepare(`UPDATE function_deliveries SET state='complete',completed=?4,error=NULL WHERE event=?1 AND function=?2 AND lease=?3`).bind(row.event,fn.name,lease,finished)
+            : abandoned ? env.DB.prepare(`UPDATE function_deliveries SET state='complete',completed=?4,error=?5 WHERE event=?1 AND function=?2 AND lease=?3`).bind(row.event,fn.name,lease,finished,failure)
             : env.DB.prepare(`UPDATE function_deliveries SET state='failed',error=?5,due=?4 WHERE event=?1 AND function=?2 AND lease=?3`).bind(row.event,fn.name,lease,finished+(fn.webhook?webhookBackoff(row.attempts+1):leaseMs),fn.webhook?failure:'Function failed; inspect its code and retry'),
           env.DB.prepare("UPDATE function_runs SET outcome=?2,finished=?3,error=?4 WHERE id=?1").bind(lease,failure===null?'complete':'failed',finished,failure),
         ]);

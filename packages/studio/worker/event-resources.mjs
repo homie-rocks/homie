@@ -1,3 +1,6 @@
+import {McpEventStreams} from './mcp-event-streams.mjs';
+import {listEvents} from './mcp-events.mjs';
+import {notification,sseFrame} from './mcp-events-wire.mjs';
 import {allowed,currentCaller} from './mcp-tools.mjs';
 import {settingsOf,launchOf} from './office.mjs';
 
@@ -44,9 +47,10 @@ export function eventHub(env,connection) {return env.LOBBY.get(env.LOBBY.idFromN
 export async function pushEvents(env,cat,origin) {
   if(!env.LOBBY||!Object.keys(eventFeeds(env)).length)return;
   // Page subscriptions, without a studio-wide subscription or delivery cap.
+  await env.DB.prepare("DELETE FROM mcp_kv WHERE key LIKE 'mcp-event-stream:%' AND expires<?1").bind(Date.now()).run();
   let after='';const seen=new Set();
   for(;;){
-    const rows=(await env.DB.prepare("SELECT key,value FROM mcp_kv WHERE key LIKE 'event-sub:%' AND key>?1 ORDER BY key LIMIT 100").bind(after).all()).results;
+    const rows=(await env.DB.prepare("SELECT key,value FROM mcp_kv WHERE (key LIKE 'event-sub:%' OR key LIKE 'mcp-event-stream:%') AND key>?1 ORDER BY key LIMIT 100").bind(after).all()).results;
     for(const row of rows){const {connection}=JSON.parse(row.value);if(seen.has(connection))continue;seen.add(connection);
       const response=await eventHub(env,connection).fetch('https://events/__studio_events',{method:'POST',body:JSON.stringify({op:'wake',connection,cat,origin})});
       if(!response.ok)throw new Error('Event stream wake failed');
@@ -58,11 +62,13 @@ export async function pushEvents(env,cat,origin) {
 /** One existing Lobby object per OAuth connection: streams never live in a Worker isolate. */
 const streamCaller=(env,connection)=>connection.startsWith('public:')?Promise.resolve({id:null,owner:false,client:null,connection}):currentCaller(env,{connection});
 export class EventStreams {
-  constructor(env,ctx){this.env=env;this.ctx=ctx;this.stream=null;this.tail=Promise.resolve();}
+  constructor(env,ctx){this.env=env;this.ctx=ctx;this.stream=null;this.tail=Promise.resolve();this.extensions=new McpEventStreams(env,ctx);}
   close(stream){stream.cancelled=true;stream.resume?.();try{stream.controller.close();}catch{}if(this.stream===stream){this.stream=null;this.ctx.waitUntil(this.env.DB.prepare('DELETE FROM mcp_kv WHERE key=?1').bind('tools-stream:'+stream.connection).run().catch(()=>{}));}}
   background(input){this.ctx.waitUntil(this.wake(input).catch(error=>{if(this.stream)this.close(this.stream);console.error('Event stream delivery failed',error);}));}
   async fetch(request) {
     const input=await request.json();
+    if(input.op==='extension-stream')return this.extensions.open(input);
+    this.extensions.wake(input);
     if(input.op==='tools') {await this.wake(input);return new Response(null,{status:204});}
     if(input.op==='stream') {
       // A reconnect replaces the previous GET, including a half-open socket.
@@ -78,6 +84,7 @@ export class EventStreams {
       const caller=await streamCaller(this.env,connection).catch(()=>null);
       if(!caller){this.close(stream);return new Response('Unauthorized',{status:401});}
       stream.toolSignature=await this.toolSignature(input.tools??[],caller);
+      stream.eventSignature=JSON.stringify(await listEvents(this.env,input.cat,caller));
       await this.env.DB.prepare('INSERT INTO mcp_kv(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind('tools-stream:'+connection,JSON.stringify({connection})).run();
       // Replay and later wakes share one ordered pump. Backpressure must not
       // hold up the writer's request or a function handler.
@@ -93,6 +100,8 @@ export class EventStreams {
     let caller;
     try{caller=await streamCaller(this.env,input.connection);}
     catch{this.close(stream);return;}
+    const eventSignature=JSON.stringify(await listEvents(this.env,input.cat,caller));
+    if(stream.eventSignature!==eventSignature){stream.eventSignature=eventSignature;stream.controller.enqueue(sseFrame(notification('list_changed',{})));}
     if(input.tools){
       const signature=await this.toolSignature(input.tools,caller);
       if(stream.toolSignature!==signature){stream.toolSignature=signature;stream.controller.enqueue(new TextEncoder().encode('event: message\ndata: '+JSON.stringify({jsonrpc:'2.0',method:'notifications/tools/list_changed'})+'\n\n'));}
@@ -130,7 +139,7 @@ export class EventStreams {
 export async function pushToolList(env,cat,tools,origin) {
   if(!env.LOBBY)return;
   const publicShape=tools.map(({name,description,inputSchema,audience,kind})=>({name,description,inputSchema,audience,kind}));
-  const signature=JSON.stringify(publicShape);
+  const signature=JSON.stringify([publicShape,eventFeeds(env)]);
   const previous=await env.DB.prepare("SELECT value FROM mcp_kv WHERE key='tools-catalogue'").first();
   if(previous?.value===signature)return;
   await env.DB.prepare("INSERT INTO mcp_kv(key,value) VALUES('tools-catalogue',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(signature).run();
