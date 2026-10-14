@@ -734,7 +734,7 @@ function gameCard(g, playing = 0) {
     <h3><a href="/${esc(g.id)}/">${esc(g.name)}</a></h3>
     <p>${esc(g.landing?.pitch ?? g.blurb)}</p>
     <div class="meta"><span>${esc(g.kind === 'app' ? 'One screen · live together' : playersText(g))}</span>${minutes(g.roundSeconds) ? `<span>${esc(minutes(g.roundSeconds))}</span>` : ''}<span>phone, computer or TV</span></div>
-    <div class="acts"><a class="btn" href="${esc(openPath(g))}" data-play>${PLAY_ICON}${esc(appWords(g).open)}</a><a class="ghost" href="/${esc(g.id)}/">About</a></div>
+    <div class="acts"><a class="btn" href="${esc(openPath(g))}" data-play>${PLAY_ICON}${esc(g.kind === 'app' ? g.landing?.action ?? `Open ${g.name}` : appWords(g).open)}</a><a class="ghost" href="/${esc(g.id)}/">About</a></div>
   </div>
 </article>`;
 }
@@ -838,7 +838,7 @@ export function homeHero(cat, f, { playing = 0 } = {}) {
     <p class="kicker">${esc(name)}<span class="k-opt"> · ${esc(tagline || (f.kind === 'app' ? 'featured app' : 'featured game'))}</span></p>
     <h1 class="title ${titleClass(f.name)}" id="hero-title">${esc(f.name)}</h1>
     <p class="line">${esc(f.landing?.pitch ?? f.blurb)}</p>
-    <div class="row"><a class="play" href="${esc(openPath(f))}" data-play>${PLAY_ICON}<span>${f.kind === 'app' ? esc(appWords(f).open) : 'Play now — free'}</span></a>${liveLine(f, playing, { idle: f.kind === 'app' ? 'One screen, together' : 'Bots hold every empty seat · press Play and you are in a round' })}</div>
+    <div class="row"><a class="play" href="${esc(openPath(f))}" data-play>${PLAY_ICON}<span>${f.kind === 'app' ? esc(f.landing?.action ?? `Open ${f.name}`) : 'Play now — free'}</span></a>${liveLine(f, playing, { idle: f.kind === 'app' ? 'One screen, together' : 'Bots hold every empty seat · press Play and you are in a round' })}</div>
     <a class="also" href="/${esc(f.id)}/">${icon('arrow')}<span>About ${esc(f.name)}</span></a>${games.length > 1 ? `<a class="also" href="/${f.kind === 'app' ? 'apps' : 'games'}/">${icon('games')}<span>All ${games.length} ${f.kind === 'app' ? 'apps' : 'games'}</span></a>` : ''}
   </div>
 </section>`;

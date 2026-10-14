@@ -21,6 +21,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 **Plugin 0.51.3**
 
+Business and cause apps use their own words, count every paid monthly gift, and test real Stripe checkout locally.
+
 ### Added
 
 - Local real Stripe test checkout: `shop connect --local --profile <sandbox> --url <Wi-Fi address>` syncs test Payment Links without Cloudflare or a public webhook. Stripe CLI forwards signed events to `dev`; phones return to the same Wi-Fi thank-you page.

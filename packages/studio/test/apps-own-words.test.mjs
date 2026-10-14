@@ -63,3 +63,16 @@ test('needs follow a payment popup and retain the original phone',async t=>{
  const result=await proveAppNeeds({plan:{needs:[{id:'give',statement:'Give on phone',steps:[{surface:'phone',selector:'#give',click:true,popup:'checkout'}],assertions:[{surface:'checkout',selector:'#checkout',text:'Pay securely'},{surface:'phone',selector:'#phone',text:'My gift'}]}]},surfaces:[{name:'phone',page:p,frame:p.mainFrame()}],shots});
  assert.equal(result[0].status,'met',result[0].why);assert.equal(await p.$eval('#phone',e=>e.innerText),'My gift');assert.equal(result[0].captures.length,2);
 });
+
+test('home page action also owns its website wording',async t=>{
+ const {homePage}=await import('../worker/site.mjs');const b=await browser(t),p=await b.newPage();await p.setContent(await homePage(cat).text());
+ const labels=await p.$$eval('a[data-play]',els=>els.map(e=>e.innerText));assert.ok(labels.length);for(const label of labels)assert.equal(label,'Open Meal table');
+});
+
+test('confirmed gift page gives receipt instructions once',async t=>{
+ const {SHOP_JS}=await import('../worker/shop-page.mjs');const b=await browser(t),p=await b.newPage();
+ await p.setContent(await thanksPage(cat,{giving:{}},{session:'cs_paid'}).text());
+ await p.evaluate(()=>{window.fetch=async()=>({ok:true,json:async()=>({ok:true,status:'paid'})});});await p.addScriptTag({content:SHOP_JS});
+ await p.waitForFunction(()=>document.querySelector('[data-thanks-title]').textContent==='Thank you for your gift');
+ const visible=await p.$eval('[data-shop-thanks]',e=>e.innerText);assert.equal(visible.split('Your receipt comes from Stripe by email.').length-1,1);
+});
