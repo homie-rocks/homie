@@ -54,7 +54,6 @@ export async function proveAppNeeds({ plan, surfaces, shots, report, ready = asy
         const { page } = target;
         waiting = `${step.surface}: ${step.reload ? 'reload and arrival readiness' : step.selector}`;
         if (step.reload) { await page.reload({ waitUntil: 'domcontentloaded' }); await ready(surface(step.surface)); continue; }
-        await waitInApp(target,step.selector,f=>f.waitForSelector(step.selector, { visible: true, timeout:10000 }),{ready});
         const act = fn => actInApp(target,step.selector,fn,{ready});
         if (step.click && step.popup) {
           let listener,timer;

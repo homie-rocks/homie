@@ -14,7 +14,7 @@ test('a refresh during a held press retains navigation when the button stays con
    const button=document.querySelector('button');
    button.onclick=()=>document.querySelector('output').textContent='Crew selected';
    button.onpointerdown=()=>setTimeout(()=>{
-    if(replace)button.replaceWith(button.cloneNode(true));
+    if(replace){const next=button.cloneNode(true);next.onclick=button.onclick;button.replaceWith(next);}
     else button.textContent='Choose crew (2 places)';
     window.refreshed=true;
    },20);
@@ -26,6 +26,7 @@ test('a refresh during a held press retains navigation when the button stays con
   return page.$eval('output',el=>el.textContent);
  };
  assert.equal(await exercise(true),'','reproduces the cancelled navigation from replacing a held button');
+ await page.click('#role');assert.equal(await page.$eval('output',el=>el.textContent),'Crew selected','the replacement has a working click handler; only the interrupted press was lost');
  assert.equal(await exercise(false),'Crew selected');
  // Deterministically replace the actual queried handle between lookup and dispatch.
  let attempts=0;const surface={name:'phone',frame:page.mainFrame()};

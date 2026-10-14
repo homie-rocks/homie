@@ -55,7 +55,7 @@ export async function actInApp(surface, selector, action, {ready=appReady,timeou
   let stale;
   for (;;) {
     try {
-      await surface.frame.waitForSelector(selector,{visible:true,timeout:Math.max(1,end-Date.now())});
+      await waitInApp(surface,selector,frame=>frame.waitForSelector(selector,{visible:true,timeout:Math.max(1,end-Date.now())}),{ready,timeout:Math.max(1,end-Date.now())});
       return await action(surface.frame);
     } catch(error) {
       if(!/node is detached|element.*(?:detach|stale)|stale.*element/i.test(error.message)) {
