@@ -1,4 +1,10 @@
-import {eventFeeds,feedUri,readableFeed,feedEvents,matchesFeed,subscribeFeed,eventHub} from './event-resources.mjs';
+function freshErrorMessage(error,env,caller) {
+  let message=String(error?.message??error);
+  for(const [key,value] of Object.entries(env))if(typeof value==='string'&&/SECRET|KEY|TOKEN|PASSWORD/.test(key)&&value.length)message=message.replaceAll(value,'[redacted]');
+  return caller.owner ? message : 'Tool failed; ask the studio owner to inspect this call.';
+}
+import {localCaller} from './local-test.mjs';
+import {eventFeeds,feedUri,readableFeed,feedEvents,matchesFeed,subscribeFeed,eventHub,pushToolList} from './event-resources.mjs';
 import { selling } from './extensions.mjs';
 import OAuthProvider from '@cloudflare/workers-oauth-provider';
 import { createMcpHandler } from 'agents/mcp/server';
@@ -29,15 +35,18 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
   if(request.headers.has('origin') && request.headers.get('origin')!==origin)return json({error:'origin refused'},403);
   if(path.startsWith('/hooks/tools/')) return (await import('./tool-webhook.mjs')).toolWebhook(request,env,{cat:await catalogueOf(),definitions});
   const scoped={...env,OAUTH_KV:oauthStorage(env.DB)};
+  const localIdentity=await localCaller(request,env);
+  const identity=()=>localIdentity ?? currentCaller(env,ctx.props);
   const api=async(request,env,ctx)=>{
     let caller;
-    try{caller=await currentCaller(env,ctx.props);}catch{return new Response(JSON.stringify({error:'connection revoked'}),{status:401,headers:{'content-type':'application/json','cache-control':'no-store','www-authenticate':`Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp", error="invalid_token"`}});}
+    try{caller=await identity();}catch{return new Response(JSON.stringify({error:'connection revoked'}),{status:401,headers:{'content-type':'application/json','cache-control':'no-store','www-authenticate':`Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp", error="invalid_token"`}});}
     const cat=await catalogueOf();
-    if(request.method==='GET'&&Object.keys(eventFeeds(env)).length&&caller.connection) {
-      if(!request.headers.get('accept')?.includes('text/event-stream'))return json({error:'Accept text/event-stream required'},406);
-      return eventHub(env,caller.connection).fetch('https://events/__studio_events',{method:'POST',body:JSON.stringify({op:'stream',connection:caller.connection,lastId:request.headers.get('last-event-id'),cat,origin})});
-    }
     const tools=[...builtins(env,cat,origin),...definitions];
+    await pushToolList(env,cat,tools,origin);
+    if(request.method==='GET'&&caller.connection) {
+      if(!request.headers.get('accept')?.includes('text/event-stream'))return json({error:'Accept text/event-stream required'},406);
+      return eventHub(env,caller.connection).fetch('https://events/__studio_events',{method:'POST',body:JSON.stringify({op:'stream',connection:caller.connection,lastId:request.headers.get('last-event-id'),cat,origin,tools:tools.map(({name,description,inputSchema,audience,kind})=>({name,description,inputSchema,audience,kind}))})});
+    }
     if(request.method==='POST') {
       const body=await request.clone().json().catch(()=>null);
       if(body?.method==='tools/call') {
@@ -53,7 +62,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
     };
     const read=async(name,handler)=>{
       let outcome='error';
-      try{const fresh=await currentCaller(env,ctx.props);await rate(fresh);const result=await handler(fresh);outcome='ok';return result;}
+      try{const fresh=await identity();await rate(fresh);const result=await handler(fresh);outcome='ok';return result;}
       finally{
         try{await audit(env,caller,name,outcome);}
         finally{const delivery=import('./functions.mjs').then(m=>m.runFunctions(env,cat,origin));if(ctx?.waitUntil)ctx.waitUntil(delivery);else await delivery;}
@@ -61,7 +70,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
     };
     const server=async()=>{
       const capabilities=await selling.machineCapabilities(env);
-      const s=new McpServer({name:cat.studio?.name??'Homie studio',version:'1.0.0'},{jsonSchemaValidator:validator,capabilities:{...(Object.keys(eventFeeds(env)).length?{resources:{subscribe:true}}:{}),experimental:{payment:{methods:capabilities.machine?.card?{stripe:{intents:['charge']}}:{}}}}});
+      const s=new McpServer({name:cat.studio?.name??'Homie studio',version:'1.0.0'},{jsonSchemaValidator:validator,capabilities:{tools:{listChanged:true},...(Object.keys(eventFeeds(env)).length?{resources:{subscribe:true}}:{}),experimental:{payment:{methods:capabilities.machine?.card?{stripe:{intents:['charge']}}:{}}}}});
       const dispatch=new Map();
       for(const name of Object.keys(eventFeeds(env))) {
         if(!await readableFeed(env,cat,caller,name))continue;
@@ -79,7 +88,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
       }
       if(Object.keys(eventFeeds(env)).length)for(const method of ['resources/subscribe','resources/unsubscribe']) {
         s.server.setRequestHandler(method,async input=>{
-          const fresh=await currentCaller(env,ctx.props);
+          const fresh=await identity();
           await subscribeFeed(env,cat,fresh,input.params.uri,method==='resources/unsubscribe');return {};
         });
       }
@@ -111,7 +120,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
           let outcome='error';
           try{
             // Recheck inside dispatch, even when a connection listed tools earlier.
-            const fresh=await currentCaller(env,ctx.props);
+            const fresh=await identity();
             if(!await allowed(tool.audience,fresh,env)){outcome='denied';throw new Error('Permission denied');}
             try{await rate(fresh);}catch(error){outcome='limited';throw error;}
             const context=services(env,cat,origin,fresh,tool.namespace??tool.name,tool);
@@ -120,7 +129,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
             const value=await tool.handler(args,{...context,request});
             const text=JSON.stringify({kind:'untrusted-tool-data',tool:tool.name,data:value});
             outcome='ok';return {content:[{type:'text',text}]};
-          }catch(error){if(error?.code===-32042)throw error;return {isError:true,content:[{type:'text',text:outcome==='denied'||outcome==='limited'||error?.name==='StudioOperationError'?error.message:'Tool failed. Check the office audit and the tool definition.'}]};}
+          }catch(error){if(error?.code===-32042)throw error;return {isError:true,content:[{type:'text',text:outcome==='denied'||outcome==='limited'||error?.name==='StudioOperationError'?error.message:(freshErrorMessage(error,env,caller))}]};}
           finally{
             try { await audit(env,caller,tool.name,outcome); }
             finally {
@@ -141,7 +150,8 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
         const entry=dispatch.get(input.params.name);
         if(!entry)return {isError:true,content:[{type:'text',text:'Permission denied or unknown tool'}]};
         const args=input.params.arguments??{};
-        if(!validator.getValidator(entry.schema)(args).valid)return {isError:true,content:[{type:'text',text:'Invalid arguments'}]};
+        const validation=validator.getValidator(entry.schema)(args);
+        if(!validation.valid)return {isError:true,content:[{type:'text',text:'Invalid arguments: '+JSON.stringify(validation.errorMessage??validation.errors??entry.schema)}]};
         try{return await entry.handler(args,{...extra,_meta:input.params._meta});}
         catch(error){if(error?.code===-32042)throw new ProtocolError(error.code,error.message,error.data);throw error;}
       });
@@ -149,6 +159,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
     };
     return createMcpHandler(server)(request,env,ctx);
   };
+  if(localIdentity)return api(request,scoped,ctx);
   const provider=new OAuthProvider({
     apiRoute:'/mcp',apiHandler:{fetch:api},
     authorizeEndpoint:'/oauth/authorize',tokenEndpoint:'/oauth/token',clientRegistrationEndpoint:'/oauth/register',

@@ -25,3 +25,20 @@ test('reload waits for readiness and replaces its frame before asserting',async(
  const [result]=await proveAppNeeds({plan:{needs:[{id:'reload',statement:'Survives reload',steps:[{surface:'tablet',reload:true}],assertions:[{surface:'tablet',selector:'#saved'}]}]},surfaces:[{name:'tablet',page,frame:{}}],shots:'/tmp',ready:async s=>{order.push('ready');s.frame=fresh;}});
  assert.equal(result.status,'met');assert.deepEqual(order,['reload','ready','assert','capture']);
 });
+test('local role sessions are scoped, authenticated and inert in production',async()=>{
+ const {localSession}=await import('../worker/local-test.mjs');
+ const {createHmac}=await import('node:crypto');
+ const secret='test-secret'; const data=Buffer.from(JSON.stringify({app:'boards',role:'staff',scope:'run-one'})).toString('base64url');
+ const token=data+'.'+createHmac('sha256',secret).update(data).digest('hex');
+ const request=new Request('http://localhost/boards/play',{headers:{cookie:'homie_test='+token}});
+ assert.equal((await localSession(request,{HOMIE_LOCAL_TEST_SECRET:secret})).role,'staff');
+ assert.equal(await localSession(request,{}),null);
+ assert.equal(await localSession(new Request('https://studio.test/boards/play',{headers:request.headers}),{HOMIE_LOCAL_TEST_SECRET:secret}),null);
+ assert.equal(await localSession(request,{HOMIE_LOCAL_TEST_SECRET:'wrong'}),null);
+});
+test('headless local tools authenticate without a browser and preserve event references',async()=>{
+ const {localCaller}=await import('../worker/local-test.mjs');
+ const request=new Request('http://localhost/mcp',{headers:{authorization:'Bearer test-secret'}});
+ assert.equal((await localCaller(request,{HOMIE_LOCAL_TEST_SECRET:'test-secret'})).owner,true);
+ assert.equal(await localCaller(request,{}),null);
+});

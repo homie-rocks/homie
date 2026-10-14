@@ -21,8 +21,8 @@ test('one studio role authorizes two apps, revocation preserves per-app grants',
 test('two record.changed handlers do not lose a versioned read-modify-write',async t=>{
  const DB=database(t),env={DB};let firstRead;const read=new Promise(r=>firstRead=r);let release;const both=new Promise(r=>release=r);let reads=0;
  const definitions=[{name:'log',event:'record.changed',async handler(e,c){
-   const value=await c.database.get('count');if(++reads===1){firstRead();await both;}else release();
-   await c.database.put('count',(value??0)+1);
+   let row=await c.database.getVersioned('count');if(++reads===1){firstRead();await both;}else release();
+   while(!(await c.database.put('count',(row?.value??0)+1,{version:row?.version??0})).ok)row=await c.database.getVersioned('count');
  }}];
  await syncFunctions(env,definitions);await emitEvent(env,'record.changed',{record:'a'},{id:'a'});
  const first=runFunctions(env,cat,'http://localhost',{definitions});await read;
@@ -48,4 +48,40 @@ test('record field names permit underscores and describe rejected names',()=>{
  assert.deepEqual(appProblems(meta),[]);
  meta.records.collections.jobs.fields={'Paid At':{type:'number'}};
  assert.match(appProblems(meta).join(' '),/lowercase.*underscore/);
+});
+test('atomic append/increment and prefix pages keep concurrent writes and namespace isolation',async t=>{
+ const DB=database(t),db=services({DB},cat,'http://localhost',owner,'a').database;
+ await Promise.all(Array.from({length:20},(_,i)=>Promise.all([db.increment('count'),db.append('log',i),db.put('entry:'+i,i)])));
+ assert.equal(await db.get('count'),20);assert.equal((await db.get('log')).length,20);
+ const page=await db.list({prefix:'entry:',limit:7});assert.equal(page.items.length,7);assert.ok(page.next);
+ const next=await db.list({prefix:'entry:',after:page.next,limit:100});assert.equal(next.items.length,13);
+ assert.equal(await services({DB},cat,'http://localhost',owner,'b').database.get('count'),null);
+ assert.equal((await db.put('count',99,{version:1})).conflict,true);
+ await assert.rejects(db.increment('log'),/numeric/);
+});
+test('live unconnected shop and giving retain priced choices and fresh shop exists',async()=>{
+ const {shopPage}=await import('../worker/shop-page.mjs');const {shopRoutes}=await import('../worker/shop.mjs');
+ for(const giving of [false,true]){
+ const shop={currency:'cad',giving:giving?{}:undefined,items:[{id:'tune',name:'Support a fitting',price:4500}],policy:{},refundDays:null};
+ const html=await shopPage({studio:{name:'Boards'}},shop,{origin:'https://boards.test'}).text();
+ assert.ok(html.includes('Support a fitting'));assert.ok(html.includes('disabled'));
+ }
+ const request=new Request('https://fresh.test/shop/');const response=await shopRoutes(request,{},null,new URL(request.url),{catalogueOf:async()=>({studio:{name:'Fresh'},games:[]})});
+ assert.equal(response?.status,200);
+});
+test('owner can clear event history through a sequence boundary without clearing newer events',async t=>{
+ const DB=database(t),env={DB,STUDIO_EVENT_FEEDS:JSON.stringify({paid:{event:'order.paid'}})};
+ await syncFunctions(env,[]);await emitEvent(env,'order.paid',{},{id:'old'});const through=DB.sql.prepare('SELECT max(seq) n FROM studio_events').get().n;await emitEvent(env,'order.paid',{},{id:'new'});
+ const tool=builtins(env,cat,'http://localhost').find(t=>t.name==='studio_events_clear');assert.ok(tool);
+ await assert.rejects(tool.handler({through},{caller:{id:'staff',owner:false}}));
+ await tool.handler({through},{caller:owner});assert.deepEqual(DB.sql.prepare('SELECT id FROM studio_events').all().map(r=>r.id),['new']);
+});
+test('connected MCP stream announces a changed tool list',async t=>{
+ const {EventStreams}=await import('../worker/event-resources.mjs');const DB=database(t);
+ DB.sql.exec("INSERT INTO players(id,name,guest,owner,created_at,seen_at) VALUES('owner','Owner',0,1,1,1);INSERT INTO mcp_connections VALUES('conn','owner','client',1,0)");
+ const pending=[];const streams=new EventStreams({DB},{waitUntil:p=>pending.push(p)});
+ const response=await streams.fetch(new Request('https://events',{method:'POST',body:JSON.stringify({op:'stream',connection:'conn',cat,tools:[{name:'old',audience:'owner'}]})}));
+ const reader=response.body.getReader();await reader.read();
+ await streams.fetch(new Request('https://events',{method:'POST',body:JSON.stringify({op:'tools',connection:'conn',cat,tools:[{name:'new',audience:'owner'}]})}));
+ let timer;try {const chunk=await Promise.race([reader.read(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('No tools/list_changed notification')),500);})]);assert.match(new TextDecoder().decode(chunk.value),/notifications\/tools\/list_changed/);}finally{clearTimeout(timer);await reader.cancel();await Promise.all(pending);}
 });

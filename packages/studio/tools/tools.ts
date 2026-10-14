@@ -7,7 +7,14 @@ export interface ToolContext {
   office(path: string, body?: Record<string, unknown>, query?: Record<string, string>): Promise<unknown>;
   shop(): Promise<unknown>;
   rooms: { send(event: {game: string; room: string; event: string; data: unknown}): Promise<unknown> };
-  database: { get(key: string): Promise<unknown>; put(key: string, value: unknown): Promise<void> };
+  database: {
+    get(key: string): Promise<unknown>;
+    getVersioned(key: string): Promise<{value: unknown; version: number} | null>;
+    put(key: string, value: unknown, options?: {version?: number}): Promise<{ok: boolean; version?: number; conflict?: boolean}>;
+    increment(key: string, amount?: number): Promise<{value: number; version: number}>;
+    append(key: string, value: unknown): Promise<{value: unknown[]; version: number}>;
+    list(options?: {prefix?: string; after?: string; limit?: number}): Promise<{items: {key: string; value: unknown; version: number}[]; next: string | null}>;
+  };
   fetch: typeof fetch;
   fetchWithSecret(name: string, url: string, init?: RequestInit): Promise<Response>;
   ai(model: string, input: unknown): Promise<unknown>;

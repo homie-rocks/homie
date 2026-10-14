@@ -225,6 +225,7 @@ export async function shopRoutes(request, env, ctx, url, { catalogueOf }) {
     if (path === '/api/player/owns') return json({ ok: true, owns: [], open: false });
     if (path.startsWith('/api/')) return json({ ok: true, open: false, items: [], missing: [shop ? 'kids-studio' : 'shop.json'] });
     // No shop.json: /shop/ is the studio's own to use (a page in site/pages, say). The policy can close a kids studio's shop.
+    if(!shop && path==='/shop/' && read && !cat.site?.pages?.includes('/shop/')) return shopPage(cat,checkShop({}).shop,{origin:url.origin,open:false});
     return shop ? notFoundPage('This studio sells nothing.', cat) : null;
   }
   const ready = await readiness(env, shop);

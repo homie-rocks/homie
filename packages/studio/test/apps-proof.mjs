@@ -60,7 +60,7 @@ export async function appProof({ wrangler, shots = null, log = () => {} }) {
     };
     await start(); log('dev --lan reached from its network address');
     const sql = (text) => { const r = spawnSync(process.execPath, [wrangler, 'd1', 'execute', 'DB', '--local', '--command', text], { cwd: studio, encoding: 'utf8', env: { ...process.env, WRANGLER_SEND_METRICS: 'false' } }); assert.equal(r.status, 0, r.stderr); };
-    const checked = await check({ url: origin, game: 'welcome', log }); assert.equal(checked.ok, true, checked.why);
+    const checked = await check({ root:studio, url: local, game: 'welcome', log }); assert.equal(checked.ok, true, checked.why);
     sql('DELETE FROM app_records;');
     const needs = [
       { id: 'arrival', statement: 'A new arrival appears on the wall and phone', assertions: [{surface:'wall',selector:'[data-count]',text:'1'},{surface:'phone',selector:'[data-count]',text:'1'}] },
@@ -68,7 +68,7 @@ export async function appProof({ wrangler, shots = null, log = () => {} }) {
     ];
     writeFileSync(join(studio, 'apps/welcome/CODEX.md'), '# Welcome\n\n## Needs\n```needs\n' + JSON.stringify(needs) + '\n```\n');
     const evidence = join(scratch, 'needs');
-    const judged = await check({root:studio,url:origin,game:'welcome',shots:evidence,log});
+    const judged = await check({root:studio,url:local,game:'welcome',shots:evidence,log});
     assert.equal(judged.ok,false,'an unmet Codex need prevents completion');
     assert.deepEqual(judged.needs.map(n=>n.status),['met','not']);
     for(const need of judged.needs) for(const capture of need.captures) assert.ok(existsSync(capture));

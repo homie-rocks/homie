@@ -1,3 +1,4 @@
+import {createLocalCredential} from './local-test.mjs';
 import {workerEntry} from './worker-build.mjs';
 import { networkInterfaces } from 'node:os';
 /**
@@ -132,7 +133,7 @@ export function devState(root) {
 export function runningDev(root) {
   const st = devState(root);
   if (st.state !== 'running' || !st.port) return null;
-  return { url: `http://127.0.0.1:${st.port}`, port: st.port, pid: st.rec.pid ?? st.pids[0] };
+  return { url: `http://localhost:${st.port}`, port: st.port, pid: st.rec.pid ?? st.pids[0] };
 }
 
 async function endAll(pids, ms = 8000) {
@@ -292,15 +293,14 @@ function passLines(stream, to, opts) {
  * saved. `rulesStamp` is what it compares: the newest change among them, and how many there are.
  */
 export function rulesStamp(g) {
-  const files = [join(g.dir, g.kind === 'app' ? 'app.json' : 'game.json'), join(g.dir, 'tunables.json')];
-  for (const sub of ['src', 'map']) {
-    const dir = join(g.dir, sub);
-    if (existsSync(dir)) for (const name of readdirSync(dir, { recursive: true })) files.push(join(dir, String(name)));
-  }
-  let newest = 0;
-  let n = 0;
-  for (const f of files) { try { const st = statSync(f); if (st.isFile()) { n += 1; newest = Math.max(newest, st.mtimeMs); } } catch { /* gone */ } }
-  return `${n}:${Math.round(newest)}`;
+  const rows=[];
+  const walk=dir=>{for(const entry of readdirSync(dir,{withFileTypes:true})) {
+    if(['node_modules','.git','.wrangler','.studio','dist','codex'].includes(entry.name))continue;
+    const file=join(dir,entry.name);
+    if(entry.isDirectory())walk(file);
+    else if(entry.isFile()){const st=statSync(file);rows.push(`${file}:${st.size}:${st.mtimeMs}:${st.ctimeMs}`);}
+  }};
+  walk(g.dir);return rows.sort().join('|');
 }
 
 const builtIds = (root) => { try { return JSON.parse(readFileSync(join(root, 'site', 'dist', 'games.json'), 'utf8')).games.map((g) => g.id); } catch { return null; } };
@@ -316,8 +316,8 @@ export async function dev(root, { lan = false, port: askedPort = 8787, remoteAi 
   // What is really there, before anything is built or started (the header: stale state heals itself).
   const st = devState(root);
   if (st.state === 'running') {
-    const at = st.port ? `http://127.0.0.1:${st.port}/` : 'an unknown port';
-    return { ok: false, command: 'dev', already: true, ...(st.port ? { url: `http://127.0.0.1:${st.port}` } : {}), why: `this studio's dev server is already running at ${at} (process ${st.pids.join(', ')}). Use that one, or stop it first: ${stop}` };
+    const at = st.port ? `http://localhost:${st.port}/` : 'an unknown port';
+    return { ok: false, command: 'dev', already: true, ...(st.port ? { url: `http://localhost:${st.port}` } : {}), why: `this studio's dev server is already running at ${at} (process ${st.pids.join(', ')}). Use that one, or stop it first: ${stop}` };
   }
   if (st.state === 'stale') {
     rmSync(st.file, { force: true });
@@ -329,7 +329,7 @@ export async function dev(root, { lan = false, port: askedPort = 8787, remoteAi 
     if (p === Number(port) && left.open) {
       const busy = port;
       do { port = String(Number(port) + 1); } while (Number(port) < 65535 && await portOpen(Number(port)));
-      log(`Port ${busy} is busy; using http://127.0.0.1:${port}/`);
+      log(`Port ${busy} is busy; using http://localhost:${port}/`);
     }
   }
 
@@ -347,7 +347,7 @@ export async function dev(root, { lan = false, port: askedPort = 8787, remoteAi 
     m.on('close', done);
     m.on('error', done);
   });
-  const origin = `http://127.0.0.1:${port}`;
+  const origin = `http://localhost:${port}`;
   log(`Local site: ${origin}/  (each game: ${origin}/<id>/play — open it in two browsers)`);
   if (lan) for (const address of lanAddresses()) log(`Same Wi-Fi: http://${address}:${port}/ (open this address on phones and wall screens)`);
   const ai = devConfig(root, remoteAi);
@@ -362,7 +362,8 @@ export async function dev(root, { lan = false, port: askedPort = 8787, remoteAi 
   }
   // --remote-ai: Wrangler's --local turns every remote binding off ("not supported"), so a dev with the real Workers AI
   // (the guides' brains, room chat's review) runs without it; everything else stays local all the same.
-  const args = ['dev', ...(remoteAi ? [] : ['--local']), '--ip', lan ? '0.0.0.0' : '127.0.0.1', '--port', port, '--var', 'HOMIE_EMBED_PREVIEW:1', ...ai.args, ...localVars];
+  const localSecret = createLocalCredential(root);
+  const args = ['dev', '--var', `HOMIE_LOCAL_TEST_SECRET:${localSecret}`, ...(remoteAi ? [] : ['--local']), '--ip', lan ? '0.0.0.0' : '127.0.0.1', '--port', port, '--var', 'HOMIE_EMBED_PREVIEW:1', ...ai.args, ...localVars];
   log(`Stop it with: ${stop}   (this studio's dev server only)`);
 
   let child = null;
@@ -417,13 +418,13 @@ export async function dev(root, { lan = false, port: askedPort = 8787, remoteAi 
     } finally { busy = false; }
   };
   // A rules game saved while dev runs is built again (see rulesStamp), one game at a time.
-  const stamps = new Map(listGames(root).filter(isRulesGame).map((g) => [g.id, rulesStamp(g)]));
+  const stamps = new Map(listGames(root).map((g) => [g.id, rulesStamp(g)]));
   const timingRetries = new Map();
   let rebuilding = false;
   let published = Promise.resolve();
   const rulesLook = async () => {
     if (rebuilding || ending) return;
-    for (const g of listGames(root).filter(isRulesGame)) {
+    for (const g of listGames(root)) {
       const now = rulesStamp(g);
       const retry = timingRetries.get(g.id);
       if (stamps.get(g.id) === now && !(retry?.stamp === now && Date.now() >= retry.at)) continue;
