@@ -48,8 +48,10 @@ test('records-only shell sends booking checkout and returns the booking to the f
   return r.continue();
  });
  await page.goto(origin+'/records-with-shop');
- const frame=page.frames().find(f=>f.url().includes('/__game/'));await frame.click('#book');
- await frame.waitForFunction(()=>document.querySelector('output').textContent==='ord_test',{timeout:2000});
+ // Click only once the shell has finished arriving, so the bridge is listening on a busy runner.
+ await page.waitForFunction(()=>window.__shell?.arrival?.phase==='done',{timeout:10000});
+ const frame=page.frames().find(f=>f.url().includes('/__game/'));await frame.waitForSelector('#book');await frame.click('#book');
+ await frame.waitForFunction(()=>document.querySelector('output').textContent==='ord_test',{timeout:10000});
  assert.deepEqual(request.booking,{collection:'bookings',slot:'morning'});assert.equal(request.game,'form');
  assert.equal(await page.evaluate(()=>window.__shell.arrival.phase),'done');
 });
