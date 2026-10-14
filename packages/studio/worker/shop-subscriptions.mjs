@@ -39,7 +39,14 @@ export async function subscriptionEvent(env, event) {
   const obj=event.data.object;
   const subscription=event.type.startsWith('customer.subscription.') ? obj.id : idOf(obj.parent?.subscription_details?.subscription ?? obj.subscription);
   if (!subscription) return 'ignored';
-  const row=await env.DB.prepare('SELECT s.*,o.mode FROM shop_subscriptions s JOIN shop_orders o ON o.id=s.order_id WHERE s.id=?1').bind(subscription).first();
+  let row;
+  try {
+    row=await env.DB.prepare('SELECT s.*,o.mode FROM shop_subscriptions s JOIN shop_orders o ON o.id=s.order_id WHERE s.id=?1').bind(subscription).first();
+  } catch (error) {
+    // Existing studios have no subscription ownership until they opt in and migrate.
+    // Preserve retries for database failures other than an absent opt-in table.
+    if (!/no such table: (?:main\.)?shop_subscriptions\b/.test(String(error?.message))) throw error;
+  }
   if (!row) {
     const metadata=obj.parent?.subscription_details?.metadata ?? obj.subscription_details?.metadata ?? obj.metadata;
     if (metadata?.homie === 'shop-v1' || metadata?.homie === 'shop-links-v1') throw new Error('Subscription Checkout has not arrived; retry');

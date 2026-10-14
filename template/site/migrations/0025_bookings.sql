@@ -8,25 +8,25 @@ CREATE TABLE shop_bookings (
 );
 CREATE INDEX shop_bookings_capacity ON shop_bookings(app, slots, slot, state);
 CREATE TRIGGER booking_capacity_insert BEFORE INSERT ON shop_bookings BEGIN
- SELECT CASE WHEN NOT EXISTS (
+ SELECT RAISE(ABORT,'booking capacity unavailable') WHERE NOT EXISTS (
   SELECT 1 FROM app_records s WHERE s.app=NEW.app AND s.collection=NEW.slots AND s.id=NEW.slot
   AND json_type(s.value,'$.capacity')='integer' AND json_extract(s.value,'$.capacity') >= NEW.quantity +
    (SELECT COALESCE(SUM(quantity),0) FROM shop_bookings WHERE app=NEW.app AND slots=NEW.slots AND slot=NEW.slot AND state IN ('held','confirmed'))
- ) THEN RAISE(ABORT,'booking capacity unavailable') END;
+ );
 END;
 CREATE TRIGGER booking_capacity_move BEFORE UPDATE OF slot ON shop_bookings
 WHEN NEW.state IN ('held','confirmed') BEGIN
- SELECT CASE WHEN NOT EXISTS (
+ SELECT RAISE(ABORT,'booking capacity unavailable') WHERE NOT EXISTS (
   SELECT 1 FROM app_records s WHERE s.app=NEW.app AND s.collection=NEW.slots AND s.id=NEW.slot
   AND json_type(s.value,'$.capacity')='integer' AND json_extract(s.value,'$.capacity') >= NEW.quantity +
    (SELECT COALESCE(SUM(quantity),0) FROM shop_bookings WHERE app=NEW.app AND slots=NEW.slots AND slot=NEW.slot AND id!=NEW.id AND state IN ('held','confirmed'))
- ) THEN RAISE(ABORT,'booking capacity unavailable') END;
+ );
 END;
 CREATE TRIGGER booking_slot_update BEFORE UPDATE OF value ON app_records
 WHEN EXISTS (SELECT 1 FROM shop_bookings WHERE app=OLD.app AND slots=OLD.collection AND slot=OLD.id AND state IN ('held','confirmed')) BEGIN
- SELECT CASE WHEN json_type(NEW.value,'$.capacity') IS NOT 'integer' OR json_extract(NEW.value,'$.capacity') <
+ SELECT RAISE(ABORT,'capacity below existing bookings') WHERE json_type(NEW.value,'$.capacity') IS NOT 'integer' OR json_extract(NEW.value,'$.capacity') <
   (SELECT SUM(quantity) FROM shop_bookings WHERE app=OLD.app AND slots=OLD.collection AND slot=OLD.id AND state IN ('held','confirmed'))
- THEN RAISE(ABORT,'capacity below existing bookings') END;
+;
 END;
 CREATE TRIGGER booking_slot_delete BEFORE DELETE ON app_records
 WHEN EXISTS (SELECT 1 FROM shop_bookings WHERE app=OLD.app AND slots=OLD.collection AND slot=OLD.id AND state IN ('held','confirmed')) BEGIN
