@@ -11,7 +11,7 @@ and in `@homie-rocks/studio`'s `lib/asset-manifest.mjs` (`PROVIDER_TERMS`), whic
   Output to the customer; fal "does not represent, warrant, or covenant that any Output Content will be original,
   will not infringe rights of any third party … or otherwise entitle Company to any intellectual property rights
   in any Output Content". Third-party model outputs may not be used to train models that compete with them. The
-  endpoints in `models.json` carry fal's "Commercial use" label.
+  model-specific terms must be checked through the official fal plugin before use; a catalogue label is not a licence record.
 - **Tripo** through fal (developer terms, https://developers.tripo3d.ai/en/terms, read 2026-10-02, last updated
   2025-07-11): "you may use Outputs for lawful commercial or non-commercial purposes". Calls through fal are paid
   calls. Tripo's FREE plan makes outputs public under CC BY 4.0 (credit Tripo); this skill never uses a free plan.

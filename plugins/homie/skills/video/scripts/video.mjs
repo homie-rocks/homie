@@ -1,45 +1,6 @@
 #!/usr/bin/env node
-/**
- * video.mjs — trailers, music videos and cutscenes for a Homie studio: generated
- * footage from fal through the creator's own account (priced, capped, receipted),
- * real gameplay captured from the studio's own game, cut on the music's beat grid,
- * checked for sync, reviewed on contact sheets, delivered 16:9 and 9:16, and
- * published as a video page on the studio's site.
- *
- *   check                                        fal key (a free check), ffmpeg, Chrome, the studio
- *   budget <slug> --cap <usd>                    the most the person agreed to spend on this video
- *   price --model <id> --input <file.json>       what one call costs, from fal's own pricing (free)
- *   gen <slug> --model <id> --input <file.json> --out <path> [--dry-run] [--yes]
- *                                                ONE paid fal call; "@file:<path>" inputs are uploaded first
- *   grid <slug> --song <music slug|file> [--bpm] the song's beats, bars and (from the music skill) sung words
- *   slice <slug> --from <s> --to <s> --out <path.wav> [--song …]    a cut of the song, e.g. a shot's audio reference
- *   lag <slug> --base <clip.mp4> --ref <cut.wav> how far a generated clip's own sound sits from its reference
- *   capture <slug> --game <id> --url <site> [--seconds 60] [--view tv|play] [--scale 0.67] [--fps 30]
- *                                         real gameplay (capture-game.mjs); --scale renders a heavy game smaller
- *   record <slug> --steps <steps.json> [--url <site>] [--device computer|phone] [--name <take>] [--seconds 120]
- *          [--fps 30] [--scale 1] [--no-cursor]
- *                                         any page, driven by a script (record-page.mjs; references/RECORD.md):
- *                                         clicks, taps, keys, typing, scrolls, waits, in real time, honest frames
- *   trailer <slug> --game <id> [--url <site>] [--page <path>] [--seconds 40] [--length 20] [--fps 30] [--scale 1]
- *          [--steps <steps.json>] [--title "…"] [--end "Play free"] [--sub "…"] [--shot <s>] [--wait-for "<js>"]
- *                                         one command: live capture for server rules; a virtual clock for browser
- *                                         games. Live sound is captured; virtual-clock sound is rebuilt from the
- *                                         game's files and event log. Pick highlights, add
- *                                         an end card, and 16:9, 1:1 and 9:16 deliveries (references/TRAILER.md)
- *   edl <slug> --length <s> [--song <slug>] [--bed-from-bar <k>] [--title "…"] [--end "…"]   an edit, cut on bars
- *   card <slug> --name <title|end> --text "…" [--sub "…"] [--game <id>]   a title or end card, 16:9 and 9:16 (--game: in
- *                                           that game's palette and display font, from games/<id>/style.json)
- *   cut <slug> [--edl work/edl.json] [--square]  the 16:9 and 9:16 deliveries (and 1:1 with --square), cut by frame
- *                                           counts, limited-range BT.709, loudness to -14 LUFS, a poster
- *   film init <slug> | film render <slug> [--mode h|v] [--from s --to s]   the draw-over + kinetic type renderer
- *   sheet <slug> --in <mp4> [--every 1]          a contact sheet to look at before anyone else does
- *   words <slug> --in <mp4>                      every sung word's frame, labelled (music videos)
- *   sync <slug> --in <mp4> [--at t1,t2,…]        sound onset vs picture change at each cut or hit, in frames
- *   add <slug> --title "…" [--kind trailer|music-video|cutscene] [--for-game <id>] [--for-song <slug>] [--publish]
- *   publish <slug>                               media to R2 when the studio has it, rebuild, redeploy, check the page
- *
- * --json prints the result. Nothing prints a key.
- */
+/** video.mjs: local asset preparation only. Generation, schemas and pricing belong to the official provider MCP.
+ * Read ../SKILL.md for the current workflow. */
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -49,7 +10,7 @@ import { beatsOf, decodeMono, energyOnsets, lagBetween, loudness, need, probe, r
 import { experienceDir, experienceJson, isServerRules, SLUG, checkBudget, getEntry, readJson, receipt, rel, requireStudio, setBudget, upsertEntry, writeJson } from '../../music/scripts/lib/studio.mjs';
 import { publishEntry } from '../../music/scripts/music.mjs';
 import { chromePath, htmlToPng, launch, loadPuppeteer } from './lib/browser.mjs';
-import { checkKey, falKey, priceOf, run as falRun } from './lib/fal.mjs';
+
 import { BT709_FLAGS, BT709_TAIL, frameSegments } from './lib/frames.mjs';
 import { eventScores } from './lib/remix.mjs';
 
@@ -101,7 +62,7 @@ function ff(args, what) {
 
 async function check() {
   const out = { ok: true, command: 'check', ffmpeg: need('ffmpeg') && need('ffprobe'), chrome: chromePath() };
-  out.fal = falKey() ? await checkKey() : { ok: false, why: 'FAL_KEY is not set (only generated footage needs it; trailers from gameplay do not)' };
+  out.fal = { connection: 'Use the official fal MCP in your AI client' };
   let root = null;
   try { root = requireStudio(); out.studio = { ok: true, root, puppeteer: Boolean(loadPuppeteer(root)) }; } catch (error) { out.studio = { ok: false, why: error.message }; }
   if (!out.ffmpeg) { out.ok = false; out.why = 'ffmpeg is not installed (macOS: `brew install ffmpeg`; the person approves the install)'; }
@@ -113,44 +74,6 @@ function budget(root) {
   const cap = Number(flags.get('cap'));
   if (!(cap > 0)) throw new Error('--cap <US dollars>: the most the person agreed to spend on this video');
   return { ok: true, command: 'budget', slug: pos[1], budget: setBudget(jobDir(root, pos[1]), { provider: 'fal', unit: 'usd', cap, approvedBy: flags.get('by') ?? 'the person, in chat', note: flags.get('note') ?? null }) };
-}
-
-function inputOf(file) {
-  const j = readJson(resolve(String(file ?? '')), null);
-  if (!j) throw new Error(`--input <file.json>: the model's input (read its schema on fal's model page or with the fal MCP get_model_schema)`);
-  return j;
-}
-
-async function price() {
-  const model = String(flags.get('model') ?? '');
-  if (!model) throw new Error('--model <fal endpoint id>');
-  const p = await priceOf(model, inputOf(flags.get('input')));
-  return { ok: true, command: 'price', ...p };
-}
-
-async function gen(root) {
-  const slug = pos[1];
-  const dir = jobDir(root, slug);
-  const model = String(flags.get('model') ?? '');
-  if (!model) throw new Error('--model <fal endpoint id>');
-  if (!flags.get('out')) throw new Error('--out <path in this video\'s folder, e.g. work/bases/s01.mp4>');
-  const input = inputOf(flags.get('input'));
-  const out = inJob(dir, flags.get('out'));
-  if (!out.startsWith(`${dir}/`)) throw new Error('--out must stay inside the video\'s folder');
-  if (existsSync(out)) return { ok: true, command: 'gen', slug, already: rel(root, out) };
-  const p = await priceOf(model, input);
-  const resuming = existsSync(`${out}.request`);
-  if (flags.has('dry-run')) return { ok: true, command: 'gen', dryRun: true, slug, price: p };
-  if (!resuming) {
-    const b = checkBudget(dir, p.usd, { provider: 'fal', unit: 'usd' });
-    if (!flags.has('yes')) return { ok: false, command: 'gen', needs: 'approval', slug, price: p, budget: { cap: b.cap, spent: b.spent }, why: `This call costs about US$${p.usd.toFixed(2)} (${p.basis}, ${p.unitPrice} per ${p.unit}); US$${b.spent.toFixed(2)} of US$${b.cap.toFixed(2)} spent so far. Run it with --yes once that is fine.` };
-  }
-  const r = await falRun(model, input, {
-    out, base: dir, uploads: join(dir, 'work', 'uploads.json'), price: p, log: say,
-    onAccepted: async (q) => { receipt(root, dir, { provider: 'fal', model, requestId: q.request_id, cost: p.usd, unit: 'usd', units: p.units, unitName: p.unit, basis: p.basis, artifact: rel(root, out) }); },
-  });
-  const facts = extname(out) === '.mp4' ? probe(out) : null;
-  return { ok: true, command: 'gen', slug, files: r.files.map((f) => rel(root, f)), requestId: r.requestId, usd: p.usd, seconds: facts?.duration ?? null, spent: readJson(join(dir, 'budget.json'), {}).spent };
 }
 
 /* ---------------------------------------------------------------- the song: grid, slices, lag */
@@ -905,9 +828,7 @@ function print(r) {
   if (r.ok === false && r.why) { process.stdout.write(`video: ${r.why}\n`); return; }
   const L = [];
   switch (r.command) {
-    case 'check': L.push(`fal: ${r.fal.ok ? 'key accepted' : r.fal.why}`, `ffmpeg: ${r.ffmpeg ? 'yes' : 'NO'}; Chrome: ${r.chrome ?? 'NO'}`, `Studio: ${r.studio.ok ? `${r.studio.root}${r.studio.puppeteer ? '' : ' (no puppeteer-core: npm install)'}` : r.studio.why}`); break;
-    case 'price': L.push(`${r.model}: US$${r.usd.toFixed(4)} (${r.basis}; ${r.unitPrice} per ${r.unit})`); break;
-    case 'gen': L.push(r.already ? `already made: ${r.already}` : r.dryRun ? `dry run: US$${r.price.usd.toFixed(4)} (${r.price.basis}); nothing sent` : `made ${r.files.join(', ')} for US$${r.usd.toFixed(2)}; this video has spent US$${Number(r.spent).toFixed(2)}`); break;
+    case 'check': L.push(`fal: ${r.fal.connection}`, `ffmpeg: ${r.ffmpeg ? 'yes' : 'NO'}; Chrome: ${r.chrome ?? 'NO'}`, `Studio: ${r.studio.ok ? `${r.studio.root}${r.studio.puppeteer ? '' : ' (no puppeteer-core: npm install)'}` : r.studio.why}`); break;
     case 'grid': L.push(`${r.bpm} BPM (confidence ${r.confidence}), bars of ${r.barSeconds} s from ${r.offset} s; ${r.bars} bars, ${r.words} sung words. ${r.file}`); break;
     case 'lag': L.push(`${r.base}: ${r.lagMs} ms (${r.lagFramesAt24} frames at 24 fps), peak ${r.peak}: ${r.verdict}`); break;
     case 'record':
@@ -936,11 +857,9 @@ async function main() {
     return null;
   }
   if (cmd === 'check') return check();
-  if (cmd === 'price') return price();
   const root = requireStudio();
   switch (cmd) {
     case 'budget': return budget(root);
-    case 'gen': return gen(root);
     case 'grid': return grid(root);
     case 'slice': return slice(root);
     case 'lag': return lag(root);

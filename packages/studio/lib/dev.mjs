@@ -32,7 +32,6 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, readlinkSync, realpat
 import { connect } from 'node:net';
 import { dirname, join, sep } from 'node:path';
 import { detectLocalAi, localAiVars } from './local-ai.mjs';
-import { projectsCloudflareEnv } from './projects-env.mjs';
 import { routesOf } from './routes.mjs';
 import { ensureMigrations, migrationWord } from './scaffold.mjs';
 import { isRulesGame, listExperiences as listGames, workerDir } from './studio.mjs';
@@ -343,7 +342,7 @@ export async function dev(root, { lan = false, port: askedPort = 8787, remoteAi 
   if (!b.catalogue.length && !b.songs.length && !b.videos.length) log('No game yet: the home page says "First game coming soon" until the first one is made.');
   const bin = wranglerBin(root);
   if (!bin) return { ok: false, command: 'dev', why: 'run npm install in the studio first' };
-  const env = { ...process.env, ...projectsCloudflareEnv(root), WRANGLER_SEND_METRICS: 'false', CI: '1', ...(process.stdout.isTTY && !process.env.NO_COLOR ? { FORCE_COLOR: process.env.FORCE_COLOR ?? '1' } : {}) };
+  const env = { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1', ...(process.stdout.isTTY && !process.env.NO_COLOR ? { FORCE_COLOR: process.env.FORCE_COLOR ?? '1' } : {}) };
   for (const added of ensureMigrations(root)) log(`added ${added} (${migrationWord(added)})`);
   await new Promise((done) => {
     const m = spawn(bin, ['d1', 'migrations', 'apply', 'DB', '--local'], { cwd: workerDir(root), env, stdio: ['ignore', 'ignore', 'inherit'] });

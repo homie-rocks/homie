@@ -74,11 +74,11 @@ person approves every install and signs in on the provider's own page.
 | Provider | What Homie's skills use | Offered when the person wants it |
 | --- | --- | --- |
 | Cloudflare | Wrangler, pinned in the studio (`login`, `--device` where no browser opens; `deploy`, D1, R2, secrets, `ai models list`) | Cloudflare's plugin (`cloudflare/skills`: its skills and API MCP server), its docs MCP server |
-| ElevenLabs | ElevenLabs' CLI (`elevenlabs auth login`; music, stems, speech to text, the subscription) | ElevenLabs' plugin (`elevenlabs/plugin`: its skills and hosted MCP server), `npx skills add elevenlabs/skills` |
-| fal | fal's MCP server to find models and read schemas and prices; the skills' scripts for paid runs (priced, capped, receipted, resumable) | fal's CLI (`fal auth login`, `fal keys create`) to make the key |
-| Tripo | Tripo's models on fal (`tripo3d/...`) | none: Tripo's own CLI and MCP server bill a separate account |
+| ElevenLabs | Official hosted MCP for music and sound; local mastering and provenance | Official ElevenLabs plugin with one OAuth browser sign-in |
+| fal | Official MCP for model discovery, pricing, images, 3D and video | Official fal plugin with one OAuth browser sign-in |
+| Tripo | Models discovered through official fal tools | No separate Homie client |
 | GitHub | the GitHub CLI (`gh auth login --web`, `gh pr create`) | GitHub's MCP server (`github@claude-plugins-official`) |
-| Stripe | Stripe's MCP server (the shop's catalog, tax settings and sales, as the owner signed it in, a sandbox first); the shop's key only through `homie-studio shop connect` | Stripe's agent plugin (`stripe agent setup`: its MCP server and skills) once a studio sells; Stripe Projects (`setup --via stripe-projects`) as an option for Cloudflare and ElevenLabs |
+| Stripe | Stripe's MCP server (the shop's catalog, tax settings and sales, as the owner signed it in, a sandbox first); the shop's key only through `homie-studio shop connect` | Stripe's agent plugin (`stripe agent setup`: its MCP server and skills) once a studio sells; provider setup stays with each official plugin |
 | Ollama | Clef on the person's own computer, when Ollama already has `clef-flash`: `dev`'s AI guides, chat review and game decisions, and `agents sit --brain local`, free (detection reads `/api/version` and `/api/tags`, loopback only) | `ollama pull clef-flash` (about 11 GB), only after the person's yes to that size |
 
 Stripe is the `shop` skill's, with its own rules for Stripe's tools: never a webhook or an API key through the MCP

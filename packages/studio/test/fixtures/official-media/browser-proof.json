@@ -1,0 +1,63 @@
+{
+  "checkedAt": "2026-10-14",
+  "image": {
+    "width": 512,
+    "height": 512
+  },
+  "sound": {
+    "duration": 0.3,
+    "ended": true,
+    "error": null
+  },
+  "provenance": [
+    {
+      "provider": "fal",
+      "tool": "run_model",
+      "model": "fal-ai/flux/schnell",
+      "requestId": "01a13c26-3085-71b2-8d3a-7e9726c0ba83",
+      "prompt": "Cozy moonlit forest clearing for a small game scene, a single warm amber lantern hanging from a curved tree branch, deep indigo and muted teal palette, large readable painterly flat shapes, quiet inviting mood, no text, no interface, square composition",
+      "styleRevision": "forest-proof-1",
+      "rights": {
+        "source": "https://fal.ai/terms",
+        "checkedAt": "2026-10-14",
+        "commercial": false,
+        "note": "Proof-only"
+      },
+      "cost": {
+        "status": "estimate",
+        "amount": 0.003,
+        "unit": "usd"
+      },
+      "fixture": false,
+      "output": "games/forest/assets/forest.png",
+      "usedBy": "games/forest/index.html",
+      "sha256": "7b5c334fee1fe624468124ab0afd6a852bc81282b5468ae9d67b29261cbd9086",
+      "bytes": 349914
+    },
+    {
+      "provider": "elevenlabs",
+      "tool": "fixture-only",
+      "model": "synthetic-audio-fixture",
+      "requestId": "fixture-sound-1",
+      "prompt": "Cozy moonlit forest clearing for a small game scene, a single warm amber lantern hanging from a curved tree branch, deep indigo and muted teal palette, large readable painterly flat shapes, quiet inviting mood, no text, no interface, square composition",
+      "styleRevision": "forest-proof-1",
+      "rights": {
+        "source": "https://fal.ai/terms",
+        "checkedAt": "2026-10-14",
+        "commercial": false,
+        "note": "Proof-only"
+      },
+      "cost": {
+        "status": "unknown",
+        "amount": null,
+        "unit": null
+      },
+      "fixture": true,
+      "output": "games/forest/assets/lantern.wav",
+      "usedBy": "games/forest/index.html",
+      "sha256": "fe3bf756890078a85e42667c008c0593c8a04a43fa5291a0d59d267dc5a07905",
+      "bytes": 9678
+    }
+  ],
+  "studioDeleted": true
+}

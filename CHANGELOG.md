@@ -45,6 +45,22 @@ An owner's AI configures and verifies shop, bookings and monthly giving through 
 
 - Use `stripe_shop_plan` with Stripe's official OAuth plugin, then `stripe_webhook`. The CLI grant is separate from MCP and needs one browser approval if not already connected. `shop connect` remains the full CLI alternative. Run a full build before release.
 
+**Plugin 0.51.5** · Official provider connections for studio media.
+
+Studio media uses the owner’s official provider connections, with local placement and provenance.
+
+### Changed
+
+- Art, models, music, sound, video and style use the official fal and ElevenLabs MCPs in the owner's AI client. Homie keeps art direction, local processing, placement, rights and provenance.
+- Setup reports session-verified official plugin connections and their browser sign-in steps. Cloudflare deploys retain Wrangler; inspection uses Cloudflare's official MCP.
+- `media import` places completed outputs, checks scene references and records hashes, rights and explicit cost status without provider access.
+
+- Removed Homie's fal and ElevenLabs API/CLI generation clients, provider key-file readers and Projects credential-to-env setup bridge. No legacy generation path remains.
+
+### Upgrade notes
+
+- Update the toolkit and plugin together, run upgrade, and connect the official plugins in the AI client. Existing outputs remain usable. Retired credential instructions are replaced; no old credential file is read or migrated. ElevenLabs media capabilities must be discovered from the connected server before promising generation.
+
 ## [0.51.4] - 2026-10-14
 
 **Plugin 0.51.4** · Studio events through experimental MCP Events.

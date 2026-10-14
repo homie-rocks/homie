@@ -1,11 +1,4 @@
-/**
- * The art skill's script against a stand-in fal (fixtures/fake-fal.mjs): a free key check, a price
- * from fal's own unit price, a budget that refuses, one approved image with its receipt written the
- * moment it is accepted, a rerun that never pays twice; and the free parts: a cover cropped into the
- * game and named in game.json, the tiling check, fitting a texture under a size, a contact sheet.
- * No account, no money. Needs ffmpeg (and Chrome for the sheet).
- * Run: node --test plugins/homie/test/art.test.mjs
- */
+/** Local media preparation and completed-output import tests. No provider clients or credentials. */
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -13,7 +6,6 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { startFakeFal } from './fixtures/fake-fal.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PLUGIN = join(HERE, '..');
@@ -36,44 +28,7 @@ function studio(name) {
 }
 const ffmpeg = (...args) => { const r = spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', ...args], { encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr); };
 
-test('art: priced, capped and receipted images; a rerun never pays twice; the key checked for free', async () => {
-  const fal = await startFakeFal();
-  const env = { ...process.env, FAL_KEY: 'test-key', FAL_QUEUE_URL: fal.base, FAL_API_URL: fal.base, FAL_STORAGE_URL: fal.base, HOMIE_SPEND_LEDGER: join(scratch, 'ledger.jsonl') };
-  const art = (args, cwd, extra = {}) => new Promise((ok) => {
-    const p = spawn(process.execPath, [ART, ...args, '--json'], { cwd, env: { ...env, ...extra } });
-    let out = ''; let err = '';
-    p.stdout.on('data', (d) => { out += d; }); p.stderr.on('data', (d) => { err += d; });
-    p.on('close', () => { try { ok(JSON.parse(out)); } catch { ok({ ok: false, why: `no JSON: ${out} ${err}` }); } });
-  });
-  try {
-    const dir = studio('paid');
-    assert.match((await art(['check'], dir)).fal, /works/);
-    assert.match((await art(['check'], dir, { FAL_KEY: 'wrong' })).fal, /refused|401|403/);
-    writeFileSync(join(dir, 'in.json'), JSON.stringify({ prompt: 'a night market seen from above, lanterns, painterly', image_size: { width: 1024, height: 576 } }));
-    const p = await art(['price', '--model', 'fal-ai/flux/dev', '--input', join(dir, 'in.json')], dir);
-    assert.equal(p.usd, 0.025);
-    const none = await art(['gen', 'cover', '--model', 'fal-ai/flux/dev', '--input', join(dir, 'in.json'), '--out', 'painted.png', '--yes'], dir);
-    assert.equal(none.ok, false);
-    assert.match(none.why, /no budget/);
-    assert.equal((await art(['budget', 'cover', '--cap', '0.02'], dir)).cap, 0.02);
-    assert.match((await art(['gen', 'cover', '--model', 'fal-ai/flux/dev', '--input', join(dir, 'in.json'), '--out', 'painted.png', '--yes'], dir)).why, /REFUSED/);
-    await art(['budget', 'cover', '--cap', '0.10'], dir);
-    const ask = await art(['gen', 'cover', '--model', 'fal-ai/flux/dev', '--input', join(dir, 'in.json'), '--out', 'painted.png'], dir);
-    assert.equal(ask.needs, 'approval');
-    assert.equal(fal.stats.submits, 0, 'nothing is sent before the go-ahead');
-    const g = await art(['gen', 'cover', '--model', 'fal-ai/flux/dev', '--input', join(dir, 'in.json'), '--out', 'painted.png', '--yes'], dir);
-    assert.equal(g.ok, true, JSON.stringify(g));
-    assert.ok(existsSync(join(dir, 'art', 'cover', 'painted.png')));
-    const receipts = readFileSync(join(dir, 'art', 'receipts.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
-    assert.equal(receipts.length, 1);
-    assert.equal(receipts[0].cost, 0.025);
-    assert.equal(JSON.parse(readFileSync(join(dir, 'art', 'cover', 'budget.json'), 'utf8')).spent, 0.025);
-    assert.equal(readFileSync(join(scratch, 'ledger.jsonl'), 'utf8').trim().split('\n').length, 1, 'the ledger named by HOMIE_SPEND_LEDGER gets the line too');
-    const again = await art(['gen', 'cover', '--model', 'fal-ai/flux/dev', '--input', join(dir, 'in.json'), '--out', 'painted.png', '--yes'], dir);
-    assert.equal(again.already, 'art/cover/painted.png');
-    assert.equal(fal.stats.submits, 1, 'a rerun never pays twice');
-  } finally { await fal.close(); }
-});
+
 
 test('art: a cover cropped into the game and named in game.json; tiling, fitting and a contact sheet', () => {
   const dir = studio('free');
