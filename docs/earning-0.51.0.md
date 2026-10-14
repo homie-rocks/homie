@@ -3,6 +3,18 @@
 Target: 0.51.0, one owner-owned Stripe checkout for carts, capacity bookings,
 and monthly giving. Existing studios opt in. No Homie payment intermediary.
 
+**Settled (supersedes the authorization notes below):** the default is keyless.
+The owner's AI creates Stripe-native objects through the one-approval Stripe CLI
+session: a menu Payment Link with adjustable quantities for a round (table in
+`client_reference_id`, paid lines from the signed invoice), one Payment Link per
+published slot with `restrictions.completed_sessions.limit` as the hard capacity,
+and recurring Prices on Payment Links plus the no-code customer portal login
+(`login_page.enabled`, set through the API) for monthly giving and memberships.
+The Worker holds only link config and the webhook signing secret. Homie has no
+platform key, OAuth backend or place in the money path; the owner never pastes a
+key. The keyed Checkout Session path stays optional, chosen only explicitly.
+Real-sandbox proof: `proof/earning/keyless/`; Maya's trial: `proof/earning/maya-keyless/`.
+
 Implementation checks:
 - Preserve immutable order lines and app references through verified payment.
 - Reserve capacity atomically before creating Checkout; never release on a local
@@ -39,7 +51,7 @@ Continuation evidence (2026-10-14):
   with original order snapshots retained across recognised plan changes. Provider
   reads have generation guards against overlapping/out-of-order reconciliations.
 
-The one-approval production blocker is **credential provisioning, not just a
+Historical (before the keyless decision): the keyed path's blocker was **credential provisioning, not just a
 missing Checkout scope**. Current CLI login/reauth grants remain CLI sessions.
 No published Homie Stripe OAuth app/client or managed-key preview integration was
 found in this repository. Stripe Apps OAuth requires a published public app plus
@@ -54,8 +66,8 @@ A supported app integration must request Checkout Session writes, subscription /
 invoice / product reads, customer portal session writes, and the existing webhook
 setup and refund permissions, then privately provision and renew the studio's
 runtime credentials. Its browser install remains one owner approval once Homie's
-app integration exists. The unresolved prerequisite prevents a complete 0.51.0
-release claim even if the implementation PR is ready for code review.
+app integration exists. That prerequisite applies only to the optional keyed path; the keyless default does
+not need it.
 
 The completed sandbox script also passed actual subscription Checkout, the
 customer portal, test-clock renewal/failure/cancellation, and Stripe's published

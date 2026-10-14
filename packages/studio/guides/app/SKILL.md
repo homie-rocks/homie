@@ -108,6 +108,8 @@ await shop.buy('full-tune', 1, undefined, { reference: booking.id });
 await shop.checkout({ reference: booking.id });
 ```
 
+On the default keyless connection, `shop.checkout({ reference: 'table-7' })` opens the studio's synced Stripe menu: the guest sets quantities on Stripe's page and `order.paid.data.lines` carries what was actually paid. A slot with capacity uses `shop.book` (see below), not `shop.buy`. Monthly gifts and memberships are recurring items on their own links. None of these needs a key.
+
 These retain their existing boolean result: true means checkout opened, not payment received. The durable `order.paid` function event includes `data.order` (the order ID), `data.reference` (your reference or null), and `data.app` (the app ID). A verified provider payment emits it. Validate the referenced record, expected amount/currency and app, deduplicate by event/order ID, then fulfil that booking or add that gift to the confirmed meal table. A buyer supplies the reference: it is correlation, never proof they own a private record or paid the expected price. Do not put personal data in it.
 
 For each offer, build the promised action and fulfilment, not just a price label: a naming purchase needs the proposed name and the staff/customer outcome; a ticket needs its receipt. Keep an unpaid request distinct when charging is unavailable.
