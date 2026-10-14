@@ -289,7 +289,7 @@ export const SHOP_JS = String.raw`(function () {
     (function poll() {
       tries += 1;
       api('GET', '/api/shop/order?session=' + encodeURIComponent(boot.thanks)).then(function (r) {
-        if (r.status === 'paid') { returnToPage(false); $('[data-thanks-title]').textContent = boot.giving ? 'Thank you for your gift' : 'It\'s yours'; $('[data-thanks-line]').textContent = boot.giving ? 'Your gift is confirmed. Your receipt comes from Stripe by email.' : 'Paid. It is on your account now, in every game of ' + boot.studio + ' that uses it.'; return; }
+        if (r.status === 'paid') { returnToPage(false); $('[data-thanks-title]').textContent = boot.giving ? 'Thank you for your gift' : 'It\'s yours'; $('[data-thanks-line]').textContent = boot.giving ? 'Your gift is confirmed. Your receipt comes from Stripe by email.' : 'Paid. It is on your account now, in every game of ' + boot.studio + ' that uses it.'; if (r.simulated) { $('[data-thanks-title]').textContent = 'Simulation confirmed'; $('[data-thanks-line]').textContent = 'This was an offline test. No money moved and no Stripe receipt was sent.'; } return; }
         if (tries < 40) setTimeout(poll, 1500);
         else $('[data-thanks-line]').textContent = boot.giving ? 'Stripe has not confirmed your gift yet. Check your email for its receipt.' : 'Stripe has not confirmed it yet. It will be on your account as soon as it does; your receipt comes by email.';
       }).catch(function () { if (tries < 40) setTimeout(poll, 3000); });

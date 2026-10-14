@@ -104,7 +104,7 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
     if (meta.records.collections[collection].booking) {
       if (op !== 'update' || !meta.roles[access.role].signIn) return fail(403, 'bookings are created and released through checkout');
       if (!Number.isSafeInteger(body.version) || !ID.test(body.data?.slot ?? '') || Object.keys(body.data ?? {}).some(k => k !== 'slot')) return fail(400, 'move requires slot and current version');
-      const moved = await moveBooking(env, { app: meta.id, collection, id, slot: body.data.slot, version: body.version });
+      const moved = await moveBooking(env, { app: recordApp, collection, id, slot: body.data.slot, version: body.version });
       return moved ? json({ ok: true, id, version: body.version + 1 }) : fail(409, 'booking changed or is released; reload');
     }
     if (op !== 'delete') { const bad = recordProblem(meta.records.collections[collection], body.data, { create: op === 'create' }); if (bad) return fail(400, bad); }

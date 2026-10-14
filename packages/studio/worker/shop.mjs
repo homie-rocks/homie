@@ -1,3 +1,4 @@
+import { localSession } from './local-test.mjs';
 import { bindSubscription, subscriptionEvent, subscriptionPortal } from './shop-subscriptions.mjs';
 import { bookingStatement } from './booking-store.mjs';
 import { paymentRefunds } from './shop-refunds.mjs';
@@ -43,7 +44,7 @@ import {
   orderLines, lineView, bandOfPlayer, forgetPlayerShop, grantStatements, migrationNeeded, migrated, newOrderId, orderById, orderByPayment, orderBySession, orderView, playerOrderStatus, ownsOf, restoreStatement, revokeStatement,
   setBand, shopDataOf, spentThisMonth,
 } from './shop-store.mjs';
-import { redactStripe, WEBHOOK_SECRET_SHAPE, KEY_SHAPE, stripeCall, StripeError, createCheckoutSession, createRefund, expireCheckoutSession, dashboardLink, isApprovalRequired, isMissingProduct, productIdOf, verifyWebhook } from './stripe.mjs';
+import { apiBase, STRIPE_API, redactStripe, WEBHOOK_SECRET_SHAPE, KEY_SHAPE, stripeCall, StripeError, createCheckoutSession, createRefund, expireCheckoutSession, dashboardLink, isApprovalRequired, isMissingProduct, productIdOf, verifyWebhook } from './stripe.mjs';
 import { SHOP_JS, officeShopPage, parentPage, refundsPage, shopPage, thanksPage } from './shop-page.mjs';
 import { notFoundPage } from './site.mjs';
 
@@ -342,7 +343,7 @@ async function orderRoute(request, env, url, shop) {
     } catch (error) { logOrderError(env, o.id, error); }
   }
   const reference = await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-reference:${o.id}`).first();
-  return json({ ok: true, order: o.id, status: playerOrderStatus(o), item: o.item, game: o.game ?? null, reference: reference?.value ?? null });
+  return json({ ok: true, order: o.id, simulated: apiBase(env) !== STRIPE_API, status: playerOrderStatus(o), item: o.item, game: o.game ?? null, reference: reference?.value ?? null });
 }
 
 /** The neutral age question: a year of birth, once. Nothing hints which answer opens anything; no default. */
@@ -527,7 +528,7 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
   lines = lines.map((line, i) => ({ ...line, id: `${order.id}_${i}` }));
   const reserve = async () => {
     const results = await env.DB.batch([reservation(),
-      ...(booking ? [bookingStatement(env, { ...booking, id: order.id, app: game, order: order.id })] : []),
+      ...(booking ? [bookingStatement(env, { ...booking, id: order.id, app: booking.app ?? game, order: order.id })] : []),
       ...(reference === null ? [] : [env.DB.prepare("INSERT INTO meta(key,value) SELECT ?1,?2 WHERE EXISTS (SELECT 1 FROM shop_orders WHERE id=?3)").bind(`shop-reference:${order.id}`, reference, order.id)]),
       ...lines.map((line, i) => env.DB.prepare("INSERT INTO shop_order_lines (id, order_id, position, item, quantity, unit_amount, amount, snapshot) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8 WHERE EXISTS (SELECT 1 FROM shop_orders WHERE id = ?2)")
         .bind(line.id, order.id, i, line.item.id, line.quantity, line.amount, line.amount * line.quantity, JSON.stringify(line.item))),
@@ -656,7 +657,8 @@ async function buyRoute(request, env, url, cat, shop, ready, ctx, requestAt) {
     const collection = requestedBooking?.collection;
     const spec = app?.records?.collections?.[collection]?.booking;
     if (!spec || !/^[A-Za-z0-9_-]{1,64}$/.test(requestedBooking?.slot ?? '') || lines.length !== 1 || item.id !== spec.item || item.interval) return fail(400, 'booking', 'Choose a declared booking slot and its service item.');
-    booking = { collection, slots: spec.slots, slot: requestedBooking.slot, quantity: lines[0].quantity };
+    const local = await localSession(request, env);
+    booking = { app: local?.app === game && local.scope ? `${game}:check:${local.scope}` : game, collection, slots: spec.slots, slot: requestedBooking.slot, quantity: lines[0].quantity };
   }
   const r = await startCheckout(env, url, cat, shop, item, { player, game, amount, lines, reference, booking, requestAt });
   const response = r.error ?? json({ ok: true, order: r.order.id, url: r.url, ...(booking ? { booking: r.order.id } : {}) });
