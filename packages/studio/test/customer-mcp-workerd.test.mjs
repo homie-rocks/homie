@@ -54,7 +54,8 @@ test('outside customer uses /mcp for catalogue, cart, standard payment, priced t
   let charges=0;McpClient.wrap(client,{methods:[stripe.charge({paymentMethod:'pm_card',createToken:async()=>{const token='spt_customer_'+ ++charges;w.st.spts.set(token,{max:10000,currency:'usd'});return token;}})]});
   const paid=await client.callTool({name:'translate',arguments:args});assert.equal(paid.isError,undefined,JSON.stringify(paid));const result=JSON.parse(paid.content[0].text);assert.deepEqual(result.data,{word:'HELLO'});assert.ok(paid.receipt);
   const again=await client.callTool({name:'translate',arguments:args});assert.equal(JSON.parse(again.content[0].text).order,result.order);assert.equal(charges,1);
-  await r.fetcher(origin+'/__functions');
+  // No status/function HTTP request: inspect D1 without waking the Worker.
+  for(let i=0;i<50;i++){if(await r.db.prepare("SELECT value FROM tool_data WHERE namespace='function:paid-order' AND key=?1").bind('purchase_orders:'+result.order+':paid').first())break;await new Promise(resolve=>setTimeout(resolve,100));}
   const fired=await r.db.prepare("SELECT value FROM tool_data WHERE namespace='function:paid-order' AND key=?1").bind('purchase_orders:'+result.order+':paid').first();assert.equal(JSON.parse(fired.value).order,result.order);
   const cart=await client.callTool({name:'studio_cart',arguments:{lines:[{item:'coffee',quantity:2}]}});assert.equal(cart.isError,undefined,JSON.stringify(cart));const offer=JSON.parse(cart.content[0].text).data;
   const bought=await client.callTool({name:'studio_purchase',arguments:{kind:offer.kind,resource:offer.resource,version:offer.version,offerVersion:offer.offerVersion,buyer:'c'.repeat(64),claim:'d'.repeat(64)}});assert.equal(bought.isError,undefined,JSON.stringify(bought));

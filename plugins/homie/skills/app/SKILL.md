@@ -70,3 +70,26 @@ Scaffold businesses with `new <folder> --kind business`; causes with `--kind cau
 For giving, set the studio currency and run `shop init --giving --currency CAD` (use the organisation’s currency). It creates one-time/monthly suggested gifts. The owner supplies `giving.receiptText` in shop.json; Homie supplies no legal or tax text. Before Stripe is connected, local /shop/ previews items and prices with checkout disabled. Run the connection step yourself; the owner approves their Stripe account in the browser.
 
 Booking requests are not capacity reservations. Calendar availability and seat capacity are the next app capability; do not promise them.
+
+
+## Tell my AI when a booking comes in
+
+Read `node_modules/@homie-rocks/studio/functions/FUNCTIONS.md` for the worked
+booking example and delivery expectations. Opt in with
+`mcp.events.bookings: {event:"record.changed", app:"cafe", collection:"bookings", audience:"owner"}`
+in `studio.json` (use the studio's real app and collection), then build. The owner's
+AI connects to the studio's `/mcp` with explicit OAuth browser approval, calls
+`resources/subscribe` for `studio://events/bookings`, and holds the authenticated
+Streamable HTTP SSE GET. Notifications use `notifications/resources/updated`;
+`params._meta["studio/event"]` carries untrusted event data. Filter booking inserts,
+deduplicate by event ID, and resume with `Last-Event-ID`. No polling or Homie relay.
+Nothing is enabled by default; a declared feed retains its events without a Homie
+count or retention cap. This release does not include outbound webhooks.
+
+Use owner tool `app_role` to grant/revoke staff by verified email or exact sign-in
+name (`signIn`, `app`, `role`, `revoke`); the person signs in first. Staff event
+feeds need the explicit app/role audience and collection read permission. Grants
+are checked again for live delivery and replay. `app_records` supports deletion
+with `operation:"delete"` and the current `version` where the role allows it.
+Reload on the returned conflict message. An office owner session and an
+owner-marked player account both authorize owner MCP access.

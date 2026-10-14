@@ -57,32 +57,35 @@ export async function pushEvents(env,cat,origin) {
 
 /** One existing Lobby object per OAuth connection: streams never live in a Worker isolate. */
 export class EventStreams {
-  constructor(env){this.env=env;this.stream=null;this.tail=Promise.resolve();}
+  constructor(env,ctx){this.env=env;this.ctx=ctx;this.stream=null;this.tail=Promise.resolve();}
+  close(stream){stream.cancelled=true;stream.resume?.();try{stream.controller.close();}catch{}if(this.stream===stream)this.stream=null;}
+  background(input){this.ctx.waitUntil(this.wake(input).catch(error=>{if(this.stream)this.close(this.stream);console.error('Event stream delivery failed',error);}));}
   async fetch(request) {
     const input=await request.json();
     if(input.op==='stream') {
       // A reconnect replaces the previous GET, including a half-open socket.
+      if(this.stream)this.close(this.stream);
       await this.tail;
-      if(this.stream){try{this.stream.controller.close();}catch{}this.stream=null;}
       const {connection,lastId}=input;
       const subscriptions=(await this.env.DB.prepare("SELECT value FROM mcp_kv WHERE key LIKE ?1").bind('event-sub:'+connection+':%').all()).results;
       let after=subscriptions.length?Math.min(...subscriptions.map(r=>JSON.parse(r.value).after)):(await this.env.DB.prepare('SELECT COALESCE(MAX(seq),0) seq FROM studio_events').first()).seq,name='';
       if(lastId){const parts=lastId.split('/');if(parts.length!==3||parts[0]!==connection||!/^\d+$/.test(parts[1]))return new Response('Invalid Last-Event-ID',{status:400});after=Number(parts[1]);name=parts[2];}
-      const stream={...input,after,name,controller:null};
-      const body=new ReadableStream({start:controller=>{stream.controller=controller;controller.enqueue(new TextEncoder().encode(': connected\n\n'));},cancel:()=>{if(this.stream===stream)this.stream=null;}});
+      const stream={...input,after,name,controller:null,cancelled:false,resume:null};
+      const body=new ReadableStream({start:controller=>{stream.controller=controller;controller.enqueue(new TextEncoder().encode(': connected\n\n'));},pull:()=>{const resume=stream.resume;stream.resume=null;resume?.();},cancel:()=>this.close(stream)});
       this.stream=stream;
-      // Replay before accepting subsequent wakes, so reconnects cannot reorder data.
-      await this.wake(input);
+      // Replay and later wakes share one ordered pump. Backpressure must not
+      // hold up the writer's request or a function handler.
+      this.background(input);
       return new Response(body,{headers:{'content-type':'text/event-stream','cache-control':'no-store'}});
     }
-    await this.wake(input);return new Response(null,{status:204});
+    this.background(input);return new Response(null,{status:204});
   }
   wake(input){const work=this.tail.then(()=>this.deliver(input));this.tail=work.catch(()=>{});return work;}
   async deliver(input) {
     const stream=this.stream;if(!stream)return;
     let caller;
     try{caller=await currentCaller(this.env,{connection:input.connection});}
-    catch{stream.controller.close();this.stream=null;return;}
+    catch{this.close(stream);return;}
     const rows=(await this.env.DB.prepare("SELECT value FROM mcp_kv WHERE key LIKE ?1").bind('event-sub:'+caller.connection+':%').all()).results;
     const subscriptions=[];
     for(const row of rows){const sub=JSON.parse(row.value);if(await readableFeed(this.env,input.cat,caller,sub.name))subscriptions.push(sub);}
@@ -93,13 +96,16 @@ export class EventStreams {
       for(const raw of events){const event={...raw,data:JSON.parse(raw.data)};
         for(const sub of subscriptions.sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0)){
           if(event.seq<=sub.after||event.seq<stream.after||event.seq===stream.after&&sub.name<=stream.name||!matchesFeed(eventFeeds(this.env)[sub.name],event))continue;
+          if(stream.cancelled)return;
+          if(stream.controller.desiredSize<=0)await new Promise(resolve=>{stream.resume=resolve;});
+          if(stream.cancelled)return;
           // Recheck identity and grants for every event, including replay.
           const fresh=await currentCaller(this.env,{connection:caller.connection}).catch(()=>null);
-          if(!fresh){stream.controller.close();this.stream=null;return;}
+          if(!fresh){this.close(stream);return;}
           if(!await readableFeed(this.env,input.cat,fresh,sub.name))continue;
           const id=`${caller.connection}/${event.seq}/${sub.name}`;
           const notification={jsonrpc:'2.0',method:'notifications/resources/updated',params:{uri:feedUri(sub.name),_meta:{'studio/event':event}}};
-          try{stream.controller.enqueue(new TextEncoder().encode(`id: ${id}\nevent: message\ndata: ${JSON.stringify(notification)}\n\n`));}catch{this.stream=null;return;}
+          try{stream.controller.enqueue(new TextEncoder().encode(`id: ${id}\nevent: message\ndata: ${JSON.stringify(notification)}\n\n`));}catch{this.close(stream);return;}
           stream.after=event.seq;stream.name=sub.name;
         }
       }

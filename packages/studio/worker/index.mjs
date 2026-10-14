@@ -2573,7 +2573,7 @@ export class Lobby {
   async fetch(request) {
     if(new URL(request.url).pathname==='/__studio_events') {
       const {EventStreams}=await import('./event-resources.mjs');
-      this.eventStreams??=new EventStreams(this.env);
+      this.eventStreams??=new EventStreams(this.env,this.ctx);
       return this.eventStreams.fetch(request);
     }
     try { return await this.answer(request); } catch (error) {
