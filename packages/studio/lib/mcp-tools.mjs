@@ -845,7 +845,7 @@ export function toolDefs(ctx, avail = {}) {
         }
         const r = await setupCard(ctx, made.dir, { install, made: { dir: made.dir, wrote: made.wrote } });
         const fold = earlier.length ? `\n\nAn earlier folder for this name is on this computer, and it is not a studio: ${earlier.map((e) => `${e.path} (${e.files.join(', ') || 'empty'})`).join('; ')}. ASK the person: fold its premise into ${name}? With their yes, studio_fold { "from": "<that folder>" } copies its notes into the studio (notes/earlier/) and shows them to you, so the plan can use them. Then, only with another yes, studio_fold { "from": "<that folder>", "remove": true } moves the old folder to the Trash.` : '';
-        r.content[0].text = `Made ${name} at ${made.dir} (ready for the requested app or game).\nWrote: ${made.wrote.join(', ')}\n${!install ? '' : install.endedAt ? (install.code === 0 ? 'Its toolkit is installed.' : `npm install failed: ${whyOf(install)}`) : `Its toolkit is installing (job ${install.id}).`}${fold}\n\n${r.content[0].text}`;
+        r.content[0].text = `Made ${name} at ${made.dir} (${!a.kind || a.kind === 'game' ? 'its home page says "First game coming soon"' : 'ready for the requested app'}).\nWrote: ${made.wrote.join(', ')}\n${!install ? '' : install.endedAt ? (install.code === 0 ? 'Its toolkit is installed.' : `npm install failed: ${whyOf(install)}`) : `Its toolkit is installing (job ${install.id}).`}${fold}\n\n${r.content[0].text}`;
         if (r.structuredContent) r.structuredContent.earlier = earlier;
         return r;
       },

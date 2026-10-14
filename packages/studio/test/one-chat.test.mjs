@@ -178,3 +178,13 @@ test('a build log line is cut at a word\'s end with "…", inside its brackets, 
   const body = line.slice('Plan: done ('.length, -'…)'.length);
   assert.ok(note.startsWith(body) && note[body.length] === ' ', 'cut where a word ends');
 });
+
+test('app handoff retains business setup and app paths without a game detour', async () => {
+ const { stepsFor } = await import('../lib/handoff.mjs');
+ for (const kind of ['setup', 'make']) {
+  const words = stepsFor({ kind, id: 'welcome', what: 'app' }, { studioKind: 'cause' }).join('\n');
+  assert.match(words, /new-studio checklist/); assert.match(words, /app new welcome/);
+  assert.doesNotMatch(words, /gem-rush|Game Codex|See a working game|games\//);
+  assert.match(words, /printed dev address/);
+ }
+});
