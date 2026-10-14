@@ -846,7 +846,7 @@ const OUTWARD_FLAGS = {
   'chat remove': ['url', 'all'], 'chat budget': ['url'],
   'servers close': ['url', 'reopen'], 'servers level': ['url'], 'servers member': ['url', 'role', 'remove'],
   'parts reissue': ['claim-hash', 'receipt-verified', 'buyer'], 'parts retire': [], 'parts keys': [], 'parts refund': ['game'],
-  'shop connect': ['url', 'managed', 'live', 'manual', 'renew', 'from-clipboard'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note', 'manual-transaction'],
+  'shop connect': ['local', 'profile', 'url', 'managed', 'live', 'manual', 'renew', 'from-clipboard'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note', 'manual-transaction'],
   'agents pass': ['url', 'label', 'server', 'hands', 'role', 'days'], 'agents revoke': ['url'], 'agents brain': ['url', 'budget', 'remove'],
   'agents sit': ['url', 'server', 'pass', 'label', 'brain'],
   'events webhook': ['url','after'],
@@ -1115,6 +1115,10 @@ async function main() {
     if (!sub) return shopStatus(root, { url });
     if (sub === 'init') return shopInit(root, { supporter: flags.has('supporter'), giving: flags.has('giving'), currency: flags.get('currency') ?? null, price: flags.get('price') ?? 500, managed: flags.has('managed') });
     if (sub === 'check') return shopCheck(root);
+    if (sub === 'connect' && flags.has('local')) {
+      if(flags.has('live'))throw new Error('Local checkout requires test mode');
+      return (await import('../lib/shop-local.mjs')).shopConnectLocal(root,{url:flags.get('url'),profile:flags.get('profile')});
+    }
     if (sub === 'connect') return shopConnect(root, { managed: flags.has('managed') ? true : null, live: flags.has('live'), manual: flags.has('manual'), fromClipboard: flags.has('from-clipboard'), renew: flags.has('renew'), log: (line) => process.stderr.write(`${line}\n`) });
     if (sub === 'disconnect') return shopDisconnect(root);
     if (sub === 'catalog') {

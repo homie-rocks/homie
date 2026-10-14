@@ -6,6 +6,12 @@ compatibility: Node 22 and Chrome; the studio's pinned toolkit and Wrangler.
 
 # Make an app
 
+For the installed version’s payment, records and local-check contracts, start with
+`node_modules/@homie-rocks/studio/apps/APPS.md`. Its “Real Stripe test checkout on
+this computer” section is the supported offline-hosting path: real Stripe test
+checkout, CLI webhook forwarding, root `.dev.vars`, Wi-Fi return pages and named
+checkout popups. Use an existing approved sandbox profile; no deploy is needed.
+
 An app is **one screen, its roles, and its parts**. The screen transforms with the person and the work: a camera moves, a ticket unfolds, controls appear in context. Do not build page-to-page navigation, a sidebar of links, or a conventional admin website inside it. A studio's public website can still have pages around the app.
 
 Read the person's brief and existing `apps/<id>/` first. Choose sensible engineering defaults from the brief; never ask the person how to implement shared state. A business or cause needs no game demo, mandatory entertainment, invented customers, scores or rounds. Never impose a shop, directory listing, sign-in for public visitors, or paid media. Make the fewest human steps possible; run commands yourself.
@@ -38,7 +44,7 @@ Before writing scene components:
 
 1. Run `style init <id> --prompt "<the person's own scene words>"`. Record the direction in the Codex: composition, camera, materials, colour, typography and motion. Use the same style machinery as games, not the starter's default theme.
 2. Inspect the installed `@homie-rocks/*` packages for mechanisms. `geom`, `props`, `render`, `camera`, `postfx` and `fx` can make the place; `input`, `ui`, `ui-world`, `device`, `audio` and `loop` make it usable. Read the package exports and examples rather than guessing imports. Install every dependency reported by the starter or parts before building.
-3. Search `parts_find` for each meaningful piece; shell equivalent: `homie-studio parts find "<piece>"`. Read its contract, source studio and licence. Add fitting pieces with `part_add` / `parts add`; write the missing parts yourself. The example studios share real app pieces: search for venue, workshop, giving, arrivals, scene, queue and sound, not just game characters. If local example studios are available, read their shared `parts/` and manifests without modifying the source studios. A failed catalogue request is not proof that nothing exists.
+3. Search the local toolkit MCP `parts_find` for each meaningful piece (the hosted connector may not expose it); shell equivalent: `homie-studio parts find "<piece>"`. Read its contract, source studio and licence. Add fitting pieces with `part_add` / `parts add`; write the missing parts yourself. The example studios share real app pieces: search for venue, workshop, giving, arrivals, scene, queue and sound, not just game characters. If local example studios are available, read their shared `parts/` and manifests without modifying the source studios. A failed catalogue request is not proof that nothing exists.
 4. Use the art/models/sound/music skills with connected providers and an authorized budget. Generate distinctive assets when useful. If no provider is connected, continue with original geometry, locally drawn SVG, CC0 assets and local synthesized sound. Report the means honestly. Provider absence never justifies replacing the scene with a board.
 5. Record packages, parts with attribution, original work and media routes under **Built from**. Keep costs and provenance visible.
 
@@ -124,7 +130,7 @@ Without Stripe, keep real services and prices visible and say payment is not con
 - `apps/<id>/app.json` describes roles (`signIn`, `can`), surfaces (`phone`, `wall`, `kiosk`, `tablet`), wording, record collections, parts and the real UI action used by check. The app's entry and assets live beside it, just like a game.
 - Before inventing each component, inspect engine packages for the mechanism and `parts_find` for the piece. A queue, quiz, menu board, live total, music loop or video intro can be a part. Record its licence and credit. Sharing happens only when requested; selling parts is not part of this workflow.
 - Use the same engine packages as a game: `@homie-rocks/geom` and `props` for original scenery; `render`, `camera`, `postfx`, `fx` for light, composition and motion; `input`, `ui`, `ui-world`, `audio`, `device`, `loop` for interaction and feel. An app can be fully 3D and wild. Legibility and the actual task come first.
-- Use the `style`, `art`, `models`, `animate`, `sound`, `music`, `video` and `perf` skills where they help. It should look like a game studio made it: a coherent world with a useful HUD, not generic cards and navigation. Media cost and licensing decisions remain the person's.
+- Use the `style`, `art`, `models`, `animate`, `sound`, `music`, `video` and `perf` skills where they help. Give the organisation a coherent scene with readable controls and purposeful motion. Media cost and licensing decisions remain the person's.
 - Keep native buttons at least 44 px, keyboard focus visible, text as text, motion reducible, and the wall QR clear of useful information. Pointer gesture guards belong on the canvas, not native click buttons.
 
 ## Roles and records

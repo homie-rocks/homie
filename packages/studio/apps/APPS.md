@@ -18,7 +18,7 @@ await queue.remove(rows[0]);
 queue.dispose();
 ```
 
-The shell handles requests only from its own frame and uses its own role, link and account, never authority claimed by the message. The Worker checks every request. Roles declare `signIn: boolean` and `can: ["read:queue", "create:queue", "update:queue", "delete:queue"]`. Collections declare fields with `type` (string/number/boolean), optional `required`, `maxLength`, `enum`, and `initial` (the only value allowed on create). Unknown fields are refused. Records are at most 8 KB, collection reads at most 1,000 records, request bodies at most 12 KB. A full collection refuses creates. This is a small operational helper, not an unbounded ledger.
+The shell handles requests only from its own frame and uses its own role, link and account, never authority claimed by the message. The Worker checks every request. Roles declare `signIn: boolean` and `can: ["read:queue", "create:queue", "update:queue", "delete:queue"]`. Collections declare fields with `type` (string/number/boolean), optional `required`, `maxLength`, `enum`, and `initial` (the only value allowed on create). Unknown fields are refused. Records are at most 8 KB and request bodies at most 12 KB. Homie imposes no collection count limit; the studio’s database capacity applies.
 
 Generate a fresh ID for every new record; never reuse a deleted ID. Updates and deletes compare `version` atomically. Conflicts return 409; reload and resolve them. A successful write is committed before acknowledgement. Records are scoped by app and collection, not by room. Deleting a room does not delete records. With `records.persist: false`, use netplay keyed state for transient data instead. Database failures are visible and never replaced with fabricated local success.
 
@@ -127,3 +127,57 @@ Use the Manage my gifts link for the buyer-owned Stripe portal in the shop.
 Records-only apps support the same shop bridge as room apps. In the sandboxed
 view, use `createShop({target: parent})` to send checkout and booking requests to
 the authenticated outer shell; a room simulation is not required for payments.
+
+## Real Stripe test checkout on this computer
+
+Use the installed toolkit's app guide and this reference for its exact version.
+The local toolkit MCP exposes `parts_find`; the hosted directory connector may not.
+With a shell, `homie-studio parts find "giving"` is the supported equivalent. Read a
+part's contract: a pledge-only example is not payment fulfilment. The giving starter
+uses the shop bridge; `shop.catalog()` is available in this version. Field names
+start with a lowercase letter and continue with lowercase letters, digits or `_`.
+
+No public HTTPS address or Cloudflare account is needed for local Stripe test
+payments. Use the owner's existing Stripe CLI sandbox profile; log in only when
+that profile is unavailable or expired. Never create an imitation checkout.
+
+1. Create the app and `shop init --giving --currency CAD` (choose the actual currency).
+2. Choose the computer's Wi-Fi address and a fixed dev port. Run
+   `homie-studio shop connect --local --profile <sandbox-profile> --url http://192.168.1.8:8787`.
+   This syncs real test Products, Prices and Payment Links through Stripe CLI and
+   saves local bindings in the project's `.dev.vars`; it does not deploy or create
+   a public webhook. Local products use a separate identity from deployed products.
+3. Run `stripe --project-name <sandbox-profile> listen --forward-to http://localhost:8787/api/shop/hook`.
+   Put its signing secret in root `.dev.vars` as `STRIPE_WEBHOOK_SECRET=whsec_…`.
+   Keep that listener running. Never commit the secrets file or print its contents.
+4. Run `homie-studio dev --lan --port 8787`. Dev loads root `.dev.vars` beside its
+   generated Wrangler configuration. Restart after changing bindings. If dev reports
+   another port, update the listener and repeat local shop connection with that port.
+5. Open **the same Wi-Fi address** on desktop and phones. Checkout returns there,
+   so its guest cookie and thank-you page work on both. Localhost is only suitable
+   when every browser is on this computer. Use Stripe's test card; verify the signed
+   webhook, paid order and app record before reporting success.
+
+The first Checkout emits `order.paid`. Later paid subscription-cycle invoices each
+create a distinct paid order and emit `order.paid` with the original app and reference.
+Invoice retries do not count again; the initial invoice does not duplicate Checkout.
+Keep fulfilment idempotent by order/event ID. Subscription lifecycle events remain
+available separately. Failed invoices never create paid gifts.
+
+`check` uses isolated records on localhost by default; `--no-isolate` opts into the
+existing records. Stripe webhooks use the ordinary local database, so for a real
+payment acceptance run use a disposable studio and `check --no-isolate`. Test money
+must not be mistaken for live giving. Named staff/tablet/kiosk surfaces and roles
+are supported; only the surfaces named by each need are asserted.
+
+For a Give button opening a new tab, name its popup in the click step:
+
+```json
+{"surface":"phone","selector":"[data-give]","click":true,"popup":"checkout"}
+```
+
+Later steps and assertions can use `"surface":"checkout"` for the provider page.
+The phone remains its own surface; assert its confirmed gift after checkout. The
+checker brings each page forward before reading or capturing it. Use the real
+provider's controls, never a test-only app action. App sharing defaults to the top
+right, clear of bottom tabs; `screen.share` remains an author-controlled override.

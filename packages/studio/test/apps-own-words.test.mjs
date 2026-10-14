@@ -54,3 +54,12 @@ test('app style starts with illustration and attributes AI refinements to the AI
  initDecisions(root,'pantry');assert.equal(readDecisions(root,'pantry').decisions['style.render'].value,'illustrated');
  const r=steerDecision(root,'pantry','style.palette','warmer',{by:'ai'});assert.equal(r.record.by,'ai');assert.equal(r.record.state,'auto');
 });
+
+test('needs follow a payment popup and retain the original phone',async t=>{
+ const {proveAppNeeds}=await import('../lib/app-needs.mjs');const {mkdtempSync,rmSync}=await import('node:fs');const {tmpdir}=await import('node:os');const {join}=await import('node:path');
+ const shots=mkdtempSync(join(tmpdir(),'homie-popup-'));t.after(()=>rmSync(shots,{recursive:true,force:true}));
+ const b=await browser(t),p=await b.newPage();await p.setContent('<a id="give" target="_blank" href="about:blank">Give</a><p id="phone">My gift</p>');
+ p.on('popup',async popup=>{await popup.setContent('<h1 id="checkout">Pay securely</h1>');});
+ const result=await proveAppNeeds({plan:{needs:[{id:'give',statement:'Give on phone',steps:[{surface:'phone',selector:'#give',click:true,popup:'checkout'}],assertions:[{surface:'checkout',selector:'#checkout',text:'Pay securely'},{surface:'phone',selector:'#phone',text:'My gift'}]}]},surfaces:[{name:'phone',page:p,frame:p.mainFrame()}],shots});
+ assert.equal(result[0].status,'met',result[0].why);assert.equal(await p.$eval('#phone',e=>e.innerText),'My gift');assert.equal(result[0].captures.length,2);
+});

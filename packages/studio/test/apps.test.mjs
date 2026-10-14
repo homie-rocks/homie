@@ -151,3 +151,13 @@ test('MCP app_make creates a starter beside game_make and exposes the app guide'
     assert.equal(guide.isError, undefined); assert.match(guide.content[0].text, /morph/i);
   } finally { await server.close(); }
 });
+
+test('a cause can retain and read more than a thousand gifts',async()=>{
+ const root=studio('Every gift');await newApp(root,'welcome');const meta=listApps(root)[0],DB=database(root);
+ try{
+  for(let i=0;i<1000;i++)DB.sql.prepare('INSERT INTO app_records VALUES(?,?,?,?,1,1)').run('welcome','queue','gift'+i,JSON.stringify({label:'Gift',status:'waiting'}));
+  const req=new Request('https://example.test/welcome/api/app/records/queue/next',{method:'POST',headers:{origin:'https://example.test','content-type':'application/json'},body:JSON.stringify({data:{label:'Next gift',status:'waiting'}})});
+  assert.equal((await appRecordsRoute(req,{DB},meta,new URL(req.url),'api/app/records/queue/next')).status,200);
+  const list=new Request('https://example.test/welcome/api/app/records/queue');const response=await appRecordsRoute(list,{DB},meta,new URL(list.url),'api/app/records/queue');assert.equal((await response.json()).records.length,1001);
+ }finally{DB.sql.close();}
+});

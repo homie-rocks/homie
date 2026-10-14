@@ -6,7 +6,7 @@ import { LINKS_STRIPE_VERSION, linkSettings, paymentLinkURL } from '../worker/sh
 import { HOOK_EVENTS, SHOP_HOOK_EVENTS } from './shop.mjs';
 const hash = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const same = (a, b) => Object.keys(a ?? {}).length === Object.keys(b).length && Object.entries(b).every(([k, v]) => a?.[k] === v);
-export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, receipt, saveReceipt, bookingSlots = [] }) {
+export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, receipt, saveReceipt, bookingSlots = [], local = false }) {
   const list = async (path, params = {}) => {
     const all = []; let cursor;
     do {
@@ -19,7 +19,8 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     } while (cursor);
     return all;
   };
-  const secrets = await w(['secret', 'list']);
+  if(local && mode!=='test')throw new Error('Local checkout requires Stripe test mode');
+  const secrets = local ? {code:0,stdout:'[]'} : await w(['secret', 'list']);
   if (secrets.code !== 0) return { ok: false, needs: 'cloudflare', why: 'Connect Cloudflare and deploy the studio, then run shop connect again.' };
   const names = JSON.parse(secrets.stdout ?? secrets.out);
   const has = (name) => names.some((s) => s.name === name);
@@ -134,6 +135,7 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     portal=await api('POST',portal?`/v1/billing_portal/configurations/${portal.id}`:'/v1/billing_portal/configurations',params);
     config.portal=portal.login_page?.url;
   }
+  if(local)return {ok:true,command:'shop connect',local:true,mode,config};
   const purchases = root ? await (await import('./purchase-links.mjs')).syncPurchaseLinks({ root, api, slug, site, mode, list, till: shop.purchasesTill ?? shop.till }) : null;
   const purchaseSecrets = {};
   if (purchases?.config.offers.length && !has('PURCHASE_SIGNING_KEYS')) {

@@ -333,3 +333,9 @@ Use Stripe's published CLI test fixtures/tokens to complete Checkout via API;
 never type card details into a form. Stop on an expired profile and ask the owner
 to approve `stripe login --project-name <profile>` once. Stop the adapter and remove
 dev bindings and disposable studios when finished.
+
+## Local Stripe test payments
+
+See `apps/APPS.md`, “Real Stripe test checkout on this computer”, for the supported
+`shop connect --local` and Stripe CLI forwarding recipe. Every paid monthly cycle
+creates a paid order and `order.paid` with the subscription’s original app reference.
