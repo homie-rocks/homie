@@ -41,6 +41,10 @@ jobs:
           - { node: 22, shard: 13, mode: '' }
           - { node: 22, shard: 14, mode: '' }
           - { node: 22, shard: 15, mode: '' }
+          - { node: 22, shard: 16, mode: '' }
+          - { node: 22, shard: 17, mode: '' }
+          - { node: 22, shard: 18, mode: '' }
+          - { node: 22, shard: 19, mode: '' }
           - { node: 24, shard: 0, mode: '--compat' }
           - { node: 24, shard: 1, mode: '--compat' }
           - { node: 24, shard: 2, mode: '--compat' }
@@ -51,6 +55,8 @@ jobs:
           - { node: 24, shard: 7, mode: '--compat' }
           - { node: 24, shard: 8, mode: '--compat' }
           - { node: 24, shard: 9, mode: '--compat' }
+          - { node: 24, shard: 10, mode: '--compat' }
+          - { node: 24, shard: 11, mode: '--compat' }
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:

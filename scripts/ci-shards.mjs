@@ -3,9 +3,14 @@
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-// Refreshed CI measurements need sixteen full-suite and ten compatibility bins
+// Refreshed first-attempt CI measurements need twenty full-suite and twelve compatibility bins
 // to stay below eight minutes without relaxing the eleven-minute watchdog.
-export const shardCounts = { full: 16, compat: 10 };
+export const shardCounts = { full: 20, compat: 12 };
+export const shardBudgetSeconds = 480;
+export function checkShardBudget(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) throw new Error('Invalid measured shard duration');
+  if (seconds > shardBudgetSeconds) throw new Error(`Measured shard took ${seconds.toFixed(1)}s, exceeding the eight-minute budget. Download this run's timings-node* artifacts, refresh scripts/ci-timings.json with --rebalance (Node 24: --compat), and split/rebalance before merging.`);
+}
 export function inventory() {
   return [...readdirSync('packages').flatMap(p => {
     try { return readdirSync(`packages/${p}/test`).filter(f => f.endsWith('.test.mjs')).map(f => `packages/${p}/test/${f}`); } catch { return []; }
@@ -50,6 +55,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const index = Number(args[0]);
     if (!Number.isInteger(index) || !bins[index]) throw new Error('usage: node scripts/ci-shards.mjs INDEX [--compat | --list]');
     const seconds = {}; let failed = false;
+    const shardStart = performance.now();
     mkdirSync('ci-results', { recursive: true });
     for (const file of bins[index].files) {
       console.log(`\n::group::${file}`);
@@ -61,7 +67,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         failed = true;
         console.error(`::error file=${file}::${result.error?.code === 'ETIMEDOUT' ? 'File exceeded 10 minutes; investigate a stuck child or unbounded wait.' : 'Test file failed.'}`);
       }
-      writeFileSync(`ci-results/${subset ? 'compat' : 'full'}-${index}.json`, JSON.stringify({ seconds }, null, 2));
+      const wallSeconds = (performance.now() - shardStart) / 1000;
+      writeFileSync(`ci-results/${subset ? 'compat' : 'full'}-${index}.json`, JSON.stringify({ seconds, wallSeconds }, null, 2));
+    }
+    // Check real elapsed time, including new files and process startup, rather
+    // than trusting the committed estimates. Finish every test before failing.
+    const wallSeconds = (performance.now() - shardStart) / 1000;
+    console.log(`SHARD_DURATION ${subset ? 'compat' : 'full'}-${index} ${wallSeconds.toFixed(1)}s (budget ${shardBudgetSeconds}s)`);
+    try { checkShardBudget(wallSeconds); } catch (error) {
+      failed = true;
+      console.error(`::error::${error.message}`);
     }
     process.exitCode = failed ? 1 : 0;
   }
