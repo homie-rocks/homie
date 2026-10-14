@@ -426,6 +426,8 @@ test('listing requires a choice, preserves old claims, and uses one canonical ad
   assert.equal(redirect.status, 308);
   assert.equal(redirect.headers.get('location'), 'https://canonical.example/hello/?a=1');
   assert.equal((await site.get('https://choice.acct.workers.dev','/api/games')).status,200);
+  assert.notEqual((await site.get('https://choice.acct.workers.dev','/cards/api/records')).status,308);
+  assert.notEqual((await site.get('https://choice.acct.workers.dev','/cards/__net')).status,308);
   site.sql.prepare('INSERT INTO meta(key,value) VALUES (?,?)').run('homie_claim', 'f'.repeat(40));
   assert.equal((await manifest('https://canonical.example')).claim,'f'.repeat(40));
   s.homie.directory = true;

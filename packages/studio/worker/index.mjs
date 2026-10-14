@@ -676,6 +676,8 @@ async function route(request, env, ctx) {
 
   // Keep tool transports and discovery on the alias; redirect browser pages only.
   if (read && url.hostname.endsWith('.workers.dev') && env.HOMIE_PREVIEW !== '1'
+      && request.headers.get('upgrade')?.toLowerCase() !== 'websocket'
+      && !/\/(?:api|__[a-z]+)(?:\/|$)/.test(path)
       && !/^\/(?:\.well-known(?:\/|$)|api(?:\/|$)|mcp(?:\/|$)|oauth(?:\/|$)|hooks(?:\/|$)|_studio(?:\/|$))/.test(path)) {
     const canonical = (await getAll()).studio?.canonical;
     if (canonical && canonical !== url.origin) return Response.redirect(canonical + url.pathname + url.search, 308);
