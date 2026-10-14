@@ -63,6 +63,15 @@ test('subscribed MCP client gets bookings without polling; replay and current ro
   const removed=await tool('staff','app_records',{app:'cafe',role:'staff',collection:'bookings',id:'first',operation:'delete',version:1});
   assert.equal(removed.result.isError,undefined);assert.equal(await db.prepare("SELECT id FROM app_records WHERE id='first'").first(),null);
   await db.prepare("INSERT INTO player_emails(player,email,verified_at,added_at) VALUES('staff','staff@example.test',1,1)").run();
+  // Paging traverses all retained events while excluding another collection.
+  await db.batch(Array.from({length:105},(_,i)=>db.prepare('INSERT INTO app_records(app,collection,id,value,version,updated_at) VALUES(?1,?2,?3,?4,1,1)').bind('cafe',i%2?'private':'bookings','page'+i,JSON.stringify({name:i%2?'HIDDEN':'visible'}))));
+  let uri='studio://events/bookings',visible=[];
+  do {
+    const page=await rpc('staff','resources/read',{uri});assert.ok(page.result,JSON.stringify(page));
+    const content=JSON.parse(page.result.contents[0].text);visible.push(...content.events);uri=content.next;
+  }while(uri);
+  assert.equal(visible.filter(e=>e.data.record.startsWith('page')).length,53);
+  assert.ok(visible.every(e=>e.data.collection==='bookings'));
   const revoke=await tool('owner','app_role',{app:'cafe',role:'staff',signIn:'staff@example.test',revoke:true});assert.equal(revoke.result.isError,undefined);
   const deniedDelete=await tool('staff','app_records',{app:'cafe',role:'staff',collection:'bookings',id:'second',operation:'delete',version:1});assert.equal(deniedDelete.result.isError,true);
   const grant=await tool('owner','app_role',{app:'cafe',role:'staff',signIn:'staff'});assert.equal(grant.result.isError,undefined);

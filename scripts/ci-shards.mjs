@@ -12,6 +12,7 @@ export function inventory() {
 // Node 24/npm 11 MCP resolution failure (run 37992524039). Keep regressions on 24
 // even if their names no longer match a broad runtime-integration category.
 export const node24Regressions = new Set([
+  'event-delivery-workerd', 'event-resources-workerd',
   'changelog', 'cloud', 'machine-payments', 'paid-parts-review4-mcp',
   'paid-parts-review5-agent', 'paid-parts-workerd', 'player-image', 'port-input',
   'purchase-deploy', 'rooms-pages', 'rules-3d-prediction-chrome',

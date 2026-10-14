@@ -103,6 +103,7 @@ export class EventStreams {
           const fresh=await currentCaller(this.env,{connection:caller.connection}).catch(()=>null);
           if(!fresh){this.close(stream);return;}
           if(!await readableFeed(this.env,input.cat,fresh,sub.name))continue;
+          if(!await this.env.DB.prepare('SELECT key FROM mcp_kv WHERE key=?1').bind(key(caller.connection,sub.name)).first())continue;
           const id=`${caller.connection}/${event.seq}/${sub.name}`;
           const notification={jsonrpc:'2.0',method:'notifications/resources/updated',params:{uri:feedUri(sub.name),_meta:{'studio/event':event}}};
           try{stream.controller.enqueue(new TextEncoder().encode(`id: ${id}\nevent: message\ndata: ${JSON.stringify(notification)}\n\n`));}catch{this.close(stream);return;}
