@@ -76,3 +76,15 @@ test('each paid monthly gift becomes one order and app event with the original r
  const events=f.sql.prepare("SELECT data FROM studio_events WHERE type='order.paid'").all().map(r=>JSON.parse(r.data));assert.equal(events.length,3);
  for(const e of events){assert.equal(e.reference,'meal-table');assert.equal(e.app,'tune');assert.equal(e.amount,2000);}
 });
+
+test('keyed giving renewals resolve the verified invoice product back to the original line',async t=>{
+ const f=fixture(t),a=await f.buy({item:'monthly',game:'tune',reference:'meal-table'});
+ await f.hook('checkout.session.completed',f.session(a,'monthly',{amount_subtotal:2000,amount_total:2000,subscription:'sub_keyed',customer:'cus_keyed',invoice:'in_initial'}));
+ const line=f.sql.prepare('SELECT * FROM shop_order_lines WHERE order_id=?').get(a.order),snapshot=JSON.parse(line.snapshot);delete snapshot.stripePrice;f.sql.prepare('UPDATE shop_order_lines SET snapshot=? WHERE id=?').run(JSON.stringify(snapshot),line.id);
+ f.env.STRIPE_KEY='rk_test_fixture';f.env.STRIPE_CHECKOUT_MODE='sessions';
+ const invoice={id:'in_keyed',status:'paid',currency:'cad',amount_paid:2000,total:2000,billing_reason:'subscription_cycle',subscription:'sub_keyed',customer:'cus_keyed',livemode:false,lines:{has_more:false,data:[{price:{id:'price_dynamic',product:{metadata:{line:line.id}}},quantity:1,amount:2000}]}};
+ const previous=globalThis.fetch;t.after(()=>{globalThis.fetch=previous;});
+ globalThis.fetch=async url=>Response.json(String(url).includes('/subscriptions/')?{id:'sub_keyed',customer:'cus_keyed',livemode:false,status:'active',items:{data:[]}}:invoice);
+ assert.equal((await f.hook('invoice.paid',invoice)).status,200);
+ const paid=f.sql.prepare("SELECT data FROM studio_events WHERE type='order.paid'").all().map(r=>JSON.parse(r.data));assert.equal(paid.length,2);assert.equal(paid[1].reference,'meal-table');
+});

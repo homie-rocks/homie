@@ -207,6 +207,12 @@ async function recordRenewal(env, subscription, invoice, at) {
   if(await env.DB.prepare('SELECT id FROM shop_subscription_events WHERE id=?1').bind(`paid:${invoice.id}`).first())return;
   const first=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`subscription-first-invoice:${subscription.id}`).first();
   if(first?.value===invoice.id || invoice.billing_reason!=='subscription_cycle')return;
+  if(hasStripeKey(env)) {
+    const invoiceId=invoice.id;
+    invoice=await stripeCall(env,'GET',`/v1/invoices/${invoiceId}`,{expand:['lines.data.price.product']});
+    if(invoice.id!==invoiceId || idOf(invoice.parent?.subscription_details?.subscription??invoice.subscription)!==subscription.id || idOf(invoice.customer)!==subscription.customer || invoice.livemode!==(subscription.mode==='live'))throw new Error('Renewal invoice identity mismatch');
+    if(invoice.lines?.has_more)invoice.lines=await allPages(env,`/v1/invoices/${invoiceId}/lines`,{expand:['data.price.product']});
+  }
   const original=await env.DB.prepare('SELECT * FROM shop_orders WHERE id=?1').bind(subscription.order_id).first();
   const lines=(await env.DB.prepare('SELECT * FROM shop_order_lines WHERE order_id=?1').bind(original.id).all()).results;
   // A subscription without shop lines has no shop fulfilment to repeat.
@@ -214,7 +220,8 @@ async function recordRenewal(env, subscription, invoice, at) {
   if(invoice.status!=='paid' || invoice.lines?.has_more || invoice.currency!==original.currency || !Number.isSafeInteger(invoice.amount_paid) || invoice.amount_paid<0)throw new Error('Complete paid renewal invoice required');
   const paidLines=(invoice.lines?.data??[]).map(l=>{
     const price=idOf(l.price ?? l.pricing?.price_details?.price);
-    const source=lines.find(s=>JSON.parse(s.snapshot??'{}').stripePrice===price);
+    const product=l.price?.product;
+    const source=lines.find(s=>{const snapshot=JSON.parse(s.snapshot??'{}');return snapshot.stripePrice===price || hasStripeKey(env) && (product?.metadata?.line===s.id || [product?.metadata?.homie_item,product?.metadata?.item].includes(s.item) || snapshot.stripeProduct && snapshot.stripeProduct===idOf(product));});
     if(!source || !Number.isSafeInteger(l.quantity) || l.quantity<1 || !Number.isSafeInteger(l.amount) || l.amount<0)throw new Error('Unknown renewal invoice line');
     return {...source,quantity:l.quantity,amount:l.amount};
   });

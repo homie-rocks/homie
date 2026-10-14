@@ -147,7 +147,7 @@ that profile is unavailable or expired. Never create an imitation checkout.
    This syncs real test Products, Prices and Payment Links through Stripe CLI and
    saves local bindings in the project's `.dev.vars`; it does not deploy or create
    a public webhook. Local products use a separate identity from deployed products.
-3. Run `stripe --project-name <sandbox-profile> listen --forward-to http://localhost:8787/api/shop/hook`.
+3. Run `stripe --project-name <sandbox-profile> listen --all-snapshot --forward-to http://localhost:8787/api/shop/hook`.
    Put its signing secret in root `.dev.vars` as `STRIPE_WEBHOOK_SECRET=whsec_…`.
    Keep that listener running. Never commit the secrets file or print its contents.
 4. Run `homie-studio dev --lan --port 8787`. Dev loads root `.dev.vars` beside its

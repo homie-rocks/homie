@@ -76,3 +76,12 @@ test('confirmed gift page gives receipt instructions once',async t=>{
  await p.waitForFunction(()=>document.querySelector('[data-thanks-title]').textContent==='Thank you for your gift');
  const visible=await p.$eval('[data-shop-thanks]',e=>e.innerText);assert.equal(visible.split('Your receipt comes from Stripe by email.').length-1,1);
 });
+
+test('app arrival and wall captions describe opening the app',async t=>{
+ const {watchPage}=await import('../worker/pages.mjs');const b=await browser(t),p=await b.newPage();await p.setRequestInterception(true);p.on('request',r=>r.respond({status:200,contentType:'application/json',body:'{}'}));
+ await p.setContent(await playPage(cat,app,{room:'pub-5'}).text());
+ assert.equal(await p.$eval('[data-arrive-step]',e=>e.textContent),'Opening the app…');
+ await p.setContent(await watchPage(cat,app,{room:'pub-5'}).text());
+ assert.equal(await p.$eval('[data-room-label]',e=>e.innerText),'Meal table');
+ assert.doesNotMatch(await p.$eval('body',e=>e.innerText),/Room 5|Quick play|people here|Play/);
+});

@@ -27,5 +27,5 @@ export async function shopConnectLocal(root,{url,profile,exec=stripeProcess}={})
  vars=vars.replace(/^STRIPE_(?:SHOP_LINKS|CHECKOUT_MODE)=.*\n?/gm,'');
  vars+=`\nSTRIPE_CHECKOUT_MODE=links\nSTRIPE_SHOP_LINKS=base64:${Buffer.from(JSON.stringify(r.config)).toString('base64')}\n`;
  writeFileSync(file,vars,{mode:0o600});
- return {ok:true,command:'shop connect',local:true,mode:'test',url:origin.origin,message:'Test Payment Links saved to root .dev.vars.',next:[`stripe --project-name ${profile} listen --forward-to http://localhost:${origin.port||80}/api/shop/hook`,'Put the listener signing secret in root .dev.vars as STRIPE_WEBHOOK_SECRET, then start/restart homie-studio dev --lan. Keep the listener running.','Open the same Wi-Fi address on phones; complete Stripe test checkout and verify the paid order and app event.']};
+ return {ok:true,command:'shop connect',local:true,mode:'test',url:origin.origin,message:'Test Payment Links saved to root .dev.vars.',next:[`stripe --project-name ${profile} listen --all-snapshot --forward-to http://localhost:${origin.port||80}/api/shop/hook`,'Put the listener signing secret in root .dev.vars as STRIPE_WEBHOOK_SECRET, then start/restart homie-studio dev --lan. Keep the listener running.','Open the same Wi-Fi address on phones; complete Stripe test checkout and verify the paid order and app event.']};
 }

@@ -387,6 +387,7 @@ export async function checkApp({ isolate = true, root = null, url, game, meta, s
     for(const name of ['wall','phone','phone-two'])await openSurface(name);
     const textOf = (f) => f.$eval(proof.observe, (e) => e.textContent);
     const actor = surfaces[1];
+    await appReady(actor);
     await waitInApp(actor,proof.action,f=>f.waitForFunction((selector) => { const el = document.querySelector(selector); return el && !el.disabled && !el.hidden; }, {}, proof.action));
     before = await waitInApp(actor,proof.observe,textOf);
     await actor.frame.click(proof.action);
