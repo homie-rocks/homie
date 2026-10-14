@@ -2779,7 +2779,8 @@ test('pt4 placement origin survives save/restore and rejects malformed origins',
 });
 
 test('pt4 each game can tune visual decay without changing authoritative movement',async t=>{
- const kits=await Promise.all([100,400].map(blendMs=>coinDashKit('server',false,20,'solid-ground-box',{blendMs})));
+ // The fixture loader publishes its view through one global; build variants sequentially.
+ const kits=[];for(const blendMs of [100,400])kits.push(await coinDashKit('server',false,20,'solid-ground-box',{blendMs}));
  const clock=virtualTime(t),rooms=kits.map(({L,compiled,openRoom},i)=>{
   const r=rig(L,compiled,false,0,0),a=openRoom({move:{runner(b){b.vel={x:0,y:0,z:0};}},net:{config:cfg(`tune ${i}`),WebSocketImpl:r.socket(),post:null}});
   t.after(()=>{a.close();r.stop();});return {r,a};
@@ -2914,4 +2915,34 @@ test('a correction route reaches an authoritative pose touching a platform side'
  }
  assert.ok(worst<=200,`contact route stopped for ${worst} ms`);
  assert.ok(Math.hypot(previous.x-target.x,previous.y-target.y)<.01,'contact correction converges');
+});
+
+for(const respawn of [false,true])test(`a late first snapshot after reconnect ${respawn?'still cuts a real respawn':'retains the living drawing beyond three seconds'}`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
+ const clock=virtualTime(t);let allowAt=Infinity;
+ const r=rig(L,compiled,false,(m,link)=>link>0&&m.t==='snap'&&Date.now()<allowAt?null:80,80);
+ const asked=[],a=openRoom({move:{runner(b){b.pos={x:Math.min(6,b.pos.x+.1),y:b.pos.y,z:0};b.vel={x:2,y:0,z:0};}},respawned:(before,after)=>{asked.push([before.pos.x,after.pos.x]);return respawn;},net:{config:cfg('Late return'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);a.input({ax:1});await clock.wait(200);
+ const beforeId=a.me.id;let previous=a.me.pos,worst=0;
+ r.network.up=false;r.sockets[0].cut();a.input({ax:0});
+ const draw=()=>{const p=a.me.pos;worst=Math.max(worst,Math.hypot(p.x-previous.x,p.y-previous.y));previous=p;};
+ for(let i=0;i<120;i++){await clock.wait(16);draw();}
+ r.network.up=true;allowAt=Date.now()+17000;
+ for(let i=0;i<1500;i++){await clock.wait(16);draw();}
+ t.diagnostic(JSON.stringify({worst,asked,beforeId,afterId:a.me.id}));
+ if(respawn)assert.ok(worst>1.5,'a true respawn still cuts');
+ else assert.ok(worst<=1.5,`delayed handoff moved ${worst} metres in one frame`);
+ assert.equal(asked.length,1,'classify the returned revision even after a long snapshot delay');
+});
+
+test('an authority return in a new round draws the new spawn even when the game classifier sees the old round',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
+ const clock=virtualTime(t),r=rig(L,compiled,false,0,0);
+ const a=openRoom({respawned:()=>false,move:{runner(b){b.vel={x:0,y:0,z:0};}},net:{config:cfg('Round handoff'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);const before=a.me.pos;
+ const socket=r.sockets[0],receive=socket.onmessage;
+ socket.onmessage=event=>{const f=JSON.parse(event.data);if(f.t==='snap'){f.e+=1;f.d[0][0]+=1;const own=f.d[1].find(e=>e[9]===a.seat);own[3][0]=-7;own[3][1]=-.5;own[14]=[-7,-.5];}receive.call(socket,{data:JSON.stringify(f)});};
+ let cut=false;
+ for(let i=0;i<10;i++){await clock.wait(16);const p=a.me.pos;if(Math.abs(p.x-before.x)>1e-5){assert.equal(p.x,-7,'the first changed drawing is the server spawn');cut=true;break;}}
+ assert.ok(cut,'the new round was drawn');
 });

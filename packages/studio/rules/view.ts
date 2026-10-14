@@ -784,7 +784,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       const prior = before?.ents.get(me.id) ?? null;
       if (changedEpoch) {
         let sameLife = false;
-        if (dims === 2 && mine?.id === me.id && prior && opts.respawned) {
+        if (dims === 2 && mine?.id === me.id && prior && before?.round[0] === f.round[0] && opts.respawned) {
           try { sameLife = !opts.respawned(entityOf(prior, true, false), entityOf(me, true, false)); }
           catch (err) { console.warn('[room] respawned', err); }
         }
@@ -794,8 +794,8 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         else presented=null;
       }
       if (placed && !changedEpoch && returningUntil > clock() && mine?.id === me.id && mine.r !== me.r && presented?.id === me.id && presented.r === mine.r) {
-        let respawn = false;
-        if (opts.respawned && prior) { try { respawn = Boolean(opts.respawned(entityOf(prior, true, false), entityOf(me, true, false))); } catch (err) { console.warn('[room] respawned', err); } }
+        let respawn = before?.round[0] !== f.round[0];
+        if (!respawn && opts.respawned && prior) { try { respawn = Boolean(opts.respawned(entityOf(prior, true, false), entityOf(me, true, false))); } catch (err) { console.warn('[room] respawned', err); } }
         if (!respawn) { presented.r = me.r; presented.at = clock(); }
         returningUntil = 0;
       }
@@ -936,6 +936,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       }
       previewKey = '';
       settlePredictions(f, before && before.e === f.e ? before : null, row?.[2] ?? 0);
+      // A transport can be online long before its first usable authority frame.
+      // End the 2D handoff on that frame, not on a wall-clock timeout.
+      if (dims === 2) returningUntil = 0;
     } else { if (mine) dropPredictions(); mine = null; }
     if (before) {
       for (const [id, u] of f.ents) { const old = before.ents.get(id); if (!old) emit('enter', entityOf(u)); else if (old.r !== u.r && id !== mine?.id) emit('placed', entityOf(u)); }
@@ -976,7 +979,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   net.on('role', (e) => { if (e.snap) onSnapshot(e.snap); if (net.offline && !net.rulesHosting) setStatus(net.closedWhy ? 'closed' : 'offline'); });
   net.on('link', (e) => {
     if (e.why === 'subscribe') return;
-    if (e.state === 'online') { returningUntil = clock() + 3000; if (dims !== 2) base = null; if (status !== 'playing') setStatus('connecting'); } else if (e.state === 'closed') setStatus('closed'); else if (e.state === 'alone' || e.state === 'offline') setStatus('offline');
+    if (e.state === 'online') { returningUntil = dims === 2 ? Infinity : clock() + 3000; if (dims !== 2) base = null; if (status !== 'playing') setStatus('connecting'); } else if (e.state === 'closed') setStatus('closed'); else if (e.state === 'alone' || e.state === 'offline') setStatus('offline');
   });
   net.on('round', (r) => { if (r.results) { results = r.results; if (round) { round = { ...round, results }; emit('round', roundNow()); } } });
   net.on('event', (e) => {
