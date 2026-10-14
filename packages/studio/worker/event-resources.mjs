@@ -25,10 +25,16 @@ export async function readableFeed(env,cat,caller,name) {
   // Non-record events have no app read capability; they remain owner-only.
   return caller.owner===true;
 }
-export async function feedEvents(env,name,{after=0,through=Number.MAX_SAFE_INTEGER}={}) {
+export async function feedEvents(env,name,{after=0,through=Number.MAX_SAFE_INTEGER,caller}={}) {
   const feed=eventFeeds(env)[name];if(!feed)return [];
-  const rows=(await env.DB.prepare('SELECT seq,id,type,data,at FROM studio_events WHERE type=?1 AND seq>?2 AND seq<=?3 ORDER BY seq LIMIT 100').bind(feed.event,after,through).all()).results;
-  return rows.map(r=>({...r,data:JSON.parse(r.data)}));
+  const scopedApp=env.HOMIE_LOCAL_TEST_SECRET&&caller?.localTest&&caller.testScope&&feed.event==='record.changed'?`${feed.app}:check:${caller.testScope}`:null;
+  const rows=(await env.DB.prepare("SELECT seq,id,type,data,at FROM studio_events WHERE type=?1 AND seq>?2 AND seq<=?3 AND (?4 IS NULL OR json_extract(data,'$.app')=?4) ORDER BY seq LIMIT 100").bind(feed.event,after,through,scopedApp).all()).results;
+  const events=rows.map(r=>({...r,data:JSON.parse(r.data)}));
+  if(env.HOMIE_LOCAL_TEST_SECRET && caller?.localTest && caller.testScope && feed.event==='record.changed') {
+    const app=`${feed.app}:check:${caller.testScope}`;
+    return events.filter(e=>e.data.app===app).map(e=>({...e,data:{...e.data,app:feed.app}}));
+  }
+  return events;
 }
 export function matchesFeed(feed,event) {
   return feed.event===event.type && (feed.event!=='record.changed'||(event.data.app===feed.app&&event.data.collection===feed.collection));
