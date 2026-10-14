@@ -21,6 +21,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 **Plugin 0.51.0** · Earning candidate — not ready to release.
 
+This candidate adds Checkout-backed booking and subscription APIs but cannot ship until one-approval runtime authorization and the remaining acceptance gaps are resolved.
+
 ### Added
 
 - Opt-in app booking collections with atomic capacity, Checkout-linked holds,
@@ -29,7 +31,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
   and buyer-owned Stripe portal sessions.
 - An offline Checkout fixture and transaction-level booking acceptance tests.
 
-### Release blockers
+### Changed
 
 - The default one-approval Payment Links connection still cannot open arbitrary
   carts or paid capacity holds. A supported production runtime authorization
