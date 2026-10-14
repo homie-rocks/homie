@@ -98,7 +98,7 @@ automatic Stripe refund; retries report completion or continue refund recovery.
 Paid services require the studio's refundable Stripe connection; chain settlement
 is not offered for services. Handler errors never expose their private contents.
 
-## Prompt delivery and AI subscriptions (0.49.1)
+## Prompt delivery and AI subscriptions (0.50.1)
 
 After a write commits, its request starts dispatch using `waitUntil`. MCP tools
 start dispatch after the tool and its audit finish: streaming response headers

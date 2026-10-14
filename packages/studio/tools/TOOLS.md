@@ -160,7 +160,7 @@ then connect the owner's AI to `/mcp` with OAuth. Subscribe to
 `studio://events/bookings` with `resources/subscribe` and keep the authenticated
 SSE GET open. `notifications/resources/updated` carries the event in
 `params._meta["studio/event"]`. Resume with the SSE `Last-Event-ID`; do not poll.
-Nothing is enabled by default. Outbound webhooks are not included in 0.49.1.
+Nothing is enabled by default. Outbound webhooks are not included in 0.50.1.
 
 The owner can call `app_role` with `{app, role, signIn, revoke}`. `signIn` is an
 existing account's verified email or exact account name, not an account ID.
