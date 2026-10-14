@@ -3,7 +3,7 @@
   "command": "app new",
   "id": "live",
   "from": "quiz",
-  "dir": "/private/var/folders/63/1sbmhrlj05g9gvcghc49h8q80000gn/T/homie-first-run-proof-yPoxA5/cafe/apps/live",
+  "dir": "/private/var/folders/63/1sbmhrlj05g9gvcghc49h8q80000gn/T/homie-first-run-proof-JDzuAI/cafe/apps/live",
   "files": [
     "README.md",
     "app.json",

@@ -1,0 +1,8 @@
+studio_scaffold {"name":"Switchback Services","folder":"bike-shop","kind":"business"}
+homie-studio app new live --from jobs --name "Switchback Services"
+# shop.json: CAD Safety check 2500, Tune-up 7500, Full service 12500 (minor units)
+# @homie-rocks/studio points at npm pack from this checkout
+npm install --no-fund
+npm run build -- --types
+npm run dev -- --no-local-ai
+CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" npx --no-install homie-studio check live --url http://127.0.0.1:8788 --shots /Users/ryan/.homie/worktrees/apps-first-run/proof/apps-first-run/bike-shop
