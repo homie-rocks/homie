@@ -2466,3 +2466,198 @@ for(const delay of [80,150,300])test(`counter-dash leaves knock catch-up on the 
  assert.ok(Math.hypot(a.me.pos.x-authority[0],a.me.pos.y-authority[1])<.001,'the blend converges to authority');
  assert.equal(r.host.core.stats.errors,0);
 });
+
+for (const seed of [17,41,83]) test(`solid correction remains continuous after placement, seed ${seed}`, async t => {
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
+ const clock=virtualTime(t),shape=predictionShaper({delay:300,loss:.05,seed,jitter:true}),r=rig(L,compiled,false,shape,shape);
+ const a=openRoom({net:{config:cfg('Continuity'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();r.stop();});
+ let placed=false;a.on('placed',()=>{placed=true;});await clock.wait(3000);
+ let previous=a.me.pos,worst=0;
+ for(let n=0;n<2400;n++){
+  placed=false;if(n%300===0)a.command('respawn');
+  a.input({ax:n%300<100?1:n%300<180?-1:0,jump:n%97<5?1:0});
+  await clock.wait(16);const p=a.me.pos;
+  if(!placed)worst=Math.max(worst,Math.hypot(p.x-previous.x,p.y-previous.y));previous=p;
+ }
+ assert.ok(worst<1.5,`non-placement frame moved ${worst} metres`);
+});
+
+test('a correction across a ledge cannot change the drawn side in one frame',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
+ const clock=virtualTime(t),r=rig(L,compiled,false,80,80),a=openRoom({net:{config:cfg('Corner'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);
+ const socket=r.sockets[0],receive=socket.onmessage;socket.onmessage=event=>{const f=JSON.parse(event.data);if(f.t==='snap'){const own=f.d[1].find(e=>e[9]===a.seat);own[3][0]=2;own[3][1]=11.5;}receive.call(socket,{data:JSON.stringify(f)});};
+ let p=a.me.pos,worst=0;
+ for(let i=0;i<480;i++){await clock.wait(16);let q=a.me.pos;
+ for(const box of [{min:{x:-8,y:0},max:{x:0,y:5}},{min:{x:-20,y:12},max:{x:20,y:15}}])assert.ok(Math.min(q.x+.5-box.min.x,box.max.x-q.x+.5,q.y+.5-box.min.y,box.max.y-q.y+.5)<=.1,'the entire route remains outside solids');
+ worst=Math.max(worst,Math.hypot(q.x-p.x,q.y-p.y));p=q;}
+ t.diagnostic(JSON.stringify({p,worst,stats:r.host.core.stats}));
+ assert.ok(worst<1.5,`correction jumped ${worst} metres`);
+ assert.ok(Math.abs(p.x-2)<.01&&Math.abs(p.y-11.5)<.01,'eventually reaches authority around the ledge');
+});
+test('a correction below the same ledge routes around its edge',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
+ const clock=virtualTime(t),r=rig(L,compiled,false,80,80),a=openRoom({net:{config:cfg('Corner'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);
+ const socket=r.sockets[0],receive=socket.onmessage;socket.onmessage=event=>{const f=JSON.parse(event.data);if(f.t==='snap'){const own=f.d[1].find(e=>e[9]===a.seat);own[3][0]=-3;own[3][1]=11.5;}receive.call(socket,{data:JSON.stringify(f)});};
+ let p=a.me.pos,worst=0;
+ for(let i=0;i<480;i++){await clock.wait(16);let q=a.me.pos;
+ for(const box of [{min:{x:-8,y:0},max:{x:0,y:5}},{min:{x:-20,y:12},max:{x:20,y:15}}])assert.ok(Math.min(q.x+.5-box.min.x,box.max.x-q.x+.5,q.y+.5-box.min.y,box.max.y-q.y+.5)<=.1,'the entire route remains outside solids');
+ worst=Math.max(worst,Math.hypot(q.x-p.x,q.y-p.y));p=q;}
+ t.diagnostic(JSON.stringify({p,worst,stats:r.host.core.stats}));
+ assert.ok(worst<1.5,`correction jumped ${worst} metres`);
+ assert.ok(Math.abs(p.x+3)<.01&&Math.abs(p.y-11.5)<.01,'eventually reaches authority around the ledge');
+});
+
+test('unchanged substep forecasts execute once across repeated view reads and refresh on input', async t => {
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'substeps');
+ const clock=virtualTime(t),r=rig(L,compiled,false,80,80);let calls=0;
+ const a=openRoom({move:{runner(b,i,c){calls++;c.substeps(b,60,s=>{b.pos={x:b.pos.x+i.ax*s.dt,y:b.pos.y,z:0};});}},net:{config:cfg('Forecast'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);
+ const before=a.me.pos, warm=calls;
+ for(let i=0;i<100;i++)assert.deepEqual(a.me.pos,before);
+ assert.equal(calls,warm,'the guarded movement result is reused for identical arguments');
+ a.input({ax:1});await clock.wait(16);void a.me;
+ assert.ok(calls>warm,'a changed input executes movement');
+});
+
+test('an entity traversal samples one presentation time for the entire group', async t => {
+ const {L,compiled,openRoom}=await coinDashKit();
+ const clock=virtualTime(t),r=rig(L,compiled,false,80,80);
+ const a=openRoom({net:{config:cfg('Sample'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);
+ const sample=a.net.sample;let calls=0,count=0;
+ a.net.sample=(...args)=>{calls++;return sample(...args);};
+ a.each('coin',()=>count++);
+ assert.ok(count>1,'a real group of remote entities is drawn');
+ assert.equal(calls,1,'every entity in a traversal uses the same network sample');
+});
+
+test('box presentation preserves an uncorrected substep jump arc through its apex', async t => {
+ const circle=await coinDashKit('server',false,20,'solid-ground');
+ const box=await coinDashKit('server',false,20,'solid-ground-box');
+ const clock=virtualTime(t),rc=rig(circle.L,circle.compiled,false,0,0),rb=rig(box.L,box.compiled,false,0,0);
+ const a=circle.openRoom({net:{config:cfg('Circle arc'),WebSocketImpl:rc.socket(),post:null}});
+ const b=box.openRoom({net:{config:cfg('Box arc'),WebSocketImpl:rb.socket(),post:null}});
+ t.after(()=>{a.close();b.close();rc.stop();rb.stop();});await clock.wait(3000);
+ let worst=0,example;
+ for(const phase of [0,7,13]) {
+  a.input({jump:0});b.input({jump:0});a.command('respawn');b.command('respawn');await clock.wait(1000+phase);
+  const ay=a.me.pos.y,by=b.me.pos.y;a.input({jump:1});b.input({jump:1});
+  for(let i=0;i<80;i++) {await clock.wait(16);if(i===3){a.input({jump:0});b.input({jump:0});}
+   const delta=Math.abs((a.me.pos.y-ay)-(b.me.pos.y-by));if(delta>worst){worst=delta;example={phase,i,ay,by,a:a.me,b:b.me};}
+  }
+ }
+ t.diagnostic(JSON.stringify({worst,example}));
+ assert.ok(worst<.002,`the same vertical substeps diverged by ${worst} metres`);
+});
+
+test('interpolated remote poses do not fill the snapshot cache with one-use keys',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit();const clock=virtualTime(t),r=rig(L,compiled,false,0,0);
+ const a=openRoom({net:{config:cfg('Viewer'),WebSocketImpl:r.socket(),post:null}}),b=openRoom({net:{config:cfg('Runner'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();b.close();r.stop();});await clock.wait(5000);b.input({ax:0,ay:127});await clock.wait(317);
+ let id;a.each('runner',e=>{if(e.seat===b.seat)id=e.id;});assert.ok(id);void a.get(id);
+ const set=WeakMap.prototype.set;let transient=0,first,second;
+ WeakMap.prototype.set=function(key,value){if(key?.id===id&&key?.fields)transient++;return set.call(this,key,value);};
+ try{first=a.get(id);second=a.get(id);}finally{WeakMap.prototype.set=set;}
+ assert.deepEqual(first.pos,second.pos);assert.ok(Object.isFrozen(first));assert.ok(Math.hypot(first.vel.x,first.vel.y)>1,'the remote body is moving');
+ assert.equal(transient,0,'a freshly interpolated pose cannot be reused as a snapshot cache key');
+});
+
+test('unchanged delta snapshot rows reuse their immutable unpacked view',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit();const clock=virtualTime(t),r=rig(L,compiled,false,0,0);
+ const a=openRoom({net:{config:cfg('Static rows'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);
+ const coins=new Map();a.each('coin',e=>coins.set(e.id,e));assert.ok(coins.size);let snapshots=0;a.net.on('snapshot',()=>snapshots++);
+ await clock.wait(100);assert.ok(snapshots>0,'a newer snapshot arrived');
+ let compared=0;a.each('coin',e=>{const before=coins.get(e.id);if(before&&JSON.stringify(before)===JSON.stringify(e)){compared++;assert.strictEqual(e,before,'an unchanged row does not allocate another immutable entity');}});assert.ok(compared,'some unchanged coins remain');
+ const before=a.me.pos;a.input({ax:127});await clock.wait(100);
+ assert.ok(a.me.pos.x>before.x,'changed own rows still advance');
+});
+
+test('a blocked correction does not route backwards against continuing horizontal movement',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
+ const clock=virtualTime(t),r=rig(L,compiled,false,80,80),a=openRoom({net:{config:cfg('Forward route'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);
+ const socket=r.sockets[0],receive=socket.onmessage;
+ socket.onmessage=event=>{const f=JSON.parse(event.data);if(f.t==='snap'){const own=f.d[1].find(e=>e[9]===a.seat);own[3][0]=-3;own[3][1]=11.5;own[4][0]=-6;}receive.call(socket,{data:JSON.stringify(f)});};
+ a.input({ax:-1});let p=a.me.pos,worstReverse=0;
+ for(let i=0;i<240;i++){await clock.wait(16);const q=a.me.pos;if(i>10)worstReverse=Math.max(worstReverse,q.x-p.x);p=q;}
+ t.diagnostic(JSON.stringify({worstReverse}));
+ assert.ok(worstReverse<.01,`a correction routed backwards ${worstReverse} metres in one frame`);
+});
+
+test('held correction direction survives zero velocity at contact and neutral input can converge',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
+ const clock=virtualTime(t),r=rig(L,compiled,false,80,80);
+ const a=openRoom({correctionDirection:i=>Number(i.ax)||0,move:{runner(b){b.vel={x:0,y:0,z:0};}},net:{config:cfg('Contact intent'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);
+ const socket=r.sockets[0],receive=socket.onmessage;
+ socket.onmessage=event=>{const f=JSON.parse(event.data);if(f.t==='snap'){const own=f.d[1].find(e=>e[9]===a.seat);own[3][0]=-3;own[3][1]=11.5;own[4][0]=0;}receive.call(socket,{data:JSON.stringify(f)});};
+ a.input({ax:1});let p=a.me.pos,worstReverse=0;
+ for(let i=0;i<480;i++){await clock.wait(16);const q=a.me.pos;if(i>10)worstReverse=Math.max(worstReverse,p.x-q.x);p=q;}
+ t.diagnostic(JSON.stringify({worstReverse}));
+ assert.ok(worstReverse<.01,`held input was reversed at contact by ${worstReverse} metres`);
+ a.input({ax:0});for(let i=0;i<480;i++){await clock.wait(16);p=a.me.pos;}
+ assert.ok(Math.abs(p.x+3)<.01&&Math.abs(p.y-11.5)<.01,'neutral input releases the direction constraint and converges');
+});
+
+test('a delayed rendered frame cannot spend a multi-body-length movement backlog at once',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
+ const clock=virtualTime(t),r=rig(L,compiled,false,80,80),a=openRoom({net:{config:cfg('Delayed frame'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);a.input({ax:1});
+ for(let i=0;i<12;i++){await clock.wait(16);void a.me;}
+ const before=a.me.pos;await clock.wait(500);const after=a.me.pos;
+ const gap=Math.hypot(after.x-before.x,after.y-before.y);t.diagnostic(JSON.stringify({gap}));
+ assert.ok(gap<1.5,`the delayed frame moved ${gap} metres`);
+ a.input({ax:0});for(let i=0;i<240;i++){await clock.wait(16);void a.me;}
+ const authority=r.host.core.snapshot()[1].find(e=>e[9]===a.seat)[3];
+ assert.ok(Math.hypot(a.me.pos.x-authority[0],a.me.pos.y-authority[1])<.01,'the limited drawing still converges after release');
+});
+
+test('a stationary correction uses blend speed rather than the declared terminal fall speed',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
+ const clock=virtualTime(t),r=rig(L,compiled,false,80,80);
+ const a=openRoom({move:{runner(b){b.vel={x:0,y:0,z:0};}},net:{config:cfg('Blend speed'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);
+ const socket=r.sockets[0],receive=socket.onmessage;
+ socket.onmessage=event=>{const f=JSON.parse(event.data);if(f.t==='snap'){const own=f.d[1].find(e=>e[9]===a.seat);own[3][0]=2;own[3][1]=11.5;own[4][0]=0;own[4][1]=0;}receive.call(socket,{data:JSON.stringify(f)});};
+ let p=a.me.pos,worst=0;
+ for(let i=0;i<480;i++){await clock.wait(16);const q=a.me.pos;worst=Math.max(worst,Math.hypot(q.x-p.x,q.y-p.y));p=q;}
+ t.diagnostic(JSON.stringify({worst,p}));
+ assert.ok(worst<.12,`a stationary correction spent fall-speed travel: ${worst} metres per 16 ms`);
+ assert.ok(Math.abs(p.x-2)<.01&&Math.abs(p.y-11.5)<.01,'the slow blend still reaches authority around solids');
+});
+
+test('explicit correction intent overrides an opposite stale replay velocity',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
+ const clock=virtualTime(t),r=rig(L,compiled,false,80,80);
+ const a=openRoom({correctionDirection:i=>Number(i.ax)||0,move:{runner(b){b.vel={x:-6,y:0,z:0};}},net:{config:cfg('Stale velocity'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);
+ const socket=r.sockets[0],receive=socket.onmessage;
+ socket.onmessage=event=>{const f=JSON.parse(event.data);if(f.t==='snap'){const own=f.d[1].find(e=>e[9]===a.seat);own[3][0]=-15;own[3][1]=11.5;own[4][0]=-6;}receive.call(socket,{data:JSON.stringify(f)});};
+ a.input({ax:1});let p=a.me.pos,worstReverse=0;
+ for(let i=0;i<240;i++){await clock.wait(16);const q=a.me.pos;if(i>40)worstReverse=Math.max(worstReverse,p.x-q.x);p=q;}
+ t.diagnostic(JSON.stringify({worstReverse}));
+ assert.ok(worstReverse<.01,`stale velocity overrode explicit intent by ${worstReverse} metres`);
+});
+
+for(const respawn of [false,true])test(`a reconnect after an outage ${respawn?'draws a placement the game names at once':'draws the own box runner continuously to where the server moved it'}`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
+ const clock=virtualTime(t),r=rig(L,compiled,false,80,80),asked=[],a=openRoom({respawned:(before,after)=>{asked.push([before.pos.x,after.pos.x]);return respawn;},net:{config:cfg('Outage'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);
+ a.input({ax:1});await clock.wait(200);
+ let p=a.me.pos,worst=0,at=null,back=0;
+ const step=()=>{const q=a.me?.pos;if(!q)return;const d=Math.hypot(q.x-p.x,q.y-p.y);if(d>worst){worst=d;at={from:p,to:q,connected:a.net.connected};}p=q;};
+ // The server still has the key held; this browser lets go while it cannot say so.
+ r.network.up=false;r.sockets[0].cut();a.input({ax:0});
+ for(let i=0;i<120;i++){await clock.wait(16);step();}
+ r.network.up=true;
+ for(let i=0;i<2000;i++){await clock.wait(16);step();if(a.net.connected&&!back)back=i;}
+ t.diagnostic(JSON.stringify({worst,at,back,end:p}));
+ assert.ok(back>0,'the view reconnected');
+ assert.equal(asked.length,1,'the game is asked once about the returned revision');
+ if(respawn){assert.ok(worst>.8,`a named placement is drawn at once, not glided (${worst})`);return;}
+ // A return is not a placement: the body glides by about a frame's travel plus blend, never cut by its full error.
+ assert.ok(worst<.5,`the reconnect cut the runner ${worst} metres in one frame`);
+});

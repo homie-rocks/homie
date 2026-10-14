@@ -17,6 +17,18 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.51.1] - 2026-10-14
+
+**Plugin 0.51.1** · A player's own runner never jumps across the screen.
+
+Your platformer keeps a player's runner moving smoothly through network corrections and reconnects, with less work per frame on slower phones.
+
+### Fixed
+
+- In server-rules platformers, a player's own box-shaped 2D runner now moves smoothly through network corrections, even after a delayed frame. It goes around blocking platforms without being pulled backwards against the player's held direction, and normal jumps keep their shape.
+- After a dropped connection, the runner glides from its last visible position to where the server moved it. Real respawns and other deliberate placements still happen immediately; games can identify placements made during an outage with `respawned`.
+- Rules games do less repeated movement, collision and drawing preparation each frame, helping play stay smooth on slower phones. These changes preserve the server's movement, hits and scoring.
+
 ## [0.51.0] - 2026-10-14
 
 **Plugin 0.51.0** · Take the money through your own Stripe, keyless by default.

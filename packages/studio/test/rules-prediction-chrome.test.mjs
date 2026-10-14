@@ -98,6 +98,13 @@ test('Chrome prediction: release smoke; full delay/loss matrix with RULES_EXTEND
             // Two cases deliberately run alternating callbacks late, as a busy software renderer does.
             if (n === 1 && mode === 'server' && delay === 50 && ((hz === 20 && loss === 0.02) || (hz === 30 && loss === 0.1))) await page.evaluate(ms=>{window.latePaint=ms;window.paintN=0;}, hz === 20 ? 12 : 21);
             await page.waitForFunction('room.me && room.status === "playing"',{timeout:15000});
+            const cache = await page.evaluate(async()=>{
+              const first=room.me, shared=first===room.me;
+              await Promise.resolve();
+              return {shared, refreshed:first!==room.me};
+            });
+            assert.ok(cache.shared,'synchronous readers share the drawn pose');
+            assert.ok(cache.refreshed,'a later callback cannot reuse an earlier presentation');
           }
           await sleep(12000);
           const startup = await pages[1].evaluate(()=>__homieNet.probe.prediction());
