@@ -17,6 +17,28 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.50.1] - 2026-10-13
+
+**Plugin 0.50.1** · Studio events reach their functions and the owner's AI.
+
+Committed events start delivery promptly, and an owner's AI can subscribe without polling.
+
+### Added
+
+- Opt-in MCP event resources, resource subscriptions and Streamable HTTP push notifications on the studio's own server. Reconnect with `Last-Event-ID`; current roles filter live events and replay.
+- Owner `app_role` tool grants or revokes staff by verified email or exact sign-in name. `app_records` can delete with the role's permission and current record version.
+- Booking notification examples in the app, servers and office skills and packaged guides.
+
+### Fixed
+
+- MCP streaming responses no longer race function dispatch ahead of the tool's committed write. App/shop writes, room transfers and jobs start delivery in their originating lifetime; event pages and handler-generated events drain without waiting for another visitor.
+- Record conflicts return their actionable message. Office owner sign-in retains MCP owner authority when a non-owner player cookie is also present.
+
+### Upgrade notes
+
+- Event feeds are off unless explicitly declared in `studio.json` under `mcp.events`. Build regenerates the Worker configuration and retry cron. Existing studios need no subscription configuration to receive the delivery fix.
+- Delivery is at least once, normally within seconds for healthy short handlers, without a wall-clock guarantee. Declared event feeds retain history without an imposed retention cap. Clients must support MCP resource subscriptions and an SSE GET stream; outbound webhooks are deferred.
+
 ## [0.50.0] - 2026-10-13
 
 **Plugin 0.50.0** · Build the person's app from their dream.

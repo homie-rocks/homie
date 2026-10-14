@@ -4,7 +4,7 @@ import {readFileSync,writeFileSync,mkdirSync,readdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {join,dirname} from 'node:path';
 const root=join(dirname(fileURLToPath(import.meta.url)),'..');
-for (const topic of ['game', 'app', 'plan', 'playtest', 'style', 'art', 'models', 'sound', 'music', 'parts', 'studio-setup', 'shop']) {
+for (const topic of ['game', 'app', 'plan', 'playtest', 'style', 'art', 'models', 'sound', 'music', 'parts', 'studio-setup', 'shop', 'servers', 'office']) {
 const source=join(root,'plugins/homie/skills',topic),out=join(root,'packages/studio/guides',topic);
 mkdirSync(out,{recursive:true});
 for(const name of readdirSync(source, {recursive:true}).filter(n=> /\.(md|mjs|json)$/.test(n))) {

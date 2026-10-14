@@ -41,6 +41,8 @@ export async function runFunctions(env, cat, origin, {definitions, now = Date.no
   definitions = await syncFunctions(env,definitions,now());
   if(!definitions.length)return;
   if(typeof cat==='function')cat=await cat();
+  // An AI notification must not wait behind a slow function handler.
+  await pushEvents(env,cat,origin);
   let more;
   do {
   more=false;

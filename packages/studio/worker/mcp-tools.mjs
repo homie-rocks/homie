@@ -91,7 +91,8 @@ export function builtins(env,cat,origin) {
     tool('studio_info','The public studio, apps, games and posts.','public',object(),async()=>{const pub=publicCatalogue(cat,await settingsOf(env),env);return {studio:pub.studio?.name,games:pub.games.map(g=>({id:g.id,name:g.name,kind:g.kind??'game'})),posts:pub.posts};}),
     tool('studio_office','Live rooms and the players as shown in the office.','owner',object(),(_,ctx)=>ctx.office('/_studio/api/office')),
     tool('studio_shop','Orders, refunds and the shop state.','owner',object(),(_,ctx)=>ctx.shop()),
-    tool('app_role','Grant or revoke a staff role by verified email or exact sign-in name.','owner',object({app:str,role:str,signIn:{type:'string',maxLength:254},revoke:{type:'boolean'}},['app','role','signIn']),async({app,role,signIn,revoke})=>{
+    tool('app_role','Grant or revoke a staff role by verified email or exact sign-in name.','owner',object({app:str,role:str,signIn:{type:'string',maxLength:254},revoke:{type:'boolean'}},['app','role','signIn']),async({app,role,signIn,revoke},ctx)=>{
+      if(!ctx.caller.owner)throw new Error('Owner only');
       const meta=cat.games.find(g=>g.id===app&&g.kind==='app');
       if(!meta?.roles?.[role]?.signIn)throw new Error('Name a sign-in role');
       const people=signIn.includes('@')

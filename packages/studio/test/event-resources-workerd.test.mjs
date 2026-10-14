@@ -52,7 +52,29 @@ test('subscribed MCP client gets bookings without polling; replay and current ro
   await booking('second');
   const resumed=await fetcher('staff')('http://localhost/mcp',{headers:{accept:'text/event-stream','last-event-id':lastId}});assert.equal(resumed.status,200);reader=resumed.body.getReader();text='';while(!text.includes('"record":"second"'))text+=new TextDecoder().decode((await reader.read()).value);
   assert.doesNotMatch(text,/"record":"first"/);await reader.cancel();reader=null;
-  await db.prepare('DELETE FROM app_roles').run();
+  const rpc=async(connection,method,params)=>{
+    const response=await fetcher(connection)('http://localhost/mcp',{method:'POST',headers:{'content-type':'application/json',accept:'application/json,text/event-stream'},body:JSON.stringify({jsonrpc:'2.0',id:99,method,params})});
+    const text=await response.text();return text.startsWith('{')?JSON.parse(text):text.split('\n').filter(l=>l.startsWith('data: ')).map(l=>JSON.parse(l.slice(6))).find(m=>m.id===99);
+  };
+  const tool=(connection,name,args)=>rpc(connection,'tools/call',{name,arguments:args});
+  const conflict=await tool(null,'app_records',{app:'cafe',collection:'bookings',id:'first',operation:'create',data:{name:'Again'}});
+  assert.equal(conflict.result.isError,true);assert.match(conflict.result.content[0].text,/record changed, already exists, or collection full; reload/);
+  assert.doesNotMatch(conflict.result.content[0].text,/Tool failed/);
+  const removed=await tool('staff','app_records',{app:'cafe',role:'staff',collection:'bookings',id:'first',operation:'delete',version:1});
+  assert.equal(removed.result.isError,undefined);assert.equal(await db.prepare("SELECT id FROM app_records WHERE id='first'").first(),null);
+  await db.prepare("INSERT INTO player_emails(player,email,verified_at,added_at) VALUES('staff','staff@example.test',1,1)").run();
+  const revoke=await tool('owner','app_role',{app:'cafe',role:'staff',signIn:'staff@example.test',revoke:true});assert.equal(revoke.result.isError,undefined);
+  const deniedDelete=await tool('staff','app_records',{app:'cafe',role:'staff',collection:'bookings',id:'second',operation:'delete',version:1});assert.equal(deniedDelete.result.isError,true);
+  const grant=await tool('owner','app_role',{app:'cafe',role:'staff',signIn:'staff'});assert.equal(grant.result.isError,undefined);
+  assert.ok(await db.prepare("SELECT player FROM app_roles WHERE player='staff'").first());
+  await tool('owner','app_role',{app:'cafe',role:'staff',signIn:'staff',revoke:true});
+  // Replaying after the grant is removed must not leak retained records.
+  const filtered=await fetcher('staff')('http://localhost/mcp',{headers:{accept:'text/event-stream','last-event-id':lastId}});
+  reader=filtered.body.getReader();assert.match(new TextDecoder().decode((await reader.read()).value),/: connected/);
+  await db.prepare("UPDATE mcp_connections SET revoked=1 WHERE id='staff'").run();
+  await booking('third');
+  assert.equal((await reader.read()).done,true,'revocation closes the stream without delivering hidden replay');reader=null;
+
   const denied=await fetcher('staff')('http://localhost/mcp',{method:'POST',headers:{'content-type':'application/json',accept:'application/json,text/event-stream'},body:JSON.stringify({jsonrpc:'2.0',id:10,method:'resources/read',params:{uri:'studio://events/bookings'}})});
   assert.match(await denied.text(),/error/);
   const anonymous=new Client({name:'public',version:'1'});clients.push(anonymous);await anonymous.connect(new StreamableHTTPClientTransport(new URL('http://localhost/mcp'),{fetch:fetcher(null)}));

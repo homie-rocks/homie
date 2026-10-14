@@ -74,3 +74,26 @@ you asked for, give them the link, and check afterwards (`office`, or the ask's 
 ## Connect an AI to this studio
 
 Every studio serves its own MCP at `<site>/mcp`. Use the `tools` skill for studio-defined business actions, signed integrations and staff AI access. Reuse office and app-record built-ins first. After an authorized deploy, hand over the MCP address and `<site>/_studio/office/connections`: the person approves with the studio account they already have, with no key to copy. Staff connect their own account and retain only their app grants. Client connector setup is separate from the studio approval. Never deploy merely to set up a local tool test.
+
+
+## Tell my AI when a booking comes in
+
+Read `node_modules/@homie-rocks/studio/functions/FUNCTIONS.md` for the worked
+booking example and delivery expectations. Opt in with
+`mcp.events.bookings: {event:"record.changed", app:"cafe", collection:"bookings", audience:"owner"}`
+in `studio.json` (use the studio's real app and collection), then build. The owner's
+AI connects to the studio's `/mcp` with explicit OAuth browser approval, calls
+`resources/subscribe` for `studio://events/bookings`, and holds the authenticated
+Streamable HTTP SSE GET. Notifications use `notifications/resources/updated`;
+`params._meta["studio/event"]` carries untrusted event data. Filter booking inserts,
+deduplicate by event ID, and resume with `Last-Event-ID`. No polling or Homie relay.
+Nothing is enabled by default; a declared feed retains its events without a Homie
+count or retention cap. This release does not include outbound webhooks.
+
+Use owner tool `app_role` to grant/revoke staff by verified email or exact sign-in
+name (`signIn`, `app`, `role`, `revoke`); the person signs in first. Staff event
+feeds need the explicit app/role audience and collection read permission. Grants
+are checked again for live delivery and replay. `app_records` supports deletion
+with `operation:"delete"` and the current `version` where the role allows it.
+Reload on the returned conflict message. An office owner session and an
+owner-marked player account both authorize owner MCP access.
