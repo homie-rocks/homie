@@ -96,7 +96,8 @@ test('local role sessions isolate records per run, keep role permissions, and pr
  assert.equal((await call('one','PUT','customer',{data:{state:'paid'},version:1})).status,403);
  assert.equal((await call('one','PUT','staff',{data:{state:'paid'},version:1})).status,200);
  assert.equal((await (await call('two','GET','staff')).json()).records[0].data.state,'fresh');
- DB.sql.exec("INSERT INTO players(id,name,guest,owner,created_at,seen_at) VALUES('crew','Crew',0,0,1,1)");
- const url=new URL('http://127.0.0.1/boards/api/app/roles');const grant=await appRecordsRoute(withToolIdentity(new Request(url,{method:'POST',headers:{origin:url.origin,'content-type':'application/json'},body:JSON.stringify({role:'staff',player:'crew',studio:true})}),owner),env,meta,url,'api/app/roles');
- assert.equal(grant.status,200);assert.equal(new URL((await grant.json()).link).hostname,'localhost');assert.equal(DB.sql.prepare("SELECT app FROM app_roles WHERE player='crew'").get().app,'*');
+ DB.sql.exec("INSERT INTO players(id,name,guest,owner,created_at,seen_at) VALUES('pl_aaaaaaaaaaaaaaaaaaaaaa','Crew',0,0,1,1)");
+ const {createHash}=await import('node:crypto');const token='a'.repeat(64);DB.sql.prepare('INSERT INTO stats_keys(hash,kind,expires_at) VALUES(?,?,?)').run(createHash('sha256').update(token).digest('hex'),'session',Date.now()+3600000);
+ const url=new URL('http://127.0.0.1/boards/api/app/roles');const grant=await appRecordsRoute(new Request(url,{method:'POST',headers:{origin:url.origin,'content-type':'application/json',cookie:'studio_owner='+token},body:JSON.stringify({role:'staff',player:'pl_aaaaaaaaaaaaaaaaaaaaaa',studio:true})}),env,meta,url,'api/app/roles');
+ assert.equal(grant.status,200);assert.equal(new URL((await grant.json()).link).hostname,'localhost');assert.equal(DB.sql.prepare("SELECT app FROM app_roles WHERE player='pl_aaaaaaaaaaaaaaaaaaaaaa'").get().app,'*');
 });

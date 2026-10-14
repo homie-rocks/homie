@@ -347,8 +347,9 @@ export async function dev(root, { lan = false, port: askedPort = 8787, remoteAi 
     m.on('close', done);
     m.on('error', done);
   });
-  const origin = `http://localhost:${port}`;
-  log(`Local site: ${origin}/  (each game: ${origin}/<id>/play — open it in two browsers)`);
+  const origin = `http://127.0.0.1:${port}`;
+  const printedOrigin = `http://localhost:${port}`;
+  log(`Local site: ${printedOrigin}/  (each game: ${printedOrigin}/<id>/play — open it in two browsers)`);
   if (lan) for (const address of lanAddresses()) log(`Same Wi-Fi: http://${address}:${port}/ (open this address on phones and wall screens)`);
   const ai = devConfig(root, remoteAi);
   if (ai.note) log(ai.note);
