@@ -135,6 +135,12 @@ test('a declaration that does not fit the contract is named', async () => {
     assert.equal(parsed.settings.predict.maxFrameM,null);
   }
   assert.equal(L.R.roomSettings({predict:{maxFrameM:null}}).settings.predict.maxFrameM,null);
+  assert.equal(L.R.roomSettings({predict:{renderAheadMs:16}}).settings.predict.renderAheadMs,16);
+  for (const renderAheadMs of [-1,51,Infinity,NaN]) {
+    const parsed=L.R.roomSettings({predict:{renderAheadMs}});
+    assert.ok(parsed.problems.length);
+    assert.equal(parsed.settings.predict.renderAheadMs,0);
+  }
   // The default budget is the same work a second at any tick rate above twenty.
   assert.deepEqual([10, 20, 30, 60].map((tickHz) => L.R.roomSettings({ tickHz }).settings.budget.tick), [500_000, 500_000, 333_333, 166_666]);
   assert.equal(L.R.roomSettings({ tickHz: 60, budget: { tick: 900_000 } }).settings.budget.tick, 900_000, 'and a game may name its own');

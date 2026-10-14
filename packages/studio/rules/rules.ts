@@ -211,7 +211,7 @@ export interface RoomSettings {
   view: { radiusM: number | null; precisionM?: number; nearM?: number | null; farHz?: number | null };
   durability: { movementSeconds: number };
   budget: { tick: number };
-  predict: { maxFrameM?: number | null; idleHold?: boolean; catchM: number | null; catchUp: number; snapM: number | null; blendMs: number; interpMs: number | null };
+  predict: { renderAheadMs?: number; maxFrameM?: number | null; idleHold?: boolean; catchM: number | null; catchUp: number; snapM: number | null; blendMs: number; interpMs: number | null };
   /** The studio's own pace on what one player sends, messages a second by frame kind (`in`, `ev`, ...). Absent: none. */
   rates?: Record<string, number>;
 }
@@ -273,6 +273,11 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
     else for (const key of Object.keys(r.view)) if (!['radiusM', 'precisionM', 'nearM', 'farHz'].includes(key)) problems.push(`"room.view.${key}" is not a setting; use radiusM, precisionM, nearM or farHz`);
   }
   const p = r.predict && typeof r.predict === 'object' ? r.predict : {};
+  let renderAheadMs = 0;
+  if (p.renderAheadMs !== undefined) {
+    if (typeof p.renderAheadMs === 'number' && Number.isFinite(p.renderAheadMs) && p.renderAheadMs >= 0 && p.renderAheadMs <= 1000 / tickHz) renderAheadMs = p.renderAheadMs;
+    else problems.push('"room.predict.renderAheadMs" is between zero and one simulation tick; using zero');
+  }
   let maxFrameM: number | null = null;
   if (p.maxFrameM !== undefined && p.maxFrameM !== null) {
     const value = Number(p.maxFrameM);
@@ -285,7 +290,7 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
       view: { radiusM: r.view?.radiusM === null ? null : num('view.radiusM', r.view?.radiusM, null), ...(r.view?.precisionM !== undefined ? { precisionM: num('view.precisionM', r.view.precisionM, 0) as number } : {}), ...(r.view?.nearM !== undefined ? { nearM: num('view.nearM', r.view.nearM, null) } : {}), ...(r.view?.farHz !== undefined ? { farHz: whole('view.farHz', r.view.farHz, 1, tickHz, tickHz) } : {}) },
       durability: { movementSeconds: whole('durability.movementSeconds', r.durability?.movementSeconds, 1, 60, r.lifetime === 'persistent' ? 30 : 1) },
       budget: { tick: Math.max(1, Math.floor(num('budget.tick', r.budget?.tick, budgetFor(tickHz)) as number)) },
-      predict: { ...(p.maxFrameM !== undefined ? {maxFrameM} : {}), ...(p.idleHold === true ? {idleHold:true} : {}), catchM: num('predict.catchM', p.catchM, null), catchUp: num('predict.catchUp', p.catchUp, 1.25) as number, snapM: num('predict.snapM', p.snapM, null), blendMs: num('predict.blendMs', p.blendMs, 100) as number, interpMs: num('predict.interpMs', p.interpMs, null) },
+      predict: { ...(p.renderAheadMs !== undefined ? {renderAheadMs} : {}), ...(p.maxFrameM !== undefined ? {maxFrameM} : {}), ...(p.idleHold === true ? {idleHold:true} : {}), catchM: num('predict.catchM', p.catchM, null), catchUp: num('predict.catchUp', p.catchUp, 1.25) as number, snapM: num('predict.snapM', p.snapM, null), blendMs: num('predict.blendMs', p.blendMs, 100) as number, interpMs: num('predict.interpMs', p.interpMs, null) },
     },
     problems,
   };

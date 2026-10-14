@@ -57,11 +57,15 @@ export default defineRules({contract:2,space:{dims:2},move,map:'./map',shared:{w
       writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
 export default defineRules({contract:2,space:{dims:${dims}},move,map:'./map',entities:{runner:{player:true,input:{ax:f.i8()},body:{shape:'${dims===2?'circle':'sphere'}',radius:.2,maxSpeed:4},fields:{neighbours:f.u8()},tick(w,s){s.neighbours=w.near(s.pos,3,'runner').length;}}},room:{bots:{keep:0},join(c,p){return {kind:'runner',at:{x:p.seat===0?19:1,y:10,z:${dims===2?0:10}}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax*4,y:0,z:0};c.world.sweep(b,c.math.scale(b.vel,c.dt));}});`);
-    } else if ((runaway === 'solid-ground' || runaway === 'solid-ground-box')) {
-      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-20,-20],max:[20,20]},boxes:[{min:[-8,0],max:[0,5]},{min:[-20,12],max:[20,15]}]}));
+    } else if ((runaway === 'solid-ground' || runaway === 'solid-ground-box' || runaway === 'solid-wide-box')) {
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify(runaway === 'solid-wide-box' ? {bounds:{min:[-60,-20],max:[60,20]},boxes:[{min:[-30,0],max:[30,5]},{min:[-60,12],max:[60,15]}]} : {bounds:{min:[-20,-20],max:[20,20]},boxes:[{min:[-8,0],max:[0,5]},{min:[-20,12],max:[20,15]}]}));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
-export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{respawn:{}}},entities:{runner:{player:true,input:{ax:f.held(),jump:f.held()},motion:{air:f.bit()},body:{shape:'${runaway === 'solid-ground-box' ? 'box' : 'circle'}',radius:.5,maxSpeed:30},commands:{respawn(w,s){w.place(s,{x:-3,y:-.5},{vel:{x:0,y:0}});s.motion.air=false;}}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:-3,y:-.5,z:0}};}}});`);
+export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{respawn:{}}},entities:{runner:{player:true,input:{ax:f.held(),jump:f.held()},motion:{air:f.bit()},body:{shape:'${runaway !== 'solid-ground' ? 'box' : 'circle'}',radius:.5,maxSpeed:30},commands:{respawn(w,s){w.place(s,{x:-3,y:-.5},{vel:{x:0,y:0}});s.motion.air=false;}}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:-3,y:-.5,z:0}};}}});`);
       writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){c.substeps(b,60,s=>{const vy=i.jump&&!b.motion.air?-15:Math.min(30,b.vel.y+40*s.dt);b.vel={x:i.ax*6,y:vy,z:0};c.map.sweep(b,{x:b.vel.x*s.dt,y:0,z:0});const hit=c.map.sweep(b,{x:0,y:vy*s.dt,z:0});b.motion.air=!hit;if(hit)b.vel={x:b.vel.x,y:0,z:0};});}});`);
+    } else if (runaway === 'input-steps') {
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-1000,-1000],max:[1000,1000]}}));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';export default defineRules({contract:2,space:{dims:2},move,map:'./map',entities:{runner:{player:true,input:{ax:f.held()},motion:{was:f.bit()},body:{shape:'box',radius:.5,maxSpeed:16}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:0,y:0,z:0}};}}});`);
+      writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){const n=3,k=Math.min(n,Math.floor(i.ax*n+(b.motion.was?.25:.75))),from=b.motion.was?0:n-k,to=b.motion.was?k:n;c.substeps(b,60,s=>{const down=s.index>=from&&s.index<to;b.pos={x:b.pos.x+b.vel.x*s.dt,y:0,z:0};b.vel={x:down?Math.min(16,b.vel.x+32*s.dt):0,y:0,z:0};});b.motion.was=to===n&&to>from;}});`);
     } else if (runaway === 'placement-clock') {
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-1000,-1000],max:[1000,1000]}}));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
@@ -2811,4 +2815,65 @@ test('a slow synchronous reader crossing a tick boundary shares the current pres
  performance.now=()=>now()+40; // CPU work crosses two ticks without an event-loop/microtask boundary.
  assert.equal(a.me,first);
  await Promise.resolve();assert.notEqual(a.me,first);
+});
+
+test('moving authority beyond a wide platform cannot starve the correction route',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-wide-box');
+ const clock=virtualTime(t),r=rig(L,compiled,false,0,0);
+ const a=openRoom({move:{runner(b){b.vel={x:0,y:0,z:0};}},net:{config:cfg('moving correction'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);void a.me;
+ const socket=r.sockets[0],receive=socket.onmessage;const start=performance.now();let target={x:-3,y:11.5};
+ socket.onmessage=event=>{const f=JSON.parse(event.data);if(f.t==='snap'){const own=f.d[1].find(e=>e[9]===a.seat);target={x:-3-Math.min(10,(performance.now()-start)*.015),y:11.5};own[3][0]=target.x;own[3][1]=target.y;own[4][0]=own[4][1]=0;}receive.call(socket,{data:JSON.stringify(f)});};
+ a.input({ax:1});let previous=a.me.pos,stopped=0,worst=0;
+ for(let i=0;i<120;i++){await clock.wait(16);const p=a.me.pos;
+  stopped=Math.hypot(p.x-target.x,p.y-target.y)>1.5 && Math.hypot(p.x-previous.x,p.y-previous.y)<.001?stopped+16:0;worst=Math.max(worst,stopped);
+  assert.ok(Math.hypot(p.x-previous.x,p.y-previous.y)<=1.5,'correction stays continuous');
+  assert.ok(!(p.x> -30.499 && p.x<30.499 && p.y>-.499 && p.y<5.499),'route stays outside the platform');
+  previous=p;
+ }
+ assert.ok(worst<=200,`route stopped for ${worst} ms`);
+ assert.ok(Math.hypot(previous.x-target.x,previous.y-target.y)<1.5,'moving correction converges');
+});
+
+test('a new input invalidates a pose sampled earlier in the browser frame',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
+ const clock=virtualTime(t),old=globalThis.requestAnimationFrame,oldCancel=globalThis.cancelAnimationFrame;
+ globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=()=>{};
+ const r=rig(L,compiled,false,0,0),a=openRoom({net:{config:cfg('fresh input'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();if(old)globalThis.requestAnimationFrame=old;else delete globalThis.requestAnimationFrame;if(oldCancel)globalThis.cancelAnimationFrame=oldCancel;else delete globalThis.cancelAnimationFrame;});
+ await clock.wait(3000);const before=a.me;a.input({ax:1});await clock.wait(16);
+ assert.ok(a.me.pos.x>before.pos.x,'a pre-input read must not buffer steering until another animation frame');
+ assert.strictEqual(a.me,a.me,'unchanged readers still share the presentation');
+});
+
+
+test('substep render lead answers steering within the display latency budget',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'input-steps',{renderAheadMs:16});
+ const clock=virtualTime(t),r=rig(L,compiled,false,0,0),a=openRoom({net:{config:cfg('substep response'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);const times=[];
+ for(const phase of [1,9,17,25,33,41,49]){
+  a.input({ax:0});await clock.wait(1000+phase);const before=a.me.pos.x;a.input({ax:1});let latency=0;
+  for(;latency<60;latency++){if(a.me.pos.x>before+.0001)break;await clock.wait(1);}
+  times.push(latency);
+ }
+ console.log({substepInputMs:times});
+ assert.ok(Math.max(...times)<=12,`substep response buffered: ${times}`);
+});
+
+test('substep render lead crosses tick boundaries without holding a moving drawing',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'input-steps',{renderAheadMs:16});
+ const clock=virtualTime(t),r=rig(L,compiled,false,0,0),a=openRoom({net:{config:cfg('lead continuity'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);a.input({ax:1});await clock.wait(2000);let previous=a.me.pos.x,min=Infinity;
+ for(let i=0;i<50;i++){await clock.wait(8);const x=a.me.pos.x;min=Math.min(min,x-previous);previous=x;}
+ assert.ok(min>.04,`render lead stopped at a tick boundary: ${min}`);
+});
+
+test('render lead never advances authoritative movement or the input clock',async t=>{
+ const kits=[];for(const renderAheadMs of [0,16])kits.push(await coinDashKit('server',false,20,'input-steps',{renderAheadMs}));
+ const clock=virtualTime(t),rooms=kits.map(({L,compiled,openRoom},i)=>{const r=rig(L,compiled,false,0,0),a=openRoom({net:{config:cfg(`lead authority ${i}`),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();r.stop();});return{r,a};});
+ await clock.wait(3000);
+ for(const {a}of rooms)a.input({ax:1});
+ for(let i=0;i<120;i++){await clock.wait(8);for(const {a}of rooms)void a.me;}
+ for(const {a}of rooms)a.input({ax:0});await clock.wait(1000);
+ assert.deepEqual(rooms[0].r.host.core.snapshot()[1],rooms[1].r.host.core.snapshot()[1]);
 });

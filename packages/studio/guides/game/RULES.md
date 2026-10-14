@@ -1432,7 +1432,18 @@ Held direction never blocks a correction. Collision shortens the offset or route
 its drawing around the obstacle. `room.predict.maxFrameM` optionally sets the
 maximum correction-frame travel (default 2.8 times the body radius). Large errors
 fast-blend under that cap instead of becoming slow run-speed slides. A browser
-frame has one shared presentation for the renderer, HUD and probes.
+frame has one shared presentation for the renderer, HUD and probes; fresh input
+invalidates a pose sampled before that input. A moving target cannot cancel an
+unfinished collision route, and clear line-of-sight shortcuts spend the blend on
+travel rather than on one search-grid edge per frame.
+
+`room.predict.renderAheadMs` optionally anticipates the display interval on the
+own runner's predicted movement path (default 0; between 0 and one simulation
+tick). A fixed 60 Hz substep game can use 16 ms to reduce the wait for the first
+displacement substep plus a display interval. Forecasts cross tick boundaries continuously, use the same movement
+and collision code, and never advance simulation, authoritative actions, or input
+timestamps. It affects 2D drawing only. Keep this small: it is visual prediction,
+not a way to compensate a network round trip.
 
 A server placement carries its original position even in later snapshots. A
 respawn first draws that exact position, then blends toward current prediction.

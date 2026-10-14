@@ -1051,7 +1051,12 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     let settled = true;
     let preview: ReturnType<typeof runMove> | null = null;
     if (kind && base) {
-      const a = Math.max(0, Math.min(1, tickAt(clock()) - stepped));
+      // Own rendering may anticipate a small display interval on this already
+      // predicted path. It never advances simulation or timestamps inputs, and
+      // cannot extend beyond the forecast whose collisions have been checked.
+      const ahead = dims === 2 ? (predict.renderAheadMs ?? 0) / period : 0;
+      const renderPhase = Math.max(0, tickAt(clock()) - stepped + ahead);
+      const a = Math.min(1, renderPhase);
       const now: Record<string, unknown> = {};
       // A held field previews as its mean over the part of the tick that has passed. The body is drawn that fraction of
       // the way to the preview, so it stands exactly where the control has carried it: it starts from rest at a press
@@ -1084,6 +1089,25 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         heading = blendHeading(before.heading, after.heading, f, dims);
         velocity = vec3({x:lerp(before.vel.x,after.vel.x,f),y:lerp(before.vel.y,after.vel.y,f),z:lerp(before.vel.z,after.vel.z,f)},dims);
         grounded = f === 1 ? after.grounded : before.grounded && after.grounded;
+      }
+      if (ahead > 0 && renderPhase > 1) {
+        // A display interval may cross the next tick. Forecast that interval too;
+        // clamping at its edge would alternate a fast frame with a stationary one.
+        const futureInput: Record<string, unknown> = {};
+        for (const [name,fd] of kind.input) futureInput[name] = fd.t === 'press' ? false : fd.t === 'pulse' ? 0 : coerce(fd,sample[name] ?? fd.init,dims);
+        const future = runMove(kind.name,{...next,motion:motionOf(kind.name,next.motion)},Object.freeze(futureInput),stepped+2);
+        moveTick=stepped+1;
+        const f = Math.min(1,renderPhase-1);
+        let from: {pos:Vec3;vel:Vec3;heading:Vec3;grounded:boolean} = next, to: typeof from = future, fraction = f;
+        if (future.steps?.length) {
+          const n=future.steps.length-1, at=f*n, index=Math.min(n-1,Math.floor(at));
+          from=future.steps[index];to=future.steps[index+1];fraction=at-index;
+        }
+        safeOrigin=from.pos;
+        pos=vec3(blendPosition(from.pos,to.pos,fraction,map.wrap),dims);
+        heading=blendHeading(from.heading,to.heading,fraction,dims);
+        velocity=vec3({x:lerp(from.vel.x,to.vel.x,fraction),y:lerp(from.vel.y,to.vel.y,fraction),z:0},dims);
+        grounded=fraction===1?to.grounded:from.grounded&&to.grounded;
       }
       preview = next;
       if (predictors[kind.name]) {
@@ -1136,14 +1160,17 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         const limit = predict.maxFrameM ?? Math.max(.1, (kind?.radius ?? .5)*2.8);
         const direct = constrain(from,pos);
         if (distance(direct,pos) > .002) {
-          const goal = routing?.goal ?? route.at(-1);
-          if (goal && distance(goal,pos)>2) { routing=null;route=[]; }
+          // Finish a bounded search against its original goal. Replanning on a
+          // moving goal can discard every search before it reaches an edge.
           if (!route.length) {
             routing ??= correctionPath(from,pos,Math.max(.25,2*(kind?.radius ?? .5)));
             const found = routing.advance((a,b)=>distance(constrain(a,b),b)<.002);
             if (found) { route=[...found];routing=null; }
           }
           while(route.length && distance(from,route[0])<.01)route.shift();
+          // Spend the blend on distance, not one search-grid edge per frame.
+          // Only skip waypoints when the body's own collision sweep clears them.
+          for (let i=route.length-1;i>0;i--) if (distance(constrain(from,route[i]),route[i])<.002) { route.splice(0,i);break; }
           const waypoint = route[0];
           if (waypoint) {
             let length=distance(from,waypoint);
@@ -1251,7 +1278,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     self: () => { const m = meNow(true); return m ? { x: m.pos.x, y: m.pos.y, z: m.pos.z } : null; },
     peer: (seat: number) => { if (!latest) return null; for (const u of latest.ents.values()) if (u.seat === seat) return { x: u.pos.x, y: u.pos.y, z: u.pos.z }; return null; },
     movement: () => { const kinds = schema.kinds.filter(k => k.player); return kinds.length && kinds.every(k => k.maxSpeed === 0) ? 'stationary' : 'spatial'; },
-    prediction: () => ({ ...correction, observedLeadAt, lastSendAt, now: clock(), serverTick: latest?.k, tick: stepped, catchTick, lead: targetLead(), medianLead: medianLead(), rate: speed, rtt: authorityRtt(), hostAge: hostMedian, pending: pending.length, applications: [...applications] }),
+    prediction: () => ({ ...correction, simulated: mine ? {...mine.pos} : null, presented: presented ? {...presented.pos} : null, observedLeadAt, lastSendAt, now: clock(), serverTick: latest?.k, tick: stepped, catchTick, lead: targetLead(), medianLead: medianLead(), rate: speed, rtt: authorityRtt(), hostAge: hostMedian, pending: pending.length, applications: [...applications] }),
     scores: () => roster().map((r) => ({ seat: r.seat, score: r.score })),
     score: myScore, tick: () => latest?.k ?? 0, epoch: () => epoch, hosted: () => net.rulesHosting ? 'browser' : schema.settings.host, status: () => solo ? 'offline' : status,
   });
@@ -1347,7 +1374,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       if (changed) pump();
       const shown = changed ? meNow()?.pos : null;
       for (const [name, fd] of kind?.input ?? []) if ((fd.t === 'press' || fd.t === 'pulse') && coerce(fd,s[name],dims)) { const value=coerce(fd,s[name],dims) as number | boolean; if(fd.t==='pulse'){pulseCount+=1;const target=Math.max(stepped+1,(pulseQueue.at(-1)?.t??stepped)+1);pulseQueue.push({name,value:Number(value),n:pulseCount,t:target});net.send('pulse',[epoch,name,value,target,pulseCount]);} else pressed.set(name,value); }
-      if (changed && typeof requestAnimationFrame === 'undefined') presentedEntity = null;
+      if (changed) presentedEntity = null;
       sample = next;
       // A discrete action belongs to the present, even while an unseen impulse is
       // being drawn from history. Resume the live prediction and let the existing

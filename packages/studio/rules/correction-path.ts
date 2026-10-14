@@ -13,7 +13,7 @@ export function correctionPath(start: Vec3, goal: Vec3, spacing: number) {
     goal,
     advance(clear: (from: Vec3,to: Vec3)=>boolean): readonly Vec3[] | null {
       if (route || exhausted) return route;
-      for (let budget=0;budget<24 && open.length;budget++) {
+      for (let budget=0;budget<128 && open.length;budget++) {
         let best=0;for(let i=1;i<open.length;i++)if(open[i].estimate<open[best].estimate)best=i;
         const node=open.splice(best,1)[0];
         if(clear(node.pos,goal)) {
