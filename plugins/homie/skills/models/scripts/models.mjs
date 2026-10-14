@@ -64,15 +64,7 @@ function receipt(root, game, line) {
 }
 
 /** A file's real picture type from its first bytes; the extension made to match (fal answers PNG or JPEG). */
-function fixExt(file) {
-  const b = readFileSync(file).subarray(0, 4);
-  const ext = b[0] === 0xff && b[1] === 0xd8 ? '.jpg' : b[0] === 0x89 && b[1] === 0x50 ? '.png' : b.toString('latin1', 0, 4) === 'RIFF' ? '.webp' : null;
-  if (!ext || file.endsWith(ext)) return file;
-  const to = file.replace(/\.[a-z0-9]+$/i, ext);
-  renameSync(file, to);
-  for (const side of ['.json', '.request']) if (existsSync(`${file}${side}`)) renameSync(`${file}${side}`, `${to}${side}`);
-  return to;
-}
+
 
 /**
  * One paid call: priced (live), checked against the cap, asked for without --yes, receipted on acceptance, resumed on

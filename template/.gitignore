@@ -10,7 +10,7 @@ site/.wrangler/
 .wrangler/
 .dev.vars
 .env
-# Stripe Projects (setup --via stripe-projects): credentials stay in its vault and the .env files it syncs, never in git.
+# Provider-owned credential stores and local environment files never belong in git.
 .env.*
 .projects/vault/
 .projects/cache/

@@ -41,21 +41,7 @@ function gameDir(root, game) {
 }
 
 /** A receipt line: the job's budget (running total), art/receipts.jsonl, and HOMIE_SPEND_LEDGER when set. */
-function receipt(root, dir, line) {
-  const at = new Date().toISOString();
-  const b = readBudget(dir);
-  if (b) {
-    b.spent = +(b.spent + (Number(line.cost) || 0)).toFixed(6);
-    b.calls.push({ at, provider: line.provider, model: line.model, cost: line.cost, unit: line.unit, requestId: line.requestId ?? null, artifact: line.artifact ?? null });
-    writeJson(join(dir, 'budget.json'), b);
-  }
-  mkdirSync(join(root, 'art'), { recursive: true });
-  appendFileSync(join(root, 'art', 'receipts.jsonl'), `${JSON.stringify({ schema: 'homie.media-receipt/1', at, ...line })}\n`);
-  const ledger = process.env.HOMIE_SPEND_LEDGER;
-  if (ledger) {
-    try { appendFileSync(ledger, `${JSON.stringify({ schema: 'homie.brand-spend/1', at, provider: line.provider, model: line.model, jobId: line.requestId ?? null, units: line.units ?? null, unit: line.unitName ?? line.unit, usd: line.cost, credits: null, unpriced: null, brand: process.env.HOMIE_SPEND_BRAND ?? null, attribution: process.env.HOMIE_SPEND_ATTRIBUTION ?? null, artifact: line.artifact ?? null })}\n`); } catch (e) { process.stderr.write(`could not write the ledger: ${e.message}\n`); }
-  }
-}
+
 
 /* ---------------------------------------------------------------- check */
 

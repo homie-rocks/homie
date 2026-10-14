@@ -119,10 +119,7 @@ function plan(root) {
  */
 
 
-function nextRender(dir) {
-  const ns = readdirSync(join(dir, 'work')).map((f) => /^render-(\d+)\./.exec(f)?.[1]).filter(Boolean).map(Number);
-  return ns.length ? Math.max(...ns) + 1 : 1;
-}
+
 
 /* ---------------------------------------------------------------- lyrics check */
 
@@ -405,12 +402,12 @@ function print(r) {
       if (r.rights) L.push(`Rights: ${r.rights.words}`);
       L.push(`ffmpeg: ${r.ffmpeg ? 'yes' : 'NO'}`, `Studio: ${r.studio?.ok ? r.studio.root : r.studio?.why}${r.studio?.pages && !r.studio.pages.ok ? ` (song pages: ${r.studio.pages.why})` : ''}`);
       break;
-    
+
     case 'plan':
       L.push(`Plan: ${r.seconds} s, ${r.bars} bars at ${r.bpm} BPM${r.vocals ? ', with vocals' : ', instrumental'}; quote through the official ElevenLabs MCP.`, ...r.sections.map((s) => `  ${s.text} ${s.ms} ms`), ...r.warnings.map((w) => `  warning: ${w}`), `Wrote ${r.file}`);
       break;
-    
-    
+
+
     case 'master':
       L.push(`Mastered to ${r.master.lufs} LUFS, ${r.master.truePeak} dBTP (target ${r.target.lufs} / ${r.target.truePeak}); the mp3 reads ${r.mp3.lufs} LUFS, ${r.mp3.truePeak} dBTP. ${r.master.file}, ${r.mp3.file}`);
       break;

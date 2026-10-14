@@ -61,11 +61,7 @@ export function wranglerBin(root) {
   return existsSync(local) ? local : null;
 }
 
-/**
- * Wrangler from the studio's own node_modules, run in site/ with the given environment. A studio whose Cloudflare came
- * uses Wrangler’s own sign-in and account
- * Projects synced to its git-ignored output file; every other studio with Wrangler's own sign-in.
- */
+/** Wrangler from the studio's own node_modules, using Cloudflare's own sign-in. */
 export function runner(root, env) {
   const bin = wranglerBin(root);
   if (!bin) throw new Error('Wrangler is not installed in this studio yet: run `npm install` in the studio folder first');

@@ -1,3 +1,7 @@
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
@@ -22,6 +26,9 @@ test('completed MCP result places the image and sound with provenance; repeat is
   assert.deepEqual(readFileSync(join(root,image.artifact)),readFileSync(new URL('forest.png',fixture)));
   assert.equal(importMedia(root,{file:new URL('forest.png',fixture),receipt,out:image.artifact,usedBy:'games/forest/index.html'}).already,true);
   const records=JSON.parse(readFileSync(join(root,'media/provenance.json')));
+  writeFileSync(join(root,'receipt.json'),JSON.stringify(receipt));
+  const cli=spawnSync(process.execPath,[fileURLToPath(new URL('../bin/homie-studio.mjs',import.meta.url)),'media','import','--file',fileURLToPath(new URL('forest.png',fixture)),'--receipt',join(root,'receipt.json'),'--out',image.artifact,'--used-by','games/forest/index.html','--json'],{cwd:root,encoding:'utf8'});
+  assert.equal(cli.status,0,cli.stdout+cli.stderr);assert.equal(JSON.parse(cli.stdout).already,true);
   assert.equal(records.length,2);assert.equal(records[0].requestId,fal.request_id);assert.equal(records[0].sha256,image.sha256);assert.equal(records[1].fixture,true);assert.equal(records[1].cost.status,'unknown');
   assert.throws(()=>importMedia(root,{file:new URL('forest.png',fixture),receipt,out:'../escape.png',usedBy:'games/forest/index.html'}),/inside/);
   symlinkSync(tmpdir(),join(root,'outside'));
@@ -58,7 +65,13 @@ test('skill workflow tool references resolve against official provider contracts
 
 import { setupStatus } from '../lib/doctor.mjs';
 import { availability } from '../lib/mcp-tools.mjs';
-test('setup and local media availability never access provider credentials',async()=>{
+test('setup and local media availability never access provider credentials',async(t)=>{
+ const read=fs.readFileSync;const exists=fs.existsSync;
+ const credentialPath=p=>['fal-key','elevenlabs-key'].some(name=>String(p).endsWith('/'+name));
+ t.mock.method(fs,'readFileSync',function(p,...args){if(credentialPath(p))throw new Error('provider credential file access');return read.call(this,p,...args);});
+ t.mock.method(fs,'existsSync',function(p){return credentialPath(p)||exists.call(this,p);});
+ syncBuiltinESMExports();
+ t.after(()=>{t.mock.restoreAll();syncBuiltinESMExports();});
  const env={};
  for(const key of ['FAL_KEY','ELEVENLABS_API_KEY','ELEVENLABS_CLI']) Object.defineProperty(env,key,{get(){throw new Error(`forbidden credential access: ${key}`);}});
  const root=mkdtempSync(join(tmpdir(),'homie-media-no-keys-'));
