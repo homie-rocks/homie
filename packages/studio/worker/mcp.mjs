@@ -36,8 +36,8 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
   if(path.startsWith('/hooks/tools/')) return (await import('./tool-webhook.mjs')).toolWebhook(request,env,{cat:await catalogueOf(),definitions});
   const scoped={...env,OAUTH_KV:oauthStorage(env.DB)};
   const localIdentity=await localCaller(request,env);
-  const identity=()=>localIdentity ?? currentCaller(env,ctx.props);
   const api=async(request,env,ctx)=>{
+    const identity=()=>localIdentity ?? currentCaller(env,ctx.props);
     let caller;
     try{caller=await identity();}catch{return new Response(JSON.stringify({error:'connection revoked'}),{status:401,headers:{'content-type':'application/json','cache-control':'no-store','www-authenticate':`Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp", error="invalid_token"`}});}
     const cat=await catalogueOf();

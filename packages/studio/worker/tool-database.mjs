@@ -1,4 +1,4 @@
-export const TOOL_DATABASE_MIGRATION_FILE='0023_tool_data_versions.sql';
+export const TOOL_DATABASE_MIGRATION_FILE='0024_tool_data_versions.sql';
 export const TOOL_DATABASE_MIGRATION='ALTER TABLE tool_data ADD COLUMN version INTEGER NOT NULL DEFAULT 1;\n';
 /** Each mutation is one SQLite statement; callers never hold a JS lock across Workers. */
 export function toolDatabase(DB,namespace) {

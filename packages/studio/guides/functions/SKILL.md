@@ -16,7 +16,7 @@ Events are delivered at least once. Deduplicate external effects by event ID. Us
 `database.getVersioned` with `put(key,value,{version})` and retry conflicts for
 read-modify-write; use atomic `increment` or `append` for those operations. Never
 assume two deliveries cannot overlap. Prefix `list` returns cursor pages without
-a studio-wide record cap. Apply migration 0023 through normal dev/deploy tooling.
+a studio-wide record cap. Apply migration 0024 through normal dev/deploy tooling.
 
 Keep operational history in declared studio event feeds, not a growing JSON array.
 Tools-only clients read `studio_events_read`; resource clients can subscribe.

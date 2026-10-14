@@ -36,7 +36,7 @@ Apps can prove staff, tablet and kiosk workflows with fresh local records, while
 
 ### Upgrade notes
 
-- Migration `0023_tool_data_versions.sql` adds storage versions. No studio quota or automatic retention policy is introduced. `check --no-isolate` explicitly opts into existing records; ordinary dev/check uses a private local credential.
+- Migration `0024_tool_data_versions.sql` adds storage versions. No studio quota or automatic retention policy is introduced. `check --no-isolate` explicitly opts into existing records; ordinary dev/check uses a private local credential.
 - Package and plugin versions are unchanged in this PR. The pending section is renumbered at release with `node scripts/renumber-release.mjs`.
 
 ## [0.50.6] - 2026-10-14
