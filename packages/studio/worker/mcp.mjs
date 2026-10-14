@@ -43,9 +43,10 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
     const cat=await catalogueOf();
     const tools=[...builtins(env,cat,origin),...definitions];
     await pushToolList(env,cat,tools,origin);
-    if(request.method==='GET'&&caller.connection&&env.LOBBY) {
+    if(request.method==='GET'&&env.LOBBY) {
       if(!request.headers.get('accept')?.includes('text/event-stream'))return json({error:'Accept text/event-stream required'},406);
-      return eventHub(env,caller.connection).fetch('https://events/__studio_events',{method:'POST',body:JSON.stringify({op:'stream',connection:caller.connection,lastId:request.headers.get('last-event-id'),cat,origin,tools:tools.map(({name,description,inputSchema,audience,kind})=>({name,description,inputSchema,audience,kind}))})});
+      const connection=caller.connection??'public:'+crypto.randomUUID();
+      return eventHub(env,connection).fetch('https://events/__studio_events',{method:'POST',body:JSON.stringify({op:'stream',connection,lastId:request.headers.get('last-event-id'),cat,origin,tools:tools.map(({name,description,inputSchema,audience,kind})=>({name,description,inputSchema,audience,kind}))})});
     }
     if(request.method==='POST') {
       const body=await request.clone().json().catch(()=>null);

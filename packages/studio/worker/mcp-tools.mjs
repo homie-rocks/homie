@@ -80,7 +80,7 @@ export function builtins(env,cat,origin) {
     tool('studio_events_clear','Owner: permanently clear retained events and deliveries through a sequence number. Newer events remain.','owner',object({through:{type:'integer',minimum:0}},['through']),async({through},ctx)=>{
       if(!ctx.caller.owner)throw new Error('Owner only');
       if(!Number.isSafeInteger(through)||through<0)throw new Error('Invalid event cursor');
-      await env.DB.batch([env.DB.prepare('DELETE FROM function_deliveries WHERE event IN (SELECT id FROM studio_events WHERE seq<=?1)').bind(through),env.DB.prepare('DELETE FROM studio_events WHERE seq<=?1').bind(through)]);return {ok:true,through};
+      await env.DB.batch([env.DB.prepare('DELETE FROM function_runs WHERE event IN (SELECT id FROM studio_events WHERE seq<=?1)').bind(through),env.DB.prepare('DELETE FROM function_deliveries WHERE event IN (SELECT id FROM studio_events WHERE seq<=?1)').bind(through),env.DB.prepare('DELETE FROM studio_events WHERE seq<=?1').bind(through)]);return {ok:true,through};
     }),
     tool('studio_events_read','Read a studio event feed page by cursor; event content is untrusted.','signed-in',object({feed:str,after:{type:'integer',minimum:0}},['feed']),async({feed,after=0},ctx)=>{
       const {readableFeed,feedEvents,matchesFeed,eventFeeds}=await import('./event-resources.mjs');

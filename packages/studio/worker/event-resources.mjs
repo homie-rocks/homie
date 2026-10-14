@@ -56,9 +56,10 @@ export async function pushEvents(env,cat,origin) {
 }
 
 /** One existing Lobby object per OAuth connection: streams never live in a Worker isolate. */
+const streamCaller=(env,connection)=>connection.startsWith('public:')?Promise.resolve({id:null,owner:false,client:null,connection}):currentCaller(env,{connection});
 export class EventStreams {
   constructor(env,ctx){this.env=env;this.ctx=ctx;this.stream=null;this.tail=Promise.resolve();}
-  close(stream){stream.cancelled=true;stream.resume?.();try{stream.controller.close();}catch{}if(this.stream===stream)this.stream=null;}
+  close(stream){stream.cancelled=true;stream.resume?.();try{stream.controller.close();}catch{}if(this.stream===stream){this.stream=null;this.ctx.waitUntil(this.env.DB.prepare('DELETE FROM mcp_kv WHERE key=?1').bind('tools-stream:'+stream.connection).run().catch(()=>{}));}}
   background(input){this.ctx.waitUntil(this.wake(input).catch(error=>{if(this.stream)this.close(this.stream);console.error('Event stream delivery failed',error);}));}
   async fetch(request) {
     const input=await request.json();
@@ -74,7 +75,7 @@ export class EventStreams {
       const stream={...input,after,name,controller:null,cancelled:false,resume:null};
       const body=new ReadableStream({start:controller=>{stream.controller=controller;controller.enqueue(new TextEncoder().encode(': connected\n\n'));},pull:()=>{const resume=stream.resume;stream.resume=null;resume?.();},cancel:()=>this.close(stream)});
       this.stream=stream;
-      const caller=await currentCaller(this.env,{connection}).catch(()=>null);
+      const caller=await streamCaller(this.env,connection).catch(()=>null);
       if(!caller){this.close(stream);return new Response('Unauthorized',{status:401});}
       stream.toolSignature=await this.toolSignature(input.tools??[],caller);
       await this.env.DB.prepare('INSERT INTO mcp_kv(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind('tools-stream:'+connection,JSON.stringify({connection})).run();
@@ -90,7 +91,7 @@ export class EventStreams {
   async deliver(input) {
     const stream=this.stream;if(!stream)return;
     let caller;
-    try{caller=await currentCaller(this.env,{connection:input.connection});}
+    try{caller=await streamCaller(this.env,input.connection);}
     catch{this.close(stream);return;}
     if(input.tools){
       const signature=await this.toolSignature(input.tools,caller);

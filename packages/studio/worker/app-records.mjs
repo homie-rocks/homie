@@ -88,7 +88,8 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
     if (!access.ok) return fail(access.status, access.error);
     const [, collection, id] = match;
     const session = await localSession(request, env);
-    const recordApp = session?.app === meta.id && session.scope ? `${meta.id}:check:${session.scope}` : meta.id;
+    const testScope = (session?.app === meta.id ? session.scope : null) ?? (env.HOMIE_LOCAL_TEST_SECRET ? toolIdentity(request)?.testScope : null);
+    const recordApp = testScope ? `${meta.id}:check:${testScope}` : meta.id;
     const op = ({ GET: 'read', POST: 'create', PUT: 'update', DELETE: 'delete' })[request.method];
     if (!op || !access.can.includes(`${op}:${collection}`)) return fail(403, 'role cannot perform this operation');
     if (op !== 'read' && !sameOrigin(request, url) && !(appOriginOf(request) && !meta.roles[access.role].signIn)) return fail(403, 'same origin required');

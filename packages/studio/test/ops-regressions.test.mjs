@@ -101,3 +101,25 @@ test('local role sessions isolate records per run, keep role permissions, and pr
  const url=new URL('http://127.0.0.1/boards/api/app/roles');const grant=await appRecordsRoute(new Request(url,{method:'POST',headers:{origin:url.origin,'content-type':'application/json',cookie:'studio_owner='+token},body:JSON.stringify({role:'staff',player:'pl_aaaaaaaaaaaaaaaaaaaaaa',studio:true})}),env,meta,url,'api/app/roles');
  assert.equal(grant.status,200);assert.equal(new URL((await grant.json()).link).hostname,'localhost');assert.equal(DB.sql.prepare("SELECT app FROM app_roles WHERE player='pl_aaaaaaaaaaaaaaaaaaaaaa'").get().app,'*');
 });
+test('record functions see the real app reference while keeping check records isolated',async t=>{
+ const {appRecordsRoute}=await import('../worker/app-records.mjs');const {localCookie}=await import('../lib/local-test.mjs');
+ const DB=database(t),env={DB,HOMIE_LOCAL_TEST_SECRET:'fixture-key'};
+ const meta={id:'boards',kind:'app',roles:{customer:{signIn:false,can:['read:jobs','create:jobs']},staff:{signIn:true,can:['read:jobs','update:jobs']}},surfaces:{phone:'customer'},records:{persist:true,collections:{jobs:{fields:{state:{type:'string'}}}}}};
+ const definitions=[{name:'prepare',event:'record.changed',handler:async(e,c)=>{if(e.data.operation!=='insert')return;assert.equal(e.data.app,'boards');const {records}=await c.records({app:e.data.app,role:'staff',collection:'jobs',id:e.data.record});await c.records({app:e.data.app,role:'staff',collection:'jobs',id:e.data.record,operation:'update',version:records[0].version,data:{state:'ready'}});}}];
+ await syncFunctions(env,definitions);
+ const url=new URL('http://localhost/boards/api/app/records/jobs/one');const request=new Request(url,{method:'POST',headers:{origin:url.origin,'content-type':'application/json',cookie:'homie_test='+localCookie(env.HOMIE_LOCAL_TEST_SECRET,{app:'boards',role:'customer',scope:'proof'})},body:JSON.stringify({data:{state:'new'}})});
+ assert.equal((await appRecordsRoute(request,env,meta,url,'api/app/records/jobs/one')).status,200);
+ await runFunctions(env,{games:[meta]},url.origin,{definitions});
+ assert.equal(JSON.parse(DB.sql.prepare("SELECT value FROM app_records WHERE app='boards:check:proof'").get().value).state,'ready');
+ assert.equal(DB.sql.prepare("SELECT count(*) n FROM app_records WHERE app='boards'").get().n,0);
+});
+test('public MCP streams refresh public tools without exposing owner tool changes',async t=>{
+ const {EventStreams}=await import('../worker/event-resources.mjs');const DB=database(t);const background=[];
+ const streams=new EventStreams({DB},{waitUntil:p=>background.push(p)}),connection='public:fixture';
+ const send=(op,tools)=>streams.fetch(new Request('https://events',{method:'POST',body:JSON.stringify({op,connection,cat,tools})}));
+ const response=await send('stream',[{name:'menu',audience:'public'},{name:'private',audience:'owner'}]);const reader=response.body.getReader();await reader.read();
+ let received=false;const next=reader.read().then(value=>{received=true;return value;});
+ await send('tools',[{name:'menu',audience:'public'},{name:'private_changed',audience:'owner'}]);await Promise.resolve();assert.equal(received,false);
+ await send('tools',[{name:'menu_changed',audience:'public'}]);const message=new TextDecoder().decode((await next).value);assert.match(message,/notifications\/tools\/list_changed/);assert.doesNotMatch(message,/private/);
+ await reader.cancel();await Promise.all(background);assert.equal(DB.sql.prepare("SELECT count(*) n FROM mcp_kv WHERE key='tools-stream:public:fixture'").get().n,0);
+});
