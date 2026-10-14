@@ -1,3 +1,4 @@
+import { directoryUrl } from '../worker/directory-choice.mjs';
 import { roomLayout } from '../worker/gate.mjs';
 import {workerEntry} from './worker-build.mjs';
 import { seatCount } from '../worker/seats.mjs';
@@ -65,6 +66,8 @@ export function runner(root, env) {
   const bin = wranglerBin(root);
   if (!bin) throw new Error('Wrangler is not installed in this studio yet: run `npm install` in the studio folder first');
   return (args, { cwd = workerDir(root), input } = {}) => {
+    const dev = join(workerDir(root), '.wrangler', 'homie-dev.wrangler.json');
+    if (args.includes('--local') && !args.includes('--config') && existsSync(dev)) args = [...args, '--config', dev, '--persist-to', join(workerDir(root), '.wrangler', 'state')];
     const res = spawnSync(bin, args, {
       cwd, env: { ...process.env, ...projectsCloudflareEnv(root), ...env, WRANGLER_SEND_METRICS: 'false', CI: '1' }, encoding: 'utf8',
       input, maxBuffer: 64 * 1024 * 1024, timeout: 10 * 60_000,
@@ -215,7 +218,9 @@ export function deployPlan(root) {
     login: 'One approval: `npx wrangler login` opens Cloudflare in the person\'s browser (a free account works; a new one verifies its email address first).',
     address: `https://${cf.worker}.<the account's workers.dev subdomain>.workers.dev`,
     directory: {
-      site: studio.homie?.directory || 'https://homie.rocks',
+      site: directoryUrl(studio.homie?.directory),
+      requested: Boolean(directoryUrl(studio.homie?.directory)),
+      choice: 'A deploy claims a listing only when homie.directory is true or a directory URL. Existing claims stay honoured; studios that never asked are not listed.',
       stores: 'the site\'s address and a claim token, the studio\'s name and slug, the @homie-rocks/studio version, and each game\'s id, name, blurb and Play/page links. Never code, media, keys or accounts.',
     },
     never: 'It never touches a Worker, database or bucket this studio did not create, and it never adds a payment method or buys anything.',
@@ -303,7 +308,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
     announced.push(
       `First deploy of ${studio.name} to the Cloudflare account "${account}". It creates: the Worker ${cf.worker} (the site and its rooms), the D1 database ${cf.d1} (rounds, and the studio's own stats: counts for the owner, never a visitor's identity), and the Durable Objects Table and Lobby (SQLite-backed).`,
       'Account subscription not queried; usage is billed under the account’s current Cloudflare plan.',
-      `The directory (${homie || studio.homie?.directory || 'https://homie.rocks'}) will store the site's address and claim, the studio's name, and each game's name, blurb and Play link.`,
+      deployPlan(root).directory.choice,
     );
     for (const line of announced) log(line);
   }
@@ -425,7 +430,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
     if (!synced.ok) return refuse('Site deployed, but open part Checkouts could not be closed. Retry deploy: ' + (synced.message ?? synced.why ?? 'no answer'));
     step(`closed ${synced.expired} obsolete part Checkouts`);
   }
-  const directory = homie || studio.homie?.directory || 'https://homie.rocks';
+  const directory = directoryUrl(homie ?? studio.homie?.directory);
   recordDeploy(root, builtNow);
   let claim = null;
   if (url) {

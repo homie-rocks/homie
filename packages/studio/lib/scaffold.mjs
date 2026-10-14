@@ -1085,14 +1085,17 @@ export function newStudio(folder, { name, homie, slug: askedSlug, install = true
   if (real) {
     if (!statSync(real).isDirectory()) throw new Error(`${real} is a file. Nothing was written.`);
     const entries = readdirSync(real).filter((n) => n !== '.DS_Store' && n !== '.git');
-    if (entries.length) throw new Error(`${real} is not empty (${entries.slice(0, 5).join(', ')}${entries.length > 5 ? ', …' : ''}). A new studio goes in a new or empty folder. Nothing was written.`);
+    let resume = false;
+    try { const existing = JSON.parse(readFileSync(join(real, 'studio.json'), 'utf8')); resume = existing.name === String(name).trim() && existing.slug === slugify(askedSlug || name) && Boolean(existing.homie?.studio); } catch {}
+    if (entries.length && !resume) throw new Error(`${real} is not empty (${entries.slice(0, 5).join(', ')}${entries.length > 5 ? ', …' : ''}). A new studio goes in a new or empty folder. Nothing was written.`);
   }
   const slug = slugify(askedSlug || name);
-  const files = studioFiles({ name: String(name).trim(), slug, homie: homie || 'https://homie.rocks', template, kind });
+  const files = studioFiles({ name: String(name).trim(), slug, homie: homie ?? null, template, kind });
   mkdirSync(dir, { recursive: true });
   const wrote = [];
   for (const [rel, content] of Object.entries(files)) {
     const path = join(dir, rel);
+    if (existsSync(path)) continue;
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, content);
     wrote.push(rel);

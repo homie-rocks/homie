@@ -197,7 +197,7 @@ export function devConfig(root, remoteAi) {
   const routed = ROUTE_KEYS.some((k) => k in json);
   const aiNote = remoteAi ? 'AI guides think with Workers AI (remote, billed to the signed-in account).' : null;
   const entry=workerEntry(root);
-  if (!entry && Boolean(json.ai) === remoteAi && !routed) return { args: [], note: aiNote, stripped: [] };
+  // Always retain the exact local binding configuration for CLI commands after a deploy.
   const abs = (p) => (p && !p.startsWith('/') ? join(base, p) : p);
   delete json.$schema;
   json.main = entry ?? abs(json.main);

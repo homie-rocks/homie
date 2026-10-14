@@ -1078,3 +1078,26 @@ test('boolean listing choice publishes without crashing', async () => {
   assert.equal(result.ok,true);
   assert.equal(sent.url,'https://homie.rocks/api/studio/publish');
 });
+
+test('rerunning new completes missing files without overwriting studio edits', () => {
+ const dir=studio('resume-new');
+ rmSync(join(dir,'site/README.md'));
+ writeFileSync(join(dir,'README.md'),'My own notes\n');
+ const result=run(['new',dir,'--name','Test Studio','--no-install'],scratch);
+ assert.equal(result.status,0,result.stdout+result.stderr);
+ assert.equal(readFileSync(join(dir,'README.md'),'utf8'),'My own notes\n');
+ assert.equal(existsSync(join(dir,'site/README.md')),true);
+});
+
+test('local D1 commands retain the dev binding after deploy changes the real database id', async () => {
+ const dir=studio('local-d1-binding');const cf=account(dir);
+ editConfig(dir,c=>{c.routes=[{pattern:'local-test.example',custom_domain:true}];});
+ const before=devConfig(dir,false);const active=JSON.parse(readFileSync(before.copy,'utf8'));
+ const {runner}=await import('../lib/cloudflare.mjs');
+ editConfig(dir,c=>{c.d1_databases[0].database_id='22222222-2222-2222-2222-222222222222';});
+ runner(dir)(['d1','execute','test-studio-db','--local','--command','SELECT 1']);
+ const call=cf.calls().at(-1);
+ const args=call.split(' ');
+ assert.equal(args[args.indexOf('--config')+1],before.copy);
+ assert.equal(JSON.parse(readFileSync(before.copy,'utf8')).d1_databases[0].database_id,active.d1_databases[0].database_id);
+});

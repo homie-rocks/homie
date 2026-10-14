@@ -1,3 +1,5 @@
+import { directoryUrl } from '../worker/directory-choice.mjs';
+import { domainOrigin } from './studio.mjs';
 import { appProblems } from '../worker/app-format.mjs';
 /**
  * `homie-studio build` — every game in games/ bundled into site/dist, plus the
@@ -707,8 +709,8 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
       ...(studio.rooms?.share === false ? { rooms: { share: false } } : {}),
       // The directory the live site claims itself in (0.10.0); studio.json `homie.directory: false` keeps it out.
       // HOMIE_DIRECTORY (a build variable) points one build at another directory, such as a staging one.
-      directory: /^https:\/\/[a-z0-9.-]+$/i.test(process.env.HOMIE_DIRECTORY ?? '') ? process.env.HOMIE_DIRECTORY
-        : studio.homie?.directory === false || studio.homie?.directory === null ? null : String(studio.homie?.directory ?? 'https://homie.rocks'),
+      directory: directoryUrl(process.env.HOMIE_DIRECTORY ?? studio.homie?.directory),
+      canonical: domainOrigin(studio.cloudflare?.domain),
       // A copy of the public template that nobody has named yet shows the name typed in Cloudflare's form.
       ...(studio.template === true ? { template: true } : {}),
       // studio.json audience is a studio label; shop policies are optional.

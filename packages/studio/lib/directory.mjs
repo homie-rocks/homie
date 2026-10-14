@@ -4,8 +4,9 @@
  * claim the directory gave it (`homie-studio deploy` stores it in D1), so
  * nobody can list games under someone else's site.
  */
+import { directoryUrl } from '../worker/directory-choice.mjs';
 import { request } from './net.mjs';
-import { listExperiences as listGames, readLocal, readStudio, siteUrl, writeLocal } from './studio.mjs';
+import { domainOrigin, listExperiences as listGames, readLocal, readStudio, siteUrl, writeLocal } from './studio.mjs';
 import { licenceProblems, readManifest } from './asset-manifest.mjs';
 import { partsPlanLines, partsPublishReport } from './parts-build.mjs';
 
@@ -103,8 +104,8 @@ function licenceRefusals(root) {
  */
 export async function publishBefore(root, { homie, site, log = () => {}, fetchFn } = {}) {
   const studio = readStudio(root);
-  const directory = (homie || studio.homie?.directory || 'https://homie.rocks').replace(/\/+$/, '');
-  const url = site || siteUrl(root, studio);
+  const directory = directoryUrl(homie ?? studio.homie?.directory) ?? 'https://homie.rocks';
+  const url = domainOrigin(studio.cloudflare?.domain) || site || siteUrl(root, studio);
   const refused = licenceRefusals(root);
   const parts = partsForListing(root);
   const local = publishesSoFar(root);
@@ -140,8 +141,8 @@ export async function publishBefore(root, { homie, site, log = () => {}, fetchFn
 
 export async function publish(root, { homie, site, log = () => {}, fetchFn } = {}) {
   const studio = readStudio(root);
-  const directory = (homie || studio.homie?.directory || 'https://homie.rocks').replace(/\/+$/, '');
-  const url = site || siteUrl(root, studio);
+  const directory = directoryUrl(homie ?? studio.homie?.directory) ?? 'https://homie.rocks';
+  const url = domainOrigin(studio.cloudflare?.domain) || site || siteUrl(root, studio);
   // Licences first: a public game may ship only assets with a licence record that allows it.
   const refused = licenceRefusals(root);
   if (refused.length) return { ok: false, command: 'publish', refused, why: `not listed: ${refused.length} asset licence problem${refused.length === 1 ? '' : 's'}:\n${refused.map((p) => `  ${p.game}/${p.asset}: ${p.problem}${p.fix ? ` (${p.fix})` : ''}`).join('\n')}\nhomie-studio assets check <id> says the same; fix them, deploy, then publish again.` };
