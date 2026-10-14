@@ -1,11 +1,14 @@
 ---
 name: sound
 description: Make a game's sound effects and synthesized music on the creator's own computer, free, with no provider or account — a set of effects (jump, coin, hit, explosion, win, lose, UI) rendered from presets, a short synthesized theme or score from chords and patterns with stems and seamless section loops, a mix of any audio files and expressions — measured for loudness, clipping, late starts and what a phone speaker loses, then wired into the game with a small player that starts on the first touch and switches music on bar lines. Use when someone asks for sound effects, SFX, game audio, a chiptune or synth theme, background music without a paid service, music that changes with the game, or says a game is silent.
+compatibility: Node 22 and ffmpeg for local synthesis; official ElevenLabs MCP for requested generated sound.
+metadata:
+  providers: elevenlabs
 ---
 
 # Sound for a studio's game
 
-Everything here runs on this computer with Node 22 and ffmpeg: nothing is sent anywhere and nothing
+Local synthesis runs on this computer with Node 22 and ffmpeg: nothing is sent anywhere and nothing
 costs money. Sung songs and produced music from a model are the `music` skill (ElevenLabs, paid);
 this skill is effects and synthesized music. They share the studio's `music/` folder and manifest, so
 a synthesized theme gets a song page just like a rendered one.
@@ -154,3 +157,69 @@ numbers, the warnings you fixed and any you did not, and that it cost nothing.
 - Never use a mp3 for an effect or a loop: encoders pad the start with silence (a late hit) and the
   ends (a gap at the loop). WAV or Ogg.
 - Never imitate a real song, artist or brand jingle.
+
+## Generated sound on request
+
+Use the official ElevenLabs MCP for requested generated effects. Discover its current
+sound capabilities and schema through the official plugin; never assume a tool exists.
+If the hosted connection lacks sound generation, say so; keep local synthesis available
+as Homie-owned, free functionality. Specify duration, loopability, envelope and material
+from the scene. Audition on phone speakers, remove clicks, and trigger it only on the
+intended game event after the browser audio unlock gesture.
+
+## Official generation workflow
+
+The owner's AI uses the provider's official plugin/MCP in its own client. Homie never
+asks for, stores, reads or prints provider credentials. Read the current provider
+skill and discover its available tools and input schemas; host prefixes vary.
+Connection instructions and verified sources: [official integrations](../studio-setup/references/OFFICIAL-MEDIA.md).
+If tools are missing, connect that official plugin once in the client's browser flow.
+Do not fall back to a Homie client, key file, environment key or CLI generation wrapper.
+
+Before spending, state the model, count/duration, estimated cost and remaining approved
+budget. Use the owner's existing authorization; ask only if the spend is outside it.
+Record the request ID as soon as accepted. Poll that same request; never resubmit to
+retry a slow job. Unknown cost is unknown, never zero. Provider billing is authoritative;
+Homie's local receipt cannot enforce spending in another client.
+
+## Place and prove the result
+
+Download the completed tool's output using the AI client's file/download facilities.
+Keep temporary signed URLs out of committed records. Keep the original in the studio's
+art/job folder; put the optimized delivered asset beside its game/app, or in music/ or
+videos/ for a published work. Record a receipt with these fields:
+
+```json
+{
+  "provider": "elevenlabs",
+  "tool": "actual discovered tool",
+  "model": "exact endpoint returned by the provider",
+  "requestId": "actual request ID",
+  "prompt": "the actual prompt, including style constraints",
+  "styleRevision": "revision from the studio's style",
+  "rights": {"source": "provider/model terms URL", "checkedAt": "YYYY-MM-DD", "commercial": false, "note": "record the actual plan and permitted use"},
+  "cost": {"status": "unknown"}
+}
+```
+
+For ElevenLabs use its actual discovered tool and model, and its flow/session or request
+identifier. A measured cost uses `{"status":"actual","amount":1,"unit":"credits"}`;
+a quote uses `estimate`. Never claim commercial rights from the fact that generation
+succeeded. Read the provider and model terms for the account's plan; record attribution,
+reference-image permissions and any restrictions. Mark test fixtures `"fixture": true`.
+
+Wire the delivered path into the scene or manifest, then run:
+
+```sh
+npx --no-install homie-studio media import --file <downloaded-file> --receipt <receipt.json> --out games/<id>/assets/<name> --used-by games/<id>/view.ts
+```
+
+This copies bytes, verifies a static reference, hashes the asset and records allowlisted
+provenance in `media/provenance.json`. Reimporting the same output is idempotent; it
+never generates or charges. Include each generation step's receipt for derived assets.
+Run the scene and look/listen: a file and static reference are not proof that it renders
+or plays. Report the placed path, usage evidence, rights and actual/estimated cost.
+
+The toolkit’s `lib/media-workflows.mjs` declares this skill’s verified tool references.
+Validate them against the host’s current tool inventory before execution; tool discovery
+is required for generation capabilities that have no stable documented name.

@@ -38,7 +38,7 @@ src.start();               // after the player's first tap or key: browsers need
 
 ## Stems
 
-`music.mjs stems <slug> --yes` asks ElevenLabs to split the master into stems (vocals, drums,
+The official ElevenLabs MCP, if its discovered tools expose stem separation, asks ElevenLabs to split the master into stems (vocals, drums,
 bass, other). It is paid and its price is measured off the account, so it needs the person's
 go-ahead and fits inside the song's budget. Stems let a game drop the vocals under dialogue or
 bring the drums in when the action starts.

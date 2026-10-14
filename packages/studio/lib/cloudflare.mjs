@@ -48,7 +48,6 @@ import { repoOf } from './repo.mjs';
 import { keptRoutes, readConfig, readZoneRoutes, routesOf, shadowedDomain, wideRouteRefusal, zoneFinding } from './routes.mjs';
 import { ensureLocalIgnored, ensureMigrations, migrationWord } from './scaffold.mjs';
 import { LOCAL_STATE, configPath, domainOrigin, isRulesGame, isWorkersDev, layoutOf, listExperiences as listGames, readLocal, readStudio, siteUrl, workerDir, writeLocal, writeStudio } from './studio.mjs';
-import { projectsCloudflareEnv } from './projects-env.mjs';
 
 const ANSI = /\u001b\[[0-9;]*m/g;
 
@@ -64,7 +63,7 @@ export function wranglerBin(root) {
 
 /**
  * Wrangler from the studio's own node_modules, run in site/ with the given environment. A studio whose Cloudflare came
- * through Stripe Projects (studio.json `cloudflare.auth: "stripe-projects"`, 0.24.3) runs it with the token and account
+ * uses Wrangler’s own sign-in and account
  * Projects synced to its git-ignored output file; every other studio with Wrangler's own sign-in.
  */
 export function runner(root, env) {
@@ -74,7 +73,7 @@ export function runner(root, env) {
     const dev = join(workerDir(root), '.wrangler', 'homie-dev.wrangler.json');
     if (args.includes('--local') && !args.includes('--config') && existsSync(dev)) args = [...args, '--config', dev, '--persist-to', join(workerDir(root), '.wrangler', 'state')];
     const res = spawnSync(bin, args, {
-      cwd, env: { ...process.env, ...projectsCloudflareEnv(root), ...env, WRANGLER_SEND_METRICS: 'false', CI: '1' }, encoding: 'utf8',
+      cwd, env: { ...process.env, ...env, WRANGLER_SEND_METRICS: 'false', CI: '1' }, encoding: 'utf8',
       input, maxBuffer: 64 * 1024 * 1024, timeout: 10 * 60_000,
     });
     const out = `${res.stdout ?? ''}${res.stderr ?? ''}`.replace(ANSI, '');
@@ -152,7 +151,7 @@ export async function zoneCheck(root, { studio = readStudio(root), config = read
   try {
     const w = bin ? runner(root, accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : {}) : null;
     headers = await cloudflareAuth({
-      env: { ...process.env, ...projectsCloudflareEnv(root) }, bin, cwd: root,
+      env: { ...process.env }, bin, cwd: root,
       exec: async (_bin, args) => { const r = w(args, { cwd: root }); return { code: r.code, stdout: r.stdout }; },
     });
   } catch { headers = null; }
@@ -398,7 +397,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   const started = Date.now();
   let dep = w(['deploy', ...(workerEntry(root) ? [workerEntry(root)] : []), ...repoVar(root)]);
   if (dep.code !== 0 && explainCloudflare(dep.out, accountId)?.needs === 'workers-dev-subdomain') {
-    const headers = await cloudflareAuth({ env: { ...process.env, ...projectsCloudflareEnv(root) }, bin: wranglerBin(root), cwd: root,
+    const headers = await cloudflareAuth({ env: { ...process.env }, bin: wranglerBin(root), cwd: root,
       exec: async (_bin, args) => { const r = w(args, { cwd: root }); return { code: r.code, stdout: r.stdout }; } });
     const address = await registerWorkersAddress({ accountId, slug: studio.slug, headers, ...(fetchFn ? { fetchFn } : {}) });
     if (!address.ok) return { ok: false, command: 'deploy', needs: 'workers-dev-subdomain', why: address.next };
@@ -408,7 +407,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   if (dep.code !== 0) return refuse(`wrangler deploy failed: ${dep.out.trim().split('\n').slice(-6).join(' ')}`, dep.out);
   if (paidReleases(root).length) {
     const bin = wranglerBin(root);
-    const uploadOptions = { cwd: workerDir(root), env: { ...process.env, ...projectsCloudflareEnv(root), CLOUDFLARE_ACCOUNT_ID: accountId, WRANGLER_SEND_METRICS: 'false', CI: '1' } };
+    const uploadOptions = { cwd: workerDir(root), env: { ...process.env, CLOUDFLARE_ACCOUNT_ID: accountId, WRANGLER_SEND_METRICS: 'false', CI: '1' } };
     await uploadPaidParts(root, { bucket: purchaseBucket, log, put: (key, file) => wranglerRun(bin, ['r2', 'object', 'put', key, '--file', file, '--remote'], uploadOptions), hash: (key) => hashRemote(bin, key, uploadOptions) });
   }
   remember(`worker:${cf.worker}`);
@@ -772,7 +771,7 @@ export async function mediaMove(root, { paths = null, dryRun = false, verify = f
   const bin = wranglerBin(root);
   if (!bin) return { ok: false, ...base, why: 'Wrangler is not installed in this studio yet: run `npm install` in the studio folder first' };
   const account = accountId || process.env.CLOUDFLARE_ACCOUNT_ID || cf.accountId || null;
-  const opts = { cwd: workerDir(root), env: { ...process.env, ...projectsCloudflareEnv(root), ...(account ? { CLOUDFLARE_ACCOUNT_ID: account } : {}), WRANGLER_SEND_METRICS: 'false', CI: '1' } };
+  const opts = { cwd: workerDir(root), env: { ...process.env, ...(account ? { CLOUDFLARE_ACCOUNT_ID: account } : {}), WRANGLER_SEND_METRICS: 'false', CI: '1' } };
   const moved = [];
   const failed = [];
   const verified = [];

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { importMedia } from '../lib/media-import.mjs';
 /**
  * homie-studio — make a studio (games, music, videos, posts), make its games,
  * put its site on the studio's own Cloudflare (free plan, no payment method), and
@@ -226,14 +227,6 @@
  *   homie-studio setup attach <hs_…> [--client claude|codex|grok]
  *                                          (this repository is the studio the chat's setup card is making: say so, once,
  *                                          learn its live address, and give a template copy its real name)
- *   homie-studio setup --via stripe-projects [--with elevenlabs] [--accept-tos] [--dry-run]
- *                                         (a prototype, 0.24.3: Cloudflare, and ElevenLabs with --with, made or linked
- *                                          through Stripe Projects on their free plans; the person accepts the providers'
- *                                          terms (then --accept-tos) and signs in on Stripe's and the provider's own
- *                                          pages; the account id goes into studio.json, the token stays in Projects'
- *                                          vault and its git-ignored .env, and Wrangler runs with it here. The usual
- *                                          way, npx wrangler login, stays the default. lib/projects.mjs)
- *   homie-studio domain <hostname>                  AI configures DNS/TLS for the next deploy
  *   homie-studio setup prepare                     AI installs a private Node/npm if missing
  *   homie-studio setup status [--connector yes|no] [--client claude|codex|grok]   (also: homie-studio doctor)
  *                                         what this computer and the person's accounts have for a studio: Node, the Homie
@@ -362,8 +355,6 @@ import { agentsBrain, agentsBrainKey, agentsPass, agentsPasses, agentsRevoke, ag
 import { AgentSeat } from '../lib/agent-seat.mjs';
 import { shopCheck, shopConnect, shopDisconnect, shopInit, shopLines, shopOrders, shopRefund, shopStatus } from '../lib/shop.mjs';
 import { catalogLines, catalogPlan } from '../lib/shop-catalog.mjs';
-import { projectsLines, setupViaProjects } from '../lib/projects.mjs';
-import { projectsCloudflareEnv } from '../lib/projects-env.mjs';
 import { Feed, currentFeed, currentId, flushProgress, publicFeed, readFeed, recordChange, startProgress } from '../lib/progress.mjs';
 import { formatStatus, setupStatus } from '../lib/doctor.mjs';
 import { codexTarget, newCodex, writeCodexPage } from '../lib/codex.mjs';
@@ -634,9 +625,6 @@ function print(result) {
       break;
     case 'shop catalog':
       lines.push(...catalogLines(result));
-      break;
-    case 'setup':
-      lines.push(...projectsLines(result));
       break;
     case 'chat rules':
     case 'chat budget':
@@ -936,12 +924,7 @@ async function main() {
   if (cmd === 'progress') return progressCommand(root, sub);
   if (cmd === 'domain') return studioDomain(root, sub);
   if (cmd === 'setup' && sub === 'attach') return setupAttach(root, positional[2], { homie: flags.get('homie'), client: flags.get('client') });
-  if (cmd === 'setup' && flags.has('via')) {
-    if (flags.get('via') !== 'stripe-projects') return { ok: false, command: 'setup', why: '--via stripe-projects is the one other way this version knows (the default is npx wrangler login)' };
-    const extra = String(flags.get('with') ?? '').split(',').map((x) => x.trim()).filter(Boolean);
-    if (extra.some((x) => x !== 'elevenlabs')) return { ok: false, command: 'setup', why: '--with takes elevenlabs (Cloudflare is always set up)' };
-    return setupViaProjects(root, { withElevenlabs: extra.includes('elevenlabs'), acceptTos: flags.has('accept-tos'), dryRun: flags.has('dry-run'), log });
-  }
+  if (cmd === 'media' && sub === 'import') return importMedia(root, { file: flags.get('file'), receipt: flags.get('receipt'), out: flags.get('out'), usedBy: flags.get('used-by') });
   if (cmd === 'handoff') return handoff(root, sub, { homie: flags.get('homie'), client: flags.get('client') });
   if (cmd === 'port' && sub === 'import') return importPort(root, positional[2], flags.get('id'), { name: flags.get('name'), mode: flags.get('mode') });
   if (cmd === 'port' && sub === 'check') {
@@ -1362,7 +1345,7 @@ function mediaPut(root, file, as) {
   const key = as ?? (/^(music|videos)\//.test(rel) && !rel.includes('..') ? rel : `${folder}/${basename(file)}`);
   const bin = wranglerBin(root);
   return new Promise((done) => {
-    const p = spawn(bin, ['r2', 'object', 'put', `${r2}/${key}`, '--file', resolve(file), '--content-type', typeOf(file), '--remote'], { cwd: workerDir(root), env: { ...process.env, ...projectsCloudflareEnv(root), CI: '1' }, stdio: ['ignore', 'ignore', 'inherit'] });
+    const p = spawn(bin, ['r2', 'object', 'put', `${r2}/${key}`, '--file', resolve(file), '--content-type', typeOf(file), '--remote'], { cwd: workerDir(root), env: { ...process.env, CI: '1' }, stdio: ['ignore', 'ignore', 'inherit'] });
     p.on('close', (code) => {
       if (code !== 0) return done({ ok: false, command: 'media put', why: 'wrangler r2 object put failed' });
       // The manifest is committed: it names the file by its path on the site, never the workers.dev address.

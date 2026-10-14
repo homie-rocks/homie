@@ -20,7 +20,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { stripeSecretWriteOf } from '../hooks/lib/commands.mjs';
 import { redact, redactText } from '../hooks/lib/redact.mjs';
-import { projectsKey, road } from '../skills/music/scripts/lib/eleven.mjs';
+
 
 const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), '..');
 // Built here so no key-shaped string sits in this file.
@@ -55,40 +55,7 @@ test('secrets: a webhook signing secret and Stripe keys come out of tool output'
   assert.equal(redactText('the secret starts with whsec_ (paste it on the page)').text, 'the secret starts with whsec_ (paste it on the page)', 'naming the prefix is not a secret');
 });
 
-test('music: the ElevenLabs key Stripe Projects keeps for a studio, read in this process only', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'homie-eleven-projects-'));
-  try {
-    const key = j('sk_', 'proj', '9'.repeat(20));
-    mkdirSync(join(dir, 'games'), { recursive: true });
-    writeFileSync(join(dir, '.env'), `# written by stripe projects\nCLOUDFLARE_ACCOUNT_ID=${'a'.repeat(32)}\nELEVENLABS_API_KEY="${key}"\n`);
-    writeFileSync(join(dir, 'studio.json'), JSON.stringify({ name: 'Owls', slug: 'owls' }));
-    assert.equal(projectsKey(join(dir, 'games')), null, 'only when studio.json says Projects keeps it');
-    writeFileSync(join(dir, 'studio.json'), JSON.stringify({ name: 'Owls', slug: 'owls', providers: { elevenlabs: { via: 'stripe-projects', envKey: 'ELEVENLABS_API_KEY', envFile: '.env' } } }));
-    assert.equal(projectsKey(join(dir, 'games')), key, 'found from a folder inside the studio');
-    writeFileSync(join(dir, 'studio.json'), JSON.stringify({ name: 'Owls', slug: 'owls', providers: { elevenlabs: { via: 'stripe-projects', envFile: '../elsewhere/.env' } } }));
-    assert.equal(projectsKey(dir), null, 'never a file outside the studio');
-    // road() names the road, never the key.
-    writeFileSync(join(dir, 'studio.json'), JSON.stringify({ name: 'Owls', slug: 'owls', providers: { elevenlabs: { via: 'stripe-projects' } } }));
-    const before = process.cwd();
-    const saved = { key: process.env.ELEVENLABS_API_KEY, cli: process.env.ELEVENLABS_CLI };
-    delete process.env.ELEVENLABS_API_KEY;
-    process.env.ELEVENLABS_CLI = join(dir, 'no-such-elevenlabs-cli');
-    process.chdir(dir);
-    try {
-      const r = road();
-      assert.equal(r.road, 'key');
-      assert.equal(r.via, 'stripe-projects');
-      assert.doesNotMatch(JSON.stringify(r), /proj9999/);
-      assert.equal(process.env.ELEVENLABS_API_KEY, undefined, 'nothing put into the environment children inherit');
-    } finally {
-      process.chdir(before);
-      if (saved.key === undefined) delete process.env.ELEVENLABS_API_KEY; else process.env.ELEVENLABS_API_KEY = saved.key;
-      if (saved.cli === undefined) delete process.env.ELEVENLABS_CLI; else process.env.ELEVENLABS_CLI = saved.cli;
-    }
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
+
 
 test('the skills: the owner\'s steps with Stripe\'s own tools; Stripe Projects is an option, never the default', () => {
   const shop = readFileSync(join(PLUGIN, 'skills', 'shop', 'SKILL.md'), 'utf8');
@@ -116,9 +83,4 @@ test('the skills: the owner\'s steps with Stripe\'s own tools; Stripe Projects i
   assert.match(codex, /value: "stripe"/);
   assert.match(codex, /url: "https:\/\/mcp\.stripe\.com"/);
   assert.match(codex, /transport: "streamable_http"/);
-  const setup = readFileSync(join(PLUGIN, 'skills', 'studio-setup', 'SKILL.md'), 'utf8');
-  assert.match(setup, /setup --via stripe-projects/);
-  assert.match(setup, /`npx wrangler login` stays the way/);
-  assert.match(setup, /--accept-tos/);
-  assert.match(setup, /no commercial licence/);
 });

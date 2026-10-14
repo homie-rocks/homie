@@ -1,0 +1,5 @@
+{
+ "checkedAt":"2026-10-14",
+ "fal":{"source":"https://fal.ai/docs/documentation/setting-up/mcp","evidence":"Live official fal plugin tool inventory in the proof session","tools":[{"name":"search_models"},{"name":"recommend_model"},{"name":"get_model_schema"},{"name":"get_pricing"},{"name":"run_model"},{"name":"submit_job"},{"name":"check_job"},{"name":"get_job_result"},{"name":"upload_file"}]},
+ "elevenlabs":{"source":"https://github.com/elevenlabs/plugin/blob/main/skills/mcp/creative-studio/SKILL.md","evidence":"Documented official plugin tool names; not a live authenticated tools/list capture","tools":[{"name":"creative_get_flow_node_types"},{"name":"creative_get_model_guide"},{"name":"creative_get_flow_run_status"}]}
+}
