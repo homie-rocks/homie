@@ -17,6 +17,17 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [Unreleased]
+
+### Added
+
+- **Every owner need:** Codex needs can call studio MCP tools as customer, staff or owner, check returned results and records, invoke declared scheduled functions locally, read event feeds and MCP Events, inspect webhook delivery and verify handover files. Headless-only checks need no Chrome; missing tools, permissions, effects and text explain why the need is not met.
+
+### Fixed
+
+- **Acceptance and evidence:** Passing assertions mark a need met even without captures. Missing captures identify the surface, failure and how to collect evidence with `--shots`.
+- **Changing controls:** UI actions re-query detached elements within a bounded wait. The app skill and packaged guides explain stable DOM updates across delayed refreshes, with a held-button example.
+
 ## [0.51.5] - 2026-10-14
 
 **Plugin 0.51.5**
