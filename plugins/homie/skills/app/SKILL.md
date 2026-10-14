@@ -175,7 +175,7 @@ Scaffold businesses with `new <folder> --kind business`; causes with `--kind cau
 
 For giving, set the studio currency and run `shop init --giving --currency CAD` (use the organisation’s currency). It creates one-time/monthly suggested gifts. The owner supplies `giving.receiptText` in shop.json; Homie supplies no legal or tax text. Before Stripe is connected, local /shop/ previews items and prices with checkout disabled. Run the connection step yourself; the owner approves their Stripe account in the browser.
 
-Booking requests are not capacity reservations. Calendar availability and seat capacity are the next app capability; do not promise them.
+Booking requests alone are not capacity reservations. The candidate `shop.book` API and booking collection declaration in SHOP.md reserve capacity atomically. Paid holds require a runtime Checkout connection; the default Payment Links approval does not yet provide it. Do not promise that unresolved connection.
 
 
 ## Tell my AI when a booking comes in

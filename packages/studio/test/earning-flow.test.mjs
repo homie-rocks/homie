@@ -1,0 +1,33 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
+import { readdirSync, readFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { startStripeFixture } from '../lib/dev-stripe-fixture.mjs';
+import { shopRoutes } from '../worker/shop.mjs';
+import { withToolIdentity } from '../worker/tool-identity.mjs';
+
+test('phone checkout holds the last seat; signed payment confirms and expiry releases through HTTP', async t => {
+ const sql=new DatabaseSync(':memory:');t.after(()=>sql.close());
+ const migrations=new URL('../../../template/site/migrations/',import.meta.url);
+ for(const file of readdirSync(migrations).sort())sql.exec(readFileSync(new URL(file,migrations),'utf8'));
+ const prepare=(q,args=[])=>{const runSync=()=>({meta:{changes:sql.prepare(q).run(...args).changes}});return{bind:(...a)=>prepare(q,a),first:async()=>sql.prepare(q).get(...args)??null,all:async()=>({results:sql.prepare(q).all(...args)}),run:async()=>runSync(),runSync};};
+ const DB={prepare,batch:async ss=>{sql.exec('BEGIN');try{const r=ss.map(s=>s.runSync());sql.exec('COMMIT');return r;}catch(e){sql.exec('ROLLBACK');throw e;}}};
+ const env={DB};const cat={studio:{name:'Coldsmoke'},games:[{id:'tuning',kind:'app',records:{collections:{bookings:{booking:{slots:'slots',item:'tune'}}}}}],shop:{till:'stripe',currency:'cad',items:[{id:'tune',name:'Tune',price:5000},{id:'wax',name:'Wax',price:1000}]}};
+ for(const id of ['alice','bob'])sql.prepare('INSERT INTO players(id,name,created_at,seen_at) VALUES(?,?,1,1)').run(id,id);
+ sql.prepare('INSERT INTO app_records VALUES(?,?,?,?,1,1)').run('tuning','slots','morning',JSON.stringify({capacity:1}));
+ const server=createServer(async(req,res)=>{let body='';for await(const c of req)body+=c;const url=new URL(req.url,origin);const r=await shopRoutes(new Request(url,{method:req.method,headers:req.headers,...(req.method==='POST'?{body}:{})}),env,{},url,{catalogueOf:async()=>cat});res.writeHead(r.status,Object.fromEntries(r.headers));res.end(await r.text());});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin=`http://127.0.0.1:${server.address().port}`;t.after(()=>new Promise(r=>server.close(r)));
+ const stripe=await startStripeFixture({origin});t.after(()=>stripe.close());Object.assign(env,stripe.bindings);
+ const buy=async(id,body)=>{const url=new URL('/api/shop/buy',origin);const req=withToolIdentity(new Request(url,{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify(body)}),{id});const r=await shopRoutes(req,env,{},url,{catalogueOf:async()=>cat});return{status:r.status,...await r.json()};};
+ const request={item:'tune',game:'tuning',booking:{collection:'bookings',slot:'morning'}};
+ const [alice,bob]=await Promise.all([buy('alice',request),buy('bob',request)]);
+ const winner=alice.ok?alice:bob,loser=alice.ok?bob:alice;assert.equal(winner.ok,true,JSON.stringify(winner));assert.equal(loser.status,409);assert.equal(sql.prepare('SELECT count(*) n FROM shop_orders').get().n,1,'capacity refusal rolls back its order');
+ assert.equal(sql.prepare('SELECT state FROM shop_bookings').get().state,'held');
+ const payment=await fetch(winner.url.replace('/checkout/','/complete/'),{method:'POST',redirect:'manual'});assert.equal(payment.status,303,await payment.text());assert.equal(sql.prepare('SELECT state FROM shop_bookings').get().state,'confirmed');
+ sql.prepare('INSERT INTO app_records VALUES(?,?,?,?,1,1)').run('tuning','slots','later',JSON.stringify({capacity:1}));
+ const second=await buy('bob',{...request,booking:{collection:'bookings',slot:'later'}});assert.equal(second.ok,true);
+ const expired=await fetch(second.url.replace('/checkout/','/expire/'),{method:'POST',redirect:'manual'});assert.equal(expired.status,303);assert.equal(sql.prepare('SELECT state FROM shop_bookings WHERE id=?').get(second.booking).state,'released');
+ const cart=await buy('alice',{lines:[{item:'tune',quantity:2},{item:'wax',quantity:1}],reference:'table-7'});assert.equal(cart.ok,true);
+ const session=await (await fetch(stripe.base+'/v1/checkout/sessions/'+cart.url.split('/').at(-1))).json();assert.equal(session.lines.length,2);assert.equal(session.amount_total,11000);assert.equal(sql.prepare('SELECT value FROM meta WHERE key=?').get('shop-reference:'+cart.order).value,'table-7');
+});

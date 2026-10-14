@@ -202,7 +202,7 @@ async function itemsView(env, shop, { game, kids, beginner, player, open, cursor
   const items = page.map((it) => {
     const owned = it.gives.length > 0 && it.gives.every((k) => owns.some((o) => o.key === k && o.item === it.id));
     const way = wayFor(it, { open: open || it.price === 0 && !shop.broken && shop.till !== 'off', kids, beginner, player, band, owned, spent, cap: purchasing ? null : shop.capPerPlayerMonth, policy: shop.policy });
-    return { id: it.id, kind: it.kind, name: it.name, blurb: it.blurb ?? null, price: it.price, ...(it.price === 'choose' ? { min: it.min, max: it.max } : {}), shown: it.price === 'choose' ? `${money(it.min, shop.currency)} or more` : money(it.price, shop.currency), gives: it.gives, ...(it.badge ? { badge: it.badge } : {}), ...(it.days ? { days: it.days } : {}), ...(it.ends ? { ends: it.ends } : {}), ...(it.game ? { game: it.game } : {}), way, ...(way === 'cap' ? { retryWay: wayFor(it, { open, kids, beginner, player, band, owned, cap: null, policy: shop.policy }) } : {}) };
+    return { id: it.id, kind: it.kind, ...(it.interval ? { interval: it.interval } : {}), name: it.name, blurb: it.blurb ?? null, price: it.price, ...(it.price === 'choose' ? { min: it.min, max: it.max } : {}), shown: it.price === 'choose' ? `${money(it.min, shop.currency)} or more` : money(it.price, shop.currency), gives: it.gives, ...(it.badge ? { badge: it.badge } : {}), ...(it.days ? { days: it.days } : {}), ...(it.ends ? { ends: it.ends } : {}), ...(it.game ? { game: it.game } : {}), way, ...(way === 'cap' ? { retryWay: wayFor(it, { open, kids, beginner, player, band, owned, cap: null, policy: shop.policy }) } : {}) };
   }).filter((i) => i.way !== 'beginner' && i.way !== 'kids');
   return { band, owns, spent, items, nextCursor: !item && cursor + 100 < selected.length ? String(cursor + 100) : null };
 }
@@ -248,6 +248,13 @@ export async function shopRoutes(request, env, ctx, url, { catalogueOf }) {
     if (path === '/api/player/owns' && read) return await ownsRoute(request, env, url, cat, shop);
     if (path === '/api/shop/mine' && read) return await mineRoute(request, env, shop);
     if (path === '/api/shop/order' && read) return await orderRoute(request, env, url, shop);
+    if (path === '/api/shop/subscriptions' && read) {
+      const player = await accountOf(request, env);
+      if (!player) return json({ ok: true, subscriptions: [] });
+      const subscriptions = (await env.DB.prepare(`SELECT s.id,s.state,o.item,o.currency,o.amount FROM shop_subscriptions s
+        JOIN shop_orders o ON o.id=s.order_id WHERE o.player=?1`).bind(player.id).all()).results ?? [];
+      return json({ ok: true, subscriptions });
+    }
     if (path === '/api/shop/portal' && request.method === 'POST') {
       const player = await accountOf(request, env);
       if (!player) return fail(401, 'account', 'Use the account that made this gift.');

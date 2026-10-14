@@ -7,6 +7,8 @@ import { checkShop } from '../worker/shop-rules.mjs';
 function fixture(t) {
  const sql=new DatabaseSync(':memory:');t.after(()=>sql.close());
  sql.exec(`CREATE TABLE shop_orders(id TEXT PRIMARY KEY,player TEXT,game TEXT,mode TEXT);
+ CREATE TABLE shop_entitlement_lines(order_id TEXT,line_id TEXT,ends_at INTEGER);
+ CREATE TABLE shop_order_lines(id TEXT,order_id TEXT,snapshot TEXT);
  CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT);
  CREATE TABLE studio_events(id TEXT PRIMARY KEY,type TEXT,data TEXT,at INTEGER);
  CREATE TABLE function_subscriptions(type TEXT);
@@ -30,8 +32,11 @@ test('subscription lifecycle is durable and renewal is deduplicated by invoice',
  const invoice={id:'in_month2',parent:{subscription_details:{subscription:'sub_test'}},billing_reason:'subscription_cycle',amount_paid:2000,currency:'usd'};
  await subscriptionEvent(env,ev('evt_1','invoice.paid',2,invoice));await subscriptionEvent(env,ev('evt_duplicate','invoice.paid',2,invoice));
  await subscriptionEvent(env,ev('evt_2','invoice.payment_failed',3,{...invoice,id:'in_month3',amount_paid:0,amount_due:2000}));
+ sql.exec(`INSERT INTO shop_order_lines VALUES('monthly-line','order','{"interval":"month"}'),('once-line','order','{}'); INSERT INTO shop_entitlement_lines VALUES('order','monthly-line',NULL),('order','once-line',NULL);`);
  await subscriptionEvent(env,ev('evt_3','customer.subscription.deleted',4,{id:'sub_test'}));
  await subscriptionEvent(env,ev('evt_old','invoice.paid',2,invoice));
+ assert.equal(sql.prepare("SELECT ends_at FROM shop_entitlement_lines WHERE line_id='monthly-line'").get().ends_at,4000);
+ assert.equal(sql.prepare("SELECT ends_at FROM shop_entitlement_lines WHERE line_id='once-line'").get().ends_at,null);
  assert.equal(sql.prepare('SELECT state FROM shop_subscriptions').get().state,'cancelled');
  const events=sql.prepare('SELECT type,data FROM studio_events ORDER BY at').all();assert.deepEqual(events.map(e=>e.type),['subscription.started','subscription.renewed','subscription.failed','subscription.cancelled']);
  assert.equal(JSON.parse(events[1].data).reference,'gift-20');

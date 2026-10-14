@@ -261,6 +261,13 @@ export const SHOP_JS = String.raw`(function () {
       list.appendChild(card);
     });
     if (s.nextCursor) { var next = el('button', { type: 'button' }, 'Next items'); next.onclick = function () { load(s.nextCursor); }; list.appendChild(next); }
+    if (s.items.some(function(i) { return i.interval; })) api('GET', '/api/shop/subscriptions').then(function(r) {
+      (r.subscriptions || []).forEach(function(sub) {
+        var manage = el('button', { type: 'button', class: 'plain' }, 'Manage subscription on Stripe');
+        manage.onclick = function() { var tab = window.open('', '_blank'); api('POST', '/api/shop/portal', { subscription: sub.id }).then(function(result) { if (!result.ok || !result.url) throw new Error(result.message || 'Portal unavailable'); if (tab) tab.location.href = result.url; else location.href = result.url; }).catch(function(e) { if (tab) tab.close(); say(e.message, true); }); };
+        list.appendChild(manage);
+      });
+    }).catch(function() {});
     if (!s.items.length) list.appendChild(el('p', null, boot.giving ? 'No gift options are available right now.' : 'Nothing for sale here right now.'));
     if (boot.item) { var at = document.getElementById('item-' + boot.item); if (at && at.scrollIntoView) at.scrollIntoView({ block: 'center' }); }
   }

@@ -103,3 +103,15 @@ and the `app_records` tool schema explain the contract; validation errors name i
 Live and local unconnected shop/giving pages display the declared items and amounts
 with disabled payment controls. They say they are not taking payments yet. A fresh
 `/shop/` has an empty preview; an authored shop page still takes precedence.
+
+## Booking capacity
+
+See `shop/SHOP.md` for “book a tune and hold the slot”. A collection opts in with
+`booking: {slots: 'slots', item: 'full-tune'}`. Slots are ordinary staff-managed
+records with integer `capacity`. Bookings are server-managed records created by
+`shop.book`; their public data is only slot, quantity and state. Keep personal
+information in a separate private collection. Public roles must not have write
+capabilities for slots or bookings. Staff movement is a versioned record update
+containing only `slot`; confirmation and release follow verified Checkout state.
+The default Payment Links connection still cannot create paid holds; this remains
+an unresolved 0.51 release requirement, not a reason to request a pasted key.

@@ -218,3 +218,65 @@ These calls open the same shop in games and apps. Inside a player card, purchase
 Create the booking/ticket/gift intention first. `shop.buy('full-tune', 1, undefined, { reference: booking.id })` or `shop.checkout({ reference: booking.id })` sends the app's own reference through checkout. Existing boolean returns are unchanged: checkout opened is not paid. The verified durable `order.paid` event carries `data.order`, `data.reference` (null if omitted) and `data.app`. Reopened Payment Links retain the reference. A reference is buyer-supplied correlation, not authorization: verify the record, app, amount and currency, deduplicate by event/order ID, then fulfil it. Keep personal data out of references. Before Stripe is connected, local prices and unpaid requests can be demonstrated; actual payment and recurring collection remain unverified. Test events must be labelled simulations.
 
 For referrals, use Stripe Connect to split payments or a Stripe-based affiliate service; Homie builds none.
+
+## Capacity bookings and monthly Checkout (0.51 work in progress)
+
+These APIs currently require an existing runtime Checkout connection. The default
+one-approval Payment Links connection still cannot create arbitrary carts or seat
+holds. Do not ask an owner to paste a key. The one-approval runtime integration is
+an unresolved release requirement; the offline fixture below is not proof of it.
+
+**A round to table 7** uses one cart and a correlation reference:
+
+```ts
+const shop = createShop();
+shop.add('negroni', 2);
+shop.add('spritz', 1);
+await shop.checkout({ reference: 'table-7' });
+```
+
+Only verified payment emits `order.paid`, with `data.reference === 'table-7'`.
+The authenticated `/api/shop/order?session=...` response also returns the reference.
+Opening Checkout is not payment. References contain no private information.
+
+**Book a tune and hold the slot.** Declare a `slots` record collection containing
+an integer `capacity`, and a `bookings` collection with
+`"booking": { "slots": "slots", "item": "full-tune" }`. Booking records expose
+`slot`, `quantity`, and `state`; the server supplies those fields. Public roles
+may read these collections; only signed-in staff may write slots or move bookings.
+Staff creates each slot using the normal records API, including its start/end
+fields defined by the app. Then the phone calls:
+
+```ts
+const result = await shop.book('full-tune', { collection: 'bookings', slot: 'sat-0900' });
+// result.booking is the public tracking record ID; read it through createAppRecords.
+```
+
+The database claims capacity before Checkout. Free bookings confirm immediately.
+Paid bookings confirm on verified payment and release on provider-confirmed
+expiry/failure or a full refund. A cancelled Checkout is expired on Stripe before
+capacity is released. An uncertain network outcome retains the hold; it is never
+sold twice. Staff moves a booking with its current version and `{slot:'sat-1000'}`;
+a full target slot refuses the move. Events are `booking.held`, `.confirmed`,
+`.released`, and `.moved`, alongside ordinary `record.changed` events.
+
+**Give $20 monthly.** A shop item can declare:
+
+```json
+{"id":"monthly-gift","kind":"donation","name":"Monthly gift","price":"choose","min":100,"interval":"month","gives":[]}
+```
+
+`shop.buy('monthly-gift', 1, 2000, {reference:'gift-20'})` opens subscription-mode
+Checkout in a two-decimal currency. Amounts obey the studio's optional min/max.
+Use `subscription.started`, `.renewed`, `.failed`, and `.cancelled` for fulfilment;
+renewals deduplicate by invoice. `POST /api/shop/portal` with `{subscription:id}`
+returns a Stripe portal URL only for the buyer who owns that subscription. Configure
+allowed changes in Stripe's portal settings. Set `giving.receiptText` to the
+organisation's own receipt wording; Homie imposes no charity or tax text.
+
+For offline development, import `startStripeFixture` from the installed toolkit's
+`lib/dev-stripe-fixture.mjs`, start it with `{origin:'http://127.0.0.1:8787'}`, and
+write its `bindings` as local Wrangler `.dev.vars` in a disposable studio. Keep it
+running alongside `homie-studio dev`. The checkout page explicitly says simulation;
+it takes no card and no money. Call `close()` and delete the disposable studio when
+finished. This tests signed webhook plumbing, not Stripe account permissions.

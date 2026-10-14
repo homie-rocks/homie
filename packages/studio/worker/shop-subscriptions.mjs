@@ -57,6 +57,9 @@ export async function subscriptionEvent(env, event) {
     env.DB.prepare(`UPDATE shop_subscriptions SET state=?2,event_at=?3 WHERE id=?1 AND state!='cancelled' AND event_at<=?3`).bind(subscription,state,at),
     env.DB.prepare(`INSERT OR IGNORE INTO shop_subscription_events(id,subscription,type,invoice,amount,currency,at)
       VALUES(?1,?2,?3,?4,?5,?6,?7)`).bind(eventId,subscription,type,event.type.startsWith('invoice.')?obj.id:null,obj.amount_paid??obj.amount_due??null,obj.currency??null,at),
+    ...(state === 'cancelled' ? [env.DB.prepare(`UPDATE shop_entitlement_lines SET ends_at=MIN(COALESCE(ends_at,?2),?2)
+      WHERE order_id=?1 AND line_id IN (SELECT id FROM shop_order_lines WHERE order_id=?1 AND json_extract(snapshot,'$.interval') IS NOT NULL)`)
+      .bind(row.order_id,at)] : []),
   ]);
   return type;
 }

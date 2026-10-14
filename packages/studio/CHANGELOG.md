@@ -17,6 +17,33 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.51.0] - 2026-10-14
+
+**Plugin 0.51.0** · Earning candidate — not ready to release.
+
+### Added
+
+- Opt-in app booking collections with atomic capacity, Checkout-linked holds,
+  confirmation and release, versioned staff moves, and durable booking events.
+- Subscription-mode Checkout for monthly amounts, subscription lifecycle events,
+  and buyer-owned Stripe portal sessions.
+- An offline Checkout fixture and transaction-level booking acceptance tests.
+
+### Release blockers
+
+- The default one-approval Payment Links connection still cannot open arbitrary
+  carts or paid capacity holds. A supported production runtime authorization
+  integration must be established before this candidate can ship.
+- The giving starter still records intentions; converting its scene and totals
+  to verified giving, complete membership lifecycle semantics, and Stripe sandbox
+  acceptance remain unfinished. Offline fixtures are not sandbox verification.
+
+### Upgrade notes
+
+Existing apps opt in to booking collections. Apply the new booking and subscription
+migrations when testing this candidate. Do not publish it as the completed earning
+release while the blockers above remain.
+
 ## [0.50.7] - 2026-10-14
 
 **Plugin 0.50.7** · Prove your needs on every screen, with fixes from studio testers.

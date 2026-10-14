@@ -152,3 +152,15 @@ For a cause, use `shop init --giving --currency <organisation currency>`: one-ti
 Create the booking/ticket/gift intention first. `shop.buy('full-tune', 1, undefined, { reference: booking.id })` or `shop.checkout({ reference: booking.id })` sends the app's own reference through checkout. Existing boolean returns are unchanged: checkout opened is not paid. The verified durable `order.paid` event carries `data.order`, `data.reference` (null if omitted) and `data.app`. Reopened Payment Links retain the reference. A reference is buyer-supplied correlation, not authorization: verify the record, app, amount and currency, deduplicate by event/order ID, then fulfil it. Keep personal data out of references. Before Stripe is connected, local prices and unpaid requests can be demonstrated; actual payment and recurring collection remain unverified. Test events must be labelled simulations.
 
 For referrals, use Stripe Connect to split payments or a Stripe-based affiliate service; Homie builds none.
+
+## Earning candidate APIs
+
+Read the final section of `shop/SHOP.md` for the worked round to table 7, booking
+a tune with `shop.book`, and $20 monthly subscription Checkout examples. Booking
+collections declare their slots and shop item; only staff writes slots or moves
+bookings. Use provider-confirmed events, not the return URL or a local timer.
+The candidate runtime APIs require an existing Checkout connection. The default
+one-approval Payment Links connection still cannot supply arbitrary carts or
+paid seat holds. That remains a release blocker; never request a pasted key.
+`lib/dev-stripe-fixture.mjs` exercises local signed webhook plumbing without a
+Stripe account. Label it simulation, not verified Stripe sandbox access.
