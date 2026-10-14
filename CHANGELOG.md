@@ -17,6 +17,16 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.51.5] - 2026-10-14
+
+**Plugin 0.51.5**
+
+Recurring shop payments reach the shop and its apps even when the studio also sells parts.
+
+### Fixed
+
+- Studio shop subscription invoices and lifecycle events stay with the shop when parts selling is enabled. Recurring gifts and memberships record renewals and app events once, retaining the original reference; parts purchases keep their own reconciliation path. Studios can remove the 0.51.3–0.51.4 subscription-routing postinstall workaround after upgrading.
+
 ## [0.51.4] - 2026-10-14
 
 **Plugin 0.51.4** · Studio events through experimental MCP Events.

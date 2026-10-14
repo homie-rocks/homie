@@ -1,3 +1,4 @@
+import { stripeEventOwner } from './stripe-ownership.mjs';
 import { hasStripeKey, shopMode, rememberMoneyEvent, rememberedMoney } from './shop-links.mjs';
 import { paymentRefunds } from './shop-refunds.mjs';
 import { orderFact, bindHostedSession } from './purchase-core.mjs';
@@ -303,11 +304,25 @@ export async function reconcileOrder(env, o) {
 
 /** Called only AFTER the existing shop webhook signature/mode check. Return null for player orders. */
 export async function purchasePaymentEvent(env, event) {
+  const obj = event.data?.object ?? {};
+  const owner = stripeEventOwner(obj);
+  if (owner === 'shop') return null;
+  // Stripe can omit metadata on lifecycle events; an established shop subscription
+  // still belongs to the shop. Explicit ownership takes precedence over ID lookup.
+  if (!owner && (event.type.startsWith('invoice.') || event.type.startsWith('customer.subscription.'))) {
+    const subscription = event.type.startsWith('customer.subscription.') ? obj.id : idOf(obj.parent?.subscription_details?.subscription ?? obj.subscription);
+    if (subscription) {
+      try {
+        if (await env.DB.prepare('SELECT 1 FROM shop_subscriptions WHERE id = ?1').bind(subscription).first()) return null;
+      } catch (error) {
+        if (!/no such table: (?:main\.)?shop_subscriptions\b/.test(String(error?.message))) throw error;
+      }
+    }
+  }
   // An existing player shop may receive webhooks before purchase migrations run.
   try { await env.DB.prepare("SELECT 1 FROM purchase_orders LIMIT 0").first(); }
   catch (error) { if (/no such table/.test(error.message)) return null; throw error; }
 
-  const obj = event.data?.object ?? {};
   if (!event.type.startsWith('checkout.session.')) await rememberMoneyEvent(env,event);
   if (obj.payment_link && obj.metadata?.homie === 'purchase-links-v1') return reconcileLinkSession(env,obj);
   if (!hasStripeKey(env) && event.type.startsWith('customer.subscription.')) {
