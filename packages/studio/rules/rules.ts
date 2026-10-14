@@ -599,7 +599,7 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
     let body: KindTable['body'] = null;
     if (e.body !== undefined) {
       const b = e.body;
-      const shapes = dims === 2 ? ['circle'] : ['sphere', 'capsule', 'box'];
+      const shapes = dims === 2 ? ['circle', 'box'] : ['sphere', 'capsule', 'box'];
       if (!b || !shapes.includes(b.shape)) throw new Error(`${at}.body.shape is ${shapes.map((s) => `'${s}'`).join(' or ')} when space.dims is ${dims}`);
       if (typeof b.radius !== 'number' || typeof b.maxSpeed !== 'number' || !Number.isFinite(b.radius) || !Number.isFinite(b.maxSpeed) || !(b.radius > 0) || !(b.maxSpeed >= 0)) throw new Error(`${at}.body needs radius (metres) and maxSpeed (metres a second)`);
       if (b.terrain !== undefined && b.terrain !== 'exact') throw new Error(`${at}.body.terrain is 'exact', or omitted for legacy casts`);
@@ -733,7 +733,7 @@ function publicField(field: Field, hidden=false): Field {
 export function schemaOf(c: Compiled): Schema {
   return {
     contract: RULES_CONTRACT, dims: c.dims, seats: c.seats, ...(c.records?{records:true as const}:{}), ...(c.historySeconds ? { rewind: { historySeconds: c.historySeconds, ...(c.rewindSeconds !== undefined ? { capSeconds: c.rewindSeconds } : {}) } } : {}),
-    kinds: c.kinds.map((k) => ({ ...(k.query?{query:k.query}:{}), ...(k.collider?{collider:k.collider}:{}), ...(k.body?.terrain ? {terrain:k.body.terrain} : {}), name: k.name, player: Boolean(k.player), ...(k.player?.control ? {control:k.player.control}:{}), owner: Boolean(k.body?.owner), radius: k.body?.radius ?? 0, ...(c.dims === 3 && k.body ? { shape: k.body.shape, height: k.body.height || 2 * k.body.radius } : {}), maxSpeed: k.body?.maxSpeed ?? 0, score: k.score, fields: k.fields.map(([name,field])=>[name,publicField(field)]), motion: k.motion, input: k.input })),
+    kinds: c.kinds.map((k) => ({ ...(k.query?{query:k.query}:{}), ...(k.collider?{collider:k.collider}:{}), ...(k.body?.terrain ? {terrain:k.body.terrain} : {}), name: k.name, player: Boolean(k.player), ...(k.player?.control ? {control:k.player.control}:{}), owner: Boolean(k.body?.owner), ...(c.dims === 2 && k.body?.shape === 'box' ? {shape: 'box'} : {}), radius: k.body?.radius ?? 0, ...(c.dims === 3 && k.body ? { shape: k.body.shape, height: k.body.height || 2 * k.body.radius } : {}), maxSpeed: k.body?.maxSpeed ?? 0, score: k.score, fields: k.fields.map(([name,field])=>[name,publicField(field)]), motion: k.motion, input: k.input })),
     effects: c.effects, effectNames: c.effectNames, commands: c.commands, shared: c.shared, rounds: c.rounds, settings: c.settings,
   };
 }

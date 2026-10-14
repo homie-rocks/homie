@@ -54,7 +54,7 @@ its guarded `move`. Bots, AI and away people are always moved on the server.
 `body.move: 'owner'` is an existing compatibility option that accepts bounded position
 claims and cannot enforce walls against a modified browser; do not use it for new games.
 A non-player entity may use `world.sweep(self, delta)` instead of a move function.
-Bodies require radius and maxSpeed. In 2D use circle; in 3D use sphere, capsule or
+Bodies require radius and maxSpeed. In 2D use circle or box (radius is its half-width); in 3D use sphere, capsule or
 axis-aligned box, with full height for capsule/box. `sweep: true` adds automatic map
 collision; explicit `ctx.map.sweep` moves and returns a contact for sliding.
 
@@ -1417,6 +1417,13 @@ Omit it to use the call time. A player can declare
 `player: {control: 'canMove', pulses: 'hold'}` to keep pulses during a knock or
 stun and deliver them when control returns. The default `'drop'` preserves the
 previous behaviour. The game's action handler still decides its cooldown.
+
+In 2D, own-body interpolation and correction are swept against the declared solid map.
+Keep that map consistent with custom movement and declare a square 2D runner as
+`body.shape: 'box'`. A blocked visual correction stops at contact; it never
+changes authoritative movement. Use `ctx.substeps` for custom integration so
+the toolkit draws the same path, without a second view-side displacement.
+Substep previews include the remaining duration of controls currently held.
 
 Residual drawing corrections use `room.predict.blendMs` (100 ms by default),
 slowed on each moving axis to avoid reversing movement (jumping cannot spend

@@ -57,6 +57,11 @@ export default defineRules({contract:2,space:{dims:2},move,map:'./map',shared:{w
       writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
 export default defineRules({contract:2,space:{dims:${dims}},move,map:'./map',entities:{runner:{player:true,input:{ax:f.i8()},body:{shape:'${dims===2?'circle':'sphere'}',radius:.2,maxSpeed:4},fields:{neighbours:f.u8()},tick(w,s){s.neighbours=w.near(s.pos,3,'runner').length;}}},room:{bots:{keep:0},join(c,p){return {kind:'runner',at:{x:p.seat===0?19:1,y:10,z:${dims===2?0:10}}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax*4,y:0,z:0};c.world.sweep(b,c.math.scale(b.vel,c.dt));}});`);
+    } else if ((runaway === 'solid-ground' || runaway === 'solid-ground-box')) {
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-20,-20],max:[20,20]},boxes:[{min:[-8,0],max:[0,5]},{min:[-20,12],max:[20,15]}]}));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
+export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{respawn:{}}},entities:{runner:{player:true,input:{ax:f.held(),jump:f.held()},motion:{air:f.bit()},body:{shape:'${runaway === 'solid-ground-box' ? 'box' : 'circle'}',radius:.5,maxSpeed:30},commands:{respawn(w,s){w.place(s,{x:-3,y:-.5},{vel:{x:0,y:0}});s.motion.air=false;}}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:-3,y:-.5,z:0}};}}});`);
+      writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){c.substeps(b,60,s=>{const vy=i.jump&&!b.motion.air?-15:Math.min(30,b.vel.y+40*s.dt);b.vel={x:i.ax*6,y:vy,z:0};c.map.sweep(b,{x:b.vel.x*s.dt,y:0,z:0});const hit=c.map.sweep(b,{x:0,y:vy*s.dt,z:0});b.motion.air=!hit;if(hit)b.vel={x:b.vel.x,y:0,z:0};});}});`);
     } else if (runaway === 'placement-clock') {
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-1000,-1000],max:[1000,1000]}}));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
@@ -2405,3 +2410,34 @@ test('wide input preserves every numbered swap exactly once under repeated histo
  assert.deepEqual([...a.me.swaps],Array.from({length:50},(_,i)=>i+1),'same ordered swaps as 0.48.0, without losses or duplicates');
  assert.equal(r.room.stats.oversize,0);assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
 });
+
+for (const seed of [17,41,83]) test(`own drawing stays outside a solid ledge under repeated TCP stalls seed ${seed}`, async t => {
+  const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground');
+  const clock=virtualTime(t);let random=seed;const lanes=new Map();
+  const lag=(m,l)=>{random=(Math.imul(random,1664525)+1013904223)>>>0;const due=Math.max(Date.now()+300+(random/4294967296<.05?600:0),lanes.get(l)??0);lanes.set(l,due);return due-Date.now();};
+  const r=rig(L,compiled,false,(m,l)=>lag(m,'d'+l),(m,l)=>lag(m,'u'+l));
+  const a=openRoom({net:{config:cfg('Ledge'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();r.stop();});
+  await clock.wait(3000);let worst=0,example;
+  for(let n=0;n<2400;n++){
+    if(n%300===0)a.command('respawn');
+    a.input({ax:n%300<100?1:n%300<180?-1:0,jump:n%97<5?1:0});
+    await clock.wait(16);const p=a.me?.pos;if(!p)continue;
+    for(const box of [{min:{x:-8,y:0},max:{x:0,y:5}},{min:{x:-20,y:12},max:{x:20,y:15}}]){
+      const d=Math.min(p.x+.5-box.min.x,box.max.x-p.x+.5,p.y+.5-box.min.y,box.max.y-p.y+.5);
+      if(d>worst){worst=d;example={n,p};}
+    }
+  }
+  assert.ok(worst<=.1,`penetration ${worst}: ${JSON.stringify(example)}`);
+});
+
+ test('a square runner retains its shape on the wire and cannot enter an exact-contact floor', async t => {
+  const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
+  assert.equal(L.R.schemaOf(compiled).kinds.find(k=>k.name==='runner').shape,'box');
+  const clock=virtualTime(t),r=rig(L,compiled,false,300,300);
+  const a=openRoom({net:{config:cfg('Square'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();r.stop();});
+  await clock.wait(3000);
+  for(let n=0;n<120;n++){await clock.wait(16);assert.equal(a.me.pos.y,-.5,'zero-gap contact stops inward gravity');}
+  a.input({jump:1});let minY=-.5;
+  for(let n=0;n<60;n++){await clock.wait(16);minY=Math.min(minY,a.me.pos.y);}
+  assert.ok(minY<-2,'the same contact lets the body jump away');
+ });
