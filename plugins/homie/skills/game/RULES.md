@@ -1437,3 +1437,9 @@ controls it used. Queued held state from an earlier placement cannot later
 change the new body. Newly received discrete presses still belong to the player
 when the browser has not yet learned of that placement. `idleHold` no longer keeps a stopped body displaced
 indefinitely. These drawing settings never alter server truth.
+
+A fresh discrete movement action (press or pulse) exits the own body's historical
+catch-up path. It resumes live prediction at once and carries the drawn pose into
+the normal correction blend, so a counter-dash or jump does not wait for the
+unseen impulse's history to finish. This changes drawing only; authority, input
+timestamps, cooldowns and replay rules are unchanged.
