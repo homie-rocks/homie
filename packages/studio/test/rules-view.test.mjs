@@ -2898,3 +2898,20 @@ test('a correction route rejects waypoints inside the collision skin',async t=>{
  assert.ok(worst<=200,`route stopped for ${worst} ms`);
  assert.ok(Math.hypot(previous.x-target.x,previous.y-target.y)<1.5,'correction converges');
 });
+
+test('a correction route reaches an authoritative pose touching a platform side',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
+ const clock=virtualTime(t),r=rig(L,compiled,false,0,0);
+ const a=openRoom({move:{runner(b){b.vel={x:0,y:0,z:0};}},net:{config:cfg('contact correction'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);let previous=a.me.pos;
+ const socket=r.sockets[0],receive=socket.onmessage;const target={x:.5,y:2.5};
+ socket.onmessage=event=>{const f=JSON.parse(event.data);if(f.t==='snap'){const own=f.d[1].find(e=>e[9]===a.seat);own[3][0]=target.x;own[3][1]=target.y;own[4][0]=own[4][1]=0;}receive.call(socket,{data:JSON.stringify(f)});};
+ a.input({ax:-1});let stopped=0,worst=0;
+ for(let i=0;i<60;i++){await clock.wait(16);const p=a.me.pos;
+  stopped=Math.hypot(p.x-target.x,p.y-target.y)>.01 && Math.hypot(p.x-previous.x,p.y-previous.y)<.001?stopped+16:0;worst=Math.max(worst,stopped);
+  assert.ok(Math.hypot(p.x-previous.x,p.y-previous.y)<=1.5,'correction stays continuous');
+  assert.ok(!(p.x> -8.499&&p.x<.499&&p.y>-.499&&p.y<5.499),'outside platform');previous=p;
+ }
+ assert.ok(worst<=200,`contact route stopped for ${worst} ms`);
+ assert.ok(Math.hypot(previous.x-target.x,previous.y-target.y)<.01,'contact correction converges');
+});
