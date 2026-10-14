@@ -33,5 +33,5 @@ export async function startStripeFixture({ origin }) {
   });
   async function hook(session,type){const event={id:`evt_fixture_${session.id}_${type}`,type,livemode:false,created:Math.floor(Date.now()/1000),data:{object:session}};const payload=JSON.stringify(event),t=event.created;const response=await fetch(`${target.origin}/api/shop/hook`,{method:'POST',headers:{'stripe-signature':`t=${t},v1=${await signPayload(payload,secret,t)}`},body:payload});if(!response.ok)throw new Error('Studio rejected fixture webhook');}
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));base=`http://127.0.0.1:${server.address().port}`;
-  return {base,bindings:{STRIPE_KEY:key,STRIPE_WEBHOOK_SECRET:secret,STRIPE_API_BASE:base},close:()=>new Promise(resolve=>server.close(resolve))};
+  return {base,bindings:{STRIPE_CHECKOUT_MODE: 'sessions', STRIPE_KEY:key,STRIPE_WEBHOOK_SECRET:secret,STRIPE_API_BASE:base},close:()=>new Promise(resolve=>server.close(resolve))};
 }

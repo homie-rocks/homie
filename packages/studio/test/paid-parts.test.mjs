@@ -120,7 +120,7 @@ test('Stripe own schema accepts paid part Checkout when stripe-mock is available
     if (till === 'stripe-managed') for (const field of ['automatic_tax', 'adaptive_pricing', 'tax_id_collection', 'invoice_creation']) assert.equal(field in params, false, field);
     assert.equal(Boolean(params.subscription_data), billing !== 'one-time');
     assert.equal(Boolean(params.payment_intent_data), billing === 'one-time');
-    const session = await createCheckoutSession({ STRIPE_KEY: KEY, STRIPE_API_BASE: process.env.STRIPE_MOCK_URL }, params, { idempotencyKey: `schema-${till}-${billing}` });
+    const session = await createCheckoutSession({ STRIPE_CHECKOUT_MODE: 'sessions', STRIPE_KEY: KEY, STRIPE_API_BASE: process.env.STRIPE_MOCK_URL }, params, { idempotencyKey: `schema-${till}-${billing}` });
     assert.ok(session.id);
   }
 });

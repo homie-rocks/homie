@@ -45,7 +45,7 @@ test('subscription lifecycle is durable and renewal is deduplicated by invoice',
 });
 test('portal uses the owning customer only, and rejects foreign provider URLs',async t=>{
  const {env}=fixture(t);await bindSubscription(env,{id:'order',amount:2000,currency:'usd',paid_at:1},{subscription:'sub_test',customer:'cus_test'});
- const prior=globalThis.fetch;t.after(()=>{globalThis.fetch=prior;});env.STRIPE_KEY='rk_test_fixture';
+ const prior=globalThis.fetch;t.after(()=>{globalThis.fetch=prior;});env.STRIPE_CHECKOUT_MODE='sessions';env.STRIPE_KEY='rk_test_fixture';
  globalThis.fetch=async (url,options)=>{assert.equal(url,'https://api.stripe.com/v1/billing_portal/sessions');const form=new URLSearchParams(options.body);assert.equal(form.get('customer'),'cus_test');assert.equal(form.get('return_url'),'https://studio.example/shop/');return Response.json({url:'https://billing.stripe.com/p/session/test'});};
  assert.equal(await subscriptionPortal(env,'giver','sub_test','https://studio.example'),'https://billing.stripe.com/p/session/test');
  globalThis.fetch=async()=>Response.json({url:'https://example.org/steal'});await assert.rejects(subscriptionPortal(env,'giver','sub_test','https://studio.example'),/Invalid/);
@@ -58,7 +58,7 @@ test('membership periods follow paid invoices, current status and portal plans w
  for(const file of readdirSync(migrations).sort())sql.exec(readFileSync(new URL(file,migrations),'utf8'));
  const prepare=(q,args=[])=>({bind:(...a)=>prepare(q,a),first:async()=>sql.prepare(q).get(...args)??null,all:async()=>({results:sql.prepare(q).all(...args)}),run:async()=>({meta:{changes:sql.prepare(q).run(...args).changes}})});
  const DB={prepare,batch:async ss=>{sql.exec('BEGIN');try{const out=[];for(const s of ss)out.push(await s.run());sql.exec('COMMIT');return out;}catch(e){sql.exec('ROLLBACK');throw e;}}};
- const env={DB,STRIPE_KEY:'rk_test_fixture'};
+ const env={DB,STRIPE_CHECKOUT_MODE: 'sessions', STRIPE_KEY:'rk_test_fixture'};
  const original={id:'basic',name:'Basic',interval:'month',gives:['member:basic']};
  sql.exec("INSERT INTO players(id,name,created_at,seen_at) VALUES('alice','Alice',1,1)");
  sql.exec("INSERT INTO shop_orders(id,player,item,amount,currency,status,mode,till,created_at,updated_at,paid_at) VALUES('order','alice','basic',2000,'usd','paid','test','stripe',1,1,1)");

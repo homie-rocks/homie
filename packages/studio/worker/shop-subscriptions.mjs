@@ -1,4 +1,4 @@
-import { linkConfig } from './shop-links.mjs';
+import { linkConfig, hasStripeKey } from './shop-links.mjs';
 import { KEY_SHAPE, stripeCall } from './stripe.mjs';
 /** Only verified shop Checkout sessions establish ownership. Provider customer IDs
  * stay private, and are never accepted from a browser. */
@@ -32,7 +32,7 @@ export async function bindSubscription(env, order, session, shop) {
       VALUES(?1,?2,'subscription.started',NULL,?3,?4,?5)`).bind(`started:${subscription}`,subscription,order.amount,order.currency,order.paid_at),
   ]);
   await reconcileMembership(env, subscription, shop);
-  if(!KEY_SHAPE.test(String(env.STRIPE_KEY??''))) {
+  if(!hasStripeKey(env)) {
     const invoice=typeof session.invoice==='string'?session.invoice:session.invoice?.id;
     if(invoice) {
       const saved=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-invoice:${invoice}`).first();
@@ -63,7 +63,7 @@ export async function subscriptionEvent(env, event, shop) {
   }
   if (event.livemode !== (row.mode === 'live')) return 'ignored';
   await reconcileMembership(env, subscription, shop);
-  if(event.type==='invoice.paid' && !KEY_SHAPE.test(String(env.STRIPE_KEY??'')))await invoiceMembership(env,subscription,obj);
+  if(event.type==='invoice.paid' && !hasStripeKey(env))await invoiceMembership(env,subscription,obj);
   const at=(event.created ?? 0)*1000;
   let type, state;
   if (event.type === 'customer.subscription.deleted') { type='subscription.cancelled'; state='cancelled'; }
@@ -72,7 +72,7 @@ export async function subscriptionEvent(env, event, shop) {
   else { return 'updated'; } // Scheduling cancellation is not cancellation; Stripe sends deleted when it ends.
   const eventId=type === 'subscription.renewed' ? `paid:${obj.id}` : event.id;
   await env.DB.batch([
-    env.DB.prepare(`UPDATE shop_subscriptions SET state=?2,event_at=?3 WHERE id=?1 AND state!='cancelled' AND event_at<=?3 AND ?4=0`).bind(subscription,state,at,KEY_SHAPE.test(String(env.STRIPE_KEY ?? ''))?1:0),
+    env.DB.prepare(`UPDATE shop_subscriptions SET state=?2,event_at=?3 WHERE id=?1 AND state!='cancelled' AND event_at<=?3 AND ?4=0`).bind(subscription,state,at,hasStripeKey(env)?1:0),
     env.DB.prepare(`INSERT OR IGNORE INTO shop_subscription_events(id,subscription,type,invoice,amount,currency,at)
       VALUES(?1,?2,?3,?4,?5,?6,?7)`).bind(eventId,subscription,type,event.type.startsWith('invoice.')?obj.id:null,obj.amount_paid??obj.amount_due??null,obj.currency??null,at),
     ...(state === 'cancelled' ? [env.DB.prepare(`UPDATE shop_entitlement_lines SET ends_at=MIN(COALESCE(ends_at,?2),?2)
@@ -84,7 +84,7 @@ export async function subscriptionEvent(env, event, shop) {
 export async function subscriptionPortal(env, player, subscription, origin) {
   const row=await env.DB.prepare(`SELECT s.customer FROM shop_subscriptions s JOIN shop_orders o ON o.id=s.order_id WHERE s.id=?1 AND o.player=?2`).bind(subscription,player).first();
   if (!row) return null;
-  if(!KEY_SHAPE.test(String(env.STRIPE_KEY??''))) {
+  if(!hasStripeKey(env)) {
     const url=linkConfig(env)?.portal;
     return typeof url==='string' && /^https:\/\/billing\.stripe\.com\/p\/login\//.test(url)?url:null;
   }
@@ -99,7 +99,7 @@ export async function subscriptionPortal(env, player, subscription, origin) {
  * grant nothing. Financial order snapshots remain immutable.
  */
 export async function reconcileMembership(env, subscription, shop) {
-  if (!KEY_SHAPE.test(String(env.STRIPE_KEY ?? ''))) return;
+  if (!hasStripeKey(env)) return;
   const row = await env.DB.prepare(`SELECT s.*,o.player,o.status AS order_status,o.mode
     FROM shop_subscriptions s JOIN shop_orders o ON o.id=s.order_id WHERE s.id=?1`).bind(subscription).first();
   if (!row) return;

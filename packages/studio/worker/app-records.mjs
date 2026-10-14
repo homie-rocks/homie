@@ -1,3 +1,4 @@
+import { linkConfig } from './shop-links.mjs';
 import {localSession} from './local-test.mjs';
 import { moveBooking } from './booking-store.mjs';
 import { toolIdentity } from './tool-identity.mjs';
@@ -97,7 +98,19 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
     if (op === 'read') {
       const rows = id ? [await env.DB.prepare('SELECT id, value, version, updated_at FROM app_records WHERE app = ?1 AND collection = ?2 AND id = ?3').bind(recordApp, collection, id).first()].filter(Boolean)
         : (await env.DB.prepare('SELECT id, value, version, updated_at FROM app_records WHERE app = ?1 AND collection = ?2 ORDER BY updated_at, id LIMIT 1000').bind(recordApp, collection).all()).results;
-      return json({ ok: true, records: rows.map((r) => ({ id: r.id, data: JSON.parse(r.value), version: r.version, updatedAt: r.updated_at })) });
+      const records=[];
+      for(const r of rows) {
+        const record={id:r.id,data:JSON.parse(r.value),version:r.version,updatedAt:r.updated_at};
+        const link=linkConfig(env)?.slots?.find(l=>l.app===meta.id&&l.slots===collection&&l.slot===r.id);
+        if(link) {
+          const saved=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-slot-link:${link.id}`).first();
+          const status=saved?JSON.parse(saved.value):link;
+          const count=await env.DB.prepare("SELECT COALESCE(SUM(quantity),0) n FROM shop_bookings WHERE app=?1 AND slots=?2 AND slot=?3 AND state='confirmed'").bind(recordApp,collection,r.id).first();
+          record.booking={full:!status.active||Math.max(status.count,count.n)>=link.capacity,available:status.active?Math.max(0,link.capacity-Math.max(status.count,count.n)):0,synced:link.capacity===record.data.capacity};
+        }
+        records.push(record);
+      }
+      return json({ok:true,records});
     }
     if (!id) return fail(400, 'record id required');
     const body = await bodyOf(request);

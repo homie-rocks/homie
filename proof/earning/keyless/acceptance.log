@@ -1,0 +1,35 @@
+TAP version 13
+# (node:92458) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Shop reconciliation {
+#   order: null,
+#   reason: 'Waiting for signed paid invoice',
+#   status: null,
+#   code: ''
+# }
+# PASS keyless mixed menu; signed invoice supplies paid lines and table reference
+# PASS two pending buyers; first paid seat confirms, full link rejects second payment
+# Shop reconciliation {
+#   order: null,
+#   reason: 'Subscription Checkout has not arrived; retry',
+#   status: null,
+#   code: ''
+# }
+# PASS keyless monthly Payment Link, paid membership period, no-code portal login
+# PASS keyless test-clock paid renewal extends membership
+# PASS keyless failed renewal does not extend membership
+# Subtest: real keyless menus, capacity and monthly giving
+ok 1 - real keyless menus, capacity and monthly giving
+  ---
+  duration_ms: 110453.873958
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 110733.906542

@@ -28,16 +28,17 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
   const links = await list('/v1/payment_links');
   const own = (o) => o.metadata?.homie === 'shop-links-v1' && o.metadata?.studio === slug && o.metadata?.origin === site;
   const config = { v: 1, mode, settings: linkSettings(shop), items: [] };
+  const customText=shop.giving?.receiptText ? {custom_text:{submit:{message:shop.giving.receiptText}}} : {};
   const catalogPrices = new Map();
   const keepPrices = new Set(), keepLinks = new Set(), keepProducts = new Set();
   for (const item of shop.items) {
     const id = await productIdOf(slug, item.id);
     keepProducts.add(id);
     const metadata = { homie: 'shop-links-v1', studio: slug, origin: site };
-    const fields = { name: item.name, description: item.blurb ?? '', tax_code: item.taxCode ?? defaultTaxCode(item), metadata, active: true };
+    const fields = { name: item.name, ...(item.blurb ? {description:item.blurb} : {}), tax_code: item.taxCode ?? defaultTaxCode(item), metadata, active: true };
     let product = products.find((p) => p.id === id);
     if (!product) product = await api('POST', '/v1/products', { id, ...fields }, `product-${hash(id)}`);
-    else if (!same(product.metadata, metadata) || product.name !== fields.name || (product.description ?? '') !== fields.description || (product.tax_code?.id ?? product.tax_code) !== fields.tax_code || !product.active) await api('POST', `/v1/products/${id}`, fields);
+    else if (!same(product.metadata, metadata) || product.name !== fields.name || (product.description ?? '') !== (fields.description ?? '') || (product.tax_code?.id ?? product.tax_code) !== fields.tax_code || !product.active) await api('POST', `/v1/products/${id}`, fields);
     // Omit an unset minimum: Stripe applies its settlement-currency floor itself.
     // https://docs.stripe.com/api/prices/create#create_price-custom_unit_amount-minimum
     const priceFields = { product: id, currency: shop.currency, ...(item.interval ? { recurring: { interval: item.interval } } : {}), tax_behavior: 'exclusive', ...(item.price === 'choose'
@@ -51,7 +52,7 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     catalogPrices.set(item.id, price.id);
     if ((product.default_price?.id ?? product.default_price) !== price.id) await api('POST', `/v1/products/${id}`, { default_price: price.id });
     if (item.price === 0) continue; // Free orders never leave the studio.
-    const params = { line_items: [{ price: price.id, quantity: 1, ...(item.price !== 'choose' ? { adjustable_quantity: { enabled: shop.policy.repeatPurchases, minimum: 1, maximum: 999999 } } : {}) }],
+    const params = { ...customText, line_items: [{ price: price.id, quantity: 1, ...(item.price !== 'choose' ? { adjustable_quantity: { enabled: shop.policy.repeatPurchases, minimum: 1, maximum: 999999 } } : {}) }],
       after_completion: { type: 'redirect', redirect: { url: `${site}/shop/thanks?session_id={CHECKOUT_SESSION_ID}` } },
       ...(shop.till === 'stripe-managed' ? { managed_payments: { enabled: true } } : { automatic_tax: { enabled: shop.automaticTax } }),
       ...(item.interval ? { subscription_data: { metadata } } : { payment_intent_data: { metadata } }),
@@ -65,14 +66,16 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     config.items.push({ item: item.id, id: link.id, url: link.url, price: price.id, revision: linkRevision });
   }
   // Menus use paid invoice snapshots: Checkout events omit their line items.
-  // Stripe allows 20 Payment Link lines; split larger catalogues into menus.
+  // Stripe allows 20 Payment Link lines; invoice snapshots include only the first
+  // 10. Split catalogues so keyless fulfillment needs no authenticated pagination.
   config.menus = [];
   const menuItems = shop.items.filter(i => typeof i.price === 'number' && i.price > 0 && !i.interval);
   const metadata = { homie: 'shop-links-v1', studio: slug, origin: site };
-  for (let offset = 0; offset < menuItems.length; offset += 20) {
-    const items = menuItems.slice(offset, offset + 20);
+  const groups=Map.groupBy(menuItems,i=>i.game??'');
+  for(const group of groups.values()) for (let offset = 0; offset < group.length; offset += 10) {
+    const items = group.slice(offset, offset + 10);
     if (items.length < 2) continue;
-    const params = { line_items: items.map(i => ({price:catalogPrices.get(i.id),quantity:1,adjustable_quantity:{enabled:true,minimum:0,maximum:999999}})),
+    const params = { ...customText, line_items: items.map(i => ({price:catalogPrices.get(i.id),quantity:1,adjustable_quantity:{enabled:true,minimum:0,maximum:shop.policy.repeatPurchases?999999:1}})),
       invoice_creation:{enabled:true,invoice_data:{metadata}},
       after_completion:{type:'redirect',redirect:{url:`${site}/shop/thanks?session_id={CHECKOUT_SESSION_ID}`}},
       automatic_tax:{enabled:shop.automaticTax}, payment_intent_data:{metadata} };
@@ -89,13 +92,14 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     const item=shop.items.find(i=>i.id===slot.item);
     if(!item || item.interval || item.price==='choose')throw new Error('Bookings require a fixed one-time service price');
     if(!item.price || !slot.capacity || slot.active===false)continue;
-    const identity=hash({app:slot.app,collection:slot.collection,slots:slot.slots,slot:slot.slot});
-    const params={line_items:[{price:catalogPrices.get(item.id),quantity:1}],payment_method_types:['card'],
+    const identity=hash({slug,site,app:slot.app,collection:slot.collection,slots:slot.slots,slot:slot.slot});
+    const params={...customText,line_items:[{price:catalogPrices.get(item.id),quantity:1}],payment_method_types:['card'],
       restrictions:{completed_sessions:{limit:slot.capacity}},after_completion:{type:'redirect',redirect:{url:`${site}/shop/thanks?session_id={CHECKOUT_SESSION_ID}`}}};
     let link=links.find(p=>own(p)&&p.metadata?.slot===identity);
     // Reuse the link and its lifetime completion count when capacity changes.
-    if(!link)link=await api('POST','/v1/payment_links',{...params,metadata:{...metadata,slot:identity,revision:identity}},`slot-${identity}`);
+    if(!link)link=await api('POST','/v1/payment_links',{...params,metadata:{...metadata,slot:identity,revision:identity,price:catalogPrices.get(item.id)}},`slot-${identity}`);
     else {
+      if(link.metadata?.price && link.metadata.price!==catalogPrices.get(item.id))throw new Error('Slot service price changed. Deactivate the old slot and publish a new slot ID after reviewing existing bookings.');
       const count=link.restrictions?.completed_sessions?.count??0;
       link=await api('POST',`/v1/payment_links/${link.id}`,{restrictions:params.restrictions,active:count<slot.capacity});
     }
@@ -116,7 +120,7 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     const pair = await generateKeyPair('Ed25519', { extractable: true });
     purchaseSecrets.PURCHASE_SIGNING_KEYS = JSON.stringify([await exportJWK(pair.privateKey)]);
   }
-  const events = purchases?.config.offers.length ? HOOK_EVENTS : SHOP_HOOK_EVENTS;
+  const events = purchases?.config.offers.length ? [...new Set([...HOOK_EVENTS,...SHOP_HOOK_EVENTS])] : SHOP_HOOK_EVENTS;
   const endpoints = await list('/v1/webhook_endpoints');
   const url = `${site}/api/shop/hook`;
   const current = endpoints.find((e) => e.id === receipt?.endpoint && e.url === url && e.status === 'enabled' && events.every((event) => e.enabled_events?.includes(event)));
@@ -131,7 +135,7 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
   const fingerprint = hash({config, purchases:purchases?.config});
   const unchanged = current && !secret && receipt?.fingerprint === fingerprint && has('STRIPE_SHOP_LINKS') && !has('STRIPE_KEY');
   if (!unchanged) {
-    const saved = await w(['secret', 'bulk'], { input: JSON.stringify({ STRIPE_SHOP_LINKS: JSON.stringify(config), ...purchaseSecrets, ...(purchases && (purchases.config.offers.length || has('PURCHASE_LINKS')) ? { PURCHASE_LINKS: JSON.stringify(purchases.config) } : {}), ...(secret ? { STRIPE_WEBHOOK_SECRET: secret } : {}) }) });
+    const saved = await w(['secret', 'bulk'], { input: JSON.stringify({ STRIPE_CHECKOUT_MODE: 'links', STRIPE_SHOP_LINKS: JSON.stringify(config), ...purchaseSecrets, ...(purchases && (purchases.config.offers.length || has('PURCHASE_LINKS')) ? { PURCHASE_LINKS: JSON.stringify(purchases.config) } : {}), ...(secret ? { STRIPE_WEBHOOK_SECRET: secret } : {}) }) });
     if (saved.code !== 0) return { ok: false, needs: 'cloudflare', why: 'Cloudflare could not save the shop connection. Run shop connect again; existing webhooks remain active.' };
     // Explicitly running connect selects keyless; manual selects the existing keyed checkout.
     if (has('STRIPE_KEY') && (await w(['secret', 'delete', 'STRIPE_KEY'], { input: 'y\n' })).code !== 0) return { ok: false, needs: 'cloudflare', why: 'The links are ready; run shop connect again to finish removing the old checkout credential.' };

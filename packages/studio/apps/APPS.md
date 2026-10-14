@@ -113,8 +113,10 @@ records with integer `capacity`. Bookings are server-managed records created by
 information in a separate private collection. Public roles must not have write
 capabilities for slots or bookings. Staff movement is a versioned record update
 containing only `slot`; confirmation and release follow verified Checkout state.
-The default Payment Links connection still cannot create paid holds; this remains
-an unresolved 0.51 release requirement, not a reason to request a pasted key.
+The default keyless connection uses one Payment Link per published slot. Call
+`stripe_bookings_sync` after publishing/changing slots. Pending checkout does not
+block others; payment secures the seat. Use record.booking.full/available/synced
+for slot display. Read SHOP.md for the complete manifest and limitations.
 
 The giving starter now reads the actual shop donation options with `shop.catalog()`.
 `shop init --giving --currency CAD` includes $20 monthly; `app new giving --from giving`

@@ -294,6 +294,8 @@ async function listRoute(request, env, url, cat, shop, ready) {
     currency: shop.currency, currencyScale: currencyScale(shop.currency), amountStep: amountStep(shop.currency), policy: shop.policy, till: shop.till, refundDays: shop.refundDays, cap: shop.capPerPlayerMonth, spent: v.spent,
     player: player ? { signedIn: !player.guest, guest: player.guest, name: player.name, band: v.band } : null,
     owns: v.owns.map((o) => o.key), items: v.items, nextCursor: v.nextCursor,
+    portalLogin: !hasStripeKey(env) && /^https:\/\/billing\.stripe\.com\/p\/login\//.test(linkConfig(env)?.portal??'') ? linkConfig(env).portal : null,
+    menus: !hasStripeKey(env) && ready.ready ? (linkConfig(env)?.menus??[]).filter(m=>m.items.every(entry=>v.items.some(i=>i.id===entry.item&&i.way==='checkout'))).map(m=>({items:m.items.map(i=>i.item)})) : [],
   });
 }
 
@@ -514,7 +516,7 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
   const keyless = (amount > 0 || lines.some(l => l.item.interval)) && !hasStripeKey(env);
   const config=linkConfig(env);
   const menu=keyless && !booking && lines.length>1 ? config?.menus?.find(m=>lines.every(l=>m.items.some(i=>i.item===l.item.id))) : null;
-  const link=keyless ? booking ? config?.slots?.find(l=>l.app===game&&l.collection===booking.collection&&l.slot===booking.slot&&l.item===item.id) : menu ?? config?.items.find(l=>l.item===item.id) : null;
+  const link=keyless ? booking ? config?.slots?.find(l=>l.app===game&&l.collection===booking.collection&&l.slots===booking.slots&&l.slot===booking.slot&&l.item===item.id) : menu ?? config?.items.find(l=>l.item===item.id) : null;
   if(keyless && lines.length>1 && !menu)return {error:fail(409,'menu','These items need separate Stripe menus. Custom amounts and monthly gifts use their own links.')};
   if(keyless && (!link || !paymentLinkURL(link.url)))return {error:fail(503,'payment-links','Ask the owner’s AI to sync the shop and published booking slots.')};
   if(keyless && booking) {
@@ -522,9 +524,12 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
     const slot=await env.DB.prepare('SELECT value FROM app_records WHERE app=?1 AND collection=?2 AND id=?3').bind(booking.app,booking.slots,booking.slot).first();
     if(!slot || JSON.parse(slot.value).capacity!==link.capacity)return {error:fail(409,'slot-sync','This slot changed; ask the owner’s AI to sync its Stripe link.')};
     const confirmed=await env.DB.prepare("SELECT COALESCE(SUM(quantity),0) n FROM shop_bookings WHERE app=?1 AND slots=?2 AND slot=?3 AND state='confirmed'").bind(booking.app,booking.slots,booking.slot).first();
-    if(!link.active || link.count>=link.capacity || confirmed.n>=link.capacity)return {error:fail(409,'capacity','That slot is full. Choose another slot.')};
+    const update=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-slot-link:${link.id}`).first();
+    const status=update?JSON.parse(update.value):link;
+    if(!status.active || status.count>=link.capacity || confirmed.n>=link.capacity)return {error:fail(409,'capacity','That slot is full. Choose another slot.')};
   }
   if(keyless && item.price==='choose' && lines[0].quantity!==1)return {error:fail(400,'quantity','A tip is one chosen amount; choose it on Stripe.')};
+  if(menu && menu.items.some(e=>{const i=shop.items.find(i=>i.id===e.item);return !i || i.game && i.game!==game;}))return {error:fail(409,'menu','This menu includes items from another app; sync separate menus for each app.')};
   if(menu)lines=menu.items.map(entry=>{const i=shop.items.find(i=>i.id===entry.item);return {item:i,quantity:1,amount:i.price};});
   if(keyless)lines=lines.map(l=>({...l,item:{...l.item,paymentLink:link,stripePrice:menu?.items.find(i=>i.item===l.item.id)?.price??link.price}}));
   const order = { id: newOrderId(), player: player.id, amount, currency: shop.currency };
@@ -825,12 +830,26 @@ async function hook(request, env, cat, shop, ready) {
       if (payment) await syncRefunds(env, payment);
       await env.DB.prepare('INSERT INTO shop_events (id, type, at) VALUES (?1, ?2, ?3) ON CONFLICT(id) DO NOTHING').bind(ev.id, ev.type, Date.now()).run(); return json({ ok: true, did: purchase }); }
   }
-  needed.push('invoice.paid','invoice.payment_failed','customer.subscription.updated','customer.subscription.deleted');
+  needed.push('payment_link.updated','invoice.paid','invoice.payment_failed','customer.subscription.updated','customer.subscription.deleted');
   if (!needed.includes(ev.type)) return json({ ok: true, did: 'ignored' });
   if (typeof ev.livemode === 'boolean' && (hasStripeKey(env) || linkConfig(env)) && ev.livemode !== (shopMode(env) === 'live')) return json({ ok: true, ignored: 'mode' });
   try {
-    if(ev.type==='invoice.paid' && obj.status==='paid' && obj.metadata?.homie==='shop-links-v1') {
-      await env.DB.prepare('INSERT INTO meta(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(`shop-invoice:${obj.id}`,JSON.stringify(obj)).run();
+    if(ev.type==='payment_link.updated') {
+      if(linkConfig(env)?.slots?.some(l=>l.id===obj.id))await env.DB.prepare('INSERT INTO meta(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(`shop-slot-link:${obj.id}`,JSON.stringify({active:obj.active,count:obj.restrictions?.completed_sessions?.count??0,at:ev.created})).run();
+      return json({ok:true,did:'slot-updated'});
+    }
+    if(ev.type==='invoice.paid' && obj.status==='paid' && (obj.metadata?.homie==='shop-links-v1' || obj.parent?.subscription_details?.metadata?.homie==='shop-links-v1' || obj.subscription_details?.metadata?.homie==='shop-links-v1')) {
+      const invoice={id:obj.id,status:obj.status,livemode:ev.livemode,currency:obj.currency,total:obj.total,lines:obj.lines ? {has_more:obj.lines.has_more,data:obj.lines.data.map(l=>({quantity:l.quantity,amount:l.amount,price:l.price?{id:l.price.id}:undefined,pricing:l.pricing,period:l.period,taxes:l.taxes,tax_amounts:l.tax_amounts}))} : null};
+      await env.DB.prepare('INSERT INTO meta(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(`shop-invoice:${obj.id}`,JSON.stringify(invoice)).run();
+      const pending=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-link-session:${obj.id}`).first();
+      if(pending) {
+        const session=JSON.parse(pending.value);
+        if(await bindLinkSession(env,session,ev.livemode?'live':'test'))await paid(env,shop,session);
+      }
+    }
+    if(ev.type.startsWith('checkout.session.') && obj.payment_link && obj.invoice && ['paid','no_payment_required'].includes(obj.payment_status)) {
+      const session=Object.fromEntries(['id','client_reference_id','payment_link','metadata','currency','amount_subtotal','amount_total','total_details','payment_status','payment_intent','subscription','customer','invoice'].map(k=>[k,obj[k]]));
+      await env.DB.prepare('INSERT INTO meta(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(`shop-link-session:${obj.invoice}`,JSON.stringify(session)).run();
     }
     const subscriptionResult = await subscriptionEvent(env, ev, shop);
     if (subscriptionResult !== null) return json({ ok: true, did: subscriptionResult });
@@ -951,6 +970,10 @@ async function bindLinkSession(env, session, mode) {
       env.DB.prepare('INSERT INTO shop_order_lines (id, order_id, position, item, quantity, unit_amount, amount, snapshot) VALUES (?1, ?2, 0, ?3, ?4, ?5, ?6, ?7) ON CONFLICT DO NOTHING').bind(`${id}_0`, id, item.id, quantity, amount / quantity, amount, lines[0].snapshot),
     ]);
     order = await orderBySession(env, session.id);
+    if(link.slot) {
+      const booking=await env.DB.prepare('SELECT * FROM shop_bookings WHERE order_id=?1').bind(source.id).first();
+      if(booking)await bookingStatement(env,{...booking,id,order:id,pending:true}).run();
+    }
   }
   if (!order) return false;
   if (order.paid_at === null) await env.DB.batch([
@@ -987,9 +1010,9 @@ async function bindMenuSession(env,session,source,lines) {
     ]);order=await orderBySession(env,session.id);
   }
   if(order.paid_at===null)await env.DB.batch([
-    env.DB.prepare('DELETE FROM shop_order_lines WHERE order_id=?1').bind(order.id),
-    ...paidLines.map((l,i)=>env.DB.prepare('INSERT INTO shop_order_lines(id,order_id,position,item,quantity,unit_amount,amount,snapshot) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)').bind(`${order.id}_${i}`,order.id,i,l.item,l.quantity,l.unit_amount,l.amount,l.snapshot)),
-    env.DB.prepare('UPDATE shop_orders SET amount=?2 WHERE id=?1').bind(order.id,session.amount_subtotal),
+    env.DB.prepare('DELETE FROM shop_order_lines WHERE order_id=?1 AND EXISTS(SELECT 1 FROM shop_orders WHERE id=?1 AND paid_at IS NULL)').bind(order.id),
+    ...paidLines.map((l,i)=>env.DB.prepare('INSERT INTO shop_order_lines(id,order_id,position,item,quantity,unit_amount,amount,snapshot) SELECT ?1,?2,?3,?4,?5,?6,?7,?8 WHERE EXISTS(SELECT 1 FROM shop_orders WHERE id=?2 AND paid_at IS NULL) ON CONFLICT DO NOTHING').bind(`${order.id}_${i}`,order.id,i,l.item,l.quantity,l.unit_amount,l.amount,l.snapshot)),
+    env.DB.prepare('UPDATE shop_orders SET amount=?2 WHERE id=?1 AND paid_at IS NULL').bind(order.id,session.amount_subtotal),
   ]);
   return true;
 }

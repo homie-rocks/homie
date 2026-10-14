@@ -70,7 +70,7 @@ export interface Shop {
   add(item: string, quantity?: number, amount?: number): void;
   cart(): CartLine[];
   clear(): void;
-  /** Opens Checkout while atomically holding capacity. The returned ID tracks the public booking record. */
+  /** Opens Checkout: keyless bookings are pending until paid; explicit session checkout holds capacity. The returned ID tracks the public booking record. */
   book(item: string, booking: { collection: string; slot: string }, quantity?: number): Promise<{ ok: boolean; booking?: string; error?: string }>;
   checkout(options?: { reference?: string }): Promise<boolean>;
   buy(item: string, quantity?: number, amount?: number, options?: { reference?: string }): Promise<boolean>;

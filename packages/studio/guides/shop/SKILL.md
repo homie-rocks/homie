@@ -43,13 +43,18 @@ The Worker redirects buyers to Stripe and grants purchases from signed events. N
 Homie service or API key is needed when someone pays. Run connect again after editing shop.json;
 it updates changed objects and archives removed ones. Existing connections need no new approval.
 
-Only when the person asks for combined carts, spending reservations, custom checkout expiry,
-automatic recovery of lost webhooks or office refunds, explain one sentence:
-“The fuller connection adds combined carts, spending limits, automatic recovery and refunds here.”
-A pre-existing Worker key selects that path automatically. Never silently select `--manual` or ask
-for a key: explain its remaining Dashboard step only if the person explicitly chooses that route.
-Before relying on spending restrictions after switching, deactivate old Payment Links with the approved CLI and resolve in-flight checkouts; a credential change does not cancel them.
-`shop connect` selects keyless again and removes an existing Worker API key after saving the links.
+Keyless also supports mixed fixed-price menus, capacity-limited booking links and fixed
+monthly gifts/memberships. Read SHOP.md's 0.51 examples before implementing these.
+Guests choose menu quantities on Stripe. Booking links show pending without holding
+an unpaid seat; Stripe's completion limit is the hard capacity. Use
+`stripe_bookings_sync` after publishing/changing slots (complete manifest), or update
+`.studio/booking-slots.json` and rerun connect. Sync creates the no-code portal login
+through the API; no Dashboard toggle is needed. Never ask for a key.
+
+Only when explicitly selected, an existing Worker key plus
+`STRIPE_CHECKOUT_MODE=sessions` enables exact app carts, exclusive expiring holds,
+spending reservations, provider reads and runtime refunds. A key alone never selects
+it. Default connect selects links and removes the runtime key.
 
 ## Never
 
@@ -124,7 +129,7 @@ No toolkit amount or duration ceiling applies. Stripe currency constraints and s
 A refund window includes used items unless `policy.refundUsedItems` is false. A player cannot refund a tip;
 the owner can refund through Stripe; keyed shops also offer office refunds. Guest purchases stay owned when the buyer signs in later.
 
-For keyed shops, carts: `shop.add(item, quantity, amount?)`, then `shop.checkout()`; `shop.buy(item)` buys directly.
+For menus or explicitly keyed shops, carts: `shop.add(item, quantity, amount?)`, then `shop.checkout()`; `shop.buy(item)` buys directly.
 Free and paid lines share one order and one Stripe Session. The studio chooses where to open the shop.
 
 ## The first sale (the acceptance)
@@ -133,17 +138,11 @@ In test mode: buy the supporter pack on a phone with Stripe's test card `4242 42
 see the badge on the account page and beside the name in a room (from the next room the player joins), refund it
 in Stripe (or through the connected AI), and see the badge go. With the protective preset, a kids server's room shows no shop and `/<game>/tv` shows only a code.
 
-Keyless purchases buy one item type at a time, with quantity confirmed on Stripe. Tips choose the
-amount on Stripe and always have quantity one. Free orders grant locally without Stripe.
-Refund and dispute snapshots are stored by provider object ID and tolerate retries and reordering.
-A missing webhook stays pending: ask Stripe to resend the event (Dashboard or official CLI
-`stripe events resend <event> --webhook-endpoint <endpoint>`). Never grant based on the return URL.
-Payment Links are public and reusable; do not promise that local sale dates, repeat-purchase or
-eligibility checks revoke a previously opened link. Deactivation stops new sessions after re-sync;
-already opened sessions may still complete. Strict pre-payment enforcement needs the keyed way.
-Stripe always enables Adaptive Pricing on Payment Links; the buyer can use the original currency.
-Keyless has no per-session expiry or provider-read reconciliation. The keyed path retains both,
-carts, cap reservations, local refunds. Managed Payments is supported on Payment Links when Stripe enables it for the account. The studio chooses its needs.
+Keyless menus offer several fixed-price items with adjustable quantities on Stripe.
+Custom amounts and monthly preset gifts have their own links. Free orders stay local.
+A missing webhook stays pending; ask Stripe to resend it. Never grant from a return
+URL. Keyless has no exclusive unpaid hold or custom session expiry. Consult SHOP.md
+for menu limits, signed invoice fulfilment, slot sync and honest pending/full wording.
 
 For a cause, use `shop init --giving --currency <organisation currency>`: one-time and monthly suggested gifts, no badge or game access. Read `giving.receiptText` from the organisation; leave it empty until provided. Local /shop/ previews before Stripe. Monthly gifts use the existing keyless Payment Links connection and Stripe handles renewals.
 
@@ -153,29 +152,24 @@ Create the booking/ticket/gift intention first. `shop.buy('full-tune', 1, undefi
 
 For referrals, use Stripe Connect to split payments or a Stripe-based affiliate service; Homie builds none.
 
-## Earning candidate APIs
+## Earning with the keyless default
 
-Read the final section of `shop/SHOP.md` for the worked round to table 7, booking
-a tune with `shop.book`, and $20 monthly subscription Checkout examples. Booking
-collections declare their slots and shop item; only staff writes slots or moves
-bookings. Use provider-confirmed events, not the return URL or a local timer.
-The candidate runtime APIs require an existing Checkout connection. The default
-one-approval Payment Links connection still cannot supply arbitrary carts or
-paid seat holds. That remains a release blocker; never request a pasted key.
-`lib/dev-stripe-fixture.mjs` exercises local signed webhook plumbing without a
-Stripe account. Label it simulation, not verified Stripe sandbox access.
+Read SHOP.md for a round to table 7, `shop.book` and $20 monthly giving.
+Menus let guests choose several quantities on Stripe; signed invoices provide actual
+paid lines and the app reference. Slot Payment Links enforce completed-session
+capacity. Pending guests do not block others. The owner's AI syncs published slots
+with `stripe_bookings_sync`; the app shows Full from verified availability.
+Recurring Prices provide monthly preset gifts and memberships. Connect enables the
+no-code customer portal login through Stripe's API, without a Dashboard toggle.
+Paid invoice periods govern membership; failed renewal never extends it.
+The giving starter opens real keyless Checkout and shows a disabled preview before
+connection. It never counts an intention as a gift.
 
-The giving starter now reads the actual shop donation options with `shop.catalog()`.
-`shop init --giving --currency CAD` includes $20 monthly; `app new giving --from giving`
-opens Checkout for the selected amount and frequency. A disconnected shop displays
-a disabled preview. No intention record or unverified collected total is created.
-Use the Manage my gifts link for the buyer-owned Stripe portal in the shop.
-
-For real sandbox acceptance, SHOP.md documents `startStripeSandbox` from the
-installed toolkit's `lib/dev-stripe-sandbox.mjs`. It uses an explicitly authorised
-CLI sandbox profile and forwards signed events to a loopback dev studio. It never
-exports API credentials; keep returned webhook bindings private and temporary.
-Use Stripe's published CLI fixture/API tokens, never card entry in a page. This
-requires the local desktop and does not resolve production runtime authorization.
-Membership access is bounded by paid invoice periods; recognised portal plan
-changes reconcile from current Stripe data. Failed renewal does not extend access.
+For real sandbox acceptance use `startKeylessStripeSandbox` from the installed
+`lib/dev-stripe-sandbox.mjs` as documented in SHOP.md. Only its explicitly authorised
+sandbox CLI profile creates Stripe objects. No Worker API key. Keep returned signing
+secret bindings private and temporary. Complete payments with Stripe's published
+CLI fixture/API tokens; never enter card digits into a page. The local listener is
+for development; production sends signed events directly to the studio's webhook.
+The optional keyed fixture remains available for testing explicitly selected session
+checkout. Label offline fixtures simulations.

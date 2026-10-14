@@ -2,7 +2,7 @@
 import { KEY_SHAPE, modeOf } from './stripe.mjs';
 // Current documented Payment Link fields, isolated from the existing keyed transport version.
 export const LINKS_STRIPE_VERSION = '2026-09-30.endive';
-export const hasStripeKey = (env) => KEY_SHAPE.test(String(env?.STRIPE_KEY ?? ''));
+export const hasStripeKey = (env) => env?.STRIPE_CHECKOUT_MODE === 'sessions' && KEY_SHAPE.test(String(env?.STRIPE_KEY ?? ''));
 export function linkConfig(env) {
   try { const c = JSON.parse(env?.STRIPE_SHOP_LINKS ?? 'null'); return c?.v === 1 && ['test', 'live'].includes(c.mode) && Array.isArray(c.items) ? c : null; } catch { return null; }
 }

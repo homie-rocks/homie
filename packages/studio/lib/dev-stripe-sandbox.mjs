@@ -36,7 +36,7 @@ export async function startStripeSandbox({ origin, profile }) {
   });
   await new Promise(r=>server.listen(0,'127.0.0.1',r));
   const childEnv={...process.env};for(const k of Object.keys(childEnv))if(k.startsWith('STRIPE_'))delete childEnv[k];
-  const listener=spawn('stripe',['--project-name',profile,'listen','--events','checkout.session.completed,checkout.session.expired,invoice.paid,invoice.payment_failed,customer.subscription.updated,customer.subscription.deleted,charge.refunded,refund.created,refund.updated','--forward-to',`${target.origin}/api/shop/hook`],{env:childEnv,stdio:['ignore','pipe','pipe']});
+  const listener=spawn('stripe',['--project-name',profile,'listen','--events','payment_link.updated,checkout.session.completed,checkout.session.expired,invoice.paid,invoice.payment_failed,customer.subscription.updated,customer.subscription.deleted,charge.refunded,refund.created,refund.updated','--forward-to',`${target.origin}/api/shop/hook`],{env:childEnv,stdio:['ignore','pipe','pipe']});
   const close=async()=>{listener.kill();await new Promise(r=>server.close(r));};
   try {
     const secret=await new Promise((resolve,reject)=>{
@@ -46,6 +46,28 @@ export async function startStripeSandbox({ origin, profile }) {
       listener.on('error',()=>{clearTimeout(timer);reject(new Error('Stripe listener failed'));});
       listener.on('exit',()=>{clearTimeout(timer);reject(new Error('Stripe listener exited: '+redactStripe(buffer).slice(-1200)));});
     });
-    return {bindings:{STRIPE_KEY:key,STRIPE_WEBHOOK_SECRET:secret,STRIPE_API_BASE:`http://127.0.0.1:${server.address().port}`},call,close};
+    return {bindings:{STRIPE_CHECKOUT_MODE: 'sessions', STRIPE_KEY:key,STRIPE_WEBHOOK_SECRET:secret,STRIPE_API_BASE:`http://127.0.0.1:${server.address().port}`},call,close};
   }catch(e){await close();throw e;}
+}
+
+/** Local keyless acceptance: only links and the listener's signing secret reach
+ * the Worker. Object sync uses the approved CLI directly, never an API adapter. */
+export async function startKeylessStripeSandbox({origin,profile,shop,bookingSlots=[],name='keyless-dev'}) {
+  const {syncPaymentLinks}=await import('./shop-links.mjs');
+  const {checkShop}=await import('../worker/shop-rules.mjs');
+  const {formEncode}=await import('../worker/stripe.mjs');
+  const checked=checkShop(shop);
+  if(!checked.ok)throw new Error('Check shop.json before sandbox setup');
+  const sandbox=await startStripeSandbox({origin,profile});
+  let links,endpoint;
+  const api=(method,path,params={},idempotency)=>sandbox.call(method,path,formEncode(params),idempotency);
+  try {
+    const result=await syncPaymentLinks({api,shop:checked.shop,slug:name,site:`https://${name}.example.com`,mode:'test',bookingSlots,
+      w:async(args,opts)=>{if(args[1]==='list')return{code:0,stdout:'[]'};if(args[1]==='bulk')links=JSON.parse(opts.input).STRIPE_SHOP_LINKS;return{code:0};},saveReceipt:r=>{endpoint=r.endpoint??endpoint;}});
+    if(!result.ok)throw Error('Sandbox Payment Link sync failed');
+    // This placeholder destination is disabled; the private local listener delivers events.
+    if(endpoint)await api('POST',`/v1/webhook_endpoints/${endpoint}`,{disabled:true});
+    return {bindings:{STRIPE_CHECKOUT_MODE:'links',STRIPE_SHOP_LINKS:links,STRIPE_WEBHOOK_SECRET:sandbox.bindings.STRIPE_WEBHOOK_SECRET},call:api,
+      close:async()=>{await sandbox.close();}};
+  }catch(e){await sandbox.close();throw e;}
 }

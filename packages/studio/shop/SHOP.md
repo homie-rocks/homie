@@ -108,7 +108,7 @@ If the studio is not deployed yet, approval is retained: deploy with `studio_dep
 `cloudflare_login` first if needed), then rerun connect. Webhooks require the deployed HTTPS address.
 
 **The default is keyless.** Connect syncs one Product and Price for each shop.json item and one
-Payment Link for each paid item. Tip Prices use custom amounts; free orders stay local. It creates
+Payment Link for each paid item, adjustable-quantity menus, and one capacity-limited link per published booking slot. Tip Prices use custom amounts; free orders stay local. It creates
 an account webhook at `<site>/api/shop/hook`, captures its signing secret without displaying it,
 and installs `STRIPE_WEBHOOK_SECRET` and `STRIPE_SHOP_LINKS` through Wrangler stdin. No Stripe
 API key goes into the Worker. Repeat connect after editing shop.json: changed prices get new
@@ -132,7 +132,7 @@ items; failed refunds restore the financial booking. A lost dispute revokes good
 
 | Need | Keyless behavior / fuller connection |
 |---|---|
-| Several different items in one payment | Buy separately. Stripe supports static multi-item links (up to 20 fixed-price lines), but they are not an arbitrary buyer cart. Dynamic carts use the keyed path. |
+| Several different items in one payment | A synced menu opens several fixed-price lines; guests choose quantities on Stripe, including zero. Stripe limits Payment Links to 20 lines; larger catalogues use separate menus. Custom amounts and subscriptions keep separate links. |
 | Reserve an optional spending allowance | Requires keyed Checkout; a reusable public link cannot atomically reserve this studio's local cap. No silent weakening of a configured cap. |
 | Expire an abandoned session | Stripe controls the lifetime; deactivating a link prevents new sessions, not existing sessions. Custom expiry/cancellation requires the keyed path. |
 | Refund in one tap / player self-refund | Owner uses Stripe Dashboard or asks their Stripe-connected AI. Signed events update books. Office shows guidance instead of a paid-order refund button. Free refunds remain local. |
@@ -142,8 +142,7 @@ items; failed refunds restore the financial booking. A lost dispute revokes good
 | Managed Payments | Payment Links support managed_payments.enabled; connect uses it when the studio selects Stripe as seller, subject to Stripe eligibility and terms. |
 | Currency display | Payment Links always enable Stripe Adaptive Pricing. Bookkeeping uses integration currency; presentment details describe what the customer saw. |
 
-An existing `STRIPE_KEY` selects the fuller path automatically. Only if requested, explain:
-“The fuller connection adds combined carts, spending limits, automatic recovery and refunds here.”
+A key alone never selects the fuller path. It requires explicit `STRIPE_CHECKOUT_MODE=sessions` as well as a Worker key. Only if requested, explain: “The optional session connection adds exact app-built carts, spending reservations, expiring holds and runtime refunds.”
 The explicit `shop connect --manual` path remains available, including `--live`, but requires the
 owner's existing Dashboard key step; it does not satisfy one approval. Never choose it automatically.
 Running default connect again saves links, removes the API key, and keeps signed-event fulfillment.
@@ -219,60 +218,90 @@ Create the booking/ticket/gift intention first. `shop.buy('full-tune', 1, undefi
 
 For referrals, use Stripe Connect to split payments or a Stripe-based affiliate service; Homie builds none.
 
-## Capacity bookings and monthly Checkout (0.51 work in progress)
+## Keyless menus, paid seats and monthly giving (0.51.0)
 
-These APIs currently require an existing runtime Checkout connection. The default
-one-approval Payment Links connection still cannot create arbitrary carts or seat
-holds. Do not ask an owner to paste a key. The one-approval runtime integration is
-an unresolved release requirement; the offline fixture below is not proof of it.
+Use `shop connect` by default. All objects belong to the owner's Stripe account and
+are created through its approved CLI session. Homie has no platform key, OAuth
+backend, payment intermediary or cut. A desktop is needed to sync, not to take money.
 
-**A round to table 7** uses one cart and a correlation reference:
+**A round to table 7:** declare fixed-price drinks in shop.json and run connect.
 
 ```ts
-const shop = createShop();
 shop.add('negroni', 2);
 shop.add('spritz', 1);
 await shop.checkout({ reference: 'table-7' });
 ```
 
-Only verified payment emits `order.paid`, with `data.reference === 'table-7'`.
-The authenticated `/api/shop/order?session=...` response also returns the reference.
-Opening Checkout is not payment. References contain no private information.
+The default opens the synced Stripe menu containing those items. The guest chooses
+final quantities **on Stripe**, starting at one for each menu line; the local cart's
+quantities are not prefilled. Adjustable quantity minimum is zero (Stripe prevents
+removing the last item). Payment Links support at most 20 lines. Keyless sync splits catalogues into menus of ten to fit signed invoice snapshots without authenticated pagination. Split larger menus;
+if selected items span menus, the app receives `menu` and should offer separate
+checkouts. Custom amounts cannot be mixed into this menu; offer a separate tip link.
+Stripe invoice creation is enabled for menus (Stripe's invoice pricing applies).
+Only signed paid invoice lines supply `order.paid.data.lines`, including actual
+item, quantity and amount; no quantity is guessed from the total. Incomplete invoice
+snapshots remain pending for recovery rather than granting a guessed order.
 
-**Book a tune and hold the slot.** Declare a `slots` record collection containing
-an integer `capacity`, and a `bookings` collection with
-`"booking": { "slots": "slots", "item": "full-tune" }`. Booking records expose
-`slot`, `quantity`, and `state`; the server supplies those fields. Public roles
-may read these collections; only signed-in staff may write slots or move bookings.
-Staff creates each slot using the normal records API, including its start/end
-fields defined by the app. Then the phone calls:
+The opaque local order ID is `client_reference_id`; its durable reference maps back
+to `table-7` in `order.paid.data.reference` and the buyer's order response. No personal
+data goes in that reference. A return URL is never proof of payment.
 
-```ts
-const result = await shop.book('full-tune', { collection: 'bookings', slot: 'sat-0900' });
-// result.booking is the public tracking record ID; read it through createAppRecords.
-```
-
-The database claims capacity before Checkout. Free bookings confirm immediately.
-Paid bookings confirm on verified payment and release on provider-confirmed
-expiry/failure or a full refund. A cancelled Checkout is expired on Stripe before
-capacity is released. An uncertain network outcome retains the hold; it is never
-sold twice. Staff moves a booking with its current version and `{slot:'sat-1000'}`;
-a full target slot refuses the move. Events are `booking.held`, `.confirmed`,
-`.released`, and `.moved`, alongside ordinary `record.changed` events.
-
-**Give $20 monthly.** A shop item can declare:
+**Book a tune; the seat is held only when paid:** declare a staff-written `slots`
+collection with integer `capacity` and a server-managed `bookings` collection with
+`"booking":{"slots":"slots","item":"full-tune"}`. Publish slot records, then have
+the owner's AI write the complete manifest to `.studio/booking-slots.json` and run
+`shop connect`, or call local MCP `stripe_bookings_sync` with the same `slots` array:
 
 ```json
-{"id":"monthly-gift","kind":"donation","name":"Monthly gift","price":"choose","min":100,"interval":"month","gives":[]}
+[{"app":"tune","collection":"bookings","slots":"slots","slot":"sat-0900","item":"full-tune","capacity":1}]
 ```
 
-`shop.buy('monthly-gift', 1, 2000, {reference:'gift-20'})` opens subscription-mode
-Checkout in a two-decimal currency. Amounts obey the studio's optional min/max.
-Use `subscription.started`, `.renewed`, `.failed`, and `.cancelled` for fulfilment;
-renewals deduplicate by invoice. `POST /api/shop/portal` with `{subscription:id}`
-returns a Stripe portal URL only for the buyer who owns that subscription. Configure
-allowed changes in Stripe's portal settings. Set `giving.receiptText` to the
-organisation's own receipt wording; Homie imposes no charity or tax text.
+Sync after publishing or changing slots. Removed or inactive slots deactivate their
+links. Each link has `restrictions.completed_sessions.limit = capacity`, with one
+fixed service and one seat per checkout. Re-sync preserves Stripe's lifetime completed
+count. Free slots stay local. Never increment capacity just to hide a full-link error.
+Refunds do not decrement Stripe's completed-session counter; the owner's AI must
+review availability and resync explicitly. A changed price should use a new slot;
+do not replace a sold link and accidentally reset its capacity counter.
+
+```ts
+const result = await shop.book('full-tune', {collection:'bookings',slot:'sat-0900'});
+// result.booking is the tracking record ID.
+```
+
+Opening the link creates local `pending` state, best effort. It does **not** block
+other guests. Confirmed payment creates `confirmed`; expiry/failure/refund releases
+the local record. The app must say “Pay to secure your seat,” not promise an exclusive
+unpaid hold. Slot reads expose `record.booking.full`, `available` and `synced` for the
+UI; Stripe's full-link update and verified confirmations make the app show Full.
+Events include `booking.pending`, `.confirmed`, `.released`, `.moved`; free and
+explicit keyed bookings also use `.held`. Staff moves use a versioned `{slot:...}`
+record update; after moves the AI must review and sync the affected Stripe links.
+An explicit keyed session connection retains exclusive expiring unpaid holds.
+
+**Give $20 monthly:** `shop init --giving --currency CAD` includes fixed suggested
+monthly gifts. Declare a recurring item, then run connect:
+
+```json
+{"id":"monthly-gift","kind":"donation","name":"Give $20 monthly","price":2000,"interval":"month","gives":[]}
+```
+
+`shop.buy('monthly-gift',1,undefined,{reference:'gift-20'})` opens a recurring Price
+on a Payment Link (subscription mode). The giver chooses among the preset options.
+Arbitrary custom monthly amounts require the explicitly selected keyed connection;
+never silently request it or ask the person to find/paste a key. One-time custom
+amounts remain keyless. `giving.receiptText` is the owner's receipt wording.
+
+Signed `subscription.started`, `.renewed`, `.failed`, `.cancelled` events drive
+membership and giving. Membership access ends at the paid invoice line's period end;
+failed invoices cannot extend it and cancellation ends access. Unknown Prices grant
+nothing. Keyless portal configuration supports cancellation, payment-method updates
+and invoice history. `shop connect` enables `login_page.enabled` through the CLI API
+and stores Stripe's no-code login URL; **no Dashboard toggle is required**. Givers
+verify their email with Stripe to manage/cancel. The buyer-owned `/api/shop/portal`
+returns this URL. Plan changes require deliberate portal configuration and fulfilment
+mapping; the optional keyed path retains current-provider reconciliation for upgrades.
 
 For offline development, import `startStripeFixture` from the installed toolkit's
 `lib/dev-stripe-fixture.mjs`, start it with `{origin:'http://127.0.0.1:8787'}`, and
@@ -287,22 +316,13 @@ opens Checkout for the selected amount and frequency. A disconnected shop displa
 a disabled preview. No intention record or unverified collected total is created.
 Use the Manage my gifts link for the buyer-owned Stripe portal in the shop.
 
-Membership grants require runtime Stripe reads. Access ends at the paid invoice
-line's period end; a failed renewal does not extend it. Reconciliation reads the
-current subscription, so delayed webhooks cannot restore cancelled/unpaid access.
-Portal changes retain the original financial order snapshot. Replacement grants
-come only from a recognised monthly catalog product, after a paid
-invoice line for that price (including a paid upgrade proration); unknown products grant nothing. Configure portal changes
-accordingly. One-time grants in the same order keep their original duration.
-
-For real sandbox acceptance without copying any API key, import `startStripeSandbox`
-from `lib/dev-stripe-sandbox.mjs` and pass `{origin, profile}` with an explicit
+For real sandbox acceptance without copying any API key, import `startKeylessStripeSandbox`
+from `lib/dev-stripe-sandbox.mjs` and pass `{origin, profile, shop, bookingSlots}` with an explicit
 sandbox CLI profile and loopback studio origin. It drives only that profile's
 Stripe CLI, starts `stripe listen --forward-to` with the required events, and
 returns local dev `bindings` and `close()`. Keep bindings private: the webhook
 signing secret is real even in test mode. Supply them to the local dev harness
-only, never source control or logs. The adapter requires the desktop CLI to stay
-running and is **not a production connection**. It never exports CLI credentials.
+only, never source control or logs. The local webhook forwarding listener needs the desktop; production uses the signed public webhook directly. No API adapter or key is installed in the keyless Worker. It never exports CLI credentials.
 Use Stripe's published CLI test fixtures/tokens to complete Checkout via API;
 never type card details into a form. Stop on an expired profile and ask the owner
 to approve `stripe login --project-name <profile>` once. Stop the adapter and remove

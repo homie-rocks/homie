@@ -1,0 +1,56 @@
+{
+  "profile": "Homie sandbox",
+  "workerApiKey": false,
+  "cart": {
+    "session": "cs_test_b1o3HwyZHf7sPzo60rsiPk7i0oMTqjxBS9qjI1NA7TekcBvOX3IkKQ0odw",
+    "event": {
+      "order": "ord_nXw9zXVzqmx0Qoble9ow",
+      "source": "shop_orders",
+      "amount": 6000,
+      "currency": "cad",
+      "mode": "test",
+      "app": null,
+      "reference": "table-7",
+      "lines": [
+        {
+          "item": "tune",
+          "quantity": 1,
+          "amount": 5000,
+          "total": 5000
+        },
+        {
+          "item": "wax",
+          "quantity": 1,
+          "amount": 1000,
+          "total": 1000
+        }
+      ]
+    }
+  },
+  "booking": {
+    "first": "cs_test_a1DNGkAPTeB2kJvtLJQuwftCRLHWc4GzuzC2DEXEWQQbvjU2OpvyhYblby",
+    "second": "cs_test_a1ZYsshuknE7xJSyuizqSRmXfI0pUzgjmeVEqrgexzNjXidFlmVE8HtL21",
+    "secondRefused": true,
+    "link": "plink_1UQRRQDz5BcOk2Yt0aKEWFqr",
+    "active": false,
+    "restrictions": {
+      "completed_sessions": {
+        "count": 1,
+        "limit": 1
+      }
+    }
+  },
+  "monthly": {
+    "session": "cs_test_a1JPu3CkYyOBk9esgHvZ4buAf2bPr9VVkm3AKl592sQsa08Nw8hAsoUWW9",
+    "subscription": "sub_1UQRS8Dz5BcOk2YtDmQBGuRu",
+    "portal": "https://billing.stripe.com/p/login/test_8x214ndWaejB2bTeAV7g403",
+    "cancelled": true
+  },
+  "clock": {
+    "id": "clock_1UQRSEDz5BcOk2YtttmXbAwE",
+    "subscription": "sub_1UQRSGDz5BcOk2YtuWdgeXJ7",
+    "renewed": true,
+    "failed": true,
+    "cancelled": true
+  }
+}

@@ -63,7 +63,7 @@ export const KEY_PERMISSIONS = Object.freeze([
 ]);
 
 export const SHOP_HOOK_EVENTS = Object.freeze([
-  'invoice.paid', 'invoice.payment_failed', 'customer.subscription.updated', 'customer.subscription.deleted',
+  'payment_link.updated', 'invoice.paid', 'invoice.payment_failed', 'customer.subscription.updated', 'customer.subscription.deleted',
   'checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired',
   'charge.refunded', 'refund.created', 'refund.updated', 'refund.failed', 'charge.dispute.created', 'charge.dispute.closed',
 ]);
@@ -324,7 +324,8 @@ export async function shopConnectManual(root, { fromClipboard = false, clipboard
             const machineNote = ` Machine payments: ${Object.entries(machine.machine).map(([name, enabled]) => `${name}: ${enabled ? 'permission check passed' : machine.reasons[name] ?? 'unavailable'}`).join('; ')}.`;
             finished = true;
             const a = w(['secret', 'put', 'STRIPE_KEY'], { input: `${key}\n` });
-            const b = a.code === 0 ? w(['secret', 'put', 'STRIPE_WEBHOOK_SECRET'], { input: `${hook}\n` }) : { code: 1 };
+            const selected = a.code === 0 ? w(['secret','put','STRIPE_CHECKOUT_MODE'],{input:'sessions\n'}) : {code:1};
+            const b = selected.code === 0 ? w(['secret', 'put', 'STRIPE_WEBHOOK_SECRET'], { input: `${hook}\n` }) : { code: 1 };
             hook = '';
             const readiness = { ...machine, key: createHash('sha256').update(key).digest('hex'), mode: modeOf(key), recurring: recurringReady };
             const c = !paidParts ? b : b.code === 0 ? w(['secret', 'put', 'PURCHASE_PAYMENT_CAPABILITIES'], { input: JSON.stringify(readiness) }) : { code: 1 };

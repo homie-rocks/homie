@@ -17,7 +17,7 @@ for (const compatibilityDate of ['2025-01-01', '2026-06-01']) test(`shop APIs in
       import { migrationNeeded, newOrderId } from './shop-store.mjs';
       export default { async fetch(request, env) {
         const id = await productIdOf('studio', 'item with spaces');
-        const stripe = await stripeCall({ STRIPE_KEY: 'rk_test_' + 'a'.repeat(32) }, 'GET', '/v1/checkout/sessions/test', { expand: ['payment_intent.latest_charge'] }, { timeout: 2000 });
+        const stripe = await stripeCall({ STRIPE_CHECKOUT_MODE: 'sessions', STRIPE_KEY: 'rk_test_' + 'a'.repeat(32) }, 'GET', '/v1/checkout/sessions/test', { expand: ['payment_intent.latest_charge'] }, { timeout: 2000 });
         const moneyEvent = { type: 'refund.failed', created: 2, livemode: false, data: { object: { id: 're_workerd', payment_intent: 'pi_workerd', currency: 'usd', amount: 500, status: 'failed' } } };
         await rememberMoneyEvent(env, moneyEvent);
         await rememberMoneyEvent(env, { ...moneyEvent, type: 'refund.created', created: 1, data: { object: { ...moneyEvent.data.object, status: 'succeeded' } } });
@@ -63,6 +63,7 @@ test('missing and released payments grant once and refund in workerd', { timeout
       import { spentThisMonth, shopDataOf } from './shop-store.mjs';
       const cat = ${JSON.stringify(cat)};
       export default { async fetch(request, env) {
+        env.STRIPE_CHECKOUT_MODE = 'sessions';
         env.STRIPE_KEY = 'rk_test_' + 'a'.repeat(32);
         env.STRIPE_WEBHOOK_SECRET = ${JSON.stringify(secret)};
         const url = new URL(request.url), shop = shopOf(cat), order = url.searchParams.get('order');
@@ -147,7 +148,7 @@ test('50,000 paid orders cost at most three reconciliation rows for an empty buy
             const result = await bound.all(); reads.push({ rows: result.meta.rows_read, returned: result.results.length }); return result;
           } }; } };
         } };
-        await reconcileOrders({ ...env, STRIPE_KEY: 'rk_test_' + 'a'.repeat(32) }, { items: [] }, new URL(request.url).pathname === '/player' ? 'empty' : null);
+        await reconcileOrders({ ...env, STRIPE_CHECKOUT_MODE: 'sessions', STRIPE_KEY: 'rk_test_' + 'a'.repeat(32) }, { items: [] }, new URL(request.url).pathname === '/player' ? 'empty' : null);
         return Response.json(reads);
       } };`,
   } });

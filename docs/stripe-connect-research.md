@@ -1,3 +1,15 @@
+# Current 0.51.0 decision and evidence
+
+The historical runtime-credential investigation below is retained as background,
+not a release prerequisite. 0.51.0 uses owner-created native Payment Links by
+default, with no Homie payment backend or Worker API key. Mixed menus use signed
+invoice snapshots, slots use completed-session limits, monthly presets use recurring
+Prices, and the CLI configures the no-code portal login. See
+`proof/earning/keyless/README.md` and `packages/studio/shop/SHOP.md` for current
+behavior, actual sandbox evidence and limits. Keyed Checkout is explicitly optional.
+
+---
+
 # Stripe connection, round two: a keyless shop
 
 Checked 2026-10-08 against current Stripe documentation, public OAuth discovery and official CLI source.
