@@ -558,7 +558,7 @@ export function sectionsOf(cat) {
   const apps = (cat.games ?? []).some((g) => g.kind === 'app');
   const ownMenu = ['business','cause'].includes(cat.studio?.kind);
   return [
-    ...(cat.site?.pages ?? []).filter(p => /^\/[a-z0-9][a-z0-9._-]*\/$/.test(p) && !['/shop/', '/apps/', '/games/', '/rooms/', '/posts/', '/music/', '/videos/', '/lounge/'].includes(p)).map(p => ({ key: p, href: p, label: p.slice(1, -1).replaceAll('-', ' ').replace(/^./, c => c.toUpperCase()) })),
+    ...(cat.site?.pages ?? []).filter(p => /^\/[a-z0-9][a-z0-9._-]*\/$/.test(p) && !['/shop/', '/apps/', '/games/', '/rooms/', '/posts/', '/music/', '/videos/', '/lounge/'].includes(p)).map(p => ({ key: p, href: p, label: (ownMenu && (cat.games??[]).find(g=>g.kind==='app' && `/${g.id}/`===p)?.name) || p.slice(1, -1).replaceAll('-', ' ').replace(/^./, c => c.toUpperCase()) })),
     cat.shop && { key: 'shop', href: '/shop/', label: cat.shop.giving ? 'Give' : 'Shop' },
     ...((ownMenu ? cat.games ?? [] : []).filter(g=>g.kind==='app' && !(cat.site?.pages??[]).includes(`/${g.id}/`)).map(g=>({key:g.id,href:`/${g.id}/`,label:g.name}))),
     apps && !ownMenu && { key: 'apps', href: '/apps/', label: 'Apps' },

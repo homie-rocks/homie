@@ -223,7 +223,7 @@ export function artToolDefs(ctx, h) {
         const by = a.by === 'person' ? 'person' : 'ai';
         let r; let action;
         try {
-          if (a.pick || a.mix) { action = 'pick'; r = pickDirection(root, game, a.pick ? String(a.pick).toLowerCase() : null, { mixes: a.mix && typeof a.mix === 'object' ? a.mix : {}, manifest }); }
+          if (a.pick || a.mix) { action = 'pick'; r = pickDirection(root, game, a.pick ? String(a.pick).toLowerCase() : null, { mixes: a.mix && typeof a.mix === 'object' ? a.mix : {}, manifest, by }); }
           else if (!a.decision) return fail('name the decision (decision: "style.palette"), or pick a direction (pick: "b")');
           else if (a.lock) { action = 'lock'; r = lockDecision(root, game, a.lock === true ? a.decision : String(a.lock), { by: 'person', words: a.words ?? (by === 'person' ? 'tapped Lock' : null) }); }
           else if (a.unlock && a.value === undefined && a.steer === undefined) { action = 'unlock'; r = unlockDecision(root, game, a.decision, { reason: a.reason ?? null, by: 'person' }); }

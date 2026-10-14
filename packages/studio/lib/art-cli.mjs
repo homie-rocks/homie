@@ -157,7 +157,7 @@ export async function styleCommand(root, sub, positional, flags, { log = () => {
   else if (verb === 'board') { const { styleBoard } = await import('./style-board.mjs'); r = await styleBoard(root, id, { prompt: String(flags.get('prompt') ?? ''), log, library: !flags.has('no-library') }); }
   else if (verb === 'pick') {
     const mixes = Object.fromEntries(list(flags.get('mix')).map((x) => x.split('=')).filter(([k, v]) => k && v));
-    r = pickDirection(root, id, args[1] && !args[1].includes('=') ? args[1] : null, { mixes, manifest: manifest() });
+    r = pickDirection(root, id, args[1] && !args[1].includes('=') ? args[1] : null, { mixes, manifest: manifest(), by: flags.get('by') === 'person' ? 'person' : 'ai' });
   } else if (verb === 'mood') { const { recordMood } = await import('./style-board.mjs'); r = await recordMood(root, id, args[1], resolve(String(flags.get('image') ?? '')), { usd: flags.get('usd') ?? null, receipt: flags.get('receipt') ?? null, model: flags.get('model') ?? null }); }
   else if (verb === 'golden') {
     if (args[1] === 'add') { const { addGolden } = await import('./style-board.mjs'); r = await addGolden(root, id, resolve(String(args[2] ?? flags.get('image') ?? '')), { from: flags.get('from') ?? null }); }

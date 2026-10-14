@@ -49,10 +49,13 @@ test('gathering check-in records contain only the chosen task and status',async 
 
 test('app style starts with illustration and attributes AI refinements to the AI',async t=>{
  const {mkdtempSync,mkdirSync,writeFileSync,rmSync}=await import('node:fs');const {tmpdir}=await import('node:os');const {join}=await import('node:path');
- const {initDecisions,readDecisions,steerDecision}=await import('../lib/decisions.mjs');
+ const {initDecisions,readDecisions,steerDecision,writeDecisions,directionsFor,pickDirection}=await import('../lib/decisions.mjs');
  const root=mkdtempSync(join(tmpdir(),'homie-app-style-'));t.after(()=>rmSync(root,{recursive:true,force:true}));mkdirSync(join(root,'apps/pantry'),{recursive:true});writeFileSync(join(root,'studio.json'),JSON.stringify(cat.studio));writeFileSync(join(root,'apps/pantry/app.json'),JSON.stringify(app));
  initDecisions(root,'pantry');assert.equal(readDecisions(root,'pantry').decisions['style.render'].value,'illustrated');
  const r=steerDecision(root,'pantry','style.palette','warmer',{by:'ai'});assert.equal(r.record.by,'ai');assert.equal(r.record.state,'auto');
+ const doc=readDecisions(root,'pantry');doc.board={directions:directionsFor(root,'pantry').directions};writeDecisions(root,'pantry',doc);
+ const picked=pickDirection(root,'pantry','b',{by:'ai'});assert.ok(picked.changed.length);
+ for(const key of picked.changed){const row=readDecisions(root,'pantry').decisions[key];assert.equal(row.by,'ai');assert.equal(row.state,'auto');}
 });
 
 test('needs follow a payment popup and retain the original phone',async t=>{
@@ -84,4 +87,10 @@ test('app arrival and wall captions describe opening the app',async t=>{
  await p.setContent(await watchPage(cat,app,{room:'pub-5'}).text());
  assert.equal(await p.$eval('[data-room-label]',e=>e.innerText),'Meal table');
  assert.doesNotMatch(await p.$eval('body',e=>e.innerText),/Room 5|Quick play|people here|Play/);
+});
+
+test('an authored app landing keeps the app name in the cause menu',async t=>{
+ const b=await browser(t),p=await b.newPage();await p.setContent(header({...cat,site:{pages:['/about/','/pantry/']}}));
+ assert.equal(await p.$eval('nav a[href="/pantry/"]',e=>e.innerText),'Meal table');
+ assert.equal(await p.$$eval('nav a[href="/pantry/"]',es=>es.length),1);
 });

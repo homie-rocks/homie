@@ -48,3 +48,19 @@ test('a wait reacquires a rebuilt frame and retains the named condition',async()
  assert.equal(result,'paid');assert.equal(ready,1);
  await assert.rejects(waitInApp(surface,'#booking contains paid',async()=>{throw Error('Waiting failed: 30000ms exceeded');}),/tablet.*#booking contains paid/);
 });
+
+test('documented app field names accept underscores and reject uppercase starts',async()=>{
+ const {appProblems,recordProblem}=await import('../worker/app-format.mjs');const {readFileSync}=await import('node:fs');
+ const app=JSON.parse(readFileSync(new URL('../app-starters/gathering/app.json',import.meta.url)));app.records.collections.entries.fields.gift_reference={type:'string'};
+ assert.deepEqual(appProblems(app),[]);assert.equal(recordProblem(app.records.collections.entries,{choice:'Packing',status:'Checked in',gift_reference:'table'}),null);
+ assert.ok(recordProblem(app.records.collections.entries,{choice:'Packing',status:'Checked in',Gift_reference:'table'}));
+});
+
+test('documented shop.catalog executes the shipped helper and returns all catalog pages',async()=>{
+ const {readFileSync}=await import('node:fs');const {transform}=await import('esbuild');const {runInNewContext}=await import('node:vm');
+ const code=(await transform(readFileSync(new URL('../shop/shop.ts',import.meta.url),'utf8'),{loader:'ts',format:'cjs'})).code;
+ let receive;const module={exports:{}};const calls=[];
+ const target={postMessage:m=>{calls.push(m);receive({source:target,data:{t:'homie-shop',q:m.q,ok:true,open:true,currency:'cad',currencyScale:100,items:m.op==='catalog'?[{id:m.cursor?'monthly':'once'}]:[],nextCursor:m.op==='catalog'&&!m.cursor?'page-two':null}});}};
+ runInNewContext(code,{module,exports:module.exports,addEventListener:(type,fn)=>{receive=fn;},setTimeout:()=>{}});
+ const shop=module.exports.createShop({target});const catalog=await shop.catalog();assert.equal(catalog.open,true);assert.equal(catalog.currency,'cad');assert.deepEqual(Array.from(catalog.items,x=>x.id),['once','monthly']);assert.equal(calls.filter(c=>c.op==='catalog').length,2);
+});

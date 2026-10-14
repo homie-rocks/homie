@@ -766,7 +766,7 @@ export function directionsFor(root, id, { prompt = '' } = {}) {
 }
 
 /** Pick a direction (all its style values) or Mix rows from several: { 'style.palette': 'b', … }. By the person. */
-export function pickDirection(root, id, choice, { mixes = {}, manifest = null } = {}) {
+export function pickDirection(root, id, choice, { mixes = {}, manifest = null, by: actor = 'person' } = {}) {
   const doc = readDecisions(root, id);
   if (!doc?.board?.directions?.length) throw new Error(`games/${id} has no style board yet: homie-studio style board ${id}`);
   const by = Object.fromEntries(doc.board.directions.map((d) => [d.id, d]));
@@ -782,7 +782,7 @@ export function pickDirection(root, id, choice, { mixes = {}, manifest = null } 
     const value = from.values[did];
     if (value === undefined || JSON.stringify(rec.value) === JSON.stringify(value)) continue;
     if (rec.state === 'locked') { refused.push(did); continue; }
-    change(rec, { value, label: labelOf(did, value), why: `the person picked direction ${from.id.toUpperCase()} on the style board`, state: rec.state === 'pinned' ? 'pinned' : 'steered' }, { by: 'person' });
+    change(rec, { value, label: labelOf(did, value), why: `${actor === 'person' ? 'the person' : 'the AI'} picked direction ${from.id.toUpperCase()} on the style board`, state: rec.state === 'pinned' ? 'pinned' : actor === 'person' ? 'steered' : rec.state }, { by: actor });
     changed.push(did);
   }
   doc.board.chosen = choice ?? doc.board.chosen ?? null;
