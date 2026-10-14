@@ -2641,3 +2641,23 @@ test('explicit correction intent overrides an opposite stale replay velocity',as
  t.diagnostic(JSON.stringify({worstReverse}));
  assert.ok(worstReverse<.01,`stale velocity overrode explicit intent by ${worstReverse} metres`);
 });
+
+for(const respawn of [false,true])test(`a reconnect after an outage ${respawn?'draws a placement the game names at once':'draws the own box runner continuously to where the server moved it'}`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
+ const clock=virtualTime(t),r=rig(L,compiled,false,80,80),asked=[],a=openRoom({respawned:(before,after)=>{asked.push([before.pos.x,after.pos.x]);return respawn;},net:{config:cfg('Outage'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);
+ a.input({ax:1});await clock.wait(200);
+ let p=a.me.pos,worst=0,at=null,back=0;
+ const step=()=>{const q=a.me?.pos;if(!q)return;const d=Math.hypot(q.x-p.x,q.y-p.y);if(d>worst){worst=d;at={from:p,to:q,connected:a.net.connected};}p=q;};
+ // The server still has the key held; this browser lets go while it cannot say so.
+ r.network.up=false;r.sockets[0].cut();a.input({ax:0});
+ for(let i=0;i<120;i++){await clock.wait(16);step();}
+ r.network.up=true;
+ for(let i=0;i<2000;i++){await clock.wait(16);step();if(a.net.connected&&!back)back=i;}
+ t.diagnostic(JSON.stringify({worst,at,back,end:p}));
+ assert.ok(back>0,'the view reconnected');
+ assert.equal(asked.length,1,'the game is asked once about the returned revision');
+ if(respawn){assert.ok(worst>.8,`a named placement is drawn at once, not glided (${worst})`);return;}
+ // A return is not a placement: the body glides by about a frame's travel plus blend, never cut by its full error.
+ assert.ok(worst<.5,`the reconnect cut the runner ${worst} metres in one frame`);
+});

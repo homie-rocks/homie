@@ -111,6 +111,12 @@ export interface OpenRoomOptions {
   screenBasis?: PortProbeOptions['basis'];
   /** Horizontal intent for box-bodied 2D visual corrections: -1 left, 0 neutral, +1 right. Does not affect simulation. */
   correctionDirection?: (input: Readonly<Record<string, unknown>>, velocity: Vec3) => number;
+  /**
+   * After this browser's connection comes back, the server hands the own body back where it has it (a new placement
+   * revision). A box-bodied 2D runner is then drawn on from where it was shown, not cut across. Say here when that
+   * revision is a real placement made while the player was away (a respawn, a new round): it is then drawn at once.
+   */
+  respawned?: (before: Entity, after: Entity) => boolean;
   /** Tests: a clock in ms and a way to run without timers. */
   now?: () => number;
   timers?: boolean;
@@ -227,6 +233,8 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   /* ---------------------------------------------------------------- frames in */
 
   const delivery = snapshotDecoder();
+  /** Until when a revision of the own body counts as the server handing it back after a reconnect. */
+  let returningUntil = 0;
   let unpackedRows = new Map<string, {wire: unknown; value: Unpacked}>();
   const sameRow = (a: unknown, b: unknown): boolean => {
     if (a === b) return true;
@@ -758,6 +766,15 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       const row = f.rows.find((x) => x[0] === seat);
       if(changedEpoch)applications.clear();
       if(row?.[6]===471){for(let i=7;i+1<row.length;i+=2)applications.set(row[i],row[i+1]);while(applications.size>128)applications.delete(applications.keys().next().value!);}
+      // A return hands the body back at the server's pose with a new revision. It is the same body, still on the
+      // screen: keep drawing it from where it is shown unless the game says it was really placed meanwhile.
+      const prior = held2.at(-2)?.ents.get(me.id) ?? null;
+      if (placed && !changedEpoch && returningUntil > clock() && mine?.id === me.id && mine.r !== me.r && presented?.id === me.id && presented.r === mine.r) {
+        let respawn = false;
+        if (opts.respawned && prior) { try { respawn = Boolean(opts.respawned(entityOf(prior, true, false), entityOf(me, true, false))); } catch (err) { console.warn('[room] respawned', err); } }
+        if (!respawn) { presented.r = me.r; presented.at = clock(); }
+        returningUntil = 0;
+      }
       if (placed || !base) {
         adopt(me); rebase(f.k, changedEpoch ? 'epoch' : 'placement');
         if (placed) emit('placed', entityOf(me, true));
@@ -920,7 +937,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   net.on('snapshot', onSnapshot);
   net.on('role', (e) => { if (e.snap) onSnapshot(e.snap); if (net.offline && !net.rulesHosting) setStatus(net.closedWhy ? 'closed' : 'offline'); });
   net.on('link', (e) => {
-    if (e.state === 'online') { base = null; if (status !== 'playing') setStatus('connecting'); } else if (e.state === 'closed') setStatus('closed'); else if (e.state === 'alone' || e.state === 'offline') setStatus('offline');
+    if (e.state === 'online') { returningUntil = clock() + 3000; base = null; if (status !== 'playing') setStatus('connecting'); } else if (e.state === 'closed') setStatus('closed'); else if (e.state === 'alone' || e.state === 'offline') setStatus('offline');
   });
   net.on('round', (r) => { if (r.results) { results = r.results; if (round) { round = { ...round, results }; emit('round', roundNow()); } } });
   net.on('event', (e) => {

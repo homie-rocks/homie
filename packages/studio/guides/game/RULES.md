@@ -1462,3 +1462,10 @@ allows convergence in either direction. Actual predicted braking against a newly
 
 After a delayed render, box-bodied 2D presentation spends at most 1.4 body widths per drawn frame,
 then continues toward prediction. This affects drawing only; an explicit placement remains immediate.
+
+When a player's connection comes back, the server hands the body back where it has it, with a new placement
+revision. Within three seconds of the link coming back online, box-bodied 2D presentation treats that revision as the
+same body and draws on from where it was shown, gliding and routing around solids as for any correction. A body that
+was really placed while the player was away (a respawn, a new round) should still be drawn at once: say so with
+`openRoom({ respawned: (before, after) => after.diedAt !== before.diedAt })`, where `before` and `after` are the own
+body as the server last had it before and after the outage.
