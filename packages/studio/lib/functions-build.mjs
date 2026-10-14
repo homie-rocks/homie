@@ -40,7 +40,7 @@ export async function buildFunctions(root,esbuild,{log=()=>{}}={}) {
   if(existsSync(worker)) {let text=readFileSync(worker,'utf8');if(!text.includes('useFunctions(')){text+="\nimport { useFunctions } from '@homie-rocks/studio/worker';\nuseFunctions(async () => (await import('./functions/index.mjs')).default);\n";writeFileSync(worker,text);}}
   writeFileSync(join(dir,'declarations.json'),JSON.stringify(definitions.map(({name,event,schedule,replay})=>({name,event,schedule,replay})),null,2)+'\n');
   (await import('./worker-config.mjs')).refreshWorkerConfig(root);
-  const config=JSON.parse(readFileSync(configPath(root),'utf8').replace(/^\s*\/\/.*$/gm,''));
+  const config=existsSync(configPath(root))?JSON.parse(readFileSync(configPath(root),'utf8').replace(/^\s*\/\/.*$/gm,'')):{};
   for(const status of scheduleStatus(definitions,config.triggers?.crons??[]))log(`Function ${status.function}: ${status.schedule} UTC; ${status.status}; next due ${status.nextDue??'none'}`);
   if(definitions.length)log(`Function cron triggers to install on deploy: ${(config.triggers?.crons??[]).join('; ')||'none'}`);
   return definitions;
