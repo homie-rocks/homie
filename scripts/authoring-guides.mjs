@@ -4,14 +4,14 @@ import {readFileSync,writeFileSync,mkdirSync,readdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {join,dirname} from 'node:path';
 const root=join(dirname(fileURLToPath(import.meta.url)),'..');
-for (const topic of ['game', 'app', 'parts', 'studio-setup', 'shop']) {
+for (const topic of ['game', 'app', 'plan', 'playtest', 'style', 'art', 'models', 'sound', 'music', 'parts', 'studio-setup', 'shop']) {
 const source=join(root,'plugins/homie/skills',topic),out=join(root,'packages/studio/guides',topic);
 mkdirSync(out,{recursive:true});
-for(const name of readdirSync(source).filter(n=>n.endsWith('.md'))) {
+for(const name of readdirSync(source, {recursive:true}).filter(n=> /\.(md|mjs|json)$/.test(n))) {
   const text=readFileSync(join(source,name),'utf8'),target=join(out,name);
   if(process.argv.includes('--check')) {
     if(readFileSync(target,'utf8')!==text)throw new Error(`stale npm guide ${name}: node scripts/authoring-guides.mjs`);
-  } else writeFileSync(target,text);
+  } else { mkdirSync(dirname(target), {recursive:true}); writeFileSync(target,text); }
 }
 
 }

@@ -922,7 +922,7 @@ export function toolDefs(ctx, avail = {}) {
           if (ctx.install) { const job = runningJobs(root).find((j) => j.label.startsWith('npm install')) ?? installJob(root); install = ` Dependencies are installing (job ${job.id}); wait for studio_job.`; }
           else install = ' Run studio_install for its engine dependencies.';
         }
-        return ok(`apps/${a.id} is ready.${install} Build, dev --lan, then check. Follow the app skill: one screen, roles and parts.`, { kind: 'app', ...r.result });
+        return ok(`apps/${a.id} plumbing is ready.${install} Read the app and plan guides. Capture the person’s dream in apps/${a.id}/CODEX.md, design their scene with engines, style from their words, parts_find and media. Build it; fix failures without flattening. Check and playtest each Codex need with wall and phone evidence.`, { kind: 'app', ...r.result });
       },
     },
     {
@@ -979,25 +979,26 @@ export function toolDefs(ctx, avail = {}) {
       },
     },
     {
-      name: 'game_plan', title: 'Plan a game (its Game Codex)',
+      name: 'game_plan', title: 'Plan a game or app (its Codex)',
       description: 'Step 4: start the game\'s Game Codex (games/<id>/CODEX.md, every section) and record sensible defaults from the request for genre, style, devices, rooms, art, sound and scope. Never route engineering or design questions to the person. A game is planned before it is made: with no game <id> yet, this starts its folder with only the codex. Fill CODEX.md from their request and your defaults in one call (file_write of the whole file, or one file_edit with an edits list), then game_codex shows it. While planning, run `parts find` (the parts_find tool) for each system the game needs, so the plan starts from pieces of existing games and the @homie-rocks/* packages rather than from nothing; the codex\'s Built from section records what was found.',
-      inputSchema: { type: 'object', properties: { id: str('The game\'s id (lowercase, digits, hyphens)'), name: str('Its name, when the game is not made yet'), interview: { type: 'boolean', description: 'Only when the person explicitly requests a planning conversation' }, ...STUDIO_ARG }, required: ['id'] },
+      inputSchema: { type: 'object', properties: { id: str('The game\'s id (lowercase, digits, hyphens)'), name: str('Its name, when the game is not made yet'), kind: { type: 'string', enum: ['game', 'app'], description: 'App plans use apps/<id>/CODEX.md with the person’s scene, people, offers and needs' }, interview: { type: 'boolean', description: 'Only when the person explicitly requests a planning conversation' }, ...STUDIO_ARG }, required: ['id'] },
       annotations: { title: 'Plan a game', ...RW },
       run: async (a) => {
         const root = ctx.root(a.studio);
-        const file = join(root, 'games', String(a.id), 'CODEX.md');
+        const folder = a.kind === 'app' || existsSync(join(root, 'apps', String(a.id))) ? 'apps' : 'games';
+        const file = join(root, folder, String(a.id), 'CODEX.md');
         let made = null;
         if (!existsSync(file)) {
-          made = newCodex(root, String(a.id), { name: a.name ?? null });
+          made = newCodex(root, String(a.id), { name: a.name ?? null, kind: folder === 'apps' ? 'app' : 'game' });
           if (!made.ok) return fail(made.why);
         }
         const guide = a.interview === true && ctx.skillsDir && existsSync(join(ctx.skillsDir, 'plan', 'references', 'INTERVIEW.md')) ? readFileSync(join(ctx.skillsDir, 'plan', 'references', 'INTERVIEW.md'), 'utf8') : null;
         return ok([
-          made ? `Wrote games/${a.id}/CODEX.md (every section${made.planned ? '; the game is planned here before it is made' : ''}).` : `games/${a.id}/CODEX.md is there already: change it, never replace it.`,
-          'From the request and sensible defaults, fill CODEX.md in one call, then show it with game_codex and continue building. New games are rules plus view with room.host server; read the game guide and RULES.md. Choose phone and computer controls, a small first version, local sound and CC0 art. Infer persistent progress from the premise. No interview unless the person explicitly asks to plan together; no engineering or design questions.',
+          made ? `Wrote ${folder}/${a.id}/CODEX.md (every section${made.planned ? '; the game is planned here before it is made' : ''}).` : `${folder}/${a.id}/CODEX.md is there already: change it, never replace it.`,
+          folder === 'apps' ? 'Fill Their words, Scene, People and surfaces, Offers and executable Needs from the person’s request. Use the app guide; starter plumbing is not their scene. Show with game_codex, build and prove every need on wall and phone.' : 'From the request and sensible defaults, fill CODEX.md in one call, then show it with game_codex and continue building. New games are rules plus view with room.host server; read the game guide and RULES.md. Choose phone and computer controls, a small first version, local sound and CC0 art. Infer persistent progress from the premise. No interview unless the person explicitly asks to plan together; no engineering or design questions.',
           '', PARTS_FIRST,
           ...(guide ? ['', 'Optional reference for a person who explicitly requests an interview:', guide] : []),
-        ].join('\n'), { kind: 'plan', id: a.id, file: `games/${a.id}/CODEX.md`, created: Boolean(made) });
+        ].join('\n'), { kind: 'plan', id: a.id, file: `${folder}/${a.id}/CODEX.md`, created: Boolean(made) });
       },
     },
     {

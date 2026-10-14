@@ -3544,7 +3544,7 @@ test('customer purchase rates are opt-in with no implicit shop limits',()=>{
 
 test('an app checkout carries its booking reference to the durable paid event', async () => {
   const s = await site();
-  for (const file of ['0014_studio_apps.sql','0015_purchases.sql','0016_purchase_facts.sql','0017_studio_mcp.sql','0018_studio_functions.sql','0019_function_cursors.sql','0020_function_meta.sql']) {
+  for (const file of ['0014_studio_apps.sql','0015_purchases.sql','0016_purchase_facts.sql','0017_studio_mcp.sql','0018_studio_functions.sql','0019_function_cursors.sql','0020_function_meta.sql','0021_app_payment_reference.sql']) {
     s.DB.sql.exec(readFileSync(join(s.dir, 'site/migrations', file), 'utf8'));
   }
   s.DB.sql.exec("INSERT INTO function_subscriptions(name,type,started) VALUES('booking-paid','order.paid',0)");

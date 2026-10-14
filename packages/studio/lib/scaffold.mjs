@@ -1,4 +1,4 @@
-import { FUNCTIONS_META_MIGRATION, FUNCTIONS_META_MIGRATION_FILE, FUNCTIONS_MIGRATION, FUNCTIONS_MIGRATION_FILE, FUNCTIONS_CURSOR_MIGRATION, FUNCTIONS_CURSOR_MIGRATION_FILE } from '../worker/functions-schema.mjs';
+import { FUNCTIONS_REFERENCE_MIGRATION, FUNCTIONS_REFERENCE_MIGRATION_FILE, FUNCTIONS_META_MIGRATION, FUNCTIONS_META_MIGRATION_FILE, FUNCTIONS_MIGRATION, FUNCTIONS_MIGRATION_FILE, FUNCTIONS_CURSOR_MIGRATION, FUNCTIONS_CURSOR_MIGRATION_FILE } from '../worker/functions-schema.mjs';
 import { MCP_MIGRATION, MCP_MIGRATION_FILE } from '../worker/mcp-store.mjs';
 import { APPS_MIGRATION, APPS_MIGRATION_FILE } from '../worker/app-records.mjs';
 import { PURCHASE_MIGRATION, PURCHASE_MIGRATION_FILE, PURCHASE_STATE, PURCHASE_STATE_FILE } from '../worker/purchase-schema.mjs';
@@ -117,7 +117,7 @@ export function agentsMd({ name, slug, kind = 'game' }) {
 
 This is **${name}** (\`${slug}\`), a ${kind === 'cause' ? 'cause' : 'business'} studio. Its apps, pages and shop run on its own Cloudflare account.
 
-Read \`node_modules/@homie-rocks/studio/guides/app/SKILL.md\` first. Proceed from the owner's request through building and checking; ask for an interview only when requested or when essential information is missing.
+Read \`node_modules/@homie-rocks/studio/guides/app/SKILL.md\` and the shared \`guides/plan/SKILL.md\` first. Capture the owner’s exact dream, scene, people, offers and demonstrable needs in \`apps/<id>/CODEX.md\` (\`codex new <id> --kind app\`). A starter is plumbing, never the deliverable. Build their scene with the engine packages, style from their words, parts_find and appropriate art/models/sound/music. Fix build failures without flattening the scene. End with every Codex need shown on wall and phone and judged through the playtest guide. Proceed from the owner's request through building and checking; ask for an interview only when requested or when essential information is missing.
 
 - \`apps/<id>/app.json\` defines the app's words, roles, records and surfaces; \`src/view.ts\` draws it.
 - \`site/pages/<path>/index.html\` adds a page and a header link. A page at an app's id replaces its landing, while \`/<id>/open\` and \`/<id>/tv\` remain the phone and wall entrances.
@@ -172,6 +172,8 @@ Cloudflare creates DNS and TLS during deploy with the existing sign-in.
 
 
 ## Apps: one screen, roles and parts
+
+Plan apps with the same Codex mechanism as games: \`codex new <id> --kind app\` writes \`apps/<id>/CODEX.md\`. Read the packaged plan, app and playtest guides. Preserve the person’s words, scene, people, offers and testable needs; build that scene with engines, style, parts and media, then prove each need on wall and phone. Starters are plumbing, not completion.
 
 An app lives in \`apps/<id>/app.json\` and \`src/\`. Make one with \`homie-studio app new <id>\` (or \`app_make\`). Use the Homie plugin's \`app\` skill for businesses, venues, causes and customer apps. No game demo, rounds, scores, bots or mandatory fun: build what the person needs with the fewest human steps.
 
@@ -822,6 +824,7 @@ export { default, Table, Lobby, Gate, Concentrator } from '@homie-rocks/studio/w
     [`site/migrations/${FUNCTIONS_MIGRATION_FILE}`]: FUNCTIONS_MIGRATION,
     [`site/migrations/${FUNCTIONS_CURSOR_MIGRATION_FILE}`]: FUNCTIONS_CURSOR_MIGRATION,
     [`site/migrations/${FUNCTIONS_META_MIGRATION_FILE}`]: FUNCTIONS_META_MIGRATION,
+    [`site/migrations/${FUNCTIONS_REFERENCE_MIGRATION_FILE}`]: FUNCTIONS_REFERENCE_MIGRATION,
     [`site/migrations/${LOUNGE_MIGRATION_FILE}`]: LOUNGE_MIGRATION,
     'wrangler.jsonc': wranglerConfig({ worker, name, d1: studio.cloudflare.d1, r2: studio.cloudflare.r2, layout: 'root' }),
     '.claude/skills/.gitkeep': '',
@@ -993,6 +996,11 @@ function ensurePartsStateMigration(root) {
   return `site/migrations/${PURCHASE_STATE_FILE}`;
 }
 
+function ensureFunctionReference(root) {
+  const file=join(root,'site','migrations',FUNCTIONS_REFERENCE_MIGRATION_FILE);
+  if(existsSync(file))return null;
+  mkdirSync(dirname(file),{recursive:true});writeFileSync(file,FUNCTIONS_REFERENCE_MIGRATION);return `site/migrations/${FUNCTIONS_REFERENCE_MIGRATION_FILE}`;
+}
 function ensureFunctionMeta(root) {
   const file=join(root,'site','migrations',FUNCTIONS_META_MIGRATION_FILE);
   if(existsSync(file))return null;
@@ -1014,7 +1022,7 @@ function ensureMcpMigration(root) {
   mkdirSync(dirname(file),{recursive:true});writeFileSync(file,MCP_MIGRATION);return `site/migrations/${MCP_MIGRATION_FILE}`;
 }
 export function ensureMigrations(root) {
-  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopStatements(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root)].filter(Boolean);
+  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopStatements(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root), ensureFunctionReference(root)].filter(Boolean);
 }
 
 /** What a migration file the template added is for, in a few words (deploy and dev say it). */
@@ -1079,9 +1087,9 @@ export function newStudio(folder, { name, homie, slug: askedSlug, install = true
   const q = JSON.stringify(realpathSync(dir));
   return { ok: true, command: 'new', dir: realpathSync(dir), name, slug, wrote, git, installed, studio: STUDIO_VERSION, next: kind !== 'game' ? [
     `cd ${q}`,
-    'Read the app guide. Proceed from the request through build and checks without waiting unless the person asks for an interview.',
+    'Read the app and shared plan guides. Create apps/<id>/CODEX.md with codex new <id> --kind app; capture their words, scene, people, offers and testable needs. Proceed without an engineering interview.',
     'npx --no-install homie-studio app new <id> --from welcome --name "<Name>"',
-    'npm install && npm run build; npm run dev (use the printed address)',
+    'Starter = plumbing only. Install dependencies, style init from their words, parts find, design and build their living scene; repair failures without flattening it. npm run build; npm run dev (use the printed address)',
     'npx --no-install homie-studio check <id> --url <printed address> --shots .checks',
     'The phone opens /<id>/open; the wall /<id>/tv. Publish when requested.',
   ] : [

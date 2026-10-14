@@ -10,13 +10,115 @@ An app is **one screen, its roles, and its parts**. The screen transforms with t
 
 Read the person's brief and existing `apps/<id>/` first. Choose sensible engineering defaults from the brief; never ask the person how to implement shared state. A business or cause needs no game demo, mandatory entertainment, invented customers, scores or rounds. Never impose a shop, directory listing, sign-in for public visitors, or paid media. Make the fewest human steps possible; run commands yourself.
 
+## The person's dream is the brief
+
+Before scaffolding the app, read the shared `plan` skill. Run `codex new <id> --kind app --name "<Name>"` and fill `apps/<id>/CODEX.md` from their request. This is the same Codex mechanism as games, with the sections an app needs. Draw its page with `codex <id>`. Keep it open as the person's way to steer the work. A request to decide and continue authorizes you to make sensible decisions; do not wait for approval of a plan they did not ask to approve.
+
+Capture these before implementation:
+
+- **Their words:** quote the request, including its scene and emotional intent. Do not replace “my skis moving through the workshop” with “a kanban dashboard.”
+- **Scene:** describe walking into the place. What occupies the wall? What moves, arrives, fills or lights up? What can someone understand from across the room? What feels different about this place?
+- **People and surfaces:** owner, staff, customer, visitor, volunteer or donor as appropriate. For each: what they need to accomplish and where. Include the person who arrives with no account and the person returning to their own work.
+- **Offers:** names, prices, currency, once/monthly, what is included, and what purchase or gift pays for. Preserve “from” prices; a base repair estimate is not a fixed final charge. Record assumptions plainly.
+- **Needs:** short statements that can be shown true or false on a real wall and phone. Give each a stable ID. A request to book, follow, give monthly or log a send is a separate need. The app existing is not a need.
+
+The AI chooses records, room structure, packages, camera, interaction, animation and build strategy. Never interview a nontechnical owner about hosting, databases, engines or synchronization. Ask only for indispensable real-world information; continue independent work. If a request names their *actual* place and there is no layout/photo, build an editable, clearly labelled provisional layout and report that exact need as partly met until it is supplied. Never invent a real floor plan and call it actual.
+
+## Turn the work into a living scene
+
+A starter is plumbing: role permissions, records, room connection and a real check action. Nobody is commissioning the starter. Choose the closest plumbing, install its reported dependencies, then replace its scene and workflow with the Codex. A starter painted in brand colours is not completion.
+
+Design a spatial or pictorial model of the business process. Make the things the owner cares about the largest objects, not equal-sized cards with labels. A service has physical objects, locations and transitions; a cause has a visible shared outcome; a venue has an actual place and people doing things there. Stages belong in the scene as destinations, work areas or changes to the objects. They are not automatically columns. Compose the wall first in a sketch, then implement a useful phone view of the same world.
+
+For example, a workshop may have recognisable skis and snowboards riding a rail between a wax bench, an edge station and a repair press. Wax can shine, repair marks can disappear, and completed gear can settle into a collection rack. A kitchen may lay places at a long communal table as verified gifts fund meals; an unconfirmed pledge must look distinct. A climbing wall may carry routes in their real positions; completion switches their lighting, while a climber's send briefly traces that route. These are examples of translating verbs into pictures, not new templates to copy.
+
+Use scene geometry, illustration or layered SVG when it serves the request; 3D is available, not compulsory. A beautifully composed 2D place can work. A flat board of boxes with counters does not satisfy a request for things moving through a place. Avoid generic dashboards, stock admin layouts and navigation as the primary experience. Native controls, readable text and clear labels remain essential.
+
+Before writing scene components:
+
+1. Run `style init <id> --prompt "<the person's own scene words>"`. Record the direction in the Codex: composition, camera, materials, colour, typography and motion. Use the same style machinery as games, not the starter's default theme.
+2. Inspect the installed `@homie-rocks/*` packages for mechanisms. `geom`, `props`, `render`, `camera`, `postfx` and `fx` can make the place; `input`, `ui`, `ui-world`, `device`, `audio` and `loop` make it usable. Read the package exports and examples rather than guessing imports. Install every dependency reported by the starter or parts before building.
+3. Search `parts_find` for each meaningful piece; shell equivalent: `homie-studio parts find "<piece>"`. Read its contract, source studio and licence. Add fitting pieces with `part_add` / `parts add`; write the missing parts yourself. The example studios share real app pieces: search for venue, workshop, giving, arrivals, scene, queue and sound, not just game characters. If local example studios are available, read their shared `parts/` and manifests without modifying the source studios. A failed catalogue request is not proof that nothing exists.
+4. Use the art/models/sound/music skills with connected providers and an authorized budget. Generate distinctive assets when useful. If no provider is connected, continue with original geometry, locally drawn SVG, CC0 assets and local synthesized sound. Report the means honestly. Provider absence never justifies replacing the scene with a board.
+5. Record packages, parts with attribution, original work and media routes under **Built from**. Keep costs and provenance visible.
+
+Make a small vertical slice before dressing every corner: a customer performs one real action; its durable record appears as a recognisable object in the wall scene; staff can advance it; the customer's own view updates. Then complete the remaining needs. If an engine import, type check or function build fails, repair the dependency or source error. Do not remove the designed scene, permissions or durable workflow to make a build pass. Diagnose the reported error, read the package contract, and build again.
+
+## Records are the scene's truth
+
+Write a mapping from each durable entity to its visual representation. Use a stable record ID as the object key. Its stage, progress, position, amount or completion time drives the picture; an animation interpolates from the last confirmed state to the next. Reloading reconstructs the same scene from records. A customer action shows a pending acknowledgement immediately, then confirmed state or an actionable failure. Do not animate a successful booking, paid gift or staff transition before it is confirmed.
+
+Choose a coherent transition vocabulary for that place. An arrival enters the scene, stage changes move an object, completion changes material/light, and removal retires it. Use elapsed time for local easing, not frame-count increments. A late subscriber goes directly to current truth rather than replaying every historical event. Prevent a reconnect from duplicating objects or counting the same gift twice. Reduced motion preserves the information with a quiet state change.
+
+Separate records by who may read them. Public wall records contain safe display information and stable IDs. Contact details, private booking notes and staff-only operations belong in protected collections. UI filtering is not access control. Never put a customer email or private token on the wall. Read `apps/APPS.md` for collection permissions and versioned updates. Do not weaken permissions to make a local staff demo easy.
+
+Keep scene state derived from the records service. Rooms may relay transient effects and live presence, but a room emptying must not erase bookings, gifts, routes or shifts. On a version conflict, reload the record and show the current state; do not silently overwrite another staff member. Validate allowed transitions and meaningful inputs. No invented capacity guarantee: a booking request is a request unless an implemented reservation system confirms capacity.
+
+## Let each person find their own thing
+
+On submission, give the customer a stable receipt or tracking URL for the exact created record. Use `randomId`, `appLink` and `qrSvg` from the links package. Keep the link on the success screen, with an explicit copy/save action and meaningful short reference. Persist their own reference locally so reloads return to it; also allow entering a reference or opening the saved link. Another phone using that link should follow the same public-safe item. Never make the customer search a wall full of other people's work to discover whether their booking succeeded.
+
+A public tracking ID identifies a public-safe record; it is not an authorization secret. Private customer information needs authenticated access. Use clean public URLs, never staff links. Test returning later, unknown reference, an empty workshop, a failed submission and a reconnect. Clearly distinguish pending payment, paid, in progress and ready to collect where those states matter.
+
+Design each surface intentionally:
+
+| Surface | The job of the scene and controls |
+| --- | --- |
+| Wall | Legible across the room; the whole place and its changing work; little prose; no personal data; no dependence on hovering or tapping; a clear QR to the public phone action. |
+| Phone | A close view of *my* booking, gift, route or shift; one obvious next action, native fields, receipt and return link; responsive portrait and landscape. |
+| Staff tablet | Operational controls at the thing being worked on, current record/version, failure and conflict recovery; authenticated privilege. |
+| Kiosk | Large touch targets, public actions, a clear finish/reset, no previous person's private details left behind. |
+
+These can share a renderer and records while changing framing and controls. Do not shrink the wall to a phone or show staff controls to customers. Test touch, keyboard focus, text contrast, 44 px targets and reduced motion. A QR is only useful if its address is reachable from the phone: use the printed LAN address for a physical phone. Capture at actual viewport sizes in Chrome, not resized desktop screenshots.
+
+## Acceptance belongs to the owner
+
+The Codex's `needs` fenced block is a JSON array, one entry per need from the request. It is the check's source, not a second parallel list in app.json. Example (replace selectors and actions with this app's actual workflow):
+
+```needs
+[
+  {
+    "id": "track-gear",
+    "statement": "Customers book a tune from their phone and watch their own gear on the workshop wall and their phone.",
+    "steps": [
+      {"surface":"phone", "selector":"#gear-name", "fill":"Blue board"},
+      {"surface":"phone", "selector":"#book-tune", "click":true}
+    ],
+    "assertions": [
+      {"surface":"phone", "selector":"#my-ticket", "text":"Blue board"},
+      {"surface":"wall", "selector":"[data-gear]", "text":"Blue board"}
+    ]
+  }
+]
+```
+
+Steps support `fill`, `select`, `click: true` and `reload: true`; surfaces are `wall`, `phone`, `phone-two`. Assertions require a visible selector and optionally contained text. Both wall and phone must have assertions. An honestly unavailable capability remains in the block with no assertions and a plain explanation in the prose; check reports it not met. Do not delete, weaken or replace a need to get green. Static needs such as accurate prices may have no action steps. Use semantic attributes on real visible scene elements for testability, never hidden QA-only counters.
+
+Run build and the shared-action check, then the needs step runs on those real browsers. Save captures with `--shots .checks`. The result contains each statement, met/partly/not, the assertion result and wall/phone captures; `.studio/checks/<id>-needs.json` drives the Codex's Needs status. Redraw `codex <id>` after checking. Passing a selector assertion is evidence, not a visual judgement: read every capture and perform the full flows as owner and customer using the playtest skill. If the picture fails the words, it is not done even with green assertions.
+
+For staff flows, sign in through the existing local owner link and prove the transition in real Chrome. Keep evidence in the Codex alongside the automated flows. Confirm unauthorized writes are refused and records remain after all screens close. Never call an untested privileged path passed. Before final handover, show the need table with evidence and explicit remaining gaps. If the starter or a board of boxes is still visible, return to the scene design and build it.
+
+## Tie payment to the work
+
+Create the booking, gift intention or ticket first and pass its ID as the application's reference:
+
+```ts
+await shop.buy('full-tune', 1, undefined, { reference: booking.id });
+// Or a cart:
+await shop.checkout({ reference: booking.id });
+```
+
+These retain their existing boolean result: true means checkout opened, not payment received. The durable `order.paid` function event includes `data.order` (the order ID), `data.reference` (your reference or null), and `data.app` (the app ID). A verified provider payment emits it. Validate the referenced record, expected amount/currency and app, deduplicate by event/order ID, then fulfil that booking or add that gift to the confirmed meal table. A buyer supplies the reference: it is correlation, never proof they own a private record or paid the expected price. Do not put personal data in it.
+
+Without Stripe, keep real services and prices visible and say payment is not connected; allow a clearly labelled unpaid request/intention if useful. Never mark it paid or add it to the paid total. Test event handlers locally with explicit test events, labelled as simulations. Report actual charging and recurring collection as not yet met until connected and verified. Do not build a new payment sandbox or pretend recurring intentions are subscriptions.
+
 ## Start and compose
 
 - Run `homie-studio app new <id> --from <starter> --name "<Name>"`, or `app_make`. Starters: `welcome` (queue), `gathering` (check-in/task choice), `giving` (goal and giving intentions linked to the shop), `quiz` (casual quiz night), `jobs` (service booking requests). The welcome starter is one 3D scene with customer, wall and staff roles. Install its reported `needsAdded`, then build.
 - `apps/<id>/app.json` describes roles (`signIn`, `can`), surfaces (`phone`, `wall`, `kiosk`, `tablet`), wording, record collections, parts and the real UI action used by check. The app's entry and assets live beside it, just like a game.
 - Before inventing each component, inspect engine packages for the mechanism and `parts_find` for the piece. A queue, quiz, menu board, live total, music loop or video intro can be a part. Record its licence and credit. Sharing happens only when requested; selling parts is not part of this workflow.
 - Use the same engine packages as a game: `@homie-rocks/geom` and `props` for original scenery; `render`, `camera`, `postfx`, `fx` for light, composition and motion; `input`, `ui`, `ui-world`, `audio`, `device`, `loop` for interaction and feel. An app can be fully 3D and wild. Legibility and the actual task come first.
-- Reach for the `style`, `art`, `models`, `animate`, `sound`, `music`, `video` and `perf` skills where they help. It should look like a game studio made it: a coherent world with a useful HUD, not generic cards and navigation. Media cost and licensing decisions remain the person's.
+- Use the `style`, `art`, `models`, `animate`, `sound`, `music`, `video` and `perf` skills where they help. It should look like a game studio made it: a coherent world with a useful HUD, not generic cards and navigation. Media cost and licensing decisions remain the person's.
 - Keep native buttons at least 44 px, keyboard focus visible, text as text, motion reducible, and the wall QR clear of useful information. Pointer gesture guards belong on the canvas, not native click buttons.
 
 ## Roles and records

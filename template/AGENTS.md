@@ -41,6 +41,8 @@ Cloudflare creates DNS and TLS during deploy with the existing sign-in.
 
 ## Apps: one screen, roles and parts
 
+Plan apps with the same Codex mechanism as games: `codex new <id> --kind app` writes `apps/<id>/CODEX.md`. Read the packaged plan, app and playtest guides. Preserve the person’s words, scene, people, offers and testable needs; build that scene with engines, style, parts and media, then prove each need on wall and phone. Starters are plumbing, not completion.
+
 An app lives in `apps/<id>/app.json` and `src/`. Make one with `homie-studio app new <id>` (or `app_make`). Use the Homie plugin's `app` skill for businesses, venues, causes and customer apps. No game demo, rounds, scores, bots or mandatory fun: build what the person needs with the fewest human steps.
 
 An app is ONE screen that morphs with context: camera moves, panels unfold, its roles see and do different things, and parts plug into the scene. No page-to-page navigation or menus of links inside it. Use all the same engine packages and media skills as games (camera, geom, props, render, postfx, fx, audio, input, ui-world; style, art, models, animate, music, sound, video). It can be fully 3D and wild while remaining useful and legible.

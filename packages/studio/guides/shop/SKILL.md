@@ -147,3 +147,7 @@ Keyless has no per-session expiry or provider-read reconciliation. The keyed pat
 carts, cap reservations, local refunds. Managed Payments is supported on Payment Links when Stripe enables it for the account. The studio chooses its needs.
 
 For a cause, use `shop init --giving --currency <organisation currency>`: one-time and monthly suggested gifts, no badge or game access. Read `giving.receiptText` from the organisation; leave it empty until provided. Local /shop/ previews before Stripe. Monthly gifts use the existing keyless Payment Links connection and Stripe handles renewals.
+
+## App payment references
+
+Create the booking/ticket/gift intention first. `shop.buy('full-tune', 1, undefined, { reference: booking.id })` or `shop.checkout({ reference: booking.id })` sends the app's own reference through checkout. Existing boolean returns are unchanged: checkout opened is not paid. The verified durable `order.paid` event carries `data.order`, `data.reference` (null if omitted) and `data.app`. Reopened Payment Links retain the reference. A reference is buyer-supplied correlation, not authorization: verify the record, app, amount and currency, deduplicate by event/order ID, then fulfil it. Keep personal data out of references. Before Stripe is connected, local prices and unpaid requests can be demonstrated; actual payment and recurring collection remain unverified. Test events must be labelled simulations.

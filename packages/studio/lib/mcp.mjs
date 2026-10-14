@@ -144,7 +144,7 @@ function promptText(name, args = {}) {
 export async function serveMcp({ studios = null, skills = null, cwd = process.cwd(), input = process.stdin, output = process.stdout, waitMs, directory = null, install = true, desktop = inDesktopApp(), log = (line) => process.stderr.write(`[homie-studio mcp] ${line}\n`) } = {}) {
   // A GUI app starts this with a short PATH: everything it runs sees the usual places Node, npm and ffmpeg live.
   process.env.PATH = toolPath();
-  const skillsDir = skills ?? [join(PACKAGE_ROOT, '..', '..', 'plugins', 'homie', 'skills'), join(PACKAGE_ROOT, '..', 'skills')].find((d) => existsSync(join(d, 'studio-setup', 'SKILL.md'))) ?? null;
+  const skillsDir = skills ?? [join(PACKAGE_ROOT, 'guides'), join(PACKAGE_ROOT, '..', '..', 'plugins', 'homie', 'skills'), join(PACKAGE_ROOT, '..', 'skills')].find((d) => existsSync(join(d, 'studio-setup', 'SKILL.md'))) ?? null;
   const ctx = new StudioContext({ studiosDir: studios, cwd, skillsDir, waitMs: waitMs ?? Number(process.env.HOMIE_MCP_WAIT_MS || 40_000), directory, install, desktop });
   let avail = availability();
   let names = '';

@@ -461,7 +461,7 @@ export async function reconcileOrders(env, shop, player = null, { expireOpen = f
 }
 
 /** Make the order row, then Stripe's Checkout Session. Returns { order, url } or a refusal Response. */
-async function startCheckout(env, url, cat, shop, item, { player, game, via, amount, parent = false, lines = null, requestAt = Date.now() }) {
+async function startCheckout(env, url, cat, shop, item, { player, game, via, amount, parent = false, lines = null, reference = null, requestAt = Date.now() }) {
   lines ??= [{ item, amount, quantity: 1 }];
   const keyless = amount > 0 && !hasStripeKey(env);
   if (keyless && (lines.length !== 1 || fullerReason(shop))) return { error: fail(409, 'one-item', fullerReason(shop) ?? 'Buy one item at a time. A combined cart needs the fuller checkout connection.') };
@@ -480,6 +480,7 @@ async function startCheckout(env, url, cat, shop, item, { player, game, via, amo
   lines = lines.map((line, i) => ({ ...line, id: `${order.id}_${i}` }));
   const reserve = async () => {
     const results = await env.DB.batch([reservation(),
+      ...(reference === null ? [] : [env.DB.prepare("INSERT INTO meta(key,value) SELECT ?1,?2 WHERE EXISTS (SELECT 1 FROM shop_orders WHERE id=?3)").bind(`shop-reference:${order.id}`, reference, order.id)]),
       ...lines.map((line, i) => env.DB.prepare("INSERT INTO shop_order_lines (id, order_id, position, item, quantity, unit_amount, amount, snapshot) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8 WHERE EXISTS (SELECT 1 FROM shop_orders WHERE id = ?2)")
         .bind(line.id, order.id, i, line.item.id, line.quantity, line.amount, line.amount * line.quantity, JSON.stringify(line.item))),
       env.DB.prepare('UPDATE shop_orders SET referral_terms = ?2, checkout_player = player WHERE id = ?1').bind(order.id, shop.referrals ? JSON.stringify(shop.referrals) : null),
@@ -564,6 +565,8 @@ function purchaseLimited(request, shop, player, kind) {
 async function buyRoute(request, env, url, cat, shop, ready, ctx, requestAt) {
   const b = await bodyOf(request, requestSize(shop));
   if (b.error) return b.error;
+  const reference = b.body.reference ?? null;
+  if (reference !== null && (typeof reference !== 'string' || !reference.trim() || /[\u0000-\u001f\u007f]/.test(reference))) return fail(400, 'reference', 'reference must be a nonempty string without control characters');
   const freeOnly = (b.body.lines ?? [{ item: b.body.item }]).every?.((l) => shop.items.some((i) => i.id === l?.item && i.price === 0));
   if (!ready.ready && !(freeOnly && ready.missing.every((m) => ['payment-links', 'webhook-secret', 'fuller-checkout'].includes(m)))) return fail(503, 'closed', 'The shop is not open yet.', { missing: ready.missing, migration: ready.migration });
   const requested = b.body.lines ?? [{ item: b.body.item, quantity: b.body.quantity ?? 1, amount: b.body.amount }];
@@ -603,7 +606,7 @@ async function buyRoute(request, env, url, cat, shop, ready, ctx, requestAt) {
     cookies = guest.session.cookies;
   }
   const via = await viaFor(request, env, url, shop, player);
-  const r = await startCheckout(env, url, cat, shop, item, { player, game, via, amount, lines, requestAt });
+  const r = await startCheckout(env, url, cat, shop, item, { player, game, via, amount, lines, reference, requestAt });
   const response = r.error ?? json({ ok: true, order: r.order.id, url: r.url });
   if (!r.error && !r.reconciled && ctx?.waitUntil) ctx.waitUntil(reconcileOrders(env, shop, player.id).catch((error) => logOrderError(env, r.order.id, error)));
   for (const cookie of cookies) response.headers.append('set-cookie', cookie);
@@ -864,6 +867,7 @@ async function bindLinkSession(env, session, mode) {
     const id = `ord_${(await sha256Hex(session.id)).slice(0, 20)}`;
     await env.DB.batch([
       env.DB.prepare("INSERT INTO shop_orders (id, player, checkout_player, item, game, amount, currency, till, mode, status, parent, via, created_at, updated_at, session, referral_terms) SELECT ?2, player, checkout_player, item, game, ?4, currency, till, mode, 'started', parent, via, ?5, ?5, ?3, referral_terms FROM shop_orders WHERE id = ?1 ON CONFLICT DO NOTHING").bind(source.id, id, session.id, amount, Date.now()),
+      env.DB.prepare("INSERT OR IGNORE INTO meta(key,value) SELECT ?1,value FROM meta WHERE key=?2").bind(`shop-reference:${id}`, `shop-reference:${source.id}`),
       env.DB.prepare('INSERT INTO shop_order_lines (id, order_id, position, item, quantity, unit_amount, amount, snapshot) VALUES (?1, ?2, 0, ?3, ?4, ?5, ?6, ?7) ON CONFLICT DO NOTHING').bind(`${id}_0`, id, item.id, quantity, amount / quantity, amount, lines[0].snapshot),
     ]);
     order = await orderBySession(env, session.id);

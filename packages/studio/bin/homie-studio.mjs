@@ -995,7 +995,7 @@ async function main() {
       const results = [];
       for (const game of games) {
         const shots = flags.get('shots') ? resolve(flags.get('shots'), ...(games.length > 1 ? [game] : [])) : null;
-        const r = await tracked(root, 'checks', (report) => check({ url: site.url, game, shots, log, report }), 'check');
+        const r = await tracked(root, 'checks', (report) => check({ root, url: site.url, game, shots, log, report }), 'check');
         results.push({ ...r, game, site: site.url, local: site.local });
         const receiptDir = join(root, '.studio', 'checks');
         mkdirSync(receiptDir, { recursive: true });
@@ -1173,7 +1173,7 @@ async function labCommand(root, sub) {
 /** `homie-studio codex …` (lib/codex.mjs): the Game Codex of one game. */
 function codexCommand(root, sub) {
   const games = listGames(root);
-  if (sub === 'new') return newCodex(root, positional[2] ?? (games.length === 1 ? games[0].id : undefined), { name: flags.get('name') ?? null });
+  if (sub === 'new') return newCodex(root, positional[2] ?? (games.length === 1 ? games[0].id : undefined), { name: flags.get('name') ?? null, kind: flags.get('kind') ?? null });
   if (sub === 'link') {
     const id = positional[2] ?? (games.length === 1 ? games[0].id : null);
     if (!id || !games.some((g) => g.id === id)) return { ok: false, command: 'codex link', why: 'name the game: homie-studio codex link <id>' };
