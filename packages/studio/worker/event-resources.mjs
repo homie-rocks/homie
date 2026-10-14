@@ -50,7 +50,7 @@ export async function pushEvents(env,cat,origin) {
   await env.DB.prepare("DELETE FROM mcp_kv WHERE key LIKE 'mcp-event-stream:%' AND expires<?1").bind(Date.now()).run();
   let after='';const seen=new Set();
   for(;;){
-    const rows=(await env.DB.prepare("SELECT key,value FROM mcp_kv WHERE (key LIKE 'event-sub:%' OR key LIKE 'mcp-event-stream:%') AND key>?1 ORDER BY key LIMIT 100").bind(after).all()).results;
+    const rows=(await env.DB.prepare("SELECT key,value FROM mcp_kv WHERE (key LIKE 'event-sub:%' OR key LIKE 'mcp-event-stream:%' OR key LIKE 'tools-stream:%') AND key>?1 ORDER BY key LIMIT 100").bind(after).all()).results;
     for(const row of rows){const {connection}=JSON.parse(row.value);if(seen.has(connection))continue;seen.add(connection);
       const response=await eventHub(env,connection).fetch('https://events/__studio_events',{method:'POST',body:JSON.stringify({op:'wake',connection,cat,origin})});
       if(!response.ok)throw new Error('Event stream wake failed');

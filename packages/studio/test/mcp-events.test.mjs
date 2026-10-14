@@ -83,3 +83,34 @@ test('push active/event/heartbeat, resume, cancellation and revocation',async t=
  await emit('offline');const resumed=await streams.open({...input,id:8,params:{name:'bookings',cursor:event.params.cursor}}),r=resumed.body.getReader();await r.read();const replay=JSON.parse(new TextDecoder().decode((await r.read()).value).split('data: ')[1]);assert.equal(replay.params.eventId,'offline');await r.read();await Promise.all(jobs);
  env.DB.sql.prepare('UPDATE mcp_connections SET revoked=1 WHERE id=?').run(owner.connection);streams.wake({cat});const ended=JSON.parse(new TextDecoder().decode((await r.read()).value).split('data: ')[1]);assert.equal(ended.method,'notifications/events/terminated');assert.equal(ended.params.error.code,-32024);const result=JSON.parse(new TextDecoder().decode((await r.read()).value).split('data: ')[1]);assert.equal(result.id,8);assert.deepEqual(result.result,{_meta:{}});await r.cancel();await Promise.all(jobs);
 });
+
+test('webhook replay watermark never skips failed delivery; permanent failures, quotas and role revocation',async t=>{
+ const {env,cat,owner,staff,params,emit}=fixture(t);await syncFunctions(env,[]);
+ const baseline=await pollEvents(env,cat,owner,{name:'bookings'});await emit('earlier');await emit('later');
+ const sub=await subscribeEvents(env,cat,staff,{...params,cursor:baseline.cursor});const bodies=[];let time=Date.now();
+ const options={now:()=>time,webhookOptions:{fetchFn:async(url,init)=>{const body=new Webhook(params.delivery.secret).verify(init.body,init.headers);bodies.push(body);return new Response(null,{status:body.eventId==='earlier'?503:204});}}};
+ await runFunctions(env,cat,'https://studio.example',options);
+ assert.equal(bodies.length,2);assert.equal(bodies[1].cursor,baseline.cursor,'acknowledged later event cannot skip an earlier failure');
+ const refresh=await subscribeEvents(env,cat,staff,{...params,cursor:baseline.cursor});assert.equal(refresh.cursor,baseline.cursor);
+ time+=60000;options.webhookOptions.fetchFn=async(url,init)=>{bodies.push(new Webhook(params.delivery.secret).verify(init.body,init.headers));return new Response(null,{status:410});};
+ await runFunctions(env,cat,'https://studio.example',options);assert.equal(env.DB.sql.prepare('SELECT state FROM function_deliveries WHERE event=? AND function=?').get('earlier',hookFunction(sub.id)).state,'complete');
+ assert.notEqual((await subscribeEvents(env,cat,staff,params)).cursor,baseline.cursor);
+ const feeds=JSON.parse(env.STUDIO_EVENT_FEEDS);feeds.bookings.maxSubscriptions=1;env.STUDIO_EVENT_FEEDS=JSON.stringify(feeds);
+ await rejects(()=>subscribeEvents(env,cat,owner,params),-32025);
+ // A revoked grant sends a signed terminal control body and drops subscription secrets.
+ env.DB.sql.exec("DELETE FROM app_roles WHERE player='staff'");await runFunctions(env,cat,'https://studio.example',options);
+ assert.equal(bodies.at(-1).type,'terminated');assert.equal(bodies.at(-1).error.code,-32024);
+ assert.equal(env.DB.sql.prepare("SELECT COUNT(*) n FROM mcp_kv WHERE key LIKE 'mcp-event-hook:%'").get().n,0);
+});
+
+test('two independent push streams and a separate discovery channel emit only their own messages',async t=>{
+ const {env,cat,owner,staff,emit}=fixture(t);await syncFunctions(env,[]);const jobs=[],ctx={waitUntil:p=>jobs.push(p)},streams=new McpEventStreams(env,ctx);
+ t.after(()=>{for(const stream of streams.streams)streams.close(stream);});
+ const a=await streams.open({id:'a',connection:owner.connection,cat,params:{name:'bookings'}}),b=await streams.open({id:'b',connection:owner.connection,cat,params:{name:'bookings'}});
+ const ar=a.body.getReader(),br=b.body.getReader();await ar.read();await br.read();await ar.read();await br.read();await Promise.all(jobs);await ar.cancel();
+ assert.equal(streams.streams.size,1);await emit('remaining');streams.wake({cat});const event=JSON.parse(new TextDecoder().decode((await br.read()).value).split('data: ')[1]);assert.equal(event.params._meta['io.modelcontextprotocol/subscriptionId'],'b');await br.read();await Promise.all(jobs);await br.cancel();await Promise.all(jobs);
+ assert.equal(env.DB.sql.prepare("SELECT COUNT(*) n FROM mcp_kv WHERE key LIKE 'mcp-event-stream:%'").get().n,0);
+ const legacy=new EventStreams(env,ctx);const response=await legacy.fetch(new Request('https://events/__studio_events',{method:'POST',body:JSON.stringify({op:'stream',connection:staff.connection,cat,tools:[]})}));const reader=response.body.getReader();await reader.read();await Promise.all(jobs);
+ env.DB.sql.exec("DELETE FROM app_roles WHERE player='staff'");await legacy.wake({connection:staff.connection,cat,tools:[]});
+ const changed=JSON.parse(new TextDecoder().decode((await reader.read()).value).split('data: ')[1]);assert.equal(changed.method,'notifications/events/list_changed');assert.equal(changed.params._meta,undefined);await reader.cancel();await Promise.all(jobs);
+});

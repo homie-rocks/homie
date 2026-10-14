@@ -5,10 +5,11 @@ import {eventError,notification,sseFrame,streamResult,cursorOf} from './mcp-even
 export class McpEventStreams {
   constructor(env,ctx){this.env=env;this.ctx=ctx;this.streams=new Set();}
   close(stream){if(stream.closed)return;stream.closed=true;clearInterval(stream.timer);stream.resume?.();try{stream.controller.close();}catch{}this.streams.delete(stream);if(stream.registryKey)this.ctx.waitUntil(this.env.DB.prepare('DELETE FROM mcp_kv WHERE key=?1').bind(stream.registryKey).run().catch(()=>{}));}
-  async write(stream,value){
+  async write(stream,value,authorize){
     if(stream.closed)return false;
     if(stream.controller.desiredSize<=0)await new Promise(resolve=>{stream.resume=resolve;});
     if(stream.closed)return false;
+    if(authorize)await authorize();
     try{stream.controller.enqueue(sseFrame(value));return true;}catch{this.close(stream);return false;}
   }
   wake(input){for(const stream of this.streams){if(input.cat)stream.cat=input.cat;this.pump(stream);}}
@@ -38,7 +39,7 @@ export class McpEventStreams {
         const page=await pollEvents(this.env,stream.cat,caller,{...stream.params,maxAgeMs:undefined,cursor:stream.cursor});
         for(const event of page.events){
           await checkEvent(this.env,stream.cat,await eventCaller(this.env,stream.connection),stream.params);
-          if(!await this.write(stream,notification('event',event,stream.id)))return;
+          if(!await this.write(stream,notification('event',event,stream.id),async()=>checkEvent(this.env,stream.cat,await eventCaller(this.env,stream.connection),stream.params)))return;
           stream.cursor=event.cursor;
         }
         stream.cursor=page.cursor;more=page.hasMore;

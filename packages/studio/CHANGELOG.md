@@ -17,6 +17,22 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.51.4] - Unreleased
+
+<!-- pending-release: renumber before publishing -->
+
+**Plugin 0.51.4** · Studio events through experimental MCP Events.
+
+### Added
+
+- Every declared studio feed speaks the Triggers & Events draft: role-filtered `events/list`, cursor/replay polling, SSE push with heartbeat and resume, and authenticated webhook subscribe/refresh/unsubscribe with negotiated TTLs and client-supplied Standard Webhooks secrets.
+- Extension and configured webhooks share the durable delivery engine. Owners can see retries and errors; rotation dual-signs for five minutes. Existing resource subscriptions and cursor tools keep working.
+- Servers, app and office guides explain subscription setup and Cloudflare's own Workers Issues events through the person's existing Cloudflare connection.
+
+### Upgrade notes
+
+- Experimental wire format tracks the working-group draft as inspected on 2026-10-14. Declare exact trusted HTTPS callback URLs in each feed's `receivers` array for extension webhooks. Workers fetch cannot pin DNS with original TLS SNI, so arbitrary callbacks are refused; the guide documents this draft limitation. Poll and push need no callback setup.
+
 ## [0.51.3] - 2026-10-14
 
 **Plugin 0.51.3**

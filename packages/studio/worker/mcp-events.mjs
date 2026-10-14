@@ -95,11 +95,12 @@ export async function eventHookSubscriptions(env,cat,options={}){
   for(;;){const rows=(await env.DB.prepare("SELECT key,value FROM mcp_kv WHERE key LIKE 'mcp-event-hook:%' AND key>?1 ORDER BY key LIMIT 100").bind(after).all()).results;
     for(const row of rows){const sub=JSON.parse(row.value);if(sub.expires<=now()){await removeEventHook(env,sub.id);continue;}
       let feed;
-      try{feed=await checkEvent(env,cat,await eventCaller(env,sub.connection),{name:sub.name});}
+      try{feed=await checkEvent(env,cat,await eventCaller(env,sub.connection),{name:sub.name});if(!permittedCallback(env,sub.name,sub.url))throw new EventsError(-32024);}
       catch(error){try{await send(env,sub,control('terminated',{error:eventError(error)}),'msg_terminated_'+crypto.randomUUID(),options);}catch{}await removeEventHook(env,sub.id);continue;}
       definitions.push({name:hookFunction(sub.id),event:feed.event,webhook:true,mcpEvent:true,matches:event=>matchesFeed(feed,event),async handler(event){
         const fresh=await stored(env,sub.id);if(!fresh||fresh.expires<=now())return;
-        await checkEvent(env,cat,await eventCaller(env,fresh.connection),{name:fresh.name});
+        try{await checkEvent(env,cat,await eventCaller(env,fresh.connection),{name:fresh.name});}
+        catch(error){try{await send(env,fresh,control('terminated',{error:eventError(error)}),'msg_terminated_'+crypto.randomUUID(),options);}catch{}await removeEventHook(env,fresh.id);return;}
         try{await send(env,fresh,occurrence(fresh.name,event,await watermark(env,fresh)),event.id,options);}
         catch(error){const failure=new WebhookFailure(deliveryCategory(error));failure.permanent=error.status===410||error.status===413;throw failure;}
       }});
