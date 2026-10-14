@@ -63,7 +63,7 @@ test('skill workflow tool references resolve against official provider contracts
  }
 });
 
-import { setupStatus } from '../lib/doctor.mjs';
+import { setupStatus, stripeAgentConfigured } from '../lib/doctor.mjs';
 import { availability } from '../lib/mcp-tools.mjs';
 test('setup and local media availability never access provider credentials',async(t)=>{
  const accesses=[];const read=fs.readFileSync;const exists=fs.existsSync;
@@ -83,5 +83,28 @@ test('setup and local media availability never access provider credentials',asyn
   assert.ok(calls.every(([cmd])=>cmd!=='elevenlabs'&&cmd!=='fal'));
   assert.equal(availability(env).node,true);
   assert.deepEqual(accesses,[], 'even caught credential-read attempts are forbidden');
+ } finally {rmSync(root,{recursive:true,force:true});}
+});
+
+// Preserve shop onboarding coverage from the retired Projects suite.
+test('shop setup uses official Stripe tooling without treating connection as payment readiness', async () => {
+ const root=mkdtempSync(join(tmpdir(),'homie-official-shop-'));
+ try {
+  const home=join(root,'home');mkdirSync(home);
+  writeFileSync(join(root,'studio.json'),JSON.stringify({name:'Forest',slug:'forest'}));
+  const options={cwd:root,env:{HOME:home},exec:async(cmd)=>cmd==='stripe'?{code:0,stdout:'stripe version 1.45.0',stderr:''}:{code:127,stdout:'',stderr:''},fetchFn:async()=>new Response('{}',{status:200}),chrome:()=>null};
+  assert.equal((await setupStatus(options)).rows.find(x=>x.id==='stripe'),undefined);
+  writeFileSync(join(root,'shop.json'),JSON.stringify({till:'stripe',items:[]}));
+  let stripe=(await setupStatus(options)).rows.find(x=>x.id==='stripe');
+  assert.equal(stripe.state,'act');assert.equal(stripe.fix.run,'stripe agent setup');
+  assert.match(stripe.detail,/Stripe CLI 1\.45\.0/);
+  writeFileSync(join(home,'.claude.json'),JSON.stringify({mcpServers:{stripe:{type:'http',url:'https://mcp.stripe.com/'}}}));
+  stripe=(await setupStatus(options)).rows.find(x=>x.id==='stripe');
+  assert.equal(stripe.state,'act','MCP configuration alone does not prove payment readiness');
+  assert.equal(stripe.fix.run,'npx --no-install homie-studio shop plan');
+  assert.match(stripe.detail,/set up for Claude Code/);
+  rmSync(join(home,'.claude.json'));mkdirSync(join(home,'.codex'));
+  writeFileSync(join(home,'.codex/config.toml'),'[mcp_servers.stripe]\nurl = "https://mcp.stripe.com"\n');
+  assert.equal(stripeAgentConfigured({root,env:{HOME:home}}),'Codex');
  } finally {rmSync(root,{recursive:true,force:true});}
 });

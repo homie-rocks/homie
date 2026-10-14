@@ -4,25 +4,15 @@
  *   conversation (a new webhook endpoint, an event destination with its secret included), whatever the MCP server is
  *   called and however the call names the method; reads, updates of an existing endpoint and the catalog pass;
  * - a webhook signing secret (whsec_ with no live/test part) is taken out of tool output, as Stripe keys are;
- * - the music skill finds the ElevenLabs key Stripe Projects keeps for a studio (studio.json providers.elevenlabs and
- *   the git-ignored .env), in its own process only, and nothing else's;
- * - the shop skill says the owner's steps, Stripe's agent plugin, the Agent-key change of 2026-10-31, and never a
- *   webhook through the MCP; the studio-setup skill has Stripe Projects as an option, never as the default.
  * Nothing here reaches Stripe, Cloudflare or ElevenLabs: every value is made up.
  *
  * Run: node --test plugins/homie/test/stripe-agent.test.mjs
  */
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
 import { stripeSecretWriteOf } from '../hooks/lib/commands.mjs';
 import { redact, redactText } from '../hooks/lib/redact.mjs';
 
-
-const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), '..');
 // Built here so no key-shaped string sits in this file.
 const j = (...parts) => parts.join('');
 
@@ -54,5 +44,3 @@ test('secrets: a webhook signing secret and Stripe keys come out of tool output'
   assert.doesNotMatch(JSON.stringify(deep.value), /Ab3dEf6h/, 'an MCP result is walked too');
   assert.equal(redactText('the secret starts with whsec_ (paste it on the page)').text, 'the secret starts with whsec_ (paste it on the page)', 'naming the prefix is not a secret');
 });
-
-
