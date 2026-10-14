@@ -819,7 +819,7 @@ async function hook(request, env, cat, shop, ready) {
   if (!needed.includes(ev.type)) return json({ ok: true, did: 'ignored' });
   if (typeof ev.livemode === 'boolean' && (hasStripeKey(env) || linkConfig(env)) && ev.livemode !== (shopMode(env) === 'live')) return json({ ok: true, ignored: 'mode' });
   try {
-    const subscriptionResult = await subscriptionEvent(env, ev);
+    const subscriptionResult = await subscriptionEvent(env, ev, shop);
     if (subscriptionResult !== null) return json({ ok: true, did: subscriptionResult });
     const sessionEvent = ev.type.startsWith('checkout.session.');
     if (!sessionEvent) await rememberMoneyEvent(env, ev);
@@ -1018,7 +1018,7 @@ export async function paid(env, shop, session, paidAt = Date.now()) {
       if (['lost', 'won', 'warning_closed'].includes(d.status)) await disputeClosed(env, paymentId, d.status);
     }
   }
-  if (lines.some(l => l.snapshot && JSON.parse(l.snapshot).interval)) await bindSubscription(env, await orderById(env,o.id), session);
+  if (lines.some(l => l.snapshot && JSON.parse(l.snapshot).interval)) await bindSubscription(env, await orderById(env,o.id), session, shop);
   await env.DB.prepare('UPDATE shop_orders SET attention = 0 WHERE id = ?1').bind(o.id).run();
   return result.at(-1)?.meta?.changes ? 'paid' : 'already';
 }
