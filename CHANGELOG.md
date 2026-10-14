@@ -17,6 +17,15 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## Unreleased
+
+### Fixed
+
+- Opt-in keyless saved baskets preserve the phone’s exact items and quantities. A
+  custom-amount Payment Link prefills the total, while signed payments retain the
+  saved lines and distinguish full payment from a shortfall for staff. The Worker
+  needs no Stripe API key. Existing adjustable Stripe menus keep their behavior.
+
 ## [0.51.4] - 2026-10-14
 
 **Plugin 0.51.4** · Studio events through experimental MCP Events.

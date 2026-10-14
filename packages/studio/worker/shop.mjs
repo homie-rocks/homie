@@ -516,7 +516,7 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
   const keyless = (amount > 0 || lines.some(l => l.item.interval)) && !hasStripeKey(env);
   const config=linkConfig(env);
   if(booking && amount===0 && !hasStripeKey(env) && config?.slots?.some(l=>l.app===game&&l.slots===booking.slots&&l.slot===booking.slot))return {error:fail(409,'booking','Publish a separate local slot for a free booking; it cannot share a paid Stripe capacity budget.')};
-  const menu=keyless && !booking && lines.length>1 ? config?.menus?.find(m=>lines.every(l=>m.items.some(i=>i.item===l.item.id))) : null;
+  const menu=keyless && !booking && lines.length>0 ? config?.menus?.find(m=>(m.basket || lines.length>1)&&lines.every(l=>m.items.some(i=>i.item===l.item.id))) : null;
   const link=keyless ? booking ? config?.slots?.find(l=>l.app===game&&l.collection===booking.collection&&l.slots===booking.slots&&l.slot===booking.slot&&l.item===item.id) : menu ?? config?.items.find(l=>l.item===item.id) : null;
   if(keyless && lines.length>1 && !menu)return {error:fail(409,'menu','These items need separate Stripe menus. Custom amounts and monthly gifts use their own links.')};
   if(keyless && (!link || !paymentLinkURL(link.url)))return {error:fail(503,'payment-links','Ask the owner’s AI to sync the shop and published booking slots.')};
@@ -532,7 +532,7 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
   }
   if(keyless && item.price==='choose' && lines[0].quantity!==1)return {error:fail(400,'quantity','A tip is one chosen amount; choose it on Stripe.')};
   if(menu && menu.items.some(e=>{const i=shop.items.find(i=>i.id===e.item);return !i || i.game && i.game!==game;}))return {error:fail(409,'menu','This menu includes items from another app; sync separate menus for each app.')};
-  if(menu)lines=menu.items.map(entry=>{const i=shop.items.find(i=>i.id===entry.item);return {item:i,quantity:1,amount:i.price};});
+  if(menu && !menu.basket)lines=menu.items.map(entry=>{const i=shop.items.find(i=>i.id===entry.item);return {item:i,quantity:1,amount:i.price};});
   if(keyless)lines=lines.map(l=>({...l,item:{...l.item,paymentLink:link,stripePrice:menu?.items.find(i=>i.item===l.item.id)?.price??link.price}}));
   const order = { id: newOrderId(), player: player.id, amount, currency: shop.currency };
   if (booking && reference === null) reference = order.id;
@@ -574,6 +574,7 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
   }
   if (keyless) {
     const checkout = new URL(link.url); checkout.searchParams.set('client_reference_id', order.id);
+    if(menu?.basket)checkout.searchParams.set('prefilled_amount',String(amount));
     return { order, url: checkout.href, reconciled };
   }
   let session = null;
@@ -953,6 +954,7 @@ async function bindLinkSession(env, session, mode) {
   if (!source || source.mode !== mode) return false;
   const lines = await orderLines(env, source.id);
   if (!lines.length || !lines[0].snapshot) return false;
+  if(JSON.parse(lines[0].snapshot).paymentLink?.basket) return bindBasketSession(env,session,source,lines);
   if(JSON.parse(lines[0].snapshot).paymentLink?.items) {
     const saved=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-menu:${source.id}`).first();
     const original=saved?JSON.parse(saved.value).map(l=>({item:l.item.id,snapshot:JSON.stringify(l.item),unit_amount:l.amount})):lines;
@@ -986,6 +988,50 @@ async function bindLinkSession(env, session, mode) {
     env.DB.prepare('UPDATE shop_order_lines SET quantity = ?2, unit_amount = ?3, amount = ?4 WHERE order_id = ?1 AND EXISTS (SELECT 1 FROM shop_orders WHERE id = ?1 AND paid_at IS NULL)').bind(order.id, quantity, amount / quantity, amount),
   ]);
   return true;
+}
+
+/** A saved basket is immutable. A reopened link buys that same basket again. */
+async function bindBasketSession(env,session,source,lines) {
+  const link=JSON.parse(lines[0].snapshot).paymentLink;
+  if((session.payment_link?.id??session.payment_link)!==link.id || session.metadata?.revision!==link.revision || session.currency!==source.currency)return false;
+  if(session.payment_status!=='paid' || !Number.isSafeInteger(session.amount_total) || session.amount_total<=0 || session.amount_subtotal!==session.amount_total)return false;
+  await env.DB.prepare('UPDATE shop_orders SET session=?2 WHERE id=?1 AND session IS NULL').bind(source.id,session.id).run();
+  let order=await orderBySession(env,session.id);
+  if(!order) {
+    const id=`ord_${(await sha256Hex(session.id)).slice(0,20)}`;
+    await env.DB.batch([
+      env.DB.prepare("INSERT OR IGNORE INTO shop_orders(id,player,checkout_player,item,game,amount,currency,till,mode,status,parent,created_at,updated_at,session) SELECT ?2,player,checkout_player,item,game,amount,currency,till,mode,'started',parent,?4,?4,?3 FROM shop_orders WHERE id=?1").bind(source.id,id,session.id,Date.now()),
+      env.DB.prepare('INSERT OR IGNORE INTO meta(key,value) SELECT ?1,value FROM meta WHERE key=?2').bind(`shop-reference:${id}`,`shop-reference:${source.id}`),
+      ...lines.map((l,i)=>env.DB.prepare('INSERT OR IGNORE INTO shop_order_lines(id,order_id,position,item,quantity,unit_amount,amount,snapshot) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)').bind(`${id}_${i}`,id,i,l.item,l.quantity,l.unit_amount,l.amount,l.snapshot)),
+    ]);
+    order=await orderBySession(env,session.id);
+  }
+  return Boolean(order);
+}
+
+// Keep the actual payment in financial totals and the ordered amounts in lines.
+// Aggregate refunds are allocated proportionally; they do not change quantities.
+async function paidBasket(env,shop,o,lines,session,paidAt) {
+  const total=session.amount_total;
+  if(session.payment_status!=='paid' || session.currency!==o.currency || !Number.isSafeInteger(total) || total<=0 || session.amount_subtotal!==total)return 'mismatch';
+  if(o.paid_at!==null)return 'already';
+  const expected=lines.reduce((n,l)=>n+Number(l.amount),0);
+  if(!Number.isSafeInteger(expected)||expected<=0)return 'mismatch';
+  const writes=[];let cumulative=0,allocated=0;
+  for(const l of lines) {
+    cumulative+=Number(l.amount);
+    const next=Number(BigInt(total)*BigInt(cumulative)/BigInt(expected));
+    const gross=next-allocated;allocated=next;
+    if(total>=expected && o.player)writes.push(...grantStatements(env,o,JSON.parse(l.snapshot),paidAt,l));
+    writes.push(env.DB.prepare("UPDATE shop_order_lines SET status='paid',total=?2 WHERE id=?1 AND EXISTS(SELECT 1 FROM shop_orders WHERE id=?3 AND paid_at IS NULL)").bind(l.id,gross,o.id));
+  }
+  const payment=typeof session.payment_intent==='string'?session.payment_intent:session.payment_intent?.id;
+  writes.push(env.DB.prepare("UPDATE shop_orders SET status='paid',amount=?2,total=?2,tax=0,payment=?3,paid_at=?4,updated_at=?4,attention=0,note=?5 WHERE id=?1 AND paid_at IS NULL").bind(o.id,total,payment??null,paidAt,total<expected?'Settle the difference at the bar':''));
+  // Enrich the trigger's durable event in this same transaction, before dispatch.
+  writes.push(env.DB.prepare("UPDATE studio_events SET data=json_set(data,'$.basketTotal',?2,'$.settlement',?3) WHERE id=?1").bind(`shop_orders:${o.id}:paid`,expected,total<expected?'short':'paid'));
+  const result=await env.DB.batch(writes);
+  if(payment)await syncRefunds(env,payment);
+  return result.at(-2)?.meta?.changes?'paid':'already';
 }
 
 /** Menu totals are never decoded into quantities. Only signed invoice lines are authoritative. */
@@ -1027,7 +1073,9 @@ export async function paid(env, shop, session, paidAt = Date.now()) {
   const o = await orderBySession(env, session.id);
   if (!o) return 'unknown-order';
   // The session must be the one this order opened, for this player and this price.
-  const linkOrder = (await orderLines(env, o.id)).some((l) => l.snapshot && JSON.parse(l.snapshot).paymentLink);
+  const savedLines=await orderLines(env,o.id);
+  if(savedLines[0]?.snapshot && JSON.parse(savedLines[0].snapshot).paymentLink?.basket)return paidBasket(env,shop,o,savedLines,session,paidAt);
+  const linkOrder = savedLines.some((l) => l.snapshot && JSON.parse(l.snapshot).paymentLink);
   if (!linkOrder && (session.metadata?.order !== o.id || ((o.checkout_player ?? o.player) && session.client_reference_id && session.client_reference_id !== (o.checkout_player ?? o.player)))) return 'mismatch';
   if (session.currency !== o.currency || !Number.isSafeInteger(session.amount_subtotal) || session.amount_subtotal !== Number(o.amount)) return 'mismatch';
   if (['refunded', 'lost', 'disputed'].includes(o.status)) {

@@ -73,7 +73,7 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
   const menuItems = shop.items.filter(i => typeof i.price === 'number' && i.price > 0 && !i.interval);
   const metadata = { homie: 'shop-links-v1', studio: slug, origin: site };
   const groups=Map.groupBy(menuItems,i=>i.game??'');
-  for(const group of groups.values()) for (let offset = 0; offset < group.length; offset += 10) {
+  for(const group of (shop.basket ? [] : groups.values())) for (let offset = 0; offset < group.length; offset += 10) {
     const items = group.slice(offset, offset + 10);
     if (items.length < 2) continue;
     const params = { ...customText, line_items: items.map(i => ({price:catalogPrices.get(i.id),quantity:1,adjustable_quantity:{enabled:true,minimum:0,maximum:shop.policy.repeatPurchases?999999:1}})),
@@ -86,6 +86,32 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     if(!link.active)await api('POST',`/v1/payment_links/${link.id}`,{active:true});
     keepLinks.add(link.id);
     config.menus.push({id:link.id,url:link.url,revision,items:items.map(i=>({item:i.id,price:catalogPrices.get(i.id)}))});
+  }
+  // One aggregate payment represents a frozen local basket, including one-item baskets.
+  // Runtime uses prefilled_amount, never a shared Price mutation: concurrent
+  // guests must receive their own saved totals.
+  if(shop.basket) for(const [game,items] of groups) {
+    const id=await productIdOf(slug,`basket-${game||'shop'}`);
+    keepProducts.add(id);
+    const fields={name:shop.basket.name,description:shop.basket.description,metadata,active:true};
+    const product=products.find(p=>p.id===id);
+    if(!product)await api('POST','/v1/products',{id,...fields},`product-${hash(id)}`);
+    else if(product.name!==fields.name || product.description!==fields.description || !product.active)await api('POST',`/v1/products/${id}`,fields);
+    const priceFields={product:id,currency:shop.currency,custom_unit_amount:{enabled:true},tax_behavior:'inclusive'};
+    const priceRevision=hash(priceFields);
+    let price=prices.find(p=>own(p)&&p.product===id&&p.metadata?.revision===priceRevision);
+    if(!price)price=await api('POST','/v1/prices',{...priceFields,metadata:{...metadata,revision:priceRevision}},`price-${hash({priceFields,metadata})}`);
+    if(!price.active)await api('POST',`/v1/prices/${price.id}`,{active:true});
+    keepPrices.add(price.id);
+    const params={line_items:[{price:price.id,quantity:1}],automatic_tax:{enabled:false},payment_intent_data:{metadata},
+      after_completion:{type:'redirect',redirect:{url:`${site}/shop/thanks?session_id={CHECKOUT_SESSION_ID}`}}};
+    const revision=hash(params);
+    let link=links.find(p=>own(p)&&p.metadata?.revision===revision);
+    if(!link)link=await api('POST','/v1/payment_links',{...params,metadata:{...metadata,revision}},`basket-${revision}`);
+    if(!link.active)await api('POST',`/v1/payment_links/${link.id}`,{active:true});
+    if(!paymentLinkURL(link.url))throw new Error('Invalid basket Payment Link');
+    keepLinks.add(link.id);
+    config.menus.push({id:link.id,url:link.url,revision,price:price.id,basket:true,items:items.map(i=>({item:i.id,price:catalogPrices.get(i.id)}))});
   }
   config.slots=[];
   const pause=async link=>{

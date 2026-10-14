@@ -9,7 +9,7 @@ export function linkConfig(env) {
 export const shopMode = (env) => hasStripeKey(env) ? modeOf(env.STRIPE_KEY) : linkConfig(env)?.mode ?? 'test';
 export function linkSettings(shop) {
   return JSON.stringify({ currency: shop.currency, till: shop.till, automaticTax: shop.automaticTax, policy: shop.policy,
-    cap: shop.capPerPlayerMonth, checkoutMinutes: shop.checkoutMinutes, items: shop.items });
+    cap: shop.capPerPlayerMonth, checkoutMinutes: shop.checkoutMinutes, items: shop.items, ...(shop.basket ? {basket:shop.basket} : {}) });
 }
 export function fullerReason(shop) {
   if (shop.items.some(item => item.interval && item.price === 'choose')) return 'A giver-chosen monthly amount needs a Stripe Checkout connection.';
