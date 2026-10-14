@@ -25,7 +25,11 @@ Recurring shop payments reach the shop and its apps even when the studio also se
 
 ### Fixed
 
-- Studio shop subscription invoices and lifecycle events stay with the shop when parts selling is enabled. Recurring gifts and memberships record renewals and app events once, retaining the original reference; parts purchases keep their own reconciliation path. Studios can remove the 0.51.3–0.51.4 subscription-routing postinstall workaround after upgrading.
+- Recurring gifts and memberships now record each renewal and notify your apps once, even when your studio also sells parts. Renewals keep the reference from the original purchase, so your app can connect them to the right cause or member. Subscription updates and cancellations also reach the shop, while payments for parts continue to work as before.
+
+### Upgrade notes
+
+- If your studio added the temporary subscription-routing postinstall workaround for 0.51.3–0.51.4, remove it after upgrading.
 
 ## [0.51.4] - 2026-10-14
 
