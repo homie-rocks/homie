@@ -64,7 +64,7 @@ test('I: four advertised starters exist and declare their actual workflow', asyn
 test('L: Grok Bot feedback retains its client identity', async () => {
  const { appOf, cleanNote } = await import('../lib/feedback.mjs');
  assert.equal(appOf({ name: 'Grok Bot' }), 'grok');
- assert.equal(cleanNote({ kind: 'issue', text: 'App setup failed', app: 'grok' }).note.app, 'grok');
+ assert.equal(cleanNote({ kind: 'bug', text: 'App setup failed', app: 'grok' }).note.app, 'grok');
 });
 
 test('H: monthly CAD gifts create recurring Stripe prices and subscription links', async () => {

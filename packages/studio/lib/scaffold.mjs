@@ -113,6 +113,23 @@ ${JSON.stringify(config, null, 2)}
 }
 
 export function agentsMd({ name, slug, kind = 'game' }) {
+  if (kind !== 'game') return `# ${name}
+
+This is **${name}** (\`${slug}\`), a ${kind === 'cause' ? 'cause' : 'business'} studio. Its apps, pages and shop run on its own Cloudflare account.
+
+Read \`node_modules/@homie-rocks/studio/guides/app/SKILL.md\` first. Proceed from the owner's request through building and checking; ask for an interview only when requested or when essential information is missing.
+
+- \`apps/<id>/app.json\` defines the app's words, roles, records and surfaces; \`src/view.ts\` draws it.
+- \`site/pages/<path>/index.html\` adds a page and a header link. A page at an app's id replaces its landing, while \`/<id>/open\` and \`/<id>/tv\` remain the phone and wall entrances.
+- \`shop.json\` defines products, services or gifts. Local dev previews items before Stripe is connected.
+- \`studio.json\` names the organisation and its currency. \`site/theme.json\` sets its colours and fonts.
+
+Start with \`homie-studio app new <id> --from welcome|gathering|giving|quiz|jobs\`, then \`npm install\`, \`npm run build\`, \`npm run dev\`. Use the printed address; a busy port is skipped. Run \`homie-studio check <id> --url <address> --shots .checks\` and inspect the wall and phone captures.
+
+For gifts, use \`homie-studio shop init --giving --currency <currency>\`. The organisation supplies its own receipt/tax wording. The giving wall records intentions, not paid gifts. Service requests are not confirmed reservations.
+
+Keep credentials, private staff links and personal records out of source control. Use the studio's own roles and records APIs. Publish only when the owner requests it. Existing authored files belong to the owner; do not overwrite them during upgrades.
+`;
   return `# ${name}
 
 This folder is a studio: **${name}** (\`${slug}\`). It is one repository.
