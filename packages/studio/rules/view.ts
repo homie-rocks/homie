@@ -1159,16 +1159,16 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       if (t >= 1) headingBlend = null;
     }
     const result = entityOf({ ...server, ...(kind && predictors[kind.name] ? { fields: (base ? previewFields : null) ?? mine.fields } : {}), pos, vel: velocity, heading, grounded, motion }, true);
-    // Readers (HUD, scene, probes) share one presentation per animation frame.
-    // Inputs and snapshots still invalidate immediately. The probe must not run
-    // a second visual collision/forecast pass before the game draws that frame.
+    // Synchronous readers (HUD, scene, probes) share one presentation. Clear at
+    // the microtask boundary: an rAF clear can run after the next drawing callback,
+    // reusing an old pose and then spending two callbacks' travel at once.
+    // Inputs and snapshots still invalidate immediately.
     if (present && typeof window !== 'undefined') {
       presentedEntity = result;
       if (!presentationQueued) {
         presentationQueued = true;
         const clear = () => { presentedEntity = null; presentationQueued = false; };
-        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(clear);
-        else queueMicrotask(clear);
+        queueMicrotask(clear);
       }
     }
     return result;
