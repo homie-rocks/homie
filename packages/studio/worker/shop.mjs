@@ -141,11 +141,11 @@ export async function readiness(env, shop) {
   else if (shop.broken) missing.push('shop.json-refused');
   else if (shop.till === 'off') missing.push('till-off');
   else if (!shop.items.length) missing.push('items');
-  const paidItems = shop?.items.some((i) => i.price !== 0);
+  const paidItems = shop?.items.some((i) => i.price !== 0 || i.interval);
   const links = linkConfig(env);
   if (paidItems && !hasStripeKey(env)) {
     if (fullerReason(shop)) missing.push('fuller-checkout');
-    else if (!links || links.settings !== linkSettings(shop) || shop.items.some((i) => i.price !== 0 && !links.items.some((l) => l.item === i.id && paymentLinkURL(l.url)))) missing.push('payment-links');
+    else if (!links || links.settings !== linkSettings(shop) || shop.items.some((i) => (i.price !== 0 || i.interval) && !links.items.some((l) => l.item === i.id && paymentLinkURL(l.url)))) missing.push('payment-links');
   }
   // Reliable fulfillment requires the webhook as well as the redirect.
   // https://docs.stripe.com/checkout/fulfillment
@@ -202,7 +202,7 @@ async function itemsView(env, shop, { game, kids, beginner, player, open, cursor
   const page = item ? selected : selected.slice(cursor, cursor + 100);
   const items = page.map((it) => {
     const owned = it.gives.length > 0 && it.gives.every((k) => owns.some((o) => o.key === k && o.item === it.id));
-    const way = wayFor(it, { open: open || it.price === 0 && !shop.broken && shop.till !== 'off', kids, beginner, player, band, owned, spent, cap: purchasing ? null : shop.capPerPlayerMonth, policy: shop.policy });
+    const way = wayFor(it, { open: open || it.price === 0 && !it.interval && !shop.broken && shop.till !== 'off', kids, beginner, player, band, owned, spent, cap: purchasing ? null : shop.capPerPlayerMonth, policy: shop.policy });
     return { id: it.id, kind: it.kind, ...(it.interval ? { interval: it.interval } : {}), name: it.name, blurb: it.blurb ?? null, price: it.price, ...(it.price === 'choose' ? { min: it.min, max: it.max } : {}), shown: it.price === 'choose' ? `${money(it.min, shop.currency)} or more` : money(it.price, shop.currency), gives: it.gives, ...(it.badge ? { badge: it.badge } : {}), ...(it.days ? { days: it.days } : {}), ...(it.ends ? { ends: it.ends } : {}), ...(it.game ? { game: it.game } : {}), way, ...(way === 'cap' ? { retryWay: wayFor(it, { open, kids, beginner, player, band, owned, cap: null, policy: shop.policy }) } : {}) };
   }).filter((i) => i.way !== 'beginner' && i.way !== 'kids');
   return { band, owns, spent, items, nextCursor: !item && cursor + 100 < selected.length ? String(cursor + 100) : null };
