@@ -394,7 +394,7 @@ export async function checkApp({ root = null, url, game, meta, shots = null, log
     }
     report?.check?.('app-action', 'pass', { note: 'action reached wall and both phones; reconnect retained it' });
     const needs = plan ? await proveAppNeeds({ plan, surfaces, shots, report }) : null;
-    if (plan) saveAppNeeds(root, game, plan, needs);
+    if (plan) { saveAppNeeds(root, game, plan, needs); const { refreshCodexFile } = await import('./codex.mjs'); refreshCodexFile(root, game); }
     const ok = !needs || needs.every(n => n.status === 'met');
     return { ok, ...(needs ? { needs, why: ok ? undefined : 'Some needs from the person’s Codex are not yet met; see needs and captures' } : {}), command: 'check', kind: 'app', room, surfaces: surfaces.map((s) => s.name), action: proof.action, before, after, reconnect: true };
   } catch (error) { return { ok: false, command: 'check', kind: 'app', why: error.message }; }

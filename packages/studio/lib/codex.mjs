@@ -567,7 +567,7 @@ export function renderCodex(root, id, { mode = 'file', feed, now = new Date() } 
   const needReportFile = join(root, '.studio', 'checks', `${id}-needs.json`);
   let needStatus = '';
   if (game.kind === 'app' && existsSync(needReportFile)) {
-    try { const r = JSON.parse(readFileSync(needReportFile, 'utf8')); needStatus = `<section><h2>Needs status</h2><p>Checked ${esc(r.at)}. Screen assertions are evidence; review the captures against Their words.</p>${r.needs.map(n => `<p><strong>${esc(n.status)}</strong> ${esc(n.statement)} — ${esc(n.why ?? '')} ${esc((n.captures ?? []).join(', '))}</p>`).join('')}</section>`; } catch {}
+    try { const r = JSON.parse(readFileSync(needReportFile, 'utf8')); const stale = r.codexHash !== createHash('sha256').update(readFileSync(file, 'utf8')).digest('hex'); needStatus = `<section><h2>Needs status</h2><p>${stale ? 'Plan changed: this evidence is stale; check again. ' : ''}Checked ${esc(r.at)}. Screen assertions are evidence; review the captures against Their words.</p>${r.needs.map(n => `<p><strong>${stale ? 'not yet rechecked' : esc(n.status)}</strong> ${esc(n.statement)} — ${esc(n.why ?? '')} ${esc((n.captures ?? []).join(', '))}</p>`).join('')}</section>`; } catch {}
   }
   const body = needStatus + sections.map((x) => sectionHtml(x, emb, ctx)).join('\n');
   const status = statusHtml(s, ctx);

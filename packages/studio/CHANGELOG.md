@@ -21,6 +21,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 **Plugin 0.50.0** · Build the person's app from their dream.
 
+Apps now follow their owner’s words through planning, a living scene and evidence of each need.
+
 ### Added
 
 - Apps use the shared Codex planning page: their own words, pictured scene, people, offers and demonstrable needs. A plan can precede app plumbing and survives creation.
