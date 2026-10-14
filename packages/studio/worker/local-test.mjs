@@ -1,0 +1,19 @@
+/** Only dev supplies this secret. Neither a loopback URL nor a role parameter grants authority. */
+const local = (request, env) => env.HOMIE_LOCAL_TEST_SECRET && ['localhost','127.0.0.1','[::1]'].includes(new URL(request.url).hostname);
+export async function localCaller(request, env) {
+  if (!local(request, env) || request.headers.get('authorization') !== `Bearer ${env.HOMIE_LOCAL_TEST_SECRET}`) return null;
+  return {id:'local-test-owner',owner:true,client:null};
+}
+export async function localSession(request, env) {
+  if (!local(request, env)) return null;
+  const token = /(?:^|;\s*)homie_test=([^;]+)/.exec(request.headers.get('cookie') ?? '')?.[1];
+  if (!token) return null;
+  try {
+    const [data, signature] = token.split('.');
+    if (!/^[a-f0-9]{64}$/.test(signature)) return null;
+    const key = await crypto.subtle.importKey('raw',new TextEncoder().encode(env.HOMIE_LOCAL_TEST_SECRET),{name:'HMAC',hash:'SHA-256'},false,['verify']);
+    if (!await crypto.subtle.verify('HMAC',key,Uint8Array.from(signature.match(/../g),h=>parseInt(h,16)),new TextEncoder().encode(data))) return null;
+    const session = JSON.parse(atob(data.replaceAll('-','+').replaceAll('_','/')));
+    return /^[a-z][a-z0-9-]*$/.test(session.app) && /^[a-z][a-z0-9-]*$/.test(session.role) && (!session.scope || /^[a-zA-Z0-9-]+$/.test(session.scope)) ? session : null;
+  } catch { return null; }
+}

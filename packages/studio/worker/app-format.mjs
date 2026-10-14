@@ -18,7 +18,7 @@ export function appProblems(meta) {
   if (!object(meta.records) || typeof meta.records.persist !== 'boolean' || !object(meta.records.collections)) bad.push('records declares persist and collections');
   for (const [id, c] of Object.entries(collections)) {
     if (!key.test(id) || !object(c) || !object(c.fields)) { bad.push(`collection ${id}: declare fields`); continue; }
-    for (const [field, spec] of Object.entries(c.fields)) if (!key.test(field) || !object(spec) || !['string', 'number', 'boolean'].includes(spec.type) || (spec.enum && (!Array.isArray(spec.enum) || !spec.enum.length))) bad.push(`collection ${id}.${field}: invalid field`);
+    for (const [field, spec] of Object.entries(c.fields)) if (!/^[a-z][a-z0-9_]*$/.test(field) || !object(spec) || !['string', 'number', 'boolean'].includes(spec.type) || (spec.enum && (!Array.isArray(spec.enum) || !spec.enum.length))) bad.push(`collection ${id}.${field}: invalid field: names start with a lowercase letter and use lowercase letters, digits and underscore; declare a string, number or boolean type`);
   }
   for (const r of Object.values(roles)) for (const cap of Array.isArray(r?.can) ? r.can : []) if (!Object.hasOwn(meta.records?.collections ?? {}, String(cap).split(':')[1])) bad.push(`unknown collection in ${cap}`);
   for (const [k, v] of Object.entries(meta.words ?? {})) if (!/^[a-z][a-zA-Z0-9-]*$/.test(k) || typeof v !== 'string' || v.length > 500) bad.push(`words.${k}: use a short label`);
@@ -32,6 +32,7 @@ export function appRole(meta, url) {
 }
 export function recordProblem(collection, data, { create = false } = {}) {
   if (!object(data) || JSON.stringify(data).length > 8192) return 'record must be an object below 8 KB';
+  for (const k of Object.keys(data)) if (!/^[a-z][a-z0-9_]*$/.test(k)) return `invalid field ${k}: names start with a lowercase letter and use lowercase letters, digits and underscore`;
   for (const k of Object.keys(data)) if (!Object.hasOwn(collection.fields, k)) return `unknown field ${k}`;
   for (const [k, s] of Object.entries(collection.fields)) {
     const v = data[k];

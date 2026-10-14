@@ -29,7 +29,7 @@ const GAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
 /** Call the studio's office API with a key that lives ten minutes and is dropped as soon as the answer is in. */
 export async function withKey(root, url, fn) {
   const { studio, site } = siteOf(root, url);
-  if (!site) return { ok: false, why: 'this studio has no live site yet: `npm run deploy` first, or give --url http://127.0.0.1:8787 for `npm run dev`' };
+  if (!site) return { ok: false, why: 'this studio has no live site yet: `npm run deploy` first, or give --url http://localhost:8787 for `npm run dev`' };
   const local = loopback(site);
   const k = mint(root, studio, 'office', 10 * 60_000, { local });
   let expiresAt = Date.now() + 10 * 60_000;

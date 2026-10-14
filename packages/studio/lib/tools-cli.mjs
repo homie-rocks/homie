@@ -1,3 +1,4 @@
+import {localCredential} from './local-test.mjs';
 import {existsSync,mkdirSync,writeFileSync,readFileSync,chmodSync} from 'node:fs';
 import {join,dirname} from 'node:path';
 import {createServer} from 'node:http';
@@ -16,6 +17,8 @@ export async function connectToolClient(root,site,{publicOnly=false,open=default
   const url=new URL('/mcp',site);if(url.protocol!=='https:'&&!['localhost','127.0.0.1','[::1]'].includes(url.hostname))throw new Error('Use HTTPS, or localhost for local development');
   const client=new Client({name:'Homie studio tool CLI',version:'1.0.0'});
   if(publicOnly){await client.connect(new StreamableHTTPClientTransport(url));return client;}
+  const secret=localCredential(root,url);
+  if(secret){await client.connect(new StreamableHTTPClientTransport(url,{requestInit:{headers:{authorization:`Bearer ${secret}`}}}));return client;}
   const file=join(root,'.studio','mcp',Buffer.from(url.origin).toString('base64url')+'.json');
   let state={};try{state=JSON.parse(readFileSync(file,'utf8'));}catch{}
   // Credentials without an issuer predate the SDK's OAuth binding fix; reconnect safely.

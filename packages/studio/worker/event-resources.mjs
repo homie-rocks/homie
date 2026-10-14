@@ -17,7 +17,7 @@ export async function readableFeed(env,cat,caller,name) {
     if(!app||!app.records?.collections?.[feed.collection])return false;
     if(caller.owner)return true;
     if(launchOf(app,await settingsOf(env,{fresh:true}),env)!=='public')return false;
-    return Object.entries(app.roles??{}).some(([role,decl])=>decl.can.includes('read:'+feed.collection)&&(!decl.signIn||caller.roles?.[app.id]?.includes(role)));
+    return Object.entries(app.roles??{}).some(([role,decl])=>decl.can.includes('read:'+feed.collection)&&(!decl.signIn||(caller.roles?.[app.id]?.includes(role)||caller.roles?.['*']?.includes(role))));
   }
   // Non-record events have no app read capability; they remain owner-only.
   return caller.owner===true;
@@ -56,12 +56,14 @@ export async function pushEvents(env,cat,origin) {
 }
 
 /** One existing Lobby object per OAuth connection: streams never live in a Worker isolate. */
+const streamCaller=(env,connection)=>connection.startsWith('public:')?Promise.resolve({id:null,owner:false,client:null,connection}):currentCaller(env,{connection});
 export class EventStreams {
   constructor(env,ctx){this.env=env;this.ctx=ctx;this.stream=null;this.tail=Promise.resolve();}
-  close(stream){stream.cancelled=true;stream.resume?.();try{stream.controller.close();}catch{}if(this.stream===stream)this.stream=null;}
+  close(stream){stream.cancelled=true;stream.resume?.();try{stream.controller.close();}catch{}if(this.stream===stream){this.stream=null;this.ctx.waitUntil(this.env.DB.prepare('DELETE FROM mcp_kv WHERE key=?1').bind('tools-stream:'+stream.connection).run().catch(()=>{}));}}
   background(input){this.ctx.waitUntil(this.wake(input).catch(error=>{if(this.stream)this.close(this.stream);console.error('Event stream delivery failed',error);}));}
   async fetch(request) {
     const input=await request.json();
+    if(input.op==='tools') {await this.wake(input);return new Response(null,{status:204});}
     if(input.op==='stream') {
       // A reconnect replaces the previous GET, including a half-open socket.
       if(this.stream)this.close(this.stream);
@@ -73,6 +75,10 @@ export class EventStreams {
       const stream={...input,after,name,controller:null,cancelled:false,resume:null};
       const body=new ReadableStream({start:controller=>{stream.controller=controller;controller.enqueue(new TextEncoder().encode(': connected\n\n'));},pull:()=>{const resume=stream.resume;stream.resume=null;resume?.();},cancel:()=>this.close(stream)});
       this.stream=stream;
+      const caller=await streamCaller(this.env,connection).catch(()=>null);
+      if(!caller){this.close(stream);return new Response('Unauthorized',{status:401});}
+      stream.toolSignature=await this.toolSignature(input.tools??[],caller);
+      await this.env.DB.prepare('INSERT INTO mcp_kv(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind('tools-stream:'+connection,JSON.stringify({connection})).run();
       // Replay and later wakes share one ordered pump. Backpressure must not
       // hold up the writer's request or a function handler.
       this.background(input);
@@ -81,11 +87,16 @@ export class EventStreams {
     this.background(input);return new Response(null,{status:204});
   }
   wake(input){const work=this.tail.then(()=>this.deliver(input));this.tail=work.catch(()=>{});return work;}
+  async toolSignature(tools,caller) {const visible=[];for(const tool of tools)if(await allowed(tool.audience,caller,this.env))visible.push(tool);return JSON.stringify(visible);}
   async deliver(input) {
     const stream=this.stream;if(!stream)return;
     let caller;
-    try{caller=await currentCaller(this.env,{connection:input.connection});}
+    try{caller=await streamCaller(this.env,input.connection);}
     catch{this.close(stream);return;}
+    if(input.tools){
+      const signature=await this.toolSignature(input.tools,caller);
+      if(stream.toolSignature!==signature){stream.toolSignature=signature;stream.controller.enqueue(new TextEncoder().encode('event: message\ndata: '+JSON.stringify({jsonrpc:'2.0',method:'notifications/tools/list_changed'})+'\n\n'));}
+    }
     const rows=(await this.env.DB.prepare("SELECT value FROM mcp_kv WHERE key LIKE ?1").bind('event-sub:'+caller.connection+':%').all()).results;
     const subscriptions=[];
     for(const row of rows){const sub=JSON.parse(row.value);if(await readableFeed(this.env,input.cat,caller,sub.name))subscriptions.push(sub);}
@@ -112,5 +123,21 @@ export class EventStreams {
       }
       if(events.length<100)break;cursor=events.at(-1).seq;
     }
+  }
+}
+
+/** Refresh active streams whenever this Worker observes a new tool catalogue. */
+export async function pushToolList(env,cat,tools,origin) {
+  if(!env.LOBBY)return;
+  const publicShape=tools.map(({name,description,inputSchema,audience,kind})=>({name,description,inputSchema,audience,kind}));
+  const signature=JSON.stringify(publicShape);
+  const previous=await env.DB.prepare("SELECT value FROM mcp_kv WHERE key='tools-catalogue'").first();
+  if(previous?.value===signature)return;
+  await env.DB.prepare("INSERT INTO mcp_kv(key,value) VALUES('tools-catalogue',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(signature).run();
+  let after='';
+  for(;;){
+    const rows=(await env.DB.prepare("SELECT key,value FROM mcp_kv WHERE key LIKE 'tools-stream:%' AND key>?1 ORDER BY key LIMIT 100").bind(after).all()).results;
+    for(const row of rows){const connection=JSON.parse(row.value).connection;await eventHub(env,connection).fetch('https://events/__studio_events',{method:'POST',body:JSON.stringify({op:'tools',connection,cat,tools:publicShape,origin})});}
+    if(rows.length<100)break;after=rows.at(-1).key;
   }
 }

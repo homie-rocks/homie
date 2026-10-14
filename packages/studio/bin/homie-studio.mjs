@@ -246,7 +246,7 @@
  *                                         when another MCP server named homie has taken the connector's name there.
  *
  *   homie-studio codex new <id> [--kind app|game] [--name "<Name>"]
- *                                         games/<id>/CODEX.md: the Game Codex, every section, in the game's colours (a game
+ *                                         apps/<id>/CODEX.md for apps; games/<id>/CODEX.md for games: the Codex, every section, in the game's colours (a game
  *                                          is planned before it is made: with no game <id> yet, it starts its folder)
  *   homie-studio codex <id> [--artifact] [--open]
  *                                         the codex as a page in the game's own look (.studio/codex/<id>.html; it redraws
@@ -951,7 +951,7 @@ async function main() {
     const { withKey } = await import('../lib/office.mjs');
     const id = positional[2]; const role = positional[3];
     if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id ?? '') || !/^[a-z][a-z0-9-]{0,39}$/.test(role ?? '')) throw new Error('app role <id> <role> [--player <account>] [--revoke] [--url <site>]');
-    return withKey(root, flags.get('url'), (call) => call(`/${id}/api/app/roles`, { role, ...(flags.get('player') ? { player: flags.get('player') } : {}), revoke: flags.has('revoke') }));
+    return withKey(root, flags.get('url'), (call) => call(`/${id}/api/app/roles`, { role, studio:flags.has('studio'), ...(flags.get('player') ? { player: flags.get('player') } : {}), revoke: flags.has('revoke') }));
   }
   if (cmd === 'app' && sub === 'new') return newApp(root, positional[2], { name: flags.get('name'), from: flags.get('from') ?? 'welcome' });
   if (cmd === 'game' && sub === 'new') return newGame(root, positional[2], { from: flags.get('from') ?? 'gem-rush', name: flags.get('name') });
@@ -1001,7 +1001,7 @@ async function main() {
       const results = [];
       for (const game of games) {
         const shots = flags.get('shots') ? resolve(flags.get('shots'), ...(games.length > 1 ? [game] : [])) : null;
-        const r = await tracked(root, 'checks', (report) => check({ root, url: site.url, game, shots, log, report }), 'check');
+        const r = await tracked(root, 'checks', (report) => check({ root, url: site.url, game, shots, log, report, isolate:!flags.has('no-isolate') }), 'check');
         results.push({ ...r, game, site: site.url, local: site.local });
         const receiptDir = join(root, '.studio', 'checks');
         mkdirSync(receiptDir, { recursive: true });

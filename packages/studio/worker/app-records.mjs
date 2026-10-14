@@ -1,3 +1,4 @@
+import {localSession} from './local-test.mjs';
 import { toolIdentity } from './tool-identity.mjs';
 /** Lasting app records in the studio's own D1. Room hosts never authorize writes. */
 import { appRole, recordProblem } from './app-format.mjs';
@@ -38,12 +39,14 @@ export async function appAccess(request, env, meta, url) {
   const declared = Object.hasOwn(meta.roles ?? {}, role) ? meta.roles[role] : null;
   if (!declared) return { ok: false, status: 404, error: 'unknown role' };
   if (!declared.signIn) return { ok: true, role, can: declared.can };
+  const session = await localSession(request, env);
+  if (session?.app === meta.id && session.role === role) return {ok:true,role,can:declared.can};
   if (!env.DB) return { ok: false, status: 503, error: 'app roles need the studio database' };
   const caller = toolIdentity(request);
   if (caller) {
     if (caller.owner) return { ok: true, role, can: declared.can };
     if (!caller.id) return { ok: false, status: 401, error: 'sign in to this studio' };
-    const grant = await env.DB.prepare('SELECT player FROM app_roles WHERE app = ?1 AND role = ?2 AND player = ?3').bind(meta.id, role, caller.id).first();
+    const grant = await env.DB.prepare("SELECT player FROM app_roles WHERE app IN (?1, '*') AND role = ?2 AND player = ?3").bind(meta.id, role, caller.id).first();
     return grant ? { ok: true, role, can: declared.can } : { ok: false, status: 403, error: 'this account has no role grant' };
   }
   const link = await env.DB.prepare('SELECT token FROM app_role_links WHERE app = ?1 AND role = ?2').bind(meta.id, role).first();
@@ -51,7 +54,7 @@ export async function appAccess(request, env, meta, url) {
   if (await isOwner(request, env)) return { ok: true, role, can: declared.can };
   const person = await players.of(request, env);
   if (!person || person.guest) return { ok: false, status: 401, error: 'sign in to this studio' };
-  const grant = await env.DB.prepare('SELECT player FROM app_roles WHERE app = ?1 AND role = ?2 AND player = ?3').bind(meta.id, role, person.id).first();
+  const grant = await env.DB.prepare("SELECT player FROM app_roles WHERE app IN (?1, '*') AND role = ?2 AND player = ?3").bind(meta.id, role, person.id).first();
   return grant ? { ok: true, role, can: declared.can } : { ok: false, status: 403, error: 'this account has no role grant' };
 }
 export async function appRecordsRoute(request, env, meta, url, sub) {
@@ -69,26 +72,30 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
         if (!ID.test(b.player)) return fail(400, 'invalid account');
         const p = await players.get(b.player, env);
         if (!p || p.guest) return fail(400, 'role grants require an existing signed-in account');
-        await env.DB.prepare(b.revoke === true ? 'DELETE FROM app_roles WHERE app = ?1 AND role = ?2 AND player = ?3' : 'INSERT OR IGNORE INTO app_roles (app, role, player) VALUES (?1, ?2, ?3)').bind(meta.id, b.role, b.player).run();
+        await env.DB.prepare(b.revoke === true ? 'DELETE FROM app_roles WHERE app = ?1 AND role = ?2 AND player = ?3' : 'INSERT OR IGNORE INTO app_roles (app, role, player) VALUES (?1, ?2, ?3)').bind(b.studio === true ? '*' : meta.id, b.role, b.player).run();
       }
       const token = crypto.randomUUID().replaceAll('-', '');
       if (b.rotate === true) await env.DB.prepare('DELETE FROM app_role_links WHERE app = ?1 AND role = ?2').bind(meta.id, b.role).run();
       await env.DB.prepare('INSERT OR IGNORE INTO app_role_links (app, role, token) VALUES (?1, ?2, ?3)').bind(meta.id, b.role, token).run();
       const row = await env.DB.prepare('SELECT token FROM app_role_links WHERE app = ?1 AND role = ?2').bind(meta.id, b.role).first();
-      return json({ ok: true, link: `${url.origin}/${meta.id}/open?role=${b.role}&access=${row.token}`, role: b.role });
+      return json({ ok: true, link: `${url.origin.replace('127.0.0.1','localhost')}/${meta.id}/open?role=${b.role}&access=${row.token}`, role: b.role });
     }
     const match = /^api\/app\/records\/([a-z][a-z0-9-]{0,39})(?:\/([A-Za-z0-9_-]{1,64}))?$/.exec(sub);
+    if(!match && /^api\/app\/records\/[^/]+\//.test(sub))return fail(400,'record id: 1–64 letters, digits, underscore or hyphen');
     if (!match || !Object.hasOwn(meta.records?.collections ?? {}, match[1])) return fail(404, 'unknown collection');
     if (meta.records.persist !== true) return fail(409, 'use netplay state for transient records, or enable records.persist');
     const access = await appAccess(request, env, meta, url);
     if (!access.ok) return fail(access.status, access.error);
     const [, collection, id] = match;
+    const session = await localSession(request, env);
+    const testScope = (session?.app === meta.id ? session.scope : null) ?? (env.HOMIE_LOCAL_TEST_SECRET ? toolIdentity(request)?.testScope : null);
+    const recordApp = testScope ? `${meta.id}:check:${testScope}` : meta.id;
     const op = ({ GET: 'read', POST: 'create', PUT: 'update', DELETE: 'delete' })[request.method];
     if (!op || !access.can.includes(`${op}:${collection}`)) return fail(403, 'role cannot perform this operation');
     if (op !== 'read' && !sameOrigin(request, url) && !(appOriginOf(request) && !meta.roles[access.role].signIn)) return fail(403, 'same origin required');
     if (op === 'read') {
-      const rows = id ? [await env.DB.prepare('SELECT id, value, version, updated_at FROM app_records WHERE app = ?1 AND collection = ?2 AND id = ?3').bind(meta.id, collection, id).first()].filter(Boolean)
-        : (await env.DB.prepare('SELECT id, value, version, updated_at FROM app_records WHERE app = ?1 AND collection = ?2 ORDER BY updated_at, id LIMIT 1000').bind(meta.id, collection).all()).results;
+      const rows = id ? [await env.DB.prepare('SELECT id, value, version, updated_at FROM app_records WHERE app = ?1 AND collection = ?2 AND id = ?3').bind(recordApp, collection, id).first()].filter(Boolean)
+        : (await env.DB.prepare('SELECT id, value, version, updated_at FROM app_records WHERE app = ?1 AND collection = ?2 ORDER BY updated_at, id LIMIT 1000').bind(recordApp, collection).all()).results;
       return json({ ok: true, records: rows.map((r) => ({ id: r.id, data: JSON.parse(r.value), version: r.version, updatedAt: r.updated_at })) });
     }
     if (!id) return fail(400, 'record id required');
@@ -96,9 +103,9 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
     if (op !== 'delete') { const bad = recordProblem(meta.records.collections[collection], body.data, { create: op === 'create' }); if (bad) return fail(400, bad); }
     if (op !== 'create' && (!Number.isSafeInteger(body.version) || body.version < 1)) return fail(400, 'record version required');
     const stmt = op === 'create'
-      ? env.DB.prepare('INSERT OR IGNORE INTO app_records (app, collection, id, value, version, updated_at) SELECT ?1, ?2, ?3, ?4, 1, ?5 WHERE (SELECT COUNT(*) FROM app_records WHERE app = ?1 AND collection = ?2) < 1000').bind(meta.id, collection, id, JSON.stringify(body.data), Date.now())
-      : op === 'update' ? env.DB.prepare('UPDATE app_records SET value = ?4, version = version + 1, updated_at = ?5 WHERE app = ?1 AND collection = ?2 AND id = ?3 AND version = ?6').bind(meta.id, collection, id, JSON.stringify(body.data), Date.now(), body.version)
-      : env.DB.prepare('DELETE FROM app_records WHERE app = ?1 AND collection = ?2 AND id = ?3 AND version = ?4').bind(meta.id, collection, id, body.version);
+      ? env.DB.prepare('INSERT OR IGNORE INTO app_records (app, collection, id, value, version, updated_at) SELECT ?1, ?2, ?3, ?4, 1, ?5 WHERE (SELECT COUNT(*) FROM app_records WHERE app = ?1 AND collection = ?2) < 1000').bind(recordApp, collection, id, JSON.stringify(body.data), Date.now())
+      : op === 'update' ? env.DB.prepare('UPDATE app_records SET value = ?4, version = version + 1, updated_at = ?5 WHERE app = ?1 AND collection = ?2 AND id = ?3 AND version = ?6').bind(recordApp, collection, id, JSON.stringify(body.data), Date.now(), body.version)
+      : env.DB.prepare('DELETE FROM app_records WHERE app = ?1 AND collection = ?2 AND id = ?3 AND version = ?4').bind(recordApp, collection, id, body.version);
     const result = await stmt.run();
     return result.meta.changes ? json({ ok: true, id, version: op === 'create' ? 1 : body.version + 1 }) : fail(409, 'record changed, already exists, or collection full; reload');
   } catch (error) {

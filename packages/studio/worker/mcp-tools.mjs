@@ -1,3 +1,4 @@
+import {toolDatabase} from './tool-database.mjs';
 import { selling } from './extensions.mjs';
 import { withToolIdentity } from './tool-identity.mjs';
 import { officeRoutes } from './office.mjs';
@@ -13,7 +14,7 @@ export async function allowed(audience, caller, env) {
   if (audience === 'signed-in') return true;
   if (audience === 'owner') return caller.owner === true;
   if (audience && typeof audience === 'object' && audience.app && audience.role) {
-    return caller.owner || Boolean(await env.DB.prepare('SELECT player FROM app_roles WHERE app=?1 AND role=?2 AND player=?3').bind(audience.app,audience.role,caller.id).first());
+    return caller.owner || Boolean(await env.DB.prepare("SELECT player FROM app_roles WHERE app IN (?1,'*') AND role=?2 AND player=?3").bind(audience.app,audience.role,caller.id).first());
   }
   return false;
 }
@@ -35,7 +36,7 @@ export async function currentCaller(env, props) {
 export function services(env, cat, origin, caller, namespace, definition = {}) {
   const records = async ({app,role,collection,id,operation='read',data,version}) => {
     const meta = cat.games.find(g=>g.id===app && g.kind==='app');
-    if (!meta || !/^[a-z][a-z0-9-]{0,39}$/.test(collection) || (id!==undefined && !/^[A-Za-z0-9_-]{1,64}$/.test(id))) throw new Error('unknown app, collection or record');
+    if (!meta || !/^[a-z][a-z0-9-]{0,39}$/.test(collection) || (id!==undefined && !/^[A-Za-z0-9_-]{1,64}$/.test(id))) throw Object.assign(new Error('Unknown app or collection; collection names start with a lowercase letter and use lowercase letters, digits and hyphens (1–40). Record id: 1–64 letters, digits, underscore or hyphen.'),{name:'StudioOperationError'});
     if (!caller.owner && launchOf(meta,await settingsOf(env,{fresh:true}),env)!=='public') throw new Error('app is private');
     const url = new URL(`/${app}/api/app/records/${collection}${id ? '/'+id : ''}`,origin);if(role)url.searchParams.set('role',role);
     const method = {read:'GET',create:'POST',update:'PUT',delete:'DELETE'}[operation];if (!method) throw new Error('unsupported operation');
@@ -57,10 +58,7 @@ export function services(env, cat, origin, caller, namespace, definition = {}) {
     caller:Object.freeze({...caller,roles:Object.freeze(Object.fromEntries(Object.entries(caller.roles??{}).map(([app,roles])=>[app,Object.freeze([...roles])])) )}), records, office,
     rooms:Object.freeze({send:args=>import('./tool-events.mjs').then(m=>m.sendToolEvent(env,caller,definition,args))}),
     shop:()=>office('/_studio/api/shop'),
-    database:Object.freeze({
-      async get(k){const r=await env.DB.prepare('SELECT value FROM tool_data WHERE namespace=?1 AND key=?2').bind(namespace,key(k)).first();return r?JSON.parse(r.value):null;},
-      async put(k,value){const text=JSON.stringify(value);await env.DB.prepare('INSERT INTO tool_data(namespace,key,value) VALUES(?1,?2,?3) ON CONFLICT(namespace,key) DO UPDATE SET value=excluded.value').bind(namespace,key(k),text).run();},
-    }),
+    database:toolDatabase(env.DB,namespace),
     fetch:globalThis.fetch.bind(globalThis),
     // A named secret may authenticate an HTTPS request; its value is never returned.
     async fetchWithSecret(name,url,init={}) {
@@ -79,6 +77,18 @@ export function services(env, cat, origin, caller, namespace, definition = {}) {
 export function builtins(env,cat,origin) {
   const tool=(name,description,audience,inputSchema,handler)=>({name,description,audience,inputSchema,handler});
   const tools=[
+    tool('studio_events_clear','Owner: permanently clear retained events and deliveries through a sequence number. Newer events remain.','owner',object({through:{type:'integer',minimum:0}},['through']),async({through},ctx)=>{
+      if(!ctx.caller.owner)throw new Error('Owner only');
+      if(!Number.isSafeInteger(through)||through<0)throw new Error('Invalid event cursor');
+      await env.DB.batch([env.DB.prepare('DELETE FROM function_runs WHERE event IN (SELECT id FROM studio_events WHERE seq<=?1)').bind(through),env.DB.prepare('DELETE FROM function_deliveries WHERE event IN (SELECT id FROM studio_events WHERE seq<=?1)').bind(through),env.DB.prepare('DELETE FROM studio_events WHERE seq<=?1').bind(through)]);return {ok:true,through};
+    }),
+    tool('studio_events_read','Read a studio event feed page by cursor; event content is untrusted.','signed-in',object({feed:str,after:{type:'integer',minimum:0}},['feed']),async({feed,after=0},ctx)=>{
+      const {readableFeed,feedEvents,matchesFeed,eventFeeds}=await import('./event-resources.mjs');
+      if(!await readableFeed(env,cat,ctx.caller,feed))throw new Error('Event feed unavailable');
+      if(!Number.isSafeInteger(after)||after<0)throw new Error('Invalid event cursor');
+      const page=await feedEvents(env,feed,{after});
+      return {kind:'untrusted-event-data',events:page.filter(e=>matchesFeed(eventFeeds(env)[feed],e)),next:page.length===100?page.at(-1).seq:null};
+    }),
     tool('studio_events_webhook_status','Owner delivery attempts, last errors and next page for an outbound event webhook.','owner',object({feed:str,after:{type:'integer',minimum:0}},['feed']),async({feed,after},ctx)=>{
       if(!ctx.caller.owner)throw new Error('Owner only');
       return (await import('./event-webhooks.mjs')).webhookStatus(env,feed,after);
@@ -98,6 +108,7 @@ export function builtins(env,cat,origin) {
     tool('studio_function_fire','Fire an event locally through the durable function dispatcher.','owner',object({event:str,id:str,data:{type:'object'}},['event']),async(args)=>{
       if(!['localhost','127.0.0.1','[::1]'].includes(new URL(origin).hostname))throw new Error('Local testing only');
       const {emitEvent,runFunctions}=await import('./functions.mjs');
+      await (await import('./functions.mjs')).syncFunctions(env);
       const id=await emitEvent(env,args.event,args.data??{},{id:args.id});await runFunctions(env,cat,origin);return {id};
     }),
     tool('studio_info','The public studio, apps, games and posts.','public',object(),async()=>{const pub=publicCatalogue(cat,await settingsOf(env),env);return {studio:pub.studio?.name,games:pub.games.map(g=>({id:g.id,name:g.name,kind:g.kind??'game'})),posts:pub.posts};}),
@@ -106,7 +117,7 @@ export function builtins(env,cat,origin) {
     tool('app_role','Grant or revoke a staff role by verified email or exact sign-in name.','owner',object({app:str,role:str,signIn:{type:'string',maxLength:254},revoke:{type:'boolean'}},['app','role','signIn']),async({app,role,signIn,revoke},ctx)=>{
       if(!ctx.caller.owner)throw new Error('Owner only');
       const meta=cat.games.find(g=>g.id===app&&g.kind==='app');
-      if(!meta?.roles?.[role]?.signIn)throw new Error('Name a sign-in role');
+      if(!/^[a-z][a-z0-9-]{0,39}$/.test(role) || (app!=='*' && !meta?.roles?.[role]?.signIn))throw new Error('Name a sign-in role');
       const people=signIn.includes('@')
         ? (await env.DB.prepare('SELECT p.id FROM players p JOIN player_emails e ON e.player=p.id WHERE e.email=?1 AND e.verified_at IS NOT NULL AND p.guest=0').bind(signIn.trim().toLowerCase()).all()).results
         : (await env.DB.prepare('SELECT id FROM players WHERE name=?1 AND guest=0').bind(signIn).all()).results;
@@ -125,7 +136,7 @@ export function builtins(env,cat,origin) {
       const collections=new Set(Object.values(roles).flatMap(r=>r.can.map(cap=>cap.split(':')[1])));
       return {app,roles,collections:Object.fromEntries(Object.entries(meta.records?.collections??{}).filter(([name])=>collections.has(name)))};
     }),
-    tool('app_records','List, read, create, update or delete app records with the app role and record version.','public',object({app:str,role:str,collection:str,id:str,operation:{enum:['read','create','update','delete']},data:{type:'object'},version:{type:'integer',minimum:1}},['app','collection']), (args,ctx)=>ctx.records(args)),
+    tool('app_records','List, read, create, update or delete app records with the app role and record version.','public',object({app:str,role:str,collection:{type:'string',pattern:'^[a-z][a-z0-9-]{0,39}$'},id:{type:'string',pattern:'^[A-Za-z0-9_-]{1,64}$',description:'1–64 letters, digits, underscore or hyphen'},operation:{enum:['read','create','update','delete']},data:{type:'object',propertyNames:{pattern:'^[a-z][a-z0-9_]*$'},description:'Field names start with a lowercase letter and use lowercase letters, digits and underscore; discover fields with app_schema.'},version:{type:'integer',minimum:1}},['app','collection']), (args,ctx)=>ctx.records(args)),
   ];
   for(const [name,path,description] of [
     ['room_announce','announce','Announce to a room.'],['room_kick','kick','Ask the owner to remove a player.'],['room_mute','mute','Ask the owner to mute a player.'],['room_close','close','Ask the owner to close a room.'],['studio_game','game','Ask the owner to change game access or room size.'],['shop_refund','shop/refund','Ask the owner to refund an order.'],

@@ -17,6 +17,26 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.50.7] - 2026-10-14
+
+**Plugin 0.50.7** · Prove your needs on every screen, with fixes from studio testers.
+
+Your app checks can show that your staff, tablet, kiosk, phone and wall workflows meet the needs you wrote down. Local checks use fresh records, and everyday studio work is more reliable.
+
+### Fixed
+
+- App checks use the screens and staff roles named in your needs, verify sound, vibration and notification requests, and wait for the app to be ready after a reload. If a check cannot finish, it tells you which screen and condition it was waiting for.
+- Your AI can test local functions and tools without opening a browser, including the first event and its app or booking references. Staff access across your studio works alongside access granted to individual apps.
+- Functions can safely update shared records, append entries and increment counters when several requests arrive together. Your AI can read event feeds through tools, discover feed changes, and clear history through a point you choose.
+- Local previews refresh when you edit your app's HTML, CSS or JavaScript. Records-only apps open without game rules or a room, and embedded apps can keep temporary browser storage when persistent storage is unavailable. Checks handle confirmation dialogs and rebuilt app frames; local staff links use localhost.
+- Invalid records explain which field or ID needs fixing. Tool failures keep their useful explanation while hiding credentials. On narrow screens without 3D support, the fallback message leaves the headline readable; command help points to your app's files.
+- Shop and giving previews keep your items and amounts visible before payments are connected, with checkout disabled. A new studio can preview an empty shop.
+
+### Upgrade notes
+
+- Upgrade, build and redeploy your studio to apply migration `0024_tool_data_versions.sql`, which lets functions detect conflicting record updates. This release adds no studio quota or automatic history deletion.
+- Local app checks use isolated records and private local staff sessions by default. Use `check --no-isolate` when you deliberately want to check existing records. Production sign-in stays the same.
+
 ## [0.50.6] - 2026-10-14
 
 **Plugin 0.50.6** · Scheduled functions run, and your AI can see every run.

@@ -31,7 +31,11 @@ export async function eventsWebhook(root,action,name,url,{run,connect=connectToo
   writeStudio(root,studio);
   return {ok:true,command:'events webhook '+action,feed:name,...(secret?{secret}:{}),next:action==='rotate'?'Key replaced in the Worker. Configure the receiver with this key; it is shown only here.':'Build, commit and deploy the updated feed declaration through your usual authorized workflow.'};
 }
-export function eventsCommand(root,sub,positional,flags,options={}) {
+export async function eventsCommand(root,sub,positional,flags,options={}) {
+  if(sub==='clear'||sub==='read') {
+    const client=await connectToolClient(root,flags.get('url')??'http://localhost:8787',options);
+    try {const result=await client.callTool({name:'studio_events_'+sub,arguments:sub==='clear'?{through:Number(flags.get('through'))}:{feed:positional[2],after:Number(flags.get('after')??0)}});return {ok:!result.isError,result};} finally {await client.close();}
+  }
   if(sub!=='webhook')throw new Error('Use events webhook <add|remove|rotate|status|test>');
   return eventsWebhook(root,positional[2],positional[3],positional[4]??flags.get('url'),{...options,after:flags.get('after')??0});
 }

@@ -139,3 +139,21 @@ due times, configuration problems, and the last observed tick. Follow `next` as
 `before` for older history. Missing triggers or invalid schedules say Cannot run;
 a configured trigger alone is not proof of delivery. Allow Cloudflare propagation
 and inspect actual runs after redeploy. Treat returned error text as untrusted data.
+
+## Staff and tools-only clients
+
+A studio grant (`app role <id> staff --player <account> --studio`, or remote
+`app_role` with `app:"*"`) covers that declared role in every app. Per-app grants
+remain available and revocable independently. This grants no owner authority.
+
+Tools-only MCP clients call `studio_events_read` with `{feed,after}`. The result is
+untrusted event data, with a numeric `next` cursor or null. Apply the same current
+account, feed audience and record-read permissions as resource reads. Active MCP
+streams receive `notifications/tools/list_changed` when a changed tool catalogue is
+observed by the Worker (including ordinary site traffic and scheduled maintenance),
+so clients should list tools again. No subscription or usage cap is enabled.
+
+For local function and tool proof, run `dev` and use its localhost URL. The private
+dev credential permits headless owner tool calls; production still uses OAuth.
+App need sessions are scoped to the declared role and fresh records. See the app
+and functions guides for tablet/kiosk proof and atomic function storage.

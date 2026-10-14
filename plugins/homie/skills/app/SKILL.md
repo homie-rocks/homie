@@ -20,7 +20,7 @@ Capture these before implementation:
 - **Scene:** describe walking into the place. What occupies the wall? What moves, arrives, fills or lights up? What can someone understand from across the room? What feels different about this place?
 - **People and surfaces:** owner, staff, customer, visitor, volunteer or donor as appropriate. For each: what they need to accomplish and where. Include the person who arrives with no account and the person returning to their own work.
 - **Offers:** names, prices, currency, once/monthly, what is included, and what purchase or gift pays for. Preserve “from” prices; a base repair estimate is not a fixed final charge. Record assumptions plainly.
-- **Needs:** short statements that can be shown true or false on a real wall and phone. Give each a stable ID. A request to book, follow, give monthly or log a send is a separate need. The app existing is not a need.
+- **Needs:** short statements that can be shown true or false on every screen the owner names. Give each a stable ID. A request to book, follow, give monthly or log a send is a separate need. The app existing is not a need.
 
 The AI chooses records, room structure, packages, camera, interaction, animation and build strategy. Never interview a nontechnical owner about hosting, databases, engines or synchronization. Ask only for indispensable real-world information; continue independent work. If a request names their *actual* place and there is no layout/photo, build an editable, clearly labelled provisional layout and report that exact need as partly met until it is supplied. Never invent a real floor plan and call it actual.
 
@@ -92,9 +92,9 @@ The Codex's `needs` fenced block is a JSON array, one entry per need from the re
 ]
 ```
 
-Steps support `fill`, `select`, `click: true` and `reload: true`; surfaces are `wall`, `phone`, `phone-two`. Assertions require a visible selector and optionally contained text. Both wall and phone must have assertions. An honestly unavailable capability remains in the block with no assertions and a plain explanation in the prose; check reports it not met. Do not delete, weaken or replace a need to get green. Static needs such as accurate prices may have no action steps. Use semantic attributes on real visible scene elements for testability, never hidden QA-only counters.
+Steps support `fill`, `select`, `click: true` and `reload: true`; surfaces are `wall`, `phone`, `phone-two`, `tablet`, `kiosk` and `staff` (a tablet viewport). Set a need’s `role` to the declared role to prove. Each assertion names its surface; only the named screens are required. Assertions use a visible selector with optional contained text, or an observed effect. An honestly unavailable capability remains in the block with no assertions and a plain explanation in the prose; check reports it not met. Do not delete, weaken or replace a need to get green. Static needs such as accurate prices may have no action steps. Use semantic attributes on real visible scene elements for testability, never hidden QA-only counters.
 
-Run build and the shared-action check, then the needs step runs on those real browsers. Save captures with `--shots .checks`. The result contains each statement, met/partly/not, the assertion result and wall/phone captures; `.studio/checks/<id>-needs.json` drives the Codex's Needs status. Redraw `codex <id>` after checking. Passing a selector assertion is evidence, not a visual judgement: read every capture and perform the full flows as owner and customer using the playtest skill. If the picture fails the words, it is not done even with green assertions.
+Run build and the shared-action check, then the needs step runs on those real browsers. Save captures with `--shots .checks`. The result contains each statement, met/partly/not, the assertion result and captures of all named surfaces; `.studio/checks/<id>-needs.json` drives the Codex's Needs status. Redraw `codex <id>` after checking. Passing a selector assertion is evidence, not a visual judgement: read every capture and perform the full flows as owner and customer using the playtest skill. If the picture fails the words, it is not done even with green assertions.
 
 For staff flows, sign in through the existing local owner link and prove the transition in real Chrome. Keep evidence in the Codex alongside the automated flows. Confirm unauthorized writes are refused and records remain after all screens close. Never call an untested privileged path passed. Before final handover, show the need table with evidence and explicit remaining gaps. If the starter or a board of boxes is still visible, return to the scene design and build it.
 
@@ -137,7 +137,7 @@ maxSpeed 0 and a no-op defineMove handler for a stationary board or poll. This i
 logical seat anchor, not a visible avatar; never add fake movement to pass a test. Include a small map/main.json with bounds even for stationary seats. Draw through openRoom, and acknowledge a button
 locally while waiting for shared outcomes. Keep animations and camera in the view.
 
-Do not add rules to an app that only needs the records service and local UI.
+Do not add rules or a placeholder map to an app that only needs the records service and local UI. Omit `room` and use the records bridge. Its shell loads one frame and reports readiness after loading; it needs no simulated participants.
 The welcome starter demonstrates authorized records plus a server-rules scene with
 stationary participants, change effects and a shared revision. Existing apps keep working. Use the manual extraction steps in [REWRITE.md](../game/REWRITE.md)
 for existing live state, adapting game-only tests to the app's workflow.
@@ -212,3 +212,47 @@ are checked again for live delivery and replay. `app_records` supports deletion
 with `operation:"delete"` and the current `version` where the role allows it.
 Reload on the returned conflict message. An office owner session and an
 owner-marked player account both authorize owner MCP access.
+
+## Local acceptance and operations
+
+`check` uses fresh isolated records by default and prints that choice. Run `dev`,
+then check its **localhost** URL with the studio root available. All screens in a
+run share its isolated records; later runs start empty. `--no-isolate` explicitly
+uses existing records (including when checking a live URL). Do not assume existing
+bookings are fixtures: create the needed records through the flow. The baseline
+`app.json check` action is optional when the Codex contains executable needs.
+
+`dev` creates a private local test credential. The checker signs each screen into
+the role the need names without a passkey ceremony, and still enforces that role’s
+record capabilities. This credential only works on loopback with the dev-only
+Worker binding; production account sign-in is unchanged. Use `app role <id> staff
+--player <account> --studio` for a studio-wide grant; omit `--studio` for one app.
+Staff links printed locally use localhost. A grant can be revoked at either scope.
+
+Example: `{"id":"fit","statement":"My crew fits boards from a tablet","role":"staff",
+"steps":[{"surface":"tablet","selector":"[data-fit]","click":true}],
+"assertions":[{"surface":"tablet","selector":"[data-state]","text":"Fitted"},
+{"surface":"tablet","effect":"sound","name":"audio"}]}`.
+
+Nonvisual assertions observe actual platform calls: `sound` (`audio` for Web Audio
+source starts, including the audio package, or `media` for media play), `haptic`
+(`vibrate`), and `notification` (the notification title). Omit `name` to accept any
+request of that type. An app-specific adapter may emit `homie-effect` with
+`{effect,name}` at its real trigger. These prove requests, not that an OS delivered
+a notification or a person heard audio. Observations reset before each need.
+
+After reloads and rebuilt frames, check waits for online state, completed arrival,
+a hidden loading cover and two frames before assertions/captures. Timeout evidence
+names the surface and selector/effect it awaited. Dialogs are automatically accepted
+and reported. Read retries recover detached frames; dispatched actions are not
+silently repeated. `dev` rebuilds root HTML, CSS and JS as well as source and map
+changes. Unavailable sandbox Web Storage uses frame-local memory; use app records
+or `net.prefs` for persistence across reloads.
+
+Record fields start with a lowercase letter and use lowercase letters, digits and
+underscore. Record IDs use 1–64 letters, digits, underscores or hyphens. `app_schema`
+and the `app_records` tool schema explain the contract; validation errors name it.
+
+Live and local unconnected shop/giving pages display the declared items and amounts
+with disabled payment controls. They say they are not taking payments yet. A fresh
+`/shop/` has an empty preview; an authored shop page still takes precedence.

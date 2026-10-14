@@ -61,7 +61,7 @@ export const WAY_LINES = Object.freeze({
 export function shopPage(cat, shop, { origin = '', game = null, item = null, open = false, mode = null } = {}) {
   const studio = cat.studio?.name ?? 'Studio';
   const g = game ? (cat.games ?? []).find((x) => x.id === game) : null;
-  const preview = !open && /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/.test(origin);
+  const preview = !open;
   const giving = Boolean(shop.giving);
   const previewItems = preview ? shop.items.map(i => `<article class="item"><h2>${esc(i.name)}</h2><span class="price">${esc(money(i.price === 'choose' ? i.min : i.price, shop.currency))}${i.interval ? ' / month' : ''}</span><p>${esc(i.blurb ?? '')}</p><button disabled>Preview only</button></article>`).join('') : '';
   const boot = { giving, preview, game: g ? g.id : null, item: ITEM_ID.test(String(item ?? '')) ? item : null, studio };
@@ -72,7 +72,7 @@ ${mode === 'test' ? '<p class="test">TEST MODE: no real money moves (Stripe test
 <p class="lead">${giving ? `Support ${esc(studio)} with a one-time or monthly gift. Gifts go directly to the organisation through its own Stripe account.` : `Things you can buy here, in real money, from ${esc(studio)} itself. Paid purchases open Stripe's checkout page. Guest purchases stay in this browser; keep its cookies or sign in to keep access.`} ${g ? `<a href="/${esc(g.id)}/">Back to ${esc(g.name)}</a>` : ''}</p>
 <noscript><p class="lead">This page needs JavaScript.</p></noscript>
 <div data-shop-age hidden></div>
-<div class="items" data-shop-items><p>${open ? 'Reading the shop…' : preview ? 'PREVIEW — checkout is disabled. Connect Stripe to open.' : 'Connect the organisation’s Stripe account to open giving or sales.'}</p>${previewItems}</div>
+<div class="items" data-shop-items><p>${open ? 'Reading the shop…' : preview ? 'PREVIEW — not taking payments yet. Checkout is disabled. Connect Stripe to open.' : 'Connect the organisation’s Stripe account to open giving or sales.'}</p>${previewItems}</div>
 ${giving && shop.giving.receiptText ? `<p class="note">${esc(shop.giving.receiptText)}</p>` : ''}
 <p class="msg" data-shop-msg role="status" aria-live="polite"></p>
 <p class="note">${giving ? `${esc(studio)} receives your gift through its own Stripe account. Stripe emails the payment receipt.` : `${esc(studio)} is the seller: it sets these prices, answers for refunds and receives the money through its own Stripe account. Homie takes nothing. ${refundWords(shop)} <a href="/shop/refunds/">refunds</a>. Stripe keeps your card and email and sends your receipt; ${esc(studio)} never sees them.`}</p>

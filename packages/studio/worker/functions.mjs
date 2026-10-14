@@ -74,8 +74,11 @@ export async function runFunctions(env, cat, origin, {definitions, now = Date.no
         if (!claimed.meta.changes) continue;
         let failure=null;
         try {
-          const event=Object.freeze({id:row.event,type:row.type,at:row.at,data:JSON.parse(row.data),attempt:row.attempts+1});
-          await fn.handler(event,services(env,cat,origin,{id:'studio-function',owner:true,client:null},'function:'+fn.name,fn));
+          const stored=JSON.parse(row.data);
+          const isolated=env.HOMIE_LOCAL_TEST_SECRET && /^([a-z][a-z0-9-]*):check:([a-zA-Z0-9-]+)$/.exec(stored?.app??'');
+          const event=Object.freeze({id:row.event,type:row.type,at:row.at,data:isolated?{...stored,app:isolated[1]}:stored,attempt:row.attempts+1});
+          const testScope=isolated?isolated[2]:null;
+          await fn.handler(event,services(env,cat,origin,{id:'studio-function',owner:true,client:null,...(testScope?{testScope}:{})},'function:'+fn.name+(testScope?':check:'+testScope:''),fn));
         } catch(error) {failure=fn.webhook?webhookFailure(error):functionError(error,env);}
         const finished=now();
         await env.DB.batch([
