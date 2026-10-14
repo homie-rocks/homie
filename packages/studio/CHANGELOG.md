@@ -21,6 +21,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 **Plugin 0.51.4** · Studio events through experimental MCP Events.
 
+Your studio’s declared events reach supporting AI clients through experimental MCP polling, SSE streams and signed webhooks.
+
 ### Added
 
 - Every declared studio feed speaks the Triggers & Events draft: role-filtered `events/list`, cursor/replay polling, SSE push with heartbeat and resume, and authenticated webhook subscribe/refresh/unsubscribe with negotiated TTLs and client-supplied Standard Webhooks secrets.
