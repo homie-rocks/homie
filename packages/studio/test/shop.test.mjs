@@ -3541,3 +3541,17 @@ test('customer purchase rates are opt-in with no implicit shop limits',()=>{
  assert.equal(shop.purchaseAttemptsPerMinute,null);assert.equal(shop.purchaseAttemptsPerAddressPerMinute,null);assert.equal(shop.guestBuyersPerAddressPerHour,null);
  assert.equal(checkShop({purchaseAttemptsPerMinute:123456789}).shop.purchaseAttemptsPerMinute,123456789);
 });
+
+test('an app checkout carries its booking reference to the durable paid event', async () => {
+  const s = await site();
+  for (const file of ['0014_studio_apps.sql','0015_purchases.sql','0016_purchase_facts.sql','0017_studio_mcp.sql','0018_studio_functions.sql','0019_function_cursors.sql','0020_function_meta.sql']) {
+    s.DB.sql.exec(readFileSync(join(s.dir, 'site/migrations', file), 'utf8'));
+  }
+  s.DB.sql.exec("INSERT INTO function_subscriptions(name,type,started) VALUES('booking-paid','order.paid',0)");
+  const p = s.player(400, { band: 'adult' });
+  const paid = await s.buyPaid(p, 'supporter', { reference: 'booking:maya-42', game: 'owl-run' });
+  const event = JSON.parse(s.DB.sql.prepare("SELECT data FROM studio_events WHERE type='order.paid'").get().data);
+  assert.equal(event.order, paid.order);
+  assert.equal(event.reference, 'booking:maya-42');
+  assert.equal(event.app, 'owl-run');
+});
