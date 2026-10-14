@@ -3113,7 +3113,7 @@ test('removal migration preserves paid and pending orders, grants and refund fac
       const migrations = join(PKG, '../../template/site/migrations');
       for (const file of readdirSync(migrations).sort()) {
         if (file === '0008_studio_shop.sql') db.exec(old ? readFileSync(join(PKG, 'test/fixtures/shop-before-removal.sql'), 'utf8') : SHOP_MIGRATION + SHOP_RESERVATIONS + SHOP_LINES);
-        else if (!['0010_shop_reservations.sql', '0012_shop_lines.sql', '0022_remove_referrals.sql'].includes(file)) db.exec(readFileSync(join(migrations, file), 'utf8'));
+        else if (file < '0022_remove_referrals.sql' && !['0010_shop_reservations.sql', '0012_shop_lines.sql'].includes(file)) db.exec(readFileSync(join(migrations, file), 'utf8'));
       }
       db.exec("INSERT INTO shop_orders(id,player,item,amount,currency,till,mode,status,session,payment,created_at,paid_at,updated_at,refunded_amount,refunded_net,refund_revision) VALUES ('paid','buyer','hat',500,'usd','stripe','test','paid','cs_paid','pi_paid',1,2,3,100,100,2), ('pending','buyer','cape',900,'usd','stripe','test','processing','cs_pending',NULL,1,NULL,3,0,0,0);");
       db.exec("INSERT INTO entitlements(player,key,item,order_id,starts_at,state) VALUES ('buyer','hat','hat','paid',2,'active'); INSERT INTO shop_order_lines(id,order_id,position,item,quantity,unit_amount,amount,snapshot,status,refunded_amount,refunded_net) VALUES ('line','paid',0,'hat',1,500,500,'{}','paid',100,100);");
@@ -3122,6 +3122,8 @@ test('removal migration preserves paid and pending orders, grants and refund fac
       for (const key of ['referral_cookie_key', 'referral_signing_key', 'referral-send:seller|month', 'referral-page:seller|month|usd|', 'shop-reference:paid']) db.prepare('INSERT INTO meta VALUES (?,?)').run(key, 'kept-value');
       const snapshots = Object.fromEntries(['shop_orders', 'entitlements', 'shop_order_lines', 'shop_entitlement_lines'].map((table) => [table, db.prepare('SELECT * FROM ' + table).all().map(({ via, referral_terms, ...row }) => row)]));
       db.exec(SHOP_REMOVE_REFERRALS);
+      // Apply later schemas in deployed order; future triggers cannot precede this table rebuild.
+      for (const file of readdirSync(migrations).sort().filter(f => f > '0022_remove_referrals.sql')) db.exec(readFileSync(join(migrations, file), 'utf8'));
       for (const [table, rows] of Object.entries(snapshots)) assert.deepEqual(db.prepare('SELECT * FROM ' + table).all().map((row) => ({ ...row })), rows);
       for (const table of ['referral_lines', 'referral_statements', 'referral_editions', 'referral_edition_lines']) assert.equal(db.prepare('SELECT name FROM sqlite_master WHERE name = ?').get(table), undefined);
       assert.deepEqual(db.prepare('SELECT key FROM meta').all().map((r) => r.key), ['shop-reference:paid']);

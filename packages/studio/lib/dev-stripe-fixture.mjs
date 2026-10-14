@@ -12,6 +12,7 @@ export async function startStripeFixture({ origin }) {
     try {
       const url=new URL(req.url,base);let body='';for await(const chunk of req){body+=chunk;if(body.length>262144)return send({error:{message:'fixture body limit'}},413);}
       const form=new URLSearchParams(body);
+      if(url.pathname==='/v1/checkout/sessions'&&req.method==='GET') return send({data:[...sessions.values()].filter(s=>s.created>=Number(url.searchParams.get('created[gte]')??0)),has_more:false});
       if(url.pathname==='/v1/checkout/sessions'&&req.method==='POST') {
         const idem=req.headers['idempotency-key'];if(idem&&idempotency.has(idem))return send(sessions.get(idempotency.get(idem)));
         const id=`cs_fixture_${++seq}`,lines=[];

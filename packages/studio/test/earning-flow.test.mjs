@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readdirSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { startStripeFixture } from '../lib/dev-stripe-fixture.mjs';
-import { shopRoutes } from '../worker/shop.mjs';
+import { shopRoutes, shopOf, reconcileOrders } from '../worker/shop.mjs';
 import { withToolIdentity } from '../worker/tool-identity.mjs';
 
 test('phone checkout holds the last seat; signed payment confirms and expiry releases through HTTP', async t => {
@@ -34,5 +34,12 @@ test('phone checkout holds the last seat; signed payment confirms and expiry rel
  const session=await (await fetch(stripe.base+'/v1/checkout/sessions/'+cart.url.split('/').at(-1))).json();assert.equal(session.lines.length,2);assert.equal(session.amount_total,11000);assert.equal(sql.prepare('SELECT value FROM meta WHERE key=?').get('shop-reference:'+cart.order).value,'table-7');
  const paidCart=await fetch(cart.url.replace('/checkout/','/complete/'),{method:'POST',redirect:'manual'});assert.equal(paidCart.status,303);
  const event=sql.prepare("SELECT data FROM studio_events WHERE type='order.paid' AND json_extract(data,'$.order')=?").get(cart.order);assert.equal(JSON.parse(event.data).reference,'table-7');
+ sql.prepare('INSERT INTO app_records VALUES(?,?,?,?,1,1)').run('tuning','slots','uncertain',JSON.stringify({capacity:1}));
+ const realFetch=globalThis.fetch;
+ globalThis.fetch=async (url,options)=>{const response=await realFetch(url,options);if(String(url)===stripe.base+'/v1/checkout/sessions'&&options?.method==='POST')throw new Error('response lost after provider creation');return response;};
+ let uncertain;try {uncertain=await buy('bob',{...request,booking:{collection:'bookings',slot:'uncertain'}});}finally{globalThis.fetch=realFetch;}
+ assert.equal(uncertain.status,502);assert.equal(sql.prepare("SELECT state FROM shop_bookings WHERE slot='uncertain'").get().state,'held');
+ sql.prepare("UPDATE shop_orders SET created_at=?,updated_at=1 WHERE id=(SELECT order_id FROM shop_bookings WHERE slot='uncertain')").run(Date.now()-24*60*60*1000);
+ await reconcileOrders(env,shopOf(cat),'bob',{expireOpen:true});assert.equal(sql.prepare("SELECT state FROM shop_bookings WHERE slot='uncertain'").get().state,'released');
  const previewEnv={DB};const url=new URL('/api/shop',origin);const preview=await (await shopRoutes(new Request(url),previewEnv,{},url,{catalogueOf:async()=>cat})).json();assert.equal(preview.items.find(i=>i.id==='tune').way,'closed');
 });
