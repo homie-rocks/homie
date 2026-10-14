@@ -1,0 +1,13 @@
+file:///private/tmp/homie-maya-final-bUYeYT/studio/node_modules/puppeteer-core/lib/puppeteer/common/WaitTask.js:46
+            this.#timeoutError = new TimeoutError(`Waiting failed: ${options.timeout}ms exceeded`);
+                                 ^
+
+TimeoutError: Waiting failed: 30000ms exceeded
+    at new WaitTask (file:///private/tmp/homie-maya-final-bUYeYT/studio/node_modules/puppeteer-core/lib/puppeteer/common/WaitTask.js:46:34)
+    at IsolatedWorld.waitForFunction (file:///private/tmp/homie-maya-final-bUYeYT/studio/node_modules/puppeteer-core/lib/puppeteer/api/Realm.js:49:26)
+    at CdpFrame.waitForFunction (file:///private/tmp/homie-maya-final-bUYeYT/studio/node_modules/puppeteer-core/lib/puppeteer/api/Frame.js:585:43)
+    at CdpFrame.<anonymous> (file:///private/tmp/homie-maya-final-bUYeYT/studio/node_modules/puppeteer-core/lib/puppeteer/util/decorators.js:101:27)
+    at file:///private/tmp/homie-maya-final-bUYeYT/studio/final-pack-flow.mjs:20:10
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+
+Node.js v22.22.0

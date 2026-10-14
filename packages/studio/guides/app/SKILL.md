@@ -262,3 +262,7 @@ The giving starter now reads the actual shop donation options with `shop.catalog
 opens Checkout for the selected amount and frequency. A disconnected shop displays
 a disabled preview. No intention record or unverified collected total is created.
 Use the Manage my gifts link for the buyer-owned Stripe portal in the shop.
+
+For a records-only booking app, use `createShop({target: parent})` inside its
+sandboxed view. The shell includes the authenticated shop bridge; do not add a
+room simulation merely to make a payment button work.

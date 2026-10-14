@@ -1,0 +1,8 @@
+Author against toolkit 0.51.0: node_modules/@homie-rocks/studio/guides/app/SKILL.md
+Homie Claude Code plugin 0.25.2 is older than toolkit 0.51.0. Its guidance may be stale. Read node_modules/@homie-rocks/studio/guides/app/SKILL.md. claude plugin update homie@homie.
+Homie Codex plugin 0.50.7 is older than toolkit 0.51.0. Its guidance may be stale. Read node_modules/@homie-rocks/studio/guides/app/SKILL.md. Run codex plugin marketplace upgrade homie && codex plugin add homie@homie, then start a new session.
+Fresh isolated records: off; using existing records.
+phone connected as customer to check-826344b3a231bc2dc28a
+wall connected as wall to check-826344b3a231bc2dc28a
+staff connected as staff to check-826344b3a231bc2dc28a
+PASS: app tune: 4 Codex needs checked on phone, wall, staff.

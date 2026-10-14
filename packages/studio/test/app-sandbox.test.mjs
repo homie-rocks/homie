@@ -4,12 +4,13 @@ import {createServer} from 'node:http';
 import {once} from 'node:events';
 import puppeteer from 'puppeteer-core';
 import {findChrome,chromeArgs} from '../lib/chrome.mjs';
+import {recordsPage} from '../worker/records-page.mjs';
 import worker from '../worker/index.mjs';
 const meta={id:'form',name:'Form',kind:'app',roles:{customer:{signIn:false,can:[]}},surfaces:{phone:'customer',wall:'customer'},records:{persist:true,collections:{}},words:{},netplay:{}};
-async function fixture(t,html){
+async function fixture(t,html,shop=null){
  const cat={studio:{name:'Test'},games:[meta]},env={ASSETS:{fetch:async req=>new URL(req.url).pathname.endsWith('index.html')?new Response(html,{headers:{'content-type':'text/html'}}):Response.json(cat)}};
  let loads=0;
- const server=createServer(async(req,res)=>{try{const origin=`http://localhost:${server.address().port}`;if(req.url==='/frame'){res.end('<iframe style="width:100vw;height:100vh;border:0" sandbox="allow-scripts allow-modals" src="/form/__game/"></iframe>');return;}if(req.url.startsWith('/form/__game/'))loads++;const r=await worker.fetch(new Request(origin+req.url),env,{waitUntil:p=>p.catch(()=>{})});res.writeHead(r.status,Object.fromEntries(r.headers));res.end(Buffer.from(await r.arrayBuffer()));}catch(e){res.writeHead(500);res.end(e.message);}});
+ const server=createServer(async(req,res)=>{try{const origin=`http://localhost:${server.address().port}`;if(req.url==='/frame'){res.end('<iframe style="width:100vw;height:100vh;border:0" sandbox="allow-scripts allow-modals" src="/form/__game/"></iframe>');return;}if(req.url.startsWith('/form/__game/'))loads++;const r=req.url==='/records-with-shop'?recordsPage(meta,new URL(origin+'/form/play'),cat,shop):await worker.fetch(new Request(origin+req.url),env,{waitUntil:p=>p.catch(()=>{})});res.writeHead(r.status,Object.fromEntries(r.headers));res.end(Buffer.from(await r.arrayBuffer()));}catch(e){res.writeHead(500);res.end(e.message);}});
  server.listen(0,'127.0.0.1');await once(server,'listening');t.after(()=>new Promise(r=>(server.closeAllConnections(),server.close(r))));
  const browser=await puppeteer.launch({executablePath:findChrome(),headless:true,args:[...chromeArgs(),'--disable-webgl']});t.after(()=>browser.close());
  const page=await browser.newPage();await page.setViewport({width:390,height:844});return {page,origin:`http://localhost:${server.address().port}`,loads:()=>loads};
@@ -32,4 +33,23 @@ test('check auto-answers real dialogs and observes real sound and haptic calls',
  const dialogs=[];answerDialogs(page,'tablet',dialogs);await page.evaluateOnNewDocument(observeEffects);await page.goto(origin+'/frame');await page.evaluate(()=>{confirm('Fit this board?');alert('Fitted');});const frame=page.frames().find(f=>f.url().includes('/__game/'));
  const [need]=await proveAppNeeds({plan:{needs:[{id:'fit',statement:'Confirm fitting with a sound and haptic',steps:[{surface:'tablet',selector:'#fit',click:true}],assertions:[{surface:'tablet',selector:'#done',text:'Fitted'},{surface:'tablet',effect:'sound',name:'audio'},{surface:'tablet',effect:'haptic',name:'vibrate'}]}]},surfaces:[{name:'tablet',frame,page}]});
  assert.equal(need.status,'partly',need.why);assert.deepEqual(dialogs.map(d=>d.type),['confirm','alert']);
+});
+
+test('records-only shell sends booking checkout and returns the booking to the frame',{timeout:15000},async t=>{
+ const {page,origin}=await fixture(t,`<!doctype html><button id="book">Hold and pay</button><output></output><script>
+ window.addEventListener('message',e=>{if(e.data?.t==='homie-shop'&&e.data.q==='booking')document.querySelector('output').textContent=e.data.booking||e.data.error;});
+ document.querySelector('button').onclick=()=>parent.postMessage({t:'homie-shop',q:'booking',op:'checkout',lines:[{item:'tune',quantity:1}],booking:{collection:'bookings',slot:'morning'}},'*');
+ </script>`,{policy:{},open:true});
+ let request;
+ await page.setRequestInterception(true);
+ page.on('request',r=>{
+  if(r.url().includes('/api/shop/buy')){request=JSON.parse(r.postData());return r.respond({status:200,contentType:'application/json',body:JSON.stringify({ok:true,booking:'ord_test'})});}
+  if(r.url().includes('/api/player/owns'))return r.respond({status:200,contentType:'application/json',body:'{"owns":[]}'});
+  return r.continue();
+ });
+ await page.goto(origin+'/records-with-shop');
+ const frame=page.frames().find(f=>f.url().includes('/__game/'));await frame.click('#book');
+ await frame.waitForFunction(()=>document.querySelector('output').textContent==='ord_test',{timeout:2000});
+ assert.deepEqual(request.booking,{collection:'bookings',slot:'morning'});assert.equal(request.game,'form');
+ assert.equal(await page.evaluate(()=>window.__shell.arrival.phase),'done');
 });

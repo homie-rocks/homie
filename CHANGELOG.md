@@ -29,7 +29,8 @@ This candidate adds Checkout-backed booking and subscription APIs but cannot shi
   confirmation and release, versioned staff moves, and durable booking events.
 - Subscription-mode Checkout for monthly amounts, subscription lifecycle events,
   and buyer-owned Stripe portal sessions.
-- An offline Checkout fixture and transaction-level booking acceptance tests.
+- Offline fixtures, transaction-level booking tests, and a local CLI adapter for
+  real sandbox acceptance without exporting API credentials.
 
 ### Changed
 
@@ -39,8 +40,16 @@ This candidate adds Checkout-backed booking and subscription APIs but cannot shi
 - The giving starter now opens Checkout for actual shop donation options,
   including $20 monthly and giver-chosen amounts, and disables payment in preview.
   It no longer records intentions as gifts or displays an unverified collected total.
-- Complete membership lifecycle semantics and Stripe sandbox acceptance remain
-  unfinished. Offline fixtures are not sandbox verification.
+- Membership access follows paid invoice periods and current subscription status,
+  including recognised portal plan changes and overlapping webhook reads.
+- Real sandbox acceptance covers mixed carts, paid/expired/refunded bookings,
+  monthly Checkout, buyer portal access, and test-clock renewal/failure/cancellation.
+  This evidence does not establish production runtime authorization.
+
+### Fixed
+
+- Records-only app shells now include the shop bridge, so a booking button can
+  open Checkout without adding a multiplayer room.
 
 ### Upgrade notes
 

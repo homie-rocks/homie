@@ -1,0 +1,38 @@
+{
+  "at": "2026-10-14T11:56:23.765Z",
+  "codexHash": "7ef2b138e64ae84b27d9aefd3f9c79ad427d8014fc1d850bbfcdd8404d56af6a",
+  "needs": [
+    {
+      "id": "phone",
+      "statement": "Customers choose a tune slot on a phone",
+      "status": "met",
+      "captures": [
+        "/private/tmp/homie-maya-final-bUYeYT/evidence/generic-final/phone-phone.jpg"
+      ],
+      "why": "UI assertions passed; inspect captures against the pictured scene"
+    },
+    {
+      "id": "payment",
+      "statement": "Customers pay and the slot is held and confirmed by Stripe",
+      "status": "not",
+      "captures": [],
+      "why": "Waiting for validating assertions: need requires assertions on its named surfaces"
+    },
+    {
+      "id": "wall",
+      "statement": "Workshop wall shows bookings",
+      "status": "met",
+      "captures": [
+        "/private/tmp/homie-maya-final-bUYeYT/evidence/generic-final/wall-wall.jpg"
+      ],
+      "why": "UI assertions passed; inspect captures against the pictured scene"
+    },
+    {
+      "id": "move",
+      "statement": "Authenticated staff move bookings",
+      "status": "not",
+      "captures": [],
+      "why": "Waiting for validating assertions: need requires assertions on its named surfaces"
+    }
+  ]
+}

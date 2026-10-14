@@ -1,0 +1,36 @@
+{
+  "checks": [
+    {
+      "name": "second real hold",
+      "ok": true,
+      "booking": "ord_dArZEgrgZy2sEAkniWpc"
+    },
+    {
+      "name": "Stripe expiry",
+      "id": "cs_test_a1H4o9vVHUuEIpkFa20K88F99v8DWq22iuo9x5UNRqWLTXjUEDwsQNLeKz",
+      "status": "expired",
+      "livemode": false
+    },
+    {
+      "name": "expiry releases capacity",
+      "wall": "Fri 16 Oct · 09:00ORD_DARZReleasedRail clearFri 16 Oct · 10:00ORD_J4Q1Confirmed · paid",
+      "slots": "Fri 16 Oct · 09:00 · 1 availableFri 16 Oct · 10:00 · 0 available"
+    },
+    {
+      "name": "persistence after original browsers closed",
+      "receipt": "Confirmed · paid — Fri 16 Oct · 10:00Save your booking linkord_j4Q16xACm759AHVLjnG0"
+    },
+    {
+      "name": "stale staff version refused",
+      "status": 409,
+      "body": {
+        "ok": false,
+        "error": "booking changed or is released; reload"
+      }
+    },
+    {
+      "name": "error",
+      "message": "Attempted to use detached Frame 'DAA82F3C0233CFED84B9BCE5E0E1E8B2'."
+    }
+  ]
+}

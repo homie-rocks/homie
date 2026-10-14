@@ -170,3 +170,12 @@ The giving starter now reads the actual shop donation options with `shop.catalog
 opens Checkout for the selected amount and frequency. A disconnected shop displays
 a disabled preview. No intention record or unverified collected total is created.
 Use the Manage my gifts link for the buyer-owned Stripe portal in the shop.
+
+For real sandbox acceptance, SHOP.md documents `startStripeSandbox` from the
+installed toolkit's `lib/dev-stripe-sandbox.mjs`. It uses an explicitly authorised
+CLI sandbox profile and forwards signed events to a loopback dev studio. It never
+exports API credentials; keep returned webhook bindings private and temporary.
+Use Stripe's published CLI fixture/API tokens, never card entry in a page. This
+requires the local desktop and does not resolve production runtime authorization.
+Membership access is bounded by paid invoice periods; recognised portal plan
+changes reconcile from current Stripe data. Failed renewal does not extend access.

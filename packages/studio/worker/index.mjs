@@ -933,7 +933,7 @@ async function route(request, env, ctx) {
           if (a.status === 401) return Response.redirect(`${url.origin}/account/?next=${encodeURIComponent(url.pathname + url.search)}`, 302);
           return json({ ok: false, error: a.error }, a.status);
         }
-        if(!meta.room)return recordsPage(meta,url,cat);
+        if(!meta.room)return recordsPage(meta,url,cat,await availableShellShop(env,cat,game));
       }
     }
     const lobby = () => env.LOBBY.get(env.LOBBY.idFromName(game));
