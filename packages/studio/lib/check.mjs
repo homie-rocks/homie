@@ -382,7 +382,10 @@ export async function checkApp({ url, game, meta, shots = null, log = () => {}, 
     const rooms = await Promise.all(surfaces.map((s) => s.page.evaluate(() => window.__shell.room)));
     if (rooms.some((r) => r !== room)) throw new Error('surfaces did not retain the same room');
     for (const s of surfaces) {
-      await s.page.waitForFunction(() => window.__shell?.arrival?.phase === 'done', { timeout: READY_TIMEOUT_MS });
+      await s.page.waitForFunction(() => {
+        const cover = document.querySelector('[data-arrive]');
+        return window.__shell?.arrival?.phase === 'done' && (!cover || (getComputedStyle(cover).opacity === '0' && getComputedStyle(cover).visibility === 'hidden'));
+      }, { timeout: READY_TIMEOUT_MS });
       await s.frame.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       if (shots) await s.page.screenshot({ path: join(shots, `${s.name}.jpg`), type: 'jpeg', quality: 85 });
     }
