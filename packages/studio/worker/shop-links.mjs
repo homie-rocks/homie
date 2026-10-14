@@ -12,6 +12,7 @@ export function linkSettings(shop) {
     cap: shop.capPerPlayerMonth, checkoutMinutes: shop.checkoutMinutes, items: shop.items });
 }
 export function fullerReason(shop) {
+  if (shop.items.some(item => item.interval && item.price === 'choose')) return 'A giver-chosen monthly amount needs a Stripe Checkout connection.';
   if (shop.capPerPlayerMonth !== null) return 'Reserving a spending allowance before payment needs the fuller checkout connection.';
   if (shop.checkoutMinutes !== 1440) return 'Choosing when abandoned checkouts expire needs the fuller checkout connection.';
   return null;

@@ -63,6 +63,7 @@ export const KEY_PERMISSIONS = Object.freeze([
 ]);
 
 export const SHOP_HOOK_EVENTS = Object.freeze([
+  'invoice.paid', 'invoice.payment_failed', 'customer.subscription.updated', 'customer.subscription.deleted',
   'checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired',
   'charge.refunded', 'refund.created', 'refund.updated', 'refund.failed', 'charge.dispute.created', 'charge.dispute.closed',
 ]);
