@@ -12,10 +12,8 @@ for (const [label, status, error] of [
 ]) for (const hook of ['none', 'late']) test(`N5 ${label}, webhook ${hook}`, async (t) => {
   const s = await card(`n5${status}${hook}`); try {
     const ch = await s.challengeOf(await s.post(s.body()));
-    let at = 0; // find the boundary right after Stripe's charge
-    for (at = 1; at < 12; at++) { /* probe */ if (at === 3) break; }
-    s.K.at = s.K.n + 2; await attempt(() => s.post(s.body(), { authorization: s.cred(ch, s.spt()) })); const died = s.K.diedAt; s.K.revive();
-    const pi = cardCharges(s.w)[0];
+    s.K.killWhen = (label) => label.startsWith('net POST ') && label.endsWith('/payment_intents'); await attempt(() => s.post(s.body(), { authorization: s.cred(ch, s.spt()) })); const died = s.K.diedAt; s.K.revive();
+    const pi = cardCharges(s.w)[0]; assert.ok(pi, 'interruption follows the committed Stripe charge');
     const f = s.K.fault({ sticky: true, match: (l) => l.includes(s.w.stripeHost), before: () => Response.json({ error }, { status }) });
     const c1 = await cron(s.w, 1);
     say(`N5 [${label}/${hook}] died after "${died}" | Stripe charges ${cardCharges(s.w).length} | one cron run during the fault: jobs`, jobs(s.w).map((j) => `${j.state} | ${j.error}`), '| order', orders(s.w)[0]?.status);
