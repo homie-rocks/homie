@@ -85,3 +85,18 @@ test('connected MCP stream announces a changed tool list',async t=>{
  await streams.fetch(new Request('https://events',{method:'POST',body:JSON.stringify({op:'tools',connection:'conn',cat,tools:[{name:'new',audience:'owner'}]})}));
  let timer;try {const chunk=await Promise.race([reader.read(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('No tools/list_changed notification')),500);})]);assert.match(new TextDecoder().decode(chunk.value),/notifications\/tools\/list_changed/);}finally{clearTimeout(timer);await reader.cancel();await Promise.all(pending);}
 });
+test('local role sessions isolate records per run, keep role permissions, and print localhost grants',async t=>{
+ const {appRecordsRoute}=await import('../worker/app-records.mjs');const {localCookie}=await import('../lib/local-test.mjs');const {withToolIdentity}=await import('../worker/tool-identity.mjs');
+ const DB=database(t),env={DB,HOMIE_LOCAL_TEST_SECRET:'fixture-key'};
+ const meta={id:'boards',roles:{customer:{signIn:false,can:['read:jobs','create:jobs']},staff:{signIn:true,can:['read:jobs','update:jobs']}},surfaces:{phone:'customer',tablet:'staff'},records:{persist:true,collections:{jobs:{fields:{state:{type:'string'}}}}}};
+ async function call(scope,method,role='customer',body){const url=new URL('http://localhost/boards/api/app/records/jobs/booking?role='+role);const request=new Request(url,{method,headers:{origin:url.origin,'content-type':'application/json',cookie:'homie_test='+localCookie(env.HOMIE_LOCAL_TEST_SECRET,{app:'boards',role,scope})},...(body?{body:JSON.stringify(body)}:{})});return appRecordsRoute(request,env,meta,url,'api/app/records/jobs/booking');}
+ assert.equal((await call('one','POST','customer',{data:{state:'new'}})).status,200);
+ assert.equal((await call('two','POST','customer',{data:{state:'fresh'}})).status,200);
+ assert.equal((await (await call('one','GET','staff')).json()).records[0].data.state,'new');
+ assert.equal((await call('one','PUT','customer',{data:{state:'paid'},version:1})).status,403);
+ assert.equal((await call('one','PUT','staff',{data:{state:'paid'},version:1})).status,200);
+ assert.equal((await (await call('two','GET','staff')).json()).records[0].data.state,'fresh');
+ DB.sql.exec("INSERT INTO players(id,name,guest,owner,created_at,seen_at) VALUES('crew','Crew',0,0,1,1)");
+ const url=new URL('http://127.0.0.1/boards/api/app/roles');const grant=await appRecordsRoute(withToolIdentity(new Request(url,{method:'POST',headers:{origin:url.origin,'content-type':'application/json'},body:JSON.stringify({role:'staff',player:'crew',studio:true})}),owner),env,meta,url,'api/app/roles');
+ assert.equal(grant.status,200);assert.equal(new URL((await grant.json()).link).hostname,'localhost');assert.equal(DB.sql.prepare("SELECT app FROM app_roles WHERE player='crew'").get().app,'*');
+});

@@ -23,7 +23,7 @@ test('reload waits for readiness and replaces its frame before asserting',async(
  const order=[]; const fresh={waitForSelector:async()=>order.push('assert')};
  const page={reload:async()=>order.push('reload'),screenshot:async()=>order.push('capture')};
  const [result]=await proveAppNeeds({plan:{needs:[{id:'reload',statement:'Survives reload',steps:[{surface:'tablet',reload:true}],assertions:[{surface:'tablet',selector:'#saved'}]}]},surfaces:[{name:'tablet',page,frame:{}}],shots:'/tmp',ready:async s=>{order.push('ready');s.frame=fresh;}});
- assert.equal(result.status,'met');assert.deepEqual(order,['reload','ready','assert','capture']);
+ assert.equal(result.status,'met');assert.deepEqual(order,['reload','ready','ready','assert','ready','capture']);
 });
 test('local role sessions are scoped, authenticated and inert in production',async()=>{
  const {localSession}=await import('../worker/local-test.mjs');
@@ -41,4 +41,10 @@ test('headless local tools authenticate without a browser and preserve event ref
  const request=new Request('http://localhost/mcp',{headers:{authorization:'Bearer test-secret'}});
  assert.equal((await localCaller(request,{HOMIE_LOCAL_TEST_SECRET:'test-secret'})).owner,true);
  assert.equal(await localCaller(request,{}),null);
+});
+test('a wait reacquires a rebuilt frame and retains the named condition',async()=>{
+ const {waitInApp}=await import('../lib/app-ready.mjs');let ready=0;let calls=0;const surface={name:'tablet',frame:{old:true}};
+ const result=await waitInApp(surface,'#booking contains paid',async f=>{if(++calls===1)throw Error('Attempted to use detached Frame');assert.equal(f.old,false);return 'paid';},{ready:async s=>{ready++;s.frame={old:false};}});
+ assert.equal(result,'paid');assert.equal(ready,1);
+ await assert.rejects(waitInApp(surface,'#booking contains paid',async()=>{throw Error('Waiting failed: 30000ms exceeded');}),/tablet.*#booking contains paid/);
 });

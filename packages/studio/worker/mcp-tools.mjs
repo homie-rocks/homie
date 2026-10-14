@@ -117,7 +117,7 @@ export function builtins(env,cat,origin) {
     tool('app_role','Grant or revoke a staff role by verified email or exact sign-in name.','owner',object({app:str,role:str,signIn:{type:'string',maxLength:254},revoke:{type:'boolean'}},['app','role','signIn']),async({app,role,signIn,revoke},ctx)=>{
       if(!ctx.caller.owner)throw new Error('Owner only');
       const meta=cat.games.find(g=>g.id===app&&g.kind==='app');
-      if(app!=='*' && !meta?.roles?.[role]?.signIn)throw new Error('Name a sign-in role');
+      if(!/^[a-z][a-z0-9-]{0,39}$/.test(role) || (app!=='*' && !meta?.roles?.[role]?.signIn))throw new Error('Name a sign-in role');
       const people=signIn.includes('@')
         ? (await env.DB.prepare('SELECT p.id FROM players p JOIN player_emails e ON e.player=p.id WHERE e.email=?1 AND e.verified_at IS NOT NULL AND p.guest=0').bind(signIn.trim().toLowerCase()).all()).results
         : (await env.DB.prepare('SELECT id FROM players WHERE name=?1 AND guest=0').bind(signIn).all()).results;

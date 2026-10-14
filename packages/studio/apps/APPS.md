@@ -43,7 +43,7 @@ The QR encoder is the existing wall encoder, publicly exported with types. Links
 
 ## Parts, check and stores
 
-Parts import exactly as games do (`@parts/<id>` or `@parts/<host>/<id>`), with the same provenance and credit checks. `check.action` and `check.observe` name real UI selectors: the checker clicks on a phone, waits for changed text on wall and both phones, then reloads the actor and checks again. `check.params` optionally supplies public URL parameters (for example `{ "ticket": "404" }`) to all three surfaces so the action can address an existing sample record. The checker always chooses its own room. No round hooks are required. This performs the declared action and writes real records: use a local/test studio or a workflow explicitly safe to exercise.
+Parts import exactly as games do (`@parts/<id>` or `@parts/<host>/<id>`), with the same provenance and credit checks. `check.action` and `check.observe` name real UI selectors: the checker clicks on a phone, waits for changed text on wall and both phones, then reloads the actor and checks again. `check.params` optionally supplies public URL parameters (for example `{ "ticket": "404" }`) to all three surfaces so the action can address an existing sample record. The checker always chooses its own room. No round hooks are required. `check` uses fresh isolated records by default; run dev and check its localhost URL. `--no-isolate` explicitly uses existing records. A Codex-only needs plan can omit this baseline action.
 
 `homie-studio standalone plan/build <app-id>` reuses Electron/Capacitor and the same built bundle. Public customer record calls use the existing standalone origin allowlist; credentials are never shared across origins. Native staff sign-in, private collections, offline record writes, native billing and automatic store upload are not implemented. Existing game standalone behavior is unchanged. A store build still needs its normal local SDK, signing and store review.
 
@@ -59,3 +59,47 @@ itemButton.onclick = () => shop.open('supporter');
 ```
 
 These calls open the same shop in games and apps. Inside a player card, purchases leave for the studio's shop; ordinary play/open pages start Stripe checkout. The studio's TV and kids policies still apply.
+
+
+
+`check` uses fresh isolated records by default and prints that choice. Run `dev`,
+then check its **localhost** URL with the studio root available. All screens in a
+run share its isolated records; later runs start empty. `--no-isolate` explicitly
+uses existing records (including when checking a live URL). Do not assume existing
+bookings are fixtures: create the needed records through the flow. The baseline
+`app.json check` action is optional when the Codex contains executable needs.
+
+`dev` creates a private local test credential. The checker signs each screen into
+the role the need names without a passkey ceremony, and still enforces that role’s
+record capabilities. This credential only works on loopback with the dev-only
+Worker binding; production account sign-in is unchanged. Use `app role <id> staff
+--player <account> --studio` for a studio-wide grant; omit `--studio` for one app.
+Staff links printed locally use localhost. A grant can be revoked at either scope.
+
+Example: `{"id":"fit","statement":"My crew fits boards from a tablet","role":"staff",
+"steps":[{"surface":"tablet","selector":"[data-fit]","click":true}],
+"assertions":[{"surface":"tablet","selector":"[data-state]","text":"Fitted"},
+{"surface":"tablet","effect":"sound","name":"audio"}]}`.
+
+Nonvisual assertions observe actual platform calls: `sound` (`audio` for Web Audio
+source starts, including the audio package, or `media` for media play), `haptic`
+(`vibrate`), and `notification` (the notification title). Omit `name` to accept any
+request of that type. An app-specific adapter may emit `homie-effect` with
+`{effect,name}` at its real trigger. These prove requests, not that an OS delivered
+a notification or a person heard audio. Observations reset before each need.
+
+After reloads and rebuilt frames, check waits for online state, completed arrival,
+a hidden loading cover and two frames before assertions/captures. Timeout evidence
+names the surface and selector/effect it awaited. Dialogs are automatically accepted
+and reported. Read retries recover detached frames; dispatched actions are not
+silently repeated. `dev` rebuilds root HTML, CSS and JS as well as source and map
+changes. Unavailable sandbox Web Storage uses frame-local memory; use app records
+or `net.prefs` for persistence across reloads.
+
+Record fields start with a lowercase letter and use lowercase letters, digits and
+underscore. Record IDs use 1–64 letters, digits, underscores or hyphens. `app_schema`
+and the `app_records` tool schema explain the contract; validation errors name it.
+
+Live and local unconnected shop/giving pages display the declared items and amounts
+with disabled payment controls. They say they are not taking payments yet. A fresh
+`/shop/` has an empty preview; an authored shop page still takes precedence.

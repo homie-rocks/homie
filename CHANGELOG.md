@@ -17,6 +17,28 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.50.7] - 2026-10-14
+
+<!-- pending-release: renumber before publishing -->
+
+**Plugin 0.50.7** · Prove owner needs on every named screen and smooth studio operations.
+
+Apps can prove staff, tablet and kiosk workflows with fresh local records, while studio functions and AI clients can work safely under concurrent activity.
+
+### Fixed
+
+- Needs use the named surfaces and roles, observe sound/haptic/notification requests, name waits, and share the baseline arrival barrier after reload. Local check uses isolated records by default and dev-only staff sessions; production sign-in is unchanged.
+- Local function fire and tool calls work headlessly, including the first event and app/booking references. Studio-wide staff grants coexist with per-app grants.
+- Function storage offers versioned compare-and-set, atomic append/increment and prefix pages. Event feeds are readable as tools, announce changed tool lists, and support owner-requested history clearing through a sequence.
+- Dev watches root authoring HTML/CSS/JS. App Web Storage has an opaque-frame memory fallback; records-only apps need no room, map or rules and load their frame once. Checks report accepted dialogs and recover rebuilt frames. Local role links use localhost.
+- App record validation describes field and ID rules in errors and tool schemas; tool failures preserve their reason with binding credentials redacted. The WebGL fallback clears the headline on narrow screens, and codex help names the app path.
+- Local and live unconnected shop/giving pages retain items and amounts with disabled checkout. A fresh studio's shop serves an empty preview.
+
+### Upgrade notes
+
+- Migration `0023_tool_data_versions.sql` adds storage versions. No studio quota or automatic retention policy is introduced. `check --no-isolate` explicitly opts into existing records; ordinary dev/check uses a private local credential.
+- Package and plugin versions are unchanged in this PR. The pending section is renumbered at release with `node scripts/renumber-release.mjs`.
+
 ## [0.50.6] - 2026-10-14
 
 **Plugin 0.50.6** · Scheduled functions run, and your AI can see every run.

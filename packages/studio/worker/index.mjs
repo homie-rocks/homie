@@ -1,3 +1,5 @@
+import {APP_STORAGE_JS} from './app-frame.mjs';
+import {recordsPage} from './records-page.mjs';
 import { RULES_WIRING_MESSAGE } from './rules-wiring.mjs';
 import { characterStore, characterRequest } from './characters.mjs';
 export { useFunctions } from './functions.mjs';
@@ -529,8 +531,8 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
     ...(!agent && !watching && await availableShellShop(env, cat, game) ? { shop: true } : {}),
   };
   let html = await res.text();
-  const fallback = meta?.kind === 'app' ? `<script>addEventListener('DOMContentLoaded',function(){if(!document.querySelector('canvas')||document.querySelector('[data-webgl-fallback]'))return;try{var c=document.createElement('canvas');if(c.getContext('webgl2'))return;}catch(e){}var p=document.createElement('p');p.dataset.webglFallback='';p.setAttribute('role','status');p.textContent=${JSON.stringify(meta.words?.fallback ?? 'This device cannot display the 3D scene. Try a browser with WebGL enabled; use any available controls below.').replace(/</g, '\u003c')};p.style.cssText='position:fixed;z-index:2147483647;left:16px;right:16px;top:80px;padding:16px;background:#fff;color:#222;font:16px system-ui;border-radius:12px';document.body.append(p);});</script>` : '';
-  const head = fallback + `${embedded ? `<script>${EMBED_GAME_JS}</script>` : ''}<script>window.HOMIE_NET=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script>`;
+  const fallback = meta?.kind === 'app' ? `<script>addEventListener('DOMContentLoaded',function(){if(!document.querySelector('canvas')||document.querySelector('[data-webgl-fallback]'))return;try{var c=document.createElement('canvas');if(c.getContext('webgl2'))return;}catch(e){}var p=document.createElement('p');p.dataset.webglFallback='';p.setAttribute('role','status');p.textContent=${JSON.stringify(meta.words?.fallback ?? 'This device cannot display the 3D scene. Try a browser with WebGL enabled; use any available controls below.').replace(/</g, '\u003c')};p.style.cssText='position:fixed;z-index:2147483647;left:16px;right:16px;bottom:16px;padding:12px;background:#fff;color:#222;font:16px system-ui;border-radius:12px';document.body.append(p);});</script>` : '';
+  const head = (meta.kind==='app'?`<script>${APP_STORAGE_JS}</script>`:'') + fallback + `${embedded ? `<script>${EMBED_GAME_JS}</script>` : ''}<script>window.HOMIE_NET=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script>`;
   html = /<head[^>]*>/i.test(html) ? html.replace(/<head([^>]*)>/i, `<head$1>${head}`) : head + html;
   return new Response(html, {
     headers: {
@@ -610,6 +612,7 @@ export default {
   async scheduled(event, env, ctx) {
     const maintenance=(async () => {
       const cat = await catalogue(env, 'https://studio.invalid');
+      await notifyTools(env,cat,cat.studio?.url??'https://studio.invalid');
       await reconcileOrders(env, shopOf(cat));
       await (await import('./functions.mjs')).scheduleFunctions(event,env,cat,cat.studio?.url??'https://studio.invalid');
     })();
@@ -619,6 +622,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     await (await import('./functions.mjs')).syncFunctions(env);
+    if(env.DB&&env.LOBBY&&ctx?.waitUntil)ctx.waitUntil(catalogue(env,url.origin).then(cat=>notifyTools(env,cat,url.origin)).catch(()=>{}));
     const dispatch=()=>import('./functions.mjs').then(m=>m.runFunctions(env,()=>catalogue(env,url.origin),url.origin));
     // Some routes reconcile shop state in waitUntil after returning their page.
     // Keep dispatch behind those writes too, preserving the runtime context's
@@ -649,6 +653,11 @@ export default {
   },
 };
 
+async function notifyTools(env,cat,origin) {
+  if(!env.DB||!env.LOBBY)return;
+  const [{pushToolList},{builtins}]=await Promise.all([import('./event-resources.mjs'),import('./mcp-tools.mjs')]);
+  await pushToolList(env,cat,[...builtins(env,cat,origin),...await studioTools()],origin);
+}
 let studioTools = async () => [];
 /** Studio-authored Worker code, loaded only on the MCP surface. */
 export function useTools(load) { studioTools = load; }
@@ -920,6 +929,7 @@ async function route(request, env, ctx) {
           if (a.status === 401) return Response.redirect(`${url.origin}/account/?next=${encodeURIComponent(url.pathname + url.search)}`, 302);
           return json({ ok: false, error: a.error }, a.status);
         }
+        if(!meta.room)return recordsPage(meta,url);
       }
     }
     const lobby = () => env.LOBBY.get(env.LOBBY.idFromName(game));

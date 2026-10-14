@@ -1,7 +1,7 @@
 function freshErrorMessage(error,env,caller) {
   let message=String(error?.message??error);
   for(const [key,value] of Object.entries(env))if(typeof value==='string'&&/SECRET|KEY|TOKEN|PASSWORD/.test(key)&&value.length)message=message.replaceAll(value,'[redacted]');
-  return caller.owner ? message : 'Tool failed; ask the studio owner to inspect this call.';
+  return message;
 }
 import {localCaller} from './local-test.mjs';
 import {eventFeeds,feedUri,readableFeed,feedEvents,matchesFeed,subscribeFeed,eventHub,pushToolList} from './event-resources.mjs';
@@ -43,7 +43,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
     const cat=await catalogueOf();
     const tools=[...builtins(env,cat,origin),...definitions];
     await pushToolList(env,cat,tools,origin);
-    if(request.method==='GET'&&caller.connection) {
+    if(request.method==='GET'&&caller.connection&&env.LOBBY) {
       if(!request.headers.get('accept')?.includes('text/event-stream'))return json({error:'Accept text/event-stream required'},406);
       return eventHub(env,caller.connection).fetch('https://events/__studio_events',{method:'POST',body:JSON.stringify({op:'stream',connection:caller.connection,lastId:request.headers.get('last-event-id'),cat,origin,tools:tools.map(({name,description,inputSchema,audience,kind})=>({name,description,inputSchema,audience,kind}))})});
     }

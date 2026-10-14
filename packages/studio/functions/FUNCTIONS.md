@@ -8,8 +8,9 @@ homie-studio dev
 homie-studio function fire order.paid --id local-order-1 --input '{"order":"example"}'
 ```
 
-The fire command connects to the local studio through the existing browser OAuth
-approval. It is an owner tool and refuses remote hosts. It records an event in the
+The fire command uses the private credential created by `dev`, without browser
+approval. Local `tool call` uses the same headless connection. It is an owner tool
+and refuses remote hosts; production connections still require OAuth. It records an event in the
 same durable dispatcher as real events; firing the same ID again is a duplicate.
 
 ```ts
@@ -346,3 +347,39 @@ local webhook declaration. Build, commit and deploy the removal to retire the
 subscription and pending retries; in-flight requests cannot be recalled. Adding
 again creates a new registration and key, so old pending deliveries cannot be sent
 to a replacement receiver. The feed's MCP subscriptions remain available.
+
+
+## Concurrent storage and logs
+
+`context.database` is scoped to the function (tools can explicitly share a
+namespace). `get(key)` returns its JSON value; `getVersioned(key)` returns
+`{value,version}` or null. `put(key,value,{version})` compares and sets in one SQL
+statement, returning `{ok:true,version}` or `{ok:false,conflict:true}`. Version 0
+means create only. Omitting the version preserves unconditional replacement.
+
+```ts
+let row = await context.database.getVersioned('total');
+while (!(await context.database.put('total', Number(row?.value ?? 0) + 1,
+  { version: row?.version ?? 0 })).ok) {
+  row = await context.database.getVersioned('total');
+}
+// Prefer a single atomic statement for these operations:
+await context.database.increment('total', 1);
+await context.database.append('selected-items', event.data);
+const page = await context.database.list({prefix:'booking:', after:'', limit:100});
+// page.items: {key,value,version}[], page.next: next cursor or null.
+```
+
+These operations prevent lost writes between Workers; they do not make an
+at-least-once event exactly once. Use event IDs for deduplication. Atomic append is
+for application arrays, not an ever-growing operational log. Declare a studio event
+feed for logs and read pages using `studio_events_read` or resources. The owner can
+clear retained event/delivery history through an explicit sequence with
+`studio_events_clear`; no retention limit is imposed by default.
+
+A booking payment can be tested with:
+`homie-studio function fire order.paid --id fitting-paid-1 --input
+'{"order":"local-order","app":"boards","reference":"booking-1"}'`.
+Create any records the handler reads first. First fire registers subscriptions
+before writing the event, so the first event is delivered too. No Stripe checkout
+or browser approval is needed for this explicitly synthetic local event.

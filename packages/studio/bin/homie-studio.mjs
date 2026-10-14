@@ -246,7 +246,7 @@
  *                                         when another MCP server named homie has taken the connector's name there.
  *
  *   homie-studio codex new <id> [--kind app|game] [--name "<Name>"]
- *                                         games/<id>/CODEX.md: the Game Codex, every section, in the game's colours (a game
+ *                                         apps/<id>/CODEX.md for apps; games/<id>/CODEX.md for games: the Codex, every section, in the game's colours (a game
  *                                          is planned before it is made: with no game <id> yet, it starts its folder)
  *   homie-studio codex <id> [--artifact] [--open]
  *                                         the codex as a page in the game's own look (.studio/codex/<id>.html; it redraws

@@ -4,9 +4,10 @@ export const TOOL_DATABASE_MIGRATION='ALTER TABLE tool_data ADD COLUMN version I
 export function toolDatabase(DB,namespace) {
   const key=k=>{if(typeof k!=='string'||!k.length||k.length>128)throw new Error('Key must contain 1–128 characters');return k;};
   const decode=r=>r?{value:JSON.parse(r.value),version:r.version}:null;
+  const getVersioned=async k=>decode(await DB.prepare('SELECT value,version FROM tool_data WHERE namespace=?1 AND key=?2').bind(namespace,key(k)).first());
   return Object.freeze({
-    async get(k){return (await this.getVersioned(k))?.value??null;},
-    async getVersioned(k){return decode(await DB.prepare('SELECT value,version FROM tool_data WHERE namespace=?1 AND key=?2').bind(namespace,key(k)).first());},
+    async get(k){return (await getVersioned(k))?.value??null;},
+    getVersioned,
     async put(k,value,{version}={}) {
       const text=JSON.stringify(value);if(text===undefined)throw new Error('Value must be JSON');
       if(version!==undefined&&(!Number.isSafeInteger(version)||version<0))throw new Error('Version must be a nonnegative integer (0 creates)');

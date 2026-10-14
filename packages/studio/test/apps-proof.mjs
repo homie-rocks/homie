@@ -64,16 +64,17 @@ export async function appProof({ wrangler, shots = null, log = () => {} }) {
     sql('DELETE FROM app_records;');
     const needs = [
       { id: 'arrival', statement: 'A new arrival appears on the wall and phone', assertions: [{surface:'wall',selector:'[data-count]',text:'1'},{surface:'phone',selector:'[data-count]',text:'1'}] },
+      { id: 'crew', statement: 'My crew calls the next fitting from a tablet',role:'staff',steps:[{surface:'tablet',selector:'[data-next]',click:true},{surface:'tablet',reload:true}],assertions:[{surface:'tablet',selector:'[data-count]',text:'0'},{surface:'kiosk',selector:'[data-count]',text:'0'},{surface:'staff',selector:'[data-count]',text:'0'}]},
       { id: 'unbuilt', statement: 'My unbuilt tracking view works', assertions: [{surface:'wall',selector:'[data-count]'},{surface:'phone',selector:'#unbuilt-tracking'}] },
     ];
     writeFileSync(join(studio, 'apps/welcome/CODEX.md'), '# Welcome\n\n## Needs\n```needs\n' + JSON.stringify(needs) + '\n```\n');
     const evidence = join(scratch, 'needs');
     const judged = await check({root:studio,url:local,game:'welcome',shots:evidence,log});
     assert.equal(judged.ok,false,'an unmet Codex need prevents completion');
-    assert.deepEqual(judged.needs.map(n=>n.status),['met','not']);
+    assert.deepEqual(judged.needs.map(n=>n.status),['met','met','not']);
     for(const need of judged.needs) for(const capture of need.captures) assert.ok(existsSync(capture));
     const saved = JSON.parse(readFileSync(join(studio,'.studio/checks/welcome-needs.json'),'utf8'));
-    assert.equal(saved.needs[1].statement,needs[1].statement);
+    assert.equal(saved.needs[2].statement,needs[2].statement);
     log('Codex needs: real wall/phone evidence retained; an unbuilt need prevents completion');
     sql('DELETE FROM app_records;');
     const fallbackBrowser = await puppeteer.launch({ executablePath: findChrome(), headless: true, args: [...chromeArgs(), '--disable-webgl'] });
