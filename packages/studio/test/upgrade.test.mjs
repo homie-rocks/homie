@@ -310,3 +310,19 @@ test('upgrade refreshes untouched app preset files and defaults, preserving stud
  assert.equal(readFileSync(join(app,'src/view.ts'),'utf8'),readFileSync(join(PKG,'app-starters/giving/src/view.ts'),'utf8'));
  assert.equal(readFileSync(join(custom,'src/view.ts'),'utf8'),'// studio-authored scene\n');
 });
+
+test('upgrade refreshes the old giving preset but preserves a studio-edited item list', async () => {
+ const {shopInit}=await import('../lib/shop.mjs');
+ for(const customized of [false,true]) {
+  const {dir}=oldStudio('giving-preset-'+customized);
+  assert.equal(shopInit(dir,{giving:true,currency:'cad'}).ok,true);
+  const current=json(dir,'shop.json');
+  const old={...current,giving:{receiptText:'Our receipt wording'},items:current.items.filter(i=>i.price!==2000)};
+  if(customized)old.items[0].price=1700;
+  save(dir,'shop.json',old);
+  const upgraded=run(['upgrade','--apply'],dir);assert.equal(upgraded.status,0,upgraded.stdout+upgraded.stderr);
+  const actual=json(dir,'shop.json');
+  assert.deepEqual(actual.items,customized?old.items:current.items);
+  assert.equal(actual.giving.receiptText,'Our receipt wording');assert.equal(actual.currency,'cad');
+ }
+});

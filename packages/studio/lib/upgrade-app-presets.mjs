@@ -1,3 +1,4 @@
+import {givingItems} from './giving-preset.mjs';
 import {createHash} from 'node:crypto';
 import {readFileSync,existsSync,readdirSync} from 'node:fs';
 import {join} from 'node:path';
@@ -18,7 +19,15 @@ function merge(mine,old,next) {
  return result;
 }
 export function appPresetChanges(root) {
- const changes=[];const apps=join(root,'apps');if(!existsSync(apps))return changes;
+ const changes=[];
+ const shopFile=join(root,'shop.json');
+ if(existsSync(shopFile)) {
+  const from=readFileSync(shopFile,'utf8');let shop;try{shop=JSON.parse(from);}catch{}
+  if(shop?.giving && equal(shop.items,givingItems([1000,2500,5000]))) {
+   changes.push({file:'shop.json',kind:'update-file',what:'refresh untouched giving choices; keep currency and receipt wording',from,text:JSON.stringify({...shop,items:givingItems()},null,2)+'\n'});
+  }
+ }
+ const apps=join(root,'apps');if(!existsSync(apps))return changes;
  for(const entry of readdirSync(apps,{withFileTypes:true})) {
   if(!entry.isDirectory())continue;
   const rel=`apps/${entry.name}`,file=join(root,rel,'app.json');if(!existsSync(file))continue;
