@@ -1,7 +1,7 @@
 import { stripeCall } from './stripe.mjs';
 /** Only verified shop Checkout sessions establish ownership. Provider customer IDs
  * stay private, and are never accepted from a browser. */
-export const SUBSCRIPTIONS_MIGRATION_FILE = '0025_shop_subscriptions.sql';
+export const SUBSCRIPTIONS_MIGRATION_FILE = '0026_shop_subscriptions.sql';
 export const SUBSCRIPTIONS_MIGRATION = `
 CREATE TABLE shop_subscriptions (
  id TEXT PRIMARY KEY, order_id TEXT NOT NULL UNIQUE, customer TEXT NOT NULL,

@@ -1,6 +1,6 @@
 /** Capacity belongs to the studio database. Checkout expiry is a provider fact,
  * never an inference from a browser return or the local clock. */
-export const BOOKINGS_MIGRATION_FILE = '0024_bookings.sql';
+export const BOOKINGS_MIGRATION_FILE = '0025_bookings.sql';
 export const BOOKINGS_MIGRATION = `
 CREATE TABLE shop_bookings (
  id TEXT PRIMARY KEY, app TEXT NOT NULL, collection TEXT NOT NULL,
