@@ -12,8 +12,8 @@ import {EventStreams} from '../worker/event-resources.mjs';
 const url='https://receiver.example/events',secret=()=> 'whsec_'+randomBytes(32).toString('base64');
 function fixture(t){
  const sql=new DatabaseSync(':memory:');for(const file of readdirSync(new URL('../../../template/site/migrations/',import.meta.url)).sort())sql.exec(readFileSync(new URL('../../../template/site/migrations/'+file,import.meta.url),'utf8'));
- const stmt=(q,a=[])=>({bind:(...x)=>stmt(q,x),first:async()=>sql.prepare(q).get(...a)??null,all:async()=>({results:sql.prepare(q).all(...a)}),run:()=>({meta:{changes:sql.prepare(q).run(...a).changes}})});
- const DB={sql,prepare:stmt,batch:async xs=>xs.map(x=>x.run())};t.after(()=>sql.close());
+ const stmt=(q,a=[])=>({bind:(...x)=>stmt(q,x),first:async()=>sql.prepare(q).get(...a)??null,all:async()=>({results:sql.prepare(q).all(...a)}),run:async()=>({meta:{changes:sql.prepare(q).run(...a).changes}})});
+ const DB={sql,prepare:stmt,batch:async xs=>Promise.all(xs.map(x=>x.run()))};t.after(()=>sql.close());
  sql.exec("INSERT INTO players(id,name,guest,owner,created_at,seen_at) VALUES('owner','Owner',0,1,1,1),('staff','Staff',0,0,1,1); INSERT INTO mcp_connections(id,person,client,created) VALUES('owner-connection','owner','client',1),('staff-connection','staff','client',1); INSERT INTO app_roles(app,role,player) VALUES('cafe','staff','staff');");
  const feed={event:'record.changed',app:'cafe',collection:'bookings',audience:{app:'cafe',role:'staff'},receivers:[url]};
  const env={DB,STUDIO_EVENT_FEEDS:JSON.stringify({bookings:feed,private:{event:'tool.called',audience:'owner',receivers:[url]}})};
@@ -72,7 +72,7 @@ test('webhook auth, tenant isolation, invalid secrets, unsupported modes and end
  assert.ok(Date.parse((await subscribeEvents(env,cat,owner,{...params,ttlMs:null})).refreshBefore)>Date.now());
 });
 
-test('push active/event/heartbeat, resume, independent streams, cancellation, revocation and legacy list-changed',async t=>{
+test('push active/event/heartbeat, resume, cancellation and revocation',async t=>{
  const {env,cat,owner,params,emit}=fixture(t);await syncFunctions(env,[]);const jobs=[];const ctx={waitUntil:p=>jobs.push(p)};
  const streams=new McpEventStreams(env,ctx);t.after(()=>{for(const s of streams.streams)streams.close(s);});
  const input={id:7,connection:owner.connection,cat,params:{name:params.name}};
