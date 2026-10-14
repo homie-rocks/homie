@@ -90,7 +90,7 @@ export function thanksPage(cat, shop, { session = null, game = null } = {}) {
 <p class="kicker">${esc(studio)}</p>
 <h1 data-thanks-title>Thank you</h1>
 <p class="lead" data-thanks-line>Stripe is confirming the payment. ${shop.giving ? 'Thank you for supporting our work.' : 'This page says when it is yours (a few seconds).'}</p>
-<p>${g ? `<a class="btn" href="/${esc(g.id)}/play">Back to ${esc(g.name)}</a>` : '<a class="btn" href="/">Back to the studio</a>'} <a href="/account/">Your account</a></p>
+<p>${g ? `<a class="btn" href="/${esc(g.id)}/${g.kind === 'app' ? 'open' : 'play'}">Back to ${esc(g.name)}</a>` : `<a class="btn" href="/">Back to ${esc(studio)}</a>`} <a href="/account/">Your account</a></p>
 <p class="note">Your receipt comes from Stripe by email. ${shop.giving ? esc(shop.giving.receiptText ?? '') : refundWords(shop)}</p>
 </section>
 <script type="application/json" id="shop-boot">${JSON.stringify(boot).replace(/</g, '\\u003c')}</script>
@@ -298,7 +298,7 @@ export const SHOP_JS = String.raw`(function () {
     (function poll() {
       tries += 1;
       api('GET', '/api/shop/order?session=' + encodeURIComponent(boot.thanks)).then(function (r) {
-        if (r.status === 'paid') { returnToPage(false); $('[data-thanks-title]').textContent = boot.giving ? 'Thank you for your gift' : 'It\'s yours'; $('[data-thanks-line]').textContent = boot.giving ? 'Your gift is confirmed. Your receipt comes from Stripe by email.' : 'Paid. It is on your account now, in every game of ' + boot.studio + ' that uses it.'; if (r.simulated) { $('[data-thanks-title]').textContent = 'Simulation confirmed'; $('[data-thanks-line]').textContent = 'This was an offline test. No money moved and no Stripe receipt was sent.'; } return; }
+        if (r.status === 'paid') { returnToPage(false); $('[data-thanks-title]').textContent = boot.giving ? 'Thank you for your gift' : 'It\'s yours'; $('[data-thanks-line]').textContent = boot.giving ? 'Your gift is confirmed.' : 'Paid. It is on your account now, in every game of ' + boot.studio + ' that uses it.'; if (r.simulated) { $('[data-thanks-title]').textContent = 'Simulation confirmed'; $('[data-thanks-line]').textContent = 'This was an offline test. No money moved and no Stripe receipt was sent.'; } return; }
         if (tries < 40) setTimeout(poll, 1500);
         else $('[data-thanks-line]').textContent = boot.giving ? 'Stripe has not confirmed your gift yet. Check your email for its receipt.' : 'Stripe has not confirmed it yet. It will be on your account as soon as it does; your receipt comes by email.';
       }).catch(function () { if (tries < 40) setTimeout(poll, 3000); });

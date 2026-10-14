@@ -556,14 +556,16 @@ const studioName = (cat) => cat.studio?.name ?? 'Studio';
 export function sectionsOf(cat) {
   const games = (cat.games ?? []).some((g) => g.kind !== 'app');
   const apps = (cat.games ?? []).some((g) => g.kind === 'app');
+  const ownMenu = ['business','cause'].includes(cat.studio?.kind);
   return [
-    ...(cat.site?.pages ?? []).filter(p => /^\/[a-z0-9][a-z0-9._-]*\/$/.test(p) && !['/shop/', '/apps/', '/games/', '/rooms/', '/posts/', '/music/', '/videos/', '/lounge/'].includes(p)).map(p => ({ key: p, href: p, label: p.slice(1, -1).replaceAll('-', ' ').replace(/^./, c => c.toUpperCase()) })),
+    ...(cat.site?.pages ?? []).filter(p => /^\/[a-z0-9][a-z0-9._-]*\/$/.test(p) && !['/shop/', '/apps/', '/games/', '/rooms/', '/posts/', '/music/', '/videos/', '/lounge/'].includes(p)).map(p => ({ key: p, href: p, label: (ownMenu && (cat.games??[]).find(g=>g.kind==='app' && `/${g.id}/`===p)?.name) || p.slice(1, -1).replaceAll('-', ' ').replace(/^./, c => c.toUpperCase()) })),
     cat.shop && { key: 'shop', href: '/shop/', label: cat.shop.giving ? 'Give' : 'Shop' },
-    apps && { key: 'apps', href: '/apps/', label: 'Apps' },
+    ...((ownMenu ? cat.games ?? [] : []).filter(g=>g.kind==='app' && !(cat.site?.pages??[]).includes(`/${g.id}/`)).map(g=>({key:g.id,href:`/${g.id}/`,label:g.name}))),
+    apps && !ownMenu && { key: 'apps', href: '/apps/', label: 'Apps' },
     games && { key: 'games', href: '/games/', label: 'Games' },
     (cat.songs ?? []).length > 0 && { key: 'music', href: '/music/', label: 'Music' },
     (cat.videos ?? []).length > 0 && { key: 'videos', href: '/videos/', label: 'Videos' },
-    (games || apps) && { key: 'rooms', href: '/rooms/', label: 'Rooms' },
+    (games || (apps && !ownMenu)) && { key: 'rooms', href: '/rooms/', label: 'Rooms' },
     (cat.posts ?? []).length > 0 && { key: 'posts', href: '/posts/', label: 'Posts' },
     // The Lounge (0.29.0): the studio's own community room, when studio.json turns it on.
     cat.studio?.lounge && { key: 'lounge', href: '/lounge/', label: cat.studio.lounge.tab ?? 'Lounge' },
@@ -732,7 +734,7 @@ function gameCard(g, playing = 0) {
     <h3><a href="/${esc(g.id)}/">${esc(g.name)}</a></h3>
     <p>${esc(g.landing?.pitch ?? g.blurb)}</p>
     <div class="meta"><span>${esc(g.kind === 'app' ? 'One screen · live together' : playersText(g))}</span>${minutes(g.roundSeconds) ? `<span>${esc(minutes(g.roundSeconds))}</span>` : ''}<span>phone, computer or TV</span></div>
-    <div class="acts"><a class="btn" href="${esc(openPath(g))}" data-play>${PLAY_ICON}${esc(appWords(g).open)}</a><a class="ghost" href="/${esc(g.id)}/">About</a></div>
+    <div class="acts"><a class="btn" href="${esc(openPath(g))}" data-play>${PLAY_ICON}${esc(g.kind === 'app' ? g.landing?.action ?? `Open ${g.name}` : appWords(g).open)}</a><a class="ghost" href="/${esc(g.id)}/">About</a></div>
   </div>
 </article>`;
 }
@@ -836,7 +838,7 @@ export function homeHero(cat, f, { playing = 0 } = {}) {
     <p class="kicker">${esc(name)}<span class="k-opt"> · ${esc(tagline || (f.kind === 'app' ? 'featured app' : 'featured game'))}</span></p>
     <h1 class="title ${titleClass(f.name)}" id="hero-title">${esc(f.name)}</h1>
     <p class="line">${esc(f.landing?.pitch ?? f.blurb)}</p>
-    <div class="row"><a class="play" href="${esc(openPath(f))}" data-play>${PLAY_ICON}<span>${f.kind === 'app' ? esc(appWords(f).open) : 'Play now — free'}</span></a>${liveLine(f, playing, { idle: f.kind === 'app' ? 'One screen, together' : 'Bots hold every empty seat · press Play and you are in a round' })}</div>
+    <div class="row"><a class="play" href="${esc(openPath(f))}" data-play>${PLAY_ICON}<span>${f.kind === 'app' ? esc(f.landing?.action ?? `Open ${f.name}`) : 'Play now — free'}</span></a>${liveLine(f, playing, { idle: f.kind === 'app' ? 'One screen, together' : 'Bots hold every empty seat · press Play and you are in a round' })}</div>
     <a class="also" href="/${esc(f.id)}/">${icon('arrow')}<span>About ${esc(f.name)}</span></a>${games.length > 1 ? `<a class="also" href="/${f.kind === 'app' ? 'apps' : 'games'}/">${icon('games')}<span>All ${games.length} ${f.kind === 'app' ? 'apps' : 'games'}</span></a>` : ''}
   </div>
 </section>`;
@@ -1199,7 +1201,7 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
     ${lineage ? `<p class="based-on">Based on ${ofWhat}</p>` : ''}
     <p class="line">${esc(L.pitch ?? g.blurb)}</p>
     <div class="row">
-      <a class="play" href="${esc(openPath(g))}" data-play>${PLAY_ICON}<span>${app ? esc(words.open) : 'Play now — free'}</span></a>
+      <a class="play" href="${esc(openPath(g))}" data-play>${PLAY_ICON}<span>${app ? esc(L.action ?? `Open ${g.name}`) : 'Play now — free'}</span></a>
       ${liveLine(g, playing, { idle: app ? 'One screen, live together' : `Bots hold every empty seat · one tap and you are in` })}
     </div>
     ${tvOn ? `<a class="also" href="#anywhere">${icon('tv')}<span>Or put it on the big screen</span></a>` : ''}${playing > 0 && rooms.length && watchOf(g) !== 'off' ? `<a class="also" href="/${esc(g.id)}/watch">${icon('eye')}<span>Watch a live room</span></a>` : ''}${trailer ? `<a class="also" href="/videos/${esc(trailer.slug)}/">${icon('videos')}<span>Watch the trailer</span></a>` : ''}${g.saves ? `<a class="also" href="/account/?next=${encodeURIComponent(`/${g.id}/play`)}" data-account>${icon('spark')}<span>Your progress follows you: sign in</span></a>` : ''}
@@ -1270,7 +1272,7 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
     head: `${h.tallImage || h.wideImage ? `<link rel="preload" as="image" href="${esc(h.tallImage ?? h.wideImage)}"${h.tallImage && h.wideImage ? ' media="(max-aspect-ratio: 3/4)"' : ''}>${h.tallImage && h.wideImage ? `<link rel="preload" as="image" href="${esc(h.wideImage)}" media="(min-aspect-ratio: 3/4)">` : ''}` : ''}`,
     // A game that is not public yet (private, or an invite-only beta) is never indexed, and offers nothing.
     ld: landingLd(cat, g, origin, { listed, shop }), ...(listed ? {} : { extraHeaders: { 'x-robots-tag': 'noindex' } }),
-    main: `${hero}${app ? `<section class="band"><div class="band-in"><h2>One screen. Your place in it.</h2><p>${esc(L.about ?? g.blurb)}</p><div class="keys"><a class="btn" href="${esc(openPath(g))}">${esc(words.open)}</a><a class="ghost" href="/${esc(g.id)}/tv">Wall screen</a></div>${qr ? `<div class="scan"><span class="qr">${qr}</span><p>${esc(words.join)}</p></div>` : ''}</div></section>` : ways + liveBand}${servers ? serversBand(g, servers) : ''}${app ? '' : howBand}${shotsBand}${band(partial(cat, 'game', vars))}${band(partial(cat, `game-${g.id}`, vars))}${creditsBand}`,
+    main: `${hero}${app ? `<section class="band"><div class="band-in"><h2>One screen. Your place in it.</h2><p>${esc(L.about ?? g.blurb)}</p><div class="keys"><a class="btn" href="${esc(openPath(g))}">${esc(L.action ?? `Open ${g.name}`)}</a><a class="ghost" href="/${esc(g.id)}/tv">Wall screen</a></div>${qr ? `<div class="scan"><span class="qr">${qr}</span><p>${esc(words.join)}</p></div>` : ''}</div></section>` : ways + liveBand}${servers ? serversBand(g, servers) : ''}${app ? '' : howBand}${shotsBand}${band(partial(cat, 'game', vars))}${band(partial(cat, `game-${g.id}`, vars))}${creditsBand}`,
   });
 }
 

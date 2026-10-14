@@ -58,7 +58,7 @@ test('subscribed MCP client gets bookings without polling; replay and current ro
   };
   const tool=(connection,name,args)=>rpc(connection,'tools/call',{name,arguments:args});
   const conflict=await tool(null,'app_records',{app:'cafe',collection:'bookings',id:'first',operation:'create',data:{name:'Again'}});
-  assert.equal(conflict.result.isError,true);assert.match(conflict.result.content[0].text,/record changed, already exists, or collection full; reload/);
+  assert.equal(conflict.result.isError,true);assert.match(conflict.result.content[0].text,/record changed or already exists; reload/);
   assert.doesNotMatch(conflict.result.content[0].text,/Tool failed/);
   const removed=await tool('staff','app_records',{app:'cafe',role:'staff',collection:'bookings',id:'first',operation:'delete',version:1});
   assert.equal(removed.result.isError,undefined);assert.equal(await db.prepare("SELECT id FROM app_records WHERE id='first'").first(),null);

@@ -72,14 +72,14 @@ export function arrivalCard(cat, g, { screen = false, off = false } = {}) {
   const art = wide || tall
     ? `<picture class="arrive-art">${wide && tall ? `<source media="(min-aspect-ratio: 3/4)" srcset="${esc(wide)}">` : ''}<img src="${esc(tall ?? wide)}" alt="" decoding="async" fetchpriority="high" style="object-position:${esc(focus)}"></picture>`
     : '<div class="arrive-art bare" aria-hidden="true"></div>';
-  const html = `<div class="arrive${screen ? ' big' : ''}" data-arrive data-from="${esc(c.from)}">
+  const html = `<div class="arrive${screen ? ' big' : ''}" data-arrive data-from="${esc(c.from)}"${g?.kind === 'app' ? ' data-app' : ''}>
   ${art}<div class="arrive-shade" aria-hidden="true"></div>
   <div class="arrive-in">
     ${studio ? `<p class="arrive-kicker">${esc(studio)}</p>` : ''}
     <h1 class="arrive-title">${esc(g?.name ?? '')}</h1>
     ${pitch ? `<p class="arrive-pitch">${esc(pitch)}</p>` : ''}
     <div class="arrive-meter" aria-hidden="true"><i data-arrive-bar></i></div>
-    <p class="arrive-step" role="status" aria-live="polite"><span data-arrive-step>Finding a room…</span><span class="arrive-room" data-arrive-room></span></p>
+    <p class="arrive-step" role="status" aria-live="polite"><span data-arrive-step>${g?.kind === 'app' ? 'Opening the app…' : 'Finding a room…'}</span><span class="arrive-room" data-arrive-room></span></p>
     ${keys.map(([k, v]) => `<p class="arrive-keys" data-for="${k}">${esc(String(v).slice(0, 160))}</p>`).join('')}
   </div>
 </div>`;
@@ -166,9 +166,10 @@ export const ARRIVAL_JS = String.raw`(function () {
   function later(ms, why) { timers.push(setTimeout(function () { api.lift(why); }, ms)); }
   // Whatever happens, the game gets the screen within 30 s of the page opening.
   later(30000, 'timeout');
+  var app=el.getAttribute('data-app') !== null;
   var roomLabel = '';
   // A full server's wait ("you're next for a seat") stays said while its room loads.
-  api.room = function (label) { roomLabel = label || ''; if (a.phase === 'wait') set('wait', a.step, 0.22); else set('game', 'Loading the game…', 0.22); if (!roomEl.textContent) roomEl.textContent = roomLabel; };
+  api.room = function (label) { roomLabel = label || ''; if (a.phase === 'wait') set('wait', a.step, 0.22); else set('game', app ? 'Opening the app…' : 'Loading the game…', 0.22); if (!roomEl.textContent) roomEl.textContent = roomLabel; };
   api.facts = function (text) { if (!api.done && text) roomEl.textContent = text; };
   api.full = function (text) { set('wait', text, 0.3); };
   var attachedAt = 0;
@@ -185,7 +186,7 @@ export const ARRIVAL_JS = String.raw`(function () {
       set('join', 'Joining ' + (roomLabel || 'the room') + '…', 0.36);
       later(15000, 'cap');
     } else if (m.what === 'role' || m.what === 'token') {
-      set('world', 'Loading the world…', 0.5);
+      set('world', app ? 'Opening the app…' : 'Loading the world…', 0.5);
       // A game built with a helper older than the arrival says nothing more: it has the screen once it has a seat.
       if (a.mode === 'seat' && !seatedTimer) seatedTimer = setTimeout(function () { api.lift('seated'); }, 600);
     } else if (m.what === 'loading') {

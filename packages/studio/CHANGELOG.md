@@ -17,6 +17,31 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.51.3] - 2026-10-14
+
+**Plugin 0.51.3**
+
+Business and cause apps use their own words, count every paid monthly gift, and test real Stripe checkout locally.
+
+### Added
+
+- Local real Stripe test checkout: `shop connect --local --profile <sandbox> --url <Wi-Fi address>` syncs test Payment Links without Cloudflare or a public webhook. Stripe CLI forwards signed events to `dev`; phones return to the same Wi-Fi thank-you page.
+- App acceptance needs can name a checkout popup, interact with it, and continue asserting the original phone.
+
+### Fixed
+
+- Monthly subscription invoices create deduplicated paid orders and app events with the original reference, so every gift reaches fulfilment.
+- Business/cause menus name their own pages and apps. App shells use app names, website buttons have independent wording, thank-you pages name the organisation, and default phone sharing stays above bottom tabs.
+- Gathering is a task check-in starter with its own records and no giving or quiz workflow. App style defaults use illustration and AI refinements retain AI attribution.
+- `dev` loads root `.dev.vars`. App collections no longer stop accepting records at 1,000.
+- Requests and scheduled runs remove referral metadata recreated by an old Worker during a rolling deployment.
+- The installed app reference documents the supported local payment/checker path and distinguishes local MCP tools from hosted connector tools.
+
+### Upgrade notes
+
+- Restart local dev after updating `.dev.vars`. Local Stripe links are test-only; live connection and deployment are unchanged.
+- Existing app `screen.share` choices and authored site headers remain in control. Subscription renewals now emit `order.paid` as well as lifecycle events; fulfilment listening to both should deduplicate by payment identity.
+
 ## [0.51.2] - 2026-10-14
 
 **Plugin 0.51.2** · Deploying and listing do what the studio chose, under one address.

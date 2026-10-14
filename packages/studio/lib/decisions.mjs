@@ -130,7 +130,7 @@ export const CATALOGUE = Object.freeze([
   ['style.render', 'style', 'How is the world drawn?', [], (ctx) => {
     if (ctx.drawn?.render && RENDERS[ctx.drawn.render]) return { value: ctx.drawn.render, label: RENDERS[ctx.drawn.render].label, why: 'what the game draws now (its style.json)', options: Object.entries(RENDERS).map(([k, v]) => ({ id: k, label: v.label, value: k })) };
     const hit = best(RENDERS, ctx);
-    const key = hit?.[0] ?? 'lowpoly-flat';
+    const key = hit?.[0] ?? (ctx.kind === 'app' ? 'illustrated' : 'lowpoly-flat');
     return { value: key, label: RENDERS[key].label, why: hit ? `your words ${said(ctx, RENDERS[key].words)}: ${RENDERS[key].note}` : `nothing named a look: ${RENDERS[key].note}`, options: Object.entries(RENDERS).map(([k, v]) => ({ id: k, label: v.label, value: k })) };
   }],
   ['style.palette', 'style', 'Which colours, and what is each one for?', ['style.render', 'style.light'], (ctx) => {
@@ -140,6 +140,10 @@ export const CATALOGUE = Object.freeze([
       const v = paletteValue('custom', ctx.codexPalette);
       v.ramp = rampFrom(v);
       return { value: v, label: 'The codex\'s own colours', why: 'the Game Codex already names them', options: paletteOptions(ctx) };
+    }
+    if(ctx.kind === 'app' && !best(PALETTES,ctx)) {
+      const value=paletteValue('custom',{bg:ctx.theme.bg??'#f6f3ec',ink:ctx.theme.fg??'#243d36',accent:ctx.theme.accent??'#226b59',accent2:'#b87935'});
+      value.ramp=rampFrom(value);return {value,label:'The place’s colours',why:'a readable starting palette for the app; refine it to the organisation',options:paletteOptions(ctx)};
     }
     const hit = best(PALETTES, ctx);
     const key = hit?.[0] ?? ({ gather: 'meadow-morning', brawl: 'candy-pop', race: 'desert-noon', rpg: 'heroic-dawn', shooter: 'space-ink', platformer: 'meadow-morning', party: 'candy-pop', puzzle: 'candy-pop', sports: 'meadow-morning' })[ctx.genre] ?? 'meadow-morning';
@@ -479,7 +483,7 @@ export function setDecision(root, id, did, input, { by = 'ai', why = null, words
  * Steer: the person's words, applied where the vocabulary knows them ("warmer", "less saturated", "golden hour",
  * "closer", "chunkier", "add outlines", a hex colour), and always recorded. The decision becomes steered.
  */
-export function steerDecision(root, id, did, words, { manifest = null } = {}) {
+export function steerDecision(root, id, did, words, { manifest = null, by = 'person' } = {}) {
   const doc = readDecisions(root, id);
   if (!doc) throw new Error(`games/${id} has no decisions yet: homie-studio style init ${id}`);
   const rec = doc.decisions[did];
@@ -489,7 +493,7 @@ export function steerDecision(root, id, did, words, { manifest = null } = {}) {
   if (rec.state === 'locked') return { ok: false, command: 'style steer', id, decision: did, locked: true, why: `${did} is locked: unlock it (with a reason, after the blast radius) before steering it` };
   const { value, applied } = applySteer(did, rec.value, w, doc);
   const steer = [...(rec.steer ?? []), w].slice(-10);
-  change(rec, { value, label: did === 'style.palette' ? paletteLabel({ ...value, steered: steer.join(', ') }) : labelOf(did, value), steer, state: rec.state === 'pinned' ? 'pinned' : 'steered', why: `steered by the person: "${w}"` }, { by: 'person', words: w });
+  change(rec, { value, label: did === 'style.palette' ? paletteLabel({ ...value, steered: steer.join(', ') }) : labelOf(did, value), steer, state: rec.state === 'pinned' ? 'pinned' : by === 'person' ? 'steered' : rec.state, why: `refined by ${by === 'person' ? 'the person' : 'the AI'}: "${w}"` }, { by, words: w });
   if (did === 'style.palette' && doc.decisions['style.light'] && doc.decisions['style.light'].state !== 'locked') {
     const L = doc.decisions['style.light'];
     L.value = { ...L.value, ...lightColours(LIGHTS[L.value.time] ?? LIGHTS.morning, value) };
@@ -762,7 +766,7 @@ export function directionsFor(root, id, { prompt = '' } = {}) {
 }
 
 /** Pick a direction (all its style values) or Mix rows from several: { 'style.palette': 'b', … }. By the person. */
-export function pickDirection(root, id, choice, { mixes = {}, manifest = null } = {}) {
+export function pickDirection(root, id, choice, { mixes = {}, manifest = null, by: actor = 'person' } = {}) {
   const doc = readDecisions(root, id);
   if (!doc?.board?.directions?.length) throw new Error(`games/${id} has no style board yet: homie-studio style board ${id}`);
   const by = Object.fromEntries(doc.board.directions.map((d) => [d.id, d]));
@@ -778,7 +782,7 @@ export function pickDirection(root, id, choice, { mixes = {}, manifest = null } 
     const value = from.values[did];
     if (value === undefined || JSON.stringify(rec.value) === JSON.stringify(value)) continue;
     if (rec.state === 'locked') { refused.push(did); continue; }
-    change(rec, { value, label: labelOf(did, value), why: `the person picked direction ${from.id.toUpperCase()} on the style board`, state: rec.state === 'pinned' ? 'pinned' : 'steered' }, { by: 'person' });
+    change(rec, { value, label: labelOf(did, value), why: `${actor === 'person' ? 'the person' : 'the AI'} picked direction ${from.id.toUpperCase()} on the style board`, state: rec.state === 'pinned' ? 'pinned' : actor === 'person' ? 'steered' : rec.state }, { by: actor });
     changed.push(did);
   }
   doc.board.chosen = choice ?? doc.board.chosen ?? null;

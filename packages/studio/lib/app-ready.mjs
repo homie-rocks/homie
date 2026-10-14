@@ -1,5 +1,6 @@
 /** One arrival barrier for baseline proof, needs reloads and rebuilt frames. */
 export async function appReady(surface, {timeout=60000}={}) {
+  await surface.page.bringToFront?.();
   const end=Date.now()+timeout;
   let error;
   do {

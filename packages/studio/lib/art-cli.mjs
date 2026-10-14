@@ -151,13 +151,13 @@ export async function styleCommand(root, sub, positional, flags, { log = () => {
   } else if (verb === 'set') {
     if (!args[1] || args[2] === undefined) return { ok: false, command: 'style set', why: `usage: homie-studio style set <id> <decision> <value> (decisions: ${CATALOGUE_IDS.slice(0, 10).join(', ')}, …)` };
     r = setDecision(root, id, args[1], args.slice(2).join(' '), { by: flags.get('by') === 'person' ? 'person' : 'ai', why: flags.get('why') ?? null, words: flags.get('words') ?? null, unlock: flags.has('unlock'), reason: flags.get('reason') ?? null, confirm: flags.has('confirm'), manifest: manifest() });
-  } else if (verb === 'steer') r = steerDecision(root, id, args[1], args.slice(2).join(' ') || String(flags.get('words') ?? ''), { manifest: manifest() });
+  } else if (verb === 'steer') r = steerDecision(root, id, args[1], args.slice(2).join(' ') || String(flags.get('words') ?? ''), { manifest: manifest(), by: flags.get('by') === 'person' ? 'person' : 'ai' });
   else if (verb === 'lock') r = lockDecision(root, id, args[1] ?? 'style', { by: 'person', words: flags.get('words') ?? null });
   else if (verb === 'unlock') r = unlockDecision(root, id, args[1], { reason: flags.get('reason') ?? null, by: 'person' });
   else if (verb === 'board') { const { styleBoard } = await import('./style-board.mjs'); r = await styleBoard(root, id, { prompt: String(flags.get('prompt') ?? ''), log, library: !flags.has('no-library') }); }
   else if (verb === 'pick') {
     const mixes = Object.fromEntries(list(flags.get('mix')).map((x) => x.split('=')).filter(([k, v]) => k && v));
-    r = pickDirection(root, id, args[1] && !args[1].includes('=') ? args[1] : null, { mixes, manifest: manifest() });
+    r = pickDirection(root, id, args[1] && !args[1].includes('=') ? args[1] : null, { mixes, manifest: manifest(), by: flags.get('by') === 'person' ? 'person' : 'ai' });
   } else if (verb === 'mood') { const { recordMood } = await import('./style-board.mjs'); r = await recordMood(root, id, args[1], resolve(String(flags.get('image') ?? '')), { usd: flags.get('usd') ?? null, receipt: flags.get('receipt') ?? null, model: flags.get('model') ?? null }); }
   else if (verb === 'golden') {
     if (args[1] === 'add') { const { addGolden } = await import('./style-board.mjs'); r = await addGolden(root, id, resolve(String(args[2] ?? flags.get('image') ?? '')), { from: flags.get('from') ?? null }); }

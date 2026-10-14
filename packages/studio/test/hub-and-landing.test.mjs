@@ -74,6 +74,7 @@ async function siteOf(dir, { rooms = {}, week = null } = {}) {
   const LOBBY = { idFromName: (n) => n, get: (n) => ({ fetch: async (u) => new Response(JSON.stringify(new URL(u).pathname === '/rooms' ? { rooms: rooms[n] ?? [] } : { players: 0, rooms: 0, peak: { players: 0, room: 0 } })) }) };
   const DB = week && {
     prepare: (sql) => ({
+      run: async () => ({}),
       bind: () => ({
         first: async () => (/SELECT value FROM meta/.test(sql) ? null : { plays: week.total.plays, rounds: week.total.rounds }),
         all: async () => ({ results: Object.entries(week.games).map(([subject, v]) => ({ subject, ...v })) }),

@@ -97,7 +97,7 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
     if (op !== 'read' && !sameOrigin(request, url) && !(appOriginOf(request) && !meta.roles[access.role].signIn)) return fail(403, 'same origin required');
     if (op === 'read') {
       const rows = id ? [await env.DB.prepare('SELECT id, value, version, updated_at FROM app_records WHERE app = ?1 AND collection = ?2 AND id = ?3').bind(recordApp, collection, id).first()].filter(Boolean)
-        : (await env.DB.prepare('SELECT id, value, version, updated_at FROM app_records WHERE app = ?1 AND collection = ?2 ORDER BY updated_at, id LIMIT 1000').bind(recordApp, collection).all()).results;
+        : (await env.DB.prepare('SELECT id, value, version, updated_at FROM app_records WHERE app = ?1 AND collection = ?2 ORDER BY updated_at, id').bind(recordApp, collection).all()).results;
       const records=[];
       for(const r of rows) {
         const record={id:r.id,data:JSON.parse(r.value),version:r.version,updatedAt:r.updated_at};
@@ -124,11 +124,11 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
     if (op !== 'delete') { const bad = recordProblem(meta.records.collections[collection], body.data, { create: op === 'create' }); if (bad) return fail(400, bad); }
     if (op !== 'create' && (!Number.isSafeInteger(body.version) || body.version < 1)) return fail(400, 'record version required');
     const stmt = op === 'create'
-      ? env.DB.prepare('INSERT OR IGNORE INTO app_records (app, collection, id, value, version, updated_at) SELECT ?1, ?2, ?3, ?4, 1, ?5 WHERE (SELECT COUNT(*) FROM app_records WHERE app = ?1 AND collection = ?2) < 1000').bind(recordApp, collection, id, JSON.stringify(body.data), Date.now())
+      ? env.DB.prepare('INSERT OR IGNORE INTO app_records (app, collection, id, value, version, updated_at) VALUES (?1, ?2, ?3, ?4, 1, ?5)').bind(recordApp, collection, id, JSON.stringify(body.data), Date.now())
       : op === 'update' ? env.DB.prepare('UPDATE app_records SET value = ?4, version = version + 1, updated_at = ?5 WHERE app = ?1 AND collection = ?2 AND id = ?3 AND version = ?6').bind(recordApp, collection, id, JSON.stringify(body.data), Date.now(), body.version)
       : env.DB.prepare('DELETE FROM app_records WHERE app = ?1 AND collection = ?2 AND id = ?3 AND version = ?4').bind(recordApp, collection, id, body.version);
     const result = await stmt.run();
-    return result.meta.changes ? json({ ok: true, id, version: op === 'create' ? 1 : body.version + 1 }) : fail(409, 'record changed, already exists, or collection full; reload');
+    return result.meta.changes ? json({ ok: true, id, version: op === 'create' ? 1 : body.version + 1 }) : fail(409, 'record changed or already exists; reload');
   } catch (error) {
     if (/booking capacity|capacity below|slot has active/.test(error.message)) return fail(409, error.message);
     if (error instanceof SyntaxError || error.message === 'body too large') return fail(400, error.message);

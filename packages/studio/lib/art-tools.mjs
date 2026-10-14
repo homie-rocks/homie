@@ -223,11 +223,11 @@ export function artToolDefs(ctx, h) {
         const by = a.by === 'person' ? 'person' : 'ai';
         let r; let action;
         try {
-          if (a.pick || a.mix) { action = 'pick'; r = pickDirection(root, game, a.pick ? String(a.pick).toLowerCase() : null, { mixes: a.mix && typeof a.mix === 'object' ? a.mix : {}, manifest }); }
+          if (a.pick || a.mix) { action = 'pick'; r = pickDirection(root, game, a.pick ? String(a.pick).toLowerCase() : null, { mixes: a.mix && typeof a.mix === 'object' ? a.mix : {}, manifest, by }); }
           else if (!a.decision) return fail('name the decision (decision: "style.palette"), or pick a direction (pick: "b")');
           else if (a.lock) { action = 'lock'; r = lockDecision(root, game, a.lock === true ? a.decision : String(a.lock), { by: 'person', words: a.words ?? (by === 'person' ? 'tapped Lock' : null) }); }
           else if (a.unlock && a.value === undefined && a.steer === undefined) { action = 'unlock'; r = unlockDecision(root, game, a.decision, { reason: a.reason ?? null, by: 'person' }); }
-          else if (a.steer) { action = 'steer'; r = steerDecision(root, game, a.decision, String(a.steer), { manifest }); }
+          else if (a.steer) { action = 'steer'; r = steerDecision(root, game, a.decision, String(a.steer), { manifest, by }); }
           else if (a.value !== undefined) { action = 'set'; r = setDecision(root, game, a.decision, a.value, { by, why: null, words: a.words ?? null, unlock: a.unlock === true, reason: a.reason ?? null, confirm: a.confirm === true, manifest }); }
           else return fail('say what to do: value, steer, lock, unlock, pick or mix');
         } catch (error) { return fail(error.message); }

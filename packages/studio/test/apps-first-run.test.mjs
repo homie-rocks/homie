@@ -99,3 +99,13 @@ test('H: giving thank-you and terms use the organisation wording without item-ac
   assert.doesNotMatch(html, /unused items|digital items|keep access|statutory rights/);
  }
 });
+
+test('local Stripe links return to the Wi-Fi origin without a public webhook or Cloudflare',async()=>{
+ const {syncPaymentLinks}=await import('../lib/shop-links.mjs');const {checkShop}=await import('../worker/shop-rules.mjs');const calls=[];
+ const api=async(method,path,params)=>{calls.push({method,path,params});if(method==='GET')return {data:[],has_more:false};if(path==='/v1/products')return {id:params.id,...params};if(path==='/v1/prices')return {id:'price_local',active:true};if(path==='/v1/payment_links')return {id:'plink_local',url:'https://buy.stripe.com/test_local',active:true};return {};};
+ const shop=checkShop({currency:'cad',items:[{id:'gift',kind:'donation',name:'Gift',price:2000}]}).shop;
+ const r=await syncPaymentLinks({api,shop,slug:'local-pantry',site:'http://192.168.1.8:8787',mode:'test',local:true});
+ assert.equal(r.ok,true);assert.equal(r.config.mode,'test');
+ assert.equal(calls.find(c=>c.path==='/v1/payment_links'&&c.method==='POST').params.after_completion.redirect.url,'http://192.168.1.8:8787/shop/thanks?session_id={CHECKOUT_SESSION_ID}');
+ assert.equal(calls.some(c=>c.path==='/v1/webhook_endpoints'),false);
+});

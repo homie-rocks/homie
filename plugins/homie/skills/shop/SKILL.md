@@ -173,3 +173,11 @@ CLI fixture/API tokens; never enter card digits into a page. The local listener 
 for development; production sends signed events directly to the studio's webhook.
 The optional keyed fixture remains available for testing explicitly selected session
 checkout. Label offline fixtures simulations.
+
+## Local Stripe test payments
+
+Use `shop connect --local --profile <sandbox-profile> --url http://<Wi-Fi-IP>:8787`
+and Stripe CLI `listen --all-snapshot --forward-to http://localhost:8787/api/shop/hook`. The full
+recipe is in the installed toolkit’s `apps/APPS.md`, “Real Stripe test checkout on
+this computer”. It uses root `.dev.vars`, needs no public HTTPS or Cloudflare, and
+keeps the existing approved Stripe CLI session. Do not write a stand-in checkout.

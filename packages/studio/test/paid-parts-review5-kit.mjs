@@ -23,7 +23,7 @@ class Killed extends Error { constructor() { super('process killed'); this.kille
 export function instrument(w) {
   try { w.sql.exec('CREATE TABLE IF NOT EXISTS players (id TEXT PRIMARY KEY, name TEXT)'); } catch {}
   const K = { n: 0, at: 0, dead: false, trace: [], faults: [], calls: [] };
-  const tick = (label) => { if (K.dead) throw new Killed(); K.n++; K.trace.push(label); if (K.at && K.n === K.at) { K.dead = true; K.diedAt = label; throw new Killed(); } };
+  const tick = (label) => { if (K.dead) throw new Killed(); K.n++; K.trace.push(label); if ((K.at && K.n === K.at) || K.killWhen?.(label)) { K.dead = true; K.diedAt = label; throw new Killed(); } };
   const gate = () => { if (K.dead) throw new Killed(); };
   const db = w.env.DB;
   const wrap = (stmt, q) => ({
@@ -58,7 +58,7 @@ export function instrument(w) {
     tick(`net ${label}`);
     return r;
   };
-  K.revive = () => { K.dead = false; K.at = 0; };
+  K.revive = () => { K.dead = false; K.at = 0; K.killWhen = undefined; };
   K.fault = (f) => { K.faults.push(f); return f; };
   K.restore = () => { globalThis.fetch = inner; w.env.DB = db; };
   return K;

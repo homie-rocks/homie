@@ -387,6 +387,7 @@ export async function checkApp({ isolate = true, root = null, url, game, meta, s
     for(const name of ['wall','phone','phone-two'])await openSurface(name);
     const textOf = (f) => f.$eval(proof.observe, (e) => e.textContent);
     const actor = surfaces[1];
+    await appReady(actor);
     await waitInApp(actor,proof.action,f=>f.waitForFunction((selector) => { const el = document.querySelector(selector); return el && !el.disabled && !el.hidden; }, {}, proof.action));
     before = await waitInApp(actor,proof.observe,textOf);
     await actor.frame.click(proof.action);
@@ -406,6 +407,7 @@ export async function checkApp({ isolate = true, root = null, url, game, meta, s
     report?.check?.('app-action', 'pass', { note: 'action reached wall and both phones; reconnect retained it' });
     }
     for(const need of plan?.needs??[])for(const item of [...(need.steps??[]),...(need.assertions??[])]) {
+      if(plan.needs.some(n=>(n.steps??[]).some(s=>s.popup===item.surface)))continue;
       const role=item.role??need.role??meta.surfaces?.[item.surface]??(item.surface==='staff'?'staff':undefined);
       if(!surfaces.some(s=>s.name===item.surface&&s.role===role))await openSurface(item.surface,role);
     }

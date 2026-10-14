@@ -24,6 +24,8 @@ export function readAppNeeds(root, id) {
 /** Run real UI actions. A failed or absent flow stays visible; continue collecting other needs. */
 export async function proveAppNeeds({ plan, surfaces, shots, report, ready = async () => {} }) {
   const results = [];
+  const appBarrier=ready;
+  ready=async s=>{await s.page.bringToFront?.();if(s.external){s.frame=s.page.mainFrame();return;}await appBarrier(s);};
   let activeRole;
   const surface = name => { const s = surfaces.find(s => s.name === name && (!activeRole || s.role === activeRole)) ?? surfaces.find(s => s.name === name); if (!s) throw new Error(`unknown surface ${name}`); return s; };
   for (const need of plan.needs) {
@@ -33,7 +35,8 @@ export async function proveAppNeeds({ plan, surfaces, shots, report, ready = asy
     const result = { id: need.id, statement: need.statement, status: 'not', captures: [] };
     try {
       if (!Array.isArray(need.assertions) || !need.assertions.length) throw new Error('need requires assertions on its named surfaces');
-      for (const name of names) { const s = surface(name); if (need.role && s.role !== need.role) throw new Error(`${name} requires role ${need.role}, got ${s.role ?? 'unspecified'}`); }
+      const popupNames=new Set((need.steps??[]).map(s=>s.popup).filter(Boolean));
+      for (const name of names) { if(popupNames.has(name))continue; const s = surface(name); if (need.role && s.role !== need.role) throw new Error(`${name} requires role ${need.role}, got ${s.role ?? 'unspecified'}`); }
       for (const name of new Set(need.assertions.filter(a => a.effect).map(a => a.surface))) await surface(name).frame.evaluate(() => { window.__homieNeedsEffects = []; });
       for (const step of need.steps ?? []) {
         const target=surface(step.surface);
@@ -43,7 +46,19 @@ export async function proveAppNeeds({ plan, surfaces, shots, report, ready = asy
         if (step.reload) { await page.reload({ waitUntil: 'domcontentloaded' }); await ready(surface(step.surface)); continue; }
         await waitInApp(target,step.selector,f=>f.waitForSelector(step.selector, { visible: true, timeout:10000 }),{ready});
         const frame=target.frame;
-        if (step.click) await frame.click(step.selector);
+        if (step.click && step.popup) {
+          let listener,timer;
+          const opened=new Promise((resolve,reject)=>{
+            listener=popup=>resolve(popup);page.once('popup',listener);
+            timer=setTimeout(()=>reject(new Error('payment popup did not open')),10000);
+          });
+          try {
+            const [popup]=await Promise.all([opened,frame.click(step.selector)]);
+            surfaces.push({name:step.popup,page:popup,frame:popup.mainFrame(),external:true,role:target.role});
+            await page.bringToFront();
+          } finally {clearTimeout(timer);page.off('popup',listener);}
+        }
+        else if (step.click) {await frame.click(step.selector);await page.bringToFront?.();}
         else if (step.fill !== undefined) { await frame.$eval(step.selector, el => { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); }); await frame.type(step.selector, String(step.fill)); }
         else if (step.select !== undefined) await frame.select(step.selector, String(step.select));
         else throw new Error('step needs click, fill, select or reload');
