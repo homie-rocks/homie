@@ -66,14 +66,14 @@ test('skill workflow tool references resolve against official provider contracts
 import { setupStatus } from '../lib/doctor.mjs';
 import { availability } from '../lib/mcp-tools.mjs';
 test('setup and local media availability never access provider credentials',async(t)=>{
- const read=fs.readFileSync;const exists=fs.existsSync;
+ const accesses=[];const read=fs.readFileSync;const exists=fs.existsSync;
  const credentialPath=p=>['fal-key','elevenlabs-key'].some(name=>String(p).endsWith('/'+name));
- t.mock.method(fs,'readFileSync',function(p,...args){if(credentialPath(p))throw new Error('provider credential file access');return read.call(this,p,...args);});
+ t.mock.method(fs,'readFileSync',function(p,...args){if(credentialPath(p)){accesses.push(String(p));throw new Error('provider credential file access');}return read.call(this,p,...args);});
  t.mock.method(fs,'existsSync',function(p){return credentialPath(p)||exists.call(this,p);});
  syncBuiltinESMExports();
  t.after(()=>{t.mock.restoreAll();syncBuiltinESMExports();});
  const env={};
- for(const key of ['FAL_KEY','ELEVENLABS_API_KEY','ELEVENLABS_CLI']) Object.defineProperty(env,key,{get(){throw new Error(`forbidden credential access: ${key}`);}});
+ for(const key of ['FAL_KEY','ELEVENLABS_API_KEY','ELEVENLABS_CLI']) Object.defineProperty(env,key,{get(){accesses.push(key);throw new Error(`forbidden credential access: ${key}`);}});
  const root=mkdtempSync(join(tmpdir(),'homie-media-no-keys-'));
  try {
   const calls=[];
@@ -82,5 +82,6 @@ test('setup and local media availability never access provider credentials',asyn
   assert.equal(status.rows.find(x=>x.id==='elevenlabs').connection,'unknown');
   assert.ok(calls.every(([cmd])=>cmd!=='elevenlabs'&&cmd!=='fal'));
   assert.equal(availability(env).node,true);
+  assert.deepEqual(accesses,[], 'even caught credential-read attempts are forbidden');
  } finally {rmSync(root,{recursive:true,force:true});}
 });

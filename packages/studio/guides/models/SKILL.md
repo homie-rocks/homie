@@ -23,6 +23,15 @@ Import a completed GLB with `homie-studio assets add`; use its current `--help` 
 scale, rig and clip options. Retain original generation receipts and register the
 optimized result's licence and provenance. `scripts/models.mjs import` also accepts
 an already completed connector receipt and local GLB; it never runs a provider.
+For a completed connector job, the local import command is:
+
+```sh
+node <path-to-models.mjs> import <id> <asset> --receipt <job.json> --file <model.glb>
+```
+
+If a registered asset is deliberately not placed, mark it accurately with
+`homie-studio assets use <id> <asset> unused`. Never report an unused model as visible.
+
 Inspect bounds, normals, textures, silhouettes and pivot; run `assets check`, check
 triangles/draw calls/texture memory on a phone, and test animation in the actual scene.
 A generated rig is not proof that Homie's clips retarget correctly.
