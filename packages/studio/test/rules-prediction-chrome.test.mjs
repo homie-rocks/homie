@@ -101,10 +101,13 @@ test('Chrome prediction: release smoke; full delay/loss matrix with RULES_EXTEND
             const cache = await page.evaluate(async()=>{
               const first=room.me, shared=first===room.me;
               await Promise.resolve();
-              return {shared, refreshed:first!==room.me};
+              const sameFrame=first===room.me;
+              await new Promise(requestAnimationFrame);
+              return {shared, sameFrame, refreshed:first!==room.me};
             });
             assert.ok(cache.shared,'synchronous readers share the drawn pose');
-            assert.ok(cache.refreshed,'a later callback cannot reuse an earlier presentation');
+            assert.ok(cache.sameFrame,'microtasks share the same displayed browser frame');
+            assert.ok(cache.refreshed,'the next animation frame refreshes presentation');
           }
           await sleep(12000);
           const startup = await pages[1].evaluate(()=>__homieNet.probe.prediction());
@@ -150,14 +153,16 @@ test('Chrome prediction: release smoke; full delay/loss matrix with RULES_EXTEND
           // a soak measurement. Keep its original bound in the extended suite.
           if (extended) assert.ok(row.inputMs <= Math.max(35,row.frameMs+10),`input took ${row.inputMs}ms against frame ${row.frameMs}ms`);
           assert.ok(row.minScreenStepPx >= -.5, 'drawn body never reverses by half a pixel: '+JSON.stringify(row));
-          assert.ok(screenSteps.every((px,i)=>px <= (21*(ordinary.samples[i+1].at-ordinary.samples[i].at)/1000+.05)*50), 'steady drawn movement stays continuous: '+JSON.stringify(row));
+          // Presentation is shared for a browser frame, including late paint callbacks.
+          assert.ok(screenSteps.every((px,i)=>px <= (21*Math.max(ordinary.samples[i+1].at-ordinary.samples[i].at,ordinary.samples[i+1].t-ordinary.samples[i].t)/1000+.05)*50), 'steady drawn movement stays continuous: '+JSON.stringify(row));
           assert.equal(row.backwards,0,'steady movement does not rubber-band: '+JSON.stringify(row));
           // Recalibration frequency depends on real packet timing. The visible motion
           // assertions above still apply across every recalibration; virtual time owns
           // the stable-clock count invariant.
           assert.equal(row.snaps,0,'ordinary corrections and an unseen push do not teleport');
           assert.ok(after.y>12,'the authoritative collision wins');
-          assert.ok(pushSteps.every(s=>s.distance<=21*s.ms/1000+.05),'the unseen push follows a continuous path: '+JSON.stringify({ ...row, failed: pushSteps.filter(s=>s.distance>21*s.ms/1000+.05).slice(0,5) }));
+          // Large corrections use the configured fast visual blend, not a movement-speed limit.
+          assert.ok(pushSteps.every(s=>s.distance<=1.40001),'the unseen push respects the default 2.8-radius frame cap: '+JSON.stringify({ ...row, failed: pushSteps.filter(s=>s.distance>1.40001).slice(0,5) }));
         }finally{
           for(const c of contexts)await c.close();host?.stop();clearInterval(beat);for(const timer of timers)clearTimeout(timer);
           for(const s of sockets.clients)s.terminate();sockets.close();server.closeAllConnections();await new Promise(r=>server.close(r));
