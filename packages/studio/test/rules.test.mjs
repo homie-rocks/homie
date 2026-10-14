@@ -660,3 +660,18 @@ test('a circle starting inside an expanded box still collides with its rounded c
   const away={pos:{x:.3310835,y:-.3753666,z:0}};
   assert.equal(L.M.sweepMap(map,away,{x:.1,y:-.1,z:0},.5,2,{shape:'circle',radius:.5,height:1}),undefined);
 });
+
+test('a square runner can leave an exact terrain corner without a zero-time collision',async()=>{
+ const {L}=await coinDash();
+ const map={bounds:{min:{x:0,y:0,z:0},max:{x:64,y:48,z:0}},boxes:[{min:{x:19,y:37,z:0},max:{x:26,y:42,z:0}}],circles:[]};
+ const shape={shape:'box',radius:.5,height:1};
+ for(const [x,y,dx,dy] of [[26.5,36.5,1,1],[18.5,36.5,-1,1],[26.5,42.5,1,-1],[18.5,42.5,-1,-1]]) {
+  const body={pos:{x,y,z:0}};
+  assert.equal(L.M.sweepMap(map,body,{x:dx,y:dy,z:0},.5,2,shape),undefined,'outgoing diagonal has no solid overlap');
+  assert.deepEqual(body.pos,{x:x+dx,y:y+dy,z:0});
+ }
+ const entering={pos:{x:26.5,y:36.5,z:0}};
+ assert.ok(L.M.sweepMap(map,entering,{x:-1,y:1,z:0},.5,2,shape),'diagonal entering the platform still collides');
+ const landing={pos:{x:23,y:35.5,z:0}};
+ assert.ok(L.M.sweepMap(map,landing,{x:0,y:1,z:0},.5,2,shape),'end-of-step landing still reports contact');
+});

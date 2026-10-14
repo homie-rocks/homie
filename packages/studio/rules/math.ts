@@ -222,6 +222,9 @@ export function rayBox(px: number, py: number, dx: number, dy: number, min: Vec3
     if (tb < t1) t1 = tb;
     if (t0 > t1) return null;
   }
+  // A body on a corner can enter one slab while immediately leaving the
+  // other. Their only intersection is the starting point, not solid travel.
+  if (t1 <= 0) return null;
   // Inside the expanded rectangle can still be outside a rounded corner.
   // Test that arc before treating the body as already overlapping.
   if (nx === 0 && ny === 0) {

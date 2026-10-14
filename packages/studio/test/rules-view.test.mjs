@@ -57,10 +57,10 @@ export default defineRules({contract:2,space:{dims:2},move,map:'./map',shared:{w
       writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
 export default defineRules({contract:2,space:{dims:${dims}},move,map:'./map',entities:{runner:{player:true,input:{ax:f.i8()},body:{shape:'${dims===2?'circle':'sphere'}',radius:.2,maxSpeed:4},fields:{neighbours:f.u8()},tick(w,s){s.neighbours=w.near(s.pos,3,'runner').length;}}},room:{bots:{keep:0},join(c,p){return {kind:'runner',at:{x:p.seat===0?19:1,y:10,z:${dims===2?0:10}}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax*4,y:0,z:0};c.world.sweep(b,c.math.scale(b.vel,c.dt));}});`);
-    } else if ((runaway === 'solid-ground' || runaway === 'solid-ground-box' || runaway === 'solid-wide-box' || runaway === 'solid-skin-route')) {
-      writeFileSync(join(dir,'map/main.json'),JSON.stringify(runaway === 'solid-skin-route' ? {bounds:{min:[0,0],max:[64,48]},boxes:[{min:[53,35],max:[58,36]},{min:[55,39],max:[60,40]},{min:[0,43],max:[64,48]},{min:[63,0],max:[64,48]}]} : runaway === 'solid-wide-box' ? {bounds:{min:[-60,-20],max:[60,20]},boxes:[{min:[-30,0],max:[30,5]},{min:[-60,12],max:[60,15]}]} : {bounds:{min:[-20,-20],max:[20,20]},boxes:[{min:[-8,0],max:[0,5]},{min:[-20,12],max:[20,15]}]}));
+    } else if ((runaway === 'solid-ground' || runaway === 'solid-ground-box' || runaway === 'solid-wide-box' || runaway === 'solid-skin-route' || runaway === 'solid-exit-corner')) {
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify(runaway === 'solid-exit-corner' ? {bounds:{min:[0,0],max:[64,48]},boxes:[{min:[0,32],max:[34,35]},{min:[18,35],max:[19,42]},{min:[19,37],max:[26,42]},{min:[0,42],max:[64,48]}]} : runaway === 'solid-skin-route' ? {bounds:{min:[0,0],max:[64,48]},boxes:[{min:[53,35],max:[58,36]},{min:[55,39],max:[60,40]},{min:[0,43],max:[64,48]},{min:[63,0],max:[64,48]}]} : runaway === 'solid-wide-box' ? {bounds:{min:[-60,-20],max:[60,20]},boxes:[{min:[-30,0],max:[30,5]},{min:[-60,12],max:[60,15]}]} : {bounds:{min:[-20,-20],max:[20,20]},boxes:[{min:[-8,0],max:[0,5]},{min:[-20,12],max:[20,15]}]}));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
-export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{respawn:{}}},entities:{runner:{player:true,input:{ax:f.held(),jump:f.held()},motion:{air:f.bit()},body:{shape:'${runaway !== 'solid-ground' ? 'box' : 'circle'}',radius:.5,maxSpeed:30},commands:{respawn(w,s){w.place(s,{x:-3,y:-.5},{vel:{x:0,y:0}});s.motion.air=false;}}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:${runaway === 'solid-skin-route' ? '61.7905,y:42.4999' : '-3,y:-.5'},z:0}};}}});`);
+export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{respawn:{}}},entities:{runner:{player:true,input:{ax:f.held(),jump:f.held()},motion:{air:f.bit()},body:{shape:'${runaway !== 'solid-ground' ? 'box' : 'circle'}',radius:.5,maxSpeed:30},commands:{respawn(w,s){w.place(s,{x:-3,y:-.5},{vel:{x:0,y:0}});s.motion.air=false;}}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:${runaway === 'solid-exit-corner' ? '19.5,y:36.5' : runaway === 'solid-skin-route' ? '61.7905,y:42.4999' : '-3,y:-.5'},z:0}};}}});`);
       writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){c.substeps(b,60,s=>{const vy=i.jump&&!b.motion.air?-15:Math.min(30,b.vel.y+40*s.dt);b.vel={x:i.ax*6,y:vy,z:0};c.map.sweep(b,{x:b.vel.x*s.dt,y:0,z:0});const hit=c.map.sweep(b,{x:0,y:vy*s.dt,z:0});b.motion.air=!hit;if(hit)b.vel={x:b.vel.x,y:0,z:0};});}});`);
     } else if (runaway === 'input-steps') {
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-1000,-1000],max:[1000,1000]}}));
@@ -2945,4 +2945,21 @@ test('an authority return in a new round draws the new spawn even when the game 
  let cut=false;
  for(let i=0;i<10;i++){await clock.wait(16);const p=a.me.pos;if(Math.abs(p.x-before.x)>1e-5){assert.equal(p.x,-7,'the first changed drawing is the server spawn');cut=true;break;}}
  assert.ok(cut,'the new round was drawn');
+});
+
+test('a correction exits an exact platform corner without waiting for the target to rise',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-exit-corner',{blendMs:40});
+ const clock=virtualTime(t),r=rig(L,compiled,false,0,0);
+ const a=openRoom({move:{runner(b){b.vel={x:0,y:0,z:0};}},net:{config:cfg('Exit corner'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);let previous=a.me.pos;
+ const socket=r.sockets[0],receive=socket.onmessage;const target={x:30.5375,y:40.7157};
+ socket.onmessage=event=>{const f=JSON.parse(event.data);if(f.t==='snap'){const own=f.d[1].find(e=>e[9]===a.seat);own[3][0]=target.x;own[3][1]=target.y;own[4][0]=own[4][1]=0;}receive.call(socket,{data:JSON.stringify(f)});};
+ a.input({ax:-1});let stopped=0,worst=0;
+ for(let i=0;i<60;i++){await clock.wait(16);const p=a.me.pos;
+  stopped=Math.hypot(p.x-target.x,p.y-target.y)>.01&&Math.hypot(p.x-previous.x,p.y-previous.y)<.001?stopped+16:0;worst=Math.max(worst,stopped);
+  assert.ok(Math.hypot(p.x-previous.x,p.y-previous.y)<=1.5,'correction stays continuous');
+  assert.ok(!(p.x>18.501&&p.x<26.499&&p.y>36.501&&p.y<42.499),'outside platform');previous=p;
+ }
+ assert.ok(worst<=200,`outgoing corner stopped for ${worst} ms`);
+ assert.ok(Math.hypot(previous.x-target.x,previous.y-target.y)<.01,'correction converges');
 });
