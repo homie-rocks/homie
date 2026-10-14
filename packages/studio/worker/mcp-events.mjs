@@ -1,9 +1,11 @@
+import {rateLimit,callsPerMinute} from './mcp-store.mjs';
 import {eventFeeds,readableFeed,matchesFeed,eventHub} from './event-resources.mjs';
 import {currentCaller} from './mcp-tools.mjs';
 import {signedWebhook,WebhookFailure} from './event-webhooks.mjs';
 import {EventsError,invalid,eventError,eventDescriptor,occurrence,cursorOf,cursorPosition,validateEventParams,callbackUrl,signingSecret,subscriptionResult,subscriptionHeaders,control} from './mcp-events-wire.mjs';
 
 const prefix='mcp-event-hook:';
+export const eventSource=feed=>JSON.stringify([feed.event,feed.app??null,feed.collection??null]);
 export const hookFunction=id=>'@mcp-webhook/'+id;
 const head=async env=>(await env.DB.prepare('SELECT COALESCE(MAX(seq),0) seq FROM studio_events').first()).seq;
 export async function eventCaller(env,connection){
@@ -12,7 +14,7 @@ export async function eventCaller(env,connection){
 }
 export async function checkEvent(env,cat,caller,params){
   validateEventParams(params);
-  const feed=eventFeeds(env)[params.name];
+  const feeds=eventFeeds(env),feed=Object.hasOwn(feeds,params.name)?feeds[params.name]:null;
   if(!feed)throw new EventsError(-32023,{kind:'event'});
   if(!await readableFeed(env,cat,caller,params.name))throw new EventsError(-32024);
   return feed;
@@ -71,16 +73,17 @@ export async function subscribeEvents(env,cat,caller,params,{now=Date.now}={}){
   const url=callbackUrl(params.delivery.url),secret=signingSecret(params.delivery.secret);
   if(!permittedCallback(env,params.name,url))throw new EventsError(-32027,{reason:'challenge_failed'});
   const id=await subId(caller,params,url),previous=await stored(env,id),live=previous&&previous.expires>now();
+  if(live&&previous.source!==eventSource(feed)){await removeEventHook(env,id);throw new EventsError(-32026,{feature:'payloadSchema',reason:'schema_changed'});}
   if(previous&&!live)await removeEventHook(env,id);
   if(!live&&feed.maxSubscriptions!==undefined){const rows=(await env.DB.prepare("SELECT value FROM mcp_kv WHERE key LIKE 'mcp-event-hook:%'").all()).results;if(rows.filter(row=>{const sub=JSON.parse(row.value);return sub.name===params.name&&sub.expires>now();}).length>=feed.maxSubscriptions)throw new EventsError(-32025,{limit:'subscriptions',max:feed.maxSubscriptions});}
   const start=await eventStart(env,params,now());
-  const sub={id,name:params.name,url,secret,principal:caller.id,connection:caller.connection??'local-test-owner',start:live?previous.start:start.after,expires:now()+Math.min(params.ttlMs??3600000,86400000)};
+  const sub={id,name:params.name,source:eventSource(feed),url,secret,principal:caller.id,connection:caller.connection??'local-test-owner',start:live?previous.start:start.after,expires:now()+Math.min(params.ttlMs??3600000,86400000)};
   if(live){if(previous.secret!==secret){sub.previous=previous.secret;sub.rotateUntil=now()+300000;}else if(previous.rotateUntil>now()){sub.previous=previous.previous;sub.rotateUntil=previous.rotateUntil;}}
   await env.DB.batch([
     env.DB.prepare('INSERT INTO mcp_kv(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(prefix+id,JSON.stringify(sub)),
     env.DB.prepare('INSERT OR IGNORE INTO function_subscriptions(name,type,cursor,started) VALUES(?1,?2,?3,?4)').bind(hookFunction(id),feed.event,sub.start,now()),
   ]);
-  const latest=await env.DB.prepare('SELECT error,completed FROM function_deliveries WHERE function=?1 ORDER BY rowid DESC LIMIT 1').bind(hookFunction(id)).first();
+  const latest=await env.DB.prepare("SELECT error,completed FROM function_deliveries WHERE function=?1 ORDER BY CASE WHEN state!='complete' AND error IS NOT NULL THEN 0 ELSE 1 END, rowid DESC LIMIT 1").bind(hookFunction(id)).first();
   return subscriptionResult(sub,await watermark(env,sub),live?false:start.truncated,{active:true,lastError:latest?.error??null,lastDeliveryAt:latest?.completed?new Date(latest.completed).toISOString():null});
 }
 export async function unsubscribeEvents(env,caller,params){
@@ -95,7 +98,7 @@ export async function eventHookSubscriptions(env,cat,options={}){
   for(;;){const rows=(await env.DB.prepare("SELECT key,value FROM mcp_kv WHERE key LIKE 'mcp-event-hook:%' AND key>?1 ORDER BY key LIMIT 100").bind(after).all()).results;
     for(const row of rows){const sub=JSON.parse(row.value);if(sub.expires<=now()){await removeEventHook(env,sub.id);continue;}
       let feed;
-      try{feed=await checkEvent(env,cat,await eventCaller(env,sub.connection),{name:sub.name});if(!permittedCallback(env,sub.name,sub.url))throw new EventsError(-32024);}
+      try{feed=await checkEvent(env,cat,await eventCaller(env,sub.connection),{name:sub.name});if(!permittedCallback(env,sub.name,sub.url))throw new EventsError(-32024);if(sub.source!==eventSource(feed))throw new EventsError(-32026,{feature:'payloadSchema',reason:'schema_changed'});}
       catch(error){try{await send(env,sub,control('terminated',{error:eventError(error)}),'msg_terminated_'+crypto.randomUUID(),options);}catch{}await removeEventHook(env,sub.id);continue;}
       definitions.push({name:hookFunction(sub.id),event:feed.event,webhook:true,mcpEvent:true,matches:event=>matchesFeed(feed,event),async handler(event){
         const fresh=await stored(env,sub.id);if(!fresh||fresh.expires<=now())return;
@@ -111,6 +114,7 @@ export async function eventHookSubscriptions(env,cat,options={}){
 export async function eventsRequest(request,env,ctx,cat,caller,body){
   const params=body.params??{};
   try{
+    if(!await rateLimit(env,caller.id??`public:${request.headers.get('cf-connecting-ip')??'local'}`,callsPerMinute(cat)))throw new EventsError(-32025,{limit:'requests'});
     if(body.jsonrpc!=='2.0'||!['string','number'].includes(typeof body.id))invalid();
     if(body.method==='events/stream'){
       await checkEvent(env,cat,caller,params);

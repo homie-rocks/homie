@@ -1,5 +1,5 @@
-import {eventCaller,checkEvent,eventStart,pollEvents} from './mcp-events.mjs';
-import {eventError,notification,sseFrame,streamResult,cursorOf} from './mcp-events-wire.mjs';
+import {eventSource,eventCaller,checkEvent,eventStart,pollEvents} from './mcp-events.mjs';
+import {EventsError,eventError,notification,sseFrame,streamResult,cursorOf} from './mcp-events-wire.mjs';
 
 /** Connection-scoped push subscriptions hosted by the existing per-connection Lobby. */
 export class McpEventStreams {
@@ -16,11 +16,11 @@ export class McpEventStreams {
   pump(stream){if(stream.busy||stream.closed)return;stream.busy=true;this.ctx.waitUntil(this.deliver(stream).catch(()=>this.close(stream)).finally(()=>{stream.busy=false;}));}
   async open(input){
     try{
-      const caller=await eventCaller(this.env,input.connection);await checkEvent(this.env,input.cat,caller,input.params);
+      const caller=await eventCaller(this.env,input.connection);const feed=await checkEvent(this.env,input.cat,caller,input.params);
       const start=await eventStart(this.env,input.params);
       const registryKey='mcp-event-stream:'+input.connection+':'+crypto.randomUUID();
       await this.env.DB.prepare('INSERT INTO mcp_kv(key,value,expires) VALUES(?1,?2,?3)').bind(registryKey,JSON.stringify({connection:input.connection}),Date.now()+60000).run();
-      const stream={...input,registryKey,cursor:cursorOf(input.params.name,start.after),closed:false,busy:false};
+      const stream={...input,registryKey,source:eventSource(feed),cursor:cursorOf(input.params.name,start.after),closed:false,busy:false};
       const body=new ReadableStream({start:controller=>{stream.controller=controller;controller.enqueue(sseFrame(notification('active',{cursor:stream.cursor,truncated:start.truncated},stream.id)));},pull:()=>{const resume=stream.resume;stream.resume=null;resume?.();},cancel:()=>this.close(stream)});
       this.streams.add(stream);
       // Heartbeats also recheck authorization, catch missed wakes and renew discovery.
@@ -34,6 +34,8 @@ export class McpEventStreams {
       let more=true;
       while(more&&!stream.closed){
         const caller=await eventCaller(this.env,stream.connection);
+        const feed=await checkEvent(this.env,stream.cat,caller,stream.params);
+        if(stream.source!==eventSource(feed))throw new EventsError(-32026,{feature:'payloadSchema',reason:'schema_changed'});
         const start=await eventStart(this.env,{name:stream.params.name,cursor:stream.cursor});
         if(start.truncated){stream.cursor=cursorOf(stream.params.name,start.after);await this.write(stream,notification('active',{cursor:stream.cursor,truncated:true},stream.id));}
         const page=await pollEvents(this.env,stream.cat,caller,{...stream.params,maxAgeMs:undefined,cursor:stream.cursor});

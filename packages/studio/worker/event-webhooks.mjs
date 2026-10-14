@@ -25,7 +25,7 @@ export async function postWebhook(env,name,event,{fetchFn=globalThis.fetch.bind(
   return signedWebhook(hook.url,{id,body:{id:event.id,type:event.type,at:event.at,data:event.data},secrets:[secret]},{fetchFn,now,timeoutMs});
 }
 /** Shared transport for configured studio hooks and MCP Events subscriptions. */
-export async function signedWebhook(url,{id,body,secrets,headers={}},{fetchFn=globalThis.fetch.bind(globalThis),now=Date.now,timeoutMs=10000,verify=false}={}) {
+export async function signedWebhook(url,{id,body,secrets,headers={}},{fetchFn=globalThis.fetch.bind(globalThis),now=Date.now,timeoutMs=10000}={}) {
   const timestamp=String(Math.floor(now()/1000));
   const encoded=JSON.stringify(body),signatures=[];
   for(const secret of secrets){
@@ -35,12 +35,6 @@ export async function signedWebhook(url,{id,body,secrets,headers={}},{fetchFn=gl
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
   try {
     const response=await fetchFn(url,{method:'POST',redirect:'manual',signal:controller.signal,headers:{'content-type':'application/json','webhook-id':id,'webhook-timestamp':timestamp,'webhook-signature':signatures.join(' '),...headers},body:encoded});
-    if(verify&&response.ok){
-      const reader=response.body?.getReader();let text='',bytes=0;
-      try{if(reader)for(;;){const part=await reader.read();if(part.done)break;bytes+=part.value.length;if(bytes>4096)throw new WebhookFailure('challenge_failed');text+=new TextDecoder().decode(part.value);}}
-      finally{await reader?.cancel();}
-      try{return JSON.parse(text);}catch{throw new WebhookFailure('challenge_failed');}
-    }
     await response.body?.cancel();
     if(!response.ok){const error=new WebhookFailure('Webhook HTTP '+response.status);error.status=response.status;throw error;}
   }catch(error){

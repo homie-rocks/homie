@@ -39,6 +39,7 @@ test('list and poll conform: role filtering, null bootstrap, replay, hasMore, ma
  await emit('not-visible',14,'private');const quiet=await pollEvents(env,cat,staff,{name:'bookings',cursor:rest.cursor});assert.equal(quiet.events.length,0);assert.notEqual(quiet.cursor,rest.cursor);
  await rejects(()=>pollEvents(env,cat,anonymous,{name:'bookings'}),-32024);
  await rejects(()=>pollEvents(env,cat,staff,{name:'missing'}),-32023);
+ await rejects(()=>pollEvents(env,cat,owner,{name:'__proto__'}),-32023);
  for(const p of [{cursor:'bad'},{arguments:{unexpected:true}},{maxEvents:0},{maxAgeMs:-1}])await rejects(()=>pollEvents(env,cat,owner,{name:'bookings',...p}),-32602);
 });
 
@@ -91,7 +92,7 @@ test('webhook replay watermark never skips failed delivery; permanent failures, 
  const options={now:()=>time,webhookOptions:{fetchFn:async(url,init)=>{const body=new Webhook(params.delivery.secret).verify(init.body,init.headers);bodies.push(body);return new Response(null,{status:body.eventId==='earlier'?503:204});}}};
  await runFunctions(env,cat,'https://studio.example',options);
  assert.equal(bodies.length,2);assert.equal(bodies[1].cursor,baseline.cursor,'acknowledged later event cannot skip an earlier failure');
- const refresh=await subscribeEvents(env,cat,staff,{...params,cursor:baseline.cursor});assert.equal(refresh.cursor,baseline.cursor);
+ const refresh=await subscribeEvents(env,cat,staff,{...params,cursor:baseline.cursor});assert.equal(refresh.cursor,baseline.cursor);assert.equal(refresh.deliveryStatus.lastError,'http_5xx');
  time+=60000;options.webhookOptions.fetchFn=async(url,init)=>{bodies.push(new Webhook(params.delivery.secret).verify(init.body,init.headers));return new Response(null,{status:410});};
  await runFunctions(env,cat,'https://studio.example',options);assert.equal(env.DB.sql.prepare('SELECT state FROM function_deliveries WHERE event=? AND function=?').get('earlier',hookFunction(sub.id)).state,'complete');
  assert.notEqual((await subscribeEvents(env,cat,staff,params)).cursor,baseline.cursor);
@@ -113,4 +114,14 @@ test('two independent push streams and a separate discovery channel emit only th
  const legacy=new EventStreams(env,ctx);const response=await legacy.fetch(new Request('https://events/__studio_events',{method:'POST',body:JSON.stringify({op:'stream',connection:staff.connection,cat,tools:[]})}));const reader=response.body.getReader();await reader.read();await Promise.all(jobs);
  env.DB.sql.exec("DELETE FROM app_roles WHERE player='staff'");await legacy.wake({connection:staff.connection,cat,tools:[]});
  const changed=JSON.parse(new TextDecoder().decode((await reader.read()).value).split('data: ')[1]);assert.equal(changed.method,'notifications/events/list_changed');assert.equal(changed.params._meta,undefined);await reader.cancel();await Promise.all(jobs);
+});
+
+test('removing an event terminates subscriptions; changing its source forces rediscovery',async t=>{
+ const {env,cat,owner,params}=fixture(t);await syncFunctions(env,[]);await subscribeEvents(env,cat,owner,params);
+ const feeds=JSON.parse(env.STUDIO_EVENT_FEEDS);feeds.bookings.collection='different';env.STUDIO_EVENT_FEEDS=JSON.stringify(feeds);cat.games[0].records.collections.different={};
+ await rejects(()=>subscribeEvents(env,cat,owner,params),-32026);
+ assert.equal(env.DB.sql.prepare("SELECT COUNT(*) n FROM mcp_kv WHERE key LIKE 'mcp-event-hook:%'").get().n,0);
+ await subscribeEvents(env,cat,owner,params);delete feeds.bookings;env.STUDIO_EVENT_FEEDS=JSON.stringify(feeds);
+ assert.deepEqual(await eventHookSubscriptions(env,cat),[]);
+ assert.equal(env.DB.sql.prepare("SELECT COUNT(*) n FROM mcp_kv WHERE key LIKE 'mcp-event-hook:%'").get().n,0);
 });
