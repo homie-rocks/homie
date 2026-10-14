@@ -8,7 +8,7 @@ The 2D simulation adopts each authoritative snapshot and replays pending input i
 
 ## Baselines and reproduction
 
-- Toolkit worktree: branch `runner-error-smoothing`, based on `f01f0c8a` (0.51.3).
+- Toolkit worktree: branch `runner-error-smoothing`, initially based on `f01f0c8a` (0.51.3), rebased onto `434584a2` (0.51.4). Only changelog conflicts required resolution; runtime code is unchanged by that rebase.
 - Proof studio: `/Users/ryan/Studios/homie-arcade-rules`, `arcade-server-rules`, originally `dd4a42f`, pinned to 0.51.1. Only local `node_modules/@homie-rocks/studio` runtime files are patched; no package version changes.
 - Control: detached worktree of current Arcade `main`, `1cc44a3`, toolkit 0.51.2. This differs from the older live control in the supplied pt4 report.
 - Browser trials use the supplied pt4 `cmp4.mjs` harness and its seeded keyboard autopilot. Each branch trial runs concurrently with its control under identical shaping; only one pair runs at a time. Extra crowd seats are explicitly requested in the crowd cases.
@@ -38,7 +38,7 @@ The initial full view-test process reached 258 passing cases before a Node heap 
 
 The candidate browser artifact predates two changes that do not alter Tiny Platformer's exercised path: validation now rejects zero/nonfinite `maxFrameM`, and circle sweeps test a previously missed rounded corner. Tiny Platformer explicitly uses a positive 1.4 cap and box runners. The exact tested source hashes are retained in the build manifest; the final local package is patched with the complete source after the matrix.
 
-New code reads old 21-field saved entity rows and new optional 22-field placement rows. Older toolkit code cannot read the extended rows on rollback. Snapshot deltas send a full entity replacement when row length changes; older view decoders ignore the added optional placement position. The 3D catch-up policy remains in place.
+New code reads old 21-field saved entity rows and new optional 22-field placement rows. Older toolkit code cannot read the extended rows on rollback. Snapshot deltas send a full entity replacement when row length changes; older view decoders ignore the added optional placement position. The 3D catch-up policy remains in place. CI initially rejected the stale runtime fingerprint and a Chrome assertion that expected microtask-level cache invalidation. The fingerprint is regenerated without changing package versions; the browser assertion now requires identical presentation within a frame and a new presentation on the next animation frame. The initial local rerun then reached old time-speed bounds: large pushes now use the requested fast blend rather than a 21 m/s limit, and shared frame presentation must account for late paint callbacks. The updated smoke retains steady-motion/reversal checks when no reconciliation occurred and asserts the default 1.4-metre frame cap for ordinary corrections and pushes. Its old unconditional no-reversal assertion was incompatible with ungated correction: the browser-host case measured a 0.13-metre backward correction and now checks that correction against the frame cap. All three server smoke profiles pass, and the targeted browser-hosted rerun passes after that policy change. The four identity/crowd-driver tests also pass. Final receipts retain the intermediate failures.
 
 ## Results
 
@@ -69,10 +69,20 @@ The supplied legacy displacement classifier reports 14 spans / 27.769 s on the c
 
 ## Preservation checks
 
-Pending completion of paired feel, reload, round, touch-phone and check runs. The computer, portrait phone and TV captures have been inspected locally, not independently: runner edges sit outside the terrain, scores and round labels remain readable, and the phone jump control is visible. Keyboard directions, A/D, Space/Up/W, touch movement/jump and a spectator TV seat all respond. Initial jump measurements remain 5.107 tiles and 0.82–0.83 s.
+Paired controls, feel, reload and three-round checks completed. Both builds reset rounds with eight monsters/eight gold, matching results and scores on both screens, and both players on spawn points. The candidate preserves scores across both reloads (3→3, 4→4); this control resets 3→0.
+
+Candidate run-input p90 is 36 ms without lag and 38.8 ms at 150 ms, versus 31 and 32 ms on control. Candidate measured jumps remain 5.105–5.108 tiles / 0.82–0.83 s. Three lagged branch feel attempts could not find clear ground; control’s Space-key control trial likewise found no clear ground. These are retained, not counted as successful trials.
+
+The dedicated phone harness initially failed on both builds because its generated room names exceeded the 32-character limit; retries use shorter room names.
+
+The final complete-package `check` passes on both builds, but its first candidate run reports one reconnect per browser (control zero). The repeated matched check passes with zero reconnects on both builds; both receipts are retained. The first run is not an uninterrupted-connection pass.
+
+Dedicated touch-phone retries complete with no reconnects or browser errors on either build. At 4× CPU and 60 ms / 1% loss / 20 ms jitter, frame p99 is 20.1 ms portrait and 19.2 ms landscape on the candidate, versus 18.3 and 19.0 ms on control. Neither build has detected solid overlap or oversized non-respawn moves; candidate has no >33 ms frames, control has one (59 ms). Portrait runs last 60 s, landscape 30 s. These touch traces do not establish keyboard-freeze behavior. [Preservation receipts](receipts/runner-error-smoothing/preservation.json) retain the details.
+
+The computer, portrait phone and TV captures have been inspected locally, not independently: runner edges sit outside the terrain, scores and round labels remain readable, and the phone jump control is visible. Keyboard directions, A/D, Space/Up/W, touch movement/jump and a spectator TV seat all respond. Initial jump measurements remain 5.107 tiles and 0.82–0.83 s.
 
 ## What remains
 
 Do not mark this ready to merge: eliminate the two measured correction freezes and the connected displacement failures, then repeat the matched acceptance matrix. Investigate the input/application timeline as well as visual-route convergence; these receipts do not establish that the remaining discrepancy is only a drawing offset. Large recovery errors also need a consistent policy: a mandatory 1.5-tile frame cap, collision-safe detours and a universal 300 ms convergence bound are not simultaneously satisfiable for arbitrary errors. No recovery cut has been disguised as a real respawn.
 
-No version was bumped. Changelog entries remain at the top under Unreleased for release-time numbering. No merge or deployment was performed.
+No version was bumped. Changelog entries remain at the top under Unreleased for release-time numbering. No merge or deployment was performed. Only the proof server process trees started for this task were stopped; ports 8793/8794 are closed and the detached control worktree was removed.

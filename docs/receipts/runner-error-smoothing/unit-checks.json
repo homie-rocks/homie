@@ -39,5 +39,20 @@
     "passed": 258,
     "failure": "Node heap exhaustion; partitioned final-source rerun passes",
     "log": "/tmp/runner-error-proof/view-tests-final.txt"
+  },
+  "chromeInitial": {
+    "cacheContract": "CI expected microtask invalidation; changed to browser-frame sharing and next-rAF invalidation",
+    "firstLocalRetry": "4 prediction cases failed old movement-speed bounds; identity/crowd-driver tests passed (4 cases).",
+    "policyUpdate": "Large push asserts 1.40001 metres/frame default radius cap, not the removed 21 metres/second blend speed. Ordinary late callbacks use max(frame interval, sample interval).",
+    "secondLocalRetry": "All three server smoke profiles passed. Browser-host profile failed the obsolete unconditional no-reversal requirement (0.13 m backward correction); final assertion keeps reversal checks for uncorrected movement and caps every ordinary correction."
+  },
+  "chromeFinal": {
+    "serverProfiles": "Three passed in chrome-retry.txt: 50ms/2%/20Hz, 150ms/10%/30Hz, 300ms/10%/60Hz",
+    "browserProfile": "Passed targeted 300ms/10%/60Hz rerun in chrome-browser-final.txt after correcting held-direction policy assertion",
+    "identityCrowdDriver": "4 passed",
+    "logSha256": {
+      "chrome-retry.txt": "4a19b1a300db1a2e057d566b0bf3fa17f592b5b4967749682a95a410f2c67c2e",
+      "chrome-browser-final.txt": "3c2bf513f1f29f1cb6d16803628aa8fe38cf018e7494cf5d4e9668a89e785c52"
+    }
   }
 }

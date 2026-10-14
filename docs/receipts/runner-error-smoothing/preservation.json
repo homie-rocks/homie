@@ -1,0 +1,1690 @@
+{
+  "comparison": {
+    "b": {
+      "controls": {
+        "keys": [
+          {
+            "code": "ArrowLeft",
+            "kind": "left",
+            "feedbackMs": 28.7,
+            "distanceTiles": 0.8
+          },
+          {
+            "code": "ArrowRight",
+            "kind": "right",
+            "feedbackMs": 30.9,
+            "distanceTiles": 0.792
+          },
+          {
+            "code": "KeyA",
+            "kind": "left",
+            "feedbackMs": 29.9,
+            "distanceTiles": 0.8
+          },
+          {
+            "code": "KeyD",
+            "kind": "right",
+            "feedbackMs": 30.6,
+            "distanceTiles": 0.8
+          },
+          {
+            "code": "Space",
+            "kind": "jump",
+            "feedbackMs": 39,
+            "heightTiles": 5.107,
+            "airSeconds": 0.82
+          },
+          {
+            "code": "ArrowUp",
+            "kind": "jump",
+            "feedbackMs": 13.4,
+            "heightTiles": 5.107,
+            "airSeconds": 0.83
+          },
+          {
+            "code": "KeyW",
+            "kind": "jump",
+            "feedbackMs": 37.8,
+            "heightTiles": 5.107,
+            "airSeconds": 0.82
+          }
+        ],
+        "touch": [
+          {
+            "what": "stick right",
+            "topSpeedTilesPerSecond": 15.5
+          },
+          {
+            "what": "stick left",
+            "topSpeedTilesPerSecond": -15.4
+          },
+          {
+            "what": "stick right",
+            "topSpeedTilesPerSecond": 14.1
+          },
+          {
+            "what": "stick left",
+            "topSpeedTilesPerSecond": -15.8
+          },
+          {
+            "what": "stick right",
+            "topSpeedTilesPerSecond": 16
+          },
+          {
+            "what": "stick left",
+            "topSpeedTilesPerSecond": -15.5
+          },
+          {
+            "what": "JUMP button",
+            "roseTiles": {
+              "rose": 2,
+              "caught": false
+            }
+          },
+          {
+            "what": "tap on the right side",
+            "roseTiles": {
+              "rose": 2,
+              "caught": false
+            }
+          },
+          {
+            "what": "JUMP button",
+            "roseTiles": {
+              "rose": 2,
+              "caught": false
+            }
+          },
+          {
+            "what": "tap on the right side",
+            "roseTiles": {
+              "rose": 2,
+              "caught": false
+            }
+          },
+          {
+            "what": "JUMP button",
+            "roseTiles": {
+              "rose": 2,
+              "caught": false
+            }
+          },
+          {
+            "what": "tap on the right side",
+            "roseTiles": {
+              "rose": 2,
+              "caught": false
+            }
+          }
+        ],
+        "tv": {
+          "seat": null,
+          "role": "screen",
+          "runners": 4,
+          "errors": []
+        },
+        "taps": [
+          {
+            "code": "ArrowLeft",
+            "kind": "left",
+            "feedbackMs": 31,
+            "distanceTiles": 0.025
+          },
+          {
+            "code": "ArrowRight",
+            "kind": "right",
+            "feedbackMs": 7.5,
+            "distanceTiles": 0.025
+          },
+          {
+            "code": "ArrowRight",
+            "kind": "right",
+            "feedbackMs": 28.1,
+            "distanceTiles": 0.025
+          },
+          {
+            "code": "ArrowLeft",
+            "kind": "left",
+            "feedbackMs": 22.1,
+            "distanceTiles": 0.025
+          }
+        ],
+        "errors": [],
+        "jumpButton": {
+          "x": 338,
+          "y": 786
+        }
+      },
+      "feel": {
+        "delayMs": 0,
+        "runKeyFeedbackMs": {
+          "n": 24,
+          "min": 6.7,
+          "median": 23.5,
+          "p90": 36,
+          "max": 54.1
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 12,
+          "min": 7,
+          "median": 24.3,
+          "p90": 37.9,
+          "max": 40.1
+        },
+        "run150msTiles": {
+          "n": 24,
+          "min": -1596,
+          "median": 450,
+          "p90": 558,
+          "max": 558
+        },
+        "jumpHeightTiles": {
+          "n": 12,
+          "min": 5106,
+          "median": 5108,
+          "p90": 5108,
+          "max": 5108
+        },
+        "jumpAirSeconds": {
+          "n": 12,
+          "min": 820,
+          "median": 830,
+          "p90": 830,
+          "max": 830
+        },
+        "tap30msTiles": [
+          0.025,
+          0.025,
+          0.025,
+          0.025,
+          0.008,
+          0.025,
+          0.025,
+          0.025
+        ],
+        "tap80msTiles": [
+          0.142,
+          0.142,
+          0.142,
+          0.142,
+          0.142,
+          0.092,
+          0.142,
+          0.142
+        ],
+        "tap120msTiles": [
+          0.275,
+          0.275,
+          0.358,
+          0.358,
+          0.358,
+          0.275,
+          0.275,
+          0.275
+        ],
+        "trialsThatFoundNoGround": 0,
+        "errors": []
+      },
+      "feel150": {
+        "delayMs": 150,
+        "runKeyFeedbackMs": {
+          "n": 23,
+          "min": 12.6,
+          "median": 22.5,
+          "p90": 38.8,
+          "max": 52.7
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 10,
+          "min": 6.1,
+          "median": 15.6,
+          "p90": 24.3,
+          "max": 24.3
+        },
+        "run150msTiles": {
+          "n": 23,
+          "min": 217,
+          "median": 450,
+          "p90": 450,
+          "max": 450
+        },
+        "jumpHeightTiles": {
+          "n": 10,
+          "min": 5105,
+          "median": 5108,
+          "p90": 5108,
+          "max": 5108
+        },
+        "jumpAirSeconds": {
+          "n": 10,
+          "min": 820,
+          "median": 830,
+          "p90": 830,
+          "max": 830
+        },
+        "tap30msTiles": [
+          0.025,
+          0.025,
+          0.025,
+          0.025,
+          0.025,
+          0.025,
+          0.025,
+          0.025
+        ],
+        "tap80msTiles": [
+          0.142,
+          0.142,
+          0.142,
+          0.142,
+          0.142,
+          0.142,
+          0.142,
+          0.092
+        ],
+        "tap120msTiles": [
+          0.358,
+          0.358,
+          0.275,
+          0.275,
+          0.275,
+          0.275,
+          0.358,
+          0.358
+        ],
+        "trialsThatFoundNoGround": 3,
+        "errors": []
+      },
+      "reload": {
+        "first": {
+          "roleBefore": "replica",
+          "roleAfter": "replica",
+          "otherRoleAfter": "replica",
+          "backInMs": 168,
+          "scoreBefore": 3,
+          "scoreAfter": 3,
+          "scoreKept": true,
+          "scoreOnOtherScreenBefore": 3,
+          "runnersBefore": 4,
+          "runnersAfter": 4,
+          "movedTilesWhileAway": 0.2,
+          "playsAgain": true,
+          "errors": []
+        },
+        "second": {
+          "roleBefore": "replica",
+          "roleAfter": "replica",
+          "otherRoleAfter": "replica",
+          "backInMs": 157,
+          "scoreBefore": 4,
+          "scoreAfter": 4,
+          "scoreKept": true,
+          "scoreOnOtherScreenBefore": 4,
+          "runnersBefore": 4,
+          "runnersAfter": 4,
+          "movedTilesWhileAway": 0.05,
+          "playsAgain": true,
+          "errors": []
+        }
+      },
+      "rounds": {
+        "rounds": [
+          {
+            "n": 2,
+            "leftMsAtStart": 119902,
+            "everyoneAtZero": true,
+            "bothOnSpawnPoints": true,
+            "monstersOnScreen": 8,
+            "goldOnScreen": 8,
+            "myHudScore": 0,
+            "results": [
+              [
+                "Kilo",
+                19,
+                true
+              ],
+              [
+                "Frosty Moth",
+                12,
+                false
+              ],
+              [
+                "Moth",
+                8,
+                true
+              ],
+              [
+                "Bold Wolf",
+                0,
+                false
+              ]
+            ],
+            "sameOnBothScreens": true,
+            "resultsMatchScores": true,
+            "resultsCard": "ROUND 2 | Kilo (bot) \u2014 19 points | You \u2014 12 points | Moth (bot) \u2014 8 points | Bold Wolf \u2014 0 points",
+            "clock": "Next round in 5",
+            "myPoints": 12,
+            "catches": 2,
+            "goldTaken": 10,
+            "stomps": 1
+          },
+          {
+            "n": 3,
+            "leftMsAtStart": 119933,
+            "everyoneAtZero": true,
+            "bothOnSpawnPoints": true,
+            "monstersOnScreen": 8,
+            "goldOnScreen": 8,
+            "myHudScore": 0,
+            "results": [
+              [
+                "Kilo",
+                18,
+                true
+              ],
+              [
+                "Frosty Moth",
+                15,
+                false
+              ],
+              [
+                "Moth",
+                13,
+                true
+              ],
+              [
+                "Bold Wolf",
+                0,
+                false
+              ]
+            ],
+            "sameOnBothScreens": true,
+            "resultsMatchScores": true,
+            "resultsCard": "ROUND 3 | Kilo (bot) \u2014 18 points | You \u2014 15 points | Moth (bot) \u2014 13 points | Bold Wolf \u2014 0 points",
+            "clock": "Next round in 5",
+            "myPoints": 15,
+            "catches": 1,
+            "goldTaken": 12,
+            "stomps": 3
+          },
+          {
+            "n": 4,
+            "leftMsAtStart": 119967,
+            "everyoneAtZero": true,
+            "bothOnSpawnPoints": true,
+            "monstersOnScreen": 8,
+            "goldOnScreen": 8,
+            "myHudScore": 0,
+            "results": [
+              [
+                "Moth",
+                14,
+                true
+              ],
+              [
+                "Frosty Moth",
+                13,
+                false
+              ],
+              [
+                "Kilo",
+                11,
+                true
+              ],
+              [
+                "Bold Wolf",
+                0,
+                false
+              ]
+            ],
+            "sameOnBothScreens": true,
+            "resultsMatchScores": true,
+            "resultsCard": "ROUND 4 | Moth (bot) \u2014 14 points | You \u2014 13 points | Kilo (bot) \u2014 11 points | Bold Wolf \u2014 0 points",
+            "clock": "Next round in 5",
+            "myPoints": 13,
+            "catches": 1,
+            "goldTaken": 7,
+            "stomps": 2
+          }
+        ],
+        "roles": [
+          "replica",
+          "replica"
+        ],
+        "sound": {
+          "computer": {
+            "audioContexts": 0,
+            "oscillators": 0,
+            "buffers": 0,
+            "media": 0
+          },
+          "phone": {
+            "audioContexts": 0,
+            "oscillators": 0,
+            "buffers": 0,
+            "media": 0
+          }
+        },
+        "reconnects": [
+          0,
+          0
+        ],
+        "errors": []
+      },
+      "tag": "b-preserve-cmp",
+      "base": "http://127.0.0.1:8793",
+      "at": "2026-10-14T19:09:36.680Z"
+    },
+    "c": {
+      "controls": {
+        "keys": [
+          {
+            "code": "ArrowLeft",
+            "kind": "left",
+            "feedbackMs": 31.8,
+            "distanceTiles": 0.8
+          },
+          {
+            "code": "ArrowRight",
+            "kind": "right",
+            "feedbackMs": 30.8,
+            "distanceTiles": 0.8
+          },
+          {
+            "code": "KeyA",
+            "kind": "left",
+            "feedbackMs": 30.2,
+            "distanceTiles": 0.8
+          },
+          {
+            "code": "KeyD",
+            "kind": "right",
+            "feedbackMs": 32,
+            "distanceTiles": 0.8
+          },
+          {
+            "code": "Space",
+            "kind": "jump",
+            "failed": "no clear ground found for the trial"
+          },
+          {
+            "code": "ArrowUp",
+            "kind": "jump",
+            "feedbackMs": 25,
+            "heightTiles": 5.108,
+            "airSeconds": 0.82
+          },
+          {
+            "code": "KeyW",
+            "kind": "jump",
+            "feedbackMs": 32.1,
+            "heightTiles": 5.108,
+            "airSeconds": 0.82
+          }
+        ],
+        "touch": [
+          {
+            "what": "stick right",
+            "topSpeedTilesPerSecond": 9.4
+          },
+          {
+            "what": "stick left",
+            "topSpeedTilesPerSecond": -15.2
+          },
+          {
+            "what": "stick right",
+            "topSpeedTilesPerSecond": 15.2
+          },
+          {
+            "what": "stick left",
+            "topSpeedTilesPerSecond": -15.4
+          },
+          {
+            "what": "stick right",
+            "topSpeedTilesPerSecond": 15.1
+          },
+          {
+            "what": "stick left",
+            "topSpeedTilesPerSecond": -15.2
+          },
+          {
+            "what": "JUMP button",
+            "roseTiles": {
+              "rose": 5.11,
+              "caught": false
+            }
+          },
+          {
+            "what": "tap on the right side",
+            "roseTiles": {
+              "rose": 5.11,
+              "caught": false
+            }
+          },
+          {
+            "what": "JUMP button",
+            "roseTiles": {
+              "rose": 5.11,
+              "caught": false
+            }
+          },
+          {
+            "what": "tap on the right side",
+            "roseTiles": {
+              "rose": 5.11,
+              "caught": false
+            }
+          },
+          {
+            "what": "JUMP button",
+            "roseTiles": {
+              "rose": 5.11,
+              "caught": false
+            }
+          },
+          {
+            "what": "tap on the right side",
+            "roseTiles": {
+              "rose": 5.11,
+              "caught": false
+            }
+          }
+        ],
+        "tv": {
+          "seat": null,
+          "role": "screen",
+          "runners": 4,
+          "errors": []
+        },
+        "taps": [
+          {
+            "code": "ArrowLeft",
+            "kind": "left",
+            "feedbackMs": 21.7,
+            "distanceTiles": 0.025
+          },
+          {
+            "code": "ArrowRight",
+            "kind": "right",
+            "feedbackMs": 22.6,
+            "distanceTiles": 0.025
+          },
+          {
+            "code": "ArrowRight",
+            "kind": "right",
+            "feedbackMs": 27.3,
+            "distanceTiles": 0.025
+          },
+          {
+            "code": "ArrowLeft",
+            "kind": "left",
+            "feedbackMs": 29.8,
+            "distanceTiles": 0.025
+          }
+        ],
+        "errors": [],
+        "jumpButton": {
+          "x": 338,
+          "y": 786
+        }
+      },
+      "feel": {
+        "delayMs": 0,
+        "runKeyFeedbackMs": {
+          "n": 24,
+          "min": 0.6,
+          "median": 24.4,
+          "p90": 31,
+          "max": 31.7
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 12,
+          "min": 17,
+          "median": 26.7,
+          "p90": 31.7,
+          "max": 32.1
+        },
+        "run150msTiles": {
+          "n": 24,
+          "min": 450,
+          "median": 450,
+          "p90": 558,
+          "max": 675
+        },
+        "jumpHeightTiles": {
+          "n": 12,
+          "min": 5108,
+          "median": 5108,
+          "p90": 5108,
+          "max": 5108
+        },
+        "jumpAirSeconds": {
+          "n": 12,
+          "min": 820,
+          "median": 820,
+          "p90": 820,
+          "max": 820
+        },
+        "tap30msTiles": [
+          0.025,
+          0.008,
+          0.025,
+          0.008,
+          0.025,
+          0.025,
+          0.008,
+          0.025
+        ],
+        "tap80msTiles": [
+          0.142,
+          0.142,
+          0.142,
+          0.142,
+          0.142,
+          0.142,
+          0.142,
+          0.142
+        ],
+        "tap120msTiles": [
+          0.275,
+          0.358,
+          0.275,
+          0.275,
+          0.275,
+          0.275,
+          0.275,
+          0.171
+        ],
+        "trialsThatFoundNoGround": 0,
+        "errors": []
+      },
+      "feel150": {
+        "delayMs": 150,
+        "runKeyFeedbackMs": {
+          "n": 24,
+          "min": 17.2,
+          "median": 26.6,
+          "p90": 32,
+          "max": 32
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 12,
+          "min": 21.4,
+          "median": 29,
+          "p90": 31.4,
+          "max": 31.5
+        },
+        "run150msTiles": {
+          "n": 24,
+          "min": 450,
+          "median": 450,
+          "p90": 558,
+          "max": 558
+        },
+        "jumpHeightTiles": {
+          "n": 12,
+          "min": 5108,
+          "median": 5108,
+          "p90": 5108,
+          "max": 5108
+        },
+        "jumpAirSeconds": {
+          "n": 12,
+          "min": 820,
+          "median": 820,
+          "p90": 820,
+          "max": 820
+        },
+        "tap30msTiles": [
+          0.025,
+          0.025,
+          0.025,
+          0.025,
+          0.025,
+          0.008,
+          0.025,
+          0.025
+        ],
+        "tap80msTiles": [
+          0.142,
+          0.142,
+          0.142,
+          0.142,
+          0.142,
+          0.142,
+          0.142,
+          0.142
+        ],
+        "tap120msTiles": [
+          0.358,
+          0.275,
+          0.275,
+          0.275,
+          0.275,
+          0.358,
+          0.358,
+          0.275
+        ],
+        "trialsThatFoundNoGround": 0,
+        "errors": []
+      },
+      "reload": {
+        "first": {
+          "roleBefore": "host",
+          "roleAfter": "replica",
+          "otherRoleAfter": "host",
+          "backInMs": 169,
+          "scoreBefore": 3,
+          "scoreAfter": 0,
+          "scoreKept": false,
+          "scoreOnOtherScreenBefore": 3,
+          "runnersBefore": 4,
+          "runnersAfter": 4,
+          "movedTilesWhileAway": 0,
+          "playsAgain": true,
+          "errors": []
+        },
+        "second": {
+          "roleBefore": "replica",
+          "roleAfter": "replica",
+          "otherRoleAfter": "host",
+          "backInMs": 162,
+          "scoreBefore": 3,
+          "scoreAfter": 0,
+          "scoreKept": false,
+          "scoreOnOtherScreenBefore": 3,
+          "runnersBefore": 4,
+          "runnersAfter": 4,
+          "movedTilesWhileAway": 0.08,
+          "playsAgain": true,
+          "errors": []
+        }
+      },
+      "rounds": {
+        "rounds": [
+          {
+            "n": 2,
+            "leftMsAtStart": 119937,
+            "everyoneAtZero": true,
+            "bothOnSpawnPoints": true,
+            "monstersOnScreen": 8,
+            "goldOnScreen": 8,
+            "myHudScore": 0,
+            "results": [
+              [
+                "Crimson Gecko",
+                16,
+                false
+              ],
+              [
+                "Moth",
+                10,
+                true
+              ],
+              [
+                "Kilo",
+                7,
+                true
+              ],
+              [
+                "Golden Panda",
+                0,
+                false
+              ]
+            ],
+            "sameOnBothScreens": true,
+            "resultsMatchScores": true,
+            "resultsCard": "ROUND 2 | You \u2014 16 points | Moth (bot) \u2014 10 points | Kilo (bot) \u2014 7 points | Golden Panda \u2014 0 points",
+            "clock": "Next round in 5",
+            "myPoints": 16,
+            "catches": 0,
+            "goldTaken": 3,
+            "stomps": 0
+          },
+          {
+            "n": 3,
+            "leftMsAtStart": 119988,
+            "everyoneAtZero": true,
+            "bothOnSpawnPoints": true,
+            "monstersOnScreen": 8,
+            "goldOnScreen": 8,
+            "myHudScore": 0,
+            "results": [
+              [
+                "Moth",
+                17,
+                true
+              ],
+              [
+                "Crimson Gecko",
+                14,
+                false
+              ],
+              [
+                "Kilo",
+                14,
+                true
+              ],
+              [
+                "Golden Panda",
+                0,
+                false
+              ]
+            ],
+            "sameOnBothScreens": true,
+            "resultsMatchScores": true,
+            "resultsCard": "ROUND 3 | Moth (bot) \u2014 17 points | You \u2014 14 points | Kilo (bot) \u2014 14 points | Golden Panda \u2014 0 points",
+            "clock": "Next round in 5",
+            "myPoints": 14,
+            "catches": 3,
+            "goldTaken": 3,
+            "stomps": 0
+          },
+          {
+            "n": 4,
+            "leftMsAtStart": 119914,
+            "everyoneAtZero": true,
+            "bothOnSpawnPoints": true,
+            "monstersOnScreen": 8,
+            "goldOnScreen": 8,
+            "myHudScore": 0,
+            "results": [
+              [
+                "Moth",
+                17,
+                true
+              ],
+              [
+                "Crimson Gecko",
+                12,
+                false
+              ],
+              [
+                "Kilo",
+                12,
+                true
+              ],
+              [
+                "Golden Panda",
+                0,
+                false
+              ]
+            ],
+            "sameOnBothScreens": true,
+            "resultsMatchScores": true,
+            "resultsCard": "ROUND 4 | Moth (bot) \u2014 17 points | You \u2014 12 points | Kilo (bot) \u2014 12 points | Golden Panda \u2014 0 points",
+            "clock": "Next round in 5",
+            "myPoints": 12,
+            "catches": 0,
+            "goldTaken": 1,
+            "stomps": 0
+          }
+        ],
+        "roles": [
+          "host",
+          "replica"
+        ],
+        "sound": {
+          "computer": {
+            "audioContexts": 0,
+            "oscillators": 0,
+            "buffers": 0,
+            "media": 0
+          },
+          "phone": {
+            "audioContexts": 0,
+            "oscillators": 0,
+            "buffers": 0,
+            "media": 0
+          }
+        },
+        "reconnects": [
+          0,
+          0
+        ],
+        "errors": []
+      },
+      "tag": "c-preserve-cmp",
+      "base": "http://127.0.0.1:8794",
+      "at": "2026-10-14T19:08:54.119Z"
+    }
+  },
+  "phones": {
+    "b-phone-portrait": {
+      "tag": "b-phone-portrait",
+      "base": "http://127.0.0.1:8793",
+      "cpu": 4,
+      "seconds": 60,
+      "lag": {
+        "delay": 60,
+        "loss": 0.01,
+        "jitter": 20
+      },
+      "jumpButton": {
+        "x": 338,
+        "y": 786
+      },
+      "frameOffset": {
+        "x": 0,
+        "y": 0
+      },
+      "steps": 555,
+      "jumps": 189,
+      "touches": 380,
+      "score": 6,
+      "link": "online",
+      "reconnects": 0,
+      "errors": [],
+      "load": [
+        11,
+        8.5,
+        8
+      ]
+    },
+    "b-phone-landscape": {
+      "tag": "b-phone-landscape",
+      "base": "http://127.0.0.1:8793",
+      "cpu": 4,
+      "seconds": 30,
+      "lag": {
+        "delay": 60,
+        "loss": 0.01,
+        "jitter": 20
+      },
+      "jumpButton": {
+        "x": 792,
+        "y": 332
+      },
+      "frameOffset": {
+        "x": 0,
+        "y": 0
+      },
+      "steps": 276,
+      "jumps": 84,
+      "touches": 170,
+      "score": 3,
+      "link": "online",
+      "reconnects": 0,
+      "errors": [],
+      "load": [
+        9.9,
+        8.5,
+        8
+      ]
+    },
+    "c-phone-portrait": {
+      "tag": "c-phone-portrait",
+      "base": "http://127.0.0.1:8794",
+      "cpu": 4,
+      "seconds": 60,
+      "lag": {
+        "delay": 60,
+        "loss": 0.01,
+        "jitter": 20
+      },
+      "jumpButton": {
+        "x": 338,
+        "y": 786
+      },
+      "frameOffset": {
+        "x": 0,
+        "y": 0
+      },
+      "steps": 617,
+      "jumps": 158,
+      "touches": 318,
+      "score": 1,
+      "link": "online",
+      "reconnects": 0,
+      "errors": [],
+      "load": [
+        11,
+        8.5,
+        8
+      ]
+    },
+    "c-phone-landscape": {
+      "tag": "c-phone-landscape",
+      "base": "http://127.0.0.1:8794",
+      "cpu": 4,
+      "seconds": 30,
+      "lag": {
+        "delay": 60,
+        "loss": 0.01,
+        "jitter": 20
+      },
+      "jumpButton": {
+        "x": 792,
+        "y": 332
+      },
+      "frameOffset": {
+        "x": 0,
+        "y": 0
+      },
+      "steps": 310,
+      "jumps": 66,
+      "touches": 134,
+      "score": 2,
+      "link": "online",
+      "reconnects": 0,
+      "errors": [],
+      "load": [
+        9.9,
+        8.5,
+        8
+      ]
+    }
+  },
+  "check": {
+    "b": {
+      "ok": true,
+      "command": "check",
+      "play": "http://127.0.0.1:8793/tiny-platformer/play",
+      "room": "pub-1",
+      "seats": [
+        {
+          "browser": "computer",
+          "seat": 0,
+          "role": "replica",
+          "seatedMs": 1129
+        },
+        {
+          "browser": "phone",
+          "seat": 1,
+          "role": "replica",
+          "seatedMs": 308
+        }
+      ],
+      "round": {
+        "n": 1,
+        "humans": 2,
+        "bots": 2,
+        "results": [
+          {
+            "slot": 5,
+            "seat": null,
+            "name": "Kilo",
+            "score": 19,
+            "bot": true,
+            "place": 1
+          },
+          {
+            "slot": 6,
+            "seat": null,
+            "name": "Moth",
+            "score": 13,
+            "bot": true,
+            "place": 2
+          },
+          {
+            "slot": 0,
+            "seat": 0,
+            "name": "Copper Echo",
+            "score": 11,
+            "bot": false,
+            "place": 3
+          },
+          {
+            "slot": 1,
+            "seat": 1,
+            "name": "Cobalt Moth",
+            "score": 0,
+            "bot": false,
+            "place": 4
+          }
+        ],
+        "overMs": [
+          121333,
+          120267
+        ]
+      },
+      "readiness": [
+        {
+          "browser": "computer",
+          "ready": true,
+          "by": "auto",
+          "liftedMs": 304,
+          "waitedMs": 5,
+          "shot": "computer-playing.png"
+        },
+        {
+          "browser": "phone",
+          "ready": true,
+          "by": "auto",
+          "liftedMs": 220,
+          "waitedMs": 0,
+          "shot": "phone-playing.png"
+        }
+      ],
+      "connection": [
+        {
+          "browser": "computer",
+          "seats": [
+            0
+          ],
+          "reconnects": 1,
+          "closed": null,
+          "cutOff": [
+            "reconnecting"
+          ]
+        },
+        {
+          "browser": "phone",
+          "seats": [
+            1
+          ],
+          "reconnects": 1,
+          "closed": null,
+          "cutOff": [
+            "reconnecting"
+          ]
+        }
+      ],
+      "reconnects": 2,
+      "uninterrupted": false,
+      "note": "the computer reconnected 1 time (seen reconnecting), the phone reconnected 1 time (seen reconnecting) during the check: the round finished, the connection did not hold throughout. Run it again; one run does not say why",
+      "frames": [
+        {
+          "browser": "computer",
+          "fps": 61,
+          "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)"
+        },
+        {
+          "browser": "phone",
+          "fps": 61,
+          "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)"
+        }
+      ],
+      "totalMs": 123369
+    },
+    "c": {
+      "ok": true,
+      "command": "check",
+      "play": "http://127.0.0.1:8794/tiny-platformer/play",
+      "room": "pub-1",
+      "seats": [
+        {
+          "browser": "computer",
+          "seat": 0,
+          "role": "host",
+          "seatedMs": 1304
+        },
+        {
+          "browser": "phone",
+          "seat": 1,
+          "role": "replica",
+          "seatedMs": 344
+        }
+      ],
+      "round": {
+        "n": 1,
+        "humans": 2,
+        "bots": 2,
+        "results": [
+          {
+            "slot": 2,
+            "seat": null,
+            "name": "Moth",
+            "score": 16,
+            "bot": true,
+            "place": 1
+          },
+          {
+            "slot": 0,
+            "seat": 0,
+            "name": "Swift Raven",
+            "score": 10,
+            "bot": false,
+            "place": 2
+          },
+          {
+            "slot": 3,
+            "seat": null,
+            "name": "Kilo",
+            "score": 6,
+            "bot": true,
+            "place": 3
+          },
+          {
+            "slot": 1,
+            "seat": 1,
+            "name": "Retro Meteor",
+            "score": 1,
+            "bot": false,
+            "place": 4
+          }
+        ],
+        "overMs": [
+          120515,
+          119299
+        ]
+      },
+      "readiness": [
+        {
+          "browser": "computer",
+          "ready": true,
+          "by": "auto",
+          "liftedMs": 252,
+          "waitedMs": 1,
+          "shot": "computer-playing.png"
+        },
+        {
+          "browser": "phone",
+          "ready": true,
+          "by": "auto",
+          "liftedMs": 232,
+          "waitedMs": 1,
+          "shot": "phone-playing.png"
+        }
+      ],
+      "connection": [
+        {
+          "browser": "computer",
+          "seats": [
+            0
+          ],
+          "reconnects": 0,
+          "closed": null
+        },
+        {
+          "browser": "phone",
+          "seats": [
+            1
+          ],
+          "reconnects": 0,
+          "closed": null
+        }
+      ],
+      "reconnects": 0,
+      "uninterrupted": true,
+      "note": "no reconnects: both connections held from the seat to the results",
+      "frames": [
+        {
+          "browser": "computer",
+          "fps": 61,
+          "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)"
+        },
+        {
+          "browser": "phone",
+          "fps": 61,
+          "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)"
+        }
+      ],
+      "totalMs": 122645
+    }
+  },
+  "notes": [
+    "The first portrait and landscape harness attempts used room ids longer than 32 characters and failed on both builds. Retried with shorter ids.",
+    "Phone runs use touch input and CPU throttle 4, 60 ms delay, 1% loss, 20 ms jitter. They do not provide a keyboard-freeze measurement."
+  ],
+  "phoneFrames": [
+    {
+      "name": "b-phone-portrait",
+      "row": {
+        "s": 60.66,
+        "frames": 3641,
+        "cpu": 4,
+        "load": 11,
+        "late": 18,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 0,
+        "slides": 0,
+        "slidesOver1": 0,
+        "slideMaxNet": 0,
+        "respawns": 0,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 20.1,
+        "dtMax": 29,
+        "ev": ""
+      },
+      "jumps": [],
+      "slides": [],
+      "resp": [],
+      "stalls": []
+    },
+    {
+      "name": "c-phone-portrait",
+      "row": {
+        "s": 60.53,
+        "frames": 3633,
+        "cpu": 4,
+        "load": 11,
+        "late": 25,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 0,
+        "slides": 0,
+        "slidesOver1": 0,
+        "slideMaxNet": 0,
+        "respawns": 1,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 18.3,
+        "dtMax": 25,
+        "ev": ""
+      },
+      "jumps": [],
+      "slides": [],
+      "resp": [
+        {
+          "s": 14.73,
+          "cut": 14,
+          "fromSpawnTiles": 0,
+          "slideWithin1_5s": 0,
+          "ev": null
+        }
+      ],
+      "stalls": []
+    },
+    {
+      "name": "b-phone-landscape",
+      "row": {
+        "s": 30.53,
+        "frames": 1833,
+        "cpu": 4,
+        "load": 9.9,
+        "late": 13,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 0,
+        "slides": 0,
+        "slidesOver1": 0,
+        "slideMaxNet": 0,
+        "respawns": 0,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 19.2,
+        "dtMax": 29,
+        "ev": ""
+      },
+      "jumps": [],
+      "slides": [],
+      "resp": [],
+      "stalls": []
+    },
+    {
+      "name": "c-phone-landscape",
+      "row": {
+        "s": 30.61,
+        "frames": 1837,
+        "cpu": 4,
+        "load": 9.9,
+        "late": 9,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 0,
+        "slides": 0,
+        "slidesOver1": 0,
+        "slideMaxNet": 0,
+        "respawns": 0,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 1,
+        "over50": 1,
+        "dtP99": 19,
+        "dtMax": 59,
+        "ev": ""
+      },
+      "jumps": [],
+      "slides": [],
+      "resp": [],
+      "stalls": []
+    }
+  ],
+  "checkRetry": {
+    "b": {
+      "ok": true,
+      "command": "check",
+      "play": "http://127.0.0.1:8793/tiny-platformer/play",
+      "room": "pub-2",
+      "seats": [
+        {
+          "browser": "computer",
+          "seat": 0,
+          "role": "replica",
+          "seatedMs": 1020
+        },
+        {
+          "browser": "phone",
+          "seat": 1,
+          "role": "replica",
+          "seatedMs": 371
+        }
+      ],
+      "round": {
+        "n": 1,
+        "humans": 2,
+        "bots": 2,
+        "results": [
+          {
+            "slot": 5,
+            "seat": null,
+            "name": "Kilo",
+            "score": 15,
+            "bot": true,
+            "place": 1
+          },
+          {
+            "slot": 6,
+            "seat": null,
+            "name": "Moth",
+            "score": 12,
+            "bot": true,
+            "place": 2
+          },
+          {
+            "slot": 0,
+            "seat": 0,
+            "name": "Jolly Kite",
+            "score": 11,
+            "bot": false,
+            "place": 3
+          },
+          {
+            "slot": 1,
+            "seat": 1,
+            "name": "Static Kite",
+            "score": 0,
+            "bot": false,
+            "place": 4
+          }
+        ],
+        "overMs": [
+          120939,
+          119996
+        ]
+      },
+      "readiness": [
+        {
+          "browser": "computer",
+          "ready": true,
+          "by": "auto",
+          "liftedMs": 270,
+          "waitedMs": 8,
+          "shot": "computer-playing.png"
+        },
+        {
+          "browser": "phone",
+          "ready": true,
+          "by": "auto",
+          "liftedMs": 264,
+          "waitedMs": 10,
+          "shot": "phone-playing.png"
+        }
+      ],
+      "connection": [
+        {
+          "browser": "computer",
+          "seats": [
+            0
+          ],
+          "reconnects": 0,
+          "closed": null
+        },
+        {
+          "browser": "phone",
+          "seats": [
+            1
+          ],
+          "reconnects": 0,
+          "closed": null
+        }
+      ],
+      "reconnects": 0,
+      "uninterrupted": true,
+      "note": "no reconnects: both connections held from the seat to the results",
+      "frames": [
+        {
+          "browser": "computer",
+          "fps": 61,
+          "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)"
+        },
+        {
+          "browser": "phone",
+          "fps": 61,
+          "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)"
+        }
+      ],
+      "totalMs": 122617
+    },
+    "c": {
+      "ok": true,
+      "command": "check",
+      "play": "http://127.0.0.1:8794/tiny-platformer/play",
+      "room": "pub-2",
+      "seats": [
+        {
+          "browser": "computer",
+          "seat": 0,
+          "role": "host",
+          "seatedMs": 1013
+        },
+        {
+          "browser": "phone",
+          "seat": 1,
+          "role": "replica",
+          "seatedMs": 326
+        }
+      ],
+      "round": {
+        "n": 1,
+        "humans": 2,
+        "bots": 2,
+        "results": [
+          {
+            "slot": 3,
+            "seat": null,
+            "name": "Kilo",
+            "score": 16,
+            "bot": true,
+            "place": 1
+          },
+          {
+            "slot": 0,
+            "seat": 0,
+            "name": "Silent Kite",
+            "score": 9,
+            "bot": false,
+            "place": 2
+          },
+          {
+            "slot": 2,
+            "seat": null,
+            "name": "Moth",
+            "score": 8,
+            "bot": true,
+            "place": 3
+          },
+          {
+            "slot": 1,
+            "seat": 1,
+            "name": "Clever Raven",
+            "score": 2,
+            "bot": false,
+            "place": 4
+          }
+        ],
+        "overMs": [
+          120279,
+          119342
+        ]
+      },
+      "readiness": [
+        {
+          "browser": "computer",
+          "ready": true,
+          "by": "auto",
+          "liftedMs": 241,
+          "waitedMs": 1,
+          "shot": "computer-playing.png"
+        },
+        {
+          "browser": "phone",
+          "ready": true,
+          "by": "auto",
+          "liftedMs": 240,
+          "waitedMs": 0,
+          "shot": "phone-playing.png"
+        }
+      ],
+      "connection": [
+        {
+          "browser": "computer",
+          "seats": [
+            0
+          ],
+          "reconnects": 0,
+          "closed": null
+        },
+        {
+          "browser": "phone",
+          "seats": [
+            1
+          ],
+          "reconnects": 0,
+          "closed": null
+        }
+      ],
+      "reconnects": 0,
+      "uninterrupted": true,
+      "note": "no reconnects: both connections held from the seat to the results",
+      "frames": [
+        {
+          "browser": "computer",
+          "fps": 61,
+          "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)"
+        },
+        {
+          "browser": "phone",
+          "fps": 61,
+          "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)"
+        }
+      ],
+      "totalMs": 121392
+    }
+  }
+}
