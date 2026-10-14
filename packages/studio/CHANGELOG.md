@@ -17,15 +17,17 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
-## Unreleased — runner correction and client frame cost
+## [0.51.1] - 2026-10-14
 
-This section is renumbered at release; no package version is changed here.
+**Plugin 0.51.1** · A player's own runner never jumps across the screen.
+
+Your platformer keeps a player's runner moving smoothly through network corrections and reconnects, with less work per frame on slower phones.
 
 ### Fixed
-- Spatial collision queries avoid temporary axis and leaf iterators while preserving candidate order and every execution-budget charge. Transient interpolated entity views are no longer retained in the snapshot cache.
-- A rules player's box-bodied 2D drawing now sweeps from its previous displayed position and bounds correction travel by elapsed time and per rendered frame, so a delayed render cannot spend its entire backlog in one jump. Corrections blocked by a platform can route around it in bounded work across frames, without reversing continuing horizontal movement or following a stale destination. Stationary vertical corrections use blend speed rather than terminal fall speed; recorded substep velocities preserve normal jump arcs. Explicit placements still reset the presentation immediately. `correctionDirection` lets a platformer retain held horizontal intent when contact sets velocity to zero, while neutral input permits convergence.
-- A box-bodied 2D runner returning after a dropped connection is drawn on from where it was shown to where the server has it, instead of cut across by the placement revision the return makes. `respawned` lets a game name a real placement made while the player was away, which is still drawn at once.
-- Rules views reuse unchanged substep forecasts and identical deterministic movement replays, cache snapshot latency statistics, reuse unchanged decoded snapshot rows and static entity views, and sample each entity group at one presentation time. Extra probe callbacks no longer require a proxy. Physics-world operations are excluded from replay caching. Synchronous readers share a presentation without repeating movement or collision work.
+
+- In server-rules platformers, a player's own box-shaped 2D runner now moves smoothly through network corrections, even after a delayed frame. It goes around blocking platforms without being pulled backwards against the player's held direction, and normal jumps keep their shape.
+- After a dropped connection, the runner glides from its last visible position to where the server moved it. Real respawns and other deliberate placements still happen immediately; games can identify placements made during an outage with `respawned`.
+- Rules games do less repeated movement, collision and drawing preparation each frame, helping play stay smooth on slower phones. These changes preserve the server's movement, hits and scoring.
 
 ## [0.51.0] - 2026-10-14
 
