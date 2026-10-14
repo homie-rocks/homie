@@ -108,6 +108,8 @@ await shop.buy('full-tune', 1, undefined, { reference: booking.id });
 await shop.checkout({ reference: booking.id });
 ```
 
+On the default keyless connection, `shop.checkout({ reference: 'table-7' })` opens the studio's synced Stripe menu: the guest sets quantities on Stripe's page and `order.paid.data.lines` carries what was actually paid. A slot with capacity uses `shop.book` (see below), not `shop.buy`. Monthly gifts and memberships are recurring items on their own links. None of these needs a key.
+
 These retain their existing boolean result: true means checkout opened, not payment received. The durable `order.paid` function event includes `data.order` (the order ID), `data.reference` (your reference or null), and `data.app` (the app ID). A verified provider payment emits it. Validate the referenced record, expected amount/currency and app, deduplicate by event/order ID, then fulfil that booking or add that gift to the confirmed meal table. A buyer supplies the reference: it is correlation, never proof they own a private record or paid the expected price. Do not put personal data in it.
 
 For each offer, build the promised action and fulfilment, not just a price label: a naming purchase needs the proposed name and the staff/customer outcome; a ticket needs its receipt. Keep an unpaid request distinct when charging is unavailable.
@@ -175,7 +177,7 @@ Scaffold businesses with `new <folder> --kind business`; causes with `--kind cau
 
 For giving, set the studio currency and run `shop init --giving --currency CAD` (use the organisation’s currency). It creates one-time/monthly suggested gifts. The owner supplies `giving.receiptText` in shop.json; Homie supplies no legal or tax text. Before Stripe is connected, local /shop/ previews items and prices with checkout disabled. Run the connection step yourself; the owner approves their Stripe account in the browser.
 
-Booking requests are not capacity reservations. Calendar availability and seat capacity are the next app capability; do not promise them.
+Use `shop.book` and the booking collection declaration in SHOP.md. Default keyless booking links show pending while paying; an unpaid guest does not block others. Stripe limits completed sessions to capacity. The owner’s AI syncs published/changed slots with `stripe_bookings_sync`. Say “Pay to secure your seat.” Exclusive unpaid holds require the explicitly selected optional keyed connection.
 
 
 ## Tell my AI when a booking comes in
@@ -256,3 +258,13 @@ and the `app_records` tool schema explain the contract; validation errors name i
 Live and local unconnected shop/giving pages display the declared items and amounts
 with disabled payment controls. They say they are not taking payments yet. A fresh
 `/shop/` has an empty preview; an authored shop page still takes precedence.
+
+The giving starter now reads the actual shop donation options with `shop.catalog()`.
+`shop init --giving --currency CAD` includes $20 monthly; `app new giving --from giving`
+opens Checkout for the selected amount and frequency. A disconnected shop displays
+a disabled preview. No intention record or unverified collected total is created.
+Use the Manage my gifts link for the buyer-owned Stripe portal in the shop.
+
+For a records-only booking app, use `createShop({target: parent})` inside its
+sandboxed view. The shell includes the authenticated shop bridge; do not add a
+room simulation merely to make a payment button work.

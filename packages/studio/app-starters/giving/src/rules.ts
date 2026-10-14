@@ -15,7 +15,7 @@ export default defineRules({
   },
   room: {
     rounds: { seconds: 0, breakSeconds: 0 }, bots: { keep: 0 },
-    join() { return { kind: 'participant', at: { x: 0, y: 0 } }; },
+    join() { return { kind: 'participant', at: { x: 0, y: 0, z: 0 } }; },
     on: { refresh(world) { world.shared.revision += 1; world.emit('refresh', { x: 0, y: 0 }, {}); } },
   },
 });

@@ -72,6 +72,7 @@ export async function appProof({ wrangler, shots = null, log = () => {} }) {
     const evidence = join(scratch, 'needs');
     const judged = await check({root:studio,url:local,game:'welcome',shots:evidence,log});
     assert.equal(judged.ok,false,'an unmet Codex need prevents completion');
+    assert.ok(Array.isArray(judged.needs),JSON.stringify(judged));
     assert.deepEqual(judged.needs.map(n=>n.status),['met','met','met','not'],JSON.stringify(judged.needs));
     for(const need of judged.needs) for(const capture of need.captures) assert.ok(existsSync(capture));
     const saved = JSON.parse(readFileSync(join(studio,'.studio/checks/welcome-needs.json'),'utf8'));

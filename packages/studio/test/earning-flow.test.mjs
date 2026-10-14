@@ -1,0 +1,45 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
+import { readdirSync, readFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { startStripeFixture } from '../lib/dev-stripe-fixture.mjs';
+import { shopRoutes, shopOf, reconcileOrders } from '../worker/shop.mjs';
+import { withToolIdentity } from '../worker/tool-identity.mjs';
+
+test('phone checkout holds the last seat; signed payment confirms and expiry releases through HTTP', async t => {
+ const sql=new DatabaseSync(':memory:');t.after(()=>sql.close());
+ const migrations=new URL('../../../template/site/migrations/',import.meta.url);
+ for(const file of readdirSync(migrations).sort())sql.exec(readFileSync(new URL(file,migrations),'utf8'));
+ const prepare=(q,args=[])=>{const runSync=()=>({meta:{changes:sql.prepare(q).run(...args).changes}});return{bind:(...a)=>prepare(q,a),first:async()=>sql.prepare(q).get(...args)??null,all:async()=>({results:sql.prepare(q).all(...args)}),run:async()=>runSync(),runSync};};
+ const DB={prepare,batch:async ss=>{sql.exec('BEGIN');try{const r=ss.map(s=>s.runSync());sql.exec('COMMIT');return r;}catch(e){sql.exec('ROLLBACK');throw e;}}};
+ const env={DB};const cat={studio:{name:'Coldsmoke'},games:[{id:'tuning',kind:'app',records:{collections:{bookings:{booking:{slots:'slots',item:'tune'}},freebookings:{booking:{slots:'slots',item:'free'}}}}}],shop:{till:'stripe',currency:'cad',items:[{id:'tune',name:'Tune',price:5000},{id:'wax',name:'Wax',price:1000},{id:'free',name:'Free assessment',price:0}]}};
+ for(const id of ['alice','bob'])sql.prepare('INSERT INTO players(id,name,created_at,seen_at) VALUES(?,?,1,1)').run(id,id);
+ sql.prepare('INSERT INTO app_records VALUES(?,?,?,?,1,1)').run('tuning','slots','morning',JSON.stringify({capacity:1}));
+ const server=createServer(async(req,res)=>{let body='';for await(const c of req)body+=c;const url=new URL(req.url,origin);const r=await shopRoutes(new Request(url,{method:req.method,headers:req.headers,...(req.method==='POST'?{body}:{})}),env,{},url,{catalogueOf:async()=>cat});res.writeHead(r.status,Object.fromEntries(r.headers));res.end(await r.text());});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin=`http://127.0.0.1:${server.address().port}`;t.after(()=>new Promise(r=>server.close(r)));
+ const stripe=await startStripeFixture({origin});t.after(()=>stripe.close());Object.assign(env,stripe.bindings);
+ const buy=async(id,body)=>{const url=new URL('/api/shop/buy',origin);const req=withToolIdentity(new Request(url,{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify(body)}),{id});const r=await shopRoutes(req,env,{},url,{catalogueOf:async()=>cat});return{status:r.status,...await r.json()};};
+ sql.exec("INSERT INTO function_subscriptions(name,type,cursor,started) VALUES('paid','order.paid',0,0)");
+ const request={item:'tune',game:'tuning',booking:{collection:'bookings',slot:'morning'}};
+ const [alice,bob]=await Promise.all([buy('alice',request),buy('bob',request)]);
+ const winner=alice.ok?alice:bob,loser=alice.ok?bob:alice;assert.equal(winner.ok,true,JSON.stringify(winner));assert.equal(loser.status,409);assert.equal(sql.prepare('SELECT count(*) n FROM shop_orders').get().n,1,'capacity refusal rolls back its order');
+ assert.equal(sql.prepare('SELECT state FROM shop_bookings').get().state,'held');
+ const payment=await fetch(winner.url.replace('/checkout/','/complete/'),{method:'POST',redirect:'manual'});assert.equal(payment.status,303,await payment.text());assert.equal(sql.prepare('SELECT state FROM shop_bookings').get().state,'confirmed');assert.equal(JSON.parse(sql.prepare("SELECT data FROM studio_events WHERE type='order.paid' AND json_extract(data,'$.order')=?").get(winner.order).data).reference,winner.booking);
+ sql.prepare('INSERT INTO app_records VALUES(?,?,?,?,1,1)').run('tuning','slots','later',JSON.stringify({capacity:1}));
+ const second=await buy('bob',{...request,booking:{collection:'bookings',slot:'later'}});assert.equal(second.ok,true);
+ const expired=await fetch(second.url.replace('/checkout/','/expire/'),{method:'POST',redirect:'manual'});assert.equal(expired.status,303);assert.equal(sql.prepare('SELECT state FROM shop_bookings WHERE id=?').get(second.booking).state,'released');
+ const free=await buy('bob',{item:'free',game:'tuning',booking:{collection:'freebookings',slot:'later'}});assert.equal(free.ok,true);assert.equal(sql.prepare('SELECT state FROM shop_bookings WHERE id=?').get(free.booking).state,'confirmed');
+ const cart=await buy('alice',{lines:[{item:'tune',quantity:2},{item:'wax',quantity:1}],reference:'table-7'});assert.equal(cart.ok,true);
+ const session=await (await fetch(stripe.base+'/v1/checkout/sessions/'+cart.url.split('/').at(-1))).json();assert.equal(session.lines.length,2);assert.equal(session.amount_total,11000);assert.equal(sql.prepare('SELECT value FROM meta WHERE key=?').get('shop-reference:'+cart.order).value,'table-7');
+ const paidCart=await fetch(cart.url.replace('/checkout/','/complete/'),{method:'POST',redirect:'manual'});assert.equal(paidCart.status,303);
+ const event=sql.prepare("SELECT data FROM studio_events WHERE type='order.paid' AND json_extract(data,'$.order')=?").get(cart.order);assert.equal(JSON.parse(event.data).reference,'table-7');
+ sql.prepare('INSERT INTO app_records VALUES(?,?,?,?,1,1)').run('tuning','slots','uncertain',JSON.stringify({capacity:1}));
+ const realFetch=globalThis.fetch;
+ globalThis.fetch=async (url,options)=>{const response=await realFetch(url,options);if(String(url)===stripe.base+'/v1/checkout/sessions'&&options?.method==='POST')throw new Error('response lost after provider creation');return response;};
+ let uncertain;try {uncertain=await buy('bob',{...request,booking:{collection:'bookings',slot:'uncertain'}});}finally{globalThis.fetch=realFetch;}
+ assert.equal(uncertain.status,502);assert.equal(sql.prepare("SELECT state FROM shop_bookings WHERE slot='uncertain'").get().state,'held');
+ sql.prepare("UPDATE shop_orders SET created_at=?,updated_at=1 WHERE id=(SELECT order_id FROM shop_bookings WHERE slot='uncertain')").run(Date.now()-24*60*60*1000);
+ await reconcileOrders(env,shopOf(cat),'bob',{expireOpen:true});assert.equal(sql.prepare("SELECT state FROM shop_bookings WHERE slot='uncertain'").get().state,'released');
+ const previewEnv={DB};const url=new URL('/api/shop',origin);const preview=await (await shopRoutes(new Request(url),previewEnv,{},url,{catalogueOf:async()=>cat})).json();assert.equal(preview.items.find(i=>i.id==='tune').way,'closed');
+});

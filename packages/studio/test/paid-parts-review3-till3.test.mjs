@@ -9,7 +9,7 @@ test('L1 every Checkout parameter sent, per till and billing, with every seller 
     const params = PP.purchaseSessionParams(o, 'https://seller.example', till);
     const keys = [...new Set(Object.keys(flat(params)).map((k) => k.replace(/\.\d+\./g, '[].')))];
     let mock = 'not run';
-    try { const s = await stripeMod.createCheckoutSession({ STRIPE_KEY: `sk_test_${'A1b2C3d4'.repeat(4)}`, STRIPE_API_BASE: MOCK }, params, { idempotencyKey: `l1-${till}-${billing}` }); mock = s.id ? 'accepted' : 'no id'; } catch (e) { mock = 'REFUSED ' + e.message; }
+    try { const s = await stripeMod.createCheckoutSession({ STRIPE_CHECKOUT_MODE: 'sessions', STRIPE_KEY: `sk_test_${'A1b2C3d4'.repeat(4)}`, STRIPE_API_BASE: MOCK }, params, { idempotencyKey: `l1-${till}-${billing}` }); mock = s.id ? 'accepted' : 'no id'; } catch (e) { mock = 'REFUSED ' + e.message; }
     console.log(`L1 [${till} / ${billing}] stripe-mock: ${mock}\n     ${keys.join(', ')}`);
     assert.equal(mock, 'accepted');
     if (till === 'stripe-managed') for (const banned of ['tax_id_collection', 'automatic_tax', 'adaptive_pricing', 'invoice_creation']) assert.equal(banned in params, false, banned);

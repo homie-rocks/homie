@@ -49,6 +49,7 @@ export function amountError(amount, currency) {
 
 /** Checkout wording is shared by validation and the request path. */
 export function checkoutMessage(shop, studio = 'this studio', parent = false) {
+  if (shop.giving?.receiptText) return shop.giving.receiptText;
   return `${parent ? "This is for your child's account. " : ''}Delivered at once to the player's account on ${studio}. ${shop.policy.withdrawalAcknowledgement ? 'By paying you ask for it now, which ends the 14-day withdrawal right;' : 'Your statutory rights still apply.'} ${shop.refundDays === null ? (shop.policy.withdrawalAcknowledgement ? 'ask the studio about refunds.' : 'Ask the studio about refunds.') : `${shop.policy.refundUsedItems ? 'an item' : 'an unused item'} can still be refunded within ${shop.refundDays} days.`}`;
 }
 
@@ -157,7 +158,7 @@ export function checkShop(raw, { games = null, audience = 'general', studioName 
       if (why) err(`${at}.price`, why);
       else price = numeric(it.price);
     }
-    if (it.interval !== undefined && (it.interval !== 'month' || chosen)) err(`${at}.interval`, 'monthly gifts need a fixed suggested amount');
+    if (it.interval !== undefined && it.interval !== 'month') err(`${at}.interval`, 'interval must be month');
     const charge = chosen ? min : price;
     if (currencyScale(currency) === 1000 && charge % 10) warnings.push({ at: `${at}.price`, message: 'This three-decimal amount uses the smallest minor unit. Confirm support with your Stripe payment method; Stripe decides acceptance (https://docs.stripe.com/currencies).' });
     if (charge > 0 && charge < minimumCharge(currency)) warnings.push({ at: `${at}.price`, message: `Stripe's minimum for settlement in ${currency.toUpperCase()} is ${money(minimumCharge(currency), currency)}. Your settlement currency and payment method determine the actual minimum at checkout.` });

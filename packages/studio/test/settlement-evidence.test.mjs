@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { findSettlement, resumeSettlement } from '../worker/settlement-journal.mjs';
-const env = { STRIPE_KEY: 'rk_live_test' };
+const env = { STRIPE_CHECKOUT_MODE: 'sessions', STRIPE_KEY: 'rk_live_test' };
 const payload = { payload: { payload: { authorization: { from: `0x${'1'.repeat(40)}`, to: `0x${'2'.repeat(40)}`, value: '1000000', nonce: `0x${'3'.repeat(64)}`, validBefore: '1' } } }, requirements: { asset: `0x${'4'.repeat(40)}` }, fromBlock: '0x1' };
 const job = { network: 'base', mode: 'live', payload: JSON.stringify(payload) };
 test('an expired authorization is unpaid only after the finalized chain proves expiry', async () => {

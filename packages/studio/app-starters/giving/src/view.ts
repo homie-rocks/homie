@@ -1,74 +1,72 @@
 import app from '../app.json';
 import { openRoom } from '@homie-rocks/studio/rules/view';
 import type rules from './rules';
-import { createAppRecords, type AppRecord } from '@homie-rocks/studio/apps';
-import { randomId } from '@homie-rocks/studio/links';
-type Entry = { choice: string; status: string; amount: number; monthly: boolean };
+import { createShop, type ShopCatalog } from '@homie-rocks/studio/shop';
 const room = openRoom<typeof rules>();
-const net = room.net;
-const role = net.params.role ?? 'customer';
-const words: Record<string, string> = app.words;
-const config = app.starter;
+const shop = createShop();
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector<T>(s)!;
-const records = createAppRecords<Entry>({ collection: 'entries' });
-let rows: AppRecord<Entry>[] = [], busy = false, ready = false, question = 0;
 const action = $<HTMLButtonElement>('[data-action]');
-document.body.className = role;
-document.body.style.setProperty('--tone', config.color);
-$('h1').textContent = app.name; $('#intro').textContent = app.blurb;
-$('#label').textContent = words.total; action.textContent = words.action;
-$('#choice-label').textContent = words.choice;
-$('#frequency-label').textContent = words.monthly;
-$('#once').textContent = words.once; $('#month').textContent = words.month;
-$('#giving-link').textContent = words.give;
-$('#giving-link').hidden = config.kind !== 'giving';
-$('#frequency').hidden = config.kind !== 'giving';
-$('#goal').hidden = config.kind !== 'giving';
-$('#controls').hidden = role === 'wall';
-const select = $<HTMLSelectElement>('#choice');
-function choices() {
- select.replaceChildren();
- const list = config.kind === 'quiz' ? config.questions[question]?.choices ?? [] : config.choices;
- for (const value of list) { const option = document.createElement('option'); option.value = value; option.textContent = value; select.append(option); }
- $('#prompt').textContent = config.kind === 'quiz' ? config.questions[question]?.text ?? words.finished : words.prompt;
- action.hidden = config.kind === 'quiz' && question >= config.questions.length;
-}
-choices();
+const choice = $<HTMLSelectElement>('#choice');
+const frequency = $<HTMLSelectElement>('#monthly');
+let catalog: ShopCatalog | undefined, busy = false;
+const wall = room.net.params.role === 'wall';
+document.body.className = room.net.params.role ?? 'customer';
+document.body.style.setProperty('--tone', app.starter.color);
+$('h1').textContent = app.name;
+$('#intro').textContent = app.blurb;
+$('#label').textContent = wall ? 'Give with us' : 'Your gift';
+$('#choice-label').textContent = 'Choose a gift';
+$('#frequency-label').textContent = 'Gift frequency';
+$('#once').textContent = 'One time'; $('#month').textContent = 'Monthly';
+$('#giving-link').textContent = 'Manage my gifts';
+$('#goal').hidden = true;
+$('#entries').hidden = true;
+$('#prompt').textContent = 'Choose what works for you. Payments go directly to our Stripe account.';
+const amountLabel = document.createElement('label'); amountLabel.textContent = 'Your amount';
+const amount = document.createElement('input'); amount.type = 'number'; amount.inputMode = 'decimal'; amountLabel.append(amount);
+choice.parentElement!.after(amountLabel);
+function selected() { return catalog?.items.find(i => i.id === choice.value); }
 function paint() {
- $('[data-count]').textContent = String(rows.length);
- const amount = rows.reduce((n, r) => n + r.data.amount, 0);
- $('#amount').textContent = new Intl.NumberFormat(undefined, { style: 'currency', currency: config.currency }).format(amount);
- $('#target').textContent = new Intl.NumberFormat(undefined, { style: 'currency', currency: config.currency }).format(config.goal);
- $<HTMLProgressElement>('progress').max = config.goal; $<HTMLProgressElement>('progress').value = amount;
- $('#goal-label').textContent = words.goal;
- action.disabled = busy || !ready;
- $('#entries').replaceChildren();
- for (const row of rows.slice(-6).reverse()) {
-  const li = document.createElement('li');
-  li.textContent = `${row.data.choice} · ${row.data.status}${row.data.monthly ? ' · ' + words.month : ''}`;
-  if (role === 'staff' && row.data.status !== words.done) {
-   const button = document.createElement('button'); button.textContent = words.complete;
-   button.onclick = () => { void records.update(row, { ...row.data, status: words.done }).then(refresh).catch(e => { $('#status').textContent = e.message; }); }; li.append(button);
-  }
-  $('#entries').append(li);
+ const item = selected();
+ amountLabel.hidden = item?.price !== 'choose';
+ action.disabled = busy || !catalog?.open || !item || item.way === 'closed';
+ action.textContent = frequency.value === 'month' ? 'Give monthly on Stripe' : 'Give on Stripe';
+ $('[data-count]').textContent = wall ? 'Thank you' : item?.shown ?? 'Preview';
+ if (item?.price === 'choose') {
+  const scale = catalog!.currencyScale;
+  amount.min = String((item.min ?? 0) / scale);
+  amount.max = item.max == null ? '' : String(item.max / scale);
+  amount.step = String(1 / scale);
  }
 }
-async function refresh() {
- try { rows = await records.list(); ready = true; paint(); net.playable(); }
- catch (error) { $('#status').textContent = (error as Error).message; }
+function options() {
+ choice.replaceChildren();
+ for (const item of catalog?.items ?? []) {
+  if (item.kind !== 'donation' || Boolean(item.interval) !== (frequency.value === 'month')) continue;
+  const option = document.createElement('option'); option.value = item.id; option.textContent = `${item.name} · ${item.shown}`; choice.append(option);
+ }
+ paint();
 }
+choice.onchange = paint; frequency.onchange = options;
 action.onclick = async () => {
+ const item = selected(); if (!item || !catalog?.open) return;
+ const value = item.price === 'choose' ? Math.round(Number(amount.value) * catalog.currencyScale) : undefined;
+ if (item.price === 'choose' && (!amount.value || !Number.isSafeInteger(value) || value! < (item.min ?? 0) || item.max != null && value! > item.max)) {
+  $('#status').textContent = 'Enter an amount within the displayed range.'; return;
+ }
  busy = true; paint();
  try {
-  const choice = select.value;
-  await records.create({ choice: config.kind === 'quiz' ? `${question + 1}. ${choice}` : choice, status: words.pending, amount: config.kind === 'giving' ? Number(choice) : 0, monthly: $<HTMLSelectElement>('#monthly').value === 'month' }, randomId());
-  $('#status').textContent = words.thanks;
-  if (config.kind === 'quiz') { question++; choices(); }
-  room.command('refresh', {}); await refresh();
- } catch (error) { $('#status').textContent = (error as Error).message; }
- finally { busy = false; paint(); }
+  // Opening Checkout is not a payment. Only Stripe's verified webhook records a gift.
+  const opened = await shop.buy(item.id, 1, value);
+  $('#status').textContent = opened ? 'Finish your gift on Stripe. Your receipt confirms payment.' : 'Open the shop to sign in or complete the steps for this gift.';
+  if (!opened) shop.open(item.id);
+ } finally { busy = false; paint(); }
 };
-room.on('refresh', () => { void refresh(); });
-net.on('link', () => { void refresh(); });
-setInterval(() => { $('#connection').textContent = net.link === 'online' ? words.live : words.reconnecting; void refresh(); }, 2000);
+async function refresh() {
+ catalog = await shop.catalog(); options();
+ $('#status').textContent = wall ? 'Join on your phone to choose a one-time or monthly gift.' : catalog.open ? 'Monthly gifts renew until you cancel through Stripe. Manage your gifts using the link below.' : 'Preview — giving is unavailable until the organisation connects Stripe.';
+ $('#connection').textContent = room.net.link === 'online' ? 'Together · live' : 'Connecting…';
+ room.net.playable();
+}
+shop.on('closed', () => { void refresh(); });
 void refresh();

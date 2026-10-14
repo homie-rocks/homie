@@ -2,9 +2,9 @@
 import { KEY_SHAPE, modeOf } from './stripe.mjs';
 // Current documented Payment Link fields, isolated from the existing keyed transport version.
 export const LINKS_STRIPE_VERSION = '2026-09-30.endive';
-export const hasStripeKey = (env) => KEY_SHAPE.test(String(env?.STRIPE_KEY ?? ''));
+export const hasStripeKey = (env) => env?.STRIPE_CHECKOUT_MODE === 'sessions' && KEY_SHAPE.test(String(env?.STRIPE_KEY ?? ''));
 export function linkConfig(env) {
-  try { const c = JSON.parse(env?.STRIPE_SHOP_LINKS ?? 'null'); return c?.v === 1 && ['test', 'live'].includes(c.mode) && Array.isArray(c.items) ? c : null; } catch { return null; }
+  try { const raw=env?.STRIPE_SHOP_LINKS??'null'; const c = JSON.parse(raw.startsWith('base64:') ? new TextDecoder().decode(Uint8Array.from(atob(raw.slice(7)),c=>c.charCodeAt(0))) : raw); return c?.v === 1 && ['test', 'live'].includes(c.mode) && Array.isArray(c.items) ? c : null; } catch { return null; }
 }
 export const shopMode = (env) => hasStripeKey(env) ? modeOf(env.STRIPE_KEY) : linkConfig(env)?.mode ?? 'test';
 export function linkSettings(shop) {
@@ -12,6 +12,7 @@ export function linkSettings(shop) {
     cap: shop.capPerPlayerMonth, checkoutMinutes: shop.checkoutMinutes, items: shop.items });
 }
 export function fullerReason(shop) {
+  if (shop.items.some(item => item.interval && item.price === 'choose')) return 'A giver-chosen monthly amount needs a Stripe Checkout connection.';
   if (shop.capPerPlayerMonth !== null) return 'Reserving a spending allowance before payment needs the fuller checkout connection.';
   if (shop.checkoutMinutes !== 1440) return 'Choosing when abandoned checkouts expire needs the fuller checkout connection.';
   return null;

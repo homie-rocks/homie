@@ -1,0 +1,13 @@
+{
+  "currency": "cad",
+  "items": [
+    {
+      "id": "full-tune",
+      "kind": "service",
+      "name": "Coldsmoke full tune \u2014 sandbox prototype",
+      "price": 6000,
+      "game": "tune",
+      "gives": []
+    }
+  ]
+}

@@ -49,7 +49,7 @@ Parts import exactly as games do (`@parts/<id>` or `@parts/<host>/<id>`), with t
 
 ## Shop button on the screen
 
-An open shop with items for this game or app shows **Shop** above its play/open screen. The shell reserves 52 pixels plus the safe area above the content, so the button never covers its controls. In `game.json` or `app.json`, set `"screen": { "shop": false }` to hide this button (merge with any existing screen settings). The room panel and your own shop buttons still work. Closed shops, kids policies and an empty selection show no button.
+An open shop with items for this game or app shows **Shop** above its play/open screen. The shell reserves 52 pixels plus the safe area above the content, so the button never covers its controls. In `game.json` or `app.json`, set `"screen": { "shop": false }` to disable the experience’s shop (merge with any existing screen settings). Keep it true or omitted when your app uses its own `createShop` buttons; false also refuses their checkout bridge requests. Closed shops, kids policies and an empty selection show no button.
 
 ```ts
 import { createShop } from '@homie-rocks/studio/shop';
@@ -103,3 +103,27 @@ and the `app_records` tool schema explain the contract; validation errors name i
 Live and local unconnected shop/giving pages display the declared items and amounts
 with disabled payment controls. They say they are not taking payments yet. A fresh
 `/shop/` has an empty preview; an authored shop page still takes precedence.
+
+## Booking capacity
+
+See `shop/SHOP.md` for “book a tune and hold the slot”. A collection opts in with
+`booking: {slots: 'slots', item: 'full-tune'}`. Slots are ordinary staff-managed
+records with integer `capacity`. Bookings are server-managed records created by
+`shop.book`; their public data is only slot, quantity and state. Keep personal
+information in a separate private collection. Public roles must not have write
+capabilities for slots or bookings. Staff movement is a versioned record update
+containing only `slot`; confirmation and release follow verified Checkout state.
+The default keyless connection uses one Payment Link per published slot. Call
+`stripe_bookings_sync` after publishing/changing slots. Pending checkout does not
+block others; payment secures the seat. Use record.booking.full/available/synced
+for slot display. Read SHOP.md for the complete manifest and limitations.
+
+The giving starter now reads the actual shop donation options with `shop.catalog()`.
+`shop init --giving --currency CAD` includes $20 monthly; `app new giving --from giving`
+opens Checkout for the selected amount and frequency. A disconnected shop displays
+a disabled preview. No intention record or unverified collected total is created.
+Use the Manage my gifts link for the buyer-owned Stripe portal in the shop.
+
+Records-only apps support the same shop bridge as room apps. In the sandboxed
+view, use `createShop({target: parent})` to send checkout and booking requests to
+the authenticated outer shell; a room simulation is not required for payments.

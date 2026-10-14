@@ -1,4 +1,6 @@
+import { linkConfig } from './shop-links.mjs';
 import {localSession} from './local-test.mjs';
+import { moveBooking } from './booking-store.mjs';
 import { toolIdentity } from './tool-identity.mjs';
 /** Lasting app records in the studio's own D1. Room hosts never authorize writes. */
 import { appRole, recordProblem } from './app-format.mjs';
@@ -96,10 +98,29 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
     if (op === 'read') {
       const rows = id ? [await env.DB.prepare('SELECT id, value, version, updated_at FROM app_records WHERE app = ?1 AND collection = ?2 AND id = ?3').bind(recordApp, collection, id).first()].filter(Boolean)
         : (await env.DB.prepare('SELECT id, value, version, updated_at FROM app_records WHERE app = ?1 AND collection = ?2 ORDER BY updated_at, id LIMIT 1000').bind(recordApp, collection).all()).results;
-      return json({ ok: true, records: rows.map((r) => ({ id: r.id, data: JSON.parse(r.value), version: r.version, updatedAt: r.updated_at })) });
+      const records=[];
+      for(const r of rows) {
+        const record={id:r.id,data:JSON.parse(r.value),version:r.version,updatedAt:r.updated_at};
+        const link=linkConfig(env)?.slots?.find(l=>l.app===meta.id&&l.slots===collection&&l.slot===r.id);
+        if(link) {
+          const saved=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-slot-link:${link.id}`).first();
+          const observed=saved?JSON.parse(saved.value):null;
+          const status=observed && observed.capacity===(link.limit??link.capacity) ? observed : link;
+          const count=await env.DB.prepare("SELECT COALESCE(SUM(quantity),0) n FROM shop_bookings WHERE app=?1 AND slots=?2 AND slot=?3 AND state='confirmed'").bind(recordApp,collection,r.id).first();
+          record.booking={full:!status.active||status.count>=(link.limit??link.capacity)||count.n>=link.capacity,available:status.active?Math.max(0,Math.min(link.capacity-count.n,(link.limit??link.capacity)-status.count)):0,synced:link.capacity===record.data.capacity};
+        }
+        records.push(record);
+      }
+      return json({ok:true,records});
     }
     if (!id) return fail(400, 'record id required');
     const body = await bodyOf(request);
+    if (meta.records.collections[collection].booking) {
+      if (op !== 'update' || !meta.roles[access.role].signIn) return fail(403, 'bookings are created and released through checkout');
+      if (!Number.isSafeInteger(body.version) || !ID.test(body.data?.slot ?? '') || Object.keys(body.data ?? {}).some(k => k !== 'slot')) return fail(400, 'move requires slot and current version');
+      const moved = await moveBooking(env, { app: recordApp, collection, id, slot: body.data.slot, version: body.version });
+      return moved ? json({ ok: true, id, version: body.version + 1 }) : fail(409, 'booking changed or is released; reload');
+    }
     if (op !== 'delete') { const bad = recordProblem(meta.records.collections[collection], body.data, { create: op === 'create' }); if (bad) return fail(400, bad); }
     if (op !== 'create' && (!Number.isSafeInteger(body.version) || body.version < 1)) return fail(400, 'record version required');
     const stmt = op === 'create'
@@ -109,6 +130,7 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
     const result = await stmt.run();
     return result.meta.changes ? json({ ok: true, id, version: op === 'create' ? 1 : body.version + 1 }) : fail(409, 'record changed, already exists, or collection full; reload');
   } catch (error) {
+    if (/booking capacity|capacity below|slot has active/.test(error.message)) return fail(409, error.message);
     if (error instanceof SyntaxError || error.message === 'body too large') return fail(400, error.message);
     return fail(503, 'app database unavailable; apply studio migrations');
   }

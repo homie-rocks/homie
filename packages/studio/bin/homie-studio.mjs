@@ -788,7 +788,11 @@ function print(result) {
         `Written: ${result.file}`);
       break;
     case 'check':
-      if (result.kind === 'app') { lines.push(`PASS: app ${result.game ?? ''}: wall and two phones shared an action; reconnect ${result.reconnect ? 'passed' : 'failed'}.`, `  ${result.before} → ${result.after}`); break; }
+      if (result.kind === 'app') {
+        if (result.needs?.length) lines.push(`PASS: app ${result.game ?? ''}: ${result.needs.length} Codex needs checked on ${(result.surfaces ?? []).join(', ')}.`);
+        if (result.reconnect) lines.push(`PASS: app ${result.game ?? ''}: wall and two phones shared an action; reconnect passed.`, `  ${result.before} → ${result.after}`);
+        break;
+      }
       if (result.results) { for (const r of result.results) lines.push(`${r.game}: PASS at ${r.site}: room ${r.room}, round ${r.round?.n} (${r.round?.humans} humans, ${r.round?.bots} bots), connection ${r.uninterrupted === true ? 'uninterrupted' : r.uninterrupted === false ? 'INTERRUPTED' : 'unknown'}`); break; }
       if (result.site) lines.push(`Checked ${result.local ? 'this studio\'s own build' : 'the site'} at ${result.site}.`);
       lines.push(`PASS: two fresh browsers in room ${result.room} finished round ${result.round.n} (${result.round.humans} humans, ${result.round.bots} bots) in ${Math.round(result.totalMs / 1000)} s.`,

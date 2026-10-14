@@ -1,0 +1,63 @@
+{
+  "mode": "real Stripe sandbox",
+  "profile": "Homie sandbox",
+  "checks": [
+    {
+      "name": "staff creates slots",
+      "text": "Fri 16 Oct · 09:00Rail clearFri 16 Oct · 10:00Rail clear"
+    },
+    {
+      "name": "booking response",
+      "ok": true,
+      "booking": "ord_j4Q16xACm759AHVLjnG0"
+    },
+    {
+      "name": "last-seat second customer refused",
+      "status": 409,
+      "body": {
+        "ok": false,
+        "error": "capacity",
+        "message": "That slot is full. Choose another slot."
+      }
+    },
+    {
+      "name": "unauthorized staff write",
+      "status": 404,
+      "body": {
+        "ok": false,
+        "error": "private role link required"
+      }
+    },
+    {
+      "name": "Stripe fixture confirmation",
+      "status": "complete",
+      "payment_status": "paid",
+      "error": null
+    },
+    {
+      "name": "Stripe actual session",
+      "id": "cs_test_a18NvET20RgNN3grbJnDBmvgFgCgTxtiHvcjDLsKOVYt9btcL8osLmP1Rm",
+      "status": "complete",
+      "payment_status": "paid",
+      "livemode": false
+    },
+    {
+      "name": "wall after Stripe",
+      "text": "Fri 16 Oct · 09:00ORD_J4Q1Confirmed · paidFri 16 Oct · 10:00Rail clear"
+    },
+    {
+      "name": "staff moved",
+      "text": "Booking moved",
+      "wall": "Fri 16 Oct · 09:00Rail clearFri 16 Oct · 10:00ORD_J4Q1Confirmed · paid"
+    },
+    {
+      "name": "expiry setup failed"
+    },
+    {
+      "name": "return link",
+      "text": "Confirmed · paid — Fri 16 Oct · 10:00Save your booking linkord_j4Q16xACm759AHVLjnG0"
+    }
+  ],
+  "session": "cs_test_a18NvET20RgNN3grbJnDBmvgFgCgTxtiHvcjDLsKOVYt9btcL8osLmP1Rm",
+  "booking": "ord_j4Q16xACm759AHVLjnG0"
+}

@@ -1,0 +1,124 @@
+{
+  "id": "tune",
+  "name": "Coldsmoke Tuning",
+  "blurb": "Pay to secure your tune. Follow the workshop live.",
+  "entry": "src/view.ts",
+  "roles": {
+    "customer": {
+      "signIn": false,
+      "can": [
+        "read:slots",
+        "read:bookings"
+      ]
+    },
+    "wall": {
+      "signIn": false,
+      "can": [
+        "read:slots",
+        "read:bookings"
+      ]
+    },
+    "staff": {
+      "signIn": true,
+      "can": [
+        "read:slots",
+        "create:slots",
+        "update:slots",
+        "read:bookings",
+        "update:bookings"
+      ]
+    }
+  },
+  "surfaces": {
+    "phone": "customer",
+    "wall": "wall",
+    "kiosk": "customer",
+    "tablet": "staff"
+  },
+  "words": {
+    "open": "Open",
+    "join": "Scan to join",
+    "one": "person",
+    "many": "people",
+    "action": "Request booking",
+    "total": "Requests",
+    "choice": "Choose an option",
+    "monthly": "Gift frequency",
+    "once": "One time",
+    "month": "Monthly",
+    "give": "Give securely on Stripe",
+    "goal": "Intention goal · not payments received",
+    "prompt": "Choose what works for you.",
+    "finished": "All three answers are in. Thank you!",
+    "complete": "Mark complete",
+    "done": "Complete",
+    "pending": "Requested",
+    "thanks": "Thank you — the wall is up to date.",
+    "live": "Together · live",
+    "reconnecting": "Reconnecting…"
+  },
+  "records": {
+    "persist": true,
+    "collections": {
+      "slots": {
+        "fields": {
+          "label": {
+            "type": "string",
+            "required": true,
+            "maxLength": 80
+          },
+          "capacity": {
+            "type": "number",
+            "required": true
+          }
+        }
+      },
+      "bookings": {
+        "booking": {
+          "slots": "slots",
+          "item": "full-tune"
+        },
+        "fields": {
+          "slot": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "state": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "parts": [],
+  "netplay": {
+    "v": 1,
+    "public": true,
+    "version": "1",
+    "params": [
+      "role",
+      "surface",
+      "ticket"
+    ]
+  },
+  "playerCard": false,
+  "chat": false,
+  "agents": {
+    "vote": false
+  },
+  "watch": "overview",
+  "screen": {
+    "shop": false
+  },
+  "needs": {},
+  "landing": {
+    "pitch": "Request a service. The team confirms your booking and updates the board."
+  },
+  "check": {
+    "params": {
+      "ticket": "ord_tufNXmI98bBZS3bfaeO0"
+    }
+  }
+}

@@ -185,7 +185,10 @@ async function sellingShop(env, cat) {
 }
 
 async function availableShellShop(env, cat, game, options) {
-  return await sellingShop(env, cat) ? shellShop(cat, game, options) : null;
+  // The shell can show a disabled catalog before payment setup is complete.
+  // Checkout readiness is enforced by the shop API, separately from visibility.
+  const preview = (cat.games ?? []).find(g => g.id === game)?.screen?.shopPreview === true;
+  return (preview && !shopOf(cat)?.broken || await sellingShop(env, cat)) ? shellShop(cat, game, options) : null;
 }
 
 async function postsOf(env, origin) {
@@ -930,7 +933,7 @@ async function route(request, env, ctx) {
           if (a.status === 401) return Response.redirect(`${url.origin}/account/?next=${encodeURIComponent(url.pathname + url.search)}`, 302);
           return json({ ok: false, error: a.error }, a.status);
         }
-        if(!meta.room)return recordsPage(meta,url,cat);
+        if(!meta.room)return recordsPage(meta,url,cat,await availableShellShop(env,cat,game));
       }
     }
     const lobby = () => env.LOBBY.get(env.LOBBY.idFromName(game));

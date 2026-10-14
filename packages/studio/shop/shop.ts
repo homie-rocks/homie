@@ -44,10 +44,19 @@ export interface ShopOptions {
 
 export interface CartLine { item: string; quantity: number; amount?: number }
 
+export interface ShopCatalog {
+  open: boolean;
+  currency: string;
+  currencyScale: number;
+  items: Array<{ id: string; kind: string; name: string; interval?: 'month'; price: number | 'choose'; min?: number; max?: number | null; shown: string; way: string }>;
+}
+
 export interface Shop {
   /** Resolves once the shell answered (or after `timeoutMs` with no shell: an empty, closed shop). */
   readonly ready: Promise<ShopState>;
   readonly state: ShopState;
+  /** Current gift/item options and payment readiness, without exposing account details. */
+  catalog(): Promise<ShopCatalog>;
   /** Whether the player owns this entitlement key now ("skin:ember", "badge:supporter"). Synchronous, for a render loop. */
   has(key: string): boolean;
   /** Every key the player owns now. */
@@ -61,6 +70,8 @@ export interface Shop {
   add(item: string, quantity?: number, amount?: number): void;
   cart(): CartLine[];
   clear(): void;
+  /** Opens Checkout: keyless bookings are pending until paid; explicit session checkout holds capacity. The returned ID tracks the public booking record. */
+  book(item: string, booking: { collection: string; slot: string }, quantity?: number): Promise<{ ok: boolean; booking?: string; error?: string }>;
   checkout(options?: { reference?: string }): Promise<boolean>;
   buy(item: string, quantity?: number, amount?: number, options?: { reference?: string }): Promise<boolean>;
   /** Mark an item used; the studio's refundUsedItems policy decides whether self-service refunds still apply. */
@@ -121,6 +132,20 @@ export function createShop(opts: ShopOptions = {}): Shop {
   let cart: CartLine[] = [];
   const shop: Shop = {
     ready,
+    catalog: async () => {
+      const result: ShopCatalog = { open: false, currency: 'usd', currencyScale: 100, items: [] };
+      let cursor: string | undefined;
+      do {
+        const m = await send({ op: 'catalog', cursor });
+        if (!m.ok) return result;
+        result.open = Boolean(m.open);
+        result.currency = String(m.currency ?? 'usd');
+        result.currencyScale = Number(m.currencyScale) || 100;
+        if (Array.isArray(m.items)) result.items.push(...m.items as ShopCatalog['items']);
+        cursor = typeof m.nextCursor === 'string' ? m.nextCursor : undefined;
+      } while (cursor);
+      return result;
+    },
     get state() { return { ...state }; },
     has: (key) => owns.includes(String(key)),
     entitlements: () => owns.slice(),
@@ -129,6 +154,10 @@ export function createShop(opts: ShopOptions = {}): Shop {
     add: (item, quantity = 1, amount) => { cart.push({ item, quantity, ...(amount === undefined ? {} : { amount }) }); },
     cart: () => cart.map((line) => ({ ...line })),
     clear: () => { cart = []; },
+    book: async (item, booking, quantity = 1) => {
+      const r = await send({ op: 'checkout', booking, lines: [{ item, quantity }] });
+      return { ok: Boolean(r.ok), ...(typeof r.booking === 'string' ? { booking: r.booking } : {}), ...(typeof r.message === 'string' ? { error: r.message } : {}) };
+    },
     checkout: async (options = {}) => { const ok = Boolean((await send({ op: 'checkout', lines: cart, reference: options.reference })).ok); if (ok) cart = []; return ok; },
     buy: async (item, quantity = 1, amount, options = {}) => Boolean((await send({ op: 'checkout', reference: options.reference, lines: [{ item, quantity, ...(amount === undefined ? {} : { amount }) }] })).ok),
     close: () => { void send({ op: 'close' }); },

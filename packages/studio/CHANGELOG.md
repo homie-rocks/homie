@@ -17,6 +17,48 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.51.0] - 2026-10-14
+
+**Plugin 0.51.0** · Take the money through your own Stripe, keyless by default.
+
+One Stripe approval enables mixed menus, paid capacity bookings and monthly giving through the owner’s own account.
+
+### Added
+
+- Mixed-item Stripe menus with adjustable quantities, signed paid invoice lines
+  and app references such as table 7 on `order.paid`.
+- Booking collections with pending/confirmed/released records and versioned staff
+  moves. Each published slot has its own Stripe Payment Link with a completed-session
+  capacity limit; the owner's AI syncs slots with `stripe_bookings_sync`.
+- Recurring Payment Links for monthly giving and memberships, paid invoice periods,
+  subscription lifecycle events and an API-configured no-code customer portal login.
+- Real sandbox acceptance for menus, two guests with the last-seat link open,
+  full-link deactivation, monthly payment, portal, and clock-driven renewal/failure.
+
+### Changed
+
+- The one-approval CLI connection remains keyless. Homie has no platform credential,
+  backend or cut in the payment path. A key alone never selects session checkout;
+  `STRIPE_CHECKOUT_MODE=sessions` explicitly opts into the fuller connection.
+- Keyless unpaid bookings are pending, not exclusive holds. Payment secures the seat.
+  The optional keyed path retains exclusive expiring holds and exact app-built carts.
+- The giving starter opens real Checkout for suggested one-time/monthly gifts and
+  disables payment before connection. It never counts intentions as gifts.
+
+### Fixed
+
+- Records-only app shells include the shop bridge without needing a multiplayer room.
+- Signed menu invoices and Checkout events tolerate either arrival order, and paid
+  membership access never extends on a failed renewal or revives after cancellation.
+
+### Upgrade notes
+
+Existing studios keep their pinned version until they opt in. Apply booking and
+subscription migrations when adding those capabilities. Run connect after changing
+shop items; the owner's AI syncs published slot manifests after schedule changes.
+Stripe's Payment Link and invoice snapshot limits split large catalogues into menus;
+custom amounts and monthly presets use separate links. No studio catalogue cap is added.
+
 ## [0.50.7] - 2026-10-14
 
 **Plugin 0.50.7** · Prove your needs on every screen, with fixes from studio testers.

@@ -286,7 +286,7 @@ export function forgetPlayerShop(env, player) {
 /** Grant an order's entitlements (idempotent on player, key and order). */
 export function grantStatements(env, order, item, now = Date.now(), line = { id: order.id + '_0', quantity: 1 }) {
   const starts = item.starts ? Math.max(now, Date.parse(item.starts)) : now;
-  const ends = item.ends ? Date.parse(item.ends) : item.days !== undefined && item.days !== null ? starts + Math.round(item.days * DAY) : null;
+  const ends = item.interval ? starts : item.ends ? Date.parse(item.ends) : item.days !== undefined && item.days !== null ? starts + Math.round(item.days * DAY) : null;
   return (item.gives ?? []).flatMap((key) => [
     env.DB.prepare("INSERT INTO entitlements (player, key, item, order_id, starts_at, ends_at, state, used_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'active', NULL) ON CONFLICT(player, key, order_id) DO UPDATE SET starts_at = MIN(starts_at, excluded.starts_at), ends_at = CASE WHEN ends_at IS NULL OR excluded.ends_at IS NULL THEN NULL ELSE MAX(ends_at, excluded.ends_at) END").bind(order.player, key, item.id, order.id, starts, ends),
     env.DB.prepare("INSERT INTO shop_entitlement_lines (player, key, item, order_id, line_id, quantity, starts_at, ends_at, state) SELECT ?1, ?2, ?3, ?4, ?7, ?8, ?5, ?6, 'active' WHERE NOT EXISTS (SELECT 1 FROM entitlements WHERE player = ?1 AND key = ?2 AND order_id = ?4 AND state != 'active') ON CONFLICT DO NOTHING").bind(order.player, key, item.id, order.id, starts, ends, line.id, line.quantity),

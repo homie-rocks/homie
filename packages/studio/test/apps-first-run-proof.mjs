@@ -35,7 +35,13 @@ try {
   run([process.execPath, CLI, 'app', 'new', 'live', '--from', starter, '--name', name], root, join(out, 'app-new.txt'));
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'))); pkg.devDependencies['@homie-rocks/studio'] = tar;
   writeFileSync(join(root, 'package.json'), JSON.stringify(pkg, null, 2)); // only substitutes this release's tarball for the unpublished npm version
-  if (starter === 'giving') run([process.execPath, CLI, 'shop', 'init', '--giving', '--currency', 'cad'], root);
+  if (starter === 'giving') {
+   run([process.execPath, CLI, 'shop', 'init', '--giving', '--currency', 'cad'], root);
+   const needs = [{ id: 'preview', statement: 'Before Stripe is connected, gift options are visible on the phone and payment is disabled.',
+    steps: [{ surface: 'phone', selector: '#monthly', select: 'month' }],
+    assertions: [{ surface: 'phone', selector: '[data-action]:disabled' }, { surface: 'phone', selector: '#choice' }, { surface: 'wall', selector: 'h1' }] }];
+   writeFileSync(join(root, 'apps/live/CODEX.md'), '# Giving preview check\n\n```needs\n' + JSON.stringify(needs) + '\n```\n');
+  }
   if (starter === 'jobs') writeFileSync(join(root, 'shop.json'), JSON.stringify({ till: 'stripe', currency: 'cad', items: ['Safety check', 'Tune-up', 'Full service'].map((name, i) => ({ id: `service-${i}`, kind: 'service', name, price: [2500, 7500, 12500][i] })) }));
   run(['npm', 'install', '--no-fund'], root, join(out, 'install.txt'));
   const built = run(['npm', 'run', 'build', '--', '--types'], root, join(out, 'build.txt'));
@@ -59,17 +65,19 @@ try {
    browser = await puppeteer.launch({ executablePath: findChrome(), headless: true, args: chromeArgs() });
    const page = await browser.newPage(); await page.setViewport({ width: 1100, height: 900 });
    if (starter === 'giving') {
+    await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
     await page.goto(origin + '/live/open?room=monthly-proof', { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => window.__shell?.arrival?.phase === 'done');
     const frame = page.frames().find(f => /\/__game\//.test(f.url()));
-    await frame.select('#monthly', 'month'); await frame.select('#choice', '50');
-    await frame.click('[data-action]');
-    await frame.waitForFunction(() => document.querySelector('#entries').textContent.includes('Monthly'));
+    await frame.select('#monthly', 'month'); await frame.select('#choice', 'gift-2000-monthly');
+    assert.equal(await frame.$eval('[data-action]', e => e.disabled), true);
+    assert.equal(await frame.$eval('#choice', e => e.value), 'gift-2000-monthly');
+    assert.equal(await frame.$eval('#goal', e => e.hidden), true);
     await page.screenshot({ path: join(out, 'monthly-phone.png'), fullPage: true });
    }
    await page.goto(origin + '/shop/', { waitUntil: 'networkidle0' });
    assert.match(await page.$eval('body', e => e.textContent), /PREVIEW/);
-   assert.equal(await page.$$eval('.item', e => e.length), starter === 'jobs' ? 3 : 6);
+   assert.equal(await page.$$eval('.item', e => e.length), starter === 'jobs' ? 3 : 8);
    await page.screenshot({ path: join(out, 'shop.png'), fullPage: true });
    await browser.close(); browser = null;
   }

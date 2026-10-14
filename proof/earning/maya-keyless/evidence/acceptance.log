@@ -1,0 +1,15 @@
+Staff published fresh slots through UI
+Initial links have capacity-one completed-session limits; base64 bindings written verbatim
+Pending does not exclude another guest
+Target has a real open Checkout before pause
+Token API payment succeeded and signed webhook confirmed local booking
+Paid source refuses additional booking
+Staff UI move into active paid target refused
+Pause both slots deactivates links and expires target and competing checkouts
+Paused staff UI move succeeds; stale version refused
+Fresh signed-state confirmed counts read after move
+Reviewed resync reopens source and keeps target full
+Moved-full target refuses purchase
+Freed source accepts a fresh actual checkout; proof checkout expired without payment
+Public staff write denied
+Generic check green on retained real sandbox-paid fixtures

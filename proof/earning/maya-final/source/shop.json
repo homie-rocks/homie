@@ -1,0 +1,13 @@
+{
+  "currency": "cad",
+  "checkoutMinutes": 31,
+  "items": [
+    {
+      "id": "full-tune",
+      "name": "Full ski tune (demo price)",
+      "price": 6500,
+      "game": "tune",
+      "gives": []
+    }
+  ]
+}

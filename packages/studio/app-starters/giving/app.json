@@ -1,29 +1,20 @@
 {
   "id": "giving",
   "name": "Together we can",
-  "blurb": "Support our goal with a one-time or monthly gift. Intentions below are not payments.",
+  "blurb": "Support our work with a one-time or monthly gift, paid securely through Stripe.",
   "entry": "src/view.ts",
   "roles": {
     "customer": {
       "signIn": false,
-      "can": [
-        "read:entries",
-        "create:entries"
-      ]
+      "can": []
     },
     "wall": {
       "signIn": false,
-      "can": [
-        "read:entries"
-      ]
+      "can": []
     },
     "staff": {
       "signIn": true,
-      "can": [
-        "read:entries",
-        "update:entries",
-        "delete:entries"
-      ]
+      "can": []
     }
   },
   "surfaces": {
@@ -37,14 +28,14 @@
     "join": "Scan to join",
     "one": "person",
     "many": "people",
-    "action": "Record my intention",
-    "total": "Giving intentions",
+    "action": "Give on Stripe",
+    "total": "Your gift",
     "choice": "Choose an option",
     "monthly": "Gift frequency",
     "once": "One time",
     "month": "Monthly",
     "give": "Give securely on Stripe",
-    "goal": "Intention goal \u00b7 not payments received",
+    "goal": "Our goal",
     "prompt": "Choose what works for you.",
     "finished": "All three answers are in. Thank you!",
     "complete": "Mark complete",
@@ -53,33 +44,6 @@
     "thanks": "Thank you \u2014 the wall is up to date.",
     "live": "Together \u00b7 live",
     "reconnecting": "Reconnecting\u2026"
-  },
-  "records": {
-    "persist": true,
-    "collections": {
-      "entries": {
-        "fields": {
-          "choice": {
-            "type": "string",
-            "required": true,
-            "maxLength": 100
-          },
-          "status": {
-            "type": "string",
-            "required": true,
-            "maxLength": 60
-          },
-          "amount": {
-            "type": "number",
-            "required": true
-          },
-          "monthly": {
-            "type": "boolean",
-            "required": true
-          }
-        }
-      }
-    }
   },
   "parts": [],
   "netplay": {
@@ -100,7 +64,8 @@
   "watch": "overview",
   "screen": {
     "join": "bottom-right",
-    "share": "top-right"
+    "share": "top-right",
+    "shopPreview": true
   },
   "needs": {
     "three": "0.185.1",
@@ -108,12 +73,9 @@
     "@homie-rocks/geom": "0.1.1",
     "@types/three": "0.185.1"
   },
-  "check": {
-    "action": "[data-action]",
-    "observe": "[data-count]"
-  },
+  "check": {},
   "landing": {
-    "pitch": "Support our goal with a one-time or monthly gift. Intentions below are not payments."
+    "pitch": "Support our work with a one-time or monthly gift, paid securely through Stripe."
   },
   "room": {
     "host": "server"
@@ -126,6 +88,7 @@
     "kind": "giving",
     "choices": [
       "10",
+      "20",
       "25",
       "50"
     ],
@@ -158,5 +121,9 @@
         ]
       }
     ]
+  },
+  "records": {
+    "persist": false,
+    "collections": {}
   }
 }

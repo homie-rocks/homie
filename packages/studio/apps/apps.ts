@@ -1,6 +1,6 @@
 /** Lasting records through the same sandbox bridge used by saves and the shop. */
 import { randomId } from '../links/links.mjs';
-export interface AppRecord<T> { id: string; data: T; version: number; updatedAt: number }
+export interface AppRecord<T> { id: string; data: T; version: number; updatedAt: number; booking?: {full: boolean; available: number; synced: boolean} }
 export function createAppRecords<T extends Record<string, unknown>>({ collection }: { collection: string }) {
   if (!/^[a-z][a-z0-9-]{0,39}$/.test(collection)) throw new Error('invalid collection');
   const pending = new Map<string, { resolve: (v: any) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();

@@ -19,7 +19,7 @@ for (const migrated of [true, false]) test(`unrelated refund event, old key, par
     if (req.url.startsWith('/v1/payment_intents/')) return res.end(JSON.stringify({ id: 'pi_other', metadata: {} }));
     res.statusCode = 403; res.end(JSON.stringify({ error: { type: 'invalid_request_error', message: 'The provided key does not have the required permissions for this endpoint' } })); });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
-  const env = { DB, STRIPE_KEY: KEY, STRIPE_WEBHOOK_SECRET: SECRET, STRIPE_API_BASE: `http://127.0.0.1:${server.address().port}` };
+  const env = { DB, STRIPE_CHECKOUT_MODE: 'sessions', STRIPE_KEY: KEY, STRIPE_WEBHOOK_SECRET: SECRET, STRIPE_API_BASE: `http://127.0.0.1:${server.address().port}` };
   const cat = { studio: { name: 'S' }, games: [], shop: { till: 'stripe', currency: 'usd', items: [{ id: 'hat', kind: 'cosmetic', name: 'Hat', price: 500, gives: ['hat'] }] } };
   const body = JSON.stringify({ id: 'evt_1', type: 'charge.refunded', livemode: false, data: { object: { id: 'ch_other', payment_intent: 'pi_other', refunded: true, amount: 900, amount_refunded: 900 } } });
   const t = Math.floor(Date.now() / 1000);

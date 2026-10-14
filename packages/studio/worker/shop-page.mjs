@@ -207,6 +207,14 @@ export const SHOP_JS = String.raw`(function () {
         age.appendChild(sel); age.appendChild(ok);
       }
     }
+    (s.menus || []).forEach(function (menu, index) {
+      var button = el('button', {type:'button',class:'buy'}, s.menus.length > 1 ? 'Choose items on Stripe · Menu ' + (index+1) : 'Choose several items on Stripe');
+      button.onclick = function () {
+        button.disabled=true;
+        api('POST','/api/shop/buy',{lines:menu.items.map(function(item){return {item:item,quantity:1};}),game:boot.game||undefined}).then(function(r){if(!r.ok||!r.url)throw new Error(r.message||'Could not open menu');location.href=r.url;}).catch(function(e){button.disabled=false;say(e.message,true);});
+      };
+      list.appendChild(button);
+    });
     s.items.forEach(function (i) {
       var card = el('article', { class: 'item', id: 'item-' + i.id });
       card.appendChild(el('h2', null, i.name));
@@ -236,7 +244,7 @@ export const SHOP_JS = String.raw`(function () {
         var add = el('button', { type: 'button', class: 'plain' }, 'Add to cart');
         add.onclick = function () { cart.push({ item: i.id, name: i.name, quantity: Number(quantity.value), amount: amount ? units(amount.value, s.currencyScale) : undefined }); drawCart(); };
         if (!s.keyless) { act.appendChild(quantity); act.appendChild(add); }
-        else if (i.price !== 0) act.appendChild(el('p', { class: 'note' }, i.price === 'choose' ? 'Choose your amount on Stripe.' : boot.giving ? 'Confirm your gift on Stripe.' : 'Confirm quantity on Stripe. Buy different items separately.'));
+        else if (i.price !== 0) act.appendChild(el('p', { class: 'note' }, i.price === 'choose' ? 'Choose your amount on Stripe.' : boot.giving ? 'Confirm your gift on Stripe.' : 'Confirm quantity on Stripe, or use a menu above for several items.'));
       } else if (i.way === 'owned') {
         act.appendChild(el('span', { class: 'owned' }, 'Yours ✓'));
       } else if (i.way === 'make-an-account') {
@@ -261,6 +269,14 @@ export const SHOP_JS = String.raw`(function () {
       list.appendChild(card);
     });
     if (s.nextCursor) { var next = el('button', { type: 'button' }, 'Next items'); next.onclick = function () { load(s.nextCursor); }; list.appendChild(next); }
+    if(s.portalLogin)list.appendChild(el('a',{href:s.portalLogin,target:'_blank',rel:'noopener',class:'plain'},'Manage monthly giving or membership on Stripe'));
+    if (!s.portalLogin && s.items.some(function(i) { return i.interval; })) api('GET', '/api/shop/subscriptions').then(function(r) {
+      (r.subscriptions || []).forEach(function(sub) {
+        var manage = el('button', { type: 'button', class: 'plain' }, 'Manage subscription on Stripe');
+        manage.onclick = function() { var tab = window.open('', '_blank'); api('POST', '/api/shop/portal', { subscription: sub.id }).then(function(result) { if (!result.ok || !result.url) throw new Error(result.message || 'Portal unavailable'); if (tab) tab.location.href = result.url; else location.href = result.url; }).catch(function(e) { if (tab) tab.close(); say(e.message, true); }); };
+        list.appendChild(manage);
+      });
+    }).catch(function() {});
     if (!s.items.length) list.appendChild(el('p', null, boot.giving ? 'No gift options are available right now.' : 'Nothing for sale here right now.'));
     if (boot.item) { var at = document.getElementById('item-' + boot.item); if (at && at.scrollIntoView) at.scrollIntoView({ block: 'center' }); }
   }
@@ -282,7 +298,7 @@ export const SHOP_JS = String.raw`(function () {
     (function poll() {
       tries += 1;
       api('GET', '/api/shop/order?session=' + encodeURIComponent(boot.thanks)).then(function (r) {
-        if (r.status === 'paid') { returnToPage(false); $('[data-thanks-title]').textContent = boot.giving ? 'Thank you for your gift' : 'It\'s yours'; $('[data-thanks-line]').textContent = boot.giving ? 'Your gift is confirmed. Your receipt comes from Stripe by email.' : 'Paid. It is on your account now, in every game of ' + boot.studio + ' that uses it.'; return; }
+        if (r.status === 'paid') { returnToPage(false); $('[data-thanks-title]').textContent = boot.giving ? 'Thank you for your gift' : 'It\'s yours'; $('[data-thanks-line]').textContent = boot.giving ? 'Your gift is confirmed. Your receipt comes from Stripe by email.' : 'Paid. It is on your account now, in every game of ' + boot.studio + ' that uses it.'; if (r.simulated) { $('[data-thanks-title]').textContent = 'Simulation confirmed'; $('[data-thanks-line]').textContent = 'This was an offline test. No money moved and no Stripe receipt was sent.'; } return; }
         if (tries < 40) setTimeout(poll, 1500);
         else $('[data-thanks-line]').textContent = boot.giving ? 'Stripe has not confirmed your gift yet. Check your email for its receipt.' : 'Stripe has not confirmed it yet. It will be on your account as soon as it does; your receipt comes by email.';
       }).catch(function () { if (tries < 40) setTimeout(poll, 3000); });
@@ -485,13 +501,19 @@ export const SHOP_SHELL_JS = String.raw`(function () {
       if (!cfg || kids) return reply({ ok: true, open: false, kids: kids, screen: screen, owns: [] });
       return refresh().then(function () { reply({ ok: true, open: true, kids: false, screen: screen, owns: owns }); });
     }
+    if (m.op === 'catalog') {
+      if (kids) return reply({ ok: true, open: false, items: [] });
+      return api('GET', '/api/shop?game=' + encodeURIComponent(GAME) + '&server=' + encodeURIComponent(SERVER) + '&cursor=' + encodeURIComponent(typeof m.cursor === 'string' ? m.cursor : '')).then(function (r) {
+        reply({ ok: r.ok, open: r.open, currency: r.currency, currencyScale: r.currencyScale, items: r.items, nextCursor: r.nextCursor });
+      }).catch(function () { reply({ ok: false }); });
+    }
     if (m.op === 'owns') return refresh().then(function () { reply({ ok: true, owns: owns }); });
     if (m.op === 'open') { open(typeof m.item === 'string' ? m.item : null); return reply({ ok: true, shown: true }); }
     if (m.op === 'close') { close(); return reply({ ok: true }); }
     if (m.op === 'checkout') {
       if (!cfg || kids || screen) return reply({ ok: false, error: 'policy' });
       var checkoutTab = window.open('', '_blank');
-      return api('POST', '/api/shop/buy', { lines: m.lines, reference: m.reference, game: GAME, server: SERVER }).then(function (r) {
+      return api('POST', '/api/shop/buy', { lines: m.lines, reference: m.reference, booking: m.booking, game: GAME, server: SERVER }).then(function (r) {
         if (r.ok && r.url) { leaveForCheckout(checkoutTab, r); watch(); } else if (checkoutTab) checkoutTab.close();
         reply(r);
       }).catch(function () { if (checkoutTab) checkoutTab.close(); reply({ ok: false }); });

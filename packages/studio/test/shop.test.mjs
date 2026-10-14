@@ -366,7 +366,7 @@ async function site({ key = true, managed = false, catalog = null, settings = nu
   const base = assetsOf(dir);
   const managedAssets = variant ? assetsOf(mdir) : null;
   const ASSETS = variant ? { fetch: async (req) => (new URL(req.url).pathname === '/games.json' ? managedAssets.fetch(req) : base.fetch(req)) } : base;
-  const env = { ASSETS, DB, STUDIO_NAME: 'Shop Owls', STRIPE_API_BASE: stripe.base, ...(key ? { STRIPE_KEY: TEST_KEY, STRIPE_WEBHOOK_SECRET: HOOK_SECRET } : {}) };
+  const env = { ASSETS, DB, STUDIO_NAME: 'Shop Owls', STRIPE_API_BASE: stripe.base, ...(key ? { STRIPE_CHECKOUT_MODE: 'sessions', STRIPE_KEY: TEST_KEY, STRIPE_WEBHOOK_SECRET: HOOK_SECRET } : {}) };
   ref.env = env;
   env.TABLE = namespace(Table, ref, waits);
   env.LOBBY = namespace(Lobby, ref, waits);
@@ -444,7 +444,7 @@ test('closed until the key and the webhook secret are in; a Preview and a missin
   assert.equal(r.status, 503);
   assert.equal(s.stripe.calls.length, 0, 'nothing reaches Stripe while the shop is closed');
   // The studio chooses its Stripe key type.
-  s.env.STRIPE_KEY = `sk_live_${'x'.repeat(30)}`;
+  s.env.STRIPE_CHECKOUT_MODE = 'sessions'; s.env.STRIPE_KEY = `sk_live_${'x'.repeat(30)}`;
   s.env.STRIPE_WEBHOOK_SECRET = HOOK_SECRET;
   assert.deepEqual((await (await s.fetchSite('/api/shop')).json()).missing, undefined);
   s.stripe.close();
@@ -886,7 +886,7 @@ test('stripe-mock: Stripe\'s own API description accepts both tills\' Checkout S
 test('stripe-mock: the catalog\'s writes, a checkout that names its Product, and the webhook the connect page makes', { skip: MOCK ? false : 'STRIPE_MOCK_URL is not set (CI starts stripe-mock; locally: stripe-mock -http-port 12111)' }, async () => {
   const { stripeCall, createWebhookEndpoint, updateWebhookEndpoint } = await import('../worker/stripe.mjs');
   const { HOOK_EVENTS } = await import('../lib/shop.mjs');
-  const env = { STRIPE_KEY: TEST_KEY, STRIPE_API_BASE: MOCK };
+  const env = { STRIPE_CHECKOUT_MODE: 'sessions', STRIPE_KEY: TEST_KEY, STRIPE_API_BASE: MOCK };
   // The writes `shop catalog --have` lists for an empty account, then a price change, as the owner's AI sends them.
   const dir = studio('catalog-mock');
   writeFileSync(join(dir, 'shop.json'), JSON.stringify({ till: 'stripe-managed', currency: 'usd', items: [SUPPORTER, { id: 'tip', kind: 'tip', name: 'A coffee', price: 'choose', min: 200, max: 1000 }] }));
@@ -1024,7 +1024,7 @@ test('shop connect: the owner pastes the key on this computer; it goes to the Wo
   assert.match(calls, /^secret put STRIPE_WEBHOOK_SECRET$/m);
   assert.match(calls, /^secret put PURCHASE_PAYMENT_CAPABILITIES$/m);
   assert.match(calls, /^secret put PURCHASE_MACHINE_PAYMENTS$/m);
-  assert.deepEqual(readFileSync(join(state, 'stdin-bytes'), 'utf8').trim().split('\n').map(Number).slice(0,2), [TEST_KEY.length + 1, HOOK_SECRET.length + 1], 'both on Wrangler\'s standard input');
+  assert.deepEqual(readFileSync(join(state, 'stdin-bytes'), 'utf8').trim().split('\n').map(Number).slice(0,3), [TEST_KEY.length + 1, 9, HOOK_SECRET.length + 1], 'both on Wrangler\'s standard input');
   assert.doesNotMatch(JSON.stringify(r) + said.join(' ') + calls, /rk_test_A1b2|whsec_test/, 'never printed, returned or put in an argument');
   assert.equal(JSON.parse(readFileSync(join(dir, 'shop.json'), 'utf8')).till, 'stripe-managed', 'the seller the owner picked');
   assert.equal(r.webhook.made, false, 'the owner made the webhook and pasted its secret');
@@ -1068,7 +1068,7 @@ test('shop connect: with the key alone the page makes the webhook; its secret go
     const calls = readFileSync(join(state, 'calls'), 'utf8');
     assert.match(calls, /^secret put STRIPE_KEY$/m);
     assert.match(calls, /^secret put STRIPE_WEBHOOK_SECRET$/m);
-    assert.deepEqual(readFileSync(join(state, 'stdin-bytes'), 'utf8').trim().split('\n').map(Number).slice(0,2), [TEST_KEY.length + 1, made.secret.length + 1], 'Stripe\'s secret went to Wrangler\'s standard input');
+    assert.deepEqual(readFileSync(join(state, 'stdin-bytes'), 'utf8').trim().split('\n').map(Number).slice(0,3), [TEST_KEY.length + 1, 9, made.secret.length + 1], 'Stripe\'s secret went to Wrangler\'s standard input');
     assert.doesNotMatch(JSON.stringify(r) + c.said.join(' ') + calls + words, /Q7Q7|rk_test_A1b2/, 'the webhook\'s secret and the key are never printed or returned');
   } finally {
     if (before === undefined) delete process.env.STRIPE_API_BASE; else process.env.STRIPE_API_BASE = before;
@@ -1097,7 +1097,7 @@ test('shop connect: a key without Webhook Endpoints says how to fix it; the page
     const r = await c.done;
     assert.equal(r.webhook.made, false);
     assert.equal(r.managedPayments.ok, false);
-    assert.deepEqual(readFileSync(join(state, 'stdin-bytes'), 'utf8').trim().split('\n').map(Number).slice(0,2), [TEST_KEY.length + 1, HOOK_SECRET.length + 1]);
+    assert.deepEqual(readFileSync(join(state, 'stdin-bytes'), 'utf8').trim().split('\n').map(Number).slice(0,3), [TEST_KEY.length + 1, 9, HOOK_SECRET.length + 1]);
   } finally {
     if (before === undefined) delete process.env.STRIPE_API_BASE; else process.env.STRIPE_API_BASE = before;
     stripe.close();
@@ -1397,7 +1397,7 @@ test('expired, sessionless and test-mode reservations are resolved without guess
     }
     if (kind === 'unreachable') s.stripe.behave.unreachable = true;
     if (kind === 'lost-expiry-event') truth.status = 'expired';
-    if (kind === 'test-mode') s.env.STRIPE_KEY = TEST_KEY.replace('_test_', '_live_');
+    if (kind === 'test-mode') { s.env.STRIPE_CHECKOUT_MODE = 'sessions'; s.env.STRIPE_KEY = TEST_KEY.replace('_test_', '_live_'); }
     else s.DB.sql.prepare('UPDATE shop_orders SET updated_at = 1, expires_at = ?, session = ? WHERE id = ?').run(Date.now() - DAY, kind === 'sessionless' ? null : order.session, order.id);
     const pending = ['processing', 'unreachable'].includes(kind);
     assert.equal((await s.post('/api/shop/buy', { item: 'supporter' }, s.as(p))).status, pending ? 403 : 200, kind);
@@ -2548,7 +2548,7 @@ test('browser pairing: first connect, existing endpoint, repeat, expiry, renewal
   const first = await shopConnect(h.dir, h.opts);
   assert.equal(first.ok, true, JSON.stringify(first)); assert.equal(first.verifiedPurchase, false);
   assert.equal(h.state.approvals.length, 1); assert.equal(h.state.writes, 1);
-  assert.deepEqual(Object.keys(h.state.saved).sort(), ['STRIPE_SHOP_LINKS', 'STRIPE_WEBHOOK_SECRET']);
+  assert.deepEqual(Object.keys(h.state.saved).sort(), ['STRIPE_CHECKOUT_MODE', 'STRIPE_SHOP_LINKS', 'STRIPE_WEBHOOK_SECRET']);
   assert.deepEqual(h.stripe.behave.updated.map((e) => e.id), ['we_old']);
   assert.doesNotMatch(JSON.stringify([first, h.state.logs]), /rk_test_|whsec_/);
   const second = await shopConnect(h.dir, h.opts);
@@ -2745,7 +2745,7 @@ test('keyless: setup, changed catalog, purchase, tips, reordered refund/dispute,
   resetShopLimits();
   const cart = await s.post('/api/shop/buy', { lines: [{ item: 'supporter' }, { item: 'tip', amount: 500 }] }, s.as(p));
   assert.equal(cart.status, 409);
-  s.env.STRIPE_KEY = TEST_KEY;
+  s.env.STRIPE_CHECKOUT_MODE = 'sessions'; s.env.STRIPE_KEY = TEST_KEY;
   const keyed = await purchase('supporter'); assert.match(keyed.url, /checkout.stripe.com/);
   delete s.env.STRIPE_KEY;
   resetShopLimits();
@@ -3113,7 +3113,7 @@ test('removal migration preserves paid and pending orders, grants and refund fac
       const migrations = join(PKG, '../../template/site/migrations');
       for (const file of readdirSync(migrations).sort()) {
         if (file === '0008_studio_shop.sql') db.exec(old ? readFileSync(join(PKG, 'test/fixtures/shop-before-removal.sql'), 'utf8') : SHOP_MIGRATION + SHOP_RESERVATIONS + SHOP_LINES);
-        else if (!['0010_shop_reservations.sql', '0012_shop_lines.sql', '0022_remove_referrals.sql'].includes(file)) db.exec(readFileSync(join(migrations, file), 'utf8'));
+        else if (file < '0022_remove_referrals.sql' && !['0010_shop_reservations.sql', '0012_shop_lines.sql'].includes(file)) db.exec(readFileSync(join(migrations, file), 'utf8'));
       }
       db.exec("INSERT INTO shop_orders(id,player,item,amount,currency,till,mode,status,session,payment,created_at,paid_at,updated_at,refunded_amount,refunded_net,refund_revision) VALUES ('paid','buyer','hat',500,'usd','stripe','test','paid','cs_paid','pi_paid',1,2,3,100,100,2), ('pending','buyer','cape',900,'usd','stripe','test','processing','cs_pending',NULL,1,NULL,3,0,0,0);");
       db.exec("INSERT INTO entitlements(player,key,item,order_id,starts_at,state) VALUES ('buyer','hat','hat','paid',2,'active'); INSERT INTO shop_order_lines(id,order_id,position,item,quantity,unit_amount,amount,snapshot,status,refunded_amount,refunded_net) VALUES ('line','paid',0,'hat',1,500,500,'{}','paid',100,100);");
@@ -3122,6 +3122,8 @@ test('removal migration preserves paid and pending orders, grants and refund fac
       for (const key of ['referral_cookie_key', 'referral_signing_key', 'referral-send:seller|month', 'referral-page:seller|month|usd|', 'shop-reference:paid']) db.prepare('INSERT INTO meta VALUES (?,?)').run(key, 'kept-value');
       const snapshots = Object.fromEntries(['shop_orders', 'entitlements', 'shop_order_lines', 'shop_entitlement_lines'].map((table) => [table, db.prepare('SELECT * FROM ' + table).all().map(({ via, referral_terms, ...row }) => row)]));
       db.exec(SHOP_REMOVE_REFERRALS);
+      // Apply later schemas in deployed order; future triggers cannot precede this table rebuild.
+      for (const file of readdirSync(migrations).sort().filter(f => f > '0022_remove_referrals.sql')) db.exec(readFileSync(join(migrations, file), 'utf8'));
       for (const [table, rows] of Object.entries(snapshots)) assert.deepEqual(db.prepare('SELECT * FROM ' + table).all().map((row) => ({ ...row })), rows);
       for (const table of ['referral_lines', 'referral_statements', 'referral_editions', 'referral_edition_lines']) assert.equal(db.prepare('SELECT name FROM sqlite_master WHERE name = ?').get(table), undefined);
       assert.deepEqual(db.prepare('SELECT key FROM meta').all().map((r) => r.key), ['shop-reference:paid']);

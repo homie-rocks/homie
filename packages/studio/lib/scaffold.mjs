@@ -1,4 +1,6 @@
 import {TOOL_DATABASE_MIGRATION,TOOL_DATABASE_MIGRATION_FILE} from '../worker/tool-database.mjs';
+import { SUBSCRIPTIONS_MIGRATION, SUBSCRIPTIONS_MIGRATION_FILE } from '../worker/shop-subscriptions.mjs';
+import { BOOKINGS_MIGRATION, BOOKINGS_MIGRATION_FILE } from '../worker/booking-store.mjs';
 import { FUNCTIONS_RUNS_MIGRATION, FUNCTIONS_RUNS_MIGRATION_FILE, FUNCTIONS_REFERENCE_MIGRATION, FUNCTIONS_REFERENCE_MIGRATION_FILE, FUNCTIONS_META_MIGRATION, FUNCTIONS_META_MIGRATION_FILE, FUNCTIONS_MIGRATION, FUNCTIONS_MIGRATION_FILE, FUNCTIONS_CURSOR_MIGRATION, FUNCTIONS_CURSOR_MIGRATION_FILE } from '../worker/functions-schema.mjs';
 import { MCP_MIGRATION, MCP_MIGRATION_FILE } from '../worker/mcp-store.mjs';
 import { APPS_MIGRATION, APPS_MIGRATION_FILE } from '../worker/app-records.mjs';
@@ -822,6 +824,8 @@ export { default, Table, Lobby, Gate, Concentrator } from '@homie-rocks/studio/w
     [`site/migrations/${SHOP_REMOVE_REFERRALS_FILE}`]: SHOP_REMOVE_REFERRALS,
     [`site/migrations/${APPS_MIGRATION_FILE}`]: APPS_MIGRATION,
     [`site/migrations/${TOOL_DATABASE_MIGRATION_FILE}`]: TOOL_DATABASE_MIGRATION,
+    [`site/migrations/${BOOKINGS_MIGRATION_FILE}`]: BOOKINGS_MIGRATION,
+    [`site/migrations/${SUBSCRIPTIONS_MIGRATION_FILE}`]: SUBSCRIPTIONS_MIGRATION,
     [`site/migrations/${MCP_MIGRATION_FILE}`]: MCP_MIGRATION,
     [`site/migrations/${FUNCTIONS_MIGRATION_FILE}`]: FUNCTIONS_MIGRATION,
     [`site/migrations/${FUNCTIONS_CURSOR_MIGRATION_FILE}`]: FUNCTIONS_CURSOR_MIGRATION,
@@ -999,6 +1003,16 @@ function ensurePartsStateMigration(root) {
   return `site/migrations/${PURCHASE_STATE_FILE}`;
 }
 
+function ensureSubscriptions(root) {
+  const file=join(root,'site','migrations',SUBSCRIPTIONS_MIGRATION_FILE);
+  if(existsSync(file))return null;
+  mkdirSync(dirname(file),{recursive:true});writeFileSync(file,SUBSCRIPTIONS_MIGRATION);return `site/migrations/${SUBSCRIPTIONS_MIGRATION_FILE}`;
+}
+function ensureBookings(root) {
+  const file=join(root,'site','migrations',BOOKINGS_MIGRATION_FILE);
+  if(existsSync(file))return null;
+  mkdirSync(dirname(file),{recursive:true});writeFileSync(file,BOOKINGS_MIGRATION);return `site/migrations/${BOOKINGS_MIGRATION_FILE}`;
+}
 function ensureFunctionRuns(root) {
   const file=join(root,'site','migrations',FUNCTIONS_RUNS_MIGRATION_FILE);
   if(existsSync(file))return null;
@@ -1035,7 +1049,7 @@ function ensureToolDatabase(root) {
   mkdirSync(dirname(file),{recursive:true});writeFileSync(file,TOOL_DATABASE_MIGRATION);return `site/migrations/${TOOL_DATABASE_MIGRATION_FILE}`;
 }
 export function ensureMigrations(root) {
-  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root), ensureFunctionReference(root), ensureShopRemoveReferrals(root), ensureFunctionRuns(root), ensureToolDatabase(root)].filter(Boolean);
+  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root), ensureFunctionReference(root), ensureShopRemoveReferrals(root), ensureFunctionRuns(root), ensureToolDatabase(root), ensureBookings(root), ensureSubscriptions(root)].filter(Boolean);
 }
 
 /** What a migration file the template added is for, in a few words (deploy and dev say it). */
