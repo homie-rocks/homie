@@ -121,3 +121,13 @@ test('local forwarding captures split secret output privately and never logs it'
  assert.equal(lines.length,1);assert.equal(lines.join('').includes(secret),false);
  assert.ok(readFileSync(join(root,'.dev.vars'),'utf8').includes(secret));
 });
+
+test('CLI verification preserves the next operation without requiring --json',async t=>{
+ const {spawnSync}=await import('node:child_process');
+ const {fileURLToPath}=await import('node:url');
+ const root=studio(t);
+ const result=spawnSync(process.execPath,[fileURLToPath(new URL('../bin/homie-studio.mjs',import.meta.url)),'shop','verify'],{cwd:root,encoding:'utf8'});
+ assert.equal(result.status,1);
+ const report=JSON.parse(result.stdout);
+ assert.equal(report.verified,false);assert.equal(report.next.method,'GET');assert.equal(report.next.path,'/v1/products');
+});

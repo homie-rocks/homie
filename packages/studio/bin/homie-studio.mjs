@@ -401,7 +401,7 @@ const asJson = flags.has('json');
 const log = asJson && positional[0] !== 'build' ? () => {} : (line) => process.stderr.write(`${line}\n`);
 
 function print(result) {
-  if (asJson) { process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); return; }
+  if (asJson || /^shop (plan|verify)$/.test(result.command ?? '')) { process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); return; }
   // A standalone plan or build says every target, built or not, and what a standalone copy does not have.
   if (/^standalone( |$)/.test(String(result.command ?? ''))) { process.stdout.write(`${standaloneLines(result).join('\n')}\n`); return; }
   // A check that found problems still prints them (its rows say what to fix), never a bare "failed".
