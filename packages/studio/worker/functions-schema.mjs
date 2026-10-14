@@ -86,7 +86,7 @@ END;
 `;
 
 /** Attempt history is independent of the prunable delivery queue. */
-export const FUNCTIONS_RUNS_MIGRATION_FILE = '0022_function_runs.sql';
+export const FUNCTIONS_RUNS_MIGRATION_FILE = '0023_function_runs.sql';
 export const FUNCTIONS_RUNS_MIGRATION = `
 CREATE TABLE function_runs (
  seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,

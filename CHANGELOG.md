@@ -17,25 +17,25 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
-## [0.50.4] - Unreleased (next patch; renumber at release)
+## [0.50.6] - 2026-10-14
 
-**Plugin 0.50.4** · Scheduled functions and owner AI run diagnostics.
+**Plugin 0.50.6** · Scheduled functions run, and your AI can see every run.
+
+Your studio runs scheduled functions even when nobody has the office open. Your owner AI can check what ran, see failures and retries, and tell you when each function is next due.
 
 ### Fixed
 
-- Scheduled functions keep their required cron when a studio has custom triggers.
-  Build/deploy derive a shared UTC trigger, and the Worker dispatches due functions
-  rather than matching the incoming cron string. Custom crons survive upgrades;
-  removing schedules removes only toolkit-owned triggers.
+- Your scheduled functions keep running when you add custom triggers. Functions run when their UTC schedule is due, and overlapping triggers do not run the same scheduled minute twice. Your custom triggers survive upgrades; removing a schedule removes only triggers managed by Homie.
 
 ### Added
 
-- `homie-studio functions runs [<name>] [--errors]` and owner-only
-  `studio_function_runs`: retained attempt history, redacted errors, pagination,
-  next due times and trigger diagnostics. Invalid schedules fail build plainly.
-- Deploy plans describe installed crons. Existing studios build and redeploy after
-  upgrading to install the trigger and D1 history migration. No version bump here;
-  renumber this section at release with `node scripts/renumber-release.mjs`.
+- Ask your owner AI to inspect function runs, or use `homie-studio functions runs [<name>] [--errors]`. Each execution attempt stays in history, including failures followed by successful retries. Errors have credentials redacted, and older runs remain available through pagination.
+- Your AI can use the owner-only `studio_function_runs` tool to see run history, next due times, configured triggers and the last observed scheduled tick. Invalid schedules stop the build with the function name and reason; deploy plans show the triggers being installed.
+
+### Upgrade notes
+
+- Upgrade, build and redeploy your studio to install the required triggers and the `0023_function_runs.sql` history migration. Workers Builds redeploys register functions too. Cloudflare can take up to 15 minutes to apply trigger changes.
+- Schedules use UTC. Scheduled-only failures retry on a later scheduled tick or request; event functions and AI feeds retain their minute-by-minute retry trigger.
 
 ## [0.50.5] - 2026-10-14
 
