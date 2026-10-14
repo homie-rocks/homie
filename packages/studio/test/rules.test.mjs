@@ -117,7 +117,7 @@ test('a declaration that does not fit the contract is named', async () => {
   bad((d) => { d.entities.a.input = { v: f.vec3() }; }, /an input field is a whole number/);
   bad((d) => { d.entities.a.fields = { l: f.list(f.u8(), 0) }; }, /declares its largest size/);
   bad((d) => { d.entities.a.player = { leave: 'bot' }; }, /need a think\(world, self\) handler/);
-  bad((d) => { d.entities.a.body = { shape: 'sphere', radius: 1, maxSpeed: 1 }; }, /body\.shape is 'circle' when space\.dims is 2/);
+  bad((d) => { d.entities.a.body = { shape: 'sphere', radius: 1, maxSpeed: 1 }; }, /body\.shape is 'circle' or 'box' when space\.dims is 2/);
   bad((d) => { d.shapes.events.roundStart = {}; }, /an event the runtime sends itself/);
   bad((d) => { delete d.room.join; }, /room\.join\(ctx, player\) says where/);
   bad((d) => { d.move = { a() {} }; }, /defineMove/);
