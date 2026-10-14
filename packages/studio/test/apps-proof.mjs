@@ -34,6 +34,10 @@ export async function appProof({ wrangler, shots = null, log = () => {} }) {
     symlinkSync(wrangler, join(studio, 'node_modules/.bin/wrangler'));
     symlinkSync(dirname(dirname(wrangler)), join(studio, 'node_modules/wrangler'));
     await newApp(studio, 'welcome', { name: 'Welcome House' });
+    const metaPath = join(studio, 'apps/welcome/app.json');
+    const app = JSON.parse(readFileSync(metaPath));
+    app.words.wallTitle = 'Welcome creekkeepers'; app.words.waiting = 'checked in'; app.blurb = 'Our watershed gathering';
+    writeFileSync(metaPath, JSON.stringify(app));
     // Public helper is bundled into a fixture page, tested on an actual insecure LAN origin.
     const publicDir = join(studio, 'site/public'); mkdirSync(publicDir, { recursive: true });
     const script = await bundle({ stdin: { contents: `import * as links from '${join(ROOT, 'packages/studio/links/links.mjs')}'; window.proofLinks = links;`, resolveDir: ROOT }, bundle: true, write: false, format: 'iife' });
@@ -92,6 +96,9 @@ export async function appProof({ wrangler, shots = null, log = () => {} }) {
     const room = 'welcome-proof';
     const open = async (s, url) => { await s.page.goto(url, { waitUntil: 'domcontentloaded' }); await s.page.waitForFunction(() => window.__shell?.link?.state === 'online', { timeout: 60000 }); s.frame = s.page.frames().find((f) => /\/__game\//.test(f.url())); assert.ok(s.frame); await s.frame.waitForSelector('[data-count]'); };
     await open(wall, `${origin}/welcome/tv?room=${room}`);
+    assert.equal(await wall.frame.$eval('h1', e => e.textContent), 'Welcome creekkeepers');
+    assert.equal(await wall.frame.$eval('#intro', e => e.textContent), 'Our watershed gathering');
+    assert.equal(await wall.frame.$eval('#waiting-word', e => e.textContent), 'checked in');
     assert.match(await wall.page.$eval('[data-join]', (e) => e.textContent), /Scan to join/);
     const qrLink = await wall.page.$eval('[data-join] span', (e) => 'http://' + e.textContent); assert.equal(new URL(qrLink).hostname, ip); assert.equal(new URL(qrLink).searchParams.get('room'), room);
     await open(phone, qrLink); await open(phone2, qrLink); await open(staff, privateLink + `&room=${room}`);

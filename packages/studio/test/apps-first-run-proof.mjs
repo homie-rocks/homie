@@ -22,7 +22,7 @@ try {
  mkdirSync(shots, { recursive: true });
  const pack = JSON.parse(run(['npm', 'pack', '--json', '--pack-destination', scratch], join(ROOT, 'packages/studio')))[0];
  const tar = join(scratch, pack.filename);
- blocker = createServer(socket => { socket.on('error', () => {}); socket.end(); });
+ blocker = createServer(socket => { socket.on('error', () => {}); socket.destroy(); });
  await new Promise((ok, bad) => { blocker.once('error', e => e.code === 'EADDRINUSE' ? ok() : bad(e)); blocker.listen(8787, '127.0.0.1', ok); });
  server = mcpServer(process.execPath, [CLI, 'mcp', '--studios', scratch, '--no-install'], { cwd: ROOT });
  await server.request('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'Grok Bot', version: '1' } });
@@ -38,7 +38,8 @@ try {
   if (starter === 'giving') run([process.execPath, CLI, 'shop', 'init', '--giving', '--currency', 'cad'], root);
   if (starter === 'jobs') writeFileSync(join(root, 'shop.json'), JSON.stringify({ till: 'stripe', currency: 'cad', items: ['Safety check', 'Tune-up', 'Full service'].map((name, i) => ({ id: `service-${i}`, kind: 'service', name, price: [2500, 7500, 12500][i] })) }));
   run(['npm', 'install', '--no-fund'], root, join(out, 'install.txt'));
-  run(['npm', 'run', 'build', '--', '--types'], root, join(out, 'build.txt'));
+  const built = run(['npm', 'run', 'build', '--', '--types'], root, join(out, 'build.txt'));
+  assert.match(built, /apps\/live\/hero/); assert.doesNotMatch(built, /games\/live\/hero/);
   let logs = ''; dev = spawn('npm', ['run', 'dev', '--', '--no-local-ai'], { cwd: root, detached: true, stdio: ['ignore','pipe','pipe'], env: { ...process.env, WRANGLER_SEND_METRICS: 'false' } });
   for (const stream of [dev.stdout, dev.stderr]) stream.on('data', c => { logs += c; });
   let port;
@@ -81,6 +82,6 @@ try {
 } finally {
  await browser?.close(); await server?.close();
  if (dev && dev.exitCode === null) { const done = once(dev, 'exit'); process.kill(-dev.pid, 'SIGTERM'); await done; }
- if (blocker?.listening) await new Promise(r => blocker.close(r));
+ if (blocker?.listening) blocker.close();
  rmSync(scratch, { recursive: true, force: true });
 }

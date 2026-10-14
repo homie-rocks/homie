@@ -487,7 +487,7 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
     digest.update(readFileSync(join(out, 'index.html')));
     rules.build = digest.digest('hex').slice(0, 32);
     writeFileSync(join(out, 'rules.json'), `${JSON.stringify({ v: 1, host: rules.settings.host, offline: rules.settings.offline, build: rules.build, files: [bundled, ...chunks] })}\n`);
-    if (g.netplay?.version !== undefined) log(`  ${g.id}: rules games use their build hash as the revision; netplay.version is not read`);
+    if (g.netplay?.version !== undefined) log(`  ${g.id}: rules ${g.kind === 'app' ? 'apps' : 'games'} use their build hash as the revision; netplay.version is not read`);
   }
   return { mode, warnings, metafile, bundle: bundled, chunks, rules };
 }
@@ -572,7 +572,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
       ...(bundle ? { bundle } : {}), ...(chunks.length ? { chunks: chunks.length, chunkBytes: later } : {}),
     });
     log(`built ${g.id} (${mode}, ${Math.round(bytes / 1024)} KB${chunks.length ? ` + ${chunks.length} additional ${chunks.length === 1 ? 'chunk' : 'chunks'}, ${Math.max(1, Math.round(later / 1024))} KB` : ''})`);
-    if (rules && (rules.settings.offline || rules.settings.host === 'browser')) log(`${g.id}: this game's rules and tunables are sent to players' devices so it can be played offline`);
+    if (rules && (rules.settings.offline || rules.settings.host === 'browser')) log(`${g.id}: this ${g.kind === 'app' ? 'app' : 'game'}'s rules and tunables are sent to players' devices so it can be played offline`);
     if (rules) log(`  ${g.id}: its rules run ${rules.settings.host === 'browser' ? "in a player's browser" : 'on the server'} (checked and guarded, ${Math.max(1, Math.round(rules.code.length / 1024))} KB, build ${rules.build}; ${rules.check.ticks} ticks played, the room rebuilt from its save ${rules.check.restores} times: the busiest tick used ${rules.tickUnits} of ${rules.settings.budget.tick} budget units, ${rules.units} of them in one handler; the largest save was ${rules.check.largestSaveBytes} bytes)`);
     if (rules && rules.settings.host === 'server' && (rules.snapshotBytes > rules.snapshotCap || rules.checkpointBytes > rules.checkpointCap)) log(`  ${g.id}: this state fits server and offline play but exceeds browser hosting limits.`);
     if (rules) log(`  ${g.id}: smoke-run largest snapshot ${rules.snapshotBytes} B / ${rules.snapshotCap} B browser cap; checkpoint ${rules.checkpointBytes} B / ${rules.checkpointCap} B browser cap (measured, not an upper bound)`);
@@ -761,6 +761,6 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
     ...(retired.length ? { retired: `Remix was retired, and games now build on each other through parts (pieces a studio shares; ask for a part, or see parts/PARTS.md). These settings no longer do anything and can be deleted: ${retired.join('; ')}. No game's source is served whole; a game made from another keeps its credit.` } : {}),
     songs: catalogue.songs.map((e) => e.slug), videos: catalogue.videos.map((e) => e.slug), mediaSkipped: media.skipped, mediaNotes: media.notes ?? [],
     posts: posts.map((p) => p.slug), postsSkipped, codexes, parts: partsBuilt, pages: site.pages, partials: Object.keys(site.partials), public: site.public.length, siteSkipped: site.skipped,
-    landings: rows.map((g) => ({ id: g.id, hero: g.landing.hero.wide || g.landing.hero.tall ? 'footage' : g.landing.hero.wideImage ? 'art' : 'colours', credits: Boolean(g.landing.credits.original || g.landing.credits.people.length) })),
+    landings: rows.map((g) => ({ id: g.id, ...(g.kind === 'app' ? { kind: 'app' } : {}), hero: g.landing.hero.wide || g.landing.hero.tall ? 'footage' : g.landing.hero.wideImage ? 'art' : 'colours', credits: Boolean(g.landing.credits.original || g.landing.credits.people.length) })),
   };
 }

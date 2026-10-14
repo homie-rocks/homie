@@ -347,7 +347,7 @@ import { R2_COST, lineOf, mediaPlan, r2OverOf, recordUpload, resolveMedia, sizeO
 import { newStudio } from '../lib/scaffold.mjs';
 import { lineDiff, upgradeApply, upgradePlan } from '../lib/upgrade.mjs';
 import { whatsNewLines } from '../lib/changelog.mjs';
-import { listGames, newGame, newApp, readStudio, requireStudio, siteUrl, starters, workerDir } from '../lib/studio.mjs';
+import { listExperiences, listGames, newGame, newApp, readStudio, requireStudio, siteUrl, starters, workerDir } from '../lib/studio.mjs';
 import { STUDIO_VERSION } from '../lib/version.mjs';
 import { statsKey, statsLink, statsRevoke, statsShare, statsShow } from '../lib/stats.mjs';
 import { playersOwner, playersShow } from '../lib/players.mjs';
@@ -436,7 +436,7 @@ function print(result) {
         lines.push(`Landing /${l.id}/: hero from ${l.hero === 'footage' ? 'its footage' : l.hero === 'art' ? 'its art (moving)' : 'the studio\'s colours (it has no picture or footage yet)'}${l.credits ? ', credits' : ''}`);
         // Which files, and what shape: the names the landing looks for (lib/site.mjs HERO_NAMES). Any size is shown,
         // cropped to fill; these are the sizes that fill a computer and an upright phone without waste.
-        if (l.hero === 'colours') lines.push(`  give it one: games/${l.id}/hero/wide.jpg (16:9, 1280×720 or larger) and games/${l.id}/hero/tall.jpg (9:16, 720×1280, for an upright phone); footage beside them as hero/wide.mp4 and hero/tall.mp4 (the same shapes, a silent loop of 8 to 15 s, under 3 MB each); or "cover" in its game.json`);
+        if (l.hero === 'colours') lines.push(`  give it one: ${l.kind === 'app' ? 'apps' : 'games'}/${l.id}/hero/wide.jpg (16:9, 1280×720 or larger) and ${l.kind === 'app' ? 'apps' : 'games'}/${l.id}/hero/tall.jpg (9:16, 720×1280, for an upright phone); footage beside them as hero/wide.mp4 and hero/tall.mp4 (the same shapes, a silent loop of 8 to 15 s, under 3 MB each); or "cover" in its ${l.kind === 'app' ? 'app' : 'game'}.json`);
       }
       if (result.posts?.length) lines.push(`Posts: ${result.posts.map((x) => `/posts/${x}/`).join(', ')} (feeds: /posts/feed.xml, /posts/feed.json)`);
       if (result.pages?.length || result.partials?.length) lines.push(`The studio's own: ${[...(result.pages ?? []).map((x) => `page ${x}`), ...(result.partials ?? []).map((x) => `partial ${x}`)].join(', ')}`);
@@ -906,7 +906,7 @@ async function main() {
   const root = requireStudio();
   // Keep guidance visible to AI callers using --json as well as human output.
   if (['build', 'check', 'upgrade'].includes(cmd)) {
-    for (const line of (await import('../lib/authoring-guides.mjs')).authoringWords()) process.stderr.write(`${line}\n`);
+    for (const line of (await import('../lib/authoring-guides.mjs')).authoringWords({ kind: ['app', 'business', 'cause'].includes(readStudio(root).kind) || listExperiences(root).some(g => g.kind === 'app') ? 'app' : 'game' })) process.stderr.write(`${line}\n`);
   }
   if (cmd === 'function') return (await import('../lib/functions-cli.mjs')).functionCommand(root, sub, positional, flags, { log });
   if (cmd === 'tool') return (await import('../lib/tools-cli.mjs')).toolCommand(root, sub, positional, flags, { log });

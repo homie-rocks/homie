@@ -24,3 +24,10 @@ test('check --json still tells an AI caller about installed version-matched guid
   assert.match(result.stderr,/Author against toolkit.*node_modules\/@homie-rocks\/studio\/guides\/game/);
   assert.equal(JSON.parse(result.stdout).command,'check');
 });
+
+test('D: app authoring guidance points at the shipped app skill', () => {
+ const result = authoringGuidance({ kind: 'app' });
+ assert.match(result.guides, /guides\/app\/$/);
+ assert.equal(result.files, 'SKILL.md');
+ assert.doesNotMatch(result.warning.join('\n'), /guides\/game/);
+});
