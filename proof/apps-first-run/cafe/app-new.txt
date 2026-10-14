@@ -1,0 +1,44 @@
+{
+  "ok": true,
+  "command": "app new",
+  "id": "live",
+  "from": "quiz",
+  "dir": "/private/var/folders/63/1sbmhrlj05g9gvcghc49h8q80000gn/T/homie-first-run-proof-yPoxA5/cafe/apps/live",
+  "files": [
+    "README.md",
+    "app.json",
+    "index.html",
+    "map",
+    "src",
+    "map/main.json",
+    "src/move.ts",
+    "src/rules.ts",
+    "src/view.ts"
+  ],
+  "needs": {
+    "three": "0.185.1",
+    "@homie-rocks/camera": "0.2.1",
+    "@homie-rocks/geom": "0.1.1",
+    "@types/three": "0.185.1"
+  },
+  "needsAdded": [
+    {
+      "name": "three",
+      "version": "0.185.1"
+    },
+    {
+      "name": "@homie-rocks/camera",
+      "version": "0.2.1"
+    },
+    {
+      "name": "@homie-rocks/geom",
+      "version": "0.1.1"
+    },
+    {
+      "name": "@types/three",
+      "version": "0.185.1"
+    }
+  ],
+  "needsHeld": [],
+  "installNeeded": true
+}

@@ -40,7 +40,7 @@ import { rulesIndex } from './studio.mjs';
 
 export const COMPAT_DATE = '2026-06-01';
 /** 4.135.0 or later: Worker Previews (`wrangler preview`, a Durable Object namespace per Preview). */
-export const WRANGLER_VERSION = '4.145.0';
+export const WRANGLER_VERSION = '4.150.0';
 /**
  * The TypeScript a new studio asks for, so `build --types` (and an editor) has a compiler: the studio's own
  * devDependency, never one of the toolkit's (a studio that never checks types pays nothing for it at runtime).
@@ -112,11 +112,11 @@ ${JSON.stringify(config, null, 2)}
 `;
 }
 
-export function agentsMd({ name, slug }) {
+export function agentsMd({ name, slug, kind = 'game' }) {
   return `# ${name}
 
 This folder is a studio: **${name}** (\`${slug}\`). It is one repository.
-Its games, music, videos and posts live here; its website and public game rooms
+${kind === 'game' ? 'Its games, music, videos and posts live here;' : 'Its apps and public pages live here. Read node_modules/@homie-rocks/studio/guides/app/SKILL.md first;'} its website and public game rooms
 run on the studio's **own Cloudflare account** (one Worker, one D1 database and
 the Table/Lobby Durable Objects, on the studio's Cloudflare account), built
 from \`@homie-rocks/studio\`, pinned in \`package.json\`. The homie.rocks
@@ -679,7 +679,7 @@ anything here wins. The whole list is in \`node_modules/@homie-rocks/studio/site
 | \`theme.json\` | The look: \`bg\`, \`fg\`, \`accent\`, \`glow\` colours, \`display\` and \`text\` fonts (\`fonts\` loads a file from \`public/\`), \`radius\`, \`mark\` (a logo). Or \`palette\`: neon, dock, gold, acid, ember, orchid, tide, candy. |
 | \`theme.css\` | Extra CSS on every page (restyle anything, the "Made with Homie" footer included). |
 | \`partials/<name>.html\` | A piece of every page: \`head\`, \`header\`, \`footer\`, \`home\` (a band on Home), \`game\` (a band on every game's landing), \`game-<id>\` (on one game's), \`post\`. |
-| \`pages/<path>/index.html\` | A whole page at \`/<path>/\`, instead of the generated one (\`pages/<id>/index.html\` replaces a game's landing) or beside them (\`pages/about/index.html\`). It may borrow \`<!-- homie:style -->\`, \`<!-- homie:header -->\`, \`<!-- homie:footer -->\`, \`<!-- homie:script -->\`, and \`<!-- homie:schema -->\` in its \`<head>\` (the page's structured data for search engines). A Home of your own (\`pages/index.html\`) takes the generated hero with \`<!-- homie:home-hero -->\` (the featured game) or \`<!-- homie:home-hero <id> -->\` (that game); a game's own hero files are served at \`/games/<id>/_landing/<file>\` (\`wide.jpg\`, \`tall.jpg\`, \`wide.mp4\`, \`tall.mp4\`) if a page of yours needs one by address (\`/api/games\` says each exactly, in \`landing.hero\`). |
+| \`pages/<path>/index.html\` | A whole page at \`/<path>/\`, instead of the generated one (\`pages/<id>/index.html\` replaces an app or game landing; the app still opens at \`/<id>/open\` and its wall at \`/<id>/tv\`) or beside them (\`pages/about/index.html\`). It may borrow \`<!-- homie:style -->\`, \`<!-- homie:header -->\`, \`<!-- homie:footer -->\`, \`<!-- homie:script -->\`, and \`<!-- homie:schema -->\` in its \`<head>\` (the page's structured data for search engines). A Home of your own (\`pages/index.html\`) takes the generated hero with \`<!-- homie:home-hero -->\` (the featured game) or \`<!-- homie:home-hero <id> -->\` (that game); a game's own hero files are served at \`/games/<id>/_landing/<file>\` (\`wide.jpg\`, \`tall.jpg\`, \`wide.mp4\`, \`tall.mp4\`) if a page of yours needs one by address (\`/api/games\` says each exactly, in \`landing.hero\`). |
 | \`public/\` | Files served as they are, at the same path (\`public/fonts/x.woff2\` is \`/fonts/x.woff2\`). A \`robots.txt\`, \`sitemap.xml\` or \`llms.txt\` here replaces the one the site makes. |
 
 \`src/worker.mjs\` and \`migrations/\` are the Worker (its config is \`wrangler.jsonc\`, at the studio's root); \`dist/\` is the build (not committed).
@@ -726,10 +726,11 @@ art/**/raw/
 `;
 
 /** Every file a new studio gets, relative to its folder. */
-export function studioFiles({ name, slug, homie, template = false }) {
+export function studioFiles({ name, slug, homie, template = false, kind = 'game' }) {
   const worker = slug;
   const studio = {
     name, slug,
+    ...(kind !== 'game' ? { kind } : {}),
     // A copy of the public template (Deploy to Cloudflare) until `homie-studio setup attach` names it for real:
     // meanwhile its site shows the name the person typed in Cloudflare's form (STUDIO_NAME).
     ...(template ? { template: true } : {}),
@@ -759,7 +760,7 @@ export function studioFiles({ name, slug, homie, template = false }) {
     },
   };
   const files = {
-    'AGENTS.md': agentsMd({ name, slug }),
+    'AGENTS.md': agentsMd({ name, slug, kind }),
     'CLAUDE.md': claudeMd(),
     'README.md': template ? templateReadme() : readme({ name }),
     'HANDOFF.md': HANDOFF_MD,
@@ -775,6 +776,7 @@ export function studioFiles({ name, slug, homie, template = false }) {
     'posts/README.md': POSTS_README,
     'site/theme.json': themeFile(slug),
     'site/README.md': SITE_README,
+    'site/pages/.gitkeep': '',
     'site/src/worker.mjs': `// This studio's site: pages, public rooms (Table + Lobby Durable Objects), D1, and R2 once storage is added.
 // The code is @homie-rocks/studio's, pinned in package.json, so an update never changes a published game by surprise.
 import { hostRules, useTools } from '@homie-rocks/studio/worker';
@@ -1019,7 +1021,7 @@ function insideGit(dir) {
   try { return execFileSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() === 'true'; } catch { return false; }
 }
 
-export function newStudio(folder, { name, homie, slug: askedSlug, install = true, template = false } = {}) {
+export function newStudio(folder, { name, homie, slug: askedSlug, install = true, template = false, kind = 'game' } = {}) {
   if (typeof folder !== 'string' || !folder.trim()) throw new Error('name the folder for the new studio, e.g. `homie-studio new ~/studios/night-owls --name "Night Owls"`. Nothing was written.');
   if (!name || !String(name).trim()) throw new Error('give the studio a name: --name "Night Owls". Nothing was written.');
   const dir = resolve(folder.replace(/^~(?=\/|$)/, homedir()));
@@ -1034,7 +1036,7 @@ export function newStudio(folder, { name, homie, slug: askedSlug, install = true
     if (entries.length) throw new Error(`${real} is not empty (${entries.slice(0, 5).join(', ')}${entries.length > 5 ? ', …' : ''}). A new studio goes in a new or empty folder. Nothing was written.`);
   }
   const slug = slugify(askedSlug || name);
-  const files = studioFiles({ name: String(name).trim(), slug, homie: homie || 'https://homie.rocks', template });
+  const files = studioFiles({ name: String(name).trim(), slug, homie: homie || 'https://homie.rocks', template, kind });
   mkdirSync(dir, { recursive: true });
   const wrote = [];
   for (const [rel, content] of Object.entries(files)) {
@@ -1058,7 +1060,14 @@ export function newStudio(folder, { name, homie, slug: askedSlug, install = true
     } catch (error) { installed = `npm install failed (${String(error.stderr ?? error.message).trim().split('\n').slice(-2).join(' ')}): run it in the studio folder`; }
   }
   const q = JSON.stringify(realpathSync(dir));
-  return { ok: true, command: 'new', dir: realpathSync(dir), name, slug, wrote, git, installed, studio: STUDIO_VERSION, next: [
+  return { ok: true, command: 'new', dir: realpathSync(dir), name, slug, wrote, git, installed, studio: STUDIO_VERSION, next: kind !== 'game' ? [
+    `cd ${q}`,
+    'Read the app guide. Proceed from the request through build and checks without waiting unless the person asks for an interview.',
+    'npx --no-install homie-studio app new <id> --from welcome --name "<Name>"',
+    'npm install && npm run build; npm run dev (use the printed address)',
+    'npx --no-install homie-studio check <id> --url <printed address> --shots .checks',
+    'The phone opens /<id>/open; the wall /<id>/tv. Publish when requested.',
+  ] : [
     `cd ${q}${install ? '' : ' && npm install'}`,
     'read the game skill and RULES.md; choose sensible defaults and make the requested game as server rules plus view',
     'optional live example, without copying a game here: npx --no-install homie-studio demo',

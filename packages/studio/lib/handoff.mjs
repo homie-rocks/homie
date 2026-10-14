@@ -43,7 +43,7 @@ export function stepsFor(h, { games = [], client = 'chat' } = {}) {
   const q = (s) => JSON.stringify(String(s));
   const work = {
     setup: [
-      `This studio was just set up from ${client === 'grok' ? 'Grok' : client === 'codex' ? 'Codex' : client === 'claude' ? 'the Claude app' : 'this chat'}. Go through the new-studio checklist with the person, one step at a time and never ahead (the plugin's studio-setup skill): it has no game yet, and its home page says "First game coming soon".`,
+      `This studio was just set up from ${client === 'grok' ? 'Grok' : client === 'codex' ? 'Codex' : client === 'claude' ? 'the Claude app' : 'this chat'}. Proceed through setup, building and checks from the request without waiting unless the person asks (the plugin's studio-setup skill): for a business or cause, start with the app skill and app new; choose the starter that fits the requested work.`,
       'See a working game: `npx --no-install homie-studio demo` names a live one on Homie Arcade; copy a starter in only if they ask.',
       'One small change from one sentence of theirs (the studio\'s colours in site/theme.json, a tagline in studio.json, or a first post in posts/), then plan their game into its Game Codex (`npx --no-install homie-studio codex new <id> --name "<Name>"`) before any game is made.',
     ],

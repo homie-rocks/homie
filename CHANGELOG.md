@@ -17,6 +17,31 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.49.0] - 2026-10-13
+
+**Plugin 0.49.0** · Apps from the first request.
+
+Businesses and causes can start, check and preview their first live app without hand fixes.
+
+### Added
+
+- Business and cause scaffolds, gathering, quiz, service-request and giving app starters; custom pages and Shop in the header.
+- Giving preset with the organisation’s currency, suggested one-time and monthly Stripe Payment Links, and organisation-supplied receipt wording.
+- Local shop preview before Stripe is connected, and a visible fallback when WebGL is unavailable.
+
+### Fixed
+
+- Fresh app installs include Three.js types; strict builds need no hand-installed dependencies.
+- App text checks wait for visual readiness, prove wall/two-phone actions and reconnect, and leave receipts visible to deployment hooks.
+- Deployment command parsing excludes quoted documentation and heredocs; Codex exec user events retain task authorization.
+- Starter words and blurb reach the wall. Busy local dev ports select and print a free port.
+- App setup, paths, guides and parts messages use app wording. Grok setup explains trust through the AI.
+- Updated Agents/MCP dependencies and Wrangler to resolve the reported audit advisories.
+
+### Upgrade notes
+
+Existing studios and games keep their authored files and policies. New app starters are opt-in. Calendar capacity and booking availability are planned next; service starters collect requests, not confirmed reservations.
+
 ## [0.48.4] - 2026-10-13
 
 **Plugin 0.48.4** · Deploys go right.

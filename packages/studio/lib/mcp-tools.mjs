@@ -814,8 +814,8 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'studio_scaffold', title: 'Make a studio',
-      description: 'Step 1: make a new game studio ON THIS COMPUTER, in the studios folder: one folder with AGENTS.md, games/, music/, videos/, posts/ and a site that later goes online on the studio\'s own Cloudflare (their account). It has NO game: its home page says "First game coming soon". Then installs its pinned toolkit (npm install, in the background). Never put a game in it the person did not ask for.',
-      inputSchema: { type: 'object', properties: { name: str('The studio\'s name, e.g. "Night Owls"'), folder: str('Optional: the folder name inside the studios folder (default: from the name)') } },
+      description: 'Make a studio for a business, cause, app or game ON THIS COMPUTER, in the studios folder: one folder with AGENTS.md, games/, music/, videos/, posts/ and a site that later goes online on the studio\'s own Cloudflare (their account). Choose kind business or cause for an app-first setup. Proceed through setup, build and checks without waiting unless asked. Then installs its pinned toolkit (npm install, in the background). Never put a game in it the person did not ask for.',
+      inputSchema: { type: 'object', properties: { name: str('The studio\'s name, e.g. "Night Owls"'), kind: { type: 'string', enum: ['game', 'business', 'cause', 'app'], description: 'Use business or cause for customer apps' }, folder: str('Optional: the folder name inside the studios folder (default: from the name)') } },
       annotations: { title: 'Make a studio', ...RW }, _meta: ui(UI.setup),
       run: async (a) => {
         const name = String(a.name ?? '').trim().slice(0, 60) || 'My Studio';
@@ -833,7 +833,7 @@ export function toolDefs(ctx, avail = {}) {
         let at = dir;
         if (existsSync(at) && readdirSync(at).some((f) => !['.DS_Store', '.git'].includes(f)) && !existsSync(join(at, 'studio.json'))) at = `${dir}-studio`;
         let made;
-        try { made = newStudio(at, { name, install: false, ...(ctx.directory ? { homie: ctx.directory } : {}) }); } catch (error) { return fail(error.message); }
+        try { made = newStudio(at, { name, kind: a.kind ?? 'game', install: false, ...(ctx.directory ? { homie: ctx.directory } : {}) }); } catch (error) { return fail(error.message); }
         ctx.current = made.dir;
         ctx.note(made.dir).earlier = earlier.map((e) => e.path);
         let install = null;
@@ -844,7 +844,7 @@ export function toolDefs(ctx, avail = {}) {
         }
         const r = await setupCard(ctx, made.dir, { install, made: { dir: made.dir, wrote: made.wrote } });
         const fold = earlier.length ? `\n\nAn earlier folder for this name is on this computer, and it is not a studio: ${earlier.map((e) => `${e.path} (${e.files.join(', ') || 'empty'})`).join('; ')}. ASK the person: fold its premise into ${name}? With their yes, studio_fold { "from": "<that folder>" } copies its notes into the studio (notes/earlier/) and shows them to you, so the plan can use them. Then, only with another yes, studio_fold { "from": "<that folder>", "remove": true } moves the old folder to the Trash.` : '';
-        r.content[0].text = `Made ${name} at ${made.dir} (no game yet: its home page says "First game coming soon").\nWrote: ${made.wrote.join(', ')}\n${!install ? '' : install.endedAt ? (install.code === 0 ? 'Its toolkit is installed.' : `npm install failed: ${whyOf(install)}`) : `Its toolkit is installing (job ${install.id}).`}${fold}\n\n${r.content[0].text}`;
+        r.content[0].text = `Made ${name} at ${made.dir} (ready for the requested app or game).\nWrote: ${made.wrote.join(', ')}\n${!install ? '' : install.endedAt ? (install.code === 0 ? 'Its toolkit is installed.' : `npm install failed: ${whyOf(install)}`) : `Its toolkit is installing (job ${install.id}).`}${fold}\n\n${r.content[0].text}`;
         if (r.structuredContent) r.structuredContent.earlier = earlier;
         return r;
       },
@@ -908,12 +908,12 @@ export function toolDefs(ctx, avail = {}) {
     {
       name: 'app_make', title: 'Make an app',
       description: 'Make one morphing screen with customer, staff and wall roles, lasting records and a shared 3D scene. Uses the same engines, netplay, parts and standalone builds as games. No rounds required.',
-      inputSchema: { type: 'object', properties: { id: str('App id: lowercase, digits, hyphens'), name: str('Display name'), ...STUDIO_ARG }, required: ['id', 'name'] },
+      inputSchema: { type: 'object', properties: { id: str('App id: lowercase, digits, hyphens'), name: str('Display name'), from: { type: 'string', enum: ['welcome', 'gathering', 'giving', 'quiz', 'jobs'] }, ...STUDIO_ARG }, required: ['id', 'name'] },
       annotations: { title: 'Make an app', ...RW },
       run: async (a) => {
         if (!GAME_ID.test(String(a.id ?? ''))) return fail('invalid app id');
         const root = ctx.root(a.studio);
-        const r = await cli(ctx, root, `app new ${a.id}`, ['app', 'new', a.id, '--name', String(a.name ?? a.id).slice(0, 60)]);
+        const r = await cli(ctx, root, `app new ${a.id}`, ['app', 'new', a.id, '--from', a.from ?? 'welcome', '--name', String(a.name ?? a.id).slice(0, 60)]);
         if (!r.ended) return stillRunning(r.job, 'Making the app');
         if (r.job.code !== 0) return fail(`Not made: ${whyOf(r.job)}`);
         let install = '';

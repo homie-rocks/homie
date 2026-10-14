@@ -390,3 +390,18 @@ test('recorded codex exec transcript authorizes the original task without a prom
     assert.ok(await pre(bash(s, 'npm run deploy', { transcript_path: transcript }), { dir: s.data }), 'revocation wins');
   } finally { s.done(); }
 });
+
+test('C: exec event_msg through real hook stdin recognizes task deploy intent and app receipts', () => {
+ const s = studio();
+ try {
+  const transcript = join(s.root, 'exec.jsonl');
+  writeFileSync(transcript, [
+   { type: 'session_meta', payload: { id: 'session-1', cwd: s.root } },
+   { type: 'event_msg', payload: { type: 'user_message', message: 'The owner asked for this studio to be deployed: run npm run deploy.' } },
+  ].map(JSON.stringify).join('\n'));
+  mkdirSync(join(s.root, '.studio/checks'), { recursive: true });
+  writeFileSync(join(s.root, '.studio/checks/latest.json'), JSON.stringify({ command: 'check', kind: 'app', game: 'welcome', ok: true, at: new Date().toISOString() }));
+  const r = spawnSync(process.execPath, [SCRIPT, 'pre'], { encoding: 'utf8', input: JSON.stringify(bash(s, 'npm run deploy', { transcript_path: transcript })), env: { ...process.env, HOMIE_HOLDS_DATA: s.data, HOMIE_HOLDS_MARKS: join(s.data, 'marks') } });
+  assert.equal(r.status, 0, r.stderr); assert.doesNotMatch(r.stdout, /deny|hold [A-Z0-9]{4}/);
+ } finally { s.done(); }
+});

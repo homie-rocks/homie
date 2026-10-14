@@ -297,7 +297,7 @@ export async function setupStatus({
         who: 'person',
         say: app === 'codex'
           ? 'In Codex, open /hooks and trust Homie\'s three hooks: Codex runs no plugin\'s hooks until you do. Then run this again. Until then nothing is held, so your AI asks you before each of those itself.'
-          : 'Grok runs a plugin\'s hooks only once the plugin is trusted, and only from a Homie plugin new enough to name them for Grok. Install it again with trust (grok plugin install homie-rocks/homie#plugins/homie --trust), start a new session (/hooks lists Homie\'s three), then run this again. Until then nothing is held, so your AI asks you before each of those itself.',
+          : 'Grok runs a plugin\'s hooks only once the plugin is trusted, and only from a Homie plugin new enough to name them for Grok. Ask your AI to install the Homie plugin in Grok and open its trust prompt (the AI runs grok plugin install homie-rocks/homie#plugins/homie --trust), start a new session (/hooks lists Homie\'s three), then run this again. Until then nothing is held, so your AI asks you before each of those itself.',
       },
     });
   }

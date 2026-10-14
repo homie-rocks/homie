@@ -300,16 +300,17 @@ export function addNeeds(root, needs) {
 }
 
 
-export async function newApp(root, id, { name } = {}) {
+export async function newApp(root, id, { name, from = 'welcome' } = {}) {
   if (!GAME_ID.test(String(id ?? '')) || RESERVED_IDS.has(id)) throw new Error('invalid app id');
   if (listExperiences(root).some((g) => g.id === id) || existsSync(join(root, 'apps', id))) throw new Error(`app/game ${id} already exists`);
   const dest = join(root, 'apps', id);
-  cpSync(join(PACKAGE_ROOT, 'app-starters', 'welcome'), dest, { recursive: true });
+  if (!['welcome', 'giving', 'gathering', 'quiz', 'jobs'].includes(from)) throw new Error('app starter: welcome, giving, gathering, quiz or jobs');
+  cpSync(join(PACKAGE_ROOT, 'app-starters', from), dest, { recursive: true });
   const file = join(dest, 'app.json');
   const meta = JSON.parse(readFileSync(file, 'utf8'));
-  meta.id = id; meta.name = String(name ?? 'Welcome together').slice(0, 60);
+  meta.id = id; meta.name = String(name ?? meta.name).slice(0, 60);
   writeFileSync(file, `${JSON.stringify(meta, null, 2)}\n`);
   const main = join(dest, meta.entry ?? 'src/main.ts');
   writeFileSync(main, readFileSync(main, 'utf8').replaceAll("game: 'welcome'", `game: '${id}'`));
-  return { ok: true, command: 'app new', id, dir: dest, files: readdirSync(dest, { recursive: true }).map(String), ...addNeeds(root, meta.needs) };
+  return { ok: true, command: 'app new', id, from, dir: dest, files: readdirSync(dest, { recursive: true }).map(String), ...addNeeds(root, meta.needs) };
 }

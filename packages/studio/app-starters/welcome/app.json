@@ -36,7 +36,29 @@
     "open": "Open",
     "join": "Scan to join",
     "one": "person",
-    "many": "people"
+    "many": "people",
+    "eyebrow": "A space for everyone",
+    "wallTitle": "",
+    "staffTitle": "Welcome desk",
+    "waiting": "waiting",
+    "panel": "Now welcoming",
+    "yourTicket": "Your ticket",
+    "welcome": "Welcome in",
+    "home": "Make yourself at home.",
+    "ready": "Ready when you are.",
+    "called": "It\u2019s your turn. Come on over!",
+    "ahead": "You have a place. {n} ahead of you.",
+    "guest": "No account needed. Just a place in line.",
+    "waitingDetail": "{n} {people} waiting for a welcome.",
+    "empty": "The next arrival will appear here.",
+    "joinAction": "Join the queue",
+    "nextAction": "Call the next person",
+    "ticket": "No. {label}",
+    "keepTicket": "Keep your ticket",
+    "live": "Here together \u00b7 live",
+    "reconnecting": "Reconnecting\u2026",
+    "footer": "ONE PLACE \u00b7 TOGETHER",
+    "fallback": "The 3D scene is unavailable on this device. Your live controls still work."
   },
   "records": {
     "persist": true,
@@ -89,7 +111,8 @@
   "needs": {
     "three": "0.185.1",
     "@homie-rocks/camera": "0.2.1",
-    "@homie-rocks/geom": "0.1.1"
+    "@homie-rocks/geom": "0.1.1",
+    "@types/three": "0.185.1"
   },
   "check": {
     "action": "[data-join]",

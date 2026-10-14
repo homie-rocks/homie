@@ -17,11 +17,33 @@ export function tokenize(text) {
   return words;
 }
 
+/** Split operators only outside quotes; heredoc bodies are data, not commands. */
+function shellSegments(command) {
+  const lines = String(command ?? '').split('\n');
+  const kept = []; let heredoc = null;
+  for (const line of lines) {
+    if (heredoc) { if (line.replace(/^\t+/, '') === heredoc) heredoc = null; continue; }
+    kept.push(line);
+    const m = /<<-?\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?/.exec(line);
+    if (m) heredoc = m[1];
+  }
+  const out = []; let part = '', quote = null, escape = false;
+  for (const c of kept.join('\n')) {
+    if (escape) { part += c; escape = false; continue; }
+    if (c === '\\' && quote !== "'") { part += c; escape = true; continue; }
+    if (quote) { part += c; if (c === quote) quote = null; continue; }
+    if (c === "'" || c === '"') { quote = c; part += c; continue; }
+    if (';&|\n'.includes(c)) { if (part.trim()) out.push(part); part = ''; } else part += c;
+  }
+  if (part.trim()) out.push(part);
+  return out;
+}
+
 /** The segments of a command line, each with the folder a `cd dir &&` before it moved to (null: the session's). */
 export function segments(command) {
   const out = [];
   let dir = null;
-  for (const raw of String(command ?? '').split(/&&|\|\||;|\||\n/)) {
+  for (const raw of shellSegments(command)) {
     let words = tokenize(raw.trim().replace(/^[({]+\s*/, '').replace(/\s*[)}]+$/, ''));
     while (words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0])) words = words.slice(1);
     while (words.length && ['command', 'exec', 'env', 'nohup', 'time', 'sudo'].includes(words[0])) words = words.slice(1);
@@ -71,7 +93,8 @@ export function studioCalls(command) {
   for (const seg of segments(command)) {
     const w = seg.words;
     let at = -1;
-    for (let i = 0; i < w.length; i++) {
+    const launcher = /^(node|npx|bunx|pnpm)$/.test(w[0]);
+    for (let i = 0; i < (launcher ? w.length : Math.min(1, w.length)); i++) {
       if (/(^|\/)homie-studio(\.mjs)?$/.test(w[i])) { at = i; break; }
     }
     let rest = null;

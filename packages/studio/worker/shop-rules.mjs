@@ -169,6 +169,7 @@ export function checkShop(raw, { games = null, audience = 'general', studioName 
       if (why) err(`${at}.price`, why);
       else price = numeric(it.price);
     }
+    if (it.interval !== undefined && (it.interval !== 'month' || chosen)) err(`${at}.interval`, 'monthly gifts need a fixed suggested amount');
     const charge = chosen ? min : price;
     if (currencyScale(currency) === 1000 && charge % 10) warnings.push({ at: `${at}.price`, message: 'This three-decimal amount uses the smallest minor unit. Confirm support with your Stripe payment method; Stripe decides acceptance (https://docs.stripe.com/currencies).' });
     if (charge > 0 && charge < minimumCharge(currency)) warnings.push({ at: `${at}.price`, message: `Stripe's minimum for settlement in ${currency.toUpperCase()} is ${money(minimumCharge(currency), currency)}. Your settlement currency and payment method determine the actual minimum at checkout.` });
@@ -196,10 +197,10 @@ export function checkShop(raw, { games = null, audience = 'general', studioName 
     const advantage = it.advantage === true;
     const badge = gives.find((g) => g.startsWith('badge:'));
     for (const key of Object.keys(it)) {
-      if (!['id', 'kind', 'name', 'blurb', 'description', 'price', 'min', 'max', 'gives', 'badge', 'days', 'starts', 'ends', 'game', 'taxCode', 'advantage'].includes(key)) warnings.push({ at: `${at}.${key}`, message: 'This field is not published by the shop. Describe any buyer-facing meaning in blurb so buyers can read it.' });
+      if (!['id', 'kind', 'name', 'blurb', 'description', 'interval', 'price', 'min', 'max', 'gives', 'badge', 'days', 'starts', 'ends', 'game', 'taxCode', 'advantage'].includes(key)) warnings.push({ at: `${at}.${key}`, message: 'This field is not published by the shop. Describe any buyer-facing meaning in blurb so buyers can read it.' });
     }
     items.push({
-      id, kind, name, ...(blurb ? { blurb } : {}),
+      id, kind, name, ...(it.interval === 'month' ? { interval: 'month' } : {}), ...(blurb ? { blurb } : {}),
       ...(chosen ? { price: 'choose', min, max } : { price }),
       gives, ...(badge ? { badge: badgeWord(badge, it) } : {}),
       ...(days !== null ? { days } : {}), ...(Number.isFinite(starts) ? { starts: new Date(starts).toISOString() } : {}), ...(Number.isFinite(ends) ? { ends: new Date(ends).toISOString() } : {}),
@@ -236,7 +237,7 @@ export function checkShop(raw, { games = null, audience = 'general', studioName 
   const finalTill = kids ? 'off' : TILLS.includes(till) ? till : 'off';
   if (kids && till !== 'off') warnings.push({ at: 'till', message: 'studio.json says "audience": "kids": the studio sells nothing in its games (the till is off under policy.kidsStudio).' });
   const shop = {
-    v: 1, policy, purchasesTill: TILLS.includes(raw.purchasesTill ?? till) ? (raw.purchasesTill ?? till) : 'off', ...(/^https:\/\/billing\.stripe\.com\/p\/login\/[A-Za-z0-9_]+$/.test(raw.purchasesPortalLogin ?? '') ? { purchasesPortalLogin: raw.purchasesPortalLogin } : {}), checkoutMinutes, requestBytes, automaticTax: raw.automaticTax === true, referralNewPlayersOnly: raw.referralNewPlayersOnly === true, guestBuyersPerAddressPerHour, purchaseAttemptsPerMinute, purchaseAttemptsPerAddressPerMinute, till: finalTill, currency: CURRENCY.test(currency) ? currency : 'usd', refundDays, capPerPlayerMonth: cap, items, referrals,
+    v: 1, ...(isObj(raw.giving) ? { giving: { receiptText: String(raw.giving.receiptText ?? '') } } : {}), policy, purchasesTill: TILLS.includes(raw.purchasesTill ?? till) ? (raw.purchasesTill ?? till) : 'off', ...(/^https:\/\/billing\.stripe\.com\/p\/login\/[A-Za-z0-9_]+$/.test(raw.purchasesPortalLogin ?? '') ? { purchasesPortalLogin: raw.purchasesPortalLogin } : {}), checkoutMinutes, requestBytes, automaticTax: raw.automaticTax === true, referralNewPlayersOnly: raw.referralNewPlayersOnly === true, guestBuyersPerAddressPerHour, purchaseAttemptsPerMinute, purchaseAttemptsPerAddressPerMinute, till: finalTill, currency: CURRENCY.test(currency) ? currency : 'usd', refundDays, capPerPlayerMonth: cap, items, referrals,
     open: finalTill !== 'off' && items.length > 0, ...(kids ? { audience: 'kids' } : {}), ...(catalog.length ? { catalog } : {}),
   };
   // https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-custom_text-submit-message

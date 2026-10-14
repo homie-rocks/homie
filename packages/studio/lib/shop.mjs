@@ -107,13 +107,15 @@ export function supporterItem({ price = 500, days = 365, name = 'Supporter' } = 
   return { id: 'supporter', kind: 'supporter', name, price, days, gives: ['badge:supporter'], badge: 'Supporter', blurb: 'A Supporter badge on your account and beside your name in rooms, for a year. It changes nothing about how any game plays.' };
 }
 
-export function shopInit(root, { supporter = false, currency = 'usd', price = 500, managed = false } = {}) {
+export function shopInit(root, { supporter = false, giving = false, currency = null, price = 500, managed = false } = {}) {
   const file = join(root, SHOP_FILE);
   if (existsSync(file)) return { ok: false, command: 'shop init', why: 'shop.json is here already: change it, then homie-studio shop check' };
   const studio = readStudio(root);
+  if (giving && !currency && !studio.currency) return { ok: false, command: 'shop init', why: 'Set studio.json currency or give --currency for gifts.' };
   const shop = {
-    till: managed ? 'stripe-managed' : 'stripe', currency: String(currency).toLowerCase(),
-    items: supporter ? [supporterItem({ price: Number(price) })] : [],
+    ...(giving ? { giving: { receiptText: '' } } : {}),
+    till: managed ? 'stripe-managed' : 'stripe', currency: String(currency ?? studio.currency ?? 'usd').toLowerCase(),
+    items: giving ? [1000, 2500, 5000].flatMap(amount => [false, true].map(monthly => ({ id: `gift-${amount}${monthly ? '-monthly' : ''}`, kind: 'donation', name: monthly ? 'Monthly gift' : 'One-time gift', price: amount, ...(monthly ? { interval: 'month' } : {}), gives: [], blurb: monthly ? 'Give this amount each month. Manage your gift through Stripe.' : 'A gift to support our work.' }))) : supporter ? [supporterItem({ price: Number(price) })] : [],
   };
   const r = checkShop(shop, { games: listGames(root).map((g) => g.id) });
   if (!r.ok) return { ok: false, command: 'shop init', why: r.errors.map((e) => e.message).join('; ') };

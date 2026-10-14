@@ -688,7 +688,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
   const lounge = loungeConfig(studio, rows, { audience: audienceOf(studio) });
   const catalogue = {
     studio: {
-      name: studio.name, slug: studio.slug, version: STUDIO_VERSION,
+      name: studio.name, slug: studio.slug, version: STUDIO_VERSION, ...(studio.kind ? { kind: studio.kind } : {}),
       ...(typeof studio.tagline === 'string' && studio.tagline.trim() ? { tagline: studio.tagline.trim().slice(0, 140) } : {}),
       theme,
       // studio.json "site": { "schema": { … } }: the owner's own schema.org properties on the studio (sameAs, …).
@@ -727,6 +727,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
     // shop.json, checked (nothing secret is ever in it): the Worker sells from this and checks it again.
     ...(shop ? { shop } : {}),
   };
+  for (const app of rows.filter(g => g.kind === 'app' && site.pages.includes(`/${g.id}/`))) log(`site/pages/${app.id}/ replaces the app landing; open /${app.id}/open and wall /${app.id}/tv`);
   for (const game of rows) {
     const image = await playerImage(catalogue, game, dist, log);
     if (image) game.playerImage = image;

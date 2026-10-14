@@ -12,7 +12,7 @@ Read the person's brief and existing `apps/<id>/` first. Choose sensible enginee
 
 ## Start and compose
 
-- Run `homie-studio app new <id> --name "<Name>"`, or `app_make`. The welcome starter is one 3D scene with customer, wall and staff roles. Install its reported `needsAdded`, then build.
+- Run `homie-studio app new <id> --from <starter> --name "<Name>"`, or `app_make`. Starters: `welcome` (queue), `gathering` (check-in/task choice), `giving` (goal and giving intentions linked to the shop), `quiz` (casual quiz night), `jobs` (service booking requests). The welcome starter is one 3D scene with customer, wall and staff roles. Install its reported `needsAdded`, then build.
 - `apps/<id>/app.json` describes roles (`signIn`, `can`), surfaces (`phone`, `wall`, `kiosk`, `tablet`), wording, record collections, parts and the real UI action used by check. The app's entry and assets live beside it, just like a game.
 - Before inventing each component, inspect engine packages for the mechanism and `parts_find` for the piece. A queue, quiz, menu board, live total, music loop or video intro can be a part. Record its licence and credit. Sharing happens only when requested; selling parts is not part of this workflow.
 - Use the same engine packages as a game: `@homie-rocks/geom` and `props` for original scenery; `render`, `camera`, `postfx`, `fx` for light, composition and motion; `input`, `ui`, `ui-world`, `audio`, `device`, `loop` for interaction and feel. An app can be fully 3D and wild. Legibility and the actual task come first.
@@ -62,3 +62,11 @@ The complete helper and limits are in `node_modules/@homie-rocks/studio/apps/APP
 Use Studio functions (`functions/FUNCTIONS.md` in the toolkit) for durable reactions to `record.changed`, `order.paid`, refunds, schedules and tool calls. `homie-studio function new <name> --event <type>` creates a plain TypeScript file; local `function fire` and the office delivery table make it testable. Deduplicate external effects by event ID. Public or priced tools can expose app services to customer AIs using the same purchase engine.
 
 Every studio serves its own MCP at `<site>/mcp`. Use the `tools` skill for studio-defined business actions, signed integrations and staff AI access. Reuse office and app-record built-ins first. After an authorized deploy, hand over the MCP address and `<site>/_studio/office/connections`: the person approves with the studio account they already have, with no key to copy. Staff connect their own account and retain only their app grants. Client connector setup is separate from the studio approval. Never deploy merely to set up a local tool test.
+
+## Public pages and giving
+
+Scaffold businesses with `new <folder> --kind business`; causes with `--kind cause` (MCP `studio_scaffold` uses `kind`). The header links custom `site/pages/<slug>/index.html` pages and an existing Shop. A page at `site/pages/<app-id>/index.html` takes over only the landing: use `/<id>/open` for phones and `/<id>/tv` for the wall. Build says when this happens. In-app links to public pages should use `target="_blank" rel="noopener"` because the app is sandboxed. App assets and hero files belong under `apps/<id>/`, including `apps/<id>/hero/`.
+
+For giving, set the studio currency and run `shop init --giving --currency CAD` (use the organisation’s currency). It creates one-time/monthly suggested gifts. The owner supplies `giving.receiptText` in shop.json; Homie supplies no legal or tax text. Before Stripe is connected, local /shop/ previews items and prices with checkout disabled. Run the connection step yourself; the owner approves their Stripe account in the browser.
+
+Booking requests are not capacity reservations. Calendar availability and seat capacity are the next app capability; do not promise them.

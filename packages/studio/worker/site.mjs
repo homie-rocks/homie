@@ -555,6 +555,8 @@ export function sectionsOf(cat) {
   const games = (cat.games ?? []).some((g) => g.kind !== 'app');
   const apps = (cat.games ?? []).some((g) => g.kind === 'app');
   return [
+    ...(cat.site?.pages ?? []).filter(p => /^\/[a-z0-9][a-z0-9._-]*\/$/.test(p) && !['/shop/', '/apps/', '/games/', '/rooms/', '/posts/', '/music/', '/videos/', '/lounge/'].includes(p)).map(p => ({ key: p, href: p, label: p.slice(1, -1).replaceAll('-', ' ').replace(/^./, c => c.toUpperCase()) })),
+    cat.shop && { key: 'shop', href: '/shop/', label: cat.shop.giving ? 'Give' : 'Shop' },
     apps && { key: 'apps', href: '/apps/', label: 'Apps' },
     games && { key: 'games', href: '/games/', label: 'Games' },
     (cat.songs ?? []).length > 0 && { key: 'music', href: '/music/', label: 'Music' },
@@ -859,11 +861,11 @@ export function homePage(cat, { origin = '', rooms = [], live = {} } = {}) {
   <div class="hero-copy">
     <p class="kicker">${esc(tagline || 'A Homie studio')}</p>
     <h1 class="title ${titleClass(name)}" id="hero-title">${esc(name)}</h1>
-    <p class="line">First game coming soon.</p>
+    <p class="line">${['business', 'cause', 'app'].includes(cat.studio?.kind) ? 'Your app is coming soon.' : 'First game coming soon.'}</p>
     <p class="live"><span class="live-dot" aria-hidden="true"></span><span>${posts.length ? 'In the making · the latest news is below' : 'In the making'}</span></p>
   </div>
 </section>`;
-    const next = [
+    const next = ['business', 'cause', 'app'].includes(cat.studio?.kind) ? [['Apps', 'Your live app', 'Open it on a phone, wall or staff tablet.'], ['Pages', 'Your own pages', 'Services, events and information for your community.']] : [
       ['Games', 'The first game', 'It opens here with a Play button: a live public room on a phone, a computer or a TV, with bots in the empty seats.'],
       ['Posts', 'News and drops', 'The studio\'s posts land on this page, with feeds to follow.'],
       ['Music and videos', 'Songs and trailers', 'Scores, songs and trailers get pages of their own.'],

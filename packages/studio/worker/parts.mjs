@@ -263,13 +263,13 @@ ${sayRow('Say', sayAdd(p))}
  * build something new from them. Empty when the game shared none. It stands by itself: its own markup and styles.
  */
 export function partsBand(g, parts, host) {
-  const mine = parts.filter((p) => (p.from?.game ?? p.from?.app) === g.id);
+  const mine = parts.filter((p) => (p.from?.game ?? p.from?.app ?? (p.from?.kind === 'app' ? p.from.id : null)) === g.id);
   if (!mine.length) return '';
-  const say = mine.length === 1 ? sayAdd({ ...mine[0], add: `${host}/${mine[0].id}` }) : `Make a new game in my Homie studio with these parts of ${g.name}: ${mine.slice(0, 4).map((p) => `${host}/${p.id}`).join(', ')}`;
+  const say = mine.length === 1 ? sayAdd({ ...mine[0], add: `${host}/${mine[0].id}` }) : `Make a new ${g.kind === 'app' ? 'app' : 'game'} in my Homie studio with these parts of ${g.name}: ${mine.slice(0, 4).map((p) => `${host}/${p.id}`).join(', ')}`;
   return `${CSS}<section class="pband" aria-labelledby="parts-title" data-parts-band>
   <p class="ptag">Take a piece</p>
-  <h2 id="parts-title">Parts from this game</h2>
-  <p class="plead">Pieces of ${esc(g.name)} you can put in a game of your own, each with its licence. Mix them with parts from other games: a creature from here, a level from there.</p>
+  <h2 id="parts-title">Parts from this ${g.kind === 'app' ? 'app' : 'game'}</h2>
+  <p class="plead">Pieces of ${esc(g.name)} you can put in ${g.kind === 'app' ? 'an app' : 'a game'} of your own, each with its licence.</p>
   <ul class="pgrid">${mine.map(card).join('')}</ul>
   ${sayRow('In a chat with your Homie studio open, say', say)}
   <div class="keys"><a class="btn" href="/parts/#from-${esc(g.id)}">${icon('spark')}<span>See the parts</span></a></div>

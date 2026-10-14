@@ -39,7 +39,7 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     else if (!same(product.metadata, metadata) || product.name !== fields.name || (product.description ?? '') !== fields.description || (product.tax_code?.id ?? product.tax_code) !== fields.tax_code || !product.active) await api('POST', `/v1/products/${id}`, fields);
     // Omit an unset minimum: Stripe applies its settlement-currency floor itself.
     // https://docs.stripe.com/api/prices/create#create_price-custom_unit_amount-minimum
-    const priceFields = { product: id, currency: shop.currency, tax_behavior: 'exclusive', ...(item.price === 'choose'
+    const priceFields = { product: id, currency: shop.currency, ...(item.interval ? { recurring: { interval: item.interval } } : {}), tax_behavior: 'exclusive', ...(item.price === 'choose'
       ? { custom_unit_amount: { enabled: true, ...(item.min > 0 ? { minimum: item.min } : {}), ...(item.max !== null ? { maximum: item.max } : {}) } }
       : { unit_amount: item.price }) };
     const revision = hash(priceFields);
@@ -52,7 +52,7 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     const params = { line_items: [{ price: price.id, quantity: 1, ...(item.price !== 'choose' ? { adjustable_quantity: { enabled: shop.policy.repeatPurchases, minimum: 1, maximum: 999999 } } : {}) }],
       after_completion: { type: 'redirect', redirect: { url: `${site}/shop/thanks?session_id={CHECKOUT_SESSION_ID}` } },
       ...(shop.till === 'stripe-managed' ? { managed_payments: { enabled: true } } : { automatic_tax: { enabled: shop.automaticTax } }),
-      payment_intent_data: { metadata },
+      ...(item.interval ? { subscription_data: { metadata } } : { payment_intent_data: { metadata } }),
     };
     const linkRevision = hash({ params, item, policy: shop.policy });
     let link = links.find((p) => own(p) && p.metadata?.revision === linkRevision);

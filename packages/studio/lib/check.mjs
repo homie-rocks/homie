@@ -381,7 +381,11 @@ export async function checkApp({ url, game, meta, shots = null, log = () => {}, 
     await actor.frame.waitForFunction((selector, wanted) => document.querySelector(selector)?.textContent === wanted, {}, proof.observe, after);
     const rooms = await Promise.all(surfaces.map((s) => s.page.evaluate(() => window.__shell.room)));
     if (rooms.some((r) => r !== room)) throw new Error('surfaces did not retain the same room');
-    if (shots) for (const s of surfaces) await s.page.screenshot({ path: join(shots, `${s.name}.jpg`), type: 'jpeg', quality: 65 });
+    for (const s of surfaces) {
+      await s.page.waitForFunction(() => window.__shell?.arrival?.phase === 'done', { timeout: READY_TIMEOUT_MS });
+      await s.frame.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      if (shots) await s.page.screenshot({ path: join(shots, `${s.name}.jpg`), type: 'jpeg', quality: 85 });
+    }
     report?.check?.('app-action', 'pass', { note: 'action reached wall and both phones; reconnect retained it' });
     return { ok: true, command: 'check', kind: 'app', room, surfaces: surfaces.map((s) => s.name), action: proof.action, before, after, reconnect: true };
   } catch (error) { return { ok: false, command: 'check', kind: 'app', why: error.message }; }
