@@ -31,6 +31,8 @@ export async function bindSubscription(env, order, session, shop) {
     env.DB.prepare(`INSERT OR IGNORE INTO shop_subscription_events(id,subscription,type,invoice,amount,currency,at)
       VALUES(?1,?2,'subscription.started',NULL,?3,?4,?5)`).bind(`started:${subscription}`,subscription,order.amount,order.currency,order.paid_at),
   ]);
+  const firstInvoice=idOf(session.invoice);
+  if(firstInvoice)await env.DB.prepare('INSERT INTO meta(key,value) VALUES(?1,?2) ON CONFLICT(key) DO NOTHING').bind(`subscription-first-invoice:${subscription}`,firstInvoice).run();
   await reconcileMembership(env, subscription, shop);
   if(!hasStripeKey(env)) {
     const invoice=typeof session.invoice==='string'?session.invoice:session.invoice?.id;
@@ -70,6 +72,7 @@ export async function subscriptionEvent(env, event, shop) {
   else if (event.type === 'invoice.paid') { if (obj.billing_reason === 'subscription_create') return 'initial'; type='subscription.renewed'; state='active'; }
   else if (event.type === 'invoice.payment_failed') { type='subscription.failed'; state='past_due'; }
   else { return 'updated'; } // Scheduling cancellation is not cancellation; Stripe sends deleted when it ends.
+  if(type==='subscription.renewed')await recordRenewal(env,row,obj,at);
   const eventId=type === 'subscription.renewed' ? `paid:${obj.id}` : event.id;
   await env.DB.batch([
     env.DB.prepare(`UPDATE shop_subscriptions SET state=?2,event_at=?3 WHERE id=?1 AND state!='cancelled' AND event_at<=?3 AND ?4=0`).bind(subscription,state,at,hasStripeKey(env)?1:0),
@@ -195,4 +198,36 @@ async function invoiceMembership(env,subscription,invoice) {
     writes.push(env.DB.prepare('UPDATE shop_entitlement_lines SET ends_at=MAX(COALESCE(ends_at,0),?2) WHERE line_id=?1').bind(l.id,end));
   }
   if(writes.length)await env.DB.batch(writes);
+}
+
+/** The invoice is the financial identity; delivery retries never count twice.
+ * Access stays on the original subscription; renewal orders are payment receipts. */
+async function recordRenewal(env, subscription, invoice, at) {
+  if(invoice.status!=='paid')return;
+  if(await env.DB.prepare('SELECT id FROM shop_subscription_events WHERE id=?1').bind(`paid:${invoice.id}`).first())return;
+  const first=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`subscription-first-invoice:${subscription.id}`).first();
+  if(first?.value===invoice.id || invoice.billing_reason!=='subscription_cycle')return;
+  const original=await env.DB.prepare('SELECT * FROM shop_orders WHERE id=?1').bind(subscription.order_id).first();
+  const lines=(await env.DB.prepare('SELECT * FROM shop_order_lines WHERE order_id=?1').bind(original.id).all()).results;
+  // A subscription without shop lines has no shop fulfilment to repeat.
+  if(!lines.length)return;
+  if(invoice.status!=='paid' || invoice.lines?.has_more || invoice.currency!==original.currency || !Number.isSafeInteger(invoice.amount_paid) || invoice.amount_paid<0)throw new Error('Complete paid renewal invoice required');
+  const paidLines=(invoice.lines?.data??[]).map(l=>{
+    const price=idOf(l.price ?? l.pricing?.price_details?.price);
+    const source=lines.find(s=>JSON.parse(s.snapshot??'{}').stripePrice===price);
+    if(!source || !Number.isSafeInteger(l.quantity) || l.quantity<1 || !Number.isSafeInteger(l.amount) || l.amount<0)throw new Error('Unknown renewal invoice line');
+    return {...source,quantity:l.quantity,amount:l.amount};
+  });
+  if(!paidLines.length)throw new Error('Renewal invoice has no lines');
+  const amount=paidLines.reduce((n,l)=>n+l.amount,0),total=invoice.total??invoice.amount_paid;
+  const id=`renewal:${invoice.id}`;
+  const writes=[env.DB.prepare(`INSERT OR IGNORE INTO shop_orders(id,player,item,game,amount,currency,total,till,mode,status,created_at,updated_at)
+    VALUES(?1,?2,?3,?4,?5,?6,?7,'stripe',?8,'started',?9,?9)`)
+    .bind(id,original.player,original.item,original.game,amount,original.currency,total,original.mode,at),
+    env.DB.prepare(`INSERT OR IGNORE INTO meta(key,value) SELECT ?1,value FROM meta WHERE key=?2`).bind(`shop-reference:${id}`,`shop-reference:${original.id}`),
+    ...paidLines.map((l,i)=>env.DB.prepare(`INSERT OR IGNORE INTO shop_order_lines(id,order_id,position,item,quantity,unit_amount,amount,total,snapshot,status)
+      VALUES(?1,?2,?3,?4,?5,?6,?7,?7,?8,'paid')`).bind(`${id}_${i}`,id,i,l.item,l.quantity,l.amount/l.quantity,l.amount,l.snapshot)),
+    env.DB.prepare("UPDATE shop_orders SET paid_at=?2,status='paid',payment=?3,tax=?4 WHERE id=?1 AND paid_at IS NULL")
+      .bind(id,at,idOf(invoice.payment_intent)??null,total-amount)];
+  await env.DB.batch(writes);
 }
