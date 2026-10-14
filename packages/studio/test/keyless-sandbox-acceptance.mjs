@@ -30,19 +30,23 @@ test('real keyless menus, capacity and monthly giving',async t=>{
  env.STRIPE_WEBHOOK_SECRET=stripe.bindings.STRIPE_WEBHOOK_SECRET;
  const api=(method,path,params={},idempotency)=>stripe.call(method,path,formEncode(params),idempotency);
  const stamp=Date.now();let config,endpoint;
- const sync=async bookingSlots=>syncPaymentLinks({api,shop:shopOf(cat),slug:'keyless-'+stamp,site:'https://keyless-'+stamp+'.example.com',mode:'test',bookingSlots,w:async(args,opts)=>{if(args[1]==='list')return{code:0,stdout:'[]'};if(args[1]==='bulk'){const values=JSON.parse(opts.input);env.STRIPE_SHOP_LINKS=values.STRIPE_SHOP_LINKS;config=JSON.parse(values.STRIPE_SHOP_LINKS);}return{code:0};},saveReceipt:r=>{endpoint=r.endpoint??endpoint;}});
+ const sync=async bookingSlots=>{const r=await syncPaymentLinks({api,shop:shopOf(cat),slug:'keyless-'+stamp,site:'https://keyless-'+stamp+'.example.com',mode:'test',bookingSlots,w:async(args,opts)=>{if(args[1]==='list')return{code:0,stdout:'[]'};if(args[1]==='bulk'){const values=JSON.parse(opts.input);env.STRIPE_SHOP_LINKS=values.STRIPE_SHOP_LINKS;config=JSON.parse(values.STRIPE_SHOP_LINKS);}return{code:0};},saveReceipt:r=>{endpoint=r.endpoint??endpoint;}});if(endpoint){await api('DELETE','/v1/webhook_endpoints/'+endpoint);endpoint=undefined;}return r;};
  const manifest=['morning','afternoon'].map(slot=>({app:'tune',collection:'bookings',slots:'slots',slot,item:'tune',capacity:1}));
  sql.prepare('INSERT INTO app_records VALUES(?,?,?,?,1,1)').run('tune','slots','afternoon',JSON.stringify({capacity:1}));
  const result=await sync(manifest);
  assert.equal(result.ok,true);assert.equal(env.STRIPE_KEY,undefined);
- t.after(async()=>{for(const l of [...config.items,...config.menus,...config.slots])await api('POST','/v1/payment_links/'+l.id,{active:false});if(endpoint)await api('POST','/v1/webhook_endpoints/'+endpoint,{disabled:true});});
+ t.after(async()=>{for(const l of [...config.items,...config.menus,...config.slots])await api('POST','/v1/payment_links/'+l.id,{active:false});});
  const browser=await puppeteer.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});t.after(()=>browser.close());
  const wait=async fn=>{const until=Date.now()+60000;while(Date.now()<until){if(await fn())return;await new Promise(r=>setTimeout(r,500));}throw Error('Acceptance timed out');};
  const buy=async(id,body)=>{const url=new URL('/api/shop/buy',origin);const request=withToolIdentity(new Request(url,{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify(body)}),{id});const r=await shopRoutes(request,env,{},url,{catalogueOf:async()=>cat});return {status:r.status,...await r.json()};};
- const open=async order=>{assert.equal(order.ok,true,JSON.stringify(order));const p=await browser.newPage();await p.goto(order.url,{waitUntil:'networkidle2'});const link=new URL(order.url);const target=[...config.items,...config.menus,...config.slots].find(l=>l.url===link.origin+link.pathname);if(target.items) {
-   await p.evaluate(()=>Array.from(document.querySelectorAll('button')).find(b=>b.innerText==='Qty 1').click());
+ const open=async order=>{assert.equal(order.ok,true,JSON.stringify(order));const p=await browser.newPage();await p.setViewport({width:1280,height:900});await p.goto(order.url,{waitUntil:'networkidle2'});const link=new URL(order.url);const target=[...config.items,...config.menus,...config.slots].find(l=>l.url===link.origin+link.pathname);
+ if(target.items){
+   // The guest raises the first menu line to two on Stripe's own hosted page.
+   const button=text=>p.evaluate(t=>{const b=Array.from(document.querySelectorAll('button')).find(b=>b.innerText.trim().startsWith(t));b?.click();return !!b;},text);
+   await p.waitForFunction(()=>Array.from(document.querySelectorAll('button')).some(b=>b.innerText.trim().startsWith('Qty')),{timeout:30000});
+   assert.equal(await button('Qty'),true);
    await p.waitForSelector('button[aria-label="increase quantity"]');await p.click('button[aria-label="increase quantity"]');
-   await p.evaluate(()=>Array.from(document.querySelectorAll('button')).find(b=>b.innerText==='Update').click());
+   assert.equal(await button('Update'),true);
  }
  let session;await wait(async()=>{session=(await api('GET','/v1/checkout/sessions',{payment_link:target.id,limit:100})).data.find(s=>s.client_reference_id===order.order&&s.status==='open');return session && (!target.items || session.amount_total===11000);});await p.close();return session;};
  const complete=async session=>{await api('GET',`/v1/payment_pages/${session.id}`);const pm=await api('POST','/v1/payment_methods',{type:'card',card:{token:'tok_visa'},billing_details:{email:'stripe@example.com',name:'Jenny Rosen',address:{line1:'354 Oyster Point Blvd',postal_code:'94080',city:'South San Francisco',state:'CA',country:'US'}}});return api('POST',`/v1/payment_pages/${session.id}/confirm`,{payment_method:pm.id,expected_amount:session.amount_total});};

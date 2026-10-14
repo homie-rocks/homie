@@ -2,11 +2,11 @@
   "profile": "Homie sandbox",
   "workerApiKey": false,
   "cart": {
-    "session": "cs_test_b13EWyGtMESnNEXJlb4wdNfSiIl7BL3UUsaOaTioYf9WI5gkcYsmrftoQJ",
+    "session": "cs_test_b1l1jNpNaI6jEn0GyCuczRNzDnTGcZllv0e6F4G3x2iPsYJqus8haX8Nj9",
     "event": {
-      "order": "ord_io6d7TwcsZHQcgqVdrSh",
+      "order": "ord_ZYRWddnWS8ptCjVmdSwm",
       "source": "shop_orders",
-      "amount": 6000,
+      "amount": 11000,
       "currency": "cad",
       "mode": "test",
       "app": null,
@@ -14,9 +14,9 @@
       "lines": [
         {
           "item": "tune",
-          "quantity": 1,
-          "amount": 5000,
-          "total": 5000
+          "quantity": 2,
+          "amount": 10000,
+          "total": 10000
         },
         {
           "item": "wax",
@@ -28,11 +28,11 @@
     }
   },
   "booking": {
-    "first": "cs_test_a16dCdKRGwkHtlRoHEZKdXAiltDfhmQF3HXCP39XmAg9z4X3b2QGL8cXpw",
-    "second": "cs_test_a1Xmx2fypLZjZTwcMsaOmYASLC9peGz8n3Rq1T6zUQ9jAfkJjJOMuB8oHZ",
+    "first": "cs_test_a1kR7qcN82e2iaQmdDatJHKrt6alDBqq5aGQME3s4ldz4ckfyazkoGqDIl",
+    "second": "cs_test_a1O7dQ5l1laCSoencnTvt68XD07yKiNo4EB0kQ9J80aodFkflZOHHJP2VO",
     "secondRefused": true,
     "movePausedAndResynced": true,
-    "link": "plink_1UQRg1Dz5BcOk2YtyOmoMjvt",
+    "link": "plink_1UQRxXDz5BcOk2YtQov4D1Ny",
     "active": false,
     "restrictions": {
       "completed_sessions": {
@@ -42,14 +42,14 @@
     }
   },
   "monthly": {
-    "session": "cs_test_a10IybUhwYM9SALlwvHuzWUkxI6KOaDhiS6dkQXP5nFYkraia81fs0SIIk",
-    "subscription": "sub_1UQRh7Dz5BcOk2Ytxts4GyRz",
-    "portal": "https://billing.stripe.com/p/login/test_cNi9AT3hwgrJ3fXgJ37g404",
+    "session": "cs_test_a1aDX1LzNviF27G3IU2ZGXKBPIkxBG3Vx78LzqoCywj2TgXZ5Nqo5ngjC9",
+    "subscription": "sub_1UQRySDz5BcOk2YtwEYC4iwL",
+    "portal": "https://billing.stripe.com/p/login/test_3cI28r5pE3EX9El9gB7g408",
     "cancelled": true
   },
   "clock": {
-    "id": "clock_1UQRhCDz5BcOk2YtytH14y2h",
-    "subscription": "sub_1UQRhEDz5BcOk2Yt3ZLRTAWe",
+    "id": "clock_1UQRyWDz5BcOk2Yttxp8lMFq",
+    "subscription": "sub_1UQRyXDz5BcOk2YtIo3kSPXw",
     "renewed": true,
     "failed": true,
     "cancelled": true

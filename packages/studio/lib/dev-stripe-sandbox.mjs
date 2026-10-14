@@ -65,7 +65,10 @@ export async function startKeylessStripeSandbox({origin,profile,shop,bookingSlot
     const result=await syncPaymentLinks({api,shop:checked.shop,slug:name,site:`https://${name}.example.com`,mode:'test',bookingSlots,
       w:async(args,opts)=>{if(args[1]==='list')return{code:0,stdout:'[]'};if(args[1]==='bulk')links=JSON.parse(opts.input).STRIPE_SHOP_LINKS;return{code:0};},saveReceipt:r=>{endpoint=r.endpoint??endpoint;}});
     if(!result.ok)throw Error('Sandbox Payment Link sync failed');
-    if(endpoint)await api('POST',`/v1/webhook_endpoints/${endpoint}`,{disabled:true});
+    // The placeholder endpoint points at an unreachable example address; signed
+    // events reach the loopback studio through `stripe listen`. Remove it so
+    // repeated syncs never accumulate toward Stripe's per-account endpoint limit.
+    if(endpoint){await api('DELETE',`/v1/webhook_endpoints/${endpoint}`);endpoint=undefined;}
     return {links:JSON.parse(links),bindings:{STRIPE_CHECKOUT_MODE:'links',STRIPE_SHOP_LINKS:'base64:'+Buffer.from(links).toString('base64'),STRIPE_WEBHOOK_SECRET:sandbox.bindings.STRIPE_WEBHOOK_SECRET}};
   };
   try {

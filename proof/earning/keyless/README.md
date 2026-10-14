@@ -14,8 +14,9 @@ HOMIE_STRIPE_SANDBOX_PROFILE='Homie sandbox' node --test packages/studio/test/ke
 `acceptance.log` and `sandbox.json` record the real results. The Worker received only
 links and a private webhook signing secret. The desktop CLI forwarded signed events.
 
-- A mixed menu paid once; the signed invoice supplied its actual lines and quantities.
-  `order.paid` retained `table-7`. The invoice and Checkout event arrived separately.
+- A mixed menu paid once. The guest raised the first line to two on Stripe's own
+  hosted page (Chrome, no card fields touched); the signed invoice supplied the actual
+  lines and quantities (tune x2, wax x1, CAD 110), and `order.paid` retained `table-7`. The invoice and Checkout event arrived separately.
 - Two guests opened the same capacity-one slot link. Both were pending. The first
   paid and confirmed; Stripe deactivated the full link and refused payment from the
   second already-open session. The app rejected further booking attempts.
@@ -60,3 +61,8 @@ staff movement from silently overselling Stripe's independent lifetime budget.
 item increased to two and its second item removed (minimum zero). The read-back
 Checkout Session contains one line, quantity two, for CAD 20. No payment/card input
 was used for this quantity-only check; its native link was deactivated afterward.
+
+Acceptance cleanup: each sandbox sync creates a webhook endpoint for the placeholder
+`*.example.com` site (events reach the loopback studio through `stripe listen`). The
+helper and acceptance now delete that placeholder right after each sync; earlier runs
+had left fifteen disabled ones, which hit Stripe's 16 test-endpoint limit and were removed.
