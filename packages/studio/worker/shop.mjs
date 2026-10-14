@@ -440,9 +440,22 @@ export async function reconcileOrders(env, shop, player = null, { expireOpen = f
           let recovered;
           if (now - row.created_at < 23 * 60 * 60 * 1000) recovered = await createCheckoutSession(env, JSON.parse(saved.value), { idempotencyKey: `checkout-${row.id}` });
           else {
-            // No second charge after Stripe's idempotency retention. Signed events or
-            // the owner's Stripe investigation resolve an unknown creation outcome.
-            return;
+            // After idempotency retention, discover the original session instead of
+            // creating another. A complete provider list can establish no creation.
+            let cursor;
+            do {
+              const page = await stripeCall(env, 'GET', '/v1/checkout/sessions', { limit: 100, created: { gte: Math.floor(row.created_at / 1000) - 60 }, ...(cursor ? { starting_after: cursor } : {}) });
+              if (!Array.isArray(page.data)) throw new Error('Stripe session list unavailable');
+              recovered = page.data.find(session => session.metadata?.order === row.id);
+              if (recovered) break;
+              const next = page.has_more ? page.data.at(-1)?.id : null;
+              if (page.has_more && (!next || next === cursor)) throw new Error('Stripe session list incomplete');
+              cursor = next;
+            } while (cursor);
+            if (!recovered) {
+              await env.DB.prepare("UPDATE shop_orders SET status='failed',updated_at=?2 WHERE id=?1 AND session IS NULL AND paid_at IS NULL").bind(row.id,now).run();
+              return;
+            }
           }
           if (recovered?.id) {
             await env.DB.prepare('UPDATE shop_orders SET session=?2,expires_at=?3 WHERE id=?1 AND session IS NULL').bind(row.id,recovered.id,recovered.expires_at*1000).run();
@@ -571,7 +584,7 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
     }
     await env.DB.prepare('UPDATE shop_orders SET session = ?2, updated_at = ?3, expires_at = ?4 WHERE id = ?1').bind(order.id, session.id, Date.now(), (session.expires_at ?? order.expiresAt) * 1000).run();
   } catch (error) {
-    await env.DB.prepare("UPDATE shop_orders SET status = ?4, note = ?2, updated_at = ?3 WHERE id = ?1").bind(order.id, redactStripe(error?.code ?? 'stripe', env).slice(0, 60), Date.now(), booking ? 'started' : 'failed').run();
+    await env.DB.prepare("UPDATE shop_orders SET status = ?4, note = ?2, updated_at = ?3 WHERE id = ?1 AND paid_at IS NULL").bind(order.id, redactStripe(error?.code ?? 'stripe', env).slice(0, 60), Date.now(), booking ? 'started' : 'failed').run();
     const why = error instanceof StripeError ? redactStripe(error.message, env) : 'Stripe did not answer';
     return { error: fail(502, 'stripe', `Stripe could not open the checkout (${why}). Nothing was charged.`) };
   }
