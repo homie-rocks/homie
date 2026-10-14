@@ -338,7 +338,7 @@ existing Cloudflare sign-in to create DNS and TLS. Never ask the person for a zo
 or wildcard route already on that domain belongs to another site there, and the deploy's warning gives the
 one line to add instead (the `publish` skill has the rest).
 
-**The directory, only when asked.** Going online never lists a studio: listing in the homie.rocks directory
+**The directory, only when asked.** A deploy never opts a studio in by itself: listing in the homie.rocks directory
 is its own step, it is public, and it is the person's to ask for. When they asked to be listed (in their first
 message or now), or say yes when you offer it once the site is live, call the Homie MCP tool `studio_publish`
 with the live site address (without the connector, `npx --no-install homie-studio publish`). It lists the
