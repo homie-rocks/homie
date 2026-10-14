@@ -7,7 +7,9 @@ import {shopRoutes,shopOf} from '../worker/shop.mjs';
 import {linkSettings,hasStripeKey,linkConfig} from '../worker/shop-links.mjs';
 import {withToolIdentity} from '../worker/tool-identity.mjs';
 import {moveBooking} from '../worker/booking-store.mjs';
-import {subscriptionPortal} from '../worker/shop-subscriptions.mjs';
+import {loadSelling} from '../worker/selling/index.mjs';
+await loadSelling();
+import {subscriptionPortal,subscriptionEvent} from '../worker/shop-subscriptions.mjs';
 function fixture(t){
  const sql=new DatabaseSync(':memory:');t.after(()=>sql.close());
  for(const f of readdirSync(new URL('../../../template/site/migrations/',import.meta.url)).sort())sql.exec(readFileSync(new URL('../../../template/site/migrations/'+f,import.meta.url),'utf8'));
@@ -66,15 +68,20 @@ test('staff cannot move into a live keyless checkout budget; an AI-paused target
  assert.equal(f.sql.prepare('SELECT value FROM meta WHERE key=?').get('shop-reference:'+cloned.id).value,cloned.id);
 });
 
-test('each paid monthly gift becomes one order and app event with the original reference',async t=>{
+for (const owner of ['shop-links-v1','shop-v1']) for (const location of ['parent','subscription_details','metadata']) test(`${owner} ${location}: each paid monthly gift becomes one order and app event with the original reference`,async t=>{
  const f=fixture(t);const a=await f.buy({item:'monthly',game:'tune',reference:'meal-table'});
  await f.hook('checkout.session.completed',f.session(a,'monthly',{amount_subtotal:2000,amount_total:2000,subscription:'sub_gifts',customer:'cus_gifts',invoice:'in_initial'}));
  const invoice={id:'in_initial',status:'paid',livemode:false,currency:'cad',amount_paid:2000,total:2000,subtotal:2000,billing_reason:'subscription_create',parent:{subscription_details:{subscription:'sub_gifts',metadata:{homie:'shop-links-v1'}}},lines:{has_more:false,data:[{price:{id:'price_monthly'},quantity:1,amount:2000,period:{end:2000000000}}]}};
+ await f.hook('invoice.paid',invoice);
+ if(location==='parent')invoice.parent.subscription_details.metadata.homie=owner;
+ else { delete invoice.parent.subscription_details.metadata; if(location==='metadata')invoice.metadata={homie:owner};else invoice.subscription_details={metadata:{homie:owner}}; }
  await f.hook('invoice.paid',invoice);
  for(const id of ['in_second','in_second','in_third'])assert.equal((await f.hook('invoice.paid',{...invoice,id,billing_reason:'subscription_cycle'})).status,200);
  const orders=f.sql.prepare("SELECT * FROM shop_orders WHERE status='paid'").all();assert.equal(orders.length,3);assert.equal(orders.reduce((n,o)=>n+o.amount,0),6000);
  const events=f.sql.prepare("SELECT data FROM studio_events WHERE type='order.paid'").all().map(r=>JSON.parse(r.data));assert.equal(events.length,3);
  for(const e of events){assert.equal(e.reference,'meal-table');assert.equal(e.app,'tune');assert.equal(e.amount,2000);}
+ assert.equal(f.sql.prepare("SELECT count(*) n FROM meta WHERE key LIKE 'purchase-invoice:%'").get().n,0);
+ assert.equal(f.sql.prepare('SELECT count(*) n FROM purchase_orders').get().n,0);
 });
 
 test('keyed giving renewals resolve the verified invoice product back to the original line',async t=>{
@@ -87,4 +94,16 @@ test('keyed giving renewals resolve the verified invoice product back to the ori
  globalThis.fetch=async url=>Response.json(String(url).includes('/subscriptions/')?{id:'sub_keyed',customer:'cus_keyed',livemode:false,status:'active',items:{data:[]}}:invoice);
  assert.equal((await f.hook('invoice.paid',invoice)).status,200);
  const paid=f.sql.prepare("SELECT data FROM studio_events WHERE type='order.paid'").all().map(r=>JSON.parse(r.data));assert.equal(paid.length,2);assert.equal(paid[1].reference,'meal-table');
+});
+
+for (const owner of ['purchase-links-v1','purchase-v1']) for (const location of ['parent','subscription_details','metadata']) test(`${owner} ${location} invoice belongs only to parts even when a shop subscription matches`,async t=>{
+ const f=fixture(t);
+ f.sql.exec("INSERT INTO shop_orders(id,player,item,amount,currency,till,mode,status,created_at,updated_at) VALUES('shop-original','alice','monthly',2000,'cad','stripe','test','paid',1,1); INSERT INTO shop_subscriptions(id,order_id,customer) VALUES('sub_parts','shop-original','cus_parts')");
+ const invoice={id:'in_parts',status:'paid',livemode:false,currency:'cad',total:2000,amount_paid:2000,billing_reason:'subscription_cycle',parent:{subscription_details:{subscription:'sub_parts',metadata:{homie:owner}}},lines:{has_more:false,data:[{period:{end:2000000000}}]}};
+ if(location!=='parent') { delete invoice.parent.subscription_details.metadata; if(location==='metadata')invoice.metadata={homie:owner};else invoice.subscription_details={metadata:{homie:owner}}; }
+ assert.equal(await subscriptionEvent(f.env,{type:'invoice.paid',livemode:false,data:{object:invoice}}),null);
+ assert.equal((await f.hook('invoice.paid',invoice)).did,'purchase-invoice-waiting');
+ assert.equal(f.sql.prepare("SELECT count(*) n FROM shop_subscription_events").get().n,0);
+ assert.equal(f.sql.prepare("SELECT count(*) n FROM studio_events").get().n,0);
+ assert.ok(f.sql.prepare("SELECT value FROM meta WHERE key='purchase-invoice:sub_parts'").get());
 });

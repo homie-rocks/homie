@@ -1,3 +1,4 @@
+import { stripeEventOwner } from './stripe-ownership.mjs';
 import { localSession } from './local-test.mjs';
 import { bindSubscription, subscriptionEvent, subscriptionPortal } from './shop-subscriptions.mjs';
 import { bookingStatement } from './booking-store.mjs';
@@ -832,6 +833,7 @@ async function hook(request, env, cat, shop, ready) {
       if (payment) await syncRefunds(env, payment);
       await env.DB.prepare('INSERT INTO shop_events (id, type, at) VALUES (?1, ?2, ?3) ON CONFLICT(id) DO NOTHING').bind(ev.id, ev.type, Date.now()).run(); return json({ ok: true, did: purchase }); }
   }
+  if (stripeEventOwner(obj) === 'parts') return json({ ok: true, did: 'ignored' });
   needed.push('payment_link.updated','invoice.paid','invoice.payment_failed','customer.subscription.updated','customer.subscription.deleted');
   if (!needed.includes(ev.type)) return json({ ok: true, did: 'ignored' });
   if (typeof ev.livemode === 'boolean' && (hasStripeKey(env) || linkConfig(env)) && ev.livemode !== (shopMode(env) === 'live')) return json({ ok: true, ignored: 'mode' });

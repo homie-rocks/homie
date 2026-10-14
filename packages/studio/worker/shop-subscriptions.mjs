@@ -1,3 +1,4 @@
+import { stripeEventOwner } from './stripe-ownership.mjs';
 import { linkConfig, hasStripeKey } from './shop-links.mjs';
 import { KEY_SHAPE, stripeCall } from './stripe.mjs';
 /** Only verified shop Checkout sessions establish ownership. Provider customer IDs
@@ -48,6 +49,7 @@ export async function bindSubscription(env, order, session, shop) {
 export async function subscriptionEvent(env, event, shop) {
   if (!['invoice.paid','invoice.payment_failed','customer.subscription.updated','customer.subscription.deleted'].includes(event.type)) return null;
   const obj=event.data.object;
+  if (stripeEventOwner(obj) === 'parts') return null;
   const subscription=event.type.startsWith('customer.subscription.') ? obj.id : idOf(obj.parent?.subscription_details?.subscription ?? obj.subscription);
   if (!subscription) return 'ignored';
   let row;
