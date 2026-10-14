@@ -28,6 +28,11 @@ test('tool new produces typed code, auto-discovery rejects types, duplicate name
   const config=readFileSync(join(studio,'wrangler.jsonc'),'utf8');await buildFunctions(studio,esbuild);assert.equal(readFileSync(join(studio,'wrangler.jsonc'),'utf8'),config);
   assert.ok(JSON.parse(config.replace(/^\s*\/\/.*$/gm,'')).triggers.crons.includes('* * * * *'));
   writeFileSync(made.file,good.replace('await context.database.put', 'const bad: number = event.id; await context.database.put'));await assert.rejects(buildFunctions(studio,esbuild),/not assignable/);
+  const logs=[];writeFileSync(made.file,good.replace("event: \"order.paid\",","event: \"order.paid\", schedule: '*/15 * * * *',"));
+  await buildFunctions(studio,esbuild,{log:m=>logs.push(m)});
+  assert.ok(logs.length>0);
+  writeFileSync(made.file,good.replace("event: \"order.paid\",","event: \"order.paid\", schedule: '99 9 * * *',"));
+  await assert.rejects(buildFunctions(studio,esbuild),/paid-order cannot run: invalid schedule/);
   writeFileSync(made.file,good);writeFileSync(join(studio,'functions','duplicate.ts'),good);await assert.rejects(buildFunctions(studio,esbuild),/unique name/);
   await assert.rejects(functionCommand(studio,'fire',['function','fire','order.paid'],new Map([['url','https://studio.example']])),/local testing/);
  }finally{rmSync(root,{recursive:true,force:true});}

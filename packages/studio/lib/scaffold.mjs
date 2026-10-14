@@ -1,4 +1,4 @@
-import { FUNCTIONS_REFERENCE_MIGRATION, FUNCTIONS_REFERENCE_MIGRATION_FILE, FUNCTIONS_META_MIGRATION, FUNCTIONS_META_MIGRATION_FILE, FUNCTIONS_MIGRATION, FUNCTIONS_MIGRATION_FILE, FUNCTIONS_CURSOR_MIGRATION, FUNCTIONS_CURSOR_MIGRATION_FILE } from '../worker/functions-schema.mjs';
+import { FUNCTIONS_RUNS_MIGRATION, FUNCTIONS_RUNS_MIGRATION_FILE, FUNCTIONS_REFERENCE_MIGRATION, FUNCTIONS_REFERENCE_MIGRATION_FILE, FUNCTIONS_META_MIGRATION, FUNCTIONS_META_MIGRATION_FILE, FUNCTIONS_MIGRATION, FUNCTIONS_MIGRATION_FILE, FUNCTIONS_CURSOR_MIGRATION, FUNCTIONS_CURSOR_MIGRATION_FILE } from '../worker/functions-schema.mjs';
 import { MCP_MIGRATION, MCP_MIGRATION_FILE } from '../worker/mcp-store.mjs';
 import { APPS_MIGRATION, APPS_MIGRATION_FILE } from '../worker/app-records.mjs';
 import { PURCHASE_MIGRATION, PURCHASE_MIGRATION_FILE, PURCHASE_STATE, PURCHASE_STATE_FILE } from '../worker/purchase-schema.mjs';
@@ -825,6 +825,7 @@ export { default, Table, Lobby, Gate, Concentrator } from '@homie-rocks/studio/w
     [`site/migrations/${FUNCTIONS_CURSOR_MIGRATION_FILE}`]: FUNCTIONS_CURSOR_MIGRATION,
     [`site/migrations/${FUNCTIONS_META_MIGRATION_FILE}`]: FUNCTIONS_META_MIGRATION,
     [`site/migrations/${FUNCTIONS_REFERENCE_MIGRATION_FILE}`]: FUNCTIONS_REFERENCE_MIGRATION,
+    [`site/migrations/${FUNCTIONS_RUNS_MIGRATION_FILE}`]: FUNCTIONS_RUNS_MIGRATION,
     [`site/migrations/${LOUNGE_MIGRATION_FILE}`]: LOUNGE_MIGRATION,
     'wrangler.jsonc': wranglerConfig({ worker, name, d1: studio.cloudflare.d1, r2: studio.cloudflare.r2, layout: 'root' }),
     '.claude/skills/.gitkeep': '',
@@ -996,6 +997,11 @@ function ensurePartsStateMigration(root) {
   return `site/migrations/${PURCHASE_STATE_FILE}`;
 }
 
+function ensureFunctionRuns(root) {
+  const file=join(root,'site','migrations',FUNCTIONS_RUNS_MIGRATION_FILE);
+  if(existsSync(file))return null;
+  mkdirSync(dirname(file),{recursive:true});writeFileSync(file,FUNCTIONS_RUNS_MIGRATION);return `site/migrations/${FUNCTIONS_RUNS_MIGRATION_FILE}`;
+}
 function ensureFunctionReference(root) {
   const file=join(root,'site','migrations',FUNCTIONS_REFERENCE_MIGRATION_FILE);
   if(existsSync(file))return null;
@@ -1022,7 +1028,7 @@ function ensureMcpMigration(root) {
   mkdirSync(dirname(file),{recursive:true});writeFileSync(file,MCP_MIGRATION);return `site/migrations/${MCP_MIGRATION_FILE}`;
 }
 export function ensureMigrations(root) {
-  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root), ensureFunctionReference(root), ensureShopRemoveReferrals(root)].filter(Boolean);
+  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root), ensureFunctionReference(root), ensureShopRemoveReferrals(root), ensureFunctionRuns(root)].filter(Boolean);
 }
 
 /** What a migration file the template added is for, in a few words (deploy and dev say it). */

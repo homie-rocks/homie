@@ -17,6 +17,26 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.50.4] - Unreleased (next patch; renumber at release)
+
+**Plugin 0.50.4** · Scheduled functions and owner AI run diagnostics.
+
+### Fixed
+
+- Scheduled functions keep their required cron when a studio has custom triggers.
+  Build/deploy derive a shared UTC trigger, and the Worker dispatches due functions
+  rather than matching the incoming cron string. Custom crons survive upgrades;
+  removing schedules removes only toolkit-owned triggers.
+
+### Added
+
+- `homie-studio functions runs [<name>] [--errors]` and owner-only
+  `studio_function_runs`: retained attempt history, redacted errors, pagination,
+  next due times and trigger diagnostics. Invalid schedules fail build plainly.
+- Deploy plans describe installed crons. Existing studios build and redeploy after
+  upgrading to install the trigger and D1 history migration. No version bump here;
+  renumber this section at release with `node scripts/renumber-release.mjs`.
+
 ## [0.50.5] - 2026-10-14
 
 **Plugin 0.50.5** · Homie has no referral system.

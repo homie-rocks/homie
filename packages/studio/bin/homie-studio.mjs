@@ -157,6 +157,7 @@
  *                                        [--speech game|lines|off] [--bots fill|off] [--rooms <n>] [--listed on|off]
  *   homie-studio events webhook add <feed> <https-url>
  *   homie-studio events webhook <rotate|remove|status|test> <feed> [--url <studio-site>]
+ *   homie-studio functions runs [<name>] [--errors] [--url <studio-site>] [--before <cursor>]
  *   homie-studio function new <name> [--event order.paid]
  *   homie-studio function replay <name> --replay [--url <studio-site>]
  *   homie-studio function fire <event> [--input <JSON>] [--id <event-id>] [--url <local-site>]
@@ -498,6 +499,7 @@ function print(result) {
     case 'tool new':
       lines.push(result.file, result.next);
       break;
+    case 'functions runs':
     case 'function replay':
     case 'function fire':
     case 'tool call':
@@ -844,6 +846,7 @@ const OUTWARD_FLAGS = {
   'agents pass': ['url', 'label', 'server', 'hands', 'role', 'days'], 'agents revoke': ['url'], 'agents brain': ['url', 'budget', 'remove'],
   'agents sit': ['url', 'server', 'pass', 'label', 'brain'],
   'events webhook': ['url','after'],
+  'functions runs': ['url','errors','before'], 'function runs': ['url','errors','before'],
   'function replay': ['url','replay'], 'function new': ['event'], 'function fire': ['url','input','id'],
   'tool new': ['app'], 'tool call': ['url', 'input', 'public'], 'tool list': ['url', 'public'],
   // With --device it adds a phone to the person's Apple team and installs on it: a flag it does not know stops it.
@@ -911,7 +914,7 @@ async function main() {
     for (const line of (await import('../lib/authoring-guides.mjs')).authoringWords({ kind: ['app', 'business', 'cause'].includes(readStudio(root).kind) || listExperiences(root).some(g => g.kind === 'app') ? 'app' : 'game' })) process.stderr.write(`${line}\n`);
   }
   if (cmd === 'events') return (await import('../lib/events-cli.mjs')).eventsCommand(root, sub, positional, flags, { log });
-  if (cmd === 'function') return (await import('../lib/functions-cli.mjs')).functionCommand(root, sub, positional, flags, { log });
+  if (cmd === 'function' || cmd === 'functions') return (await import('../lib/functions-cli.mjs')).functionCommand(root, sub, positional, flags, { log });
   if (cmd === 'tool') return (await import('../lib/tools-cli.mjs')).toolCommand(root, sub, positional, flags, { log });
   // A trailer is the plugin's video skill; this hands the words after the id over to it (lib/trailer.mjs).
   if (cmd === 'trailer') return trailerCommand(root, sub, argv.slice(argv.indexOf(sub) + 1), { skills: flags.get('skills') ?? null, slug: flags.get('slug') ?? null });

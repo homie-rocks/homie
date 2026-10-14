@@ -188,7 +188,7 @@ and [expiring open sessions](https://docs.stripe.com/api/checkout/sessions/expir
 Replacing an open checkout expires only reservations at least a minute old; a named cancellation can expire immediately.
 Unresolved orders become eligible for reconciliation after one minute, even with no cap. A buyer's next shop
 or owned-items request schedules up to three reads off the response path, with atomic claims and backoff up
-to an hour; an optional Worker cron invokes the same reconciliation across buyers. No cron is installed for you. To run it every five minutes, add `"triggers": { "crons": ["*/5 * * * *"] }` to the studio’s root `wrangler.jsonc`; deploy preserves its triggers.
+to an hour; an optional Worker cron invokes the same reconciliation across buyers. Shop/paid-part studios install a five-minute maintenance trigger. Declared functions install their own required scheduling/retry trigger. Put additional studio crons in root `wrangler.custom.json`; build and deploy merge and preserve them.
 With an API key, every recorded payment checks Stripe’s refunds and dispute state, including payments recovered by an early refund or dispute event. The thanks page can verify a payment directly with the studio's key. Webhook events require Stripe's signature.
 Test and live books stay separate. Owner release attempts to expire an open session, records who released it
 and when, and never prevents a later verified payment grant.

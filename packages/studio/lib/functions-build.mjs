@@ -1,12 +1,13 @@
 import {validateWebhook,webhookName} from '../worker/event-webhook-config.mjs';
+import {parseSchedule,nextDue,scheduleStatus} from '../worker/function-schedule.mjs';
 import {existsSync,readdirSync,mkdirSync,writeFileSync,readFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {readStudio} from './studio.mjs';
+import {readStudio,configPath} from './studio.mjs';
 import {pathToFileURL} from 'node:url';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 export function functionFiles(root) { const dir=join(root,'functions');return existsSync(dir)?readdirSync(dir).filter(f=>/^[a-z][a-z0-9-]*\.ts$/.test(f)).sort().map(f=>join(dir,f)):[]; }
-export async function buildFunctions(root,esbuild) {
+export async function buildFunctions(root,esbuild,{log=()=>{}}={}) {
   const feeds=readStudio(root).mcp?.events??{};
   if(!feeds||typeof feeds!=='object'||Array.isArray(feeds))throw new Error('mcp.events must be a map of named event feeds');
   for(const [name,feed] of Object.entries(feeds)) {
@@ -29,13 +30,19 @@ export async function buildFunctions(root,esbuild) {
   const names=new Set();
   for(const fn of definitions) {
     if(!/^[a-z][a-z0-9-]*$/.test(fn.name)||names.has(fn.name)||typeof fn.handler!=='function'||typeof fn.event!=='string'||!fn.event.trim())throw new Error('Function needs a unique name, event and handler');
-    if(fn.schedule && (typeof fn.schedule!=='string'||fn.schedule.trim().split(/\s+/).length!==5))throw new Error('Function schedule needs a Cloudflare cron expression');
+    if(fn.schedule!==undefined) {
+      try {if(nextDue(parseSchedule(fn.schedule))===null)throw new Error('no matching date');}
+      catch(error) {throw new Error(`Function ${fn.name} cannot run: invalid schedule ${JSON.stringify(fn.schedule)} (${error.message})`);}
+    }
     names.add(fn.name);
   }
   const worker=join(root,'site/src/worker.mjs');
   if(existsSync(worker)) {let text=readFileSync(worker,'utf8');if(!text.includes('useFunctions(')){text+="\nimport { useFunctions } from '@homie-rocks/studio/worker';\nuseFunctions(async () => (await import('./functions/index.mjs')).default);\n";writeFileSync(worker,text);}}
   writeFileSync(join(dir,'declarations.json'),JSON.stringify(definitions.map(({name,event,schedule,replay})=>({name,event,schedule,replay})),null,2)+'\n');
   (await import('./worker-config.mjs')).refreshWorkerConfig(root);
+  const config=JSON.parse(readFileSync(configPath(root),'utf8').replace(/^\s*\/\/.*$/gm,''));
+  for(const status of scheduleStatus(definitions,config.triggers?.crons??[]))log(`Function ${status.function}: ${status.schedule} UTC; ${status.status}; next due ${status.nextDue??'none'}`);
+  if(definitions.length)log(`Function cron triggers to install on deploy: ${(config.triggers?.crons??[]).join('; ')||'none'}`);
   return definitions;
 }
 /** Install subscriptions before the new Worker can produce its first event. */

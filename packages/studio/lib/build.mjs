@@ -513,7 +513,7 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
   if (Object.hasOwn(studio, 'referrals')) log('studio.json referrals: ignored; Homie has no referral system.');
   if (listGames(root).some(g => isRulesGame(g) && g.room?.host !== 'browser' && g.room?.host !== 'offline')) await (await import('./rules-wiring.mjs')).ensureRulesWiring(root);
   await (await import('./tools-build.mjs')).buildTools(root, esbuild);
-  await (await import('./functions-build.mjs')).buildFunctions(root, esbuild);
+  await (await import('./functions-build.mjs')).buildFunctions(root, esbuild, { log });
   // The shop first (shop/SHOP.md): invalid shop settings stop the build before anything is built.
   const shop = shopForBuild(root, { log });
   const live = join(root, 'site', 'dist');
