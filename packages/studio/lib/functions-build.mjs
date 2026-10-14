@@ -1,3 +1,4 @@
+import {validateWebhook,webhookName} from '../worker/event-webhook-config.mjs';
 import {existsSync,readdirSync,mkdirSync,writeFileSync,readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {readStudio} from './studio.mjs';
@@ -9,6 +10,7 @@ export async function buildFunctions(root,esbuild) {
   const feeds=readStudio(root).mcp?.events??{};
   if(!feeds||typeof feeds!=='object'||Array.isArray(feeds))throw new Error('mcp.events must be a map of named event feeds');
   for(const [name,feed] of Object.entries(feeds)) {
+    if(feed?.webhook)validateWebhook(name,feed.webhook);
     if(!/^[a-z][a-z0-9-]*$/.test(name)||!feed||typeof feed.event!=='string'||!feed.event.trim())throw new Error('Event feed needs a name and event type');
     if(feed.event==='record.changed'&&(!/^[a-z][a-z0-9-]*$/.test(feed.app??'')||!/^[a-z][a-z0-9-]*$/.test(feed.collection??'')))throw new Error('Record event feed needs app and collection');
     if(feed.audience!==undefined&&feed.audience!=='owner'&&!(feed.audience&&typeof feed.audience==='object'&&feed.audience.app===feed.app&&typeof feed.audience.role==='string'))throw new Error('Event feed audience must be owner or an app role');
@@ -40,7 +42,7 @@ export async function buildFunctions(root,esbuild) {
 export function functionDeploymentSQL(root) {
   const file=join(root,'site/src/functions/declarations.json');
   const definitions=existsSync(file)?JSON.parse(readFileSync(file,'utf8')):[];
-  for(const [name,feed] of Object.entries(readStudio(root).mcp?.events??{}))definitions.push({name:'@events/'+name,event:feed.event});
+  for(const [name,feed] of Object.entries(readStudio(root).mcp?.events??{})){definitions.push({name:'@events/'+name,event:feed.event});if(feed.webhook)definitions.push({name:webhookName(name,feed.webhook),event:feed.event});}
   const literal=value=>"'"+String(value).replaceAll("'","''")+"'";
   return [...definitions.map(fn=>`INSERT INTO function_subscriptions(name,type,cursor,started) VALUES(${literal(fn.name)},${literal(fn.event)},(SELECT COALESCE(MAX(seq),0) FROM studio_events),unixepoch()*1000) ON CONFLICT(name) DO UPDATE SET type=excluded.type,cursor=excluded.cursor,started=excluded.started WHERE type!=excluded.type;`),`DELETE FROM function_subscriptions WHERE name NOT IN (${definitions.map(fn=>literal(fn.name)).join(',')||"''"});`,"INSERT INTO meta(key,value) VALUES('function-registry-deployed','1') ON CONFLICT(key) DO UPDATE SET value='1';"].join(' ');
 }

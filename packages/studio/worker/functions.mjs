@@ -1,3 +1,4 @@
+import {webhookSubscriptions,webhookFailure,webhookBackoff} from './event-webhooks.mjs';
 import {feedSubscriptions,pushEvents} from './event-resources.mjs';
 import { services } from './mcp-tools.mjs';
 import { isOwner, sameOrigin } from './office.mjs';
@@ -7,7 +8,7 @@ export function useFunctions(loader) { load = loader; }
 export async function hasFunctionType(type,env={}) { return [...await load(),...feedSubscriptions(env)].some(fn=>fn.event===type); }
 export async function syncFunctions(env, definitions = null, now = Date.now()) {
   definitions ??= await load();
-  definitions=[...definitions.filter(fn=>!fn.name.startsWith('@events/')),...feedSubscriptions(env)];
+  definitions=[...definitions.filter(fn=>!fn.name.startsWith('@events/')&&!fn.name.startsWith('@webhook/')),...feedSubscriptions(env),...webhookSubscriptions(env,null)];
   if (!env.DB || !definitions.length) return definitions;
   // Deploy owns the production registry; an old in-flight Worker must not overwrite it.
   if(await env.DB.prepare("SELECT 1 FROM meta WHERE key='function-registry-deployed'").first())return definitions;
@@ -30,17 +31,18 @@ export async function pruneEvents(env) {
   const cursor=Number((await env.DB.prepare("SELECT value FROM meta WHERE key='function-prune-cursor'").first())?.value??0);
   const rows=(await env.DB.prepare('SELECT seq,id FROM studio_events WHERE seq>?1 ORDER BY seq LIMIT 100').bind(cursor).all()).results;
   const statements=rows.flatMap(({id})=>[
-    env.DB.prepare(`DELETE FROM function_deliveries WHERE event=?1 AND (state='complete' OR NOT EXISTS (SELECT 1 FROM function_subscriptions s WHERE s.name=function_deliveries.function))`).bind(id),
+    env.DB.prepare(`DELETE FROM function_deliveries WHERE event=?1 AND ((state='complete' AND function NOT LIKE '@webhook/%') OR NOT EXISTS (SELECT 1 FROM function_subscriptions s WHERE s.name=function_deliveries.function))`).bind(id),
     env.DB.prepare(`DELETE FROM studio_events WHERE id=?1 AND NOT EXISTS (SELECT 1 FROM function_subscriptions s WHERE s.type=studio_events.type AND s.cursor<studio_events.seq) AND NOT EXISTS (SELECT 1 FROM function_deliveries d WHERE d.event=studio_events.id)`).bind(id),
   ]);
   statements.push(env.DB.prepare("INSERT INTO meta(key,value) VALUES('function-prune-cursor',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(String(rows.at(-1)?.seq??0)));
   await env.DB.batch(statements);
 }
 /** A lease is for retry after a crashed Worker, not a deadline imposed on studio code. */
-export async function runFunctions(env, cat, origin, {definitions, now = Date.now, leaseMs = 60000} = {}) {
+export async function runFunctions(env, cat, origin, {definitions, now = Date.now, leaseMs = 60000, webhookOptions = {}} = {}) {
   definitions = await syncFunctions(env,definitions,now());
   if(!definitions.length)return;
   if(typeof cat==='function')cat=await cat();
+  definitions=definitions.filter(fn=>!fn.webhook).concat(webhookSubscriptions(env,cat,webhookOptions));
   // An AI notification must not wait behind a slow function handler.
   const notify=()=>pushEvents(env,cat,origin).catch(error=>console.error('Event notification wake failed',error));
   const notifications=notify();
@@ -54,7 +56,7 @@ export async function runFunctions(env, cat, origin, {definitions, now = Date.no
       const page=(await env.DB.prepare('SELECT seq,id,data FROM studio_events WHERE type=?1 AND seq>?2 ORDER BY seq LIMIT 100').bind(fn.event,subscription.cursor).all()).results;
       if(page.length)more=true;
       if(page.length)await env.DB.batch([
-        ...page.filter(e=>!fn.schedule||JSON.parse(e.data).function===fn.name).map(e=>env.DB.prepare('INSERT OR IGNORE INTO function_deliveries(event,function) SELECT id,?2 FROM studio_events WHERE id=?1').bind(e.id,fn.name)),
+        ...page.filter(e=>(!fn.schedule||JSON.parse(e.data).function===fn.name)&&(!fn.matches||fn.matches({type:fn.event,data:JSON.parse(e.data)}))).map(e=>env.DB.prepare('INSERT OR IGNORE INTO function_deliveries(event,function) SELECT id,?2 FROM studio_events WHERE id=?1').bind(e.id,fn.name)),
         env.DB.prepare('UPDATE function_subscriptions SET cursor=MAX(cursor,?2) WHERE name=?1').bind(fn.name,page.at(-1).seq),
       ]);
       const rows=(await env.DB.prepare(`SELECT d.*,e.type,e.data,e.at FROM function_deliveries d JOIN studio_events e ON e.id=d.event WHERE d.function=?1 AND d.state IN ('pending','failed','running') AND d.due<=?2 ORDER BY d.due LIMIT 100`).bind(fn.name,now()).all()).results;
@@ -67,9 +69,9 @@ export async function runFunctions(env, cat, origin, {definitions, now = Date.no
           const event=Object.freeze({id:row.event,type:row.type,at:row.at,data:JSON.parse(row.data),attempt:row.attempts+1});
           await fn.handler(event,services(env,cat,origin,{id:'studio-function',owner:true,client:null},'function:'+fn.name,fn));
           await env.DB.prepare(`UPDATE function_deliveries SET state='complete',completed=?4,error=NULL WHERE event=?1 AND function=?2 AND lease=?3`).bind(row.event,fn.name,lease,now()).run();
-        } catch {
+        } catch (error) {
           // Handler errors may contain credentials. The office identifies the function/event; Worker logs are the studio's debugging surface.
-          await env.DB.prepare(`UPDATE function_deliveries SET state='failed',error='Function failed; inspect its code and retry',due=?4 WHERE event=?1 AND function=?2 AND lease=?3`).bind(row.event,fn.name,lease,now()+leaseMs).run();
+          await env.DB.prepare(`UPDATE function_deliveries SET state='failed',error=?5,due=?4 WHERE event=?1 AND function=?2 AND lease=?3`).bind(row.event,fn.name,lease,now()+(fn.webhook?webhookBackoff(row.attempts+1):leaseMs),fn.webhook?webhookFailure(error):'Function failed; inspect its code and retry').run();
         }
       }
     }

@@ -155,6 +155,8 @@
  *   homie-studio servers new <game> "<Name>" --policy open|humans-only|hybrid|beginner [--ai <n>] [--guides <n>]
  *                                        [--kids] [--door open|accounts|invite] [--level 1-5] [--level-max 1-5]
  *                                        [--speech game|lines|off] [--bots fill|off] [--rooms <n>] [--listed on|off]
+ *   homie-studio events webhook add <feed> <https-url>
+ *   homie-studio events webhook <rotate|remove|status|test> <feed> [--url <studio-site>]
  *   homie-studio function new <name> [--event order.paid]
  *   homie-studio function replay <name> --replay [--url <studio-site>]
  *   homie-studio function fire <event> [--input <JSON>] [--id <event-id>] [--url <local-site>]
@@ -403,6 +405,7 @@ function print(result) {
   // A check that found problems still prints them (its rows say what to fix), never a bare "failed".
   if (result.ok === false && result.command !== 'port check' && !(result.command === 'look' && result.rows) && !(result.command === 'assets check' && result.rows) && !(result.command === 'parts check' && result.rows) && !(result.command === 'shoot' && result.frames !== undefined)) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}${result.instead ? `\n${result.instead}` : ''}\n`); return; }
   if (result.ok === false && result.command === 'port check' && !result.rows) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}\n`); return; }
+  if (/^events webhook /.test(result.command ?? '')) { process.stdout.write(JSON.stringify(result,null,2)+'\n'); return; }
   const lines = [];
   if (/^parts /.test(String(result.command ?? ''))) { process.stdout.write(`${partsLines(result).join('\n')}\n`); return; }
   if (/^(style|assets|cast|anim)( |$)/.test(String(result.command ?? ''))) { process.stdout.write(`${artLines(result).join('\n')}\n`); return; }
@@ -842,6 +845,7 @@ const OUTWARD_FLAGS = {
   'shop connect': ['url', 'managed', 'live', 'manual', 'renew', 'from-clipboard'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note', 'manual-transaction'], 'shop statements': ['url', 'period', 'send', 'cursor'],
   'agents pass': ['url', 'label', 'server', 'hands', 'role', 'days'], 'agents revoke': ['url'], 'agents brain': ['url', 'budget', 'remove'],
   'agents sit': ['url', 'server', 'pass', 'label', 'brain'],
+  'events webhook': ['url','after'],
   'function replay': ['url','replay'], 'function new': ['event'], 'function fire': ['url','input','id'],
   'tool new': ['app'], 'tool call': ['url', 'input', 'public'], 'tool list': ['url', 'public'],
   // With --device it adds a phone to the person's Apple team and installs on it: a flag it does not know stops it.
@@ -908,6 +912,7 @@ async function main() {
   if (['build', 'check', 'upgrade'].includes(cmd)) {
     for (const line of (await import('../lib/authoring-guides.mjs')).authoringWords({ kind: ['app', 'business', 'cause'].includes(readStudio(root).kind) || listExperiences(root).some(g => g.kind === 'app') ? 'app' : 'game' })) process.stderr.write(`${line}\n`);
   }
+  if (cmd === 'events') return (await import('../lib/events-cli.mjs')).eventsCommand(root, sub, positional, flags, { log });
   if (cmd === 'function') return (await import('../lib/functions-cli.mjs')).functionCommand(root, sub, positional, flags, { log });
   if (cmd === 'tool') return (await import('../lib/tools-cli.mjs')).toolCommand(root, sub, positional, flags, { log });
   // A trailer is the plugin's video skill; this hands the words after the id over to it (lib/trailer.mjs).

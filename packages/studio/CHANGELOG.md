@@ -17,6 +17,22 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.50.4] - 2026-10-13
+
+**Plugin 0.50.4** · Send studio events by signed webhook.
+
+Your studio can send booking updates and other events to your AI or service, even when it cannot keep a live connection open.
+
+### Added
+
+- Connect each event feed to your own HTTPS receiver. Signed deliveries let the receiver verify that events came from your studio; failed deliveries retry automatically, and audience permissions are checked before each attempt.
+- Add, rotate, remove, inspect and test webhooks with `homie-studio events webhook`. Your local AI can set them up, and your remote owner AI can check their status and send a test. Signing keys are stored in Worker secrets and shown once for receiver setup; delivery diagnostics keep keys and receiver response bodies private.
+- Booking examples and receiver verification instructions in the app, servers and office guides. Webhooks run on your studio without a messaging service or relay.
+
+### Upgrade notes
+
+- Webhooks are opt-in. Declare an event feed, connect it with `homie-studio events webhook add <feed> <https-url>`, then build and deploy your studio. Configure your receiver to verify Standard Webhooks HMAC-SHA256 signatures using the key shown during setup.
+
 ## [0.50.3] - 2026-10-13
 
 **Plugin 0.50.3** · A counter-dash continues from where the player sees it.
