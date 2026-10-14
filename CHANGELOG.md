@@ -29,9 +29,7 @@ Studio media uses the owner’s official provider connections, with local placem
 - Setup reports session-verified official plugin connections and their browser sign-in steps. Cloudflare deploys retain Wrangler; inspection uses Cloudflare's official MCP.
 - `media import` places completed outputs, checks scene references and records hashes, rights and explicit cost status without provider access.
 
-### Removed
-
-- Homie's fal and ElevenLabs API/CLI generation clients, provider key-file readers and Projects credential-to-env setup bridge. No legacy generation path remains.
+- Removed Homie's fal and ElevenLabs API/CLI generation clients, provider key-file readers and Projects credential-to-env setup bridge. No legacy generation path remains.
 
 ### Upgrade notes
 
