@@ -218,7 +218,7 @@ test('NO CREDIT CARD: a free account without R2 deploys the whole studio, and de
   assert.equal(done.ok, true, JSON.stringify(done));
   assert.equal(done.r2, null);
   assert.match(done.announced.join(' '), /It creates: the Worker test-studio .* the D1 database test-studio-db \(rounds, and the studio's own stats: counts for the owner, never a visitor's identity\), and the Durable Objects Table and Lobby/);
-  assert.match(done.announced.join(' '), /will store the site's address/);
+  assert.equal(plan.directory.requested,true);
   assert.deepEqual(out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir)).announced, [], 'a redeploy creates nothing new and says nothing');
   assert.ok(!account.calls().some((c) => c.startsWith('r2')), `no r2 call: ${account.calls().join(' | ')}`);
   const wrangler = readFileSync(join(dir, 'wrangler.jsonc'), 'utf8');

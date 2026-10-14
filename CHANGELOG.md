@@ -23,6 +23,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 Your platformer keeps a player's runner moving smoothly through network corrections and reconnects, with less work per frame on slower phones.
 
+Studios choose listing, share one public address, and keep their apps and tools working after deploy and upgrade.
+
 ### Fixed
 
 - In server-rules platformers, a player's own box-shaped 2D runner now moves smoothly through network corrections, even after a delayed frame. It goes around blocking platforms without being pulled backwards against the player's held direction, and normal jumps keep their shape.
