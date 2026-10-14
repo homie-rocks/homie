@@ -15,7 +15,7 @@ class WebhookFailure extends Error {
 }
 export function webhookFailure(error){return error instanceof WebhookFailure?error.message:'Webhook delivery failed';}
 export const webhookBackoff=attempt=>Math.min(3600000,60000*2**Math.min(16,attempt-1));
-export async function postWebhook(env,name,event,{fetchFn=fetch,now=Date.now,timeoutMs=10000}={}) {
+export async function postWebhook(env,name,event,{fetchFn=globalThis.fetch.bind(globalThis),now=Date.now,timeoutMs=10000}={}) {
   const hook=eventFeeds(env)[name]?.webhook;
   if(!hook)throw new WebhookFailure('Webhook removed');
   validateWebhook(name,hook);
@@ -29,7 +29,7 @@ export async function postWebhook(env,name,event,{fetchFn=fetch,now=Date.now,tim
   const signature=btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(`${id}.${timestamp}.${body}`)))));
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeoutMs);
   try {
-    const response=await fetchFn(hook.url,{method:'POST',redirect:'error',signal:controller.signal,headers:{'content-type':'application/json','webhook-id':id,'webhook-timestamp':timestamp,'webhook-signature':'v1,'+signature},body});
+    const response=await fetchFn(hook.url,{method:'POST',redirect:'manual',signal:controller.signal,headers:{'content-type':'application/json','webhook-id':id,'webhook-timestamp':timestamp,'webhook-signature':'v1,'+signature},body});
     // Never read or log receiver content: it may echo credentials or private records.
     await response.body?.cancel();
     if(!response.ok)throw new WebhookFailure('Webhook HTTP '+response.status);
@@ -56,7 +56,7 @@ export async function webhookStatus(env,name,after=0) {
   const latest=await env.DB.prepare('SELECT d.event,d.state,d.attempts,d.error,d.due,d.completed FROM function_deliveries d JOIN studio_events e ON e.id=d.event WHERE d.function=?1 ORDER BY e.seq DESC LIMIT 1').bind(webhookName(name,feed.webhook)).first();
   return {feed:name,enabled:true,latest,deliveries:rows,next:rows.length===100?rows.at(-1).seq:null};
 }
-export async function testWebhook(env,cat,name) {
+export async function testWebhook(env,cat,name,origin) {
   const feed=eventFeeds(env)[name];if(!feed?.webhook)throw new Error('Webhook not configured');
   if(!await readableWebhook(env,cat,feed))throw new Error('Feed audience cannot read this collection');
   const {syncFunctions,runFunctions}=await import('./functions.mjs');await syncFunctions(env);
@@ -66,6 +66,6 @@ export async function testWebhook(env,cat,name) {
     env.DB.prepare('INSERT INTO studio_events(id,type,data,at) VALUES(?1,?2,?3,?4)').bind(id,'webhook.test',JSON.stringify({feed:name,test:true}),Date.now()),
     env.DB.prepare('INSERT INTO function_deliveries(event,function) VALUES(?1,?2)').bind(id,webhookName(name,feed.webhook)),
   ]);
-  await runFunctions(env,cat,'https://studio.invalid');
+  await runFunctions(env,cat,origin);
   return {id,...await env.DB.prepare('SELECT state,attempts,error,due FROM function_deliveries WHERE event=?1 AND function=?2').bind(id,webhookName(name,feed.webhook)).first()};
 }

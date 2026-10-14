@@ -85,7 +85,7 @@ export function builtins(env,cat,origin) {
     }),
     tool('studio_events_webhook_test','Send an explicitly synthetic event to the selected webhook using durable retries.','owner',object({feed:str},['feed']),async({feed},ctx)=>{
       if(!ctx.caller.owner)throw new Error('Owner only');
-      return (await import('./event-webhooks.mjs')).testWebhook(env,cat,feed);
+      return (await import('./event-webhooks.mjs')).testWebhook(env,cat,feed,origin);
     }),
     tool('studio_function_replay','Replay retained events for a declaration with replay: true.','owner',object({name:str},['name']),async({name})=>{
       const {replayFunction,runFunctions}=await import('./functions.mjs');

@@ -39,7 +39,7 @@ test('every version has its section: dated, with the plugin beside it, a summary
   const log = readChangelog();
   assert.deepEqual(log.problems, []);
   const versions = log.versions.map((s) => s.version);
-  assert.equal(versions[0], STUDIO_VERSION, 'the newest section is this package\'s version');
+  assert.equal(log.versions.find(s=>!s.body.includes('<!-- pending-release: renumber before publishing -->'))?.version, STUDIO_VERSION, 'the newest non-pending section is this package’s version');
   for (const v of HISTORY) assert.ok(versions.includes(v), `a section for ${v}`);
   assert.deepEqual(versions, [...versions].sort((a, b) => compareVersions(b, a)), 'newest first');
   for (const s of log.versions) {

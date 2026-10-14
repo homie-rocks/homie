@@ -26,7 +26,7 @@ test('Standard Webhooks verifier accepts exact signed bytes, rejects tampering; 
  const verifier=new Webhook(secret);assert.deepEqual(verifier.verify(captured.body,captured.headers),event);
  assert.throws(()=>verifier.verify(captured.body+' ',captured.headers));
  assert.throws(()=>verifier.verify(captured.body,{...captured.headers,'webhook-id':'changed'}));
- assert.equal(captured.redirect,'error');assert.equal(captured.headers['content-type'],'application/json');
+ assert.equal(captured.redirect,'manual');assert.equal(captured.headers['content-type'],'application/json');
  assert.ok(!JSON.stringify(captured).includes(secret));
 });
 
@@ -72,7 +72,7 @@ test('owner-only status and synthetic test use durable dispatcher; disabled feed
  t.mock.method(globalThis,'fetch',async(url,init)=>{sent.push(JSON.parse(init.body));return new Response(null,{status:204});});
  const tools=builtins(env,cat,'https://studio.example');
  for(const name of ['studio_events_webhook_status','studio_events_webhook_test'])await assert.rejects(()=>tools.find(x=>x.name===name).handler({feed:'bookings'},{caller:{owner:false}}),/Owner only/);
- const result=await testWebhook(env,cat,'bookings');assert.equal(result.state,'complete');assert.equal(sent[0].type,'webhook.test');assert.equal(sent[0].data.test,true);assert.equal((await feedEvents(env,'bookings')).length,0);
+ const result=await testWebhook(env,cat,'bookings','https://studio.example');assert.equal(result.state,'complete');assert.equal(sent[0].type,'webhook.test');assert.equal(sent[0].data.test,true);assert.equal((await feedEvents(env,'bookings')).length,0);
  env.STUDIO_EVENT_FEEDS='{}';await runFunctions(env,cat,'https://studio.example');assert.equal(sent.length,1);
 });
 
