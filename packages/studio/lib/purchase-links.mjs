@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sharedPartsOf, readPart, packedDir } from './parts.mjs';
-import { canonicalJson } from '../worker/referrals.mjs';
+import { canonicalJson } from '../worker/canonical-json.mjs';
 import { paymentLinkURL } from '../worker/shop-links.mjs';
 const hash = (v) => createHash('sha256').update(canonicalJson(v)).digest('hex');
 export async function syncPurchaseLinks({ root, api, slug, site, mode, list, till }) {

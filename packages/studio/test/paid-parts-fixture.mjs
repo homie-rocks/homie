@@ -17,7 +17,7 @@ import { buildParts } from '../lib/parts-build.mjs';
 import { uploadPaidParts } from '../lib/parts-upload.mjs';
 import { partsRoutes } from '../worker/parts.mjs';
 import { shopRoutes } from '../worker/shop.mjs';
-import { SHOP_MIGRATION, SHOP_RESERVATIONS, SHOP_STATEMENTS } from '../worker/shop-store.mjs';
+import { SHOP_MIGRATION, SHOP_RESERVATIONS } from '../worker/shop-store.mjs';
 import { PURCHASE_MIGRATION, PURCHASE_STATE, authorizePurchaseTest, purchaseRoutes } from '../worker/purchases.mjs';
 import { signPayload } from '../worker/stripe.mjs';
 
@@ -28,7 +28,7 @@ const SECRET = `whsec_${'testsecretvalue0'.repeat(2)}`;
 const sale = { amount: 125000, currency: 'usd', billing: 'one-time', scope: 'studio', source: true, updates: 'major', taxCode: 'txcd_10000000', refund: 'Ask the selling studio for a refund under these terms.', onRefund: 'terminate', onExpiry: 'retain', commercialUse: true, transferable: false };
 function db() {
   const sql = new DatabaseSync(':memory:');
-  sql.exec('CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);'); sql.exec(SHOP_MIGRATION); sql.exec(SHOP_RESERVATIONS); sql.exec(SHOP_STATEMENTS); sql.exec(PURCHASE_MIGRATION); sql.exec(PURCHASE_STATE);
+  sql.exec('CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);'); sql.exec(SHOP_MIGRATION); sql.exec(SHOP_RESERVATIONS); sql.exec(PURCHASE_MIGRATION); sql.exec(PURCHASE_STATE);
   const stmt = (q, args = []) => ({ bind: (...a) => stmt(q, a), first: async () => sql.prepare(q).get(...args) ?? null, all: async () => ({ results: sql.prepare(q).all(...args) }), run: async () => ({ meta: { changes: sql.prepare(q).run(...args).changes } }) });
   return { sql, prepare: stmt, batch: async (list) => { sql.exec('BEGIN'); try { const r = []; for (const s of list) r.push(await s.run()); sql.exec('COMMIT'); return r; } catch (e) { sql.exec('ROLLBACK'); throw e; } } };
 }

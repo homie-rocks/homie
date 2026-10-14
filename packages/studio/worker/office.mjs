@@ -58,8 +58,8 @@ import { toolIdentity } from './tool-identity.mjs';
  * taking a message down, happens at once.
  *
  * THE SHOP (0.24.0, worker/shop.mjs): /_studio/office/shop and /_studio/api/shop (sales, refunds, disputes, payouts as
- * links to the studio's own Stripe, a CSV, the referral books and signed statements). A refund is the owner's one tap;
- * from an office key it is ALWAYS an ask (the AI may only propose one), and so is marking a referrer paid.
+ * links to the studio's own Stripe, a CSV, order records). A refund is the owner's one tap;
+ * from an office key it is ALWAYS an ask (the AI may only propose one).
  */
 import { seatsOf } from './seats.mjs';
 import { diagnosticsOf, gatePlayers, roomLayout } from './gate.mjs';
@@ -71,7 +71,7 @@ import { esc, layout, notFoundPage } from './site.mjs';
 import { confirmPage, lockedPage, officePage } from './office-page.mjs';
 import { CHAT_MODES, CHAT_WHO, checkChatRules, publicChat } from './chat.mjs';
 import { chatDay, chatOf, chatRowsOf, clearChatRules, dismissReport, reportsOf, writeChatRules } from './chat-store.mjs';
-import { linesOf, checkRelease, performRelease, checkRefund, checkSettle, describeRefund, officeShopPage, ordersCsv, performRefund, receivedPages, settleReferrer, shopOffice, statementsOut, statementsSend } from './shop.mjs';
+import { checkRelease, performRelease, checkRefund, describeRefund, officeShopPage, ordersCsv, performRefund, shopOffice } from './shop.mjs';
 import { orderById } from './shop-store.mjs';
 import { checkLoungeAction, describeLounge, loungeNeedsAsk, loungeOffice, performLounge } from './lounge.mjs';
 
@@ -766,7 +766,6 @@ function checkAction(cat, op, body) {
     }
     case 'shop-release': return checkRelease(body);
     case 'refund': return checkRefund(body);
-    case 'shop-settle': return checkSettle(body);
     case 'agents-brain': {
       if (!meta) return bad('game is one of this studio\'s game ids');
       if (typeof body.server !== 'string' || !(body.server === 'public' || /^[a-z0-9][a-z0-9-]{1,19}$/.test(body.server))) return bad('server is the server\'s id');
@@ -868,7 +867,6 @@ export function describe(cat, a) {
     case 'room-level': return `Set the AI in ${where} to ${levelName(a.level)} (level ${a.level}).`;
     case 'shop-release': return `Release reservation ${a.order}: it stops counting toward the cap. We ask Stripe to expire an open Checkout Session. This does not refund a payment. A payment that still arrives grants the item, counts toward spending and can be refunded from the office.`;
     case 'refund': return describeRefund(cat, a, a.item ? { item: a.item, amount: a.amount, currency: a.currency } : null);
-    case 'shop-settle': return `Mark what this studio owes ${a.via} for referrals in ${a.currency.toUpperCase()} as paid${a.ref ? ` (${a.ref})` : ''}: its owed lines are settled in the books.`;
     case 'agents-brain': return ['workers-ai', 'owner-key'].includes(a.mode)
       ? `Let the AI guides on ${gname}'s server ${a.server} talk: they speak only the lines the game's own agents.json gives them (never free text), at most one line every 8 seconds, never about a person, and a player can quiet them. Their brain runs on ${a.mode === 'workers-ai' ? `this studio's own Workers AI (free allowance${a.budget !== undefined ? `; at most ${Math.round(a.budget).toLocaleString('en-US')} neurons a day` : ''})` : `your own AI provider key (claude-haiku-4-5, your money${a.budget !== undefined ? `, at most $${Number(a.budget).toFixed(2)} a day` : ', capped daily'})`}.`
       : `Set the AI guides' brain on ${gname}'s server ${a.server} to ${a.mode}.`;
@@ -901,7 +899,7 @@ export async function needsAsk(env, cat, a) {
   if (String(a.op).startsWith('lounge-')) return loungeNeedsAsk(env, cat, a, chatOpensUp);
   if (DESTRUCTIVE.has(a.op)) return true;
   // Money: the owner's AI may only propose a refund or a settlement; the owner says yes.
-  if (a.op === 'refund' || a.op === 'shop-settle' || a.op === 'shop-release') return true;
+  if (a.op === 'refund' || a.op === 'shop-release') return true;
   if (a.op === 'server-close') return !a.reopen;
   if (a.op === 'member') return a.remove === true;
   if (a.op === 'server-set') {
@@ -1134,7 +1132,6 @@ export async function perform(env, cat, a) {
     }
     case 'shop-release': return performRelease(env, a, cat);
     case 'refund': return performRefund(env, cat, a);
-    case 'shop-settle': return settleReferrer(env, a);
     default: return { ok: false, error: 'op' };
   }
 }
@@ -1284,24 +1281,20 @@ async function api(request, env, url, cat) {
     const lounge = await loungeOffice(env, cat, url.origin);
     return lounge ? json({ ok: true, lounge }) : json({ ok: false, error: 'no-lounge', message: 'This studio has no Lounge: add "lounge": true to studio.json and deploy.' }, 404);
   }
-  // The shop (0.24.0): the owner's view, the accountant's CSV, the referral statements.
+  // The shop (0.24.0): the owner's view, the accountant's CSV, order records.
   if (selling.enabled) { const result = await selling.officeRoutes(request, env, path, body); if (result) return result; }
-  if (path === '/_studio/api/shop' && request.method === 'GET') return json(await shopOffice(env, cat, url.origin, url.searchParams.get('cursor') ?? '', /^\d+$/.test(url.searchParams.get('itemCursor') ?? '') ? Number(url.searchParams.get('itemCursor')) : 0, /^\d+$/.test(url.searchParams.get('orderCursor') ?? '') ? Math.min(Number(url.searchParams.get('orderCursor')), Number.MAX_SAFE_INTEGER) : 0));
+  if (path === '/_studio/api/shop' && request.method === 'GET') return json(await shopOffice(env, cat, url.origin, /^\d+$/.test(url.searchParams.get('itemCursor') ?? '') ? Number(url.searchParams.get('itemCursor')) : 0, /^\d+$/.test(url.searchParams.get('orderCursor') ?? '') ? Math.min(Number(url.searchParams.get('orderCursor')), Number.MAX_SAFE_INTEGER) : 0));
   if (path === '/_studio/api/shop/orders.csv' && request.method === 'GET') {
     try {
       return new Response(await ordersCsv(env), { headers: { 'content-type': 'text/csv; charset=utf-8', 'cache-control': 'no-store, private', 'content-disposition': `attachment; filename="orders-${today()}.csv"` } });
     } catch { return json({ ok: false, error: 'not-migrated', message: 'The shop needs migration 0008_studio_shop.sql (npm run deploy).' }, 503); }
   }
-  if (path === '/_studio/api/shop/lines' && request.method === 'GET') return json({ ok: true, ...(await linesOf(env, { via: url.searchParams.get('via'), currency: url.searchParams.get('currency'), cursor: url.searchParams.get('cursor') ?? '' })) });
-  if (path === '/_studio/api/shop/received' && request.method === 'GET') return json(await receivedPages(env, url.searchParams.get('seller') ?? '', url.searchParams.get('period') ?? '', url.searchParams.get('cursor') ?? ''));
-  if (path === '/_studio/api/shop/statements' && request.method === 'GET') return json(await statementsOut(env, cat, url.origin, url.searchParams.get('period'), url.searchParams.get('cursor') ?? ''));
-  if (path === '/_studio/api/shop/statements/send' && request.method === 'POST') return json(await statementsSend(env, cat, url.origin, body.period, body.cursor ?? ''));
   const OPS = {
     '/_studio/api/chat/rules': 'chat-rules', '/_studio/api/chat/remove': 'chat-remove', '/_studio/api/chat/report': 'chat-report', '/_studio/api/chat/budget': 'chat-budget',
     '/_studio/api/kick': 'kick', '/_studio/api/mute': 'mute', '/_studio/api/close': 'close', '/_studio/api/announce': 'announce', '/_studio/api/game': 'game',
     '/_studio/api/servers': 'server-create', '/_studio/api/servers/set': 'server-set', '/_studio/api/servers/close': 'server-close', '/_studio/api/servers/member': 'member',
     '/_studio/api/agents/pass': 'pass', '/_studio/api/room-level': 'room-level', '/_studio/api/agents/brain': 'agents-brain',
-    '/_studio/api/shop/release': 'shop-release', '/_studio/api/shop/refund': 'refund', '/_studio/api/shop/settle': 'shop-settle',
+    '/_studio/api/shop/release': 'shop-release', '/_studio/api/shop/refund': 'refund',
     '/_studio/api/lounge/rules': 'lounge-rules', '/_studio/api/lounge/night': 'lounge-night', '/_studio/api/lounge/mod': 'lounge-mod',
     '/_studio/api/lounge/remove': 'lounge-remove', '/_studio/api/lounge/hold': 'lounge-hold',
   };

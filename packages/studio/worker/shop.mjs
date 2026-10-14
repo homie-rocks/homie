@@ -16,10 +16,9 @@ import { selling } from './extensions.mjs';
  *                                follows the studio advantage settings)
  *   GET  /api/shop/mine          the player's orders and what they own (the account page)
  *   GET  /shop/  /shop/thanks  /shop/refunds/  /shop/parent/<token>   the pages (worker/shop-page.mjs)
- *   POST /api/referrals/statement   another studio's signed referral statement to this one (worker/referrals.mjs)
  *
  * THE OFFICE (worker/office.mjs routes them): sales, refunds, disputes and payouts as links to the studio's own Stripe
- * Dashboard, a CSV for the accountant, the referral books and signed statements. A refund is the owner's one tap; the
+ * Dashboard, a CSV for the accountant, order records. A refund is the owner's one tap; the
  * owner's AI (an office key) can only ASK for one, which the owner confirms with one tap. A dispute never touches the
  * player's account: it changes nothing until it is decided, and a lost one is a refund of that one item.
  *
@@ -37,17 +36,16 @@ import { selling } from './extensions.mjs';
 import { hasStripeKey, linkConfig, linkSettings, shopMode, fullerReason, paymentLinkURL, rememberMoneyEvent, rememberedMoney } from './shop-links.mjs';
 import { players } from './players.mjs';
 import { serversOf } from './servers.mjs';
-import { ENTITLEMENT_KEY, referralShare, checkoutMessage, amountError, amountStep, parseAmount, currencyScale, audienceOf, bandOf, checkShop, defaultTaxCode, money, wayFor } from './shop-rules.mjs';
+import { ENTITLEMENT_KEY, checkoutMessage, amountError, amountStep, parseAmount, currencyScale, audienceOf, bandOf, checkShop, defaultTaxCode, money, wayFor } from './shop-rules.mjs';
 import {
   orderLines, lineView, bandOfPlayer, forgetPlayerShop, grantStatements, migrationNeeded, migrated, newOrderId, orderById, orderByPayment, orderBySession, orderView, playerOrderStatus, ownsOf, restoreStatement, revokeStatement,
   setBand, shopDataOf, spentThisMonth,
 } from './shop-store.mjs';
 import { redactStripe, WEBHOOK_SECRET_SHAPE, KEY_SHAPE, stripeCall, StripeError, createCheckoutSession, createRefund, expireCheckoutSession, dashboardLink, isApprovalRequired, isMissingProduct, productIdOf, verifyWebhook } from './stripe.mjs';
-import { pendingStatementPeriod, statementFailures, arrivalOf, booksOf, linesOf, statementPage, lineFor, receiveStatement, receivedPages, referrerOk, sendStatements, settle, statementsIn, voidLineStatements } from './referrals.mjs';
 import { SHOP_JS, officeShopPage, parentPage, refundsPage, shopPage, thanksPage } from './shop-page.mjs';
 import { notFoundPage } from './site.mjs';
 
-export { linesOf, forgetPlayerShop, officeShopPage, receivedPages, shopDataOf };
+export { forgetPlayerShop, officeShopPage, shopDataOf };
 
 const DAY = 86_400_000;
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
@@ -166,7 +164,7 @@ export const MISSING_WORDS = Object.freeze({
   'stripe-key': 'The Worker has no Stripe key yet (homie-studio shop connect: approve Stripe in your browser; the command names any remaining Worker credential step).',
   'webhook-secret': 'The Worker has no webhook signing secret yet (run homie-studio shop connect to create and store it automatically).',
   database: 'This Worker has no database.',
-  migration: 'The shop\'s tables are not in the studio\'s D1 yet: npm run deploy applies migrations 0008_studio_shop.sql, 0010_shop_reservations.sql and 0011_shop_statements.sql and 0012_shop_lines.sql.',
+  migration: 'The shop\'s tables are not in the studio\'s D1 yet: npm run deploy applies migrations 0008_studio_shop.sql, 0010_shop_reservations.sql and 0012_shop_lines.sql.',
 });
 
 /** The server a request names (the play shell says which), with its kids and beginner flags. */
@@ -183,7 +181,7 @@ async function serverFacts(env, cat, game, server) {
 /** The items a game's shop shows (its own and the studio's), in shop.json's order. */
 const itemsFor = (shop, game) => (shop?.items ?? []).filter((i) => !i.game || !game || i.game === game);
 
-/** The account a request is signed in as, with when it was made (a referral counts only for a new account). */
+/** The account a request is signed in as, with when it was made. */
 async function accountOf(request, env) {
   const p = await players.of(request, env);
   if (!p) return null;
@@ -214,7 +212,6 @@ export async function shopRoutes(request, env, ctx, url, { catalogueOf }) {
   const requestAt = Date.now();
   const path = url.pathname;
   const read = request.method === 'GET' || request.method === 'HEAD';
-  if (path === '/api/referrals/statement') return receiveStatement(request, env, url);
   if (path === '/_homie/shop.js') return new Response(SHOP_JS, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=300', 'x-content-type-options': 'nosniff' } });
   const shopPath = path === '/shop' || path === '/shop/' || path.startsWith('/shop/') || path === '/api/shop' || path.startsWith('/api/shop/') || path === '/api/player/owns';
   if (selling.enabled && (path.startsWith('/api/purchases/') || path.startsWith('/purchases/'))) return selling.purchaseRoutes(request, env, url, await catalogueOf());
@@ -374,7 +371,7 @@ export function sessionParams(shop, item, order, { origin, amount, player, game,
     client_reference_id: player,
     // Stripe metadata values allow 500 characters; the order holds the complete item id.
     // https://docs.stripe.com/metadata (fetched 2026-10-08).
-    metadata: { homie: 'shop-v1', origin, studio: String(studio ?? '').length <= 500 ? String(studio ?? '') : undefined, order: order.id, item: item.id.length <= 500 ? item.id : undefined, ...(game ? { game } : {}), ...(order.via ? { via: order.via } : {}), ...(parent ? { parent: '1' } : {}) },
+    metadata: { homie: 'shop-v1', origin, studio: String(studio ?? '').length <= 500 ? String(studio ?? '') : undefined, order: order.id, item: item.id.length <= 500 ? item.id : undefined, ...(game ? { game } : {}), ...(parent ? { parent: '1' } : {}) },
     payment_intent_data: { metadata: { homie: 'shop-v1', origin, order: order.id, item: item.id.length <= 500 ? item.id : undefined } },
     success_url: `${origin}/shop/thanks?session_id={CHECKOUT_SESSION_ID}${back}`,
     cancel_url: `${origin}/shop/?cancelled=1&order=${order.id}${back}`,
@@ -461,7 +458,7 @@ export async function reconcileOrders(env, shop, player = null, { expireOpen = f
 }
 
 /** Make the order row, then Stripe's Checkout Session. Returns { order, url } or a refusal Response. */
-async function startCheckout(env, url, cat, shop, item, { player, game, via, amount, parent = false, lines = null, reference = null, requestAt = Date.now() }) {
+async function startCheckout(env, url, cat, shop, item, { player, game, amount, parent = false, lines = null, reference = null, requestAt = Date.now() }) {
   lines ??= [{ item, amount, quantity: 1 }];
   const keyless = amount > 0 && !hasStripeKey(env);
   if (keyless && (lines.length !== 1 || fullerReason(shop))) return { error: fail(409, 'one-item', fullerReason(shop) ?? 'Buy one item at a time. A combined cart needs the fuller checkout connection.') };
@@ -469,21 +466,20 @@ async function startCheckout(env, url, cat, shop, item, { player, game, via, amo
   if (keyless && (!link || !paymentLinkURL(link.url))) return { error: fail(503, 'payment-links', MISSING_WORDS['payment-links']) };
   if (keyless && item.price === 'choose' && lines[0].quantity !== 1) return { error: fail(400, 'quantity', 'A tip is one chosen amount; choose it on Stripe.') };
   if (keyless) lines = lines.map((l) => ({ ...l, item: { ...l.item, paymentLink: link } }));
-  try { if (via) referralShare(amount, shop.referrals.rate); } catch { return { error: fail(400, 'arithmetic', 'The referral share exceeds safe integer arithmetic.') }; }
-  const order = { id: newOrderId(), player: player.id, via: via ?? null, amount, currency: shop.currency };
+  const order = { id: newOrderId(), player: player.id, amount, currency: shop.currency };
   const now = Date.now();
   order.createdAt = now;
   order.expiresAt = Math.floor(now / 1000) + Math.max(31, shop.checkoutMinutes ?? 1440) * 60;
   // One SQL statement reserves the amount: concurrent requests cannot both spend the remaining cap.
-  const reservation = () => env.DB.prepare("INSERT INTO shop_orders (id, player, item, game, amount, currency, till, mode, status, parent, via, created_at, updated_at, expires_at) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'started', ?9, ?10, ?11, ?11, ?14 WHERE ?5 = 0 OR ?12 IS NULL OR ?5 <= ?12 - (SELECT COALESCE(SUM(amount - refunded_net), 0) FROM shop_orders WHERE player = ?2 AND mode = ?8 AND ((status IN ('paid', 'disputed') AND paid_at >= ?13) OR (status IN ('started', 'processing') AND (session IS NOT NULL OR COALESCE(expires_at, created_at + 1860000) + 60000 > ?11))))")
-    .bind(order.id, player.id, item.id, game ?? item.game ?? null, amount, shop.currency, shop.till, shopMode(env), parent ? 1 : 0, order.via, now, shop.capPerPlayerMonth, Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), 1), order.expiresAt * 1000);
+  const reservation = () => env.DB.prepare("INSERT INTO shop_orders (id, player, item, game, amount, currency, till, mode, status, parent, created_at, updated_at, expires_at) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'started', ?9, ?10, ?10, ?13 WHERE ?5 = 0 OR ?11 IS NULL OR ?5 <= ?11 - (SELECT COALESCE(SUM(amount - refunded_net), 0) FROM shop_orders WHERE player = ?2 AND mode = ?8 AND ((status IN ('paid', 'disputed') AND paid_at >= ?12) OR (status IN ('started', 'processing') AND (session IS NOT NULL OR COALESCE(expires_at, created_at + 1860000) + 60000 > ?10))))")
+    .bind(order.id, player.id, item.id, game ?? item.game ?? null, amount, shop.currency, shop.till, shopMode(env), parent ? 1 : 0, now, shop.capPerPlayerMonth, Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), 1), order.expiresAt * 1000);
   lines = lines.map((line, i) => ({ ...line, id: `${order.id}_${i}` }));
   const reserve = async () => {
     const results = await env.DB.batch([reservation(),
       ...(reference === null ? [] : [env.DB.prepare("INSERT INTO meta(key,value) SELECT ?1,?2 WHERE EXISTS (SELECT 1 FROM shop_orders WHERE id=?3)").bind(`shop-reference:${order.id}`, reference, order.id)]),
       ...lines.map((line, i) => env.DB.prepare("INSERT INTO shop_order_lines (id, order_id, position, item, quantity, unit_amount, amount, snapshot) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8 WHERE EXISTS (SELECT 1 FROM shop_orders WHERE id = ?2)")
         .bind(line.id, order.id, i, line.item.id, line.quantity, line.amount, line.amount * line.quantity, JSON.stringify(line.item))),
-      env.DB.prepare('UPDATE shop_orders SET referral_terms = ?2, checkout_player = player WHERE id = ?1').bind(order.id, shop.referrals ? JSON.stringify(shop.referrals) : null),
+      env.DB.prepare('UPDATE shop_orders SET checkout_player = player WHERE id = ?1').bind(order.id),
     ]);
     return results[0];
   };
@@ -535,17 +531,6 @@ async function startCheckout(env, url, cat, shop, item, { player, game, via, amo
     return { error: fail(502, 'stripe', `Stripe could not open the checkout (${why}). Nothing was charged.`) };
   }
   return { order, url: session.url, session: session.id, reconciled };
-}
-
-/** The referrer this buyer brought, if it still counts: their arrival, a new account since it, in the window, proven. */
-async function viaFor(request, env, url, shop, player) {
-  if (!shop.referrals || !(shop.referrals.rate > 0)) return null;
-  const a = await arrivalOf(request, env);
-  if (!a || a.via === url.hostname.replace(/^www\./, '')) return null;
-  if (shop.referrals.windowDays !== null && Date.now() - a.at > Math.round(shop.referrals.windowDays * DAY)) return null;
-  // New players only: an account made before the arrival was already this studio's player.
-  if (shop.referralNewPlayersOnly && player.since !== null && player.since < a.at - 60_000) return null;
-  return (await referrerOk(a.via)) ? a.via : null;
 }
 
 const WAY_WORDS = Object.freeze({
@@ -605,8 +590,7 @@ async function buyRoute(request, env, url, cat, shop, ready, ctx, requestAt) {
     player = guest.session.player;
     cookies = guest.session.cookies;
   }
-  const via = await viaFor(request, env, url, shop, player);
-  const r = await startCheckout(env, url, cat, shop, item, { player, game, via, amount, lines, reference, requestAt });
+  const r = await startCheckout(env, url, cat, shop, item, { player, game, amount, lines, reference, requestAt });
   const response = r.error ?? json({ ok: true, order: r.order.id, url: r.url });
   if (!r.error && !r.reconciled && ctx?.waitUntil) ctx.waitUntil(reconcileOrders(env, shop, player.id).catch((error) => logOrderError(env, r.order.id, error)));
   for (const cookie of cookies) response.headers.append('set-cookie', cookie);
@@ -638,7 +622,6 @@ async function parentLinkRoute(request, env, url, cat, shop, ready) {
     cart.push({ item: item.id, quantity });
   }
   const item = shop.items.find((i) => i.id === cart[0].item);
-  cart[0].via = await viaFor(request, env, url, shop, player);
   const token = randomToken();
   await env.DB.prepare('INSERT INTO shop_parent_links (hash, player, item, game, order_id, expires_at, cart) VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6)').bind(await sha256Hex(token), player.id, item.id, game, Date.now() + 7 * DAY, JSON.stringify(cart)).run();
   return json({ ok: true, link: `${url.origin}/shop/parent/${token}`, expiresInDays: 7 });
@@ -678,7 +661,7 @@ async function parentRoute(request, env, url, cat, shop, ready, token, ctx) {
     if (total > BigInt(Number.MAX_SAFE_INTEGER)) return parentPage(cat, shop, { item, lines, name: kid.name, token, said: 'The total exceeds safe integer arithmetic.' });
     amount = Number(total);
   }
-  const r = await startCheckout(env, url, cat, shop, item, { player: { id: row.player }, game: row.game, via: cart[0]?.via ?? null, amount, parent: true, lines });
+  const r = await startCheckout(env, url, cat, shop, item, { player: { id: row.player }, game: row.game, amount, parent: true, lines });
   if (r.error) return parentPage(cat, shop, { item, lines, name: kid.name, token, open: true, said: (await r.error.json()).message });
   await env.DB.prepare('UPDATE shop_parent_links SET order_id = ?2 WHERE hash = ?1').bind(await sha256Hex(token), r.order.id).run();
   if (!r.reconciled && ctx?.waitUntil) ctx.waitUntil(reconcileOrders(env, shop, row.player).catch((error) => logOrderError(env, r.order.id, error)));
@@ -866,7 +849,7 @@ async function bindLinkSession(env, session, mode) {
   if (!order) {
     const id = `ord_${(await sha256Hex(session.id)).slice(0, 20)}`;
     await env.DB.batch([
-      env.DB.prepare("INSERT INTO shop_orders (id, player, checkout_player, item, game, amount, currency, till, mode, status, parent, via, created_at, updated_at, session, referral_terms) SELECT ?2, player, checkout_player, item, game, ?4, currency, till, mode, 'started', parent, via, ?5, ?5, ?3, referral_terms FROM shop_orders WHERE id = ?1 ON CONFLICT DO NOTHING").bind(source.id, id, session.id, amount, Date.now()),
+      env.DB.prepare("INSERT INTO shop_orders (id, player, checkout_player, item, game, amount, currency, till, mode, status, parent, created_at, updated_at, session) SELECT ?2, player, checkout_player, item, game, ?4, currency, till, mode, 'started', parent, ?5, ?5, ?3 FROM shop_orders WHERE id = ?1 ON CONFLICT DO NOTHING").bind(source.id, id, session.id, amount, Date.now()),
       env.DB.prepare("INSERT OR IGNORE INTO meta(key,value) SELECT ?1,value FROM meta WHERE key=?2").bind(`shop-reference:${id}`, `shop-reference:${source.id}`),
       env.DB.prepare('INSERT INTO shop_order_lines (id, order_id, position, item, quantity, unit_amount, amount, snapshot) VALUES (?1, ?2, 0, ?3, ?4, ?5, ?6, ?7) ON CONFLICT DO NOTHING').bind(`${id}_0`, id, item.id, quantity, amount / quantity, amount, lines[0].snapshot),
     ]);
@@ -880,7 +863,7 @@ async function bindLinkSession(env, session, mode) {
   return true;
 }
 
-/** A paid checkout: the order is paid, its entitlements granted, a referral line written. Idempotent. */
+/** A paid checkout: the order is paid, its entitlements granted, its payment recorded. Idempotent. */
 export async function paid(env, shop, session, paidAt = Date.now()) {
   const o = await orderBySession(env, session.id);
   if (!o) return 'unknown-order';
@@ -939,11 +922,9 @@ export async function paid(env, shop, session, paidAt = Date.now()) {
     writes.push(env.DB.prepare("UPDATE shop_order_lines SET status = 'paid', total = ?2, snapshot = COALESCE(snapshot, ?3) WHERE id = ?1 AND status != 'refunded'").bind(line.id, gross, JSON.stringify(item)));
   }
   if (lineTotal !== total) throw new Error('Stripe line totals do not match order');
-  if (o.via && o.paid_at === null) writes.push(...(await lineFor(env, o, o.referral_terms ? { referrals: JSON.parse(o.referral_terms) } : shop, { now })));
-  writes.push(env.DB.prepare("UPDATE referral_lines SET original_share = share WHERE order_id = ?1 AND original_share IS NULL").bind(o.id));
   writes.push(env.DB.prepare("UPDATE shop_orders SET status = 'paid', payment = ?2, tax = ?3, total = ?4, paid_at = ?5, updated_at = ?6 WHERE id = ?1 AND paid_at IS NULL")
     .bind(o.id, typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id ?? null, tax, total, paidAt, now));
-  // D1 batch is transactional: a failure rolls back payment, every grant and the referral together.
+  // D1 batch is transactional: a failure rolls back payment and every grant together.
   // https://developers.cloudflare.com/d1/worker-api/d1-database/#batch
   const result = await env.DB.batch(writes);
   const paymentId = payment?.id ?? (typeof session.payment_intent === 'string' ? session.payment_intent : null);
@@ -1007,15 +988,6 @@ export async function syncRefunds(env, payment, freeOrder = null, freeLines = []
   }
   writes.push(env.DB.prepare(`UPDATE entitlements SET state = CASE WHEN ?3 OR ?4 OR EXISTS (SELECT 1 FROM shop_entitlement_lines WHERE order_id = ?1 AND key = entitlements.key) AND NOT EXISTS (SELECT 1 FROM shop_entitlement_lines WHERE order_id = ?1 AND key = entitlements.key AND state = 'active') THEN 'revoked' ELSE 'active' END WHERE order_id = ?1 AND ${guard}`).bind(o.id, revision, full ? 1 : 0, o.status === 'lost' ? 1 : 0));
   writes.push(env.DB.prepare(`UPDATE entitlements SET starts_at = (SELECT MIN(starts_at) FROM shop_entitlement_lines l WHERE l.order_id = ?1 AND l.key = entitlements.key AND l.state = 'active'), ends_at = CASE WHEN EXISTS (SELECT 1 FROM shop_entitlement_lines l WHERE l.order_id = ?1 AND l.key = entitlements.key AND l.state = 'active' AND l.ends_at IS NULL) THEN NULL ELSE (SELECT MAX(ends_at) FROM shop_entitlement_lines l WHERE l.order_id = ?1 AND l.key = entitlements.key AND l.state = 'active') END WHERE order_id = ?1 AND ${guard} AND EXISTS (SELECT 1 FROM shop_entitlement_lines l WHERE l.order_id = ?1 AND l.key = entitlements.key AND l.state = 'active')`).bind(o.id, revision));
-  const referral = await env.DB.prepare('SELECT * FROM referral_lines WHERE order_id = ?1').bind(o.id).first();
-  if (referral && o.status !== 'lost') {
-    const share = Number(referral.original_share ?? referral.share);
-    const remaining = o.amount ? Number((2n * BigInt(share) * BigInt(Number(o.amount) - net) + BigInt(o.amount)) / (2n * BigInt(o.amount))) : 0;
-    changed ||= Number(referral.share) !== remaining || Number(referral.net) !== Number(o.amount) - net || (referral.state === 'void') !== (remaining === 0) && referral.state !== 'settled';
-    const delta = Number(referral.share) - remaining;
-    writes.push(env.DB.prepare(`INSERT INTO referral_lines (order_id, via, net, rate, share, original_share, currency, state, period, hold_until, created_at) SELECT ?3, via, ?4, rate, ?5, ?5, currency, 'clawback', period, hold_until, ?6 FROM referral_lines WHERE order_id = ?1 AND state = 'settled' AND ${guard} AND ?5 != 0 ON CONFLICT DO NOTHING`).bind(o.id, revision, `${o.id}_refund_${revision}`, net - Number(o.refunded_net), delta, Date.now()));
-    writes.push(env.DB.prepare(`UPDATE referral_lines SET share = ?3, net = ?4, state = CASE WHEN state = 'settled' THEN state WHEN ?3 = 0 THEN 'void' WHEN state = 'void' THEN 'pending' ELSE state END WHERE order_id = ?1 AND ${guard}`).bind(o.id, revision, remaining, Number(o.amount) - net));
-  }
   full &&= o.status !== 'lost';
   changed ||= (o.status === 'refunded') !== full;
   if (!changed) return 'already';
@@ -1044,7 +1016,6 @@ async function disputeClosed(env, payment, status) {
       env.DB.prepare("UPDATE shop_orders SET status = 'lost', updated_at = ?2 WHERE id = ?1 AND status IN ('paid', 'disputed')").bind(o.id, now),
       env.DB.prepare("UPDATE shop_order_lines SET status = 'lost' WHERE order_id = ?1 AND status != 'refunded' AND EXISTS (SELECT 1 FROM shop_orders WHERE id = ?1 AND status = 'lost')").bind(o.id),
       revokeStatement(env, o.id),
-      ...voidLineStatements(env, o.id),
     ]);
     return 'lost';
   }
@@ -1101,7 +1072,7 @@ export async function refundOrder(env, o, { reason = 'requested_by_customer', by
   }
   if (legacy) {
     await env.DB.batch([
-      revokeStatement(env, o.id), ...voidLineStatements(env, o.id),
+      revokeStatement(env, o.id),
       env.DB.prepare("UPDATE shop_orders SET status = 'refunded', refund = ?2, refunded_at = ?3, updated_at = ?3 WHERE id = ?1").bind(o.id, refund?.id ?? null, Date.now()),
     ]);
   } else if (!amount) await syncRefunds(env, o.payment, o.payment ? null : o, selected.map((line) => line.id));
@@ -1146,12 +1117,6 @@ export async function performRelease(env, a, cat) {
   return result.meta?.changes ? { ok: true, order: a.order, by: a.by, at } : { ok: false, error: 'state', message: 'Only an unresolved order can be released.' };
 }
 
-export function checkSettle(body) {
-  if (!/^[a-z0-9.-]{3,253}$/.test(String(body.via ?? ''))) return { ok: false, error: 'bad-request', message: 'via is the referrer\'s host (as the shop page shows it)' };
-  if (!/^[a-z]{3}$/.test(body.currency ?? '')) return { ok: false, error: 'currency', message: 'Choose the currency to mark paid.' };
-  return { ok: true, action: { op: 'shop-settle', currency: body.currency, via: String(body.via), ref: String(body.ref ?? '') } };
-}
-
 /** The refund in plain words, for the owner's confirm page and the AI's card. */
 export function describeRefund(cat, a, order = null) {
   const shop = shopOf(cat);
@@ -1178,13 +1143,13 @@ export async function performRefund(env, cat, a) {
 }
 
 /** Everything the office's shop page shows. Money is read from this studio's D1; Stripe's own pages are linked. */
-export async function shopOffice(env, cat, origin, cursor = '', itemCursor = 0, orderCursor = 0) {
+export async function shopOffice(env, cat, origin, itemCursor = 0, orderCursor = 0) {
   const shop = shopOf(cat);
   const ready = await readiness(env, shop);
   const mode = ready.mode ?? 'test';
   const out = {
     ok: true, ready: ready.ready, missing: ready.missing.map((m) => ({ id: m, words: m === 'migration' ? `The shop needs ${ready.migration}; npm run deploy applies it.` : MISSING_WORDS[m] ?? m })), mode: ready.mode,
-    shop: shop ? { policy: shop.policy, purchaseAttemptsPerMinute: shop.purchaseAttemptsPerMinute, till: shop.till, currency: shop.currency, refundDays: shop.refundDays, cap: shop.capPerPlayerMonth, nextItemsCursor: itemCursor + 100 < shop.items.length ? String(itemCursor + 100) : null, items: shop.items.slice(itemCursor, itemCursor + 100).map((i) => ({ id: i.id, kind: i.kind, name: i.name, price: i.price, shown: i.price === 'choose' ? `${money(i.min, shop.currency)}+` : money(i.price, shop.currency), gives: i.gives, game: i.game ?? null })), referrals: shop.referrals, ...(shop.broken ? { broken: shop.broken } : {}) } : null,
+    shop: shop ? { policy: shop.policy, purchaseAttemptsPerMinute: shop.purchaseAttemptsPerMinute, till: shop.till, currency: shop.currency, refundDays: shop.refundDays, cap: shop.capPerPlayerMonth, nextItemsCursor: itemCursor + 100 < shop.items.length ? String(itemCursor + 100) : null, items: shop.items.slice(itemCursor, itemCursor + 100).map((i) => ({ id: i.id, kind: i.kind, name: i.name, price: i.price, shown: i.price === 'choose' ? `${money(i.min, shop.currency)}+` : money(i.price, shop.currency), gives: i.gives, game: i.game ?? null })), ...(shop.broken ? { broken: shop.broken } : {}) } : null,
     stripe: {
       payments: dashboardLink(mode, 'payments'), refunds: dashboardLink(mode, 'refunds'), disputes: dashboardLink(mode, 'disputes'), payouts: dashboardLink(mode, 'payouts'),
       balance: dashboardLink(mode, 'balance'), tax: dashboardLink(mode, 'tax'), keys: dashboardLink(mode, 'keys'), webhooks: dashboardLink(mode, 'webhooks'),
@@ -1192,7 +1157,7 @@ export async function shopOffice(env, cat, origin, cursor = '', itemCursor = 0, 
     },
     keyless: !hasStripeKey(env),
     hook: `${origin}/api/shop/hook`,
-    totals: null, orders: [], referrals: { owe: [], owedToUs: [] },
+    totals: null, orders: [],
   };
   if (!(await migrated(env, { complete: false }))) return out;
   const since = Date.now() - 30 * DAY;
@@ -1212,8 +1177,6 @@ export async function shopOffice(env, cat, origin, cursor = '', itemCursor = 0, 
     refundable: (Number(r.amount) === 0 || hasStripeKey(env)) && ['paid', 'started', 'processing', 'missing', 'released', 'expired', 'failed'].includes(r.status) && (Number(r.amount) === 0 || Boolean(r.payment) || Boolean(r.session)),
   })));
   if (selling.enabled) await selling.extendOffice(env, cat, origin, out);
-  const { books, nextCursor } = await booksOf(env, { cursor });
-  out.referrals = { nextCursor, owe: books, failures: await statementFailures(env), owedToUs: await statementsIn(env), invoice: dashboardLink(mode, 'invoices') };
   return out;
 }
 
@@ -1221,29 +1184,10 @@ export async function shopOffice(env, cat, origin, cursor = '', itemCursor = 0, 
 export async function ordersCsv(env) {
   const rows = (await env.DB.prepare("SELECT * FROM shop_orders WHERE status != 'started' ORDER BY created_at").all()).results ?? [];
   const cell = (v) => { const s = v === null || v === undefined ? '' : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-  const head = ['order', 'created', 'paid', 'refunded', 'status', 'item', 'game', 'amount', 'tax', 'total', 'currency', 'till', 'mode', 'parent', 'via', 'stripe_payment', 'stripe_refund', 'stripe_dispute', 'lines_json', 'refunded_total', 'refunded_net'];
+  const head = ['order', 'created', 'paid', 'refunded', 'status', 'item', 'game', 'amount', 'tax', 'total', 'currency', 'till', 'mode', 'parent', 'stripe_payment', 'stripe_refund', 'stripe_dispute', 'lines_json', 'refunded_total', 'refunded_net'];
   const iso = (t) => (t ? new Date(Number(t)).toISOString() : '');
-  const lines = await Promise.all(rows.map(async (r) => [r.id, iso(r.created_at), iso(r.paid_at), iso(r.refunded_at), r.status, r.item, r.game, (Number(r.amount) / currencyScale(r.currency)).toFixed(Math.log10(currencyScale(r.currency))), r.tax === null ? '' : (Number(r.tax) / currencyScale(r.currency)).toFixed(Math.log10(currencyScale(r.currency))), r.total === null ? '' : (Number(r.total) / currencyScale(r.currency)).toFixed(Math.log10(currencyScale(r.currency))), r.currency, r.till, r.mode, Number(r.parent) ? 'yes' : '', r.via, r.payment, r.refund, r.dispute, JSON.stringify((await orderLines(env, r.id)).map(lineView)), (Number(r.refunded_amount ?? 0) / currencyScale(r.currency)).toFixed(Math.log10(currencyScale(r.currency))), (Number(r.refunded_net ?? 0) / currencyScale(r.currency)).toFixed(Math.log10(currencyScale(r.currency)))].map(cell).join(',')));
+  const lines = await Promise.all(rows.map(async (r) => [r.id, iso(r.created_at), iso(r.paid_at), iso(r.refunded_at), r.status, r.item, r.game, (Number(r.amount) / currencyScale(r.currency)).toFixed(Math.log10(currencyScale(r.currency))), r.tax === null ? '' : (Number(r.tax) / currencyScale(r.currency)).toFixed(Math.log10(currencyScale(r.currency))), r.total === null ? '' : (Number(r.total) / currencyScale(r.currency)).toFixed(Math.log10(currencyScale(r.currency))), r.currency, r.till, r.mode, Number(r.parent) ? 'yes' : '', r.payment, r.refund, r.dispute, JSON.stringify((await orderLines(env, r.id)).map(lineView)), (Number(r.refunded_amount ?? 0) / currencyScale(r.currency)).toFixed(Math.log10(currencyScale(r.currency))), (Number(r.refunded_net ?? 0) / currencyScale(r.currency)).toFixed(Math.log10(currencyScale(r.currency)))].map(cell).join(',')));
   return `${head.join(',')}\n${lines.join('\n')}${lines.length ? '\n' : ''}`;
-}
-
-/** The signed statements for a period (YYYY-MM, default last month): one per referrer this studio owes. */
-export async function statementsOut(env, cat, origin, period, cursor = '') {
-  const shop = shopOf(cat);
-  const p = /^\d{4}-\d{2}$/.test(String(period ?? '')) ? period : lastMonth();
-  return { ok: true, period: p, ...(await statementPage(env, origin, shop?.referrals, p, cursor, { snapshot: false })) };
-}
-export async function statementsSend(env, cat, origin, period, cursor = '') {
-  const shop = shopOf(cat);
-  const p = /^\d{4}-\d{2}$/.test(String(period ?? '')) ? period : (await pendingStatementPeriod(env, origin)) ?? lastMonth();
-  const { sent, nextCursor, retryAfter, failures } = await sendStatements(env, origin, shop, p, { cursor });
-  return { ok: true, period: p, nextCursor, sent, retryAfter, failures };
-}
-export const settleReferrer = (env, a) => settle(env, a.via, a.ref, { currency: a.currency });
-
-function lastMonth(now = new Date()) {
-  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-  return d.toISOString().slice(0, 7);
 }
 
 /* ------------------------------------------------------------------ for the rest of the Worker */

@@ -5,7 +5,7 @@ import { orderFact, recordOrderState } from './purchase-core.mjs';
 import { machineCapabilities } from './payment-capabilities.mjs';
 /** Studio licences use the shop's Stripe, order book, webhook and refund office. */
 
-import { canonicalJson } from './referrals.mjs';
+import { canonicalJson } from './canonical-json.mjs';
 
 import {
   cancelSubscription,

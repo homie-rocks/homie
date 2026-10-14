@@ -1,5 +1,5 @@
 import {byClaim} from './purchase-store.mjs';
-import {canonicalJson} from './referrals.mjs';
+import {canonicalJson} from './canonical-json.mjs';
 import {purchaseResponse} from './purchase-response.mjs';
 import {machineResource} from './purchase-machine.mjs';
 import {purchaseSchema} from './purchase-mcp.mjs';

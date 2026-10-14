@@ -22,7 +22,6 @@ import { paidReleases } from './parts-upload.mjs';
  *   homie-studio shop orders                the latest orders (never a card or an email)
  *   homie-studio shop refund <order> [--reason requested_by_customer|duplicate|fraudulent] [--note "<why>"]
  *                                           ASKS the owner (a one-tap link): the AI never refunds by itself
- *   homie-studio shop statements [--period YYYY-MM] [--send]   the signed referral statements this studio owes
  *
  * The proof of ownership is the studio's own Cloudflare login, as for the office.
  */
@@ -139,7 +138,7 @@ export async function shopStatus(root, { url } = {}) {
 export async function shopOrders(root, { url } = {}) {
   const r = await withKey(root, url, (call) => call('/_studio/api/shop'));
   if (!r.ok) return { ok: false, command: 'shop orders', why: r.message ?? r.why ?? 'the studio did not answer' };
-  return { ok: true, command: 'shop orders', orders: (r.orders ?? []).map((o) => ({ id: o.id, at: new Date(o.createdAt).toISOString(), item: o.item, name: o.name, shown: o.shown, status: o.status, mode: o.mode, player: o.player?.name ?? null, via: o.via, stripe: o.stripe, manualRefund: o.manualRefund ?? null })) };
+  return { ok: true, command: 'shop orders', orders: (r.orders ?? []).map((o) => ({ id: o.id, at: new Date(o.createdAt).toISOString(), item: o.item, name: o.name, shown: o.shown, status: o.status, mode: o.mode, player: o.player?.name ?? null, stripe: o.stripe, manualRefund: o.manualRefund ?? null })) };
 }
 
 /** The AI proposes a refund: an ask the owner confirms with one tap (an office key can never refund by itself). */
@@ -147,28 +146,6 @@ export async function shopRefund(root, order, { url, reason, note, manualTransac
   if (!/^ord_[A-Za-z0-9]{20}$/.test(String(order ?? ''))) return { ok: false, command: 'shop refund', why: 'name the order: homie-studio shop refund ord_… (homie-studio shop orders lists them)' };
   const r = await withKey(root, url, (call) => call('/_studio/api/shop/refund', { order, ...(manualTransaction ? {manualTransaction} : {}), ...(reason ? { reason } : {}), ...(note ? { note } : {}) }));
   return askedFor(root, url, r, 'shop refund');
-}
-
-export async function shopStatements(root, { url, period, cursor = '', send = false } = {}) {
-  if (!send) {
-    const r = await withKey(root, url, (call) => call(`/_studio/api/shop/statements?cursor=${encodeURIComponent(cursor)}${period ? `&period=${encodeURIComponent(period)}` : ''}`));
-    return r.ok ? { ok: true, command: 'shop statements', period: r.period, nextCursor: r.nextCursor, statements: r.statements } : { ok: false, command: 'shop statements', why: r.message ?? r.why ?? 'the studio did not answer' };
-  }
-  const sent = [];
-  console.error('Sending statements. Keep this command open; run it again after closing to resume safely.');
-  return withKey(root, url, async (call) => {
-    do {
-      const page = await call('/_studio/api/shop/statements/send', { cursor, ...(period ? { period } : {}) });
-      if (!page.ok) return { ok: false, command: 'shop statements', sent, why: page.message ?? page.why ?? 'the studio did not answer' };
-      for (const failure of page.failures ?? []) if (!sent.some((x) => !x.ok && x.via === failure.via)) { sent.push(failure); console.error(`${failure.via}: failed: ${failure.why ?? failure.status}`); }
-      sent.push(...page.sent);
-      for (const result of page.sent) console.error(`${result.via}: ${result.ok ? 'page sent' : 'failed: ' + (result.why ?? result.status)}`);
-      period = page.period;
-      cursor = page.nextCursor;
-      if (page.retryAfter) await new Promise((resolve) => setTimeout(resolve, page.retryAfter * 1000));
-    } while (cursor !== null);
-    return { ok: true, command: 'shop statements', period, nextCursor: null, sent };
-  });
 }
 
 /* ------------------------------------------------------------------ the key, from a page on this computer */
@@ -439,7 +416,7 @@ export function shopLines(r) {
     lines.push(`Webhook endpoint for Stripe: ${r.hook}`, `Payouts: ${r.stripe?.payouts}`);
     if (r.local && !r.local.ok) lines.push(`shop.json here: ${r.local.errors.map((e) => e.message).join('; ')}`);
   } else if (r.command === 'shop orders') {
-    for (const o of r.orders) lines.push(`${o.id}  ${o.at.slice(0, 16)}  ${o.name} ${o.shown}  ${o.status}${o.mode === 'test' ? ' (test)' : ''}  ${o.player ?? '(deleted account)'}${o.via ? `  via ${o.via}` : ''}`);
+    for (const o of r.orders) lines.push(`${o.id}  ${o.at.slice(0, 16)}  ${o.name} ${o.shown}  ${o.status}${o.mode === 'test' ? ' (test)' : ''}  ${o.player ?? '(deleted account)'}`);
     if (!r.orders.length) lines.push('No orders yet.');
   } else if (r.command === 'shop check') {
     if (r.absent) lines.push(r.message);
@@ -451,11 +428,6 @@ export function shopLines(r) {
     }
   } else if (r.command === 'shop init') {
     lines.push(`Wrote ${r.wrote.join(', ')} (till: ${r.till}${r.items.length ? `; ${r.items.join(', ')}` : ''}). Next:`, ...r.next.map((n) => `  ${n}`));
-  } else if (r.command === 'shop statements') {
-    if (r.nextCursor) lines.push(`More rows: shop statements --period ${r.period} --cursor '${r.nextCursor.replaceAll("'", "'\\''")}'${r.sent ? ' --send' : ''}`);
-    if (r.sent) for (const s of r.sent) lines.push(`${s.via}: ${s.ok ? 'sent' : `not sent (${s.why ?? s.status})`}`);
-    else for (const s of r.statements ?? []) lines.push(`${s.statement.referrer}: due ${s.statement.totals ? money(s.statement.totals.due, s.statement.currency) : 'see first page'} (${s.statement.lines.length} line(s)), signed`);
-    if (!(r.sent ?? r.statements ?? []).length) lines.push(`No referral statements for ${r.period}.`);
   } else { lines.push(r.message ?? r.why ?? (r.alreadyConnected ? 'Stripe test credentials are already installed.' : '')); for (const step of r.next ?? []) lines.push(step); if (r.fallback) lines.push(`Optional fallback, only if chosen: ${r.fallback}`); }
   return lines;
 }

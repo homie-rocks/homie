@@ -1,4 +1,4 @@
-/** The licence key ring is a Worker secret, independent of referral statements and D1. */
+/** The licence key ring is a Worker secret, independent of D1. */
 
 export async function purchaseKeys(env) {
   let keys;

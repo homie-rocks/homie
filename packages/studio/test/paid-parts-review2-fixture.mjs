@@ -15,7 +15,7 @@ export const { partsCommand } = await im('lib/parts-cli.mjs');
 export const purchaseLib = await im('lib/parts-purchase.mjs');
 export const { partsRoutes } = await im('worker/parts.mjs');
 export const shopMod = await im('worker/shop.mjs');
-export const { SHOP_MIGRATION, SHOP_RESERVATIONS, SHOP_STATEMENTS } = await im('worker/shop-store.mjs');
+export const { SHOP_MIGRATION, SHOP_RESERVATIONS } = await im('worker/shop-store.mjs');
 export const PP = await im('worker/purchases.mjs');
 export const sale$ = {...await im('worker/parts-sale.mjs'),...await im('worker/purchase-crypto.mjs'),...await im('worker/purchase-pricing.mjs')};
 export const stripeMod = await im('worker/stripe.mjs');
@@ -32,7 +32,7 @@ export const baseSale = { amount: 1000, currency: 'usd', billing: 'one-time', sc
 
 export function db({ migrate = true } = {}) {
   const sql = new DatabaseSync(':memory:');
-  sql.exec('CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);'); sql.exec(SHOP_MIGRATION); sql.exec(SHOP_RESERVATIONS); sql.exec(SHOP_STATEMENTS);
+  sql.exec('CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);'); sql.exec(SHOP_MIGRATION); sql.exec(SHOP_RESERVATIONS);
   if (migrate) { sql.exec(PP.PURCHASE_MIGRATION); sql.exec(PP.PURCHASE_STATE); }
   const stmt = (q, args = []) => ({ bind: (...a) => stmt(q, a), first: async () => sql.prepare(q).get(...args) ?? null, all: async () => ({ results: sql.prepare(q).all(...args) }), run: async () => ({ meta: { changes: sql.prepare(q).run(...args).changes } }) });
   return { sql, prepare: stmt, batch: async (list) => { sql.exec('BEGIN'); try { const r = []; for (const s of list) r.push(await s.run()); sql.exec('COMMIT'); return r; } catch (e) { sql.exec('ROLLBACK'); throw e; } } };

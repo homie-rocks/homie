@@ -1,5 +1,5 @@
 /** Provider facts drive orders. Offers and entitlements are immutable purchase inputs. */
-import { canonicalJson } from "./referrals.mjs";
+import { canonicalJson } from "./canonical-json.mjs";
 import { digest } from "./purchase-crypto.mjs";
 
 

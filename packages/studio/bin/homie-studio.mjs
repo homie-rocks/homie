@@ -192,7 +192,6 @@
  *   homie-studio shop disconnect          both secrets gone: the shop closes
  *   homie-studio shop orders              the latest orders (never a card or an email)
  *   homie-studio shop refund <order> [--reason …] [--note "<why>"]   ASKS the owner (a one-tap link)
- *   homie-studio shop statements [--period YYYY-MM] [--send]   signed referral statements this studio owes
  *   homie-studio agents sit <game> [--server <id>] [--pass hap_…] [--label Claude]
  *                                         (an AI guide's seat from this terminal: then lines of `do <goal> {args}`,
  *                                          `say <line> {args}`, `look`, `stand`)
@@ -360,7 +359,7 @@ import { detectLocalAi } from '../lib/local-ai.mjs';
 import { dev, stopDev } from '../lib/dev.mjs';
 import { agentsBrain, agentsBrainKey, agentsPass, agentsPasses, agentsRevoke, agentsTry, serversClose, serversLevel, serversLines, serversList, serversMember, serversNew, serversSet } from '../lib/servers.mjs';
 import { AgentSeat } from '../lib/agent-seat.mjs';
-import { shopCheck, shopConnect, shopDisconnect, shopInit, shopLines, shopOrders, shopRefund, shopStatements, shopStatus } from '../lib/shop.mjs';
+import { shopCheck, shopConnect, shopDisconnect, shopInit, shopLines, shopOrders, shopRefund, shopStatus } from '../lib/shop.mjs';
 import { catalogLines, catalogPlan } from '../lib/shop-catalog.mjs';
 import { projectsLines, setupViaProjects } from '../lib/projects.mjs';
 import { projectsCloudflareEnv } from '../lib/projects-env.mjs';
@@ -627,7 +626,6 @@ function print(result) {
     case 'shop orders':
     case 'shop check':
     case 'shop init':
-    case 'shop statements':
     case 'shop connect':
     case 'shop disconnect':
       lines.push(...shopLines(result));
@@ -842,7 +840,7 @@ const OUTWARD_FLAGS = {
   'chat remove': ['url', 'all'], 'chat budget': ['url'],
   'servers close': ['url', 'reopen'], 'servers level': ['url'], 'servers member': ['url', 'role', 'remove'],
   'parts reissue': ['claim-hash', 'receipt-verified', 'buyer'], 'parts retire': [], 'parts keys': [], 'parts refund': ['game'],
-  'shop connect': ['url', 'managed', 'live', 'manual', 'renew', 'from-clipboard'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note', 'manual-transaction'], 'shop statements': ['url', 'period', 'send', 'cursor'],
+  'shop connect': ['url', 'managed', 'live', 'manual', 'renew', 'from-clipboard'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note', 'manual-transaction'],
   'agents pass': ['url', 'label', 'server', 'hands', 'role', 'days'], 'agents revoke': ['url'], 'agents brain': ['url', 'budget', 'remove'],
   'agents sit': ['url', 'server', 'pass', 'label', 'brain'],
   'events webhook': ['url','after'],
@@ -1126,8 +1124,7 @@ async function main() {
     }
     if (sub === 'orders') return shopOrders(root, { url });
     if (sub === 'refund') return shopRefund(root, positional[2], { url, reason: flags.get('reason'), note: flags.get('note'), manualTransaction: flags.get('manual-transaction') });
-    if (sub === 'statements') return shopStatements(root, { url, period: flags.get('period'), cursor: flags.get('cursor') ?? '', send: flags.has('send') });
-    return { ok: false, command: 'shop', why: `unknown: shop ${sub} (init, check, connect, disconnect, catalog, orders, refund, statements)` };
+    return { ok: false, command: 'shop', why: `unknown: shop ${sub} (init, check, connect, disconnect, catalog, orders, refund)` };
   }
   if (cmd === 'agents') {
     const url = flags.get('url');

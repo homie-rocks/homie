@@ -33,7 +33,7 @@ import { PLAYERS_MIGRATION, PLAYERS_MIGRATION_FILE } from '../worker/players.mjs
 import { OFFICE_MIGRATION, OFFICE_MIGRATION_FILE } from '../worker/office-schema.mjs';
 import { SERVERS_MIGRATION, SERVERS_MIGRATION_FILE } from '../worker/servers.mjs';
 import { CHAT_MIGRATION, CHAT_MIGRATION_FILE } from '../worker/chat-store.mjs';
-import { SHOP_MIGRATION, SHOP_MIGRATION_FILE, SHOP_RESERVATIONS, SHOP_RESERVATIONS_FILE, SHOP_STATEMENTS, SHOP_STATEMENTS_FILE, SHOP_LINES, SHOP_LINES_FILE } from '../worker/shop-store.mjs';
+import { SHOP_MIGRATION, SHOP_MIGRATION_FILE, SHOP_RESERVATIONS, SHOP_RESERVATIONS_FILE, SHOP_REMOVE_REFERRALS, SHOP_REMOVE_REFERRALS_FILE, SHOP_LINES, SHOP_LINES_FILE } from '../worker/shop-store.mjs';
 import { LOUNGE_MIGRATION, LOUNGE_MIGRATION_FILE } from '../worker/lounge-store.mjs';
 import { themeFile } from './site.mjs';
 import { rulesIndex } from './studio.mjs';
@@ -521,7 +521,7 @@ Your shop, your choices. The studio sells through its own Stripe account and is 
 where it sells and for Stripe's terms. Homie takes no cut.
 
 - \`shop.json\` lists items, wording, kinds, prices, quantities and entitlements. Optional settings include
-  sale dates, tips, currency, \`automaticTax\`, refund windows, spending caps and referral terms.
+  sale dates, tips, currency, \`automaticTax\`, refund windows, spending caps.
 - The default is open: guests can buy repeatedly, without age questions, from any page. Signing in keeps
   guest purchases. \`shop init --supporter\` writes an example item without a policy, cap or refund window.
 - Choose \`policy.preset: "protective"\` or \`"adults-only"\` to enable an account and age policy. Omitted
@@ -545,7 +545,7 @@ where it sells and for Stripe's terms. Homie takes no cut.
   Stripe's approval links belong to the owner. \`checkoutMinutes\` is optional (Stripe: 30 to 1440 minutes,
   default 1440; values below 31 use 31 for transport margin); cancelling a named checkout, or replacing one at least a minute old, expires the open session on Stripe's confirmation.
 - \`shop orders\` and \`/_studio/office/shop\` show sales. \`shop refund <order>\` asks the owner to confirm.
-  \`shop statements\` records optional referral shares; studios pay their referrers directly.
+  For referrals, use Stripe Connect to split payments or a Stripe-based affiliate service; Homie builds none.
 
 The guide is \`node_modules/@homie-rocks/studio/shop/SHOP.md\`.
 
@@ -817,8 +817,8 @@ export { default, Table, Lobby, Gate, Concentrator } from '@homie-rocks/studio/w
     [`site/migrations/${PURCHASE_MIGRATION_FILE}`]: PURCHASE_MIGRATION,
     [`site/migrations/${PURCHASE_STATE_FILE}`]: PURCHASE_STATE,
     [`site/migrations/${SHOP_RESERVATIONS_FILE}`]: SHOP_RESERVATIONS,
-    [`site/migrations/${SHOP_STATEMENTS_FILE}`]: SHOP_STATEMENTS,
     [`site/migrations/${SHOP_LINES_FILE}`]: SHOP_LINES,
+    [`site/migrations/${SHOP_REMOVE_REFERRALS_FILE}`]: SHOP_REMOVE_REFERRALS,
     [`site/migrations/${APPS_MIGRATION_FILE}`]: APPS_MIGRATION,
     [`site/migrations/${MCP_MIGRATION_FILE}`]: MCP_MIGRATION,
     [`site/migrations/${FUNCTIONS_MIGRATION_FILE}`]: FUNCTIONS_MIGRATION,
@@ -920,7 +920,7 @@ export function ensureServersMigration(root) {
 
 /**
  * A studio made before 0.24.0 has no shop migration (worker/shop-store.mjs: orders, entitlements, the age band,
- * referral lines): add it, so the next `d1 migrations apply` makes its tables. A studio with no shop.json keeps
+ * refunds): add it, so the next `d1 migrations apply` makes its tables. A studio with no shop.json keeps
  * them empty. Returns the file it wrote, or null when it was there.
  */
 export function ensureShopMigration(root) {
@@ -939,12 +939,12 @@ function ensureShopReservations(root) {
   return `site/migrations/${SHOP_RESERVATIONS_FILE}`;
 }
 
-function ensureShopStatements(root) {
-  const file = join(root, 'site', 'migrations', SHOP_STATEMENTS_FILE);
+function ensureShopRemoveReferrals(root) {
+  const file = join(root, 'site', 'migrations', SHOP_REMOVE_REFERRALS_FILE);
   if (existsSync(file)) return null;
   mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, SHOP_STATEMENTS);
-  return `site/migrations/${SHOP_STATEMENTS_FILE}`;
+  writeFileSync(file, SHOP_REMOVE_REFERRALS);
+  return `site/migrations/${SHOP_REMOVE_REFERRALS_FILE}`;
 }
 
 function ensureShopLines(root) {
@@ -1022,12 +1022,12 @@ function ensureMcpMigration(root) {
   mkdirSync(dirname(file),{recursive:true});writeFileSync(file,MCP_MIGRATION);return `site/migrations/${MCP_MIGRATION_FILE}`;
 }
 export function ensureMigrations(root) {
-  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopStatements(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root), ensureFunctionReference(root)].filter(Boolean);
+  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root), ensureFunctionReference(root), ensureShopRemoveReferrals(root)].filter(Boolean);
 }
 
 /** What a migration file the template added is for, in a few words (deploy and dev say it). */
 export function migrationWord(file) {
-  return /function_meta/.test(file) ? 'refund events alongside plain-text studio settings' : /studio_mcp/.test(file) ? 'AI connections and tool call history' : /studio_apps/.test(file) ? 'apps: lasting records and signed-in role grants' : /lounge/.test(file) ? 'the Lounge and kept chat: play nights, moderators, and what was said only where an owner turns history on' : /shop/.test(file) ? 'the shop: orders, what players own, refunds and referral books (paid sales wait until shop.json and the studio\'s Stripe connection are ready)' : /players/.test(file) ? 'player accounts and cloud saves' : /chat/.test(file) ? 'room chat: the owner\'s chat rules and players\' reports (never the chat itself)' : /servers/.test(file) ? 'servers and agent seats: room pools with their own rules, AI passes' : /office/.test(file) ? 'the back office: launch states, invites, the owner\'s controls' : 'the studio\'s own stats: counts, never tracks';
+  return /remove_referrals/.test(file) ? 'remove referral tables, keys and sales attribution' : /function_meta/.test(file) ? 'refund events alongside plain-text studio settings' : /studio_mcp/.test(file) ? 'AI connections and tool call history' : /studio_apps/.test(file) ? 'apps: lasting records and signed-in role grants' : /lounge/.test(file) ? 'the Lounge and kept chat: play nights, moderators, and what was said only where an owner turns history on' : /shop/.test(file) ? 'the shop: orders, what players own, refunds (paid sales wait until shop.json and the studio\'s Stripe connection are ready)' : /players/.test(file) ? 'player accounts and cloud saves' : /chat/.test(file) ? 'room chat: the owner\'s chat rules and players\' reports (never the chat itself)' : /servers/.test(file) ? 'servers and agent seats: room pools with their own rules, AI passes' : /office/.test(file) ? 'the back office: launch states, invites, the owner\'s controls' : 'the studio\'s own stats: counts, never tracks';
 }
 
 /**

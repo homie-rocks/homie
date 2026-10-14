@@ -978,7 +978,7 @@ export function lockedPage(cat, { what = 'office', ask = null } = {}) {
   return new Response(shell(cat, `${what === 'confirm' ? 'Confirm' : 'Office'} · private`, body), { status: 401, headers: { ...PRIVATE, 'content-security-policy': NO_SCRIPT_CSP } });
 }
 
-const VERB = { refund: 'Refund it', 'shop-settle': 'Mark it paid', kick: 'Kick', mute: 'Mute', close: 'Close the room', announce: 'Announce', game: 'Change it', 'server-set': 'Change it', 'server-close': 'Close it', member: 'Remove', 'agents-brain': 'Let them talk' };
+const VERB = { refund: 'Refund it', kick: 'Kick', mute: 'Mute', close: 'Close the room', announce: 'Announce', game: 'Change it', 'server-set': 'Change it', 'server-close': 'Close it', member: 'Remove', 'agents-brain': 'Let them talk' };
 
 /** The owner's one tap for what their AI asked, and what came of it. */
 export function confirmPage(cat, ask, { missing = false } = {}) {

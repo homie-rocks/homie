@@ -510,6 +510,7 @@ export function orderGames(games, order, log = () => {}) {
 export async function build(root, { only = null, log = () => {}, deploy = process.env.WORKERS_CI === '1', maps = false, types = false, beforePublish = async () => {}, longCheck = false } = {}) {
   const esbuild = await studioEsbuild(root);
   const studio = readStudio(root);
+  if (Object.hasOwn(studio, 'referrals')) log('studio.json referrals: ignored; Homie has no referral system.');
   if (listGames(root).some(g => isRulesGame(g) && g.room?.host !== 'browser' && g.room?.host !== 'offline')) await (await import('./rules-wiring.mjs')).ensureRulesWiring(root);
   await (await import('./tools-build.mjs')).buildTools(root, esbuild);
   await (await import('./functions-build.mjs')).buildFunctions(root, esbuild);
@@ -710,10 +711,8 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
         : studio.homie?.directory === false || studio.homie?.directory === null ? null : String(studio.homie?.directory ?? 'https://homie.rocks'),
       // A copy of the public template that nobody has named yet shows the name typed in Cloudflare's form.
       ...(studio.template === true ? { template: true } : {}),
-      // studio.json "audience": "kids" (a studio audience label; shop policies are optional) or "teens"; and "referrals": false
-      // (this studio takes no referral statements as a referrer).
+      // studio.json audience is a studio label; shop policies are optional.
       ...(audienceOf(studio) !== 'general' ? { audience: audienceOf(studio) } : {}),
-      ...(studio.referrals === false ? { referrals: false } : {}),
       ...(lounge ? { lounge } : {}),
       ...(studio.mcp ? { mcp: studio.mcp } : {}),
       build: buildInfo(root),

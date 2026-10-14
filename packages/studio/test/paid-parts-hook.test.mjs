@@ -6,12 +6,12 @@ import { DatabaseSync } from 'node:sqlite';
 import { createServer } from 'node:http';
 const R = new URL('../worker', import.meta.url).href;
 const { shopRoutes } = await import(R + '/shop.mjs');
-const { SHOP_MIGRATION, SHOP_RESERVATIONS, SHOP_STATEMENTS } = await import(R + '/shop-store.mjs');
+const { SHOP_MIGRATION, SHOP_RESERVATIONS } = await import(R + '/shop-store.mjs');
 const { signPayload } = await import(R + '/stripe.mjs');
 let PARTS = ''; try { PARTS = (await import(R + '/purchases.mjs')).PURCHASE_MIGRATION; } catch {}
 const KEY = `rk_test_${'A1b2C3d4'.repeat(4)}`; const SECRET = `whsec_${'testsecretvalue0'.repeat(2)}`;
 for (const migrated of [true, false]) test(`unrelated refund event, old key, parts migration ${migrated ? 'applied' : 'not yet applied'}`, async () => {
-  const sql = new DatabaseSync(':memory:'); sql.exec('CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);'); sql.exec(SHOP_MIGRATION); sql.exec(SHOP_RESERVATIONS); sql.exec(SHOP_STATEMENTS); if (migrated && PARTS) sql.exec(PARTS);
+  const sql = new DatabaseSync(':memory:'); sql.exec('CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);'); sql.exec(SHOP_MIGRATION); sql.exec(SHOP_RESERVATIONS); if (migrated && PARTS) sql.exec(PARTS);
   const stmt = (q, args = []) => ({ bind: (...a) => stmt(q, a), first: async () => sql.prepare(q).get(...args) ?? null, all: async () => ({ results: sql.prepare(q).all(...args) }), run: async () => ({ meta: { changes: sql.prepare(q).run(...args).changes } }) });
   const DB = { prepare: stmt, batch: async (l) => { for (const s of l) await s.run(); } };
   const calls = [];

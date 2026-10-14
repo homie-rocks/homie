@@ -4,7 +4,7 @@ import {registerResourceKind} from './resource-kinds.mjs';
 import {quoteHash,legalTerms} from './parts-sale.mjs';
 import {digest,manifestHash} from './purchase-crypto.mjs';
 import {offerVersion} from './purchase-core.mjs';
-import {canonicalJson} from './referrals.mjs';
+import {canonicalJson} from './canonical-json.mjs';
 import {serviceTerms} from './service-terms.mjs';
 export {serviceTerms} from './service-terms.mjs';
 export async function pruneOffers(env,now=Date.now()) {

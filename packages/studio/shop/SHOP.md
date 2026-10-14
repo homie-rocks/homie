@@ -34,20 +34,16 @@ A kind is a label, not a recurring-billing, wallet, random-reward or fulfillment
   Its reservation releases only when Stripe confirms expiry or another terminal outcome.
 - `refundDays`: optional self-service refund window for items, including used items by default.
   A tip is never refunded by the player. The studio can refund any paid order or line from its office; disputed charges wait for Stripe to resolve the dispute.
-- `referrals`: optional `rate`, `windowDays`, `capPerPlayer`, `holdDays`, `minimumInvoice`,
-  `billingEmail` and `accept`. `rate` defaults to zero until written;
-  omitted limits do not apply. `referralNewPlayersOnly: true` limits attribution to new players.
 - `catalog`: modes (`test`, `live`) populated by `homie-studio shop catalog` for named Stripe Products.
   Prices always come from your file, even when a Stripe Product exists.
 - Optional flood protection: `purchaseAttemptsPerMinute`,
   `purchaseAttemptsPerAddressPerMinute`, `guestBuyersPerAddressPerHour`.
   Omitted or null means no limit. Explicit positive integers apply per Worker instance.
   An explicitly set `PLAYER_LIMIT_DAILY` also applies to new shop buyers.
-  Referral delivery uses `REFERRAL_STATEMENTS_PER_MINUTE`, `REFERRAL_STATEMENTS_GLOBAL_PER_MINUTE`
-  (both 30), and `REFERRAL_STATEMENT_BYTES` (65536). `requestBytes` overrides the catalog-sized shop request
+  `requestBytes` overrides the catalog-sized shop request
   allowance; `SHOP_WEBHOOK_BYTES` (524288) controls the webhook byte allowance.
 
-No toolkit ceiling applies to prices, quantities, tips, durations, refund windows, caps or referral terms.
+No toolkit ceiling applies to prices, quantities, tips, durations, refund windows or caps.
 Money is integer Stripe currency units, with checked safe arithmetic. Stripe's currency rules and
 [Checkout's maximum of 100 lines](https://docs.stripe.com/api/checkout/sessions/create#line_items) apply.
 Free and paid lines can share a cart. An entirely free cart grants locally without a Stripe call. Product text limits and currency-unit requirements come from Stripe;
@@ -161,22 +157,23 @@ secret-returning webhook through a conversation tool: the private connect proces
 
 ## Payment guarantees and schema
 
-The schema step `0012_shop_lines.sql` follows the reservation and statement steps. Deploy applies it through
+The schema step `0012_shop_lines.sql` follows the reservation step. Deploy applies it through
 the existing migration mechanism. It adds tables and columns without changing any existing primary key or
 column meaning. Released code keeps working after the step, including through rollback. The new Worker
 without the step still reads owned items and refunds from the office; new sales wait for the named step.
 
-A verified payment atomically grants all line snapshots and records the referral share on the order total.
+`0022_remove_referrals.sql` removes the old referral tables, keys and sales-attribution columns; orders and entitlements remain intact. Old referral settings are ignored with a build note.
+
+A verified payment atomically records the payment and grants all line snapshots.
 Duplicate events, reconciliation and late payments grant exactly once, including after a missing mark,
-owner release, expiry or failure. Refunds revoke only their own lines, retain other purchases of the same key,
-and adjust the referral share with exact integer allocation. Stripe tax is read per line when applicable.
+owner release, expiry or failure. Refunds revoke only their own lines, and retain other purchases of the same key. Stripe tax is read per line when applicable.
 Snapshots preserve delivery after catalog edits; the schema step represents older orders as one line.
 An unpaid older order has no historical item snapshot and needs its catalog definition to complete delivery.
 A missing definition gives a named retryable response and office note; the office can refund the verified
 payment. Older paid orders missing a grant are repaired once. An unknown older item is refunded by the office,
 since its original kind cannot be recovered safely for player self-service.
 A whole-order refund uses one Stripe refund for the remaining charge. Dashboard partial refunds reduce cap
-usage and referral shares by their pre-tax portion, without assigning money to an unnamed line.
+usage by their pre-tax portion, without assigning money to an unnamed line.
 Refunds are rebuilt from [Stripe’s refunds list](https://docs.stripe.com/api/refunds/list). Only
 [succeeded refunds](https://docs.stripe.com/api/refunds/object#refund_object-status) revoke items;
 pending refunds keep them and failed refunds restore them. A named line loses only its own items;
@@ -219,3 +216,5 @@ These calls open the same shop in games and apps. Inside a player card, purchase
 ## App payment references
 
 Create the booking/ticket/gift intention first. `shop.buy('full-tune', 1, undefined, { reference: booking.id })` or `shop.checkout({ reference: booking.id })` sends the app's own reference through checkout. Existing boolean returns are unchanged: checkout opened is not paid. The verified durable `order.paid` event carries `data.order`, `data.reference` (null if omitted) and `data.app`. Reopened Payment Links retain the reference. A reference is buyer-supplied correlation, not authorization: verify the record, app, amount and currency, deduplicate by event/order ID, then fulfil it. Keep personal data out of references. Before Stripe is connected, local prices and unpaid requests can be demonstrated; actual payment and recurring collection remain unverified. Test events must be labelled simulations.
+
+For referrals, use Stripe Connect to split payments or a Stripe-based affiliate service; Homie builds none.

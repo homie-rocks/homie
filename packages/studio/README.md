@@ -517,8 +517,7 @@ that change does not affect the shop's ordinary restricted API key. [SHOP.md](sh
 In a game: `createShop()` from `@homie-rocks/studio/shop` (`has`, `entitlements`, `on('change')`, `open`, `used`, `add`, `checkout`, `buy`); a
 supporter's badge rides on their seat (`peer.badge`). Stripe Checkout (hosted), optional Stripe Tax, or Stripe Managed
 Payments (Stripe as seller of record, 3.5% more) as one switch; a signed, idempotent webhook; refunds from the
-office, per order or line; a dispute never touches the account; referral statements signed per referrer (homie.rocks is one more
-referrer). The guide: `shop/SHOP.md`.
+office, per order or line; a dispute never touches the account. The guide: `shop/SHOP.md`.
 
 ## Setup status
 

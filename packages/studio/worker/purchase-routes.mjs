@@ -4,7 +4,7 @@ import { hostedReadiness } from './purchase-hosted-readiness.mjs';
 import { orderFact, orderState, recordOrderState, offerVersion } from './purchase-core.mjs';
 /** Studio licences use the shop's Stripe, order book, webhook and refund office. */
 
-import { canonicalJson } from './referrals.mjs';
+import { canonicalJson } from './canonical-json.mjs';
 import { signingKey, publicKeys } from './purchase-keys.mjs';
 import {
   createCheckoutSession,

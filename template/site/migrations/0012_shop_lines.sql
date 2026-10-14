@@ -23,7 +23,6 @@ END;
 UPDATE shop_order_lines SET refunded_amount = COALESCE(total, amount), refunded_net = amount WHERE status = 'refunded';
 ALTER TABLE shop_parent_links ADD COLUMN cart TEXT;
 ALTER TABLE shop_orders ADD COLUMN whole_refund TEXT;
-ALTER TABLE shop_orders ADD COLUMN referral_terms TEXT;
 ALTER TABLE shop_orders ADD COLUMN checkout_player TEXT;
 UPDATE shop_orders SET checkout_player = player;
 CREATE TRIGGER shop_checkout_player_insert AFTER INSERT ON shop_orders BEGIN
@@ -32,8 +31,6 @@ END;
 CREATE TRIGGER shop_forget_checkout_player AFTER UPDATE OF player ON shop_orders WHEN NEW.player IS NULL BEGIN
   UPDATE shop_orders SET checkout_player = NULL WHERE id = NEW.id;
 END;
-ALTER TABLE referral_lines ADD COLUMN original_share INTEGER;
-UPDATE referral_lines SET original_share = share;
 ALTER TABLE shop_orders ADD COLUMN attention INTEGER NOT NULL DEFAULT 1;
 UPDATE shop_orders SET attention = 0 WHERE status = 'paid' AND EXISTS (SELECT 1 FROM entitlements WHERE order_id = shop_orders.id);
 ALTER TABLE shop_orders ADD COLUMN refunded_amount INTEGER NOT NULL DEFAULT 0;

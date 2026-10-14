@@ -195,3 +195,16 @@ test('a signed webhook cannot execute a priced tool without purchase approval',a
  const response=await toolWebhook(new Request('https://studio.test/hooks/tools/paid',{method:'POST',body:'{}'}),{}, {cat:{games:[]},definitions:[{name:'paid',price:{amount:100,currency:'usd'},webhook:{secret:'SECRET',person:'owner'},handler:()=>{ran=true;}}]});
  assert.equal(response.status,402);assert.equal(ran,false);
 });
+
+test('office tools offer sales controls without referral views or settlement actions', async () => {
+ const {builtins}=await import('../worker/mcp-tools.mjs');
+ const tools=builtins({}, {games:[],studio:{}}, 'https://studio.test');
+ const views=tools.find(t=>t.name==='studio_office_read').inputSchema.properties.view.enum;
+ const actions=tools.find(t=>t.name==='studio_office_action').inputSchema.properties.operation.enum;
+ assert.ok(views.includes('shop'));
+ assert.ok(views.includes('orders'));
+ for(const view of ['lines','received','statements']) assert.equal(views.includes(view),false);
+ assert.ok(actions.includes('shop/refund'));
+ assert.ok(actions.includes('shop/release'));
+ assert.equal(actions.includes('shop/settle'),false);
+});
