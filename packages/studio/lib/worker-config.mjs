@@ -24,5 +24,5 @@ export function refreshWorkerConfig(root,overrides={}) {
   const tools=read(join(root,'site/src/tools/declarations.json'));
   const ai=cf.ai??listExperiences(root).some(g=>g.decide===true || g.chat!==false && (g.chat?.mode??'text')==='text' && g.chat?.ai!==false);
   const paid=paidReleases(root).length>0||existsSync(join(root,'shop.json'))||tools.paid===true;
-  updateWorkerConfig(root,wranglerConfig({worker:cf.worker,name:studio.name,d1:cf.d1,d1Id:cf.d1Id,r2:cf.r2,layout:layoutOf(root),ai,paidParts:paid,partsRateLimit:cf.purchaseRateLimit??null,routes:cf.routes??null,triggers:functions.length?{crons:[...new Set(['* * * * *',...functions.map(f=>f.schedule).filter(Boolean)])].sort()}:null,...overrides}));
+  updateWorkerConfig(root,wranglerConfig({worker:cf.worker,name:studio.name,d1:cf.d1,d1Id:cf.d1Id,r2:cf.r2,layout:layoutOf(root),ai,paidParts:paid,partsRateLimit:cf.purchaseRateLimit??null,routes:cf.routes??null,eventFeeds:studio.mcp?.events,triggers:functions.length||Object.keys(studio.mcp?.events??{}).length?{crons:[...new Set(['* * * * *',...functions.map(f=>f.schedule).filter(Boolean)])].sort()}:null,...overrides}));
 }

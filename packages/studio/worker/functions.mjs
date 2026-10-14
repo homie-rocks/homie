@@ -1,11 +1,13 @@
+import {feedSubscriptions,pushEvents} from './event-resources.mjs';
 import { services } from './mcp-tools.mjs';
 import { isOwner, sameOrigin } from './office.mjs';
 import { esc } from './site.mjs';
 let load = async () => [];
 export function useFunctions(loader) { load = loader; }
-export async function hasFunctionType(type) { return (await load()).some(fn=>fn.event===type); }
+export async function hasFunctionType(type,env={}) { return [...await load(),...feedSubscriptions(env)].some(fn=>fn.event===type); }
 export async function syncFunctions(env, definitions = null, now = Date.now()) {
   definitions ??= await load();
+  definitions=[...definitions.filter(fn=>!fn.name.startsWith('@events/')),...feedSubscriptions(env)];
   if (!env.DB || !definitions.length) return definitions;
   // Deploy owns the production registry; an old in-flight Worker must not overwrite it.
   if(await env.DB.prepare("SELECT 1 FROM meta WHERE key='function-registry-deployed'").first())return definitions;
@@ -39,15 +41,21 @@ export async function runFunctions(env, cat, origin, {definitions, now = Date.no
   definitions = await syncFunctions(env,definitions,now());
   if(!definitions.length)return;
   if(typeof cat==='function')cat=await cat();
+  let more;
+  do {
+  more=false;
   for (const fn of definitions) {
+    if(!fn.handler)continue;
     const subscription=await env.DB.prepare('SELECT cursor,type FROM function_subscriptions WHERE name=?1').bind(fn.name).first();
     if(!subscription || subscription.type!==fn.event)continue;
     const page=(await env.DB.prepare('SELECT seq,id,data FROM studio_events WHERE type=?1 AND seq>?2 ORDER BY seq LIMIT 100').bind(fn.event,subscription.cursor).all()).results;
+    if(page.length)more=true;
     if(page.length)await env.DB.batch([
       ...page.filter(e=>!fn.schedule||JSON.parse(e.data).function===fn.name).map(e=>env.DB.prepare('INSERT OR IGNORE INTO function_deliveries(event,function) SELECT id,?2 FROM studio_events WHERE id=?1').bind(e.id,fn.name)),
       env.DB.prepare('UPDATE function_subscriptions SET cursor=MAX(cursor,?2) WHERE name=?1').bind(fn.name,page.at(-1).seq),
     ]);
     const rows=(await env.DB.prepare(`SELECT d.*,e.type,e.data,e.at FROM function_deliveries d JOIN studio_events e ON e.id=d.event WHERE d.function=?1 AND d.state IN ('pending','failed','running') AND d.due<=?2 ORDER BY d.due LIMIT 100`).bind(fn.name,now()).all()).results;
+    if(rows.length===100)more=true;
     for (const row of rows) {
       const lease=crypto.randomUUID();
       const claimed=await env.DB.prepare(`UPDATE function_deliveries SET state='running',lease=?3,due=?4,attempts=attempts+1 WHERE event=?1 AND function=?2 AND state!='complete' AND due<=?5`).bind(row.event,fn.name,lease,now()+leaseMs,now()).run();
@@ -62,6 +70,8 @@ export async function runFunctions(env, cat, origin, {definitions, now = Date.no
       }
     }
   }
+  } while(more);
+  await pushEvents(env,cat,origin);
   await pruneEvents(env);
 }
 export async function scheduleFunctions(event,env,cat,origin) {

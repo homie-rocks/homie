@@ -26,8 +26,8 @@ test('event subscriptions avoid unused writes, index type cursors, page work and
  let calls=0;const definitions=[{name:'deliver',event:'wanted',handler:()=>{calls++;}}];await syncFunctions(env,definitions);
  for(let i=0;i<251;i++)await emitEvent(env,'wanted',{}, {id:'event-'+i});
  const plan=DB.sql.prepare('EXPLAIN QUERY PLAN SELECT seq,id,data FROM studio_events WHERE type=? AND seq>? ORDER BY seq LIMIT 100').all('wanted',0);assert.match(JSON.stringify(plan),/studio_events_type_seq/);
- await runFunctions(env,{},'https://test',{definitions});assert.equal(calls,100);
- await runFunctions(env,{},'https://test',{definitions});assert.equal(calls,200);
+ await runFunctions(env,{},'https://test',{definitions});assert.equal(calls,251,'all pages start in the originating lifetime');
+ await runFunctions(env,{},'https://test',{definitions});assert.equal(calls,251);
  await runFunctions(env,{},'https://test',{definitions});assert.equal(calls,251);
  assert.equal(DB.sql.prepare('SELECT count(*) n FROM studio_events').get().n,0);assert.equal(DB.sql.prepare('SELECT count(*) n FROM function_deliveries').get().n,0);
  await emitEvent(env,'wanted',{}, {id:'later'});await runFunctions(env,{},'https://test',{definitions});assert.equal(calls,252,'sequence never resets after pruning');

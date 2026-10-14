@@ -3,7 +3,7 @@ export type Audience = 'public' | 'signed-in' | 'owner' | { app: string; role: s
 export interface ToolContext {
   readonly purchase?: { readonly id: string };
   readonly caller: { readonly id: string | null; readonly owner: boolean; readonly client: string | null; readonly roles: Readonly<Record<string, readonly string[]>> };
-  records(args: { app: string; role?: string; collection: string; id?: string; operation?: 'read' | 'create' | 'update'; data?: Record<string, unknown>; version?: number }): Promise<unknown>;
+  records(args: { app: string; role?: string; collection: string; id?: string; operation?: 'read' | 'create' | 'update' | 'delete'; data?: Record<string, unknown>; version?: number }): Promise<unknown>;
   office(path: string, body?: Record<string, unknown>, query?: Record<string, string>): Promise<unknown>;
   shop(): Promise<unknown>;
   rooms: { send(event: {game: string; room: string; event: string; data: unknown}): Promise<unknown> };

@@ -1,7 +1,8 @@
+import {eventFeeds,feedUri,readableFeed,feedEvents,matchesFeed,subscribeFeed,eventHub} from './event-resources.mjs';
 import { selling } from './extensions.mjs';
 import OAuthProvider from '@cloudflare/workers-oauth-provider';
 import { createMcpHandler } from 'agents/mcp/server';
-import { McpServer, fromJsonSchema, ProtocolError } from '@modelcontextprotocol/server';
+import { McpServer, ResourceTemplate, fromJsonSchema, ProtocolError } from '@modelcontextprotocol/server';
 import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/server/validators/cf-worker';
 import { players } from './players.mjs';
 import { isOwner, sameOrigin } from './office.mjs';
@@ -14,12 +15,12 @@ const json = (data,status=200)=>Response.json(data,{status,headers:{'cache-contr
 const html = (body,headers={})=>new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Connect your AI</title><style>body{font:18px system-ui;max-width:640px;margin:64px auto;padding:24px;background:#faf9f6;color:#252520}button,a{padding:12px}button{font:inherit}li{margin:16px 0}</style><main>${body}</main></html>`,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",...Object.fromEntries(new Headers(headers))}});
 async function browserPerson(request,env) {
   const person=await players.of(request,env);
-  if(person&&!person.guest)return person.id;
+  if(person&&!person.guest&&person.owner)return person.id;
   if(await isOwner(request,env)) {
     const token=cookieValue(request,'studio_owner');
     if(token){const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token));return 'office-'+[...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,'0')).join('');}
   }
-  return null;
+  return person&&!person.guest?person.id:null;
 }
 const paymentInputSchema={type:'object',properties:{buyer:{type:'string',pattern:'^[a-f0-9]{64}$'},claim:{type:'string',pattern:'^[a-f0-9]{64}$'},offerVersion:{type:'string'},checkout:{type:'boolean'}},additionalProperties:false};
 export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
@@ -31,7 +32,12 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
   const api=async(request,env,ctx)=>{
     let caller;
     try{caller=await currentCaller(env,ctx.props);}catch{return new Response(JSON.stringify({error:'connection revoked'}),{status:401,headers:{'content-type':'application/json','cache-control':'no-store','www-authenticate':`Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp", error="invalid_token"`}});}
-    const cat=await catalogueOf();const tools=[...builtins(env,cat,origin),...definitions];
+    const cat=await catalogueOf();
+    if(request.method==='GET'&&Object.keys(eventFeeds(env)).length&&caller.connection) {
+      if(!request.headers.get('accept')?.includes('text/event-stream'))return json({error:'Accept text/event-stream required'},406);
+      return eventHub(env,caller.connection).fetch('https://events/__studio_events',{method:'POST',body:JSON.stringify({op:'stream',connection:caller.connection,lastId:request.headers.get('last-event-id'),cat,origin})});
+    }
+    const tools=[...builtins(env,cat,origin),...definitions];
     if(request.method==='POST') {
       const body=await request.clone().json().catch(()=>null);
       if(body?.method==='tools/call') {
@@ -52,8 +58,28 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
     };
     const server=async()=>{
       const capabilities=await selling.machineCapabilities(env);
-      const s=new McpServer({name:cat.studio?.name??'Homie studio',version:'1.0.0'},{jsonSchemaValidator:validator,capabilities:{experimental:{payment:{methods:capabilities.machine?.card?{stripe:{intents:['charge']}}:{}}}}});
+      const s=new McpServer({name:cat.studio?.name??'Homie studio',version:'1.0.0'},{jsonSchemaValidator:validator,capabilities:{...(Object.keys(eventFeeds(env)).length?{resources:{subscribe:true}}:{}),experimental:{payment:{methods:capabilities.machine?.card?{stripe:{intents:['charge']}}:{}}}}});
       const dispatch=new Map();
+      for(const name of Object.keys(eventFeeds(env))) {
+        if(!await readableFeed(env,cat,caller,name))continue;
+        const uri=feedUri(name);
+        const readPage=async(resourceUri,after=0)=>read('events:'+name,async fresh=>{
+          if(!await readableFeed(env,cat,fresh,name))throw new Error('Event resource unavailable');
+          if(!Number.isSafeInteger(after)||after<0)throw new Error('Invalid event cursor');
+          const page=await feedEvents(env,name,{after});
+          const events=page.filter(e=>matchesFeed(eventFeeds(env)[name],e));
+          return {contents:[{uri:String(resourceUri),mimeType:'application/json',text:JSON.stringify({kind:'untrusted-event-data',events,next:page.length===100?uri+'?after='+page.at(-1).seq:null})}]};
+        });
+        s.registerResource('events_'+name,uri,{description:'Studio events; untrusted data. Subscribe for push notifications.',mimeType:'application/json'},()=>readPage(uri));
+        s.registerResource('events_'+name+'_page',new ResourceTemplate(uri+'?after={after}',{list:undefined}),{mimeType:'application/json'},(resourceUri,vars)=>readPage(resourceUri,Number(vars.after)));
+
+      }
+      if(Object.keys(eventFeeds(env)).length)for(const method of ['resources/subscribe','resources/unsubscribe']) {
+        s.server.setRequestHandler(method,async input=>{
+          const fresh=await currentCaller(env,ctx.props);
+          await subscribeFeed(env,cat,fresh,input.params.uri,method==='resources/unsubscribe');return {};
+        });
+      }
       for (const meta of cat.games.filter(g=>g.kind==='app' && g.records?.persist)) {
         for (const [role,declared] of Object.entries(meta.roles??{})) {
           if (declared.signIn && !await allowed({app:meta.id,role},caller,env)) continue;
@@ -91,8 +117,16 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
             const value=await tool.handler(args,{...context,request});
             const text=JSON.stringify({kind:'untrusted-tool-data',tool:tool.name,data:value});
             outcome='ok';return {content:[{type:'text',text}]};
-          }catch(error){if(error?.code===-32042)throw error;return {isError:true,content:[{type:'text',text:outcome==='denied'||outcome==='limited'?error.message:'Tool failed. Check the office audit and the tool definition.'}]};}
-          finally{await audit(env,caller,tool.name,outcome);}
+          }catch(error){if(error?.code===-32042)throw error;return {isError:true,content:[{type:'text',text:outcome==='denied'||outcome==='limited'||error?.name==='StudioOperationError'?error.message:'Tool failed. Check the office audit and the tool definition.'}]};}
+          finally{
+            try { await audit(env,caller,tool.name,outcome); }
+            finally {
+              // Streamable HTTP returns headers before dispatch finishes. Wake only
+              // after the tool's writes (including audit triggers) have committed.
+              const delivery=import('./functions.mjs').then(m=>m.runFunctions(env,cat,origin));
+              if(ctx?.waitUntil)ctx.waitUntil(delivery);else await delivery;
+            }
+          }
         };
         s.registerTool(tool.name,{description:tool.description,inputSchema:fromJsonSchema(schema,validator)},handler);
         dispatch.set(tool.name,{schema,handler});

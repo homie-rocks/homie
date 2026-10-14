@@ -631,8 +631,13 @@ export default {
       if (!appLobby) throw error;
       try { console.error(JSON.stringify({ at: new Date().toISOString(), ev: 'lobby-route-failed', path: url.pathname, error: errorLine(error) })); } catch { /* no console */ }
       res = json({ ok: false, error: 'failed' }, 500);
+    } finally {
+      // A route can commit a write and then fail. Its outbox still needs delivery.
+      if(env.DB && ['POST','PUT','PATCH','DELETE'].includes(request.method)) {
+        const delivery=import('./functions.mjs').then(m=>m.runFunctions(env,()=>catalogue(env,url.origin),url.origin));
+        if(ctx?.waitUntil)ctx.waitUntil(delivery);else await delivery;
+      }
     }
-    if(ctx?.waitUntil && ['POST','PUT','DELETE'].includes(request.method)) ctx.waitUntil((async()=>{const {runFunctions}=await import('./functions.mjs');await runFunctions(env,()=>catalogue(env,url.origin),url.origin);})());
     if (appLobby || appRecords) return appCors(request, res);
     // A referral's arrival (worker/referrals.mjs): only a person's page load with ?via= of another site, on a studio
     // that pays referrals. The page is answered first; a cookie is added to it only then.
@@ -1840,7 +1845,7 @@ export class Table {
   queueFunctionEvent(type,data) {
     if(!this.env.DB || this.env.HOMIE_PREVIEW==='1' || !this.ctx.storage.sql) return;
     this.ctx.waitUntil((async()=>{
-      if(!await (await import('./functions.mjs')).hasFunctionType(type))return;
+      if(!await (await import('./functions.mjs')).hasFunctionType(type,this.env))return;
       const sql=this.ctx.storage.sql;
       sql.exec('CREATE TABLE IF NOT EXISTS function_outbox(id TEXT PRIMARY KEY,type TEXT,data TEXT,at INTEGER)');
       sql.exec('INSERT INTO function_outbox VALUES(?,?,?,?)',crypto.randomUUID(),type,JSON.stringify(data),Date.now());
@@ -1858,6 +1863,7 @@ export class Table {
       try {await emitEvent(this.env,row.type,JSON.parse(row.data),{id:row.id,at:row.at});sql.exec('DELETE FROM function_outbox WHERE id=?',row.id);}
       catch {this.armRoom(Date.now()+60000);await this.alarmWrite;return;}
     }
+    await (await import('./functions.mjs')).runFunctions(this.env,()=>catalogue(this.env,this.origin??'https://studio.invalid'),this.origin??'https://studio.invalid');
   }
 
   /**
@@ -2565,6 +2571,11 @@ export class Lobby {
 
   /** A request that throws is said with what it was (never its body) and answered as a failure, not left uncaught. */
   async fetch(request) {
+    if(new URL(request.url).pathname==='/__studio_events') {
+      const {EventStreams}=await import('./event-resources.mjs');
+      this.eventStreams??=new EventStreams(this.env);
+      return this.eventStreams.fetch(request);
+    }
     try { return await this.answer(request); } catch (error) {
       let path = '';
       try { path = new URL(request.url).pathname; } catch { /* not an address */ }
