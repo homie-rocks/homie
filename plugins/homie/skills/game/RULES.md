@@ -1443,3 +1443,29 @@ catch-up path. It resumes live prediction at once and carries the drawn pose int
 the normal correction blend, so a counter-dash or jump does not wait for the
 unseen impulse's history to finish. This changes drawing only; authority, input
 timestamps, cooldowns and replay rules are unchanged.
+
+Own box-bodied 2D presentation also sweeps from its last displayed position. Reconciliation
+cannot switch sides of a solid merely because the new predicted origin is on
+the other side. Travel is limited by elapsed time plus a body-sized blend. Horizontal travel uses the adjacent
+actual velocities; vertical travel uses the recorded substeps with interpolation headroom, so an apex or landing is not trimmed.
+A stationary correction spends only blend speed, not the declared terminal falling speed.
+A large falling-speed limit cannot accelerate a horizontal correction. If sliding cannot reach a correction, a bounded
+incremental route searches collision-tested edges around the obstruction. No
+route means holding the last valid position, never crossing a solid. Explicit
+placements and epoch changes reset presentation immediately. These positions
+never feed movement, hits, scoring, input timestamps, or authority.
+
+A platformer can supply `openRoom({ correctionDirection: input => Number(input.r || 0) - Number(input.l || 0) })`
+for box-bodied 2D presentation. This is horizontal control intent (-1, 0, +1), not authority or a second movement loop.
+It prevents a visual correction from reversing held controls even when contact sets velocity to zero; neutral input
+allows convergence in either direction. Actual predicted braking against a newly reversed control remains allowed.
+
+After a delayed render, box-bodied 2D presentation spends at most 1.4 body widths per drawn frame,
+then continues toward prediction. This affects drawing only; an explicit placement remains immediate.
+
+When a player's connection comes back, the server hands the body back where it has it, with a new placement
+revision. Within three seconds of the link coming back online, box-bodied 2D presentation treats that revision as the
+same body and draws on from where it was shown, gliding and routing around solids as for any correction. A body that
+was really placed while the player was away (a respawn, a new round) should still be drawn at once: say so with
+`openRoom({ respawned: (before, after) => after.diedAt !== before.diedAt })`, where `before` and `after` are the own
+body as the server last had it before and after the outage.
