@@ -55,3 +55,27 @@ test('records-only shell sends booking checkout and returns the booking to the f
  assert.deepEqual(request.booking,{collection:'bookings',slot:'morning'});assert.equal(request.game,'form');
  assert.equal(await page.evaluate(()=>window.__shell.arrival.phase),'done');
 });
+
+test('guest app frames permit Web Share and a real postcard download',{timeout:15000},async t=>{
+ const {mkdtempSync,readFileSync,rmSync,existsSync}=await import('node:fs');const {tmpdir}=await import('node:os');const {join}=await import('node:path');
+ const dir=mkdtempSync(join(tmpdir(),'homie-postcard-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const {page,origin}=await fixture(t,'<!doctype html><button id="save">Save postcard</button><script>document.querySelector("button").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["Greetings!"],{type:"text/plain"}));a.download="postcard.txt";a.click();};</script>');
+ const cdp=await page.createCDPSession();await cdp.send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:dir});
+ await page.goto(origin+'/form/open');await page.waitForFunction(()=>window.__shell?.arrival?.phase==='done');
+ const frame=page.frames().find(f=>f.url().includes('/__game/'));
+ assert.ok(await page.$eval('iframe',el=>el.allow.split(';').map(x=>x.trim()).includes('web-share *')));
+ if(await frame.evaluate(()=>document.featurePolicy.features().includes('web-share'))) assert.equal(await frame.evaluate(()=>document.featurePolicy.allowsFeature('web-share')),true);
+ await frame.click('#save');
+ for(let i=0;i<30&&!existsSync(join(dir,'postcard.txt'));i++)await new Promise(r=>setTimeout(r,100));
+ assert.equal(readFileSync(join(dir,'postcard.txt'),'utf8'),'Greetings!');
+});
+
+test('a decorative app hero lets the containing page scroll',{timeout:15000},async t=>{
+ const {layout}=await import('../worker/site.mjs');
+ const {page,origin}=await fixture(t,'<!doctype html><div style="height:2000px">Postcards</div>');
+ await page.goto(origin+'/form/open');
+ await page.setContent(await layout({studio:{name:'Test'},games:[]},{title:'Hero',main:`<style>.hero{height:700px}.hero iframe{width:100%;height:700px}footer{height:2000px}</style><section class="hero"><div class="hero-media"><iframe src="${origin}/form/open"></iframe></div></section><footer>More about us</footer>`}).text());
+ await page.waitForSelector('iframe');await page.mouse.move(195,350);await page.mouse.wheel({deltaY:600});
+ await page.waitForFunction(()=>window.scrollY>100,{timeout:1500});
+ assert.ok(await page.evaluate(()=>window.scrollY)>100);
+});

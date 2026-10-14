@@ -57,14 +57,14 @@ test('official SDK client discovers and calls a public studio in workerd',{timeo
       let clientInfo,tokens,verifier,discovery,approvalUrl;
       const redirect='http://127.0.0.1:19876/callback';
       const provider={redirectUrl:redirect,clientMetadata:{client_name:'Owner proof',redirect_uris:[redirect],grant_types:['authorization_code','refresh_token'],response_types:['code'],token_endpoint_auth_method:'none'},state:()=> 'proof-state',clientInformation:()=>clientInfo,saveClientInformation:v=>{clientInfo=v;},tokens:()=>tokens,saveTokens:v=>{tokens=v;},codeVerifier:()=>verifier,saveCodeVerifier:v=>{verifier=v;},discoveryState:()=>discovery,saveDiscoveryState:v=>{discovery=v;},redirectToAuthorization:u=>{approvalUrl=u;}};
-      assert.equal(await auth(provider,{serverUrl:address+'/mcp',scope:'studio offline_access'}),'REDIRECT');
+      assert.equal(await auth(provider,{serverUrl:address+'/mcp/auth',scope:'studio offline_access'}),'REDIRECT');
       await page.goto(approvalUrl.href);assert.match(await page.content(),/Allow connection/);
       await page.setRequestInterception(true);let callback;
       page.on('request',r=>{if(r.url().startsWith(redirect)){callback=new URL(r.url());void r.respond({status:200,body:'Connected'});}else void r.continue();});
       await Promise.all([page.waitForNavigation(),page.click('button[value="allow"]')]);
       assert.ok(callback);assert.equal(callback.searchParams.get('state'),'proof-state');
-      assert.equal(await auth(provider,{serverUrl:address+'/mcp',authorizationCode:callback.searchParams.get('code'),iss:callback.searchParams.get('iss')}),'AUTHORIZED');
-      const ownerClient=new Client({name:'owner-proof',version:'1.0.0'});clients.push(ownerClient);await ownerClient.connect(new StreamableHTTPClientTransport(new URL(address+'/mcp'),{authProvider:provider}));
+      assert.equal(await auth(provider,{serverUrl:address+'/mcp/auth',authorizationCode:callback.searchParams.get('code'),iss:callback.searchParams.get('iss')}),'AUTHORIZED');
+      const ownerClient=new Client({name:'owner-proof',version:'1.0.0'});clients.push(ownerClient);await ownerClient.connect(new StreamableHTTPClientTransport(new URL(address+'/mcp/auth'),{authProvider:provider}));
       assert.ok((await ownerClient.listTools()).tools.some(t=>t.name==='private_hello'));
       const own=await ownerClient.callTool({name:'private_hello',arguments:{}});assert.equal(own.isError,undefined);
       await page.goto(address+'/_studio/office/connections');assert.match(await page.content(),/Owner proof/);

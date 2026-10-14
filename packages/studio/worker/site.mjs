@@ -107,6 +107,8 @@ img,video{display:block;max-width:100%}
 .hero-media{position:absolute;inset:0;z-index:-2;overflow:hidden;background:
   radial-gradient(60% 50% at 70% 30%,color-mix(in srgb,var(--glow) 26%,transparent),transparent 70%),
   radial-gradient(55% 45% at 25% 70%,color-mix(in srgb,var(--hot) 24%,transparent),transparent 70%),var(--bg)}
+.hero-media iframe{pointer-events:none}
+.hero-media iframe[data-interactive]{pointer-events:auto}
 .hero-media img,.hero-media video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:var(--focus,50% 50%)}
 /* The studio's own colour over the picture, so a bright cover still carries the words (game.json landing.hero.tint, 0 to 80). */
 .hero-media::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:color-mix(in srgb,var(--bg) var(--tint,16%),transparent)}

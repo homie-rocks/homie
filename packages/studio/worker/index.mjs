@@ -539,7 +539,7 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
       'cache-control': 'no-store, no-transform',
       'access-control-allow-origin': '*',
       // The game runs in an opaque origin: it cannot read this site's storage or cookies.
-      'content-security-policy': `sandbox allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups; frame-ancestors ${embedded ? `'self' ${embedAncestors(cat, url.origin, env.HOMIE_EMBED_PREVIEW === '1').replace("'none'", '')}` : frameAncestors(cat)}`,
+      'content-security-policy': `sandbox allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups${meta.kind === 'app' ? ' allow-downloads' : ''}; frame-ancestors ${embedded ? `'self' ${embedAncestors(cat, url.origin, env.HOMIE_EMBED_PREVIEW === '1').replace("'none'", '')}` : frameAncestors(cat)}`,
     },
   });
 }

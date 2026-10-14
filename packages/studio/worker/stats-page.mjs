@@ -16,6 +16,7 @@ import { CODEX_SCRIPT } from './codex-script.mjs';
  * owner's tap, or one of the studio's games (a private game's own secret road for the owner's phone).
  */
 const nextOf = (url) => signinTarget(url.searchParams.get('to'));
+const SIGNIN_SCRIPT = "document.querySelector('form').requestSubmit();";
 const signinWord = (to) => (to.startsWith('/_studio/codex/') ? 'Open the codex' : to === '/_studio/office' ? 'Open the office' : to.startsWith('/_studio/confirm/') ? 'Sign in and see what your AI asks' : to.startsWith('/_studio/stats') ? 'Open the stats' : 'Sign in and play');
 let scriptHash = null;
 async function codexScriptHash() {
@@ -135,9 +136,11 @@ export async function ownerRoutes(request, env, url, { catalogueOf }) {
     const key = url.searchParams.get('k') ?? '';
     if (request.method === 'GET') {
       // A GET spends nothing: a chat app's link preview must not use up the owner's one-time link.
+      const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(SIGNIN_SCRIPT)));
+      const hash = btoa(String.fromCharCode(...bytes));
       return page('Sign in · stats', `<h1>${esc(cat.studio?.name ?? 'Studio')} stats</h1>
 <p class="dim">Sign this browser in as the studio's owner: the private stats and office, and the owner's tools in your own games. The link works once.</p>
-<form method="post" action="/_studio/signin?k=${esc(encodeURIComponent(key))}${nextOf(url) !== '/_studio/stats' ? `&amp;to=${esc(encodeURIComponent(nextOf(url)))}` : ''}"><button type="submit">${signinWord(nextOf(url))}</button></form>`);
+<form method="post" action="/_studio/signin?k=${esc(encodeURIComponent(key))}${nextOf(url) !== '/_studio/stats' ? `&amp;to=${esc(encodeURIComponent(nextOf(url)))}` : ''}"><button type="submit">${signinWord(nextOf(url))}</button></form><script>${SIGNIN_SCRIPT}</script>`, 200, { 'content-security-policy': PRIVATE_HEADERS['content-security-policy'].replace("default-src 'none';", `default-src 'none'; script-src 'sha256-${hash}';`) });
     }
     if (request.method !== 'POST' || !sameOrigin(request, url)) return page('Not allowed', '<h1>Not allowed</h1>', 403);
     const session = await spendSignin(env, key);

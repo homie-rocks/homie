@@ -158,7 +158,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
       });
       return s;
     };
-    return createMcpHandler(server)(request,env,ctx);
+    return createMcpHandler(server,{route:path === '/mcp/auth' ? '/mcp/auth' : '/mcp'})(request,env,ctx);
   };
   if(localIdentity)return api(request,scoped,ctx);
   const provider=new OAuthProvider({

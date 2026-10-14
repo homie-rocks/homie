@@ -200,6 +200,7 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
 .notice .acts a.primary { background: var(--hot); color: #0b0b10; border-color: transparent; }
 [hidden] { display: none !important; }
 ${arrive.css}
+${g.kind === 'app' ? 'html,body,iframe.game{touch-action:auto;user-select:auto;-webkit-user-select:auto;-webkit-touch-callout:default}' : ''}
 ${embed ? `html,body{touch-action:auto}.room.at-top-center{transform:none;left:auto;right:max(8px,env(safe-area-inset-right))}.embed-open{display:flex;align-items:center;min-height:44px;color:inherit}.embed-note{font:12px/1.4 system-ui;overflow-wrap:anywhere}.sheet{position:fixed;inset:calc(max(8px,env(safe-area-inset-top)) + 48px) max(8px,env(safe-area-inset-right)) auto auto;max-width:calc(100vw - max(8px,env(safe-area-inset-left)) - max(8px,env(safe-area-inset-right)));max-height:calc(100dvh - max(8px,env(safe-area-inset-top)) - 48px - max(8px,env(safe-area-inset-bottom)));overflow:auto;overscroll-behavior:contain;touch-action:pan-y}.sheet.more::after{content:'▾ more below';position:sticky;bottom:-12px;display:block;margin:0 -12px -12px;padding:16px 0 5px;text-align:center;font:600 11px/1 system-ui;color:#cfd6e6;background:linear-gradient(transparent,rgba(8,12,22,.98) 60%);pointer-events:none}.sheet .embed-help{margin:8px 2px;font:500 12px/1.4 system-ui;color:#aab3c7}html:not(.player-frame) .frame-only{display:none}.sheet a,.sheet button{min-height:44px}.sheet .foot a,.sheet .foot button{display:inline-flex;align-items:center}.embed-open .frame-only{margin-left:4px}.player-top iframe.game{inset:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);width:calc(100% - env(safe-area-inset-left) - env(safe-area-inset-right));height:calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom))}.arrive-in{padding:12px}.arrive-title{font-size:clamp(24px,7vw,52px)}` : ''}
 ${shopControl ? `.shop-control{color:#eef1f8;font:600 13px/1.2 system-ui;position:fixed;top:env(safe-area-inset-top);left:max(8px,env(safe-area-inset-left));height:52px;display:flex;align-items:center;z-index:6}.shop-control button{min-height:44px;padding:0 18px}html body .room.room{flex-direction:column;align-items:flex-end;top:max(4px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));left:auto;bottom:auto;transform:none}html body iframe.game.game{top:calc(env(safe-area-inset-top) + 52px);height:calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 52px)}` : ''}
 ${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${shop ? SHOP_SHELL_CSS : ''}${pillUi}`;
@@ -241,7 +242,7 @@ ${embed ? `    <p class="embed-help">Sound starts after a press. If pointer lock
 </div>
 <div class="toast" data-toast role="status" hidden></div>`;
   return layoutless(`${g.name} · ${appWords(g).open}`, `
-<iframe class="game" title="${esc(g.name)}" sandbox="allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups" allow="fullscreen *; autoplay *; gamepad *"></iframe>
+<iframe class="game" title="${esc(g.name)}" sandbox="allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups${g.kind === 'app' ? ' allow-downloads' : ''}" allow="fullscreen *; autoplay *; gamepad *${g.kind === 'app' ? '; web-share *' : ''}"></iframe>
 ${arrive.html}
 <div class="chip${arrive.html ? ' held' : ''}" data-chip><span data-status>finding a room…</span></div>
 <div class="vote" data-vote role="dialog" aria-label="How strong should the AI be?" data-keep-focus hidden></div>
@@ -1178,7 +1179,7 @@ export function watchPage(cat, g, { origin = '', room = null, ticket = null, pol
   <span class="eyes" data-eyes hidden title="Watching this room"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span data-eyes-n></span><span class="eyes-w"> watching</span></span>
   <a class="playb" data-playb href="${esc(openPath(g))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.8v14.4a1 1 0 0 0 1.5.86l12-7.2a1 1 0 0 0 0-1.72l-12-7.2A1 1 0 0 0 7 4.8Z" fill="currentColor"/></svg><span>${esc(appWords(g).open)}</span></a>
 </header>
-<main class="stage"><iframe class="game" title="${esc(g.name)}, live" tabindex="-1" sandbox="allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups" allow="fullscreen *; autoplay *; gamepad *"></iframe></main>
+<main class="stage"><iframe class="game" title="${esc(g.name)}, live" tabindex="-1" sandbox="allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups${g.kind === 'app' ? ' allow-downloads' : ''}" allow="fullscreen *; autoplay *; gamepad *${g.kind === 'app' ? '; web-share *' : ''}"></iframe></main>
 <footer class="dock">
   <div class="caption" data-caption role="status" aria-live="polite"><b data-cap-head>Joining the room…</b><span data-cap-sub></span></div>
   <nav class="strip" data-strip role="toolbar" aria-label="Whose view to watch"></nav>

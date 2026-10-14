@@ -1,3 +1,4 @@
+import {appWords} from './app-format.mjs';
 /**
  * THE ARRIVAL (0.26.0): the play page and the big screen never open on a blank screen. From the page's first paint
  * until the game says it is playable, an arrival card covers the game's frame in the game's own look: its title and
@@ -66,7 +67,7 @@ export function arrivalCard(cat, g, { screen = false, off = false } = {}) {
   const pitch = String(L.pitch ?? '').trim() || firstSentence(g?.blurb);
   const studio = cat?.studio?.name ?? '';
   const keys = screen
-    ? [['tv', L.controls?.tv ?? 'Phones are the controllers: scan the code to play.']]
+    ? [['tv', L.controls?.tv ?? (g.kind === 'app' ? appWords(g).join : 'Phones are the controllers: scan the code to play.')]]
     : [['phone', L.controls?.phone], ['desk', L.controls?.computer]].filter(([, v]) => v);
   const art = wide || tall
     ? `<picture class="arrive-art">${wide && tall ? `<source media="(min-aspect-ratio: 3/4)" srcset="${esc(wide)}">` : ''}<img src="${esc(tall ?? wide)}" alt="" decoding="async" fetchpriority="high" style="object-position:${esc(focus)}"></picture>`
