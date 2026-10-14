@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,writeFileSync,mkdirSync,rmSync,readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {shopMcpPlan,saveMcpVerification} from '../lib/shop-mcp.mjs';
+import {shopMcpPlan,saveMcpVerification,readKey} from '../lib/shop-mcp.mjs';
 import {syncPaymentLinks} from '../lib/shop-links.mjs';
 
 function studio(t) {
@@ -48,6 +48,10 @@ async function reconcile(root,f,options={}) {
  }
  throw new Error('Plan did not converge');
 }
+test('read observations match independently of parameter ordering',()=>{
+ assert.equal(readKey('/v1/products',{limit:100,starting_after:'prod_1'}),readKey('/v1/products',{starting_after:'prod_1',limit:100}));
+});
+
 test('official MCP plan converges and verifies items, menu, slots, recurring and portal from API fixtures',async t=>{
  const root=studio(t),f=fixture(),slots=[{app:'classes',collection:'bookings',slots:'sessions',slot:'monday',item:'coffee',capacity:2}];
  const {p,observations,writes}=await reconcile(root,f,{slots});

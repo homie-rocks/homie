@@ -72,6 +72,10 @@ export function completionArgs(step) {
 }
 
 export async function shopConnect(root, options = {}) {
+  const fail=(...args)=>{
+    const result=failure(...args);
+    return options.webhookOnly?{...result,command:'shop webhook',why:result.why.replaceAll('shop connect','shop webhook')}:result;
+  };
   if (options.manual || options.fromClipboard) {
     const result = await shopConnectManual(root, options);
     if (result.ok) rmSync(join(receiptDir(root, options.storage ?? receiptHome()), 'test.json'), { force: true });
@@ -81,20 +85,20 @@ export async function shopConnect(root, options = {}) {
     storage = receiptHome(), wrangler = null } = options;
   const mode = live ? 'live' : 'test';
   const checked = readShop(root);
-  if (!checked.ok || checked.absent) return failure('shop', 'Create and check shop.json first: homie-studio shop init, then shop check.');
-  if (options.managed === true && checked.shop.till !== 'stripe-managed') return failure('shop-settings', 'For Managed Payments, set shop.json till to stripe-managed and deploy that choice before connecting. Stripe’s own eligibility and terms still apply.');
+  if (!checked.ok || checked.absent) return fail('shop', 'Create and check shop.json first: homie-studio shop init, then shop check.');
+  if (options.managed === true && checked.shop.till !== 'stripe-managed') return fail('shop-settings', 'For Managed Payments, set shop.json till to stripe-managed and deploy that choice before connecting. Stripe’s own eligibility and terms still apply.');
   let catalog, mcpAccount;
   if (options.webhookOnly) {
     try {
       const {saveMcpVerification} = await import('./shop-mcp.mjs');
       const saved=JSON.parse(readFileSync(join(root,'.studio','stripe-mcp.json'),'utf8'));
-      if(!saved.result?.verifiedAt || Date.now()-Date.parse(saved.result.verifiedAt)>15*60_000) return failure('verify','Run shop verify with fresh Stripe MCP reads before installing the webhook (verification is valid for 15 minutes).');
+      if(!saved.result?.verifiedAt || Date.now()-Date.parse(saved.result.verifiedAt)>15*60_000) return fail('verify','Run shop verify with fresh Stripe MCP reads before installing the webhook (verification is valid for 15 minutes).');
       const verified=await saveMcpVerification(root,saved.options);
-      if(!verified.verified || verified.local || verified.mode!==mode || verified.site!==new URL(siteUrl(root)).origin) return failure('verify','Run shop verify with fresh Stripe MCP reads for this site and mode first.');
+      if(!verified.verified || verified.local || verified.mode!==mode || verified.site!==new URL(siteUrl(root)).origin) return fail('verify','Run shop verify with fresh Stripe MCP reads for this site and mode first.');
       mcpAccount=saved.options.account;
-      if(!/^acct_[A-Za-z0-9]+$/.test(mcpAccount??''))return failure('account','Verify with the Stripe MCP account ID first.');
+      if(!/^acct_[A-Za-z0-9]+$/.test(mcpAccount??''))return fail('account','Verify with the Stripe MCP account ID first.');
       catalog={config:verified.config,retire:verified.retire};
-    } catch { return failure('verify','Run shop verify with fresh Stripe MCP reads for this site first.'); }
+    } catch { return fail('verify','Run shop verify with fresh Stripe MCP reads for this site first.'); }
   }
   const id = hash(realpathSync(root)).slice(0, 24);
   const profile = options.profile ?? `homie-${id}`;
@@ -102,11 +106,11 @@ export async function shopConnect(root, options = {}) {
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   // Reuse the toolkit’s process-aware lock, in the private receipt folder. Dead processes do not strand setup.
   const lock = lockDeploy(dir);
-  if (!lock.ok) return failure('busy', 'Stripe connection is already running for this studio. Wait for that command to finish.');
+  if (!lock.ok) return fail('busy', 'Stripe connection is already running for this studio. Wait for that command to finish.');
   try {
     const cli = (args) => exec(['--project-name', profile, ...args], { cwd: root });
     const installed = await cli(['--version']);
-    if (installed.code !== 0) return failure('stripe-cli', 'Install Stripe’s official CLI, then run shop connect again.', { next: ['npm install -g @stripe/cli@latest'] });
+    if (installed.code !== 0) return fail('stripe-cli', 'Install Stripe’s official CLI, then run shop connect again.', { next: ['npm install -g @stripe/cli@latest'] });
 
     // A read both checks existing credentials and lets Stripe refresh its OAuth session itself.
     let probe = renew ? { code: 1 } : await cli(['get', '/v1/products', '-d', 'limit=1', ...(live ? ['--live'] : [])]);
@@ -115,25 +119,25 @@ export async function shopConnect(root, options = {}) {
       const login = json(start.stdout);
       const complete = completionArgs(login?.next_step);
       if (start.code !== 0 || !stripeURL(login?.browser_url) || !complete || !/^[a-zA-Z0-9 -]{1,100}$/.test(login?.verification_code ?? '')) {
-        return failure('stripe-login', 'Stripe could not start browser approval. Update the official Stripe CLI and try shop connect again. An account administrator may need to enable CLI access in Stripe’s MCP and CLI access settings.' + stripeReason(start, 'login'));
+        return fail('stripe-login', 'Stripe could not start browser approval. Update the official Stripe CLI and try shop connect again. An account administrator may need to enable CLI access in Stripe’s MCP and CLI access settings.' + stripeReason(start, 'login'));
       }
       log(`Approve your studio’s Stripe account in your browser. Pairing code: ${login.verification_code}. ${login.browser_url}`);
       open(login.browser_url);
       const finished = await cli(complete);
-      if (finished.code !== 0) return failure('stripe-login', 'Stripe approval did not finish. Run shop connect again when ready.' + stripeReason(finished, 'login completion'));
+      if (finished.code !== 0) return fail('stripe-login', 'Stripe approval did not finish. Run shop connect again when ready.' + stripeReason(finished, 'login completion'));
 
       probe = await cli(['get', '/v1/products', '-d', 'limit=1', ...(live ? ['--live'] : [])]);
-      if (probe.code !== 0 || !Array.isArray(json(probe.stdout)?.data)) return failure('stripe-access', 'Stripe is signed in but cannot read Products in the requested mode. Review the account, sandbox and permissions in Stripe, then run shop connect --renew again.' + stripeReason(probe, 'GET /v1/products'));
+      if (probe.code !== 0 || !Array.isArray(json(probe.stdout)?.data)) return fail('stripe-access', 'Stripe is signed in but cannot read Products in the requested mode. Review the account, sandbox and permissions in Stripe, then run shop connect --renew again.' + stripeReason(probe, 'GET /v1/products'));
     }
     if (options.webhookOnly) {
       const accountResult=await cli(['get','/v1/account',...(live?['--live']:[])]);
-      if(accountResult.code!==0 || json(accountResult.stdout)?.id!==mcpAccount) return failure('account','Stripe CLI and MCP must select the same account. Verify with the MCP account ID first.');
+      if(accountResult.code!==0 || json(accountResult.stdout)?.id!==mcpAccount) return fail('account','Stripe CLI and MCP must select the same account. Verify with the MCP account ID first.');
     }
     const site = siteUrl(root);
-    if (!site) return failure('deploy', 'Stripe is connected on this computer. Deploy the studio with studio_deploy (Cloudflare approval first if needed), then run shop connect again.', { mode, connected: true });
+    if (!site) return fail('deploy', 'Stripe is connected on this computer. Deploy the studio with studio_deploy (Cloudflare approval first if needed), then run shop connect again.', { mode, connected: true });
     let target;
-    try { target = new URL(site); } catch { return failure('deploy', 'Deploy the studio to a public HTTPS address, then run shop connect again.'); }
-    if (target.protocol !== 'https:' || target.username || target.password || /^(localhost|127\.|\[::1\])/.test(target.hostname)) return failure('deploy', 'Deploy the studio to a public HTTPS address, then run shop connect again.');
+    try { target = new URL(site); } catch { return fail('deploy', 'Deploy the studio to a public HTTPS address, then run shop connect again.'); }
+    if (target.protocol !== 'https:' || target.username || target.password || /^(localhost|127\.|\[::1\])/.test(target.hostname)) return fail('deploy', 'Deploy the studio to a public HTTPS address, then run shop connect again.');
     const api = async (method, path, params, idempotency) => {
       const args = [method.toLowerCase(), path, '--stripe-version', LINKS_STRIPE_VERSION, ...(live ? ['--live'] : []), ...(idempotency ? ['--idempotency', idempotency] : [])];
       for (const [k, v] of formEncode(params)) args.push('-d', `${k}=${v}`);
@@ -145,7 +149,7 @@ export async function shopConnect(root, options = {}) {
       return body;
     };
     const reason = fullerReason(checked.shop);
-    if (reason) return failure('fuller-checkout', reason, { mode, connected: true });
+    if (reason) return fail('fuller-checkout', reason, { mode, connected: true });
     const studio = readStudio(root);
     const w = wrangler ?? runner(root, studio.cloudflare?.accountId ? { CLOUDFLARE_ACCOUNT_ID: studio.cloudflare.accountId } : {});
     const receiptFile = join(dir, `${mode}.json`);
@@ -159,6 +163,6 @@ export async function shopConnect(root, options = {}) {
     return { ...result, command:options.webhookOnly?'shop webhook':result.command, profile };
   } catch (e) {
     const said = e?.stripeReason ?? '';
-    return failure('stripe-setup', 'Stripe setup could not finish. Check the studio’s Stripe session and Products, Prices, Payment Links and Webhook Endpoints write permissions, and the Cloudflare login, then run shop connect again. No credentials were printed.' + said);
+    return fail('stripe-setup', 'Stripe setup could not finish. Check the studio’s Stripe session and Products, Prices, Payment Links and Webhook Endpoints write permissions, and the Cloudflare login, then run shop connect again. No credentials were printed.' + said);
   } finally { lock.release(); }
 }

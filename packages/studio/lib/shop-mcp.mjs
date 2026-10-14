@@ -7,7 +7,7 @@ import {readStudio, siteUrl} from './studio.mjs';
 import {reconcilePaymentLinks} from './shop-links.mjs';
 import {fullerReason, LINKS_STRIPE_VERSION} from '../worker/shop-links.mjs';
 const hash = x => createHash('sha256').update(JSON.stringify(x)).digest('hex');
-export const readKey = (path, params) => JSON.stringify([path,params]);
+export const readKey = (path, params) => JSON.stringify([path,Object.fromEntries(Object.entries(params).sort(([a],[b])=>a.localeCompare(b)))]);
 export async function shopMcpPlan(root, {observations = [], mode = 'test', url, slots, verify = false} = {}) {
   const checked=readShop(root);
   if(!checked.ok || checked.absent) return {ok:false,why:'Create and check shop.json first.'};
