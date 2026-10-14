@@ -9,7 +9,6 @@ import { experienceDir, experienceJson, SLUG, checkBudget, findStudio, readBudge
 
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const REGISTRY = join(HERE, '..', 'references', 'models.json');
 const argv = process.argv.slice(2);
 const flags = new Map();
 const pos = [];
@@ -20,7 +19,6 @@ for (let i = 0; i < argv.length; i++) {
 const JSON_OUT = flags.has('json');
 const say = (m) => { if (!JSON_OUT) process.stderr.write(`${m}\n`); };
 const rel = (root, f) => relative(root, f).split('\\').join('/');
-const registry = () => JSON.parse(readFileSync(REGISTRY, 'utf8'));
 
 function studioRoot() {
   const root = findStudio();
@@ -127,12 +125,7 @@ function jobReceipt(file, { usd = null } = {}) {
   const pick = [usd, j.usd, j.cost, j.price?.usd, j.estimate?.usd, j.estimatedCost, j.estimated_cost, j.price].map((x) => (x === null || x === undefined || x === '' || typeof x === 'object' ? NaN : Number(x))).find((n) => Number.isFinite(n) && n >= 0);
   // No cost on the receipt: the registry's recorded price for that endpoint, said as such. Never zero by default.
   let price = Number.isFinite(pick) ? { usd: pick, basis: usd !== null && Number(usd) === pick ? 'the price given with --usd' : 'the connector receipt\'s own cost' } : null;
-  if (!price) {
-    const reg = registry();
-    const known = [reg.concept.withRefs, reg.concept.noRefs, reg.mesh.prop, reg.mood, reg.character?.mesh, ...(reg.mesh.fallbacks ?? [])].find((e) => e?.endpoint === endpoint);
-    if (known && Number.isFinite(Number(known.price?.usd))) price = { usd: Number(known.price.usd), basis: `the registry's recorded price for ${endpoint} (read ${known.price.read ?? reg.checked}); the receipt names none` };
-  }
-  if (!price) throw new Error(`${file} names no cost and ${endpoint} is not in the registry: say what it cost with --usd <US dollars> (an unknown cost is never recorded as nothing)`);
+  if (!price) throw new Error(`${file} names no cost for ${endpoint}: say what it cost with --usd <US dollars> (an unknown cost is never recorded as nothing)`);
   return { file: abs, requestId: requestId.trim(), endpoint: endpoint.trim(), price, at: typeof (j.at ?? j.createdAt ?? j.created_at) === 'string' ? (j.at ?? j.createdAt ?? j.created_at) : null };
 }
 

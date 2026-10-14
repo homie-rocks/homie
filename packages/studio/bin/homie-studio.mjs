@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { importMedia } from '../lib/media-import.mjs';
 /**
  * homie-studio — make a studio (games, music, videos, posts), make its games,
  * put its site on the studio's own Cloudflare (free plan, no payment method), and
@@ -87,7 +86,8 @@ import { importMedia } from '../lib/media-import.mjs';
  *   homie-studio look [<path>...] [--url <site>] [--shots <dir>] [--only computer,phone,sideways]
  *                                         (the site's pages on a computer and a phone, as pictures, with what is wrong)
  *   homie-studio port plan <game folder>
- *   homie-studio port import <game folder> --id <id> [--name "<Name>"] [--mode static|bundle|command]
+ *   homie-studio port import { importMedia } from '../lib/media-import.mjs';
+import <game folder> --id <id> [--name "<Name>"] [--mode static|bundle|command]
  *   homie-studio port check <id> [--url <site>] [--only owner-desk,owner-phone,owner-iphone,round,life,tv] [--shots <dir>]
  *   homie-studio deploy [--plan]          (--plan: what it will create on Cloudflare and what it costs; changes nothing)
  *                                         One deploy of a studio at a time (a lock in .studio/); it says which games changed
@@ -227,6 +227,9 @@ import { importMedia } from '../lib/media-import.mjs';
  *   homie-studio setup attach <hs_…> [--client claude|codex|grok]
  *                                          (this repository is the studio the chat's setup card is making: say so, once,
  *                                          learn its live address, and give a template copy its real name)
+ *   homie-studio domain <hostname>                  AI configures DNS/TLS for the next deploy
+ *   homie-studio media import --file <download> --receipt <receipt.json> --out <studio-path> --used-by <scene-file>
+ *                                          Place completed official MCP output with provenance (no provider calls)
  *   homie-studio setup prepare                     AI installs a private Node/npm if missing
  *   homie-studio setup status [--connector yes|no] [--client claude|codex|grok]   (also: homie-studio doctor)
  *                                         what this computer and the person's accounts have for a studio: Node, the Homie
