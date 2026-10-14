@@ -411,10 +411,10 @@ export async function setupStatus({
     const mcp = stripeAgentConfigured({ root, env });
     rows.push({
       id: 'stripe', label: 'Stripe', need: 'for selling', state: 'act',
-      detail: [version ? `Stripe CLI ${version} is installed` : 'Stripe CLI is not installed', mcp ? `optional MCP is set up for ${mcp}` : 'optional MCP is not set up', 'CLI access is not proof that Worker credentials or a purchase work'].join('; '),
-      unlocks: 'Connect the studio’s own Stripe with browser approval; shop connect syncs Payment Links and the webhook without a Worker API key. Verify a test purchase before calling the shop ready.',
+      detail: [version ? `Stripe CLI ${version} is installed` : 'Stripe CLI is not installed', mcp ? `official MCP is set up for ${mcp}` : 'official MCP is not set up', 'Provider sign-in is not proof that the shop and signed events work'].join('; '),
+      unlocks: 'Use Stripe’s official plugin for shop planning and verification, then install the private webhook. Verify a test purchase before calling the shop ready.',
       fix: {
-        who: 'ai', run: version ? 'npx --no-install homie-studio shop connect' : 'npm install -g @stripe/cli@latest',
+        who: 'ai', run: mcp ? 'npx --no-install homie-studio shop plan' : version ? 'stripe agent setup' : 'npm install -g @stripe/cli@latest',
         say: 'Use stripe_shop_plan with Stripe’s official MCP for catalog and links, then stripe_webhook for private signing-secret installation. Never ask for a key. Repeat plan and verify after edits.',
         open: 'https://dashboard.stripe.com/register',
       },
