@@ -1353,11 +1353,15 @@ test('an effect read before a simulation step cannot leave a stale browser prese
   const { L, compiled, openRoom } = await coinDashKit('server', false, 20, 'push-effects');
   const clock = virtualTime(t);
   const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const callbacks = new Map(); let frameId = 0;
+  const oldRaf = globalThis.requestAnimationFrame, oldCancel = globalThis.cancelAnimationFrame;
+  globalThis.requestAnimationFrame = fn => { callbacks.set(++frameId, fn); return frameId; };
+  globalThis.cancelAnimationFrame = id => callbacks.delete(id);
   globalThis.window = { addEventListener() {}, removeEventListener() {} };
   t.after(() => { if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow); else delete globalThis.window; });
   const r = rig(L, compiled, false, 25, 25);
   const a = openRoom({ timers: false, net: { config: cfg('Effect reader'), WebSocketImpl: r.socket(), post: null } });
-  t.after(() => { a.close(); r.stop(); });
+  t.after(() => { a.close(); r.stop(); if (oldRaf) globalThis.requestAnimationFrame = oldRaf; else delete globalThis.requestAnimationFrame; if (oldCancel) globalThis.cancelAnimationFrame = oldCancel; else delete globalThis.cancelAnimationFrame; });
   await clock.wait(3000);
   a.input({ ax: 127 });
   let effects = 0;
@@ -1365,6 +1369,7 @@ test('an effect read before a simulation step cannot leave a stale browser prese
   for (let n = 0; n < 360; n++) {
     if (n % 60 === 0) a.command('bump');
     await clock.wait([28, 5, 17, 33][n % 4]);
+    const frame = [...callbacks.values()]; callbacks.clear(); for (const fn of frame) fn(performance.now());
     const first = a.me;
     assert.equal(a.me, first, 'unchanged synchronous reads share a presentation');
     await Promise.resolve();

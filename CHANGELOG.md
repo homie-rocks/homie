@@ -21,6 +21,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ### Changed
 
+- Effect-read cache invalidation preserves a runner already drawn in the current browser frame.
+
 - Moving 2D correction targets no longer restart unfinished collision routes; visible waypoints are skipped only after a body sweep confirms the shortcut. Route nodes retain the sweep’s actual safe endpoint, including its collision skin, so near-contact grid points cannot strand the drawing and valid touching poses remain reachable. Fresh input invalidates an earlier frame read. Optional `room.predict.renderAheadMs` anticipates a small display interval on the predicted path without advancing simulation or input timestamps.
 
 - 2D own-runner reconciliation adopts server state immediately and replays pending input. Visual error decays exponentially with `room.predict.blendMs`; held direction no longer gates corrections. `room.predict.maxFrameM` bounds fast blends, collision-safe routing keeps box runners outside terrain, and all readers share one browser-frame presentation.

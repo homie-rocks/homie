@@ -717,6 +717,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const now = clock();
     checkSolo(now);
     const hidden = typeof document !== 'undefined' && document.hidden === true;
+    // Retain a pose already drawn this browser frame; only discard a cache
+    // created by effects inside this pump before the simulation advances.
+    const alreadyPresented = presentedEntity;
     // Effects play for everyone who draws the room: a watcher has no body and still sees them.
     fire();
     if (!mine || !base || net.seat === null || net.link === 'closed' || dims !== 2 && !net.connected && !net.rulesHosting) return;
@@ -740,7 +743,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       // fire() can read/cache the own entity before this pump advances it.
       // A renderer later in the same callback must see the completed step,
       // not hold that effect's old pose until the next (possibly early) frame.
-      presentedEntity = null;
+      if (!alreadyPresented) presentedEntity = null;
       if (stepped % sendEvery === sendEvery - 1) flush(now, stepped);
     }
   }
