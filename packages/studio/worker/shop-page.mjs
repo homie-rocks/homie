@@ -491,7 +491,7 @@ export const SHOP_SHELL_JS = String.raw`(function () {
     if (m.op === 'checkout') {
       if (!cfg || kids || screen) return reply({ ok: false, error: 'policy' });
       var checkoutTab = window.open('', '_blank');
-      return api('POST', '/api/shop/buy', { lines: m.lines, reference: m.reference, game: GAME, server: SERVER }).then(function (r) {
+      return api('POST', '/api/shop/buy', { lines: m.lines, reference: m.reference, booking: m.booking, game: GAME, server: SERVER }).then(function (r) {
         if (r.ok && r.url) { leaveForCheckout(checkoutTab, r); watch(); } else if (checkoutTab) checkoutTab.close();
         reply(r);
       }).catch(function () { if (checkoutTab) checkoutTab.close(); reply({ ok: false }); });

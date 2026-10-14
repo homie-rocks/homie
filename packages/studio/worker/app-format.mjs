@@ -20,6 +20,12 @@ export function appProblems(meta) {
     if (!key.test(id) || !object(c) || !object(c.fields)) { bad.push(`collection ${id}: declare fields`); continue; }
     for (const [field, spec] of Object.entries(c.fields)) if (!/^[a-z][a-z0-9_]*$/.test(field) || !object(spec) || !['string', 'number', 'boolean'].includes(spec.type) || (spec.enum && (!Array.isArray(spec.enum) || !spec.enum.length))) bad.push(`collection ${id}.${field}: invalid field: names start with a lowercase letter and use lowercase letters, digits and underscore; declare a string, number or boolean type`);
   }
+  for (const [id, c] of Object.entries(collections)) if (c.booking) {
+    const spec = c.booking;
+    if (!object(spec) || !key.test(spec.slots ?? '') || !collections[spec.slots] || typeof spec.item !== 'string' || !spec.item.trim()) bad.push(`collection ${id}: booking needs slots collection and shop item`);
+    if (!meta.records.persist) bad.push(`collection ${id}: bookings need persistent records`);
+    for (const role of Object.values(roles)) if (!role.signIn && (role.can ?? []).some(cap => ['create','update','delete'].some(op => cap === `${op}:${id}` || cap === `${op}:${spec.slots}`))) bad.push(`collection ${id}: booking and slot writes require a signed-in staff role`);
+  }
   for (const r of Object.values(roles)) for (const cap of Array.isArray(r?.can) ? r.can : []) if (!Object.hasOwn(meta.records?.collections ?? {}, String(cap).split(':')[1])) bad.push(`unknown collection in ${cap}`);
   for (const [k, v] of Object.entries(meta.words ?? {})) if (!/^[a-z][a-zA-Z0-9-]*$/.test(k) || typeof v !== 'string' || v.length > 500) bad.push(`words.${k}: use a short label`);
   return bad;

@@ -1,4 +1,5 @@
 import {localSession} from './local-test.mjs';
+import { moveBooking } from './booking-store.mjs';
 import { toolIdentity } from './tool-identity.mjs';
 /** Lasting app records in the studio's own D1. Room hosts never authorize writes. */
 import { appRole, recordProblem } from './app-format.mjs';
@@ -100,6 +101,12 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
     }
     if (!id) return fail(400, 'record id required');
     const body = await bodyOf(request);
+    if (meta.records.collections[collection].booking) {
+      if (op !== 'update' || !meta.roles[access.role].signIn) return fail(403, 'bookings are created and released through checkout');
+      if (!Number.isSafeInteger(body.version) || !ID.test(body.data?.slot ?? '') || Object.keys(body.data ?? {}).some(k => k !== 'slot')) return fail(400, 'move requires slot and current version');
+      const moved = await moveBooking(env, { app: meta.id, collection, id, slot: body.data.slot, version: body.version });
+      return moved ? json({ ok: true, id, version: body.version + 1 }) : fail(409, 'booking changed or is released; reload');
+    }
     if (op !== 'delete') { const bad = recordProblem(meta.records.collections[collection], body.data, { create: op === 'create' }); if (bad) return fail(400, bad); }
     if (op !== 'create' && (!Number.isSafeInteger(body.version) || body.version < 1)) return fail(400, 'record version required');
     const stmt = op === 'create'
@@ -109,6 +116,7 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
     const result = await stmt.run();
     return result.meta.changes ? json({ ok: true, id, version: op === 'create' ? 1 : body.version + 1 }) : fail(409, 'record changed, already exists, or collection full; reload');
   } catch (error) {
+    if (/booking capacity|capacity below|slot has active/.test(error.message)) return fail(409, error.message);
     if (error instanceof SyntaxError || error.message === 'body too large') return fail(400, error.message);
     return fail(503, 'app database unavailable; apply studio migrations');
   }

@@ -1,3 +1,4 @@
+import { bookingStatement } from './booking-store.mjs';
 import { paymentRefunds } from './shop-refunds.mjs';
 import { selling } from './extensions.mjs';
 /**
@@ -415,8 +416,25 @@ export async function reconcileOrders(env, shop, player = null, { expireOpen = f
   }
   await Promise.all(rows.map(async (row) => {
     if (!row.session) {
-      if (row.status === 'paid' || (row.expires_at ?? row.created_at + 1860000) + 60000 < now) await env.DB.prepare('UPDATE shop_orders SET attention = 0 WHERE id = ?1 AND session IS NULL').bind(row.id).run();
-      return;
+      const saved = await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`booking-checkout:${row.id}`).first();
+      if (saved) {
+        try {
+          let recovered;
+          if (now - row.created_at < 23 * 60 * 60 * 1000) recovered = await createCheckoutSession(env, JSON.parse(saved.value), { idempotencyKey: `checkout-${row.id}` });
+          else {
+            // No second charge after Stripe's idempotency retention. Signed events or
+            // the owner's Stripe investigation resolve an unknown creation outcome.
+            return;
+          }
+          if (recovered?.id) {
+            await env.DB.prepare('UPDATE shop_orders SET session=?2,expires_at=?3 WHERE id=?1 AND session IS NULL').bind(row.id,recovered.id,recovered.expires_at*1000).run();
+            row.session = recovered.id;
+          }
+        } catch (error) { logOrderError(env,row.id,error); return; }
+        if (!row.session) return;
+      }
+      if (!row.session && (row.status === 'paid' || (row.expires_at ?? row.created_at + 1860000) + 60000 < now)) await env.DB.prepare('UPDATE shop_orders SET attention = 0 WHERE id = ?1 AND session IS NULL').bind(row.id).run();
+      if (!row.session) return;
     }
     if (expireOpen && row.status !== 'started') return;
     if (row.status === 'paid' && !row.player) { await env.DB.prepare('UPDATE shop_orders SET attention = 0 WHERE id = ?1').bind(row.id).run(); return; }
@@ -459,9 +477,10 @@ export async function reconcileOrders(env, shop, player = null, { expireOpen = f
 }
 
 /** Make the order row, then Stripe's Checkout Session. Returns { order, url } or a refusal Response. */
-async function startCheckout(env, url, cat, shop, item, { player, game, amount, parent = false, lines = null, reference = null, requestAt = Date.now() }) {
+async function startCheckout(env, url, cat, shop, item, { player, game, amount, parent = false, lines = null, reference = null, booking = null, requestAt = Date.now() }) {
   lines ??= [{ item, amount, quantity: 1 }];
   const keyless = amount > 0 && !hasStripeKey(env);
+  if (booking && keyless) return { error: fail(503, 'booking-connection', 'Paid seat holds require a Stripe Checkout connection.') };
   if (keyless && (lines.length !== 1 || fullerReason(shop))) return { error: fail(409, 'one-item', fullerReason(shop) ?? 'Buy one item at a time. A combined cart needs the fuller checkout connection.') };
   const link = keyless ? linkConfig(env)?.items.find((l) => l.item === item.id) : null;
   if (keyless && (!link || !paymentLinkURL(link.url))) return { error: fail(503, 'payment-links', MISSING_WORDS['payment-links']) };
@@ -477,6 +496,7 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
   lines = lines.map((line, i) => ({ ...line, id: `${order.id}_${i}` }));
   const reserve = async () => {
     const results = await env.DB.batch([reservation(),
+      ...(booking ? [bookingStatement(env, { ...booking, id: order.id, app: game, order: order.id })] : []),
       ...(reference === null ? [] : [env.DB.prepare("INSERT INTO meta(key,value) SELECT ?1,?2 WHERE EXISTS (SELECT 1 FROM shop_orders WHERE id=?3)").bind(`shop-reference:${order.id}`, reference, order.id)]),
       ...lines.map((line, i) => env.DB.prepare("INSERT INTO shop_order_lines (id, order_id, position, item, quantity, unit_amount, amount, snapshot) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8 WHERE EXISTS (SELECT 1 FROM shop_orders WHERE id = ?2)")
         .bind(line.id, order.id, i, line.item.id, line.quantity, line.amount, line.amount * line.quantity, JSON.stringify(line.item))),
@@ -485,7 +505,11 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
     return results[0];
   };
   await reconcileOrders(env, shop, player.id, { expireOpen: true, before: Math.min(requestAt, now - 60000) });
-  let reserved = await reserve();
+  let reserved;
+  try { reserved = await reserve(); } catch (error) {
+    if (/booking capacity unavailable/.test(error.message)) return { error: fail(409, 'capacity', 'That slot is full. Choose another slot.') };
+    throw error;
+  }
   const reconciled = !reserved.meta?.changes;
   if (!reserved.meta?.changes) {
     await reconcileOrders(env, shop, player.id);
@@ -505,7 +529,7 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
   let session = null;
   const mode = shopMode(env);
   try {
-    const useCatalog = Array.isArray(shop.catalog) && shop.catalog.includes(mode);
+    const useCatalog = !booking && Array.isArray(shop.catalog) && shop.catalog.includes(mode);
     for (const line of lines) line.product = useCatalog ? await productIdOf(cat.studio?.slug, line.item.id) : null;
     await env.DB.batch(lines.map((line) => env.DB.prepare('UPDATE shop_order_lines SET snapshot = ?2 WHERE id = ?1').bind(line.id, JSON.stringify({ ...line.item, stripeProduct: line.product }))));
     // Start the provider lifetime at session creation, after reservation/expiry I/O. At Stripe's
@@ -515,7 +539,9 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
       return sessionParams(shop, item, order, { origin: url.origin, amount, player: player.id, game, parent, studio: cat.studio?.name, lines });
     };
     try {
-      session = await createCheckoutSession(env, params(), { idempotencyKey: `checkout-${order.id}` });
+      const checkoutParams = params();
+      if (booking) await env.DB.prepare('INSERT INTO meta(key,value) VALUES(?1,?2)').bind(`booking-checkout:${order.id}`, JSON.stringify(checkoutParams)).run();
+      session = await createCheckoutSession(env, checkoutParams, { idempotencyKey: `checkout-${order.id}` });
     } catch (error) {
       if (!useCatalog || !isMissingProduct(error)) throw error;
       for (const line of lines) line.product = null;
@@ -527,7 +553,7 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
     }
     await env.DB.prepare('UPDATE shop_orders SET session = ?2, updated_at = ?3, expires_at = ?4 WHERE id = ?1').bind(order.id, session.id, Date.now(), (session.expires_at ?? order.expiresAt) * 1000).run();
   } catch (error) {
-    await env.DB.prepare("UPDATE shop_orders SET status = 'failed', note = ?2, updated_at = ?3 WHERE id = ?1").bind(order.id, redactStripe(error?.code ?? 'stripe', env).slice(0, 60), Date.now()).run();
+    await env.DB.prepare("UPDATE shop_orders SET status = ?4, note = ?2, updated_at = ?3 WHERE id = ?1").bind(order.id, redactStripe(error?.code ?? 'stripe', env).slice(0, 60), Date.now(), booking ? 'started' : 'failed').run();
     const why = error instanceof StripeError ? redactStripe(error.message, env) : 'Stripe did not answer';
     return { error: fail(502, 'stripe', `Stripe could not open the checkout (${why}). Nothing was charged.`) };
   }
@@ -591,8 +617,17 @@ async function buyRoute(request, env, url, cat, shop, ready, ctx, requestAt) {
     player = guest.session.player;
     cookies = guest.session.cookies;
   }
-  const r = await startCheckout(env, url, cat, shop, item, { player, game, amount, lines, reference, requestAt });
-  const response = r.error ?? json({ ok: true, order: r.order.id, url: r.url });
+  let booking = null;
+  if (b.body.booking !== undefined) {
+    const requestedBooking = b.body.booking;
+    const app = cat.games?.find(g => g.id === game && g.kind === 'app');
+    const collection = requestedBooking?.collection;
+    const spec = app?.records?.collections?.[collection]?.booking;
+    if (!spec || !/^[A-Za-z0-9_-]{1,64}$/.test(requestedBooking?.slot ?? '') || lines.length !== 1 || item.id !== spec.item || item.interval) return fail(400, 'booking', 'Choose a declared booking slot and its service item.');
+    booking = { collection, slots: spec.slots, slot: requestedBooking.slot, quantity: lines[0].quantity };
+  }
+  const r = await startCheckout(env, url, cat, shop, item, { player, game, amount, lines, reference, booking, requestAt });
+  const response = r.error ?? json({ ok: true, order: r.order.id, url: r.url, ...(booking ? { booking: r.order.id } : {}) });
   if (!r.error && !r.reconciled && ctx?.waitUntil) ctx.waitUntil(reconcileOrders(env, shop, player.id).catch((error) => logOrderError(env, r.order.id, error)));
   for (const cookie of cookies) response.headers.append('set-cookie', cookie);
   return response;
@@ -751,6 +786,11 @@ async function hook(request, env, cat, shop, ready) {
     const sessionEvent = ev.type.startsWith('checkout.session.');
     if (!sessionEvent) await rememberMoneyEvent(env, ev);
     if (sessionEvent && obj.payment_link && !(await bindLinkSession(env, obj, ev.livemode ? 'live' : 'test'))) return json({ ok: true, did: 'mismatch' });
+    if (sessionEvent && obj.metadata?.order && !obj.payment_link) {
+      await env.DB.prepare(`UPDATE shop_orders SET session=?2 WHERE id=?1 AND session IS NULL AND mode=?3
+        AND EXISTS(SELECT 1 FROM meta WHERE key='booking-checkout:' || shop_orders.id)`)
+        .bind(obj.metadata.order, obj.id, ev.livemode ? 'live' : 'test').run();
+    }
     let known = sessionEvent ? await orderBySession(env, obj.id) : await orderByPayment(env, String(obj.payment_intent ?? ''));
     if (!known) {
       let metadata = obj.metadata;
