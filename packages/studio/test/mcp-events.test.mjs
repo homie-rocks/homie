@@ -1,7 +1,10 @@
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {functionDeploymentSQL} from '../lib/functions-build.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
-import {readFileSync,readdirSync} from 'node:fs';
+import {readFileSync,readdirSync,mkdtempSync,writeFileSync,rmSync} from 'node:fs';
 import {randomBytes} from 'node:crypto';
 import {Webhook} from 'standardwebhooks';
 import {syncFunctions,emitEvent,runFunctions,functionRuns} from '../worker/functions.mjs';
@@ -125,4 +128,17 @@ test('removing an event terminates subscriptions; changing its source forces red
  await subscribeEvents(env,cat,owner,params);delete feeds.bookings;env.STUDIO_EVENT_FEEDS=JSON.stringify(feeds);
  assert.deepEqual(await eventHookSubscriptions(env,cat),[]);
  assert.equal(env.DB.sql.prepare("SELECT COUNT(*) n FROM mcp_kv WHERE key LIKE 'mcp-event-hook:%'").get().n,0);
+});
+
+test('no-feed studios keep the no-storage fast path; deployment removes retired hook secrets',async t=>{
+ await runFunctions({},()=>{throw new Error('No catalogue read needed');},'https://studio.example',{definitions:[]});
+ await runFunctions({DB:{prepare(){throw new Error('No storage read needed');}}},()=>{throw new Error('No catalogue read needed');},'https://studio.example',{definitions:[]});
+ const {env,cat,owner,params,emit}=fixture(t);await syncFunctions(env,[]);await subscribeEvents(env,cat,owner,params);await emit('pending');
+ await runFunctions(env,cat,'https://studio.example',{webhookOptions:{fetchFn:async()=>new Response(null,{status:503})}});
+ const root=mkdtempSync(join(tmpdir(),'homie-event-deploy-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ writeFileSync(join(root,'studio.json'),JSON.stringify({mcp:{events:JSON.parse(env.STUDIO_EVENT_FEEDS)}}));env.DB.sql.exec(functionDeploymentSQL(root));
+ assert.equal(env.DB.sql.prepare("SELECT COUNT(*) n FROM mcp_kv WHERE key LIKE 'mcp-event-hook:%'").get().n,1,'unchanged feeds retain subscriptions across deploys');
+ writeFileSync(join(root,'studio.json'),JSON.stringify({mcp:{events:{}}}));env.DB.sql.exec(functionDeploymentSQL(root));
+ assert.equal(env.DB.sql.prepare("SELECT COUNT(*) n FROM mcp_kv WHERE key LIKE 'mcp-event-hook:%'").get().n,0);
+ assert.equal(env.DB.sql.prepare("SELECT COUNT(*) n FROM function_deliveries WHERE function LIKE '@mcp-webhook/%'").get().n,0);
 });
