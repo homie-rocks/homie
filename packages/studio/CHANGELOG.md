@@ -36,9 +36,11 @@ This candidate adds Checkout-backed booking and subscription APIs but cannot shi
 - The default one-approval Payment Links connection still cannot open arbitrary
   carts or paid capacity holds. A supported production runtime authorization
   integration must be established before this candidate can ship.
-- The giving starter still records intentions; converting its scene and totals
-  to verified giving, complete membership lifecycle semantics, and Stripe sandbox
-  acceptance remain unfinished. Offline fixtures are not sandbox verification.
+- The giving starter now opens Checkout for actual shop donation options,
+  including $20 monthly and giver-chosen amounts, and disables payment in preview.
+  It no longer records intentions as gifts or displays an unverified collected total.
+- Complete membership lifecycle semantics and Stripe sandbox acceptance remain
+  unfinished. Offline fixtures are not sandbox verification.
 
 ### Upgrade notes
 

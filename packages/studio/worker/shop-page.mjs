@@ -492,6 +492,12 @@ export const SHOP_SHELL_JS = String.raw`(function () {
       if (!cfg || kids) return reply({ ok: true, open: false, kids: kids, screen: screen, owns: [] });
       return refresh().then(function () { reply({ ok: true, open: true, kids: false, screen: screen, owns: owns }); });
     }
+    if (m.op === 'catalog') {
+      if (!cfg || kids) return reply({ ok: true, open: false, items: [] });
+      return api('GET', '/api/shop?game=' + encodeURIComponent(GAME) + '&server=' + encodeURIComponent(SERVER) + '&cursor=' + encodeURIComponent(typeof m.cursor === 'string' ? m.cursor : '')).then(function (r) {
+        reply({ ok: r.ok, open: r.open, currency: r.currency, currencyScale: r.currencyScale, items: r.items, nextCursor: r.nextCursor });
+      }).catch(function () { reply({ ok: false }); });
+    }
     if (m.op === 'owns') return refresh().then(function () { reply({ ok: true, owns: owns }); });
     if (m.op === 'open') { open(typeof m.item === 'string' ? m.item : null); return reply({ ok: true, shown: true }); }
     if (m.op === 'close') { close(); return reply({ ok: true }); }

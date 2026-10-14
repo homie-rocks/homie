@@ -280,3 +280,9 @@ write its `bindings` as local Wrangler `.dev.vars` in a disposable studio. Keep 
 running alongside `homie-studio dev`. The checkout page explicitly says simulation;
 it takes no card and no money. Call `close()` and delete the disposable studio when
 finished. This tests signed webhook plumbing, not Stripe account permissions.
+
+The giving starter now reads the actual shop donation options with `shop.catalog()`.
+`shop init --giving --currency CAD` includes $20 monthly; `app new giving --from giving`
+opens Checkout for the selected amount and frequency. A disconnected shop displays
+a disabled preview. No intention record or unverified collected total is created.
+Use the Manage my gifts link for the buyer-owned Stripe portal in the shop.

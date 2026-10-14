@@ -164,3 +164,9 @@ one-approval Payment Links connection still cannot supply arbitrary carts or
 paid seat holds. That remains a release blocker; never request a pasted key.
 `lib/dev-stripe-fixture.mjs` exercises local signed webhook plumbing without a
 Stripe account. Label it simulation, not verified Stripe sandbox access.
+
+The giving starter now reads the actual shop donation options with `shop.catalog()`.
+`shop init --giving --currency CAD` includes $20 monthly; `app new giving --from giving`
+opens Checkout for the selected amount and frequency. A disconnected shop displays
+a disabled preview. No intention record or unverified collected total is created.
+Use the Manage my gifts link for the buyer-owned Stripe portal in the shop.

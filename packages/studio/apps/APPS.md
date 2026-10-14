@@ -115,3 +115,9 @@ capabilities for slots or bookings. Staff movement is a versioned record update
 containing only `slot`; confirmation and release follow verified Checkout state.
 The default Payment Links connection still cannot create paid holds; this remains
 an unresolved 0.51 release requirement, not a reason to request a pasted key.
+
+The giving starter now reads the actual shop donation options with `shop.catalog()`.
+`shop init --giving --currency CAD` includes $20 monthly; `app new giving --from giving`
+opens Checkout for the selected amount and frequency. A disconnected shop displays
+a disabled preview. No intention record or unverified collected total is created.
+Use the Manage my gifts link for the buyer-owned Stripe portal in the shop.

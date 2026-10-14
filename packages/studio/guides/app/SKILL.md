@@ -256,3 +256,9 @@ and the `app_records` tool schema explain the contract; validation errors name i
 Live and local unconnected shop/giving pages display the declared items and amounts
 with disabled payment controls. They say they are not taking payments yet. A fresh
 `/shop/` has an empty preview; an authored shop page still takes precedence.
+
+The giving starter now reads the actual shop donation options with `shop.catalog()`.
+`shop init --giving --currency CAD` includes $20 monthly; `app new giving --from giving`
+opens Checkout for the selected amount and frequency. A disconnected shop displays
+a disabled preview. No intention record or unverified collected total is created.
+Use the Manage my gifts link for the buyer-owned Stripe portal in the shop.

@@ -115,7 +115,7 @@ export function shopInit(root, { supporter = false, giving = false, currency = n
   const shop = {
     ...(giving ? { giving: { receiptText: '' } } : {}),
     till: managed ? 'stripe-managed' : 'stripe', currency: String(currency ?? studio.currency ?? 'usd').toLowerCase(),
-    items: giving ? [1000, 2500, 5000].flatMap(amount => [false, true].map(monthly => ({ id: `gift-${amount}${monthly ? '-monthly' : ''}`, kind: 'donation', name: monthly ? 'Monthly gift' : 'One-time gift', price: amount, ...(monthly ? { interval: 'month' } : {}), gives: [], blurb: monthly ? 'Give this amount each month. Manage your gift through Stripe.' : 'A gift to support our work.' }))) : supporter ? [supporterItem({ price: Number(price) })] : [],
+    items: giving ? [1000, 2000, 2500, 5000].flatMap(amount => [false, true].map(monthly => ({ id: `gift-${amount}${monthly ? '-monthly' : ''}`, kind: 'donation', name: monthly ? 'Monthly gift' : 'One-time gift', price: amount, ...(monthly ? { interval: 'month' } : {}), gives: [], blurb: monthly ? 'Give this amount each month. Manage your gift through Stripe.' : 'A gift to support our work.' }))) : supporter ? [supporterItem({ price: Number(price) })] : [],
   };
   const r = checkShop(shop, { games: listGames(root).map((g) => g.id) });
   if (!r.ok) return { ok: false, command: 'shop init', why: r.errors.map((e) => e.message).join('; ') };
