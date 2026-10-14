@@ -1,0 +1,21 @@
+{
+  "review": "local, not independent",
+  "booking": true,
+  "reload": true,
+  "secondPhone": true,
+  "staffStages": [
+    "received",
+    "repair",
+    "edge",
+    "wax",
+    "ready"
+  ],
+  "publicUpdate": 403,
+  "forgedStatus": 400,
+  "unknownReference": true,
+  "failedSubmission": true,
+  "allBrowsersClosedPersistence": true,
+  "devRestartPersistence": true,
+  "trackingId": "1745a12a11e08286205679bc0dce7042",
+  "note": "flows.mjs passed booking, staff and rejection assertions; dev restart interrupted its final fresh browser navigation. This script verifies the final return after restart and all previous browsers closed."
+}

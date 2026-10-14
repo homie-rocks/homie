@@ -1,0 +1,53 @@
+{
+  "review": "local, not independent",
+  "checks": [
+    {
+      "need": "setter-lights",
+      "passed": true,
+      "before": "4",
+      "after": "5"
+    },
+    {
+      "need": "log-send",
+      "passed": true,
+      "wall": "Ines · test sent First Light V1",
+      "receipt": "Send saved · First Light"
+    },
+    {
+      "need": "reload-and-second-phone",
+      "passed": true
+    },
+    {
+      "need": "unauthorized-route-write",
+      "passed": true,
+      "result": {
+        "status": 403,
+        "body": {
+          "ok": false,
+          "error": "role cannot perform this operation"
+        }
+      }
+    },
+    {
+      "need": "private-link-without-account",
+      "passed": true,
+      "result": {
+        "status": 401,
+        "body": {
+          "ok": false,
+          "error": "sign in to this studio"
+        }
+      }
+    },
+    {
+      "need": "all-screens-closed-persistence",
+      "passed": true
+    },
+    {
+      "need": "unknown-reference",
+      "passed": true
+    }
+  ],
+  "shop": "Skip to content\nHIGHLINE\nShop\nApps\nRooms\n\nHIGHLINE BOULDERING\n\nShop\n\nTEST MODE: no real money moves (Stripe test cards only)\n\nThings you can buy here, in real money, from Highline Bouldering itself. Paid purchases open Stripe's checkout page. Guest purchases stay in this browser; keep its cookies or sign in to keep access.\n\nPREVIEW — checkout is disabled. Connect Stripe to open.\n\nDay pass\nCA$22.00\n\nOne day at Highline Bouldering.\n\nPreview only\nName a route\nCA$15.00\n\nGive a new line its name, subject to setter approval.\n\nPreview only\n\nHighline Bouldering is the seller: it sets these prices, answers for refunds and receives the money through its own Stripe account. Homie takes nothing. Ask the studio about refunds. refunds. Stripe keeps your card and email and sends your receipt; Highline Bouldering never sees them.\n\nHIGHLINE\nShop\nApps\nRooms\nMade with Homie",
+  "errors": []
+}

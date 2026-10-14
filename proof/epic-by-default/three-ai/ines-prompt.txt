@@ -1,0 +1,2 @@
+Read https://homie.rocks/business.md
+I’m Ines, and I run Highline Bouldering, a climbing gym. I want a wall screen of the gym’s actual walls with this week’s new routes lighting up as setters finish them. Climbers log a send from their phone and see it on the wall. A day pass is $22, and “name a route” is $15. Decide for me and keep going; do not put it online; show me it running locally.

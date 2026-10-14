@@ -61,8 +61,8 @@ export interface Shop {
   add(item: string, quantity?: number, amount?: number): void;
   cart(): CartLine[];
   clear(): void;
-  checkout(): Promise<boolean>;
-  buy(item: string, quantity?: number, amount?: number): Promise<boolean>;
+  checkout(options?: { reference?: string }): Promise<boolean>;
+  buy(item: string, quantity?: number, amount?: number, options?: { reference?: string }): Promise<boolean>;
   /** Mark an item used; the studio's refundUsedItems policy decides whether self-service refunds still apply. */
   used(key: string): Promise<boolean>;
   on(ev: 'change', fn: (owns: string[]) => void): () => void;
@@ -129,8 +129,8 @@ export function createShop(opts: ShopOptions = {}): Shop {
     add: (item, quantity = 1, amount) => { cart.push({ item, quantity, ...(amount === undefined ? {} : { amount }) }); },
     cart: () => cart.map((line) => ({ ...line })),
     clear: () => { cart = []; },
-    checkout: async () => { const ok = Boolean((await send({ op: 'checkout', lines: cart })).ok); if (ok) cart = []; return ok; },
-    buy: async (item, quantity = 1, amount) => Boolean((await send({ op: 'checkout', lines: [{ item, quantity, ...(amount === undefined ? {} : { amount }) }] })).ok),
+    checkout: async (options = {}) => { const ok = Boolean((await send({ op: 'checkout', lines: cart, reference: options.reference })).ok); if (ok) cart = []; return ok; },
+    buy: async (item, quantity = 1, amount, options = {}) => Boolean((await send({ op: 'checkout', reference: options.reference, lines: [{ item, quantity, ...(amount === undefined ? {} : { amount }) }] })).ok),
     close: () => { void send({ op: 'close' }); },
     used: async (key) => (KEY.test(String(key)) && owns.includes(String(key)) ? Boolean((await send({ op: 'used', key })).ok) : false),
     on: ((ev: ShopEvent, fn: (x: unknown) => void) => {

@@ -1,0 +1,4 @@
+import puppeteer from 'puppeteer-core';
+import {writeFileSync} from 'node:fs';
+const b=await puppeteer.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
+try{const p=await b.newPage();await p.setViewport({width:1920,height:1080});await p.goto('https://coldsmoke-tuning.ryan-d2f.workers.dev/workshop/tv?room=shop',{waitUntil:'domcontentloaded'});await p.waitForFunction(()=>window.__shell?.arrival?.phase==='done',{timeout:60000});await new Promise(r=>setTimeout(r,3000));await p.screenshot({path:new URL('./earlier-flat-board.png',import.meta.url).pathname});writeFileSync(new URL('./earlier-flat-board.json',import.meta.url),JSON.stringify({url:p.url(),at:new Date().toISOString(),frames:await Promise.all(p.frames().map(async f=>({url:f.url(),text:await f.$eval('body',e=>e.innerText)})))},null,2));}finally{await b.close();}

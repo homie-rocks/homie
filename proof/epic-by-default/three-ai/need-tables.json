@@ -1,0 +1,115 @@
+[
+  [
+    "before",
+    "Earlier Coldsmoke",
+    "earlier-flat-board.png",
+    [
+      [
+        "Requested scene",
+        "Not shown",
+        "Five empty stage boxes in the captured wall."
+      ],
+      [
+        "Source",
+        "Baseline capture",
+        "Existing deployed trial, captured read-only during review."
+      ]
+    ]
+  ],
+  [
+    "maya",
+    "Maya \u00b7 Coldsmoke Tuning",
+    "maya/wall.png",
+    [
+      [
+        "Moving skis & boards",
+        "Met",
+        "Staff flows: repair, edge, wax, ready; real records."
+      ],
+      [
+        "Book by phone",
+        "Met",
+        "Saved request, not a guaranteed appointment."
+      ],
+      [
+        "Follow own gear",
+        "Met",
+        "Return link, reload and second phone."
+      ],
+      [
+        "$25 / $65 / from $40",
+        "Met",
+        "Visible prices; CAD assumed, pay in shop."
+      ],
+      [
+        "Limit",
+        "Open",
+        "Labels crowd when gear occupies one station."
+      ]
+    ]
+  ],
+  [
+    "sam",
+    "Sam \u00b7 Second Street Pantry",
+    "sam/wall.png",
+    [
+      [
+        "Weekly meal table fills",
+        "Partly",
+        "Outlined places reflect unpaid intentions; zero funded."
+      ],
+      [
+        "Give once",
+        "Not",
+        "Unpaid pledge only; no charge or paid fulfilment."
+      ],
+      [
+        "Give monthly",
+        "Not",
+        "Monthly intention, not a subscription."
+      ],
+      [
+        "Volunteer shifts",
+        "Met",
+        "Saved shift signup and return reference; sample roster."
+      ],
+      [
+        "Limit",
+        "Open",
+        "Meal cost and weekly goal are provisional."
+      ]
+    ]
+  ],
+  [
+    "ines",
+    "Ines \u00b7 Highline Bouldering",
+    "ines/wall.png",
+    [
+      [
+        "Actual gym walls",
+        "Partly",
+        "Editable spatial scene; actual geometry not supplied."
+      ],
+      [
+        "Setters light new routes",
+        "Met",
+        "Authenticated local setter flow; sample routes."
+      ],
+      [
+        "Phone send \u2192 wall",
+        "Met",
+        "Durable send, wall trace, return link."
+      ],
+      [
+        "Day pass $22 / naming $15",
+        "Partly",
+        "Prices shown; purchase and fulfilment absent."
+      ],
+      [
+        "Limit",
+        "Open",
+        "1080p fits; 900px wall needs scrolling."
+      ]
+    ]
+  ]
+]

@@ -43,7 +43,7 @@ export function stepsFor(h, { games = [], client = 'chat', studioKind = 'game' }
   const q = (s) => JSON.stringify(String(s));
   const app = h.what === 'app' || ['business', 'cause', 'app'].includes(studioKind);
   const work = app && ['setup', 'make'].includes(h.kind) ? [
-    'Follow the new-studio checklist and app skill from the request through building and checks without waiting unless the person asks.',
+    'Follow the app and shared plan skills: capture their words, scene, people, offers and demonstrable needs in apps/<id>/CODEX.md. Starter plumbing is not the deliverable. Build their scene and prove each need on wall and phone; continue without an engineering interview.',
     has ? `apps/${id} is here already: change it as the brief says.` : `npx --no-install homie-studio app new ${id ?? '<id>'} --from ${ID.test(String(h.from ?? '')) ? h.from : 'welcome'}`,
     'Use apps/<id>/app.json for the organisation’s words, roles and records; site/pages/ for public pages; shop init --giving --currency <currency> for gifts.',
   ] : {

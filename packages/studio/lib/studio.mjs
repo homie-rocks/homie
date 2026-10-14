@@ -90,7 +90,7 @@ export function listExperiences(root) {
   for (const row of rows) { if (ids.has(row.id)) throw new Error(`app/game id collision: ${row.id}`); ids.add(row.id); }
   return rows;
 }
-export const experienceDir = (root, id) => join(root, existsSync(join(root, 'apps', id, 'app.json')) ? 'apps' : 'games', id);
+export const experienceDir = (root, id) => join(root, (existsSync(join(root, 'apps', id, 'app.json')) || existsSync(join(root, 'apps', id, 'CODEX.md'))) ? 'apps' : 'games', id);
 export const experienceFile = (root, id) => join(experienceDir(root, id), existsSync(join(root, 'apps', id, 'app.json')) ? 'app.json' : 'game.json');
 function listKind(root, kind) {
   const dir = join(root, `${kind}s`);
@@ -302,7 +302,7 @@ export function addNeeds(root, needs) {
 
 export async function newApp(root, id, { name, from = 'welcome' } = {}) {
   if (!GAME_ID.test(String(id ?? '')) || RESERVED_IDS.has(id)) throw new Error('invalid app id');
-  if (listExperiences(root).some((g) => g.id === id) || existsSync(join(root, 'apps', id))) throw new Error(`app/game ${id} already exists`);
+  if (listExperiences(root).some((g) => g.id === id) || (existsSync(join(root, 'apps', id)) && readdirSync(join(root, 'apps', id)).some(f => !['CODEX.md', 'codex', 'style.json'].includes(f)))) throw new Error(`app/game ${id} already exists`);
   const dest = join(root, 'apps', id);
   if (!['welcome', 'giving', 'gathering', 'quiz', 'jobs'].includes(from)) throw new Error('app starter: welcome, giving, gathering, quiz or jobs');
   cpSync(join(PACKAGE_ROOT, 'app-starters', from), dest, { recursive: true });
@@ -312,5 +312,5 @@ export async function newApp(root, id, { name, from = 'welcome' } = {}) {
   writeFileSync(file, `${JSON.stringify(meta, null, 2)}\n`);
   const main = join(dest, meta.entry ?? 'src/main.ts');
   writeFileSync(main, readFileSync(main, 'utf8').replaceAll("game: 'welcome'", `game: '${id}'`));
-  return { ok: true, command: 'app new', id, from, dir: dest, files: readdirSync(dest, { recursive: true }).map(String), ...addNeeds(root, meta.needs) };
+  return { ok: true, command: 'app new', id, from, dir: dest, files: readdirSync(dest, { recursive: true }).map(String), ...addNeeds(root, meta.needs), next: ['This starter is plumbing: roles, records, room and a check. It is not the deliverable.', 'Read guides/plan/SKILL.md and guides/app/SKILL.md in the installed toolkit. Capture the person’s scene, people, offers and demonstrable needs in apps/' + id + '/CODEX.md. Build that scene with engines, style and shared parts; repair build failures without flattening it.', 'Install reported dependencies, build, and prove every Codex need on wall and phone before calling it done.'] };
 }

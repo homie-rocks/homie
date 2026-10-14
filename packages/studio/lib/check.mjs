@@ -1,3 +1,4 @@
+import { readAppNeeds, proveAppNeeds, saveAppNeeds } from './app-needs.mjs';
 /**
  * `homie-studio check [<game>] [--url <site> | --live]` — the promise, measured (where it runs and on which games
  * when nobody says: lib/check-site.mjs; never the live site unless asked): two fresh
@@ -127,7 +128,7 @@ export function judgeRounds(browsers, missed = new Map()) {
   return null;
 }
 
-export async function check({ url, game, roundTimeoutMs = 150_000, rounds = 3, shots = null, userAgentTag = 'homie-studio-check', log = () => {}, report = null }) {
+export async function check({ root = null, url, game, roundTimeoutMs = 150_000, rounds = 3, shots = null, userAgentTag = 'homie-studio-check', log = () => {}, report = null }) {
   if (!url || !game) throw new Error('usage: homie-studio check <game> --url <site url>');
   const base = String(url).replace(/\/+$/, '');
   const play = `${base}/${game}/play`;
@@ -148,7 +149,7 @@ export async function check({ url, game, roundTimeoutMs = 150_000, rounds = 3, s
   if (!chrome) return { ok: false, command: 'check', why: noChrome() };
   let puppeteer;
   try { puppeteer = (await import('puppeteer-core')).default; } catch { return { ok: false, command: 'check', why: 'puppeteer-core is not installed (it comes with @homie-rocks/studio; run npm install)' }; }
-  if (appMeta) return checkApp({ url: base, game, meta: appMeta, shots, log, report, puppeteer, chrome });
+  if (appMeta) return checkApp({ root, url: base, game, meta: appMeta, shots, log, report, puppeteer, chrome });
   if (shots) mkdirSync(shots, { recursive: true });
   const profiles = [];
   const browsers = [];
@@ -343,7 +344,9 @@ export async function check({ url, game, roundTimeoutMs = 150_000, rounds = 3, s
 }
 
 /** Apps prove a real action crossing surfaces and a reconnect, without inventing a round. */
-export async function checkApp({ url, game, meta, shots = null, log = () => {}, report = null, puppeteer, chrome }) {
+export async function checkApp({ root = null, url, game, meta, shots = null, log = () => {}, report = null, puppeteer, chrome }) {
+  let plan;
+  try { plan = readAppNeeds(root, game); } catch (error) { return { ok: false, command: 'check', kind: 'app', why: error.message }; }
   const proof = meta.check;
   if (!proof || typeof proof.action !== 'string' || typeof proof.observe !== 'string') return { ok: false, command: 'check', kind: 'app', why: 'app.json check needs action and observe CSS selectors for a real shared action' };
   if (shots) mkdirSync(shots, { recursive: true });
@@ -390,7 +393,10 @@ export async function checkApp({ url, game, meta, shots = null, log = () => {}, 
       if (shots) await s.page.screenshot({ path: join(shots, `${s.name}.jpg`), type: 'jpeg', quality: 85 });
     }
     report?.check?.('app-action', 'pass', { note: 'action reached wall and both phones; reconnect retained it' });
-    return { ok: true, command: 'check', kind: 'app', room, surfaces: surfaces.map((s) => s.name), action: proof.action, before, after, reconnect: true };
+    const needs = plan ? await proveAppNeeds({ plan, surfaces, shots, report }) : null;
+    if (plan) { saveAppNeeds(root, game, plan, needs); const { refreshCodexFile } = await import('./codex.mjs'); refreshCodexFile(root, game); }
+    const ok = !needs || needs.every(n => n.status === 'met');
+    return { ok, ...(needs ? { needs, why: ok ? undefined : 'Some needs from the person’s Codex are not yet met; see needs and captures' } : {}), command: 'check', kind: 'app', room, surfaces: surfaces.map((s) => s.name), action: proof.action, before, after, reconnect: true };
   } catch (error) { return { ok: false, command: 'check', kind: 'app', why: error.message }; }
   finally { await browser?.close().catch(() => {}); rmSync(profile, { recursive: true, force: true }); }
 }

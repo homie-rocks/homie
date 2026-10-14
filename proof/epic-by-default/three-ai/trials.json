@@ -1,0 +1,51 @@
+{
+  "pack": "/tmp/homie-050-pack/homie-rocks-studio-0.50.0.tgz",
+  "harness": "Release trial environment: Homie 0.50.0 is an unpublished packed build at /tmp/homie-050-pack/homie-rocks-studio-0.50.0.tgz. Substitute this pack for any published Homie toolkit version in instructions you read. Bootstrap with npx -y --package=/tmp/homie-050-pack/homie-rocks-studio-0.50.0.tgz homie-studio new <folder> --kind business (cause for a nonprofit) --no-install, then pin @homie-rocks/studio in the new package.json to file:/tmp/homie-050-pack/homie-rocks-studio-0.50.0.tgz before npm install. Use that installed toolkit and its version-matched guides, not an older cached plugin or remote MCP scaffold. This is solely version routing, not a design brief. Work only inside your current empty trial folder. The four studios under /Users/ryan/Studios/examples are read-only sources if you encounter their parts. Chrome is /Applications/Google Chrome.app/Contents/MacOS/Google Chrome. No deploy, no external messages. Save real wall and phone screenshots and a need-by-need verdict inside your trial folder; leave the local app running and report its address. Do not modify the Homie repository or source examples.",
+  "trials": [
+    {
+      "person": "maya",
+      "folder": "/var/folders/63/1sbmhrlj05g9gvcghc49h8q80000gn/T/homie-050-maya-_mrhvk1a",
+      "pid": 42082,
+      "studio": "coldsmoke",
+      "session": "01a1385c-63a9-7791-adc0-057e2aa09f55",
+      "model": "gpt-6-astra",
+      "transcriptSha256": "9d843389f00d61f278f2e08786ce773a2a6092b950dde743a9be55e087712c63",
+      "transcript": "/var/folders/63/1sbmhrlj05g9gvcghc49h8q80000gn/T/homie-050-maya-_mrhvk1a/.trial/codex-exec.log",
+      "reviewServerPid": 68399,
+      "origin": "http://127.0.0.1:8893"
+    },
+    {
+      "person": "sam",
+      "folder": "/var/folders/63/1sbmhrlj05g9gvcghc49h8q80000gn/T/homie-050-sam-bhnajm4m",
+      "pid": 42083,
+      "reviewServerPid": 58274,
+      "origin": "http://127.0.0.1:8896",
+      "studio": "pantry",
+      "session": "01a1385c-57d4-7523-b083-f7ae2b220a1c",
+      "model": "gpt-6-astra",
+      "transcriptSha256": "9fea5bc533fa6d6178b13b28b9b82e84c28823bf93ac26a38def82234d7723b7",
+      "transcript": "/var/folders/63/1sbmhrlj05g9gvcghc49h8q80000gn/T/homie-050-sam-bhnajm4m/.trial/codex-exec.log"
+    },
+    {
+      "person": "ines",
+      "folder": "/var/folders/63/1sbmhrlj05g9gvcghc49h8q80000gn/T/homie-050-ines-x374al1a",
+      "pid": 42084,
+      "reviewServerPid": 60240,
+      "origin": "http://127.0.0.1:8833",
+      "studio": "highline",
+      "session": "01a1385c-5801-70e2-8efd-d0992ea390ec",
+      "model": "gpt-6-astra",
+      "transcriptSha256": "9300d7cb882ae275706eae5c041973887b68baf2907e2ab722f65658b57408a4",
+      "transcript": "/var/folders/63/1sbmhrlj05g9gvcghc49h8q80000gn/T/homie-050-ines-x374al1a/.trial/codex-exec.log"
+    }
+  ],
+  "authoringPack": {
+    "source": "d5e861fc",
+    "sha256": "5573aa90035aafa61fb78720eac98505c40e768b044407d7382970f767fc916c"
+  },
+  "reviewPack": {
+    "source": "07a43d38",
+    "sha256": "b5b8f12782e7ade8d172c0b5a1b6eb4b1c273c422d0ab02fa0a776efdd7abeec",
+    "retained": "Each trial folder: .trial/toolkit.tgz"
+  }
+}

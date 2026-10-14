@@ -17,6 +17,27 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.50.0] - 2026-10-13
+
+**Plugin 0.50.0** · Build the person's app from their dream.
+
+Apps now follow their owner’s words through planning, a living scene and evidence of each need.
+
+### Added
+
+- Apps use the shared Codex planning page: their own words, pictured scene, people, offers and demonstrable needs. A plan can precede app plumbing and survives creation.
+- Opt-in app checks run the Codex's real UI flows and attach wall/phone captures to each need; the Codex shows their status. Existing apps without an executable needs block retain their checks.
+- App checkout accepts a reference to a booking, ticket or gift. Verified paid events include that reference, the app and order ID, including reopened Payment Links.
+
+### Changed
+
+- App making and playtesting follow the person's needs, living scene, records and individual customer journey. Starters are plumbing. The packaged toolkit includes shared planning, style, media and playtest guides.
+- Scaffold and app creation direct the AI through that path with the same engines and shared parts available to games. No new studio caps or defaults.
+
+### Upgrade notes
+
+- Existing apps and games keep their behavior. Add the executable needs block to an app Codex to opt into needs evidence; omitted payment references remain null. The new migration updates only the paid-event payload.
+
 ## [0.49.0] - 2026-10-13
 
 **Plugin 0.49.0** · Apps from the first request.

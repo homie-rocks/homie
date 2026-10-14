@@ -243,7 +243,7 @@
  *                                         also says whether Homie's holds are on (the plugin's hooks ran just now), and
  *                                         when another MCP server named homie has taken the connector's name there.
  *
- *   homie-studio codex new <id> [--name "<Name>"]
+ *   homie-studio codex new <id> [--kind app|game] [--name "<Name>"]
  *                                         games/<id>/CODEX.md: the Game Codex, every section, in the game's colours (a game
  *                                          is planned before it is made: with no game <id> yet, it starts its folder)
  *   homie-studio codex <id> [--artifact] [--open]
@@ -680,7 +680,7 @@ function print(result) {
       lines.push(formatHandoff(result));
       break;
     case 'codex':
-      lines.push(`The Game Codex for ${result.title}: ${result.file}${result.opened ? ' (opened in the browser)' : ''}`,
+      lines.push(`The ${result.kind === 'app' ? 'App' : 'Game'} Codex for ${result.title}: ${result.file}${result.opened ? ' (opened in the browser)' : ''}`,
         `  tabs: ${result.sections.map((x) => x.title).join(' · ')} · Build status${result.build ? ` (${result.build.state}, ${result.build.percent}%)` : ''}`,
         ...(result.missing.length ? [`  not decided yet: ${result.missing.join(', ')}`] : ['  every section has something in it']),
         `  open questions: ${result.openQuestions}`,
@@ -995,7 +995,7 @@ async function main() {
       const results = [];
       for (const game of games) {
         const shots = flags.get('shots') ? resolve(flags.get('shots'), ...(games.length > 1 ? [game] : [])) : null;
-        const r = await tracked(root, 'checks', (report) => check({ url: site.url, game, shots, log, report }), 'check');
+        const r = await tracked(root, 'checks', (report) => check({ root, url: site.url, game, shots, log, report }), 'check');
         results.push({ ...r, game, site: site.url, local: site.local });
         const receiptDir = join(root, '.studio', 'checks');
         mkdirSync(receiptDir, { recursive: true });
@@ -1172,8 +1172,8 @@ async function labCommand(root, sub) {
 
 /** `homie-studio codex …` (lib/codex.mjs): the Game Codex of one game. */
 function codexCommand(root, sub) {
-  const games = listGames(root);
-  if (sub === 'new') return newCodex(root, positional[2] ?? (games.length === 1 ? games[0].id : undefined), { name: flags.get('name') ?? null });
+  const games = listExperiences(root);
+  if (sub === 'new') return newCodex(root, positional[2] ?? (games.length === 1 ? games[0].id : undefined), { name: flags.get('name') ?? null, kind: flags.get('kind') ?? null });
   if (sub === 'link') {
     const id = positional[2] ?? (games.length === 1 ? games[0].id : null);
     if (!id || !games.some((g) => g.id === id)) return { ok: false, command: 'codex link', why: 'name the game: homie-studio codex link <id>' };

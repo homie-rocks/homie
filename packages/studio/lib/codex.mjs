@@ -68,6 +68,15 @@ export const SECTIONS = [
   { key: 'questions', title: 'Open questions', match: /^(open questions|questions|undecided|to decide)\b/i },
 ];
 
+export const APP_SECTIONS = [
+  { key: 'dream', title: 'Their words', match: /^their words|^dream/i },
+  { key: 'scene', title: 'Scene', match: /^scene/i },
+  { key: 'people', title: 'People and surfaces', match: /^people/i },
+  { key: 'offers', title: 'Offers', match: /^offers/i },
+  { key: 'needs', title: 'Needs', match: /^needs/i },
+  ...SECTIONS.filter(s => ['art','sound','milestones','questions'].includes(s.key)),
+];
+
 /* ------------------------------------------------------------------ parsing */
 
 /** A small YAML subset: `key: value`, quoted or bare, and one level of nested `key:` blocks or `{ a: b, c: d }`. */
@@ -130,7 +139,7 @@ export function parseCodex(source) {
     while (seen.has(id)) id = `${id}-2`;
     seen.add(id);
     s.id = id;
-    s.key = SECTIONS.find((k) => k.match.test(s.title))?.key ?? (/^latest|^decisions|^changelog|^news/i.test(s.title) ? 'latest' : null);
+    s.key = [...SECTIONS, ...APP_SECTIONS].find((k) => k.match.test(s.title))?.key ?? (/^latest|^decisions|^changelog|^news/i.test(s.title) ? 'latest' : null);
   }
   return { meta, title, pitch: pitch.join('\n').trim(), sections };
 }
@@ -139,7 +148,7 @@ export function parseCodex(source) {
 export function codexGaps(parsed) {
   const has = (key) => parsed.sections.some((s) => s.key === key && s.body.join('\n').replace(/<!--[\s\S]*?-->/g, '').trim());
   const questions = parsed.sections.filter((s) => s.key === 'questions').flatMap((s) => s.body.filter((l) => /^\s*([-*+]|\d+[.)])\s+\S/.test(l)));
-  return { missing: SECTIONS.filter((s) => s.key !== 'questions' && !has(s.key)).map((s) => s.title), openQuestions: questions.length };
+  return { missing: (parsed.meta.kind === 'app' ? APP_SECTIONS : SECTIONS).filter((s) => s.key !== 'questions' && !has(s.key)).map((s) => s.title), openQuestions: questions.length };
 }
 
 /* ------------------------------------------------------------------ files from the studio */
@@ -303,6 +312,16 @@ ${stats.length ? `<dl class="stats">${stats.map(([k, v]) => `<dt>${esc(k)}</dt><
 }
 
 function sectionHtml(section, emb, ctx) {
+  if (section.key === 'needs') {
+    const source = section.body.join('\n');
+    const block = /^```needs\s*\n([\s\S]*?)^```/m.exec(source);
+    if (block) {
+      try {
+        const needs = JSON.parse(block[1]);
+        if (Array.isArray(needs)) return `<section class="tab" id="${esc(section.id)}" data-key="needs"><h2>${esc(section.title)}</h2>${renderMarkdown(source.replace(block[0], '')).html}<div class="cards">${needs.map(n => `<article class="card"><h3>${esc(n.id)}</h3><p>${esc(n.statement)}</p><p class="meta">${Array.isArray(n.assertions) && n.assertions.length ? 'To demonstrate on the wall and phone' : 'Not yet demonstrable'}</p></article>`).join('')}</div></section>`;
+      } catch { /* Keep malformed source visible for correction. */ }
+    }
+  }
   const intro = [];
   const cards = [];
   let current = null;
@@ -510,13 +529,13 @@ function lookOf(root, game, meta, emb) {
  * sit in games/<id>/ before its game.json does: then the "game" is that planned folder. `create`: a codex is being
  * started for an id with no folder yet.
  */
-function codexGame(root, id, { create = false } = {}) {
+function codexGame(root, id, { create = false, kind = null } = {}) {
   const game = listGames(root).find((g) => g.id === id);
   if (game) return game;
   if (!GAME_ID.test(String(id ?? ''))) return null;
-  const dir = join(experienceDir(root, id));
+  const dir = kind === 'app' ? join(root, 'apps', id) : experienceDir(root, id);
   if (existsSync(join(dir, 'game.json'))) return null;
-  return existsSync(join(dir, CODEX_FILE)) || create ? { id, dir, name: null, planned: true } : null;
+  return existsSync(join(dir, CODEX_FILE)) || create ? { id, dir, kind: dir === join(root, 'apps', id) ? 'app' : 'game', name: null, planned: true } : null;
 }
 
 /**
@@ -529,9 +548,10 @@ export function renderCodex(root, id, { mode = 'file', feed, now = new Date() } 
   const game = codexGame(root, id);
   if (!game) throw new Error(`no game "${id}" in games/, and no codex planning it`);
   const file = join(game.dir, CODEX_FILE);
-  if (!existsSync(file)) throw new Error(`games/${id}/${CODEX_FILE} does not exist yet: npx --no-install homie-studio codex new ${id}`);
-  if (statSync(file).size > LIMITS.source) throw new Error(`games/${id}/${CODEX_FILE} is over ${LIMITS.source / 1024} KB`);
+  if (!existsSync(file)) throw new Error(`${relative(root, file)} does not exist yet: npx --no-install homie-studio codex new ${id}`);
+  if (statSync(file).size > LIMITS.source) throw new Error(`${relative(root, file)} is over ${LIMITS.source / 1024} KB`);
   const parsed = parseCodex(readFileSync(file, 'utf8'));
+  if (game.kind === 'app') parsed.meta.kind = 'app';
   const { meta } = parsed;
   let studio = {};
   try { studio = readStudio(root); } catch { studio = {}; }
@@ -555,7 +575,17 @@ export function renderCodex(root, id, { mode = 'file', feed, now = new Date() } 
   tabs.splice(sections[0]?.key === 'latest' ? 1 : 0, 0, statusTab);
   const cover = typeof meta.cover === 'string' ? emb.image(meta.cover) : null;
   const pitch = parsed.pitch ? renderMarkdown(parsed.pitch).html : (game.blurb ? `<p>${esc(game.blurb)}</p>` : '');
-  const body = sections.map((x) => sectionHtml(x, emb, ctx)).join('\n');
+  const needReportFile = join(root, '.studio', 'checks', `${id}-needs.json`);
+  let needStatus = '';
+  if (game.kind === 'app' && existsSync(needReportFile)) {
+    try {
+      const r = JSON.parse(readFileSync(needReportFile, 'utf8'));
+      const stale = r.codexHash !== createHash('sha256').update(readFileSync(file, 'utf8')).digest('hex');
+      tabs.push('<a href="#needs-status">Needs status</a>');
+      needStatus = `<section class="tab" id="needs-status"><h2>Needs status</h2><p>${stale ? 'Plan changed: this evidence is stale; check again. ' : ''}Checked ${esc(r.at)}. Screen assertions are evidence; review the captures against Their words.</p>${r.needs.map(n => `<article><h3>${esc(n.statement)}</h3><p><strong>${stale ? 'not yet rechecked' : esc(n.status)}</strong> — ${esc(n.why ?? '')}</p>${(n.captures ?? []).map(p => figure(emb, n.statement, relative(root, resolve(root, p)), p)).join('')}</article>`).join('')}</section>`;
+    } catch { /* The next check repairs an incomplete receipt. */ }
+  }
+  const body = needStatus + sections.map((x) => sectionHtml(x, emb, ctx)).join('\n');
   const status = statusHtml(s, ctx);
   const start = s?.state === 'running' ? 'build-status' : (sections[0]?.id ?? 'build-status');
   const tagline = typeof meta.tagline === 'string' ? meta.tagline : '';
@@ -567,13 +597,13 @@ export function renderCodex(root, id, { mode = 'file', feed, now = new Date() } 
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>${esc(title)} · Game Codex</title>
+<title>${esc(title)} · ${game.kind === 'app' ? 'App' : 'Game'} Codex</title>
 ${look.links.map((href) => `<link rel="stylesheet" href="${esc(href)}">`).join('\n')}
 <style>${look.faces.join('')}${css(look.palette, look.fonts, ctx.pixel)}</style>
 </head>
 <body data-mode="${esc(mode)}" data-start="${esc(start)}"${ctx.pixel ? ' class="pixel"' : ''}>
 <header class="hero">${cover ? `<div class="bgimg" style="background-image:url(${cover})"></div>` : ''}<div class="wrap">
-<p class="kicker">Game Codex · ${esc(studio.name ?? '')}</p>
+<p class="kicker">${game.kind === 'app' ? 'App' : 'Game'} Codex · ${esc(studio.name ?? '')}</p>
 <h1>${esc(title)}</h1>
 ${tagline ? `<p class="tagline">${esc(tagline)}</p>` : ''}
 ${pitch ? `<div class="pitch">${pitch}</div>` : ''}
@@ -583,12 +613,12 @@ ${pitch ? `<div class="pitch">${pitch}</div>` : ''}
 ${body}
 ${status}
 </main>
-<footer>Game Codex for ${esc(title)}: the plan your AI keeps true as decisions change. Source: games/${esc(id)}/${CODEX_FILE}. Drawn ${esc(now.toISOString().slice(0, 16).replace('T', ' '))} UTC. Made with Homie.</footer>
+<footer>${game.kind === 'app' ? 'App' : 'Game'} Codex for ${esc(title)}: the plan your AI keeps true as decisions change. Source: ${esc(relative(root, file))}. Drawn ${esc(now.toISOString().slice(0, 16).replace('T', ' '))} UTC. Made with Homie.</footer>
 <script>${CODEX_SCRIPT}</script>
 </body>
 </html>
 `;
-  return { html, title, sections: sections.map((x) => ({ id: x.id, title: x.title, key: x.key })), missing: gaps.missing, openQuestions: gaps.openQuestions, warnings: emb.warnings, build: s ? { state: s.state, percent: s.percent } : null };
+  return { html, kind: game.kind ?? 'game', title, sections: sections.map((x) => ({ id: x.id, title: x.title, key: x.key })), missing: gaps.missing, openQuestions: gaps.openQuestions, warnings: emb.warnings, build: s ? { state: s.state, percent: s.percent } : null };
 }
 
 /** `homie-studio codex <id>`: the page on this computer (or the artifact copy). */
@@ -598,7 +628,7 @@ export function writeCodexPage(root, id, { mode = 'file' } = {}) {
   mkdirSync(dir, { recursive: true });
   const file = join(dir, mode === 'artifact' ? `${id}.artifact.html` : `${id}.html`);
   writeFileSync(file, r.html);
-  return { ok: true, command: 'codex', id, mode, file: relative(root, file), path: file, bytes: Buffer.byteLength(r.html), title: r.title, sections: r.sections, missing: r.missing, openQuestions: r.openQuestions, warnings: r.warnings, build: r.build };
+  return { ok: true, command: 'codex', kind: r.kind, id, mode, file: relative(root, file), path: file, bytes: Buffer.byteLength(r.html), title: r.title, sections: r.sections, missing: r.missing, openQuestions: r.openQuestions, warnings: r.warnings, build: r.build };
 }
 
 /** Called whenever a progress feed changes: the local page redraws itself (only when it exists already). */
@@ -632,21 +662,21 @@ export function buildCodexPages(root, dist, ids, { log = () => {} } = {}) {
 /* ------------------------------------------------------------------ a new codex */
 
 /** `homie-studio codex new <id>`: CODEX.md with every section, its look taken from the game and the studio. */
-export function newCodex(root, id, { name = null } = {}) {
+export function newCodex(root, id, { name = null, kind = null } = {}) {
   // A game is planned before it is made: with no game of this id, the codex starts its folder (games/<id>/CODEX.md),
   // and `game new <id>` later makes the game around it.
-  const game = codexGame(root, id, { create: true });
+  const game = codexGame(root, id, { create: true, kind });
   if (!game) return { ok: false, command: 'codex new', why: `"${id}" is not a game id (lowercase letters, digits and hyphens, up to 40)` };
   if (game.planned) { game.name = name ? String(name).slice(0, 60) : id.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' '); mkdirSync(game.dir, { recursive: true }); }
   const file = join(game.dir, CODEX_FILE);
-  if (existsSync(file)) return { ok: false, command: 'codex new', why: `games/${id}/${CODEX_FILE} exists already: change it, never replace it` };
+  if (existsSync(file)) return { ok: false, command: 'codex new', why: `${relative(root, file)} exists already: change it, never replace it` };
   const theme = readTheme(root);
   const land = game.landing?.theme ?? {};
   const q = (v) => JSON.stringify(String(v));
   const cover = ['hero/wide.jpg', 'cover.jpg', 'cover.png', 'public/cover.jpg', 'public/cover.png'].find((p) => existsSync(join(game.dir, p)));
   const today = new Date().toISOString().slice(0, 10);
   const players = game.players ? `${game.players.min ?? 1} to ${game.players.max ?? 8}` : '1 to 8';
-  const text = `---
+  let text = `---
 tagline: ${q(game.blurb ?? '')}
 ${cover ? `cover: ${cover}\n` : ''}palette:
   bg: ${q(theme.bg ?? '#0b0c12')}
@@ -722,8 +752,55 @@ ${game.planned ? `- [ ] The plan (this codex)
 
 -
 `;
+  if (game.kind === 'app') text = `---
+kind: app
+tagline: ""
+try: "Open the wall and phone. Follow a real request through the scene."
+---
+# ${game.name ?? id}
+
+## Their words
+<!-- Quote the owner's request. Preserve their dream, not your implementation summary. -->
+
+## Scene
+<!-- Walking in: what is on the wall, what moves/fills/arrives/lights up, how it feels. -->
+
+## People and surfaces
+<!-- Each person, what they must do, and what wall, phone, staff and kiosk show them. -->
+
+## Offers
+<!-- What is sold or given, price and currency, once/monthly, and what payment fulfils. -->
+
+## Needs
+<!-- Each statement is observable on a real screen. Fill this executable needs block.
+Each need: id, statement, steps (surface wall/phone/phone-two; click/fill/select and selector/value),
+assertions (surface, selector, optional text). Include wall and phone assertions and real flow steps.
+A missing flow is reported not met. Do not replace an unmet need with an easier one. -->
+\`\`\`needs
+[]
+\`\`\`
+
+## Art direction
+<!-- Run style init with the owner's words. Composition, materials, typography and motion. -->
+
+## Music and sound
+<!-- Useful cues, silent wall by default, local synthesis or connected providers. -->
+
+## Built from
+<!-- Engine packages, parts_find results and provenance, original work and media routes. -->
+
+## Milestones
+- [ ] Their dream captured
+- [ ] Their scene and workflows running
+- [ ] Every need demonstrated on wall and phone and visually reviewed
+
+## Latest
+- ${today}: Planned from the person's request. Starter plumbing is not completion.
+
+## Open questions
+`;
   writeFileSync(file, text);
-  return { ok: true, command: 'codex new', id, file: relative(root, file), planned: Boolean(game.planned), next: [`fill it from the request and sensible defaults (interview only when asked), then: npx --no-install homie-studio codex ${id}`, ...(game.planned ? [`after recording those defaults: npx --no-install homie-studio game new ${id} --from gem-rush --name "<Name>" makes the game around it (the codex stays)`] : [])] };
+  return { ok: true, command: 'codex new', id, file: relative(root, file), planned: Boolean(game.planned), next: [`fill it from the request and sensible defaults (interview only when asked), then: npx --no-install homie-studio codex ${id}`, ...(game.planned ? [`after recording those defaults: npx --no-install homie-studio ${game.kind === 'app' ? 'app' : 'game'} new ${id} --from ${game.kind === 'app' ? 'welcome' : 'gem-rush'} --name "<Name>" makes the game around it (the codex stays)`] : [])] };
 }
 
 /** A sign-in link that opens one game's codex on the live site (the stats page's one-time sign-in, then the codex). */

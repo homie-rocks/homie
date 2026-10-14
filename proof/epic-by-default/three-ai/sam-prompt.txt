@@ -1,0 +1,2 @@
+Read https://homie.rocks/nonprofits.md
+I’m Sam, and I run Second Street Pantry, a food pantry. I want a screen in the hall where the week’s meal table fills as neighbours give. People give from their phone, once or monthly, and volunteers sign up for shifts. Decide for me and keep going; do not put it online; show me it running locally.

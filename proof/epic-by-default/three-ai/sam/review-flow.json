@@ -1,0 +1,35 @@
+{
+  "person": "sam",
+  "origin": "http://127.0.0.1:8896",
+  "at": "2026-10-14T03:32:15.777Z",
+  "browser": "real Google Chrome, emulated phone viewport",
+  "checks": [
+    {
+      "need": "give once",
+      "result": "unpaid intention only",
+      "receipt": "Thank you. Your CAD $25 pledge is saved, unpaid.Your saved record · e768b816adb508193bbfefbc3af954ebCopy my return link"
+    },
+    {
+      "need": "give monthly",
+      "result": "unpaid intention only",
+      "receipt": "Thank you. Your CAD $25 monthly pledge is saved, unpaid.Your saved record · acc474f0bcba7abca78bb249bafd71f5Copy my return link"
+    },
+    {
+      "need": "volunteer shift",
+      "result": "saved",
+      "receipt": "You’re signed up: Wednesday · Pack meals · 10am–12pm. Show this reference on arrival.Your saved record · 186ac4c216d4e9f9dc4beaa10b2f15e0Copy my return link"
+    }
+  ],
+  "phoneUrl": "http://127.0.0.1:8896/gathering/open?ticket=186ac4c216d4e9f9dc4beaa10b2f15e0&room=pantry",
+  "wallText": "SECOND STREET PANTRY\nLOCAL PREVIEW · NO PAYMENTS\nA place at\nthe table.\nMade together.\n\nThis week, we’re setting the table for 200 meals. Every neighbour has something to give.\n\nFunded meals\nUnpaid pledges\n$300\nunpaid pledges · not received · $1,000 CAD goal\n40 places · each plate represents 5 meals\n0 / 200\nmeals funded this week\n18\nneighbourly actions\n6\nshift sign-ups\nThe weekly table · week of 2026-10-13 · synced\nLittle Inlet giving meter · MIT · Made with Homie",
+  "phoneText": "SECOND STREET PANTRY\nLOCAL PREVIEW · NO PAYMENTS\nA place at\nthe table.\nMade together.\n\nThis week, we’re setting the table for 200 meals. Every neighbour has something to give.\n\nFunded meals\nUnpaid pledges\n40 places · each plate represents 5 meals\n0 / 200\nmeals funded this week\n18\nneighbourly actions\n6\nshift sign-ups\nPull up a chair.\n\nA suggested CAD $5 helps fund a meal. Goal and meal cost are planning estimates.\n\nYour gift · CAD\n$10 · 2 meals\n$25 · 5 meals\n$50 · 10 meals\nHow often?\nGive once\nGive monthly\nRecord my unpaid pledge\n\nNo money is taken. A monthly pledge is not a subscription. Payment is not connected.\n\nView one-time & monthly giving preview ↗\nGive your time.\nChoose a volunteer shift · sample schedule\nWednesday · Pack meals · 10am–12pm\nFriday · Set the table · 4–6pm\nSaturday · Pantry welcome · 9–11am\nSign up for this shift\n\nSave your reference and show it to Sam when you arrive. No personal details are displayed.\n\nYour shift sign-up is saved. Thank you!\n\nYou’re signed up: Wednesday · Pack meals · 10am–12pm. Show this reference on arrival.\n\nYour saved record · 186ac4c216d4e9f9dc4beaa10b2f15e0Copy my return link\nReturning? Enter your reference\nFind my record\nThe weekly table · week of 2026-10-13 · synced\nLittle Inlet giving meter · MIT · Made with Homie",
+  "afterReload": "SECOND STREET PANTRY\nLOCAL PREVIEW · NO PAYMENTS\nA place at\nthe table.\nMade together.\n\nThis week, we’re setting the table for 200 meals. Every neighbour has something to give.\n\nFunded meals\nUnpaid pledges\n40 places · each plate represents 5 meals\n0 / 200\nmeals funded this week\n18\nneighbourly actions\n6\nshift sign-ups\nPull up a chair.\n\nA suggested CAD $5 helps fund a meal. Goal and meal cost are planning estimates.\n\nYour gift · CAD\n$10 · 2 meals\n$25 · 5 meals\n$50 · 10 meals\nHow often?\nGive once\nGive monthly\nRecord my unpaid pledge\n\nNo money is taken. A monthly pledge is not a subscription. Payment is not connected.\n\nView one-time & monthly giving preview ↗\nGive your time.\nChoose a volunteer shift · sample schedule\nWednesday · Pack meals · 10am–12pm\nFriday · Set the table · 4–6pm\nSaturday · Pantry welcome · 9–11am\nSign up for this shift\n\nSave your reference and show it to Sam when you arrive. No personal details are displayed.\n\nYou’re signed up: Wednesday · Pack meals · 10am–12pm. Show this reference on arrival.\n\nYour saved record · 186ac4c216d4e9f9dc4beaa10b2f15e0Copy my return link\nReturning? Enter your reference\nFind my record\nThe weekly table · week of 2026-10-13 · synced\nLittle Inlet giving meter · MIT · Made with Homie",
+  "wallLayout": {
+    "width": 1920,
+    "height": 1080,
+    "scrollWidth": 1920,
+    "scrollHeight": 1080
+  },
+  "secondPhone": "SECOND STREET PANTRY\nLOCAL PREVIEW · NO PAYMENTS\nA place at\nthe table.\nMade together.\n\nThis week, we’re setting the table for 200 meals. Every neighbour has something to give.\n\nFunded meals\nUnpaid pledges\n40 places · each plate represents 5 meals\n0 / 200\nmeals funded this week\n18\nneighbourly actions\n6\nshift sign-ups\nPull up a chair.\n\nA suggested CAD $5 helps fund a meal. Goal and meal cost are planning estimates.\n\nYour gift · CAD\n$10 · 2 meals\n$25 · 5 meals\n$50 · 10 meals\nHow often?\nGive once\nGive monthly\nRecord my unpaid pledge\n\nNo money is taken. A monthly pledge is not a subscription. Payment is not connected.\n\nView one-time & monthly giving preview ↗\nGive your time.\nChoose a volunteer shift · sample schedule\nWednesday · Pack meals · 10am–12pm\nFriday · Set the table · 4–6pm\nSaturday · Pantry welcome · 9–11am\nSign up for this shift\n\nSave your reference and show it to Sam when you arrive. No personal details are displayed.\n\nYou’re signed up: Wednesday · Pack meals · 10am–12pm. Show this reference on arrival.\n\nYour saved record · 186ac4c216d4e9f9dc4beaa10b2f15e0Copy my return link\nReturning? Enter your reference\nFind my record\nThe weekly table · week of 2026-10-13 · synced\nLittle Inlet giving meter · MIT · Made with Homie",
+  "errors": []
+}
