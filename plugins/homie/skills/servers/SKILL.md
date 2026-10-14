@@ -157,3 +157,27 @@ For local function and tool proof, run `dev` and use its localhost URL. The priv
 dev credential permits headless owner tool calls; production still uses OAuth.
 App need sessions are scoped to the declared role and fresh records. See the app
 and functions guides for tablet/kiosk proof and atomic function storage.
+
+## Experimental MCP Events
+
+For an owner's AI that should hear a studio's declared events, read
+`node_modules/@homie-rocks/studio/docs/mcp-events.md`. Connect the client to
+`<site>/mcp/auth` through the person's existing studio approval, discover feeds
+with `events/list`, and use `events/poll`, an SSE `events/stream`, or
+`events/subscribe` with a client-generated `whsec_` secret and an exact
+owner-declared `mcp.events.<feed>.receivers` URL. Refresh before `refreshBefore`,
+persist cursors, verify Standard Webhooks signatures, deduplicate event IDs, and
+use `events/unsubscribe` to stop a webhook. The feeds keep their current roles;
+resources/subscribe and the cursor tool still work. This follows the experimental
+Triggers & Events working-group draft, with the Workers DNS-pinning limitation
+and receiver allowlist explained in that guide. Inspect Functions in the office
+and refresh's `deliveryStatus` for failed deliveries; never put secrets in logs.
+
+For production failures, the owner's AI can also use the person's existing
+Cloudflare connection to `https://mcp.cloudflare.com/mcp`, discover
+`cloudflare.alert.workers_observability_real_time_issue` with `events/list`, and
+subscribe with `events/subscribe` scoped to the studio's Worker. Enable Workers
+Issues and grant Notifications Write and Workers Observability Write. Cloudflare
+posts signed events to the client's webhook so new or recurring reliability
+problems reach the AI without polling; Homie hosts nothing for this. See
+[Cloudflare's announcement](https://developers.cloudflare.com/changelog/post/2026-10-13-cloudflare-mcp-events/).

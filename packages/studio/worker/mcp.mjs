@@ -1,3 +1,5 @@
+import {eventMethods,eventsCapability} from './mcp-events-wire.mjs';
+import {eventsRequest} from './mcp-events.mjs';
 function freshErrorMessage(error,env,caller) {
   let message=String(error?.message??error);
   for(const [key,value] of Object.entries(env))if(typeof value==='string'&&/SECRET|KEY|TOKEN|PASSWORD/.test(key)&&value.length)message=message.replaceAll(value,'[redacted]');
@@ -50,6 +52,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
     }
     if(request.method==='POST') {
       const body=await request.clone().json().catch(()=>null);
+      if(eventMethods.has(body?.method))return eventsRequest(request,env,ctx,cat,caller,body);
       if(body?.method==='tools/call') {
         const tool=tools.find(t=>t.name===body.params?.name);
         const schema=tool?.price?{...tool.inputSchema,properties:{...tool.inputSchema.properties,_payment:paymentInputSchema}}:tool?.inputSchema;
@@ -71,7 +74,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
     };
     const server=async()=>{
       const capabilities=await selling.machineCapabilities(env);
-      const s=new McpServer({name:cat.studio?.name??'Homie studio',version:'1.0.0'},{jsonSchemaValidator:validator,capabilities:{tools:{listChanged:true},...(Object.keys(eventFeeds(env)).length?{resources:{subscribe:true}}:{}),experimental:{payment:{methods:capabilities.machine?.card?{stripe:{intents:['charge']}}:{}}}}});
+      const s=new McpServer({name:cat.studio?.name??'Homie studio',version:'1.0.0'},{jsonSchemaValidator:validator,capabilities:{tools:{listChanged:true},...(Object.keys(eventFeeds(env)).length?{resources:{subscribe:true},...eventsCapability}:{}),experimental:{payment:{methods:capabilities.machine?.card?{stripe:{intents:['charge']}}:{}}}}});
       const dispatch=new Map();
       for(const name of Object.keys(eventFeeds(env))) {
         if(!await readableFeed(env,cat,caller,name))continue;

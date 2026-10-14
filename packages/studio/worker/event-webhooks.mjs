@@ -10,7 +10,7 @@ export async function readableWebhook(env,cat,feed) {
   if((feed.audience??'owner')==='owner')return true;
   return feed.audience?.app===app.id && app.roles?.[feed.audience.role]?.can?.includes('read:'+feed.collection)===true && launchOf(app,await settingsOf(env,{fresh:true}),env)==='public';
 }
-class WebhookFailure extends Error {
+export class WebhookFailure extends Error {
   constructor(message){super(message);this.name='WebhookFailure';}
 }
 export function webhookFailure(error){return error instanceof WebhookFailure?error.message:'Webhook delivery failed';}
@@ -21,23 +21,28 @@ export async function postWebhook(env,name,event,{fetchFn=globalThis.fetch.bind(
   validateWebhook(name,hook);
   const secret=env[hook.secret];
   if(typeof secret!=='string'||!/^whsec_[A-Za-z0-9+/]{43}=$/.test(secret))throw new WebhookFailure('Webhook signing secret unavailable');
-  const key=await crypto.subtle.importKey('raw',Uint8Array.from(atob(secret.slice(6)),c=>c.charCodeAt(0)),{name:'HMAC',hash:'SHA-256'},false,['sign']);
-  // Encode the event ID to avoid ambiguous dot-delimited signatures and invalid headers.
   const id='evt_'+btoa(String.fromCharCode(...new TextEncoder().encode(event.id))).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
+  return signedWebhook(hook.url,{id,body:{id:event.id,type:event.type,at:event.at,data:event.data},secrets:[secret]},{fetchFn,now,timeoutMs});
+}
+/** Shared transport for configured studio hooks and MCP Events subscriptions. */
+export async function signedWebhook(url,{id,body,secrets,headers={}},{fetchFn=globalThis.fetch.bind(globalThis),now=Date.now,timeoutMs=10000}={}) {
   const timestamp=String(Math.floor(now()/1000));
-  const body=JSON.stringify({id:event.id,type:event.type,at:event.at,data:event.data});
-  const signature=btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(`${id}.${timestamp}.${body}`)))));
-  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeoutMs);
+  const encoded=JSON.stringify(body),signatures=[];
+  for(const secret of secrets){
+    const key=await crypto.subtle.importKey('raw',Uint8Array.from(atob(secret.slice(6)),c=>c.charCodeAt(0)),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+    signatures.push('v1,'+btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(`${id}.${timestamp}.${encoded}`))))));
+  }
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
   try {
-    const response=await fetchFn(hook.url,{method:'POST',redirect:'manual',signal:controller.signal,headers:{'content-type':'application/json','webhook-id':id,'webhook-timestamp':timestamp,'webhook-signature':'v1,'+signature},body});
-    // Never read or log receiver content: it may echo credentials or private records.
+    const response=await fetchFn(url,{method:'POST',redirect:'manual',signal:controller.signal,headers:{'content-type':'application/json','webhook-id':id,'webhook-timestamp':timestamp,'webhook-signature':signatures.join(' '),...headers},body:encoded});
     await response.body?.cancel();
-    if(!response.ok)throw new WebhookFailure('Webhook HTTP '+response.status);
+    if(!response.ok){const error=new WebhookFailure('Webhook HTTP '+response.status);error.status=response.status;throw error;}
   }catch(error){
     if(error instanceof WebhookFailure)throw error;
     throw new WebhookFailure(controller.signal.aborted?'Webhook timed out':'Webhook network failure');
   }finally{clearTimeout(timer);}
 }
+
 export function webhookSubscriptions(env,cat,options={}) {
   return Object.entries(eventFeeds(env)).filter(([,feed])=>feed.webhook).map(([name,feed])=>({
     name:webhookName(name,feed.webhook),event:feed.event,webhook:true,
