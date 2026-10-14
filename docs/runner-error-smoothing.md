@@ -42,7 +42,7 @@ New code reads old 21-field saved entity rows and new optional 22-field placemen
 
 ## Results
 
-The completed matrix contains **20 matched pairs / 40 runs total**, with approximately 25.3 minutes per build. It covers six jitter-only pairs (150 ± 100 ms), six 300 ms / 5% loss pairs, two five-minute 100 ms / 2% / 40 ms jitter pairs, two reconnect pairs (three 2-second and three 6-second cuts), five- and eight-player pairs, and two 4× CPU-throttled pairs. Two incomplete jitter attempts lost a Puppeteer frame reference; both pairs were repeated. Their incomplete attempts are retained but excluded from paired totals.
+The completed matrix contains **20 matched pairs / 40 runs total**, with approximately 25.3 minutes per build. It covers six jitter-only pairs (150 ± 100 ms), six 300 ms / 5% loss pairs, two five-minute 100 ms / 2% / 40 ms jitter pairs, two reconnect pairs (three 2-second and three 6-second cuts), five- and eight-player pairs, and two 4× CPU-throttled pairs. Two incomplete jitter attempts lost a Puppeteer frame reference; both pairs were repeated. The detach cause remains unresolved. Their incomplete attempts are retained but excluded from paired totals.
 
 | Metric | Candidate | Detached control |
 | --- | ---: | ---: |
@@ -55,9 +55,9 @@ The completed matrix contains **20 matched pairs / 40 runs total**, with approxi
 | Same displacement metric outside injected outages | 85 spans | 64 spans |
 | Detected held-key freezes inside injected outages | 0 | 0 |
 | Score resets during positive-score outages | 0 of 6 | 0 of 6 |
-| First confirmed placement error | 0 tiles | 0 tiles |
+| Distance to nearest spawn on confirmed placement frames | 0 tiles | 0 tiles |
 
-[Full per-run receipts and trace hashes](receipts/runner-error-smoothing/matrix.json) retain all raw and adjusted figures. The raw phase-based respawn classifier reports up to 12.12 tiles on the candidate: the probe can expose a new round number one frame before its saved drawing changes. These round-metadata-only flags are retained separately. Confirmed placement frames (`moved` or a changed drawn `diedAt`) are all exactly at a spawn. For example, at 125.428 s in `b-candidate-long-0` the probe reports round 2 with the old round-1 drawing; at 125.445 s the marked placement is exactly (30, 41).
+[Full per-run receipts and trace hashes](receipts/runner-error-smoothing/matrix.json) retain all raw and adjusted figures. The raw phase-based respawn classifier reports up to 12.12 tiles on the candidate: the probe can expose a new round number one frame before its saved drawing changes. These round-metadata-only flags are retained separately. Confirmed placement frames (`moved` or a changed drawn `diedAt`) are all exactly at a declared spawn; delayed-snapshot unit tests separately verify the server-chosen origin. For example, at 125.428 s in `b-candidate-long-0` the probe reports round 2 with the old round-1 drawing; at 125.445 s the marked placement is exactly (30, 41).
 
 The [retained failing trace](receipts/runner-error-smoothing/loss300-freeze-frames.json.gz) is `b-candidate-loss-5`; its remaining freezes are at 19.75 s (233 ms, drawn at 47.32, 9) and 22.91 s (300 ms, 42.84, 12). This is still a failure of the requested zero-freeze bar. The worst connected displacement span lasts 1.917 s with a 9.7-tile peak (`b-candidate-loss-4`, 10.6 s). A six-second reconnect has a 1.566 s post-network-restoration span with a 24.5-tile peak (`b-candidate-rc-1`, 81 s). The candidate has more strict displacement spans than the control; the design change is not sufficient evidence of convergence.
 
