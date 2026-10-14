@@ -710,7 +710,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
       // The directory the live site claims itself in (0.10.0); studio.json `homie.directory: false` keeps it out.
       // HOMIE_DIRECTORY (a build variable) points one build at another directory, such as a staging one.
       directory: directoryUrl(process.env.HOMIE_DIRECTORY ?? studio.homie?.directory),
-      canonical: domainOrigin(studio.cloudflare?.domain),
+      canonical: domainOrigin(studio.cloudflare?.domain) ?? domainOrigin(studio.cloudflare?.url),
       // A copy of the public template that nobody has named yet shows the name typed in Cloudflare's form.
       ...(studio.template === true ? { template: true } : {}),
       // studio.json audience is a studio label; shop policies are optional.

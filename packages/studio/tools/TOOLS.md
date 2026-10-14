@@ -179,3 +179,12 @@ and removes secrets directly; remote owner tools `studio_events_webhook_status`
 and `studio_events_webhook_test` inspect delivery and test it. The receiver verifies
 Standard Webhooks signatures, deduplicates events, then wakes the owner's AI to use
 its own service connectors.
+
+
+## Signed-in connector address
+
+Use `/mcp/auth` for owner and staff connectors. Its anonymous 401 includes the
+`WWW-Authenticate` resource metadata URL for `/.well-known/oauth-protected-resource/mcp`.
+Both transports use the same `/mcp` OAuth resource; `/mcp` remains public without a
+token. An approved connection retains the account’s current app grants, not a copy
+of its old permissions. Manage connections at `/_studio/office/connections`.

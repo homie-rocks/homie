@@ -219,7 +219,7 @@ export function deployPlan(root) {
         ? { kind: 'R2 bucket', name: storage, what: 'the studio\'s big media: songs and videos over the size studio.json media.r2Over names (1 MiB unless set) or that git leaves out, uploaded and checked by SHA-256 before the site stops carrying them, served at their same addresses', state: 'exists (this studio made it)', plan: 'R2 (payment method on the account; 10 GB-month free)' }
         : { kind: 'R2 bucket', name: null, what: 'none: a new studio needs no storage. `homie-studio storage add` adds it later, for large media only', state: 'not created', plan: null },
     ],
-    cost: 'Account subscription not queried. Cloudflare bills usage under the account’s current plan; estimates are not a billing quote.',
+    cost: null,
     login: 'One approval: `npx wrangler login` opens Cloudflare in the person\'s browser (a free account works; a new one verifies its email address first).',
     address: `https://${cf.worker}.<the account's workers.dev subdomain>.workers.dev`,
     directory: {
@@ -312,7 +312,6 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
     const account = who.accounts.find((a) => a.id === accountId)?.name ?? 'the signed-in account';
     announced.push(
       `First deploy of ${studio.name} to the Cloudflare account "${account}". It creates: the Worker ${cf.worker} (the site and its rooms), the D1 database ${cf.d1} (rounds, and the studio's own stats: counts for the owner, never a visitor's identity), and the Durable Objects Table and Lobby (SQLite-backed).`,
-      'Account subscription not queried; usage is billed under the account’s current Cloudflare plan.',
       deployPlan(root).directory.choice,
     );
     for (const line of announced) log(line);
@@ -451,10 +450,10 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
     } else if (read.state === 'unreachable') {
       // This computer could not ask (its own name lookup, no connection): a network preflight failure, never a
       // verdict on the site that was just deployed.
-      const said = `deployed, but this computer could not read ${url} back to check it: ${read.why}. ${read.preflight === 'dns' ? 'That is this computer\'s name lookup (a browser here may still open the site), not the deploy.' : 'That is this computer\'s connection, not the deploy.'} The site claims itself when the directory first reads it.`;
+      const said = `deployed, but this computer could not read ${url} back to check it: ${read.why}. ${read.preflight === 'dns' ? 'That is this computer\'s name lookup (a browser here may still open the site), not the deploy.' : 'That is this computer\'s connection, not the deploy.'} Listing follows the studio’s directory choice.`;
       notes.push(said);
       step(said, { preflight: read.preflight ?? 'network' });
-    } else step('the directory claim is not there yet (the site claims itself when the directory first reads it)');
+    } else step(directory ? 'the requested directory claim is not there yet' : 'no new listing requested; existing claims are honoured');
   }
 
   // The deploy before this one came from a toolkit that still had remix, and left games open to be taken whole. No
@@ -464,7 +463,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   let reread = null;
   if (url && delta.withdrawn.length) {
     const which = delta.withdrawn.join(', ');
-    const dir = String(directory).replace(/\/+$/, '');
+    const dir = directory ?? readLocal(root).listed?.directory;
     if (listedHere(root, { site: url, directory: dir })) {
       const again = await publish(root, { homie: dir, site: url, ...(fetchFn ? { fetchFn } : {}) });
       reread = { ok: again.ok, games: delta.withdrawn, ...(again.ok ? {} : { why: again.why }), ...(again.publishes ? { publishes: again.publishes } : {}) };

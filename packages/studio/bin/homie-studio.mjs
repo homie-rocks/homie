@@ -507,16 +507,16 @@ function print(result) {
       lines.push(JSON.stringify(result.result, null, 2));
       break;
     case 'deploy':
-      if (result.mcp) lines.push(`Connect your AI: ${result.mcp} (approve in your studio's browser page; no key)`);
+      if (result.mcp) lines.push(`Connect your AI: ${result.mcp}/auth (approve in your studio's browser page; no key)`);
       if (result.ci) {
-        lines.push(`Live: ${result.url ?? '(Wrangler printed no address)'}${result.commit ? ` (commit ${result.commit.slice(0, 7)}${result.branch ? ` on ${result.branch}` : ''})` : ''}`, ...result.steps.map((x) => `  ${x.what}`), ...result.games.map((g) => `  ${g.id}: ${g.open ?? g.play}${g.wall ? `  wall: ${g.wall}` : ''}${g.hash ? `  [${deployWords(g)}]` : ''}`));
+        lines.push(`Live: ${result.url ?? '(Wrangler printed no address)'}${result.commit ? ` (commit ${result.commit.slice(0, 7)}${result.branch ? ` on ${result.branch}` : ''})` : ''}`, ...result.steps.map((x) => `  ${x.what}`), ...result.games.map((g) => `  ${g.id}: ${g.open ?? g.play}${g.hash ? `  [${deployWords(g)}]` : ''}${g.wall ? `  wall: ${g.wall}` : ''}`));
         break;
       }
       lines.push(`Live: ${result.url}`, ...(result.workersDev && result.workersDev !== result.url ? [`  also at ${result.workersDev}`] : []),
         ...(result.local ? [`  (the workers.dev address names your Cloudflare account, so it is kept in ${result.local} on this computer, never in studio.json)`] : []),
         // Which games this deploy changed since the last deploy from here, and each one's build hash
         // (lib/deploy-state.mjs): the hash `build` printed and the one the live site's manifest answers with.
-        ...result.games.map((g) => `  ${g.id}: ${g.open ?? g.play}${g.wall ? `  wall: ${g.wall}` : ''}${g.hash ? `  [${deployWords(g)}]` : ''}`), ...(result.removed?.length ? [`  no longer on the site: ${result.removed.join(', ')}`] : []), ...(result.notes ?? []).map((n) => `  Note: ${n}`), ...(result.songs ?? []).map((m) => `  song ${m.slug}: ${m.page}`), ...(result.videos ?? []).map((m) => `  video ${m.slug}: ${m.page}`),
+        ...result.games.map((g) => `  ${g.id}: ${g.open ?? g.play}${g.hash ? `  [${deployWords(g)}]` : ''}${g.wall ? `  wall: ${g.wall}` : ''}`), ...(result.removed?.length ? [`  no longer on the site: ${result.removed.join(', ')}`] : []), ...(result.notes ?? []).map((n) => `  Note: ${n}`), ...(result.songs ?? []).map((m) => `  song ${m.slug}: ${m.page}`), ...(result.videos ?? []).map((m) => `  video ${m.slug}: ${m.page}`),
         ...(result.media?.moved ?? []).map((m) => `  moved to R2 (checked by SHA-256): ${m.path}, still at ${m.url}`), ...(result.media?.failed ?? []).map((m) => `  not moved to R2: ${m.path}: ${m.why}`), '', `Cloudflare: Worker ${result.worker}, D1 ${result.d1}, Durable Objects Table + Lobby${result.r2 ? `, R2 ${result.r2}` : ' (no storage: none needed; `homie-studio storage add` adds it for large media)'}.`,
         result.claim ? 'The site claimed itself in the directory: list the games with the Homie MCP tool studio_publish, or: npx --no-install homie-studio publish' : 'No directory claim. Listing is the studio’s choice: set homie.directory to true or a directory URL before deploying to request one.',
         ...(result.standalone?.length ? ['', ...result.standalone] : []));
@@ -524,7 +524,7 @@ function print(result) {
     case 'deploy plan':
       lines.push(`What \`npm run deploy\` does for ${result.studio}, on the Cloudflare account the person approves:`, '',
         ...result.cloudflare.map((r) => `  ${r.kind}${r.name ? ` ${r.name}` : ''}: ${r.what} [${r.state}${r.plan ? `; ${r.plan}` : ''}]`), '',
-        `Cost: ${result.cost}`, `Sign-in: ${result.login}`, `Address: ${result.address}`,
+        ...(result.cost ? [`Cost: ${result.cost}`] : []), `Sign-in: ${result.login}`, `Address: ${result.address}`,
         result.directory.choice, ...(result.directory.site ? [`The directory (${result.directory.site}) stores: ${result.directory.stores}`] : []), result.never,
         ...(result.zone?.warning ? ['', `Warning: ${result.zone.warning}`] : result.zone?.why ? ['', result.zone.why] : []),
         ...(result.parts && partsPlanLines(result.parts).length ? ['', ...partsPlanLines(result.parts)] : []),

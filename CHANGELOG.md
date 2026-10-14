@@ -28,6 +28,23 @@ Your platformer keeps a player's runner moving smoothly through network correcti
 - In server-rules platformers, a player's own box-shaped 2D runner now moves smoothly through network corrections, even after a delayed frame. It goes around blocking platforms without being pulled backwards against the player's held direction, and normal jumps keep their shape.
 - After a dropped connection, the runner glides from its last visible position to where the server moved it. Real respawns and other deliberate placements still happen immediately; games can identify placements made during an outage with `respawned`.
 - Rules games do less repeated movement, collision and drawing preparation each frame, helping play stay smooth on slower phones. These changes preserve the server's movement, hits and scoring.
+- Directory listing is opt-in, accepts `homie.directory: true`, preserves existing
+  claims and uses one canonical custom-domain address from either hostname.
+- Deploy reports app, game and wall links without an unmeasured billing claim;
+  local D1 tools keep their binding after deploy. Interrupted setup can resume,
+  and office links sign in directly at their requested same-site destination.
+- Upgrade refreshes untouched app preset files and defaults while preserving
+  studio edits; app walls use their join wording.
+- Decorative app hero frames allow page scrolling; app frames permit Web Share
+  and downloads without removing sandbox isolation.
+- `/mcp/auth` challenges anonymous connectors with OAuth discovery while `/mcp`
+  keeps public tools available anonymously.
+
+### Upgrade notes
+
+- Run upgrade, install and rebuild. Existing directory claims remain honoured.
+  For a new listing choose `homie.directory: true` or a directory URL before deploy.
+  Staff connectors should use `/mcp/auth`; public connectors keep `/mcp`.
 
 ## [0.51.0] - 2026-10-14
 

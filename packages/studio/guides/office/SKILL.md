@@ -147,3 +147,12 @@ Before Stripe is connected, both live and local shop/giving pages show items and
 amounts with checkout disabled and clear not-taking-payment wording. A fresh studio
 has an empty `/shop/` preview. `dev` watches authoring HTML/CSS/JS; check reports
 accepted dialogs and precise waits, and reacquires frames during rebuilds.
+
+## Direct sign-in links (0.51.1)
+
+`office link --to /<app>/open` and `--to /_studio/office/connections` retain the
+same-site destination, including its query string. Opening the link signs the browser
+in and continues there. A plain link-preview GET spends nothing; the loaded page
+submits the same-origin sign-in form. Keep the link private.
+Local office and role commands reuse the running dev server’s D1 configuration even
+after deploy records the production database id.

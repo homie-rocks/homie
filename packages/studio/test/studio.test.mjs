@@ -212,14 +212,12 @@ test('NO CREDIT CARD: a free account without R2 deploys the whole studio, and de
   assert.deepEqual(plan.cloudflare.map((r) => r.kind), ['Cron triggers', 'Worker', 'D1 database', 'Durable Object', 'Durable Object', 'R2 bucket']);
   assert.equal(plan.cloudflare.find(r=>r.kind==='Cron triggers').name,'none','no cron without a declared need');
   assert.equal(plan.cloudflare.at(-1).name, null, 'no R2 bucket in the plan');
-  assert.match(plan.cost, /Account subscription not queried/);
-  assert.doesNotMatch(plan.cost, /Workers Free/);
+  assert.equal(plan.cost, null, 'no billing claim without a measured account plan');
   assert.match(plan.directory.stores, /Never code, media, keys or accounts/);
   const done = out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir));
   assert.equal(done.ok, true, JSON.stringify(done));
   assert.equal(done.r2, null);
   assert.match(done.announced.join(' '), /It creates: the Worker test-studio .* the D1 database test-studio-db \(rounds, and the studio's own stats: counts for the owner, never a visitor's identity\), and the Durable Objects Table and Lobby/);
-  assert.match(done.announced.join(' '), /Account subscription not queried/);
   assert.match(done.announced.join(' '), /will store the site's address/);
   assert.deepEqual(out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir)).announced, [], 'a redeploy creates nothing new and says nothing');
   assert.ok(!account.calls().some((c) => c.startsWith('r2')), `no r2 call: ${account.calls().join(' | ')}`);

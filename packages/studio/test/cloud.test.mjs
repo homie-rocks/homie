@@ -432,4 +432,10 @@ test('listing requires a choice, preserves old claims, and uses one canonical ad
   writeFileSync(file, JSON.stringify(s));
   assert.equal(out(run(['build'], dir)).ok, true);
   assert.equal(JSON.parse(readFileSync(join(dir,'site/dist/games.json'),'utf8')).studio.directory,'https://homie.rocks');
+  const opted=await workerOf(dir);t.after(()=>opted.sql.close());
+  const listed=await (await opted.get('https://choice.acct.workers.dev','/.well-known/homie-studio.json')).json();
+  assert.equal(listed.claim,'e'.repeat(40));
+  assert.deepEqual(calls,['https://homie.rocks/api/studio/claim?site=https%3A%2F%2Fcanonical.example']);
+  await opted.get('https://canonical.example','/.well-known/homie-studio.json');
+  assert.equal(calls.length,1);
 });

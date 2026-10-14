@@ -47,3 +47,13 @@ function new`, plain `functions/*.ts` declarations, and `function fire` locally.
 Use the event ID to deduplicate effects; inspect Functions in the office for
 failed deliveries. Studio policy is opt-in: do not introduce a default cap or
 rate merely because a tool or function can run autonomously.
+
+## Choose public or signed-in MCP (0.51.1)
+
+Use `<site>/mcp/auth` for a staff or owner connector. Without a token it returns 401
+with `WWW-Authenticate: Bearer resource_metadata="<site>/.well-known/oauth-protected-resource/mcp"`.
+That document identifies the `/mcp` resource and its authorization server; OAuth
+approval uses the existing studio account and current app grants. The auth route is
+a protected transport of that same resource. `<site>/mcp` continues to expose public
+tools anonymously. Neither path adds studio limits.
+See the [MCP authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization).

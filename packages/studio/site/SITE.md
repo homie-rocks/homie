@@ -591,3 +591,16 @@ credentials.
 X decides what it shows, may cache tags, and may change or stop this behavior.
 Local success does not prove that X will display a card. The studio can use the
 off switch above if it does not want to offer a game through a video-oriented card.
+
+
+## Canonical address and decorative app frames
+
+Set `cloudflare.domain` for the canonical public address. The manifest uses that
+address even when fetched from workers.dev; browser pages on the alias redirect,
+while discovery and tool transports remain reachable. Listing requires an explicit
+`homie.directory: true` or URL; existing claims remain valid.
+
+An iframe inside `.hero-media` is decorative and lets the parent page scroll.
+Add `data-interactive` only when people should interact with the hero. Ordinary app
+frames permit Web Share and downloads; browser capability and a user gesture still
+apply. App shells allow normal touch scrolling and text selection.

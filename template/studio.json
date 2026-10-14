@@ -4,7 +4,7 @@
   "template": true,
   "homie": {
     "studio": "0.51.1",
-    "directory": "https://homie.rocks"
+    "directory": null
   },
   "cloudflare": {
     "worker": "my-studio",
