@@ -1,4 +1,4 @@
-import {test} from 'node:test';
+import {test,before,after} from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {once} from 'node:events';
@@ -7,13 +7,23 @@ import {findChrome,chromeArgs} from '../lib/chrome.mjs';
 import {recordsPage} from '../worker/records-page.mjs';
 import worker from '../worker/index.mjs';
 const meta={id:'form',name:'Form',kind:'app',roles:{customer:{signIn:false,can:[]}},surfaces:{phone:'customer',wall:'customer'},records:{persist:true,collections:{}},words:{},netplay:{}};
+// Cold Chrome startup belongs to suite setup, not the first app's 15-second
+// readiness deadline. Keep Puppeteer's existing 30-second launch bound and give
+// every test a fresh context. Register cancellation before launch: a late launch
+// must never outlive a failed hook and keep the shard alive until its watchdog.
+const browserLifetime=new AbortController();
+let browser;
+after(async()=>{try{await browser?.close();}finally{browserLifetime.abort();}});
+before(async()=>{
+ browser=await puppeteer.launch({executablePath:findChrome(),headless:true,dumpio:true,args:[...chromeArgs(),'--disable-gpu','--disable-webgl'],signal:browserLifetime.signal});
+},{timeout:30000});
 async function fixture(t,html,shop=null){
  const cat={studio:{name:'Test'},games:[meta]},env={ASSETS:{fetch:async req=>new URL(req.url).pathname.endsWith('index.html')?new Response(html,{headers:{'content-type':'text/html'}}):Response.json(cat)}};
  let loads=0;
  const server=createServer(async(req,res)=>{try{const origin=`http://localhost:${server.address().port}`;if(req.url==='/frame'){res.end('<iframe style="width:100vw;height:100vh;border:0" sandbox="allow-scripts allow-modals" src="/form/__game/"></iframe>');return;}if(req.url.startsWith('/form/__game/'))loads++;const r=req.url==='/records-with-shop'?recordsPage(meta,new URL(origin+'/form/play'),cat,shop):await worker.fetch(new Request(origin+req.url),env,{waitUntil:p=>p.catch(()=>{})});res.writeHead(r.status,Object.fromEntries(r.headers));res.end(Buffer.from(await r.arrayBuffer()));}catch(e){res.writeHead(500);res.end(e.message);}});
- server.listen(0,'127.0.0.1');await once(server,'listening');t.after(()=>new Promise(r=>(server.closeAllConnections(),server.close(r))));
- const browser=await puppeteer.launch({executablePath:findChrome(),headless:true,args:[...chromeArgs(),'--disable-webgl']});t.after(()=>browser.close());
- const page=await browser.newPage();await page.setViewport({width:390,height:844});return {page,origin:`http://localhost:${server.address().port}`,loads:()=>loads};
+ server.listen(0,'127.0.0.1');await once(server,'listening');t.after(()=>new Promise(r=>{server.close(r);server.closeAllConnections();}));
+ const context=browser.createBrowserContext();t.after(async()=>{await (await context).close();});
+ const page=await (await context).newPage();await page.setViewport({width:390,height:844});return {page,origin:`http://localhost:${server.address().port}`,loads:()=>loads};
 }
 test('sandboxed app storage is usable and WebGL fallback does not cover the headline',{timeout:15000},async t=>{
  const {page,origin}=await fixture(t,'<!doctype html><head></head><body><h1 style="position:absolute;top:80px">Our fittings</h1><canvas></canvas><script>localStorage.setItem("draft","one");sessionStorage.setItem("draft","two");document.body.dataset.storage=localStorage.getItem("draft")+sessionStorage.getItem("draft");</script></body>');
@@ -60,7 +70,7 @@ test('guest app frames permit Web Share and a real postcard download',{timeout:1
  const {mkdtempSync,readFileSync,rmSync,existsSync}=await import('node:fs');const {tmpdir}=await import('node:os');const {join}=await import('node:path');
  const dir=mkdtempSync(join(tmpdir(),'homie-postcard-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
  const {page,origin}=await fixture(t,'<!doctype html><button id="save">Save postcard</button><script>document.querySelector("button").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["Greetings!"],{type:"text/plain"}));a.download="postcard.txt";a.click();};</script>');
- const cdp=await page.createCDPSession();await cdp.send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:dir});
+ const cdp=await page.createCDPSession();await cdp.send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:dir,browserContextId:page.browserContext().id});
  await page.goto(origin+'/form/open');await page.waitForFunction(()=>window.__shell?.arrival?.phase==='done');
  const frame=page.frames().find(f=>f.url().includes('/__game/'));
  assert.ok(await page.$eval('iframe',el=>el.allow.split(';').map(x=>x.trim()).includes('web-share *')));

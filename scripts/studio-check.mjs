@@ -174,24 +174,41 @@ try {
     // Keep the original starter's bots for authority, disconnection and bot-seat
     // handoff. Random enemy knockback is not a keyboard/touch direction oracle.
     const life = controls('life');
-    let originalInputFile = null;
+    const originalInputFiles = [];
     if (game === 'gem-rush') {
       await stopDev();
       const rules = join(studio, 'games', game, 'src', 'rules.ts');
       const original = readFileSync(rules, 'utf8');
-      originalInputFile = { path: rules, text: original };
+      originalInputFiles.push({ path: rules, text: original });
       const botFill = 'bots: { keep: 3 }';
       if (original.split(botFill).length !== 2) throw new Error('Gem Rush control fixture changed: review its bot-fill isolation');
       writeFileSync(rules, original.replace(botFill, 'bots: { keep: 0 }'));
+      // The 6.8-unit/second input holds need 34 units of clear travel. The
+      // original 32-by-20 arena hits a wall mid-hold, where prediction/contact
+      // corrections are not an input-direction oracle. Keep the same movement
+      // and pixels per unit, with the view matching this temporary larger map.
+      const mapFile = join(studio, 'games', game, 'map', 'main.json');
+      const mapText = readFileSync(mapFile, 'utf8');
+      originalInputFiles.push({ path: mapFile, text: mapText });
+      const map = JSON.parse(mapText);
+      map.bounds = { min: [0, 0], max: [128, 128] };
+      map.spots.start = [[64, 64]];
+      writeFileSync(mapFile, JSON.stringify(map, null, 2) + '\n');
+      const viewFile = join(studio, 'games', game, 'src', 'view.ts');
+      const view = readFileSync(viewFile, 'utf8');
+      originalInputFiles.push({ path: viewFile, text: view });
+      const dimensions = 'const W = 1600, H = 1000';
+      if (view.split(dimensions).length !== 2) throw new Error('Gem Rush control fixture changed: review its arena dimensions');
+      writeFileSync(viewFile, view.replace(dimensions, 'const W = 6400, H = 6400'));
       sh(cli, ['build', '--json'], studio, env);
       await startDev();
-      lines.push('- input accuracy: temporary Gem Rush fixture without random enemy knockback; original bot round, handoff and knockback lab checked separately');
+      lines.push('- input accuracy: temporary Gem Rush fixture with clear input runway and no random enemy knockback; original bot round, handoff and knockback lab checked separately');
     }
     if (game === 'coin-dash') {
       await stopDev();
       const mapFile = join(studio, 'games', game, 'map', 'main.json');
       const original = readFileSync(mapFile, 'utf8');
-      originalInputFile = { path: mapFile, text: original };
+      originalInputFiles.push({ path: mapFile, text: original });
       const map = JSON.parse(original);
       // Each hold lasts five seconds at up to six units/second. Give both
       // down and left the full 30-unit runway, outside the original obstacles,
@@ -205,9 +222,9 @@ try {
       lines.push('- input accuracy: temporary Coin Dash spawn with down/left runway; original map checked in the round, lifecycle and lab');
     }
     const input = controls('owner-desk,owner-phone');
-    if (originalInputFile) {
+    if (originalInputFiles.length) {
       await stopDev();
-      writeFileSync(originalInputFile.path, originalInputFile.text);
+      for (const file of originalInputFiles) writeFileSync(file.path, file.text);
       // A subsequent drive check must also exercise the unmodified starter.
       if (process.argv.includes('--drive')) {
         sh(cli, ['build', '--json'], studio, env);
