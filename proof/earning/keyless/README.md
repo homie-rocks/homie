@@ -48,3 +48,15 @@ are grouped to fit signed invoice snapshots, custom amounts use their own links,
 pending is not an unpaid reservation, refunded sessions do not reduce Stripe's
 lifetime completion count, and staff moves need schedule/link review and sync.
 Keyed session checkout is available only when explicitly selected with an existing key.
+
+The final sandbox acceptance additionally opens a checkout on the destination
+slot, pauses both links through native sync, verifies Stripe expired that session,
+performs the versioned staff move, then resyncs fresh confirmed-seat counts. The
+source reopens with exactly one remaining seat; the destination remains full.
+Runtime staff moves into an unpaused paid target are refused. This prevents local
+staff movement from silently overselling Stripe's independent lifetime budget.
+
+`quantity.json` and `menu-quantity.png` also show the real hosted menu with its first
+item increased to two and its second item removed (minimum zero). The read-back
+Checkout Session contains one line, quantity two, for CAD 20. No payment/card input
+was used for this quantity-only check; its native link was deactivated afterward.

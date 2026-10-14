@@ -1,3 +1,4 @@
+import { linkConfig, hasStripeKey } from './shop-links.mjs';
 /** Capacity belongs to the studio database. Checkout expiry is a provider fact,
  * never an inference from a browser return or the local clock. */
 export const BOOKINGS_MIGRATION_FILE = '0025_bookings.sql';
@@ -69,6 +70,8 @@ export function bookingStatement(env, { id, app, collection, slots, slot, quanti
 
 /** Staff movement uses the same version contract as app records. */
 export async function moveBooking(env, { app, collection, id, slot, version }) {
+  const target=linkConfig(env)?.slots?.find(l=>l.app===app&&l.collection===collection&&l.slot===slot);
+  if(!hasStripeKey(env) && target && !target.paused)throw new Error('booking capacity: ask the owner’s AI to pause the target slot and expire open links before moving; then sync confirmed seat counts');
   const result = await env.DB.prepare(`UPDATE shop_bookings SET slot=?4,version=version+1,updated_at=?6
     WHERE app=?1 AND collection=?2 AND id=?3 AND version=?5 AND state IN ('held','confirmed')`)
     .bind(app, collection, id, slot, version, Date.now()).run();

@@ -1,0 +1,13 @@
+{
+  "profile": "Homie sandbox",
+  "session": "cs_test_b1QlbiZ5iebvB7Q4rnuXZ9lB6d4mHWGx4I9a9ZLr7N4vQa2xNkrNqtLlzP",
+  "amount": 2000,
+  "lines": [
+    {
+      "price": "price_1UQRCwDz5BcOk2YtzToVMISP",
+      "quantity": 2,
+      "amount": 2000
+    }
+  ],
+  "removedSecondItem": true
+}

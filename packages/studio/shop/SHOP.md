@@ -201,7 +201,7 @@ the full amount toward a cap. The additive schema preserves its original rows an
 
 ## Shop button on the screen
 
-An open shop with items for this game or app shows **Shop** above its play/open screen. The shell reserves 52 pixels plus the safe area above the content, so the button never covers its controls. In `game.json` or `app.json`, set `"screen": { "shop": false }` to hide this button (merge with any existing screen settings). The room panel and your own shop buttons still work. Closed shops, kids policies and an empty selection show no button.
+An open shop with items for this game or app shows **Shop** above its play/open screen. The shell reserves 52 pixels plus the safe area above the content, so the button never covers its controls. In `game.json` or `app.json`, set `"screen": { "shop": false }` to disable the experience’s shop (merge with any existing screen settings). Keep it true or omitted when your app uses its own `createShop` buttons; false also refuses their checkout bridge requests. Closed shops, kids policies and an empty selection show no button.
 
 ```ts
 import { createShop } from '@homie-rocks/studio/shop';
@@ -260,7 +260,7 @@ the owner's AI write the complete manifest to `.studio/booking-slots.json` and r
 Sync after publishing or changing slots. Removed or inactive slots deactivate their
 links. Each link has `restrictions.completed_sessions.limit = capacity`, with one
 fixed service and one seat per checkout. Re-sync preserves Stripe's lifetime completed
-count. Free slots stay local. Never increment capacity just to hide a full-link error.
+count. Free slots stay local and use separate slot records from paid links. Never increment capacity just to hide a full-link error.
 Refunds do not decrement Stripe's completed-session counter; the owner's AI must
 review availability and resync explicitly. A changed price should use a new slot;
 do not replace a sold link and accidentally reset its capacity counter.
@@ -276,8 +276,14 @@ the local record. The app must say “Pay to secure your seat,” not promise an
 unpaid hold. Slot reads expose `record.booking.full`, `available` and `synced` for the
 UI; Stripe's full-link update and verified confirmations make the app show Full.
 Events include `booking.pending`, `.confirmed`, `.released`, `.moved`; free and
-explicit keyed bookings also use `.held`. Staff moves use a versioned `{slot:...}`
-record update; after moves the AI must review and sync the affected Stripe links.
+explicit keyed bookings also use `.held`. Before staff moves, the owner's AI syncs **both affected slots** with `active:false`;
+sync deactivates their links and expires open sessions. Wait for signed payment events,
+then staff makes the versioned `{slot:...}` update. Moving into an unpaused paid target
+is refused. Read fresh confirmed booking counts and sync each affected slot with
+`confirmed:<count>` and `active:true`. Sync adjusts the lifetime completion budget to
+`Stripe completed + capacity - confirmed` (initial publication uses capacity exactly).
+This also reopens refunded availability after an explicit review. Never use a stale
+confirmed count or skip pausing: local staff movement cannot mutate Stripe by itself.
 An explicit keyed session connection retains exclusive expiring unpaid holds.
 
 **Give $20 monthly:** `shop init --giving --currency CAD` includes fixed suggested
@@ -321,7 +327,7 @@ from `lib/dev-stripe-sandbox.mjs` and pass `{origin, profile, shop, bookingSlots
 sandbox CLI profile and loopback studio origin. It drives only that profile's
 Stripe CLI, starts `stripe listen --forward-to` with the required events, and
 returns local dev `bindings` and `close()`. Keep bindings private: the webhook
-signing secret is real even in test mode. The keyless helper encodes link configuration for safe .dev.vars transport; do not decode or rewrite that binding. Use the helper’s `links` property for native link IDs when testing. `close()` deactivates its sandbox links and stops forwarding. Supply them to the local dev harness
+signing secret is real even in test mode. The keyless helper encodes link configuration for safe .dev.vars transport; do not decode or rewrite that binding. Use the helper’s `links` property for native link IDs when testing. `await helper.sync(manifest)` updates its `links` and `bindings`; save the new bindings and restart dev after a slot sync. `close()` deactivates its sandbox links and stops forwarding. Supply them to the local dev harness
 only, never source control or logs. The local webhook forwarding listener needs the desktop; production uses the signed public webhook directly. No API adapter or key is installed in the keyless Worker. It never exports CLI credentials.
 Use Stripe's published CLI test fixtures/tokens to complete Checkout via API;
 never type card details into a form. Stop on an expired profile and ask the owner

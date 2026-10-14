@@ -1,5 +1,5 @@
 TAP version 13
-# (node:92458) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (node:6253) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 # (Use `node --trace-warnings ...` to show where the warning was created)
 # Shop reconciliation {
 #   order: null,
@@ -9,6 +9,7 @@ TAP version 13
 # }
 # PASS keyless mixed menu; signed invoice supplies paid lines and table reference
 # PASS two pending buyers; first paid seat confirms, full link rejects second payment
+# PASS AI pauses and expires open target, staff moves versioned booking, sync restores exact remaining seats
 # Shop reconciliation {
 #   order: null,
 #   reason: 'Subscription Checkout has not arrived; retry',
@@ -21,7 +22,7 @@ TAP version 13
 # Subtest: real keyless menus, capacity and monthly giving
 ok 1 - real keyless menus, capacity and monthly giving
   ---
-  duration_ms: 110453.873958
+  duration_ms: 133447.125292
   type: 'test'
   ...
 1..1
@@ -32,4 +33,4 @@ ok 1 - real keyless menus, capacity and monthly giving
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 110733.906542
+# duration_ms 159094.179791

@@ -1179,8 +1179,8 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name:'stripe_bookings_sync', title:'Sync published booking slots to Stripe',
-      description:'Owner AI: after reading published slot records, supply the complete slot manifest. Creates/updates Stripe Payment Links with completed-session capacity limits through the approved CLI profile. Removed slots are deactivated. No Worker API key. Follow studio_job. Never increase capacity merely to reopen a full slot.',
-      inputSchema:{type:'object',properties:{...STUDIO_ARG,slots:{type:'array',items:{type:'object',properties:{app:{type:'string'},collection:{type:'string'},slots:{type:'string'},slot:{type:'string'},item:{type:'string'},capacity:{type:'integer',minimum:0},active:{type:'boolean'}},required:['app','collection','slots','slot','item','capacity'],additionalProperties:false}},live:{type:'boolean'}},required:['slots']},
+      description:'Owner AI: after reading published slot records, supply the complete slot manifest. Creates/updates Stripe Payment Links with completed-session capacity limits through the approved CLI profile. Before moving a booking, sync target active:false to deactivate and expire open sessions. After the versioned staff move, sync current confirmed counts for affected slots to restore the remaining budget. Removed slots deactivate and expire open sessions. No Worker API key. Follow studio_job. Never increase capacity merely to reopen a full slot.',
+      inputSchema:{type:'object',properties:{...STUDIO_ARG,slots:{type:'array',items:{type:'object',properties:{app:{type:'string'},collection:{type:'string'},slots:{type:'string'},slot:{type:'string'},item:{type:'string'},capacity:{type:'integer',minimum:0},confirmed:{type:'integer',minimum:0},active:{type:'boolean'}},required:['app','collection','slots','slot','item','capacity'],additionalProperties:false}},live:{type:'boolean'}},required:['slots']},
       annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:true},
       run:async a=>{
         const root=ctx.root(a.studio);

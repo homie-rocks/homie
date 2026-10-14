@@ -87,25 +87,46 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     config.menus.push({id:link.id,url:link.url,revision,items:items.map(i=>({item:i.id,price:catalogPrices.get(i.id)}))});
   }
   config.slots=[];
+  const pause=async link=>{
+    await api('POST',`/v1/payment_links/${link.id}`,{active:false});
+    for(const session of await list('/v1/checkout/sessions',{payment_link:link.id,status:'open'})) {
+      await api('POST',`/v1/checkout/sessions/${session.id}/expire`);
+    }
+  };
+  const slotKeys=new Set();
   for(const slot of bookingSlots) {
-    if(!['app','collection','slots','slot','item'].every(k=>typeof slot[k]==='string'&&/^[a-zA-Z0-9_-]{1,64}$/.test(slot[k])) || !Number.isSafeInteger(slot.capacity) || slot.capacity<0)throw new Error('Invalid booking slot manifest');
+    if(!['app','collection','slots','slot','item'].every(k=>typeof slot[k]==='string'&&/^[a-zA-Z0-9_-]{1,64}$/.test(slot[k])) || !Number.isSafeInteger(slot.capacity) || slot.capacity<0 || slot.confirmed!==undefined && (!Number.isSafeInteger(slot.confirmed)||slot.confirmed<0||slot.confirmed>slot.capacity))throw new Error('Invalid booking slot manifest');
+    const resource=JSON.stringify([slot.app,slot.slots,slot.slot]);
+    if(slotKeys.has(resource))throw new Error('Publish only one service Payment Link per capacity slot');
+    slotKeys.add(resource);
     const item=shop.items.find(i=>i.id===slot.item);
     if(!item || item.interval || item.price==='choose')throw new Error('Bookings require a fixed one-time service price');
-    if(!item.price || !slot.capacity || slot.active===false)continue;
+    if(!item.price)continue;
     const identity=hash({slug,site,app:slot.app,collection:slot.collection,slots:slot.slots,slot:slot.slot});
-    const params={...customText,line_items:[{price:catalogPrices.get(item.id),quantity:1}],payment_method_types:['card'],
-      restrictions:{completed_sessions:{limit:slot.capacity}},after_completion:{type:'redirect',redirect:{url:`${site}/shop/thanks?session_id={CHECKOUT_SESSION_ID}`}}};
     let link=links.find(p=>own(p)&&p.metadata?.slot===identity);
-    // Reuse the link and its lifetime completion count when capacity changes.
+    if(!link && (!slot.capacity||slot.active===false))continue;
+    if(link?.metadata?.price && link.metadata.price!==catalogPrices.get(item.id))throw new Error('Slot service price changed. Deactivate the old slot and publish a new slot ID after reviewing existing bookings.');
+    if(slot.confirmed!==undefined && link?.active && slot.active!==false)throw new Error('Pause affected slot links before recounting confirmed seats; wait for signed payments, move/refund, then sync the fresh counts.');
+    const count=link?.restrictions?.completed_sessions?.count??0;
+    // Initial publication uses capacity exactly. After a reviewed move/refund the
+    // AI supplies current confirmed seats; keep the existing Stripe lifetime count.
+    const limit=slot.confirmed===undefined ? slot.capacity : count+slot.capacity-slot.confirmed;
+    const active=slot.active!==false && limit>count;
+    const params={...customText,line_items:[{price:catalogPrices.get(item.id),quantity:1}],payment_method_types:['card'],
+      restrictions:{completed_sessions:{limit:Math.max(1,limit)}},after_completion:{type:'redirect',redirect:{url:`${site}/shop/thanks?session_id={CHECKOUT_SESSION_ID}`}}};
     if(!link)link=await api('POST','/v1/payment_links',{...params,metadata:{...metadata,slot:identity,revision:identity,price:catalogPrices.get(item.id)}},`slot-${identity}`);
     else {
-      if(link.metadata?.price && link.metadata.price!==catalogPrices.get(item.id))throw new Error('Slot service price changed. Deactivate the old slot and publish a new slot ID after reviewing existing bookings.');
-      const count=link.restrictions?.completed_sessions?.count??0;
-      link=await api('POST',`/v1/payment_links/${link.id}`,{restrictions:params.restrictions,active:count<slot.capacity});
+      // Pause first whenever publishing a changed budget, so old sessions cannot
+      // spend a previous capacity after staff moves or removes a slot.
+      if(!active || link.restrictions?.completed_sessions?.limit!==limit)await pause(link);
+      link=await api('POST',`/v1/payment_links/${link.id}`,{restrictions:params.restrictions,active});
     }
     keepLinks.add(link.id);
-    config.slots.push({...slot,id:link.id,url:link.url,price:catalogPrices.get(item.id),revision:identity,active:link.active,count:link.restrictions?.completed_sessions?.count??0});
+    config.slots.push({...slot,id:link.id,url:link.url,price:catalogPrices.get(item.id),revision:identity,active:link.active,count:link.restrictions?.completed_sessions?.count??0,limit,paused:slot.active===false});
   }
+  // Retired booking links must be closed before publishing a configuration which
+  // no longer names them; staff can then move into that local-only slot safely.
+  for(const link of links.filter(p=>own(p)&&p.metadata?.slot&&!keepLinks.has(p.id)))await pause(link);
   if(shop.items.some(i=>i.interval)) {
     const portals=await list('/v1/billing_portal/configurations');
     let portal=portals.find(p=>own(p));

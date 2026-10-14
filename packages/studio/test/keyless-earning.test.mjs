@@ -6,6 +6,7 @@ import {readdirSync,readFileSync} from 'node:fs';
 import {shopRoutes,shopOf} from '../worker/shop.mjs';
 import {linkSettings,hasStripeKey,linkConfig} from '../worker/shop-links.mjs';
 import {withToolIdentity} from '../worker/tool-identity.mjs';
+import {moveBooking} from '../worker/booking-store.mjs';
 import {subscriptionPortal} from '../worker/shop-subscriptions.mjs';
 function fixture(t){
  const sql=new DatabaseSync(':memory:');t.after(()=>sql.close());
@@ -51,4 +52,16 @@ test('keyless membership paid periods renew, failure does not extend, cancellati
  await f.hook('invoice.paid',invoice('in_next',end+1000));assert.equal(ends(),(end+1000)*1000);await f.hook('invoice.payment_failed',{...invoice('in_failed',end+2000),status:'open'});assert.equal(ends(),(end+1000)*1000);
  assert.equal(await subscriptionPortal(f.env,'alice','sub_member','https://shop.example'),f.config.portal);assert.equal(await subscriptionPortal(f.env,'bob','sub_member','https://shop.example'),null);
  await f.hook('customer.subscription.deleted',{id:'sub_member'});const cancelled=ends();await f.hook('invoice.paid',invoice('in_delayed',end+3000));assert.equal(ends(),cancelled);assert.ok(cancelled<=Date.now());
+});
+
+test('staff cannot move into a live keyless checkout budget; an AI-paused target accepts a versioned move',async t=>{
+ const f=fixture(t);const req={item:'tune',game:'tune',booking:{collection:'bookings',slot:'morning'}};const a=await f.buy(req);await f.hook('checkout.session.completed',f.session(a,'slot'));
+ f.sql.prepare('INSERT INTO app_records VALUES(?,?,?,?,1,1)').run('tune','slots','afternoon',JSON.stringify({capacity:1}));
+ f.config.slots.push({...f.config.slots[0],slot:'afternoon',id:'plink_afternoon'});f.env.STRIPE_SHOP_LINKS=JSON.stringify(f.config);
+ const move=()=>moveBooking(f.env,{app:'tune',collection:'bookings',id:a.order,slot:'afternoon',version:2});
+ await assert.rejects(move(),/pause/);f.config.slots[1].paused=true;f.config.slots[1].active=false;f.env.STRIPE_SHOP_LINKS=JSON.stringify(f.config);assert.equal(await move(),true);assert.equal(await move(),false);
+ // Reusing the old URL buys its original slot, not the moved booking's new slot.
+ await f.hook('checkout.session.completed',f.session(a,'slot',{id:'cs_test_reopened',payment_intent:'pi_reopened'}));
+ const cloned=f.sql.prepare("SELECT * FROM shop_bookings WHERE id!=? AND state='confirmed'").get(a.order);assert.equal(cloned.slot,'morning');
+ assert.equal(f.sql.prepare('SELECT value FROM meta WHERE key=?').get('shop-reference:'+cloned.id).value,cloned.id);
 });

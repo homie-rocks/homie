@@ -61,13 +61,17 @@ export async function startKeylessStripeSandbox({origin,profile,shop,bookingSlot
   const sandbox=await startStripeSandbox({origin,profile});
   let links,endpoint;
   const api=(method,path,params={},idempotency)=>sandbox.call(method,path,formEncode(params),idempotency);
-  try {
+  const synchronize=async bookingSlots=>{
     const result=await syncPaymentLinks({api,shop:checked.shop,slug:name,site:`https://${name}.example.com`,mode:'test',bookingSlots,
       w:async(args,opts)=>{if(args[1]==='list')return{code:0,stdout:'[]'};if(args[1]==='bulk')links=JSON.parse(opts.input).STRIPE_SHOP_LINKS;return{code:0};},saveReceipt:r=>{endpoint=r.endpoint??endpoint;}});
     if(!result.ok)throw Error('Sandbox Payment Link sync failed');
-    // This placeholder destination is disabled; the private local listener delivers events.
     if(endpoint)await api('POST',`/v1/webhook_endpoints/${endpoint}`,{disabled:true});
-    return {links:JSON.parse(links),bindings:{STRIPE_CHECKOUT_MODE:'links',STRIPE_SHOP_LINKS:'base64:'+Buffer.from(links).toString('base64'),STRIPE_WEBHOOK_SECRET:sandbox.bindings.STRIPE_WEBHOOK_SECRET},call:api,
+    return {links:JSON.parse(links),bindings:{STRIPE_CHECKOUT_MODE:'links',STRIPE_SHOP_LINKS:'base64:'+Buffer.from(links).toString('base64'),STRIPE_WEBHOOK_SECRET:sandbox.bindings.STRIPE_WEBHOOK_SECRET}};
+  };
+  try {
+    const client={...await synchronize(bookingSlots),call:api,
+      sync:async slots=>{Object.assign(client,await synchronize(slots));return client;},
       close:async()=>{try{const config=JSON.parse(links);for(const link of [...config.items,...config.menus,...config.slots])await api('POST',`/v1/payment_links/${link.id}`,{active:false});}finally{await sandbox.close();}}};
+    return client;
   }catch(e){await sandbox.close();throw e;}
 }

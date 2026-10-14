@@ -2,9 +2,9 @@
   "profile": "Homie sandbox",
   "workerApiKey": false,
   "cart": {
-    "session": "cs_test_b1o3HwyZHf7sPzo60rsiPk7i0oMTqjxBS9qjI1NA7TekcBvOX3IkKQ0odw",
+    "session": "cs_test_b13EWyGtMESnNEXJlb4wdNfSiIl7BL3UUsaOaTioYf9WI5gkcYsmrftoQJ",
     "event": {
-      "order": "ord_nXw9zXVzqmx0Qoble9ow",
+      "order": "ord_io6d7TwcsZHQcgqVdrSh",
       "source": "shop_orders",
       "amount": 6000,
       "currency": "cad",
@@ -28,10 +28,11 @@
     }
   },
   "booking": {
-    "first": "cs_test_a1DNGkAPTeB2kJvtLJQuwftCRLHWc4GzuzC2DEXEWQQbvjU2OpvyhYblby",
-    "second": "cs_test_a1ZYsshuknE7xJSyuizqSRmXfI0pUzgjmeVEqrgexzNjXidFlmVE8HtL21",
+    "first": "cs_test_a16dCdKRGwkHtlRoHEZKdXAiltDfhmQF3HXCP39XmAg9z4X3b2QGL8cXpw",
+    "second": "cs_test_a1Xmx2fypLZjZTwcMsaOmYASLC9peGz8n3Rq1T6zUQ9jAfkJjJOMuB8oHZ",
     "secondRefused": true,
-    "link": "plink_1UQRRQDz5BcOk2Yt0aKEWFqr",
+    "movePausedAndResynced": true,
+    "link": "plink_1UQRg1Dz5BcOk2YtyOmoMjvt",
     "active": false,
     "restrictions": {
       "completed_sessions": {
@@ -41,14 +42,14 @@
     }
   },
   "monthly": {
-    "session": "cs_test_a1JPu3CkYyOBk9esgHvZ4buAf2bPr9VVkm3AKl592sQsa08Nw8hAsoUWW9",
-    "subscription": "sub_1UQRS8Dz5BcOk2YtDmQBGuRu",
-    "portal": "https://billing.stripe.com/p/login/test_8x214ndWaejB2bTeAV7g403",
+    "session": "cs_test_a10IybUhwYM9SALlwvHuzWUkxI6KOaDhiS6dkQXP5nFYkraia81fs0SIIk",
+    "subscription": "sub_1UQRh7Dz5BcOk2Ytxts4GyRz",
+    "portal": "https://billing.stripe.com/p/login/test_cNi9AT3hwgrJ3fXgJ37g404",
     "cancelled": true
   },
   "clock": {
-    "id": "clock_1UQRSEDz5BcOk2YtttmXbAwE",
-    "subscription": "sub_1UQRSGDz5BcOk2YtuWdgeXJ7",
+    "id": "clock_1UQRhCDz5BcOk2YtytH14y2h",
+    "subscription": "sub_1UQRhEDz5BcOk2Yt3ZLRTAWe",
     "renewed": true,
     "failed": true,
     "cancelled": true

@@ -515,6 +515,7 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
   lines ??= [{ item, amount, quantity: 1 }];
   const keyless = (amount > 0 || lines.some(l => l.item.interval)) && !hasStripeKey(env);
   const config=linkConfig(env);
+  if(booking && amount===0 && !hasStripeKey(env) && config?.slots?.some(l=>l.app===game&&l.slots===booking.slots&&l.slot===booking.slot))return {error:fail(409,'booking','Publish a separate local slot for a free booking; it cannot share a paid Stripe capacity budget.')};
   const menu=keyless && !booking && lines.length>1 ? config?.menus?.find(m=>lines.every(l=>m.items.some(i=>i.item===l.item.id))) : null;
   const link=keyless ? booking ? config?.slots?.find(l=>l.app===game&&l.collection===booking.collection&&l.slots===booking.slots&&l.slot===booking.slot&&l.item===item.id) : menu ?? config?.items.find(l=>l.item===item.id) : null;
   if(keyless && lines.length>1 && !menu)return {error:fail(409,'menu','These items need separate Stripe menus. Custom amounts and monthly gifts use their own links.')};
@@ -526,8 +527,8 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
     const confirmed=await env.DB.prepare("SELECT COALESCE(SUM(quantity),0) n FROM shop_bookings WHERE app=?1 AND slots=?2 AND slot=?3 AND state='confirmed'").bind(booking.app,booking.slots,booking.slot).first();
     const update=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-slot-link:${link.id}`).first();
     const observed=update?JSON.parse(update.value):null;
-    const status=observed && observed.capacity===link.capacity ? observed : link;
-    if(!status.active || status.count>=link.capacity || confirmed.n>=link.capacity)return {error:fail(409,'capacity','That slot is full. Choose another slot.')};
+    const status=observed && observed.capacity===(link.limit??link.capacity) ? observed : link;
+    if(!status.active || status.count>=(link.limit??link.capacity) || confirmed.n>=link.capacity)return {error:fail(409,'capacity','That slot is full. Choose another slot.')};
   }
   if(keyless && item.price==='choose' && lines[0].quantity!==1)return {error:fail(400,'quantity','A tip is one chosen amount; choose it on Stripe.')};
   if(menu && menu.items.some(e=>{const i=shop.items.find(i=>i.id===e.item);return !i || i.game && i.game!==game;}))return {error:fail(409,'menu','This menu includes items from another app; sync separate menus for each app.')};
@@ -969,16 +970,15 @@ async function bindLinkSession(env, session, mode) {
   let order = await orderBySession(env, session.id);
   if (!order) {
     const id = `ord_${(await sha256Hex(session.id)).slice(0, 20)}`;
+    const booking=link.slot ? await env.DB.prepare('SELECT * FROM shop_bookings WHERE order_id=?1').bind(source.id).first() : null;
     await env.DB.batch([
       env.DB.prepare("INSERT INTO shop_orders (id, player, checkout_player, item, game, amount, currency, till, mode, status, parent, created_at, updated_at, session) SELECT ?2, player, checkout_player, item, game, ?4, currency, till, mode, 'started', parent, ?5, ?5, ?3 FROM shop_orders WHERE id = ?1 ON CONFLICT DO NOTHING").bind(source.id, id, session.id, amount, Date.now()),
-      env.DB.prepare("INSERT OR IGNORE INTO meta(key,value) SELECT ?1,value FROM meta WHERE key=?2").bind(`shop-reference:${id}`, `shop-reference:${source.id}`),
+      env.DB.prepare("INSERT OR IGNORE INTO meta(key,value) SELECT ?1,CASE WHEN value=?3 THEN ?4 ELSE value END FROM meta WHERE key=?2").bind(`shop-reference:${id}`, `shop-reference:${source.id}`,source.id,id),
       env.DB.prepare('INSERT INTO shop_order_lines (id, order_id, position, item, quantity, unit_amount, amount, snapshot) VALUES (?1, ?2, 0, ?3, ?4, ?5, ?6, ?7) ON CONFLICT DO NOTHING').bind(`${id}_0`, id, item.id, quantity, amount / quantity, amount, lines[0].snapshot),
+      ...(booking ? [bookingStatement(env,{...booking,slot:link.slot,slots:link.slots,id,order:id,pending:true})] : []),
     ]);
     order = await orderBySession(env, session.id);
-    if(link.slot) {
-      const booking=await env.DB.prepare('SELECT * FROM shop_bookings WHERE order_id=?1').bind(source.id).first();
-      if(booking)await bookingStatement(env,{...booking,id,order:id,pending:true}).run();
-    }
+
   }
   if (!order) return false;
   if (order.paid_at === null) await env.DB.batch([

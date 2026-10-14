@@ -9,6 +9,7 @@ import {startStripeSandbox} from '../lib/dev-stripe-sandbox.mjs';
 import {syncPaymentLinks} from '../lib/shop-links.mjs';
 import {formEncode} from '../worker/stripe.mjs';
 import {shopRoutes,shopOf} from '../worker/shop.mjs';
+import {moveBooking} from '../worker/booking-store.mjs';
 import {grantStatements} from '../worker/shop-store.mjs';
 import {withToolIdentity} from '../worker/tool-identity.mjs';
 import {bindSubscription,subscriptionPortal} from '../worker/shop-subscriptions.mjs';
@@ -29,7 +30,10 @@ test('real keyless menus, capacity and monthly giving',async t=>{
  env.STRIPE_WEBHOOK_SECRET=stripe.bindings.STRIPE_WEBHOOK_SECRET;
  const api=(method,path,params={},idempotency)=>stripe.call(method,path,formEncode(params),idempotency);
  const stamp=Date.now();let config,endpoint;
- const result=await syncPaymentLinks({api,shop:shopOf(cat),slug:'keyless-'+stamp,site:'https://keyless-'+stamp+'.example.com',mode:'test',bookingSlots:[{app:'tune',collection:'bookings',slots:'slots',slot:'morning',item:'tune',capacity:1}],w:async(args,opts)=>{if(args[1]==='list')return{code:0,stdout:'[]'};if(args[1]==='bulk'){const values=JSON.parse(opts.input);env.STRIPE_SHOP_LINKS=values.STRIPE_SHOP_LINKS;config=JSON.parse(values.STRIPE_SHOP_LINKS);}return{code:0};},saveReceipt:r=>{endpoint=r.endpoint??endpoint;}});
+ const sync=async bookingSlots=>syncPaymentLinks({api,shop:shopOf(cat),slug:'keyless-'+stamp,site:'https://keyless-'+stamp+'.example.com',mode:'test',bookingSlots,w:async(args,opts)=>{if(args[1]==='list')return{code:0,stdout:'[]'};if(args[1]==='bulk'){const values=JSON.parse(opts.input);env.STRIPE_SHOP_LINKS=values.STRIPE_SHOP_LINKS;config=JSON.parse(values.STRIPE_SHOP_LINKS);}return{code:0};},saveReceipt:r=>{endpoint=r.endpoint??endpoint;}});
+ const manifest=['morning','afternoon'].map(slot=>({app:'tune',collection:'bookings',slots:'slots',slot,item:'tune',capacity:1}));
+ sql.prepare('INSERT INTO app_records VALUES(?,?,?,?,1,1)').run('tune','slots','afternoon',JSON.stringify({capacity:1}));
+ const result=await sync(manifest);
  assert.equal(result.ok,true);assert.equal(env.STRIPE_KEY,undefined);
  t.after(async()=>{for(const l of [...config.items,...config.menus,...config.slots])await api('POST','/v1/payment_links/'+l.id,{active:false});if(endpoint)await api('POST','/v1/webhook_endpoints/'+endpoint,{disabled:true});});
  const browser=await puppeteer.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});t.after(()=>browser.close());
@@ -44,6 +48,18 @@ test('real keyless menus, capacity and monthly giving',async t=>{
  await complete(sa);await wait(()=>sql.prepare('SELECT state FROM shop_bookings WHERE id=?').get(a.order).state==='confirmed');
  let full;await wait(async()=>{full=await api('GET','/v1/payment_links/'+config.slots[0].id);return !full.active;});assert.equal(full.active,false);assert.equal(full.restrictions.completed_sessions.count,1);assert.equal((await buy('bob',request)).status,409);
  let refused=false;try{await complete(sb);}catch{refused=true;}assert.equal(refused,true,'already-open second session must not oversell');console.log('PASS two pending buyers; first paid seat confirms, full link rejects second payment');
+ const move=()=>moveBooking(env,{app:'tune',collection:'bookings',id:a.order,slot:'afternoon',version:2});
+ await assert.rejects(move(),/pause/);
+ const openTarget=await buy('bob',{...request,booking:{collection:'bookings',slot:'afternoon'}});const targetSession=await open(openTarget);
+ await sync(manifest.map(s=>({...s,active:false})));
+ assert.equal((await api('GET','/v1/checkout/sessions/'+targetSession.id)).status,'expired');
+ assert.equal(await move(),true);
+ await sync(manifest.map(s=>({...s,confirmed:s.slot==='afternoon'?1:0})));
+ const sourceLink=config.slots.find(s=>s.slot==='morning'),targetLink=config.slots.find(s=>s.slot==='afternoon');
+ assert.equal(sourceLink.limit,2);assert.equal(sourceLink.active,true);assert.equal(targetLink.active,false);
+ assert.equal((await buy('bob',{...request,booking:{collection:'bookings',slot:'afternoon'}})).status,409);
+ console.log('PASS AI pauses and expires open target, staff moves versioned booking, sync restores exact remaining seats');
+
  const monthly=await buy('alice',{item:'monthly',reference:'give-20-monthly'});const sm=await open(monthly);await complete(sm);await wait(()=>!!sql.prepare('SELECT id FROM shop_subscriptions WHERE order_id=?').get(monthly.order));
  await wait(()=>sql.prepare('SELECT ends_at FROM shop_entitlement_lines WHERE order_id=?').get(monthly.order)?.ends_at>Date.now());
  const sub=sql.prepare('SELECT * FROM shop_subscriptions WHERE order_id=?').get(monthly.order);assert.match(await subscriptionPortal(env,'alice',sub.id,origin),/^https:\/\/billing.stripe.com\/p\/login\//);console.log('PASS keyless monthly Payment Link, paid membership period, no-code portal login');
@@ -70,5 +86,5 @@ test('real keyless menus, capacity and monthly giving',async t=>{
  await advance(secondEnd/1000+1);await advance(secondEnd/1000+7200);
  await wait(()=>!!sql.prepare("SELECT id FROM shop_subscription_events WHERE subscription=? AND type='subscription.failed'").get(clockSub.id));assert.equal(period(),secondEnd);console.log('PASS keyless failed renewal does not extend membership');
  await api('DELETE','/v1/subscriptions/'+clockSub.id);await wait(()=>sql.prepare('SELECT state FROM shop_subscriptions WHERE id=?').get(clockSub.id).state==='cancelled');
- writeFileSync(new URL('../../../proof/earning/keyless/sandbox.json',import.meta.url),JSON.stringify({profile:'Homie sandbox',workerApiKey:false,cart:{session:cartSession.id,event},booking:{first:sa.id,second:sb.id,secondRefused:refused,link:full.id,active:full.active,restrictions:full.restrictions},monthly:{session:sm.id,subscription:sub.id,portal:config.portal,cancelled:true},clock:{id:clock.id,subscription:clockSub.id,renewed:true,failed:true,cancelled:true}},null,2));
+ writeFileSync(new URL('../../../proof/earning/keyless/sandbox.json',import.meta.url),JSON.stringify({profile:'Homie sandbox',workerApiKey:false,cart:{session:cartSession.id,event},booking:{first:sa.id,second:sb.id,secondRefused:refused,movePausedAndResynced:true,link:full.id,active:full.active,restrictions:full.restrictions},monthly:{session:sm.id,subscription:sub.id,portal:config.portal,cancelled:true},clock:{id:clock.id,subscription:clockSub.id,renewed:true,failed:true,cancelled:true}},null,2));
 });
