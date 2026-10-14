@@ -26,8 +26,8 @@ test('event subscriptions avoid unused writes, index type cursors, page work and
  let calls=0;const definitions=[{name:'deliver',event:'wanted',handler:()=>{calls++;}}];await syncFunctions(env,definitions);
  for(let i=0;i<251;i++)await emitEvent(env,'wanted',{}, {id:'event-'+i});
  const plan=DB.sql.prepare('EXPLAIN QUERY PLAN SELECT seq,id,data FROM studio_events WHERE type=? AND seq>? ORDER BY seq LIMIT 100').all('wanted',0);assert.match(JSON.stringify(plan),/studio_events_type_seq/);
- await runFunctions(env,{},'https://test',{definitions});assert.equal(calls,100);
- await runFunctions(env,{},'https://test',{definitions});assert.equal(calls,200);
+ await runFunctions(env,{},'https://test',{definitions});assert.equal(calls,251,'all pages start in the originating lifetime');
+ await runFunctions(env,{},'https://test',{definitions});assert.equal(calls,251);
  await runFunctions(env,{},'https://test',{definitions});assert.equal(calls,251);
  assert.equal(DB.sql.prepare('SELECT count(*) n FROM studio_events').get().n,0);assert.equal(DB.sql.prepare('SELECT count(*) n FROM function_deliveries').get().n,0);
  await emitEvent(env,'wanted',{}, {id:'later'});await runFunctions(env,{},'https://test',{definitions});assert.equal(calls,252,'sequence never resets after pruning');
@@ -84,4 +84,19 @@ test('deployment SQL registers new functions before requests without moving exis
 test('quote cleanup tolerates pre-offer and pre-expiry schemas during rolling upgrades',async t=>{
  const DB=database(t);DB.sql.exec('DROP TABLE customer_offers');await pruneOffers({DB});
  DB.sql.exec('CREATE TABLE customer_offers(id TEXT PRIMARY KEY,kind TEXT,manifest TEXT)');await pruneOffers({DB});
+});
+
+test('event feeds opt in to configuration, retention and retry cron without a handler',async t=>{
+ const {functionDeploymentSQL}=await import('../lib/functions-build.mjs');
+ const {root,s,read}=studio(t),DB=database(t);
+ refreshWorkerConfig(root);assert.equal(read().vars.STUDIO_EVENT_FEEDS,undefined);assert.equal(read().triggers,undefined);
+ s.mcp={events:{bookings:{event:'record.changed',app:'cafe',collection:'bookings',audience:'owner'}}};
+ writeFileSync(join(root,'studio.json'),JSON.stringify(s));refreshWorkerConfig(root);
+ assert.deepEqual(JSON.parse(read().vars.STUDIO_EVENT_FEEDS),s.mcp.events);assert.ok(read().triggers.crons.includes('* * * * *'));
+ DB.sql.exec(functionDeploymentSQL(root));DB.sql.exec("INSERT INTO app_records VALUES('cafe','bookings','one','{}',1,1)");
+ await runFunctions({DB,STUDIO_EVENT_FEEDS:read().vars.STUDIO_EVENT_FEEDS},{games:[]},'https://test',{definitions:[]});
+ assert.equal(DB.sql.prepare('SELECT count(*) n FROM studio_events').get().n,1);
+ delete s.mcp;writeFileSync(join(root,'studio.json'),JSON.stringify(s));refreshWorkerConfig(root);DB.sql.exec(functionDeploymentSQL(root));
+ assert.equal(read().vars.STUDIO_EVENT_FEEDS,undefined);assert.equal(read().triggers,undefined);
+ assert.equal(DB.sql.prepare('SELECT count(*) n FROM function_subscriptions').get().n,0);
 });

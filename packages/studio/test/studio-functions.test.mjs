@@ -51,7 +51,7 @@ test('room events survive D1 failure and interrupted acknowledgement without rep
  const sql={exec(q,...args){if(interruptDelete&&q.startsWith('DELETE FROM function_outbox')){interruptDelete=false;throw new Error('interrupted acknowledgement');}const statement=room.prepare(q);const rows=statement.columns().length?statement.all(...args):(statement.run(...args),[]);return {toArray:()=>rows};}};
  useFunctions(async()=>[{name:'joined',event:'player.joined'}]);t.after(()=>useFunctions(async()=>[]));
  await syncFunctions({DB},[{name:'joined',event:'player.joined'}]);
- const table=Object.create(Table.prototype);table.env={DB:{prepare:q=>{if(offline)throw new Error('D1 unavailable');return DB.prepare(q);}}};table.ctx={storage:{sql,getAlarm:async()=>alarm,setAlarm:async value=>{alarm=value;}},waitUntil:p=>pending.push(p)};
+ const table=Object.create(Table.prototype);table.env={ASSETS:{fetch:async()=>Response.json({games:[]})},DB:{batch:DB.batch,prepare:q=>{if(offline)throw new Error('D1 unavailable');return DB.prepare(q);}}};table.ctx={storage:{sql,getAlarm:async()=>alarm,setAlarm:async value=>{alarm=value;}},waitUntil:p=>pending.push(p)};
  useFunctions(async()=>[]);table.queueFunctionEvent('unused',{});await Promise.all(pending);assert.equal(room.prepare("SELECT count(*) n FROM sqlite_master WHERE name='function_outbox'").get().n,0);useFunctions(async()=>[{name:'joined',event:'player.joined'}]);
  table.queueFunctionEvent('player.joined',{game:'seeded-game',room:'seeded-room',player:'seeded-player',seat:0});await Promise.all(pending);
  const saved=room.prepare('SELECT * FROM function_outbox').get();assert.ok(saved);assert.equal(alarm,clock.now()+100,'keep the room alarm');
@@ -69,4 +69,17 @@ test('refund triggers leave plain-text account signing keys writable, with and w
   assert.equal(DB.sql.prepare("SELECT value FROM meta WHERE key='office_key'").get().value,'updated-signing-key');
   assert.equal(DB.sql.prepare('SELECT count(*) n FROM studio_events').get().n,0);
  }
+});
+
+test('a broken notification transport does not block server functions',async t=>{
+ const DB=database();t.after(()=>DB.sql.close());
+ const env={DB,STUDIO_EVENT_FEEDS:JSON.stringify({orders:{event:'order.paid'}}),LOBBY:{idFromName:v=>v,get:()=>({fetch:async()=>new Response('unavailable',{status:503})})}};
+ const definitions=[{name:'fulfil',event:'order.paid',handler:async(e,c)=>c.database.put(e.id,{done:true})}];
+ await syncFunctions(env,definitions);
+ await DB.prepare('INSERT INTO mcp_kv(key,value) VALUES(?1,?2)').bind('event-sub:test:orders',JSON.stringify({connection:'test',name:'orders',after:0})).run();
+ await emitEvent(env,'order.paid',{order:'one'},{id:'one'});
+ t.mock.method(console,'error',()=>{});
+ await runFunctions(env,{games:[]},'https://studio.test',{definitions});
+ assert.equal(JSON.parse((await DB.prepare("SELECT value FROM tool_data WHERE namespace='function:fulfil' AND key='one'").first()).value).done,true);
+ assert.ok(await DB.prepare("SELECT id FROM studio_events WHERE id='one'").first(),'notification history remains available for retry');
 });

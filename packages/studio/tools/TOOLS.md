@@ -151,3 +151,24 @@ page. App record collections retain their own role capabilities.
 MCP calls have no default rate limit. Set `mcp.callsPerMinute` only if the studio
 chooses a policy. Payment-provider requirements (such as a currency supported by
 the configured wallet or tax calculation in Checkout) still apply.
+
+## Booking notifications and staff access
+
+For “tell my AI when a booking comes in”, follow the worked example in
+`functions/FUNCTIONS.md`: declare `mcp.events.bookings` in `studio.json`, build,
+then connect the owner's AI to `/mcp` with OAuth. Subscribe to
+`studio://events/bookings` with `resources/subscribe` and keep the authenticated
+SSE GET open. `notifications/resources/updated` carries the event in
+`params._meta["studio/event"]`. Resume with the SSE `Last-Event-ID`; do not poll.
+Nothing is enabled by default. Outbound webhooks are not included in 0.50.1.
+
+The owner can call `app_role` with `{app, role, signIn, revoke}`. `signIn` is an
+existing account's verified email or exact account name, not an account ID.
+Ambiguous names require a verified email. Grant with `revoke: false`; revoke with
+`revoke: true`. The person must first have signed in. Current grants govern tools,
+resources and event delivery.
+
+`app_records` also accepts `operation: "delete"`, with the record's current
+`version`, where the selected role declares `delete:<collection>`. Record conflict
+messages are returned intact so the AI can reload and retry; unexpected tool
+errors remain generic to avoid exposing secrets.

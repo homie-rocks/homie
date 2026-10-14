@@ -86,3 +86,26 @@ room.skillOf(body)`.
 
 **Money.** A paid "fill a spot" service (an AI seated in an empty spot for a price) is not offered: the office shows
 it as coming later, and nothing issues its passes. Pricing it is the studio owner's own decision, never yours.
+
+
+## Tell my AI when a booking comes in
+
+Read `node_modules/@homie-rocks/studio/functions/FUNCTIONS.md` for the worked
+booking example and delivery expectations. Opt in with
+`mcp.events.bookings: {event:"record.changed", app:"cafe", collection:"bookings", audience:"owner"}`
+in `studio.json` (use the studio's real app and collection), then build. The owner's
+AI connects to the studio's `/mcp` with explicit OAuth browser approval, calls
+`resources/subscribe` for `studio://events/bookings`, and holds the authenticated
+Streamable HTTP SSE GET. Notifications use `notifications/resources/updated`;
+`params._meta["studio/event"]` carries untrusted event data. Filter booking inserts,
+deduplicate by event ID, and resume with `Last-Event-ID`. No polling or Homie relay.
+Nothing is enabled by default; a declared feed retains its events without a Homie
+count or retention cap. This release does not include outbound webhooks.
+
+Use owner tool `app_role` to grant/revoke staff by verified email or exact sign-in
+name (`signIn`, `app`, `role`, `revoke`); the person signs in first. Staff event
+feeds need the explicit app/role audience and collection read permission. Grants
+are checked again for live delivery and replay. `app_records` supports deletion
+with `operation:"delete"` and the current `version` where the role allows it.
+Reload on the returned conflict message. An office owner session and an
+owner-marked player account both authorize owner MCP access.

@@ -54,7 +54,8 @@ test('outside customer uses /mcp for catalogue, cart, standard payment, priced t
   let charges=0;McpClient.wrap(client,{methods:[stripe.charge({paymentMethod:'pm_card',createToken:async()=>{const token='spt_customer_'+ ++charges;w.st.spts.set(token,{max:10000,currency:'usd'});return token;}})]});
   const paid=await client.callTool({name:'translate',arguments:args});assert.equal(paid.isError,undefined,JSON.stringify(paid));const result=JSON.parse(paid.content[0].text);assert.deepEqual(result.data,{word:'HELLO'});assert.ok(paid.receipt);
   const again=await client.callTool({name:'translate',arguments:args});assert.equal(JSON.parse(again.content[0].text).order,result.order);assert.equal(charges,1);
-  await r.fetcher(origin+'/__functions');
+  // No status/function HTTP request: inspect D1 without waking the Worker.
+  for(let i=0;i<50;i++){if(await r.db.prepare("SELECT value FROM tool_data WHERE namespace='function:paid-order' AND key=?1").bind('purchase_orders:'+result.order+':paid').first())break;await new Promise(resolve=>setTimeout(resolve,100));}
   const fired=await r.db.prepare("SELECT value FROM tool_data WHERE namespace='function:paid-order' AND key=?1").bind('purchase_orders:'+result.order+':paid').first();assert.equal(JSON.parse(fired.value).order,result.order);
   const cart=await client.callTool({name:'studio_cart',arguments:{lines:[{item:'coffee',quantity:2}]}});assert.equal(cart.isError,undefined,JSON.stringify(cart));const offer=JSON.parse(cart.content[0].text).data;
   const bought=await client.callTool({name:'studio_purchase',arguments:{kind:offer.kind,resource:offer.resource,version:offer.version,offerVersion:offer.offerVersion,buyer:'c'.repeat(64),claim:'d'.repeat(64)}});assert.equal(bought.isError,undefined,JSON.stringify(bought));
@@ -129,4 +130,23 @@ test('hosted cart checkout binds the account from the quote and returns grants t
   const session=[...w.st.sessions.values()].at(-1);const hook=await r.event('checkout.session.completed',w.st.complete(session.id));assert.equal(hook.status,200,await hook.clone().text());
   const mine=await r.fetcher(origin+'/api/shop/mine',{headers:{cookie:offer.account.cookies[0].split(';')[0]}});assert.match(await mine.text(),/coffee/);
  }finally{await client.close();await r.mf.dispose();await w.close();}
+});
+
+test('shop reconciliation in a GET background task dispatches without a subsequent request',{timeout:30000},async()=>{
+ const w=await world('quiet-shop-reconcile',{key:LIVE_KEY,shop:{v:1,till:'stripe',currency:'usd',items:[{id:'coffee',name:'Coffee',kind:'supporter',price:400,gives:['coffee']}]}});
+ const r=await runtime(w,{handlers:new Map([[new URL(w.st.base).hostname,async req=>{if(req.method==='GET'&&new URL(req.url).pathname.includes('/checkout/sessions/'))await new Promise(resolve=>setTimeout(resolve,150));return fetch(req.url,{method:req.method,headers:Object.fromEntries(req.headers),...(req.body?{body:await req.arrayBuffer()}: {})});}]])});
+ try{
+  const checkout=await r.fetcher(origin+'/api/shop/buy',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({item:'coffee'})});
+  assert.equal(checkout.status,200,await checkout.clone().text());
+  const data=await checkout.json(),cookie=checkout.headers.get('set-cookie').split(';')[0];
+  const session=[...w.st.sessions.values()].at(-1);assert.ok(session);session.created=Math.floor(Date.now()/1000)-120;w.st.complete(session.id);
+  await r.db.prepare('UPDATE shop_orders SET created_at=?1,updated_at=?1 WHERE id=?2').bind(Date.now()-120000,data.order).run();
+  const page=await r.fetcher(origin+'/api/shop/mine',{headers:{cookie}});assert.equal(page.status,200);await page.text();
+  let delivered;
+  for(let i=0;i<30;i++){
+    delivered=await r.db.prepare("SELECT value FROM tool_data WHERE namespace='function:paid-order' AND key=?1").bind('shop_orders:'+data.order+':paid').first();
+    if(delivered)break;await new Promise(resolve=>setTimeout(resolve,100));
+  }
+  assert.ok(delivered,'background shop commit must wake its function in the same lifetime: '+JSON.stringify({data,orders:(await r.db.prepare('SELECT id,status,session,paid_at FROM shop_orders').all()).results,events:(await r.db.prepare('SELECT id,type FROM studio_events').all()).results,functions:(await r.db.prepare('SELECT * FROM function_deliveries').all()).results}));
+ }finally{await r.mf.dispose();await w.close();}
 });

@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import puppeteer from 'puppeteer-core';
 import {findChrome,chromeArgs} from '../lib/chrome.mjs';
+import {PLAYERS_MIGRATION,players} from '../worker/players.mjs';
 import {MCP_MIGRATION} from '../worker/mcp-store.mjs';
 import {Client,StreamableHTTPClientTransport,auth} from 'mcp-studio-client';
 const root=fileURLToPath(new URL('../',import.meta.url));
@@ -33,13 +34,19 @@ test('official SDK client discovers and calls a public studio in workerd',{timeo
     const bad=await client.callTool({name:'hello',arguments:{name:42}});assert.equal(bad.isError,true);
     await client.close();
     // Existing studio browser sign-in; no OAuth back door or key passed to the MCP client.
-    await db.prepare('CREATE TABLE players(id TEXT,name TEXT,owner INTEGER,guest INTEGER)').run();
+    await db.prepare('CREATE TABLE app_roles(app TEXT,role TEXT,player TEXT)').run();
+    for(const sql of PLAYERS_MIGRATION.replace(/^--.*$/gm,'').split(';').filter(s=>s.trim()))await db.prepare(sql).run();
+    await db.prepare("INSERT INTO players(id,name,guest,owner,created_at,seen_at) VALUES('existing','Existing account',0,0,1,1)").run();
+    const playerToken='b'.repeat(43);
+    await db.prepare("INSERT INTO player_sessions(hash,player,kind,expires_at) VALUES(?1,'existing','session',?2)").bind(createHash('sha256').update(playerToken).digest('hex'),Date.now()+3600000).run();
     await db.prepare('CREATE TABLE stats_keys(hash TEXT PRIMARY KEY,kind TEXT,expires_at INTEGER)').run();
     const token='a'.repeat(64);await db.prepare('INSERT INTO stats_keys VALUES(?1,?2,?3)').bind(createHash('sha256').update(token).digest('hex'),'session',Date.now()+3600000).run();
     const address=(await mf.ready).origin;
+    const signedIn=await players.of(new Request(address,{headers:{cookie:'studio_player='+playerToken}}),{DB:db});
+    assert.equal(signedIn?.id,'existing');assert.equal(signedIn.owner,false);
     const browser=await puppeteer.launch({executablePath:findChrome(),headless:true,args:chromeArgs()});
     try{
-      const page=await browser.newPage();await page.setCookie({name:'studio_owner',value:token,url:address,httpOnly:true});
+      const page=await browser.newPage();await page.setCookie({name:'studio_owner',value:token,url:address,httpOnly:true},{name:'studio_player',value:playerToken,url:address,httpOnly:true});
       let clientInfo,tokens,verifier,discovery,approvalUrl;
       const redirect='http://127.0.0.1:19876/callback';
       const provider={redirectUrl:redirect,clientMetadata:{client_name:'Owner proof',redirect_uris:[redirect],grant_types:['authorization_code','refresh_token'],response_types:['code'],token_endpoint_auth_method:'none'},state:()=> 'proof-state',clientInformation:()=>clientInfo,saveClientInformation:v=>{clientInfo=v;},tokens:()=>tokens,saveTokens:v=>{tokens=v;},codeVerifier:()=>verifier,saveCodeVerifier:v=>{verifier=v;},discoveryState:()=>discovery,saveDiscoveryState:v=>{discovery=v;},redirectToAuthorization:u=>{approvalUrl=u;}};
