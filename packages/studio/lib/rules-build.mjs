@@ -141,7 +141,8 @@ export function smokeRun(H, compiled, id, { timer = () => { const t = process.cp
  * Returns { code, tune, map, settings, seats, stateHash, schema, publicTune, build, files, rounds, units, tickUnits, check }.
  * `longCheck`: eight times the generated play (`homie-studio build --long-check`).
  */
-export async function prepareRules(esbuild, root, g, { log = () => {}, longCheck = false } = {}) {
+export async function prepareRules(esbuild, root, g, { log = () => {}, longCheck = false, quick = false } = {}) {
+  log(`${g.id}: checking rules and types${quick ? ' (quick rebuild; play checks skipped)' : ''}`);
   const guarded = await guardRules(esbuild, root, g.dir);
   if (!guarded.ok) throw new Error(`${g.kind === 'app' ? 'apps' : 'games'}/${g.id}: its rules were refused.\n${guarded.problems.slice(0, 20).map((p) => `  ${problemLine(p)}`).join('\n')}${guarded.problems.length > 20 ? `\n  … and ${guarded.problems.length - 20} more` : ''}`);
   const tune = readJson(join(g.dir, 'tunables.json')) ?? {};
@@ -157,8 +158,14 @@ export async function prepareRules(esbuild, root, g, { log = () => {}, longCheck
   const bundle = await loadRules(esbuild, root, g.id, guarded.code, { bundleOnly: true, physics: Boolean(map.physics) });
   const data = { id: g.id, tune, map, room: g.room, seats, vocab: readJson(join(g.dir, 'agents.json')), sites: guarded.sites };
   // The declarations first, for the type check: a wrong program is named by the compiler before anything is played.
-  await typecheckRules(root, g, await runRulesWorker(bundle, data, { declarationsOnly: true }), tune, { log });
-  const checked = await runRulesWorker(bundle, data, { allowance: longCheck ? LONG_ALLOWANCE : ALLOWANCE });
+  const declarations=await runRulesWorker(bundle,data,{declarationsOnly:true});
+  await typecheckRules(root,g,declarations,tune,{log});
+  log(`${g.id}: ${quick?'skipping generated play':'running generated rules play; use build --quick for an iteration without play checks'}`);
+  const heartbeat=setInterval(()=>log(`${g.id}: rules play still running (${Math.round((Date.now()-started)/1000)}s)`),15000);
+  const started=Date.now();
+  let checked;
+  try { checked=quick?{...declarations,information:[],plays:[],ticks:0,roundsPlayed:0,restores:0,units:0,maxUnits:0,maxTickUnits:0,largestSaveBytes:0}:await runRulesWorker(bundle,data,{allowance:longCheck?LONG_ALLOWANCE:ALLOWANCE}); }
+  finally {clearInterval(heartbeat);}
   for (const p of checked.problems) log(`warning: ${g.kind === 'app' ? 'apps' : 'games'}/${g.id}/${g.kind === 'app' ? 'app' : 'game'}.json: ${p}`);
   for (const line of checked.information) log(`info: ${line}`);
   const { settings, schema, publicTune, rounds, stateHash } = checked;
@@ -168,7 +175,8 @@ export async function prepareRules(esbuild, root, g, { log = () => {}, longCheck
   const { def, R, H, initializePhysics } = await loadRules(esbuild, root, g.id, guarded.code, {physics: Boolean(map.physics)});
   if (initializePhysics) await initializePhysics(readFileSync(new URL(import.meta.resolve('@homie-rocks/physics/vendor/rapier.wasm'))));
   const compiled = R.compileRules(def, { tune, map: R.compileMap(map, map.name), settings, seats });
-  const stats = smokeRun(H, compiled, g.id, { timer: () => 0, vocab: data.vocab });
+  log(`${g.id}: ${quick?'skipping':'running'} rules snapshot smoke check`);
+  const stats = quick ? {snapshotBytes:null,checkpointBytes:null,frameBytes:{},frameRates:{}} : smokeRun(H, compiled, g.id, { timer: () => 0, vocab: data.vocab });
   const snapshotCap = capOf('snap', seats); const checkpointCap = capOf('ckpt', seats);
   const exceeded = RULES_FRAMES.flatMap(t => {
     const bytes = stats.frameBytes[t] ?? 0; const cap = capOf(t, seats);
@@ -187,7 +195,7 @@ export async function prepareRules(esbuild, root, g, { log = () => {}, longCheck
     build: createHash('sha256').update(guarded.code).update(JSON.stringify(built)).digest('hex'),
     snapshotCap, checkpointCap, snapshotBytes: stats.snapshotBytes, checkpointBytes: stats.checkpointBytes,
     units: checked.maxUnits, tickUnits: checked.maxTickUnits,
-    check: { information: checked.information, capacityTrial: trial, plays: checked.plays, ticks: checked.ticks, rounds: checked.roundsPlayed, restores: checked.restores, units: checked.units, largestSaveBytes: checked.largestSaveBytes },
+    check: { skipped: quick, information: checked.information, capacityTrial: trial, plays: checked.plays, ticks: checked.ticks, rounds: checked.roundsPlayed, restores: checked.restores, units: checked.units, largestSaveBytes: checked.largestSaveBytes },
   };
 }
 

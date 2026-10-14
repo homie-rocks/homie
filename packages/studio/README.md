@@ -513,17 +513,7 @@ npx homie-studio shop                         # open (test or live) or what is m
 npx homie-studio shop refund ord_…            # an ASK: the owner taps once (or Refund in /_studio/office/shop)
 ```
 
-Connect with `stripe_login` or `shop connect`: the owner approves Stripe's official browser page, sandbox first.
-Where the CLI supplies a transferable legacy test key, the toolkit creates the webhook and installs both Worker
-secrets privately. It reports the 90-day expiry; `shop connect --renew` obtains approval again. Current CLI OAuth
-and live mode cannot export an independent Worker's key, so the result names that limitation. Only if the owner
-chooses the fallback does `shop connect --manual` open the old local key page (`--manual --live` for live mode).
-Never request a key in chat. Login is not a verified purchase; complete the test purchase, webhook and refund check.
-
-Stripe's optional agent tools (`stripe agent setup`) provide MCP and skills for catalog work (`shop catalog`),
-tax reads and sales questions. They are separate from the Worker's credentials. Never create a webhook through
-MCP because its response contains a secret. From 2026-10-31 Stripe MCP accepts only OAuth or Agent-tagged keys;
-that change does not affect the shop's ordinary restricted API key. [SHOP.md](shop/SHOP.md) describes the flow.
+Connect through Stripe’s official OAuth plugin: `stripe_shop_plan` gives exact catalog, menu, booking and recurring operations for Stripe MCP and verifies its fresh reads. `stripe_webhook` privately installs the signing secret using one separate Stripe CLI browser approval if needed. No owner handles a key. `shop connect` remains the CLI alternative. [SHOP.md](shop/SHOP.md) describes the flow.
 
 In a game: `createShop()` from `@homie-rocks/studio/shop` (`has`, `entitlements`, `on('change')`, `open`, `used`, `add`, `checkout`, `buy`); a
 supporter's badge rides on their seat (`peer.badge`). Stripe Checkout (hosted), optional Stripe Tax, or Stripe Managed

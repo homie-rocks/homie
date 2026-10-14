@@ -1,0 +1,86 @@
+{
+  "account": "acct_1UMLsKDz5BcOk2Yt",
+  "profile": "Homie sandbox",
+  "mode": "test",
+  "catalogVia": "Stripe official MCP stripe_api_read / stripe_api_write",
+  "verified": true,
+  "items": [
+    {
+      "item": "coffee",
+      "id": "plink_1UQYPqDz5BcOk2YtmfpFUUso",
+      "url": "https://buy.stripe.com/test_bJe14nbO21wPeYF2Sd7g41u",
+      "price": "price_1UQYOvDz5BcOk2YtHExTPy69",
+      "revision": "abd97ab02d43a402ff6007fe454f7e35324f43ffb2b1af8f1d46077c04819715"
+    },
+    {
+      "item": "cake",
+      "id": "plink_1UQYQYDz5BcOk2YtO1oIMqyt",
+      "url": "https://buy.stripe.com/test_00w4gz5pE5N5bMt1O97g41v",
+      "price": "price_1UQYQDDz5BcOk2YtP0iWqTPj",
+      "revision": "69a5af2eb6dcde3423cee7080125bbaf6c3fadd61cdc73a8829861c88d818bd8"
+    },
+    {
+      "item": "monthly",
+      "id": "plink_1UQYSFDz5BcOk2YtF0jjR9qf",
+      "url": "https://buy.stripe.com/test_4gM6oHf0e4J1g2J64p7g41F",
+      "price": "price_1UQYRkDz5BcOk2YtnCpsHbmV",
+      "revision": "96aad22895a2855032a49f9dc872b874bb84a4e86ce5a5c262ac0804109008e7"
+    }
+  ],
+  "menus": [
+    {
+      "id": "plink_1UQYSXDz5BcOk2YtPoOHc0RP",
+      "url": "https://buy.stripe.com/test_28E4gz9FUcbt5o59gB7g41G",
+      "revision": "c4597bd11eecdd858ad60dc5b33967d79cfbeba632229e1d4729198e4b317d3b",
+      "items": [
+        {
+          "item": "coffee",
+          "price": "price_1UQYOvDz5BcOk2YtHExTPy69"
+        },
+        {
+          "item": "cake",
+          "price": "price_1UQYQDDz5BcOk2YtP0iWqTPj"
+        }
+      ]
+    }
+  ],
+  "slots": [
+    {
+      "app": "classes",
+      "collection": "bookings",
+      "slots": "sessions",
+      "slot": "monday",
+      "item": "coffee",
+      "capacity": 2,
+      "id": "plink_1UQYSpDz5BcOk2YtpKwc5CCm",
+      "url": "https://buy.stripe.com/test_5kQdR9aJY1wPeYF8cx7g41H",
+      "price": "price_1UQYOvDz5BcOk2YtHExTPy69",
+      "revision": "0eb9c96c9f045898290109a1d27a6ee674eadb6f3842e287738ccd5024674430",
+      "active": true,
+      "count": 0,
+      "limit": 2,
+      "paused": false
+    }
+  ],
+  "portal": "https://billing.stripe.com/p/login/test_7sY00j3hw6R9eYF3Wh7g40a",
+  "webhookInstallation": {
+    "mode": "test",
+    "profile": "Homie sandbox",
+    "endpoint": {
+      "id": "we_1UQYUyDz5BcOk2YtglPMSUgI",
+      "url": "https://official-plugin-proof.example.com/api/shop/hook"
+    },
+    "privateCreation": true,
+    "wranglerStdinBoundaryVerified": true,
+    "actualCloudflareMutation": false,
+    "noDeploy": true
+  },
+  "testEvent": {
+    "id": "evt_1UQYSdDz5BcOk2YtBiE2iPvg",
+    "type": "checkout.session.completed",
+    "signatureVerified": true
+  },
+  "temporaryEndpointDeleted": true,
+  "noCardTyped": true,
+  "noDeploy": true
+}

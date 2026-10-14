@@ -364,7 +364,7 @@ describe('Stripe\'s MCP (the shop)', () => {
     const w = world(on, { feed: null })
     await start($)
     const r = await $.tool.call({ tool: WRITE, method: 'POST', path: '/v1/webhook_endpoints', params: { url: `${LIVE}/api/shop/hook`, enabled_events: ['checkout.session.completed'] } })
-    expect(r.deny).toContain('homie-studio shop connect')
+    expect(r.deny).toContain('homie-studio shop webhook')
     expect(w.log.tools).toEqual([])
     const d = await $.tool.call({ tool: 'mcp__stripe__stripe_api_write', path: '/v2/core/event_destinations', body: { include: ['webhook_endpoint.signing_secret'] } })
     expect(d.deny).toContain('signing secret')

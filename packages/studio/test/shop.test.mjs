@@ -787,7 +787,6 @@ test('a refund Stripe holds for approval (an Agent key) is accepted, not refused
   const j = await tap.json();
   assert.equal(j.held, true);
   assert.match(j.message, /Approvals/);
-  assert.match(j.message, /plain restricted key/);
   assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(a.order).status, 'paid', 'nothing changes until Stripe refunds');
   assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: { cookie: p.cookie } })).json()).owns.length > 0, true);
   // Someone approves it in Stripe; Stripe refunds and says so: the item leaves the account.

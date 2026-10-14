@@ -163,10 +163,10 @@ export const MISSING_WORDS = Object.freeze({
   'shop.json-refused': 'shop.json conflicts with the studio settings or payment requirements (homie-studio shop check says which), so nothing is sold.',
   'till-off': 'shop.json says "till": "off".',
   items: 'shop.json has no items.',
-  'payment-links': 'Run homie-studio shop connect to sync your items and connect Stripe; approve its browser page if asked.',
-  'fuller-checkout': 'Your spending allowance or checkout expiry needs the fuller checkout connection. Ask your AI to connect it.',
-  'stripe-key': 'The Worker has no Stripe key yet (homie-studio shop connect: approve Stripe in your browser; the command names any remaining Worker credential step).',
-  'webhook-secret': 'The Worker has no webhook signing secret yet (run homie-studio shop connect to create and store it automatically).',
+  'payment-links': 'Ask your AI to plan and verify this shop through Stripe’s official plugin, then install its private webhook (homie-studio shop plan, shop verify, shop webhook).',
+  'fuller-checkout': 'These spending allowance, expiry or recurring amount settings are not supported by Payment Links. Ask your AI to review them with you before setup.',
+  'stripe-key': 'This older checkout connection is unavailable. Ask your AI to set up Payment Links through Stripe’s official plugin.',
+  'webhook-secret': 'Ask your AI to run homie-studio shop webhook after verifying the Stripe plugin setup; it installs the signing secret privately.',
   database: 'This Worker has no database.',
   migration: 'The shop\'s tables are not in the studio\'s D1 yet: npm run deploy applies migrations 0008_studio_shop.sql, 0010_shop_reservations.sql and 0012_shop_lines.sql.',
 });
@@ -1196,7 +1196,7 @@ async function disputeClosed(env, payment, status) {
 }
 
 /** What the owner reads when Stripe holds a refund for approval (the shop's key is an Agent key). */
-export const REFUND_HELD = 'Stripe is holding this refund until a person approves it in Stripe (Settings, Approvals, Requests): the shop\'s Stripe key is marked as an Agent key, and Stripe asks a person before an agent\'s refund. Approve it there; Stripe then refunds, and the item leaves the player\'s account when Stripe says so. To refund with one tap again, connect the shop with a plain restricted key (homie-studio shop connect), not one made for "Authorizing agent access".';
+export const REFUND_HELD = 'Stripe is holding this refund for your approval in Stripe (Settings, Approvals, Requests). Approve it there; the item leaves the player’s account after Stripe confirms the refund. You can also manage refunds through your connected Stripe AI; no credential change is needed.';
 
 /** Refund selected lines through Stripe, revoking each only after success. */
 export async function refundOrder(env, o, { reason = 'requested_by_customer', by = 'owner', line: lineId = null } = {}) {
