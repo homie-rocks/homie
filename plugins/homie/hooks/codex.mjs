@@ -206,6 +206,11 @@ async function transcriptIntent(p, state, io) {
   if (!ctx.root) return;
   let intent = null;
   for (const row of rows) {
+    if (row.type === 'event_msg' && row.payload?.type === 'user_message') {
+      const next = deployIntent(row.payload.message);
+      if (next !== null) intent = next;
+      continue;
+    }
     const m = row.type === 'response_item' ? row.payload : null;
     if (m?.type !== 'message' || m.role !== 'user') continue;
     const kinds = m.internal_chat_message_metadata_passthrough?.content_item_kinds;

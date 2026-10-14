@@ -208,3 +208,24 @@ jobs:
       - env:
           RESULT: ${{ needs.studio-scenarios.result }}
         run: test "$RESULT" = success
+
+  apps-first-run:
+    name: Fresh business and cause apps
+    runs-on: ubuntu-latest
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: ./.github/actions/ci-setup
+        with:
+          node: 22
+      - name: Packed installs, strict builds, busy port, text checks and Chrome captures
+        env:
+          HOMIE_FIRST_RUN_SHOTS: proof/apps-first-run
+        run: node packages/studio/test/apps-first-run-proof.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: apps-first-run
+          path: proof/apps-first-run/

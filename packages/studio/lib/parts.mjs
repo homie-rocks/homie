@@ -559,15 +559,15 @@ function liftPlan(root, game, paths) {
   const files = [];
   const walk = (rel) => {
     const abs = join(gdir, rel);
-    if (!existsSync(abs)) throw new Error(`games/${game}/${rel} is not there`);
+    if (!existsSync(abs)) throw new Error(`${relative(root, experienceDir(root, game))}/${rel} is not there`);
     if (statSync(abs).isDirectory()) { for (const e of readdirSync(abs, { withFileTypes: true })) if (!e.name.startsWith('.') && e.name !== 'node_modules') walk(`${rel}/${e.name}`); } else files.push(rel);
   };
   for (const raw of paths) {
     const rel = posix(String(raw)).replace(/^\.\//, '').replace(/^(?:games|apps)\/[^/]+\//, '').replace(/\/+$/, '');
-    if (!rel || rel.split('/').includes('..') || rel.startsWith('/')) throw new Error(`"${raw}" is not a path inside games/${game}`);
+    if (!rel || rel.split('/').includes('..') || rel.startsWith('/')) throw new Error(`"${raw}" is not a path inside ${relative(root, experienceDir(root, game))}`);
     walk(rel);
   }
-  if (!files.length) throw new Error(`name the files of games/${game} that become the part (src/creature.ts, or a folder)`);
+  if (!files.length) throw new Error(`name the files of ${relative(root, experienceDir(root, game))} that become the part (src/creature.ts, or a folder)`);
   // A part is a piece of a game, never the whole game: its entry, its page and its game.json stay the game's.
   let entry = 'src/main.ts';
   try { entry = JSON.parse(readFileSync(experienceFile(root, game), 'utf8')).entry ?? entry; } catch { /* the default entry */ }
@@ -607,7 +607,7 @@ export function newPart(root, id, { kind = 'mechanic', name = null, from = null,
     if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(String(from)) || !existsSync(experienceFile(root, from))) return { ok: false, command: 'parts new', why: `there is no game "${from}" in this studio to lift a part out of` };
     let plan;
     try { plan = liftPlan(root, from, paths); } catch (error) { return { ok: false, command: 'parts new', why: error.message }; }
-    if (plan.outside.length) return { ok: false, command: 'parts new', why: `These files still reach into the rest of games/${from}: ${plan.outside.slice(0, 6).join('; ')}. A part has to stand without the game: lift those files too, or pass what they provide in as an argument first. Nothing was moved.`, outside: plan.outside };
+    if (plan.outside.length) return { ok: false, command: 'parts new', why: `These files still reach into the rest of ${relative(root, experienceDir(root, from))}: ${plan.outside.slice(0, 6).join('; ')}. A part has to stand without the game: lift those files too, or pass what they provide in as an argument first. Nothing was moved.`, outside: plan.outside };
     mkdirSync(dir, { recursive: true });
     lifted = { moved: [], copied: [] };
     for (const f of plan.files) {
@@ -654,7 +654,7 @@ export function newPart(root, id, { kind = 'mechanic', name = null, from = null,
   return {
     ok: true, command: 'parts new', id, dir: `${PARTS_DIR}/${id}`, kind, entry, files: part.files.map((f) => f.path), ...(lifted ? { from, lifted } : {}),
     next: [
-      ...(lifted ? [`games/${from} imports it now (each lifted module's old path re-exports the part's); build the game to see it unchanged.`] : []),
+      ...(lifted ? [`${relative(root, experienceDir(root, from))} imports it now (each lifted module's old path re-exports the part's); build the app or game to see it unchanged.`] : []),
       `Write a one-sentence "summary" in parts/${id}/part.json, and what it needs from a game under "contract".`,
       `Another game of this studio uses it with: import … from '@parts/${id}'`,
       'It is private. Sharing it needs a licence (an SPDX identifier such as CC-BY-4.0) and is live after the studio\'s next deploy.',
@@ -739,7 +739,7 @@ export function syncPartCredits(root, game, origins) {
   if (!existsSync(join(experienceDir(root, game)))) return null;
   const text = `${JSON.stringify({ ...credits, parts: [...keep, ...mine] }, null, 2)}\n`;
   if (!existsSync(file) || readFileSync(file, 'utf8') !== text) writeFileSync(file, text);
-  return `games/${game}/credits.json`;
+  return `${relative(root, experienceDir(root, game))}/credits.json`;
 }
 
 /* ------------------------------------------------------------------ where brought-in parts came from */

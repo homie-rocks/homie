@@ -16,7 +16,7 @@ import { once } from 'node:events';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { runningDev } from './dev.mjs';
-import { listGames, siteUrl } from './studio.mjs';
+import { listExperiences, siteUrl } from './studio.mjs';
 
 const CLI = fileURLToPath(new URL('../bin/homie-studio.mjs', import.meta.url));
 
@@ -64,16 +64,16 @@ export async function checkSite(root, { url = null, live = false, log = () => {}
 export function changedGames(root, { run = spawnSync } = {}) {
   const git = (...args) => { const r = run('git', args, { cwd: root, encoding: 'utf8' }); return r.status === 0 ? String(r.stdout) : null; };
   if (git('rev-parse', '--is-inside-work-tree') === null) return [];
-  const files = new Set((git('status', '--porcelain', '--', 'games') ?? '').split('\n').map((l) => l.slice(3).replace(/^"|"$/g, '').split(' -> ').pop()).filter(Boolean));
+  const files = new Set((git('status', '--porcelain', '--', 'games', 'apps') ?? '').split('\n').map((l) => l.slice(3).replace(/^"|"$/g, '').split(' -> ').pop()).filter(Boolean));
   const head = (git('symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD') ?? '').trim();
   for (const base of [head, 'origin/main', 'main', 'origin/master', 'master'].filter(Boolean)) {
     const fork = (git('merge-base', 'HEAD', base) ?? '').trim();
     if (!fork) continue;
-    for (const f of (git('diff', '--name-only', `${fork}..HEAD`, '--', 'games') ?? '').split('\n')) if (f) files.add(f);
+    for (const f of (git('diff', '--name-only', `${fork}..HEAD`, '--', 'games', 'apps') ?? '').split('\n')) if (f) files.add(f);
     break;
   }
-  const touched = new Set([...files].map((f) => /^games\/([^/]+)\//.exec(f)?.[1]).filter(Boolean));
-  return listGames(root).map((g) => g.id).filter((id) => touched.has(id));
+  const touched = new Set([...files].map((f) => /^(?:games|apps)\/([^/]+)\//.exec(f)?.[1]).filter(Boolean));
+  return listExperiences(root).map((g) => g.id).filter((id) => touched.has(id));
 }
 
 /** The games a check covers: the one named, else what changed, else all of them. */
@@ -81,5 +81,5 @@ export function gamesToCheck(root, named, options) {
   if (named) return { games: [named], why: 'named' };
   const changed = changedGames(root, options);
   if (changed.length) return { games: changed, why: 'changed in this checkout' };
-  return { games: listGames(root).map((g) => g.id), why: 'nothing changed against the default branch: every game' };
+  return { games: listExperiences(root).map((g) => g.id), why: 'nothing changed against the default branch: every game' };
 }

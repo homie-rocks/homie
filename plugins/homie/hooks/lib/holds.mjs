@@ -328,7 +328,9 @@ export async function deployFacts(io, root, known = {}) {
   const uncommitted = String((await git(['status', '--porcelain'])) ?? '').split('\n').filter((l) => l.trim() && !/\.studio\//.test(l)).length;
   const liveIds = new Set(known.liveIds ?? []);
   const newGames = live && liveIds.size ? (known.games ?? []).filter((g) => !g.planned && !liveIds.has(g.id)).map((g) => g.id) : [];
-  const recent = [known.feed, known.last].filter(Boolean).map((d) => summarize(d)).find((b) => b.counts.total);
+  const receipt = await readJson(io, `${root}/.studio/checks/latest.json`);
+  const recorded = receipt?.command === 'check' && typeof receipt.ok === 'boolean' && receipt.at ? { title: `${receipt.kind === 'app' ? 'App' : 'Game'} ${receipt.game}`, endedAt: receipt.at, counts: { pass: receipt.ok ? 1 : 0, fail: receipt.ok ? 0 : 1, total: 1 } } : null;
+  const recent = recorded ?? [known.feed, known.last].filter(Boolean).map((d) => summarize(d)).find((b) => b.counts.total);
   const checks = recent ? `${recent.title}: ${recent.counts.pass}/${recent.counts.total} passed${recent.counts.fail ? `, ${recent.counts.fail} failing` : ''} (${ago(recent.endedAt ?? recent.updatedAt, Date.now())})` : 'no two-browser check on record here';
   const checksShort = recent ? `${recent.counts.pass}/${recent.counts.total} passed · ${ago(recent.endedAt ?? recent.updatedAt, Date.now())}` : 'none on record';
   const stat = /(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?/.exec(diffstat ?? '');

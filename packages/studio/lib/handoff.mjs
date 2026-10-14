@@ -37,13 +37,18 @@ const line = (v, max) => String(v ?? '').replace(/[\x00-\x1f\x7f]+/g, ' ').repla
 const lines = (v, max) => String(v ?? '').split(/\r?\n/).map((l) => line(l, max)).filter(Boolean).join('\n').slice(0, max);
 
 /** The steps for a kind of build, in this toolkit's commands (the brief says what; these say how). */
-export function stepsFor(h, { games = [], client = 'chat' } = {}) {
+export function stepsFor(h, { games = [], client = 'chat', studioKind = 'game' } = {}) {
   const id = ID.test(String(h.id ?? '')) ? h.id : null;
   const has = id && games.includes(id);
   const q = (s) => JSON.stringify(String(s));
-  const work = {
+  const app = h.what === 'app' || ['business', 'cause', 'app'].includes(studioKind);
+  const work = app && ['setup', 'make'].includes(h.kind) ? [
+    'Follow the new-studio checklist and app skill from the request through building and checks without waiting unless the person asks.',
+    has ? `apps/${id} is here already: change it as the brief says.` : `npx --no-install homie-studio app new ${id ?? '<id>'} --from ${ID.test(String(h.from ?? '')) ? h.from : 'welcome'}`,
+    'Use apps/<id>/app.json for the organisation’s words, roles and records; site/pages/ for public pages; shop init --giving --currency <currency> for gifts.',
+  ] : {
     setup: [
-      `This studio was just set up from ${client === 'grok' ? 'Grok' : client === 'codex' ? 'Codex' : client === 'claude' ? 'the Claude app' : 'this chat'}. Go through the new-studio checklist with the person, one step at a time and never ahead (the plugin's studio-setup skill): it has no game yet, and its home page says "First game coming soon".`,
+      `This studio was just set up from ${client === 'grok' ? 'Grok' : client === 'codex' ? 'Codex' : client === 'claude' ? 'the Claude app' : 'this chat'}. Proceed through the new-studio checklist, building and checks from the request without waiting unless the person asks (the plugin's studio-setup skill): for a business or cause, start with the app skill and app new; choose the starter that fits the requested work.`,
       'See a working game: `npx --no-install homie-studio demo` names a live one on Homie Arcade; copy a starter in only if they ask.',
       'One small change from one sentence of theirs (the studio\'s colours in site/theme.json, a tagline in studio.json, or a first post in posts/), then plan their game into its Game Codex (`npx --no-install homie-studio codex new <id> --name "<Name>"`) before any game is made.',
     ],
@@ -58,7 +63,7 @@ export function stepsFor(h, { games = [], client = 'chat' } = {}) {
   }[h.kind] ?? ['Do what the brief asks.'];
   return [
     ...work,
-    'npm run build; npm run dev in the background; npx --no-install homie-studio check <id> --url http://127.0.0.1:8787 (on Linux without Chrome, first: npx --no-install homie-studio chrome install).',
+    'npm run build; npm run dev in the background; npx --no-install homie-studio check <id> --url <the printed dev address> (on Linux without Chrome, first: npx --no-install homie-studio chrome install).',
     'npx --no-install homie-studio progress change "<what it does, one line>"; commit on a new branch, push, gh pr create; then npx --no-install homie-studio progress pr --url <the pull request>.',
     'Never merge the pull request: the person publishes it from the chat\'s card, in GitHub.',
   ];
@@ -71,8 +76,8 @@ export async function handoff(root, build, { homie, client, fetchFn = globalThis
   if (SETUP.test(String(build ?? ''))) {
     const r = await checkIn(root, build, { homie, client: who.id === 'chat' ? null : who.id });
     if (!r.ok) return { ok: false, command: 'handoff', setup: build, why: r.why, ...(r.needs ? { needs: r.needs } : {}) };
-    const h = { kind: 'setup', what: 'game', title: 'first steps', studio: r.name ?? studio.name, brief: '', setup: build };
-    return { ok: true, command: 'handoff', build: null, ...h, client: who.id, setup: { ok: true, message: r.message, renamed: r.renamed ?? [] }, attached: null, attachWhy: 'no build was opened in the chat yet (the setup card\'s Start building opens one)', steps: stepsFor(h, { client: who.id }) };
+    const h = { kind: 'setup', what: ['business', 'cause', 'app'].includes(studio.kind) ? 'app' : 'game', title: 'first steps', studio: r.name ?? studio.name, brief: '', setup: build };
+    return { ok: true, command: 'handoff', build: null, ...h, client: who.id, setup: { ok: true, message: r.message, renamed: r.renamed ?? [] }, attached: null, attachWhy: 'no build was opened in the chat yet (the setup card\'s Start building opens one)', steps: stepsFor(h, { client: who.id, studioKind: studio.kind }) };
   }
   if (!BUILD.test(String(build ?? ''))) return { ok: false, command: 'handoff', why: `the id from the one line the chat gave: hb_ (a build) or hs_ (a setup) and 32 hex digits` };
   const directory = String(homie || studio.homie?.directory || 'https://homie.rocks').replace(/\/+$/, '');
@@ -88,7 +93,7 @@ export async function handoff(root, build, { homie, client, fetchFn = globalThis
   if (want && here && here !== want) return { ok: false, command: 'handoff', build, why: `this build is for ${body.repo}, but this session is in ${here}: open it in ${body.repo} (the card's Build it does), and change nothing here` };
   const h = {
     kind: ['make', 'port', 'change', 'setup'].includes(body.kind) ? body.kind : 'change',
-    what: ['game', 'song', 'video'].includes(body.what) ? body.what : 'game',
+    what: ['app', 'game', 'song', 'video'].includes(body.what) ? body.what : 'game',
     title: line(body.title, 120), studio: line(body.studio, 60) || studio.name, brief: lines(body.brief, 1200),
     id: ID.test(String(body.id ?? '')) ? body.id : null, name: line(body.name, 60) || null, from: ID.test(String(body.from ?? '')) ? body.from : null,
     folder: line(body.folder, 200) || null,
@@ -106,7 +111,7 @@ export async function handoff(root, build, { homie, client, fetchFn = globalThis
     ok: true, command: 'handoff', build, ...h, setup,
     attached: taken.ok ? { feed: taken.build, shared: taken.shared?.build ?? build } : null,
     attachWhy: taken.ok ? null : taken.why,
-    steps: stepsFor(h, { games, client: who.id }),
+    steps: stepsFor(h, { games, client: who.id, studioKind: studio.kind }),
   };
 }
 

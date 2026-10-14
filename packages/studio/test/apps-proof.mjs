@@ -34,6 +34,10 @@ export async function appProof({ wrangler, shots = null, log = () => {} }) {
     symlinkSync(wrangler, join(studio, 'node_modules/.bin/wrangler'));
     symlinkSync(dirname(dirname(wrangler)), join(studio, 'node_modules/wrangler'));
     await newApp(studio, 'welcome', { name: 'Welcome House' });
+    const metaPath = join(studio, 'apps/welcome/app.json');
+    const app = JSON.parse(readFileSync(metaPath));
+    app.words.wallTitle = 'Welcome creekkeepers'; app.words.waiting = 'checked in'; app.blurb = 'Our watershed gathering';
+    writeFileSync(metaPath, JSON.stringify(app));
     // Public helper is bundled into a fixture page, tested on an actual insecure LAN origin.
     const publicDir = join(studio, 'site/public'); mkdirSync(publicDir, { recursive: true });
     const script = await bundle({ stdin: { contents: `import * as links from '${join(ROOT, 'packages/studio/links/links.mjs')}'; window.proofLinks = links;`, resolveDir: ROOT }, bundle: true, write: false, format: 'iife' });
@@ -58,6 +62,18 @@ export async function appProof({ wrangler, shots = null, log = () => {} }) {
     const sql = (text) => { const r = spawnSync(process.execPath, [wrangler, 'd1', 'execute', 'DB', '--local', '--command', text], { cwd: studio, encoding: 'utf8', env: { ...process.env, WRANGLER_SEND_METRICS: 'false' } }); assert.equal(r.status, 0, r.stderr); };
     const checked = await check({ url: origin, game: 'welcome', log }); assert.equal(checked.ok, true, checked.why);
     sql('DELETE FROM app_records;');
+    const fallbackBrowser = await puppeteer.launch({ executablePath: findChrome(), headless: true, args: [...chromeArgs(), '--disable-webgl'] });
+    try {
+      const page = await fallbackBrowser.newPage();
+      await page.goto(`${local}/welcome/tv?room=fallback`);
+      await page.waitForFunction(() => window.__shell?.arrival?.phase === 'done', { timeout: 60000 });
+      const frame = page.frames().find(f => /\/__game\//.test(f.url()));
+      await frame.waitForSelector('[data-webgl-fallback]');
+      assert.match(await frame.$eval('[data-webgl-fallback]', el => el.textContent), /3D|graphics|screen/i);
+      assert.equal(await frame.$eval('canvas', el => el.hidden), true);
+      log('WebGL disabled: useful fallback and live queue remain visible');
+    } finally { await fallbackBrowser.close(); }
+
     browser = await puppeteer.launch({ executablePath: findChrome(), headless: true, userDataDir: join(scratch, 'chrome'), args: chromeArgs(), timeout: 150000 });
     const surface = async (name, width, height) => { const context = await browser.createBrowserContext(); const page = await context.newPage(); await page.setViewport({ width, height, isMobile: name.startsWith('phone'), hasTouch: name !== 'wall' }); page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`)); return { name, context, page }; };
     const wall = await surface('wall', 1600, 900), phone = await surface('phone', 390, 844), phone2 = await surface('phone-two', 390, 844), staff = await surface('staff-tablet', 1024, 768);
@@ -80,6 +96,9 @@ export async function appProof({ wrangler, shots = null, log = () => {} }) {
     const room = 'welcome-proof';
     const open = async (s, url) => { await s.page.goto(url, { waitUntil: 'domcontentloaded' }); await s.page.waitForFunction(() => window.__shell?.link?.state === 'online', { timeout: 60000 }); s.frame = s.page.frames().find((f) => /\/__game\//.test(f.url())); assert.ok(s.frame); await s.frame.waitForSelector('[data-count]'); };
     await open(wall, `${origin}/welcome/tv?room=${room}`);
+    assert.equal(await wall.frame.$eval('h1', e => e.textContent), 'Welcome creekkeepers');
+    assert.equal(await wall.frame.$eval('#intro', e => e.textContent), 'Our watershed gathering');
+    assert.equal(await wall.frame.$eval('#waiting-word', e => e.textContent), 'checked in');
     assert.match(await wall.page.$eval('[data-join]', (e) => e.textContent), /Scan to join/);
     const qrLink = await wall.page.$eval('[data-join] span', (e) => 'http://' + e.textContent); assert.equal(new URL(qrLink).hostname, ip); assert.equal(new URL(qrLink).searchParams.get('room'), room);
     await open(phone, qrLink); await open(phone2, qrLink); await open(staff, privateLink + `&room=${room}`);

@@ -310,7 +310,7 @@ const builtIds = (root) => { try { return JSON.parse(readFileSync(join(root, 'si
  * options: port, remoteAi, localAi (false: --no-local-ai), timestamps (every line of Wrangler's gets a time), log.
  */
 export async function dev(root, { lan = false, port: askedPort = 8787, remoteAi = false, localAi = true, timestamps = false, log = () => {}, watchMs = 2000 } = {}) {
-  const port = String(askedPort ?? 8787);
+  let port = String(askedPort ?? 8787);
   const stop = 'npx --no-install homie-studio dev --stop';
 
   // What is really there, before anything is built or started (the header: stale state heals itself).
@@ -327,7 +327,9 @@ export async function dev(root, { lan = false, port: askedPort = 8787, remoteAi 
     const left = await clearLeftover(root, p);
     if (left.stopped.length) log(`Stopped a leftover local runtime of this studio on port ${p} (process ${left.stopped.join(', ')}): its dev server had been stopped another way.`);
     if (p === Number(port) && left.open) {
-      return { ok: false, command: 'dev', needs: 'port', why: `port ${port} is already in use by another program${left.foreign.length ? ` (process ${left.foreign.join(', ')})` : ''}, and it is not this studio's dev server, so nothing was stopped or started. Use another port: npx --no-install homie-studio dev --port ${Number(port) + 1}` };
+      const busy = port;
+      do { port = String(Number(port) + 1); } while (Number(port) < 65535 && await portOpen(Number(port)));
+      log(`Port ${busy} is busy; using http://127.0.0.1:${port}/`);
     }
   }
 

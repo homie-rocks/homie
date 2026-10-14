@@ -531,7 +531,8 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
     ...(!agent && !watching && await availableShellShop(env, cat, game) ? { shop: true } : {}),
   };
   let html = await res.text();
-  const head = `${embedded ? `<script>${EMBED_GAME_JS}</script>` : ''}<script>window.HOMIE_NET=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script>`;
+  const fallback = meta?.kind === 'app' ? `<script>addEventListener('DOMContentLoaded',function(){if(!document.querySelector('canvas')||document.querySelector('[data-webgl-fallback]'))return;try{var c=document.createElement('canvas');if(c.getContext('webgl2'))return;}catch(e){}var p=document.createElement('p');p.dataset.webglFallback='';p.setAttribute('role','status');p.textContent=${JSON.stringify(meta.words?.fallback ?? 'This device cannot display the 3D scene. Try a browser with WebGL enabled; use any available controls below.').replace(/</g, '\u003c')};p.style.cssText='position:fixed;z-index:2147483647;left:16px;right:16px;top:80px;padding:16px;background:#fff;color:#222;font:16px system-ui;border-radius:12px';document.body.append(p);});</script>` : '';
+  const head = fallback + `${embedded ? `<script>${EMBED_GAME_JS}</script>` : ''}<script>window.HOMIE_NET=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script>`;
   html = /<head[^>]*>/i.test(html) ? html.replace(/<head([^>]*)>/i, `<head$1>${head}`) : head + html;
   return new Response(html, {
     headers: {

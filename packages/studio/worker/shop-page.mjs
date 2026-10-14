@@ -61,17 +61,21 @@ export const WAY_LINES = Object.freeze({
 export function shopPage(cat, shop, { origin = '', game = null, item = null, open = false, mode = null } = {}) {
   const studio = cat.studio?.name ?? 'Studio';
   const g = game ? (cat.games ?? []).find((x) => x.id === game) : null;
-  const boot = { game: g ? g.id : null, item: ITEM_ID.test(String(item ?? '')) ? item : null, studio };
+  const preview = !open && /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/.test(origin);
+  const giving = Boolean(shop.giving);
+  const previewItems = preview ? shop.items.map(i => `<article class="item"><h2>${esc(i.name)}</h2><span class="price">${esc(money(i.price === 'choose' ? i.min : i.price, shop.currency))}${i.interval ? ' / month' : ''}</span><p>${esc(i.blurb ?? '')}</p><button disabled>Preview only</button></article>`).join('') : '';
+  const boot = { giving, preview, game: g ? g.id : null, item: ITEM_ID.test(String(item ?? '')) ? item : null, studio };
   const main = `<section class="shop" data-shop>
 <p class="kicker">${esc(studio)}</p>
-<h1>${g ? `${esc(g.name)}: shop` : 'Shop'}</h1>
+<h1>${giving ? 'Give' : g ? `${esc(g.name)}: shop` : 'Shop'}</h1>
 ${mode === 'test' ? '<p class="test">TEST MODE: no real money moves (Stripe test cards only)</p>' : ''}
-<p class="lead">Things you can buy here, in real money, from ${esc(studio)} itself. Paid purchases open Stripe's checkout page. Guest purchases stay in this browser; keep its cookies or sign in to keep access. ${g ? `<a href="/${esc(g.id)}/">Back to ${esc(g.name)}</a>` : ''}</p>
+<p class="lead">${giving ? `Support ${esc(studio)} with a one-time or monthly gift. Gifts go directly to the organisation through its own Stripe account.` : `Things you can buy here, in real money, from ${esc(studio)} itself. Paid purchases open Stripe's checkout page. Guest purchases stay in this browser; keep its cookies or sign in to keep access.`} ${g ? `<a href="/${esc(g.id)}/">Back to ${esc(g.name)}</a>` : ''}</p>
 <noscript><p class="lead">This page needs JavaScript.</p></noscript>
 <div data-shop-age hidden></div>
-<div class="items" data-shop-items><p>${open ? 'Reading the shop…' : 'The shop is not open yet.'}</p></div>
+<div class="items" data-shop-items><p>${open ? 'Reading the shop…' : preview ? 'PREVIEW — checkout is disabled. Connect Stripe to open.' : 'Connect the organisation’s Stripe account to open giving or sales.'}</p>${previewItems}</div>
+${giving && shop.giving.receiptText ? `<p class="note">${esc(shop.giving.receiptText)}</p>` : ''}
 <p class="msg" data-shop-msg role="status" aria-live="polite"></p>
-<p class="note">${esc(studio)} is the seller: it sets these prices, answers for refunds and receives the money through its own Stripe account. Homie takes nothing. ${refundWords(shop)} <a href="/shop/refunds/">refunds</a>. Stripe keeps your card and email and sends your receipt; ${esc(studio)} never sees them.</p>
+<p class="note">${giving ? `${esc(studio)} receives your gift through its own Stripe account. Stripe emails the payment receipt.` : `${esc(studio)} is the seller: it sets these prices, answers for refunds and receives the money through its own Stripe account. Homie takes nothing. ${refundWords(shop)} <a href="/shop/refunds/">refunds</a>. Stripe keeps your card and email and sends your receipt; ${esc(studio)} never sees them.`}</p>
 </section>
 <script type="application/json" id="shop-boot">${JSON.stringify(boot).replace(/</g, '\\u003c')}</script>
 <script src="/_homie/shop.js" defer></script>`;
@@ -81,13 +85,13 @@ ${mode === 'test' ? '<p class="test">TEST MODE: no real money moves (Stripe test
 export function thanksPage(cat, shop, { session = null, game = null } = {}) {
   const studio = cat.studio?.name ?? 'Studio';
   const g = game ? (cat.games ?? []).find((x) => x.id === game) : null;
-  const boot = { thanks: session, game: g ? g.id : null, studio };
+  const boot = { giving: Boolean(shop.giving), thanks: session, game: g ? g.id : null, studio };
   const main = `<section class="shop" data-shop-thanks>
 <p class="kicker">${esc(studio)}</p>
 <h1 data-thanks-title>Thank you</h1>
-<p class="lead" data-thanks-line>Stripe is confirming the payment. This page says when it is yours (a few seconds).</p>
+<p class="lead" data-thanks-line>Stripe is confirming the payment. ${shop.giving ? 'Thank you for supporting our work.' : 'This page says when it is yours (a few seconds).'}</p>
 <p>${g ? `<a class="btn" href="/${esc(g.id)}/play">Back to ${esc(g.name)}</a>` : '<a class="btn" href="/">Back to the studio</a>'} <a href="/account/">Your account</a></p>
-<p class="note">Your receipt comes from Stripe by email. ${refundWords(shop)}</p>
+<p class="note">Your receipt comes from Stripe by email. ${shop.giving ? esc(shop.giving.receiptText ?? '') : refundWords(shop)}</p>
 </section>
 <script type="application/json" id="shop-boot">${JSON.stringify(boot).replace(/</g, '\\u003c')}</script>
 <script src="/_homie/shop.js" defer></script>`;
@@ -97,6 +101,7 @@ export function thanksPage(cat, shop, { session = null, game = null } = {}) {
 /** The refund policy (Stripe asks every seller for one; the kit's is generous by default). */
 export function refundsPage(cat, shop) {
   const studio = cat.studio?.name ?? 'Studio';
+  if (shop.giving) return layout(cat, { title: `Giving · ${studio}`, page: 'shop', main: `<section class="shop"><h1>Giving</h1><p>For questions about your gift, contact ${esc(studio)}.</p><p>${esc(shop.giving.receiptText ?? '')}</p></section>` });
   const main = `<section class="shop">
 <p class="kicker">${esc(studio)}</p>
 <h1>Refunds</h1>
@@ -182,9 +187,10 @@ export const SHOP_JS = String.raw`(function () {
     cartBox.appendChild(checkout);
   }
   function draw(s) {
+    if (boot.preview && !s.open) return;
     list.textContent = '';
     if (!s.ok) { list.appendChild(el('p', null, s.message || 'The shop did not answer.')); return; }
-    if (!s.open) { list.appendChild(el('p', null, s.kids ? 'Nothing is sold here.' : 'The shop is not open yet.')); return; }
+    if (!s.open) { list.appendChild(el('p', null, s.kids ? 'Nothing is sold here.' : 'Connect the organisation’s Stripe account to open giving or sales.')); return; }
     var age = $('[data-shop-age]');
     var needsAge = s.items.some(function (i) { return i.way === 'age-question'; });
     if (age) {
@@ -217,7 +223,7 @@ export const SHOP_JS = String.raw`(function () {
           if (i.max !== null) amount.setAttribute('max', String(i.max / s.currencyScale));
           act.appendChild(amount);
         }
-        var b = el('button', { type: 'button', class: 'buy' }, i.price === 'choose' ? 'Give on Stripe' : 'Buy on Stripe');
+        var b = el('button', { type: 'button', class: 'buy' }, boot.giving || i.kind === 'donation' || i.price === 'choose' ? 'Give on Stripe' : 'Buy on Stripe');
         b.addEventListener('click', function () {
           b.disabled = true; say('Opening Stripe…');
           api('POST', '/api/shop/buy', { item: i.id, game: boot.game || undefined, amount: amount ? units(amount.value, s.currencyScale) : undefined }).then(function (r) {
@@ -230,7 +236,7 @@ export const SHOP_JS = String.raw`(function () {
         var add = el('button', { type: 'button', class: 'plain' }, 'Add to cart');
         add.onclick = function () { cart.push({ item: i.id, name: i.name, quantity: Number(quantity.value), amount: amount ? units(amount.value, s.currencyScale) : undefined }); drawCart(); };
         if (!s.keyless) { act.appendChild(quantity); act.appendChild(add); }
-        else if (i.price !== 0) act.appendChild(el('p', { class: 'note' }, i.price === 'choose' ? 'Choose your amount on Stripe.' : 'Confirm quantity on Stripe. Buy different items separately.'));
+        else if (i.price !== 0) act.appendChild(el('p', { class: 'note' }, i.price === 'choose' ? 'Choose your amount on Stripe.' : boot.giving ? 'Confirm your gift on Stripe.' : 'Confirm quantity on Stripe. Buy different items separately.'));
       } else if (i.way === 'owned') {
         act.appendChild(el('span', { class: 'owned' }, 'Yours ✓'));
       } else if (i.way === 'make-an-account') {
@@ -255,7 +261,7 @@ export const SHOP_JS = String.raw`(function () {
       list.appendChild(card);
     });
     if (s.nextCursor) { var next = el('button', { type: 'button' }, 'Next items'); next.onclick = function () { load(s.nextCursor); }; list.appendChild(next); }
-    if (!s.items.length) list.appendChild(el('p', null, 'Nothing for sale here right now.'));
+    if (!s.items.length) list.appendChild(el('p', null, boot.giving ? 'No gift options are available right now.' : 'Nothing for sale here right now.'));
     if (boot.item) { var at = document.getElementById('item-' + boot.item); if (at && at.scrollIntoView) at.scrollIntoView({ block: 'center' }); }
   }
   function load(cursor) { api('GET', '/api/shop' + q + (q ? '&' : '?') + 'cursor=' + encodeURIComponent(cursor || '')).then(draw).catch(function () { draw({ ok: false }); }); }
@@ -276,9 +282,9 @@ export const SHOP_JS = String.raw`(function () {
     (function poll() {
       tries += 1;
       api('GET', '/api/shop/order?session=' + encodeURIComponent(boot.thanks)).then(function (r) {
-        if (r.status === 'paid') { returnToPage(false); $('[data-thanks-title]').textContent = 'It\'s yours'; $('[data-thanks-line]').textContent = 'Paid. It is on your account now, in every game of ' + boot.studio + ' that uses it.'; return; }
+        if (r.status === 'paid') { returnToPage(false); $('[data-thanks-title]').textContent = boot.giving ? 'Thank you for your gift' : 'It\'s yours'; $('[data-thanks-line]').textContent = boot.giving ? 'Your gift is confirmed. Your receipt comes from Stripe by email.' : 'Paid. It is on your account now, in every game of ' + boot.studio + ' that uses it.'; return; }
         if (tries < 40) setTimeout(poll, 1500);
-        else $('[data-thanks-line]').textContent = 'Stripe has not confirmed it yet. It will be on your account as soon as it does; your receipt comes by email.';
+        else $('[data-thanks-line]').textContent = boot.giving ? 'Stripe has not confirmed your gift yet. Check your email for its receipt.' : 'Stripe has not confirmed it yet. It will be on your account as soon as it does; your receipt comes by email.';
       }).catch(function () { if (tries < 40) setTimeout(poll, 3000); });
     })();
   }
@@ -459,7 +465,7 @@ export const SHOP_SHELL_JS = String.raw`(function () {
         listBox.appendChild(row);
       });
       if (s.nextCursor) { var next = el('button', { type: 'button' }, 'Next items'); next.onclick = function () { loadItems(s.nextCursor); }; listBox.appendChild(next); }
-      if (!s.items.length) listBox.appendChild(el('p', { class: 'sub' }, 'Nothing for sale here right now.'));
+      if (!s.items.length) listBox.appendChild(el('p', { class: 'sub' }, boot.giving ? 'No gift options are available right now.' : 'Nothing for sale here right now.'));
     }).catch(function () { listBox.appendChild(el('p', { class: 'sub' }, 'The shop did not answer.')); });
     }
     loadItems('');

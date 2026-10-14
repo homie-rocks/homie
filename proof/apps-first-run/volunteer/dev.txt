@@ -1,0 +1,92 @@
+
+> dev
+> homie-studio dev --no-local-ai
+
+Port 8787 is busy; using http://127.0.0.1:8788/
+types: apps/live: rules, move and view checked with the toolkit's strict compiler
+info: apps/live/src/rules.ts:5: the generated play covered 18000 ticks (900 seconds of the room's clock), 0 rounds finished, the room rebuilt from its save and compared 813 times, stopped at its allowance of 18000 ticks; it ended holding 10 entities and 6 waiting events in a save of 3319 bytes. `homie-studio build --long-check` plays eight times as much. Play it did not reach is not checked.
+info: rules runtime reference trial: hero-rush-3d, 32 players at 30 Hz for 20 minutes on Node (macOS arm64). Cloudflare capacity and billing are unmeasured.
+  live: rules apps use their build hash as the revision; netplay.version is not read
+built live (bundle, 42 KB + 2 additional chunks, 221 KB)
+live: this app's rules and tunables are sent to players' devices so it can be played offline
+  live: its rules run on the server (checked and guarded, 2 KB, build 3bb74b30346c68effa7abbee2abc7648; 18000 ticks played, the room rebuilt from its save 813 times: the busiest tick used 1772 of 500000 budget units, 20 of them in one handler; the largest save was 10367 bytes)
+  live: smoke-run largest snapshot 166 B / 16384 B browser cap; checkpoint 599 B / 131072 B browser cap (measured, not an upper bound)
+Local site: http://127.0.0.1:8788/  (each game: http://127.0.0.1:8788/<id>/play — open it in two browsers)
+Stop it with: npx --no-install homie-studio dev --stop   (this studio's dev server only)
+
+ ⛅️ wrangler 4.150.0
+────────────────────
+Your Worker has access to the following bindings:
+Binding                                          Resource                  Mode
+env.TABLE (Table)                                Durable Object            local
+env.LOBBY (Lobby)                                Durable Object            local
+env.GATE (Gate)                                  Durable Object            local
+env.CONCENTRATOR (Concentrator)                  Durable Object            local
+env.DB (clover-commons-db)                       D1 Database               local
+env.ASSETS                                       Assets                    local
+env.STUDIO_NAME ("Clover Commons")               Environment Variable      local
+env.HOMIE_EMBED_PREVIEW ("(hidden)")             Environment Variable      local
+
+Attaching additional modules:
+┌──────────────────────────┬──────┬─────────────┐
+│ Name                     │ Type │ Size        │
+├──────────────────────────┼──────┼─────────────┤
+│ chunk-4CEH56U4.js        │ esm  │ 1.89 KiB    │
+├──────────────────────────┼──────┼─────────────┤
+│ chunk-NIR6MJCJ.js        │ esm  │ 9.03 KiB    │
+├──────────────────────────┼──────┼─────────────┤
+│ chunk-OOJM4CTU.js        │ esm  │ 0.62 KiB    │
+├──────────────────────────┼──────┼─────────────┤
+│ chunk-PDE3OPQO.js        │ esm  │ 738.25 KiB  │
+├──────────────────────────┼──────┼─────────────┤
+│ chunk-QB4OI5WZ.js        │ esm  │ 22.22 KiB   │
+├──────────────────────────┼──────┼─────────────┤
+│ chunk-RNVDL43B.js        │ esm  │ 0.25 KiB    │
+├──────────────────────────┼──────┼─────────────┤
+│ chunk-VMSKHMF5.js        │ esm  │ 27.40 KiB   │
+├──────────────────────────┼──────┼─────────────┤
+│ chunk-W3IKBM3C.js        │ esm  │ 2.02 KiB    │
+├──────────────────────────┼──────┼─────────────┤
+│ chunk-WET2TLRI.js        │ esm  │ 6.32 KiB    │
+├──────────────────────────┼──────┼─────────────┤
+│ functions-5K3GHZS5.js    │ esm  │ 0.06 KiB    │
+├──────────────────────────┼──────┼─────────────┤
+│ functions-L24HEQUB.js    │ esm  │ 0.33 KiB    │
+├──────────────────────────┼──────┼─────────────┤
+│ mcp-ERMDZWI5.js          │ esm  │ 424.41 KiB  │
+├──────────────────────────┼──────┼─────────────┤
+│ mcp-room-HM2FTZD6.js     │ esm  │ 3.45 KiB    │
+├──────────────────────────┼──────┼─────────────┤
+│ node.browser-ELPZG267.js │ esm  │ 1.79 KiB    │
+├──────────────────────────┼──────┼─────────────┤
+│ node.browser-MP5UF6RF.js │ esm  │ 0.42 KiB    │
+├──────────────────────────┼──────┼─────────────┤
+│ saves-75QZVG6J.js        │ esm  │ 0.51 KiB    │
+├──────────────────────────┼──────┼─────────────┤
+│ sdk-IUCLV6T7.js          │ esm  │ 212.21 KiB  │
+├──────────────────────────┼──────┼─────────────┤
+│ tool-events-K475YSZM.js  │ esm  │ 0.93 KiB    │
+├──────────────────────────┼──────┼─────────────┤
+│ tool-webhook-SAPZFXRI.js │ esm  │ 1.91 KiB    │
+├──────────────────────────┼──────┼─────────────┤
+│ tools-JEZHRMAI.js        │ esm  │ 0.06 KiB    │
+├──────────────────────────┼──────┼─────────────┤
+│ Total (20 modules)       │      │ 1454.09 KiB │
+└──────────────────────────┴──────┴─────────────┘
+⎔ Starting local server...
+Wrangler detected this dev session is running in an AI agent.
+The Local Explorer API is available at http://127.0.0.1:8788/cdn-cgi/local/explorer/api
+Useful routes:
+  GET http://127.0.0.1:8788/cdn-cgi/local/explorer/api/local/workers - local Workers and bindings
+  POST http://127.0.0.1:8788/cdn-cgi/local/explorer/api/local/scheduled?worker=<name> - invoke a Worker's scheduled handler; cron is required (see the OpenAPI schema for the full request)
+  GET http://127.0.0.1:8788/cdn-cgi/local/explorer/api/storage/kv/namespaces - KV namespaces
+  GET http://127.0.0.1:8788/cdn-cgi/local/explorer/api/d1/database - D1 databases
+  GET http://127.0.0.1:8788/cdn-cgi/local/explorer/api/r2/buckets - R2 buckets
+  GET http://127.0.0.1:8788/cdn-cgi/local/explorer/api/workers/durable_objects/namespaces - Durable Object namespaces
+  GET http://127.0.0.1:8788/cdn-cgi/local/explorer/api/workflows - Workflows
+  POST http://127.0.0.1:8788/cdn-cgi/local/explorer/api/local/observability/query - run a read-only SQL query (SELECT/WITH only) over captured request traces and console logs. Tables: spans, logs (read attributes via json(attributes)). Example:
+    curl -X POST http://127.0.0.1:8788/cdn-cgi/local/explorer/api/local/observability/query -H 'Content-Type: application/json' -d '{"sql":"SELECT service, name, outcome, duration_ms FROM spans WHERE parent_id IS NULL LIMIT 20"}'
+  POST http://127.0.0.1:8788/cdn-cgi/local/explorer/api/local/observability/clear - clear all captured traces and logs
+If the routes above don't cover what you need, fetch the full OpenAPI schema (large - use only as a last resort):
+  GET http://127.0.0.1:8788/cdn-cgi/local/explorer/api - OpenAPI schema
+[wrangler:info] Ready on http://127.0.0.1:8788

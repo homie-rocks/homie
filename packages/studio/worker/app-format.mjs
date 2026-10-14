@@ -21,7 +21,7 @@ export function appProblems(meta) {
     for (const [field, spec] of Object.entries(c.fields)) if (!key.test(field) || !object(spec) || !['string', 'number', 'boolean'].includes(spec.type) || (spec.enum && (!Array.isArray(spec.enum) || !spec.enum.length))) bad.push(`collection ${id}.${field}: invalid field`);
   }
   for (const r of Object.values(roles)) for (const cap of Array.isArray(r?.can) ? r.can : []) if (!Object.hasOwn(meta.records?.collections ?? {}, String(cap).split(':')[1])) bad.push(`unknown collection in ${cap}`);
-  for (const [k, v] of Object.entries(meta.words ?? {})) if (!Object.hasOwn(APP_WORDS, k) || typeof v !== 'string' || !v.trim() || v.length > 60) bad.push(`words.${k}: use a short label`);
+  for (const [k, v] of Object.entries(meta.words ?? {})) if (!/^[a-z][a-zA-Z0-9-]*$/.test(k) || typeof v !== 'string' || v.length > 500) bad.push(`words.${k}: use a short label`);
   return bad;
 }
 export const appWords = (g) => g?.kind === 'app' ? { ...APP_WORDS, ...g.words } : { open: 'Play', join: 'Scan to play', one: 'player', many: 'players' };

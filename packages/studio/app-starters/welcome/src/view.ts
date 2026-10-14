@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import app from '../app.json';
+const words: Record<string, string> = app.words;
+const word = (key: string, values: Record<string, string | number> = {}) => String(words[key] ?? '').replace(/\{(\w+)\}/g, (_, k: string) => String(values[k] ?? ''));
 import { damp1 } from '@homie-rocks/camera/spring.js';
 import { chamferBox } from '@homie-rocks/geom/chamfer.js';
 import { openRoom } from '@homie-rocks/studio/rules/view';
@@ -22,23 +25,28 @@ let loaded = false;
 let light = 0;
 let refreshing = false;
 join.hidden = role !== 'customer'; next.hidden = role !== 'staff';
-if (role === 'wall') { $('h1').innerHTML = 'You’re in<br>good company.'; $('#intro').textContent = 'A warm welcome, one person at a time. Scan to find your place.'; }
-if (role === 'staff') { $('h1').innerHTML = 'Make someone’s<br>day brighter.'; $('#intro').textContent = 'Your welcome desk. Call the next person when you are ready.'; }
+$('h1').textContent = role === 'wall' ? words.wallTitle || app.name : role === 'staff' ? words.staffTitle || app.name : app.name;
+$('#intro').textContent = app.blurb;
+$('.eyebrow').textContent = words.eyebrow;
+$('footer').textContent = words.footer;
+join.textContent = words.joinAction; next.textContent = words.nextAction;
+$('#waiting-word').textContent = words.waiting;
+$('.panel').setAttribute('aria-label', words.panel);
 function paint() {
   const waiting = rows.filter((r) => r.data.status === 'waiting');
   const called = rows.filter((r) => r.data.status === 'called').at(-1);
   const own = rows.find((r) => r.id === mine);
   $('[data-count]').textContent = String(waiting.length);
-  $('#panel-label').textContent = role === 'customer' ? (own ? 'Your ticket' : 'Welcome in') : 'Now welcoming';
-  $('#ticket').textContent = role === 'customer' ? own ? `No. ${own.data.label}` : 'Make yourself at home.' : called ? `No. ${called.data.label}` : 'Ready when you are.';
-  $('#detail').textContent = own?.data.status === 'called' ? 'It’s your turn. Come on over!' : own ? `You have a place. ${Math.max(0, waiting.findIndex((r) => r.id === mine))} ahead of you.` : role === 'customer' ? 'No account needed. Just a place in line.' : waiting.length ? `${waiting.length} ${waiting.length === 1 ? 'person is' : 'people are'} waiting for a welcome.` : 'The next arrival will appear here.';
+  $('#panel-label').textContent = role === 'customer' ? (own ? words.yourTicket : words.welcome) : words.panel;
+  $('#ticket').textContent = role === 'customer' ? own ? word('ticket', { label: own.data.label }) : words.home : called ? word('ticket', { label: called.data.label }) : words.ready;
+  $('#detail').textContent = own?.data.status === 'called' ? words.called : own ? word('ahead', { n: Math.max(0, waiting.findIndex((r) => r.id === mine)) }) : role === 'customer' ? words.guest : waiting.length ? word('waitingDetail', { n: waiting.length, people: waiting.length === 1 ? words.one : words.many }) : words.empty;
   $('.panel').classList.toggle('called', own?.data.status === 'called' || (role !== 'customer' && !!called));
   join.hidden = role !== 'customer' || !!own;
   join.disabled = pending || !loaded; next.disabled = pending || !waiting.length;
 }
 async function refresh() {
   if (refreshing) return; refreshing = true;
-  try { rows = await records.list(); loaded = true; $('#status').textContent = ''; paint(); }
+  try { rows = await records.list(); loaded = true; net.playable(); $('#status').textContent = ''; paint(); }
   catch (e) { $('#status').textContent = (e as Error).message; }
   finally { refreshing = false; }
 }
@@ -55,7 +63,7 @@ join.onclick = () => action(async () => {
   // Build a customer link from a clean address, never from a private staff URL.
   const origin = new URL((window as any).HOMIE_NET.url.replace(/^ws/, 'http')).origin;
   const url = appLink(`/${(window as any).HOMIE_NET.url.split('/')[3]}/open`, { ticket: mine, room: (window as any).HOMIE_NET.room }, origin);
-  $('#ticket-qr').innerHTML = qrSvg(url, { title: 'Keep your ticket' });
+  $('#ticket-qr').innerHTML = qrSvg(url, { title: words.keepTicket });
   parent.postMessage({ type: 'homie-app-ticket', ticket: mine }, '*');
 });
 next.onclick = () => action(async () => {
@@ -65,11 +73,12 @@ next.onclick = () => action(async () => {
 // The room carries scene state and change notices; records always come from the authorized database.
 room.on('refresh', () => { void refresh(); });
 net.on('link', () => { void refresh(); });
-setInterval(() => { $('#connection').textContent = net.link === 'online' ? 'Here together · live' : 'Reconnecting…'; }, 500);
+setInterval(() => { $('#connection').textContent = net.link === 'online' ? words.live : words.reconnecting; }, 500);
 setInterval(() => void refresh(), 2000); // recover a missed notice; no dependency on a trusted browser host
 void refresh(); paint();
 
 // A single sculptural scene. Queue arrivals unfold the lanterns; the camera follows your context.
+function sceneStart() {
 const renderer = new THREE.WebGLRenderer({ canvas: $('canvas'), antialias: true, alpha: false });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); renderer.setClearColor('#122f38');
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -107,3 +116,6 @@ function draw(now: number) {
   renderer.render(scene, camera);
 }
 requestAnimationFrame(draw);
+
+}
+try { sceneStart(); } catch { $('canvas').hidden = true; const fallback = document.createElement('p'); fallback.dataset.webglFallback = ''; fallback.textContent = words.fallback; $('header').append(fallback); net.playable(); }

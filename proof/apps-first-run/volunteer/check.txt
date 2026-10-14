@@ -1,0 +1,8 @@
+PASS: app live: wall and two phones shared an action; reconnect passed.
+  0 → 1
+Author against toolkit 0.49.0: node_modules/@homie-rocks/studio/guides/app/SKILL.md
+Homie Claude Code plugin 0.25.2 is older than toolkit 0.49.0. Its guidance may be stale. Read node_modules/@homie-rocks/studio/guides/app/SKILL.md. claude plugin update homie@homie.
+Homie Codex plugin 0.48.3 is older than toolkit 0.49.0. Its guidance may be stale. Read node_modules/@homie-rocks/studio/guides/app/SKILL.md. Run codex plugin marketplace upgrade homie && codex plugin add homie@homie, then start a new session.
+wall connected to check-mv7hbwsu
+phone connected to check-mv7hbwsu
+phone-two connected to check-mv7hbwsu

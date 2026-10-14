@@ -1,0 +1,7 @@
+studio_scaffold {"name":"Lantern Mug Quiz","folder":"cafe","kind":"business"}
+homie-studio app new live --from quiz --name "Lantern Mug Quiz"
+# @homie-rocks/studio points at npm pack from this checkout
+npm install --no-fund
+npm run build -- --types
+npm run dev -- --no-local-ai
+CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" npx --no-install homie-studio check live --url http://127.0.0.1:8788 --shots /Users/ryan/.homie/worktrees/apps-first-run/proof/apps-first-run/cafe

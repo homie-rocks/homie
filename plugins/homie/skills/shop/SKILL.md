@@ -145,3 +145,5 @@ already opened sessions may still complete. Strict pre-payment enforcement needs
 Stripe always enables Adaptive Pricing on Payment Links; the buyer can use the original currency.
 Keyless has no per-session expiry or provider-read reconciliation. The keyed path retains both,
 carts, cap reservations, local refunds. Managed Payments is supported on Payment Links when Stripe enables it for the account. The studio chooses its needs.
+
+For a cause, use `shop init --giving --currency <organisation currency>`: one-time and monthly suggested gifts, no badge or game access. Read `giving.receiptText` from the organisation; leave it empty until provided. Local /shop/ previews before Stripe. Monthly gifts use the existing keyless Payment Links connection and Stripe handles renewals.

@@ -1,0 +1,162 @@
+{
+  "id": "quiz",
+  "name": "Quiz night",
+  "blurb": "A casual three-question quiz. Play along on your phone.",
+  "entry": "src/view.ts",
+  "roles": {
+    "customer": {
+      "signIn": false,
+      "can": [
+        "read:entries",
+        "create:entries"
+      ]
+    },
+    "wall": {
+      "signIn": false,
+      "can": [
+        "read:entries"
+      ]
+    },
+    "staff": {
+      "signIn": true,
+      "can": [
+        "read:entries",
+        "update:entries",
+        "delete:entries"
+      ]
+    }
+  },
+  "surfaces": {
+    "phone": "customer",
+    "wall": "wall",
+    "kiosk": "customer",
+    "tablet": "staff"
+  },
+  "words": {
+    "open": "Open",
+    "join": "Scan to join",
+    "one": "person",
+    "many": "people",
+    "action": "Submit answer",
+    "total": "Answers",
+    "choice": "Choose an option",
+    "monthly": "Gift frequency",
+    "once": "One time",
+    "month": "Monthly",
+    "give": "Give securely on Stripe",
+    "goal": "Intention goal \u00b7 not payments received",
+    "prompt": "Choose what works for you.",
+    "finished": "All three answers are in. Thank you!",
+    "complete": "Mark complete",
+    "done": "Complete",
+    "pending": "Recorded",
+    "thanks": "Thank you \u2014 the wall is up to date.",
+    "live": "Together \u00b7 live",
+    "reconnecting": "Reconnecting\u2026"
+  },
+  "records": {
+    "persist": true,
+    "collections": {
+      "entries": {
+        "fields": {
+          "choice": {
+            "type": "string",
+            "required": true,
+            "maxLength": 100
+          },
+          "status": {
+            "type": "string",
+            "required": true,
+            "maxLength": 60
+          },
+          "amount": {
+            "type": "number",
+            "required": true
+          },
+          "monthly": {
+            "type": "boolean",
+            "required": true
+          }
+        }
+      }
+    }
+  },
+  "parts": [],
+  "netplay": {
+    "v": 1,
+    "public": true,
+    "version": "1",
+    "params": [
+      "role",
+      "surface",
+      "ticket"
+    ]
+  },
+  "playerCard": false,
+  "chat": false,
+  "agents": {
+    "vote": false
+  },
+  "watch": "overview",
+  "screen": {
+    "join": "bottom-right",
+    "share": "top-right"
+  },
+  "needs": {
+    "three": "0.185.1",
+    "@homie-rocks/camera": "0.2.1",
+    "@homie-rocks/geom": "0.1.1",
+    "@types/three": "0.185.1"
+  },
+  "check": {
+    "action": "[data-action]",
+    "observe": "[data-count]"
+  },
+  "landing": {
+    "pitch": "A casual three-question quiz. Play along on your phone."
+  },
+  "room": {
+    "host": "server"
+  },
+  "players": {
+    "min": 1,
+    "max": 32
+  },
+  "starter": {
+    "kind": "quiz",
+    "choices": [
+      "Venus",
+      "Mars",
+      "Jupiter"
+    ],
+    "color": "#562f49",
+    "currency": "CAD",
+    "goal": 2500,
+    "questions": [
+      {
+        "text": "Which planet is called the red planet?",
+        "choices": [
+          "Venus",
+          "Mars",
+          "Jupiter"
+        ]
+      },
+      {
+        "text": "How many sides does a hexagon have?",
+        "choices": [
+          "5",
+          "6",
+          "8"
+        ]
+      },
+      {
+        "text": "Which is a mammal?",
+        "choices": [
+          "Dolphin",
+          "Trout",
+          "Octopus"
+        ]
+      }
+    ]
+  }
+}

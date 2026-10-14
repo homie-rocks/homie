@@ -968,10 +968,13 @@ test('stale dev state heals itself: a record whose server was stopped another wa
   const other = await freePort();
   const theirs = listen(scratch, other);
   assert.ok(await until(async () => (await fetch(`http://127.0.0.1:${other}/`).then((r) => r.ok).catch(() => false))));
-  const busy = out(run(['dev', '--port', String(other)], dir));
-  assert.equal(busy.ok, false);
-  assert.equal(busy.needs, 'port');
-  assert.match(busy.why, new RegExp(`port ${other} is already in use by another program.*it is not this studio's dev server, so nothing was stopped or started\\. Use another port: .*--port ${other + 1}`));
+  const { io: busy } = startDev(dir, other);
+  assert.ok(await until(() => /Rooms here are local/.test(busy.err) || busy.code !== undefined, 60000), busy.err);
+  assert.equal(busy.code, undefined, busy.err);
+  assert.match(busy.err, new RegExp(`Port ${other} is busy; using http://127.0.0.1:`));
+  assert.notEqual(devState(dir).port, other);
+  run(['dev', '--stop'], dir);
+  assert.ok(await until(() => busy.code !== undefined, 10000));
   assert.equal(theirs.exitCode, null, 'the other program still has its port');
   theirs.kill('SIGKILL');
 });

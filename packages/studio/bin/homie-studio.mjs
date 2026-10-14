@@ -13,7 +13,7 @@
  *                                         this toolkit as a local MCP server (stdio): the Claude desktop app's Homie
  *                                          extension, Claude Code or any MCP client builds in the same chat that shows
  *                                          the cards (lib/mcp.mjs); --studios: the folder the studios live in
- *   homie-studio app new <id> [--name "<App Name>"]
+ *   homie-studio app new <id> [--from welcome|gathering|giving|quiz|jobs] [--name "<App Name>"]
  *   homie-studio app role <id> <role> [--player <account>] [--revoke] [--url <site>]
  *   homie-studio game new <id> [--from gem-rush] [--name "<Game Name>"]
  *   homie-studio games
@@ -178,7 +178,7 @@
  *                                         (what the guides' brain would decide in that moment, with no seat taken;
  *                                          spent from the guides' day; --model compares a model before setting it)
  *   homie-studio shop                     is the studio's shop selling (its own Stripe), and if not, what is missing
- *   homie-studio shop init [--supporter] [--currency usd] [--price 500] [--managed]   shop.json and SELLING.md
+ *   homie-studio shop init [--supporter|--giving] [--currency <code>] [--price 500] [--managed]   shop.json and SELLING.md
  *   homie-studio shop check               shop.json against studio settings and provider requirements
  *   homie-studio shop connect [--live] [--renew] [--manual]   sync Payment Links and webhook through Stripe browser approval; --manual chooses the local page for the studio's
  *                                         restricted Stripe key; with it this makes the webhook (0.24.3), and the key
@@ -326,7 +326,7 @@
 // FIRST, before any other file of the toolkit is evaluated: a Node.js that is too old ends here, with the reason.
 import '../lib/node-version.mjs';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, relative, resolve } from 'node:path';
 import { build } from '../lib/build.mjs';
 import { PREVIEW_PORT, previewServer } from '../lib/preview.mjs';
@@ -347,7 +347,7 @@ import { R2_COST, lineOf, mediaPlan, r2OverOf, recordUpload, resolveMedia, sizeO
 import { newStudio } from '../lib/scaffold.mjs';
 import { lineDiff, upgradeApply, upgradePlan } from '../lib/upgrade.mjs';
 import { whatsNewLines } from '../lib/changelog.mjs';
-import { listGames, newGame, newApp, readStudio, requireStudio, siteUrl, starters, workerDir } from '../lib/studio.mjs';
+import { listExperiences, listGames, newGame, newApp, readStudio, requireStudio, siteUrl, starters, workerDir } from '../lib/studio.mjs';
 import { STUDIO_VERSION } from '../lib/version.mjs';
 import { statsKey, statsLink, statsRevoke, statsShare, statsShow } from '../lib/stats.mjs';
 import { playersOwner, playersShow } from '../lib/players.mjs';
@@ -382,7 +382,7 @@ import { standaloneDeployNotes } from '../lib/standalone.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['public', 'lan', 'off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'managed', 'live', 'manual', 'renew', 'send', 'accept-tos', 'quiet', 'no-local-ai', 'timestamps', 'overwrite', 'own-route', 'before', 'release', 'device'];
+const BOOL_FLAGS = ['public', 'lan', 'off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'giving', 'managed', 'live', 'manual', 'renew', 'send', 'accept-tos', 'quiet', 'no-local-ai', 'timestamps', 'overwrite', 'own-route', 'before', 'release', 'device'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -436,7 +436,7 @@ function print(result) {
         lines.push(`Landing /${l.id}/: hero from ${l.hero === 'footage' ? 'its footage' : l.hero === 'art' ? 'its art (moving)' : 'the studio\'s colours (it has no picture or footage yet)'}${l.credits ? ', credits' : ''}`);
         // Which files, and what shape: the names the landing looks for (lib/site.mjs HERO_NAMES). Any size is shown,
         // cropped to fill; these are the sizes that fill a computer and an upright phone without waste.
-        if (l.hero === 'colours') lines.push(`  give it one: games/${l.id}/hero/wide.jpg (16:9, 1280×720 or larger) and games/${l.id}/hero/tall.jpg (9:16, 720×1280, for an upright phone); footage beside them as hero/wide.mp4 and hero/tall.mp4 (the same shapes, a silent loop of 8 to 15 s, under 3 MB each); or "cover" in its game.json`);
+        if (l.hero === 'colours') lines.push(`  give it one: ${l.kind === 'app' ? 'apps' : 'games'}/${l.id}/hero/wide.jpg (16:9, 1280×720 or larger) and ${l.kind === 'app' ? 'apps' : 'games'}/${l.id}/hero/tall.jpg (9:16, 720×1280, for an upright phone); footage beside them as hero/wide.mp4 and hero/tall.mp4 (the same shapes, a silent loop of 8 to 15 s, under 3 MB each); or "cover" in its ${l.kind === 'app' ? 'app' : 'game'}.json`);
       }
       if (result.posts?.length) lines.push(`Posts: ${result.posts.map((x) => `/posts/${x}/`).join(', ')} (feeds: /posts/feed.xml, /posts/feed.json)`);
       if (result.pages?.length || result.partials?.length) lines.push(`The studio's own: ${[...(result.pages ?? []).map((x) => `page ${x}`), ...(result.partials ?? []).map((x) => `partial ${x}`)].join(', ')}`);
@@ -785,6 +785,7 @@ function print(result) {
         `Written: ${result.file}`);
       break;
     case 'check':
+      if (result.kind === 'app') { lines.push(`PASS: app ${result.game ?? ''}: wall and two phones shared an action; reconnect ${result.reconnect ? 'passed' : 'failed'}.`, `  ${result.before} → ${result.after}`); break; }
       if (result.results) { for (const r of result.results) lines.push(`${r.game}: PASS at ${r.site}: room ${r.room}, round ${r.round?.n} (${r.round?.humans} humans, ${r.round?.bots} bots), connection ${r.uninterrupted === true ? 'uninterrupted' : r.uninterrupted === false ? 'INTERRUPTED' : 'unknown'}`); break; }
       if (result.site) lines.push(`Checked ${result.local ? 'this studio\'s own build' : 'the site'} at ${result.site}.`);
       lines.push(`PASS: two fresh browsers in room ${result.room} finished round ${result.round.n} (${result.round.humans} humans, ${result.round.bots} bots) in ${Math.round(result.totalMs / 1000)} s.`,
@@ -874,7 +875,7 @@ async function main() {
   if (cmd === 'version' || flags.has('version')) return { ok: true, command: 'version', version: STUDIO_VERSION };
   const strange = unknownFlags(positional, flags);
   if (strange) return strange;
-  if (cmd === 'new') return newStudio(positional[1], { name: flags.get('name'), homie: flags.get('homie'), slug: flags.get('slug'), install: !flags.has('no-install'), template: flags.has('template') });
+  if (cmd === 'new') return newStudio(positional[1], { name: flags.get('name'), homie: flags.get('homie'), slug: flags.get('slug'), install: !flags.has('no-install'), template: flags.has('template'), kind: flags.get('kind') ?? 'game' });
   if (cmd === 'starters') return { ok: true, command: 'starters', starters: starters() };
   // The floor's built-in words need no studio: anyone can read what a studio's chat always holds.
   if (cmd === 'chat' && sub === 'words') return chatWords();
@@ -905,7 +906,7 @@ async function main() {
   const root = requireStudio();
   // Keep guidance visible to AI callers using --json as well as human output.
   if (['build', 'check', 'upgrade'].includes(cmd)) {
-    for (const line of (await import('../lib/authoring-guides.mjs')).authoringWords()) process.stderr.write(`${line}\n`);
+    for (const line of (await import('../lib/authoring-guides.mjs')).authoringWords({ kind: ['app', 'business', 'cause'].includes(readStudio(root).kind) || listExperiences(root).some(g => g.kind === 'app') ? 'app' : 'game' })) process.stderr.write(`${line}\n`);
   }
   if (cmd === 'function') return (await import('../lib/functions-cli.mjs')).functionCommand(root, sub, positional, flags, { log });
   if (cmd === 'tool') return (await import('../lib/tools-cli.mjs')).toolCommand(root, sub, positional, flags, { log });
@@ -946,7 +947,7 @@ async function main() {
     if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id ?? '') || !/^[a-z][a-z0-9-]{0,39}$/.test(role ?? '')) throw new Error('app role <id> <role> [--player <account>] [--revoke] [--url <site>]');
     return withKey(root, flags.get('url'), (call) => call(`/${id}/api/app/roles`, { role, ...(flags.get('player') ? { player: flags.get('player') } : {}), revoke: flags.has('revoke') }));
   }
-  if (cmd === 'app' && sub === 'new') return newApp(root, positional[2], { name: flags.get('name') });
+  if (cmd === 'app' && sub === 'new') return newApp(root, positional[2], { name: flags.get('name'), from: flags.get('from') ?? 'welcome' });
   if (cmd === 'game' && sub === 'new') return newGame(root, positional[2], { from: flags.get('from') ?? 'gem-rush', name: flags.get('name') });
   // Remix was retired (a game is never handed over whole): the command is refused in a sentence that says where to
   // go, so an old note, an old card or an agent's memory of the toolkit does not end at "unknown command".
@@ -996,6 +997,9 @@ async function main() {
         const shots = flags.get('shots') ? resolve(flags.get('shots'), ...(games.length > 1 ? [game] : [])) : null;
         const r = await tracked(root, 'checks', (report) => check({ url: site.url, game, shots, log, report }), 'check');
         results.push({ ...r, game, site: site.url, local: site.local });
+        const receiptDir = join(root, '.studio', 'checks');
+        mkdirSync(receiptDir, { recursive: true });
+        writeFileSync(join(receiptDir, 'latest.json'), JSON.stringify({ ...r, game, site: site.url, at: new Date().toISOString() }, null, 2));
         if (!r.ok) break;
       }
       return results.length === 1 ? results[0] : { ok: results.every((r) => r.ok), command: 'check', site: site.url, local: site.local, why: results.find((r) => !r.ok)?.why, results };
@@ -1099,7 +1103,7 @@ async function main() {
   if (cmd === 'shop') {
     const url = flags.get('url');
     if (!sub) return shopStatus(root, { url });
-    if (sub === 'init') return shopInit(root, { supporter: flags.has('supporter'), currency: flags.get('currency') ?? 'usd', price: flags.get('price') ?? 500, managed: flags.has('managed') });
+    if (sub === 'init') return shopInit(root, { supporter: flags.has('supporter'), giving: flags.has('giving'), currency: flags.get('currency') ?? null, price: flags.get('price') ?? 500, managed: flags.has('managed') });
     if (sub === 'check') return shopCheck(root);
     if (sub === 'connect') return shopConnect(root, { managed: flags.has('managed') ? true : null, live: flags.has('live'), manual: flags.has('manual'), fromClipboard: flags.has('from-clipboard'), renew: flags.has('renew'), log: (line) => process.stderr.write(`${line}\n`) });
     if (sub === 'disconnect') return shopDisconnect(root);
@@ -1222,7 +1226,7 @@ async function tracked(root, stage, run, command) {
   const note = stage === 'build' ? `Built ${(result.games ?? []).map((g) => `${g.id} (${Math.round(g.bytes / 1024)} KB)`).join(', ') || 'the site'}`
     : stage === 'deploy' ? `Live: ${result.url ?? 'deployed'}`
       : result.command === 'port check' ? `${result.passed.length} passed${result.skipped.length ? `, ${result.skipped.length} skipped` : ''} in ${Math.round(result.totalMs / 1000)} s`
-        : `Room ${result.room}: round ${result.round?.n} finished with ${result.round?.humans} people in ${Math.round(result.totalMs / 1000)} s`;
+        : result.kind === 'app' ? `App ${result.game ?? ''}: wall and two phones, shared action and reconnect passed` : `Room ${result.room}: round ${result.round?.n} finished with ${result.round?.humans} people in ${Math.round(result.totalMs / 1000)} s`;
   feed.stage(stage, 'done', note);
   if (stage === 'deploy') {
     const doc = feed.doc;

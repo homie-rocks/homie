@@ -4,7 +4,8 @@ import {readFileSync,writeFileSync,mkdirSync,readdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {join,dirname} from 'node:path';
 const root=join(dirname(fileURLToPath(import.meta.url)),'..');
-const source=join(root,'plugins/homie/skills/game'),out=join(root,'packages/studio/guides/game');
+for (const topic of ['game', 'app', 'parts', 'studio-setup', 'shop']) {
+const source=join(root,'plugins/homie/skills',topic),out=join(root,'packages/studio/guides',topic);
 mkdirSync(out,{recursive:true});
 for(const name of readdirSync(source).filter(n=>n.endsWith('.md'))) {
   const text=readFileSync(join(source,name),'utf8'),target=join(out,name);
@@ -13,6 +14,7 @@ for(const name of readdirSync(source).filter(n=>n.endsWith('.md'))) {
   } else writeFileSync(target,text);
 }
 
+}
 const docs=join(root,'packages/studio/docs');mkdirSync(docs,{recursive:true});
 for(const name of ['rooms-milestone-2-notes.md']) {
   const text=readFileSync(join(root,'docs',name),'utf8'),target=join(docs,name);

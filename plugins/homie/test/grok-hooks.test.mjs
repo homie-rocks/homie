@@ -205,3 +205,16 @@ test('Grok\'s documented shapes: a pass, a hold, the person\'s proceed, a refusa
     assert.match(broken('post').hookSpecificOutput.updatedToolOutput, /could not check this output for secrets .* so it was withheld/);
   } finally { s.done(); }
 });
+
+test('C: requested app deploy and quoted documentation through Grok stdin', () => {
+ const s = studio();
+ try {
+  const run = (event, payload) => {
+   const r = spawnSync(process.execPath, [SCRIPT, event], { encoding: 'utf8', input: JSON.stringify({ cwd: s.root, sessionId: 'app-task', ...payload }), env: { ...process.env, HOMIE_HOLDS_DATA: s.data, HOMIE_HOLDS_MARKS: join(s.data, 'marks') } });
+   assert.equal(r.status, 0, r.stderr); return r.stdout.trim() ? JSON.parse(r.stdout) : null;
+  };
+  run('prompt', { prompt: 'The owner asked for this studio to be deployed: run npm run deploy.' });
+  assert.equal(run('pre', { toolName: 'run_terminal_command', toolInput: { command: 'npm run deploy' } }).decision, 'allow');
+  assert.equal(run('pre', { sessionId: 'docs-only', toolName: 'run_terminal_command', toolInput: { command: "printf '%s' 'npm run deploy' > README.md" } }).decision, 'allow');
+ } finally { s.done(); }
+});
