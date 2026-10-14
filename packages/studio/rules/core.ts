@@ -955,7 +955,13 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
         if (!s || !e || s.driver === 'bot' || s.away === op.away) continue;
         s.away = op.away; e.away = op.away;
         // Back at the wheel: the browser starts from where the server has the body.
-        if (!op.away) { e.r = (e.r + 1) & 0xffff; e.allow = 0; }
+        if (!op.away) {
+          const revision = (e.r + 1) & 0xffff;
+          // Returning ownership is not a new physical placement. Keep an
+          // unseen respawn's origin available through the handoff revision.
+          if (e.placement?.r === e.r) e.placement = {r:revision,pos:e.placement.pos};
+          e.r = revision; e.allow = 0;
+        }
         out.push({ t: 'seats' });
         roomEvent('seatAway', Object.freeze({ seat: s.seat, id: e.id, away: op.away }));
       } else if (op.op === 'leave') {

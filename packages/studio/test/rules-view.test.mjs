@@ -2963,3 +2963,18 @@ test('a correction exits an exact platform corner without waiting for the target
  assert.ok(worst<=200,`outgoing corner stopped for ${worst} ms`);
  assert.ok(Math.hypot(previous.x-target.x,previous.y-target.y)<.01,'correction converges');
 });
+
+test('a reconnect revision preserves a respawn origin that was unseen while offline',async()=>{
+ const {L,compiled}=await coinDashKit('server',false,20,'placement-clock');let now=0;
+ const h=L.H.createHost({game:'offline placement',compiled,random:()=>.37,send(){},clock:{now:()=>now,setTimer:()=>0,clearTimer(){}}});
+ try {
+  h.frame({t:'join',peer:{seat:0,id:'one',name:'One'}});now+=50;h.tickNow();
+  h.core.seatAway(0,true);now+=50;h.tickNow();
+  h.frame({t:'ev',from:0,k:'cmd',d:['respawn',{}]});now+=50;h.tickNow();
+  for(let i=0;i<8;i++){now+=50;h.tickNow();}
+  const placed=h.core.snapshot()[1][0];assert.equal(placed[14][0],100);
+  h.core.seatAway(0,false);now+=50;h.tickNow();
+  const returned=h.core.snapshot()[1][0];assert.notEqual(returned[2],placed[2],'ownership return gets its new revision');
+  assert.equal(returned[14]?.[0],100,'the return keeps the exact physical spawn, not the later moving position');
+ } finally {h.stop();}
+});

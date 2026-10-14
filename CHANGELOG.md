@@ -27,6 +27,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 - Square runners can leave an exact terrain corner without a false zero-time collision. Correction routes finish a rounded-off turn before advancing, and shortcuts require a clear sweep from the actual drawing.
 - A 2D reconnect keeps its handoff context until the first authoritative snapshot, even when that snapshot arrives more than three seconds after transport reconnects. A new authoritative round still draws its exact spawn.
 - Server-game outages retain local prediction and server scores instead of starting a visible solo game. Reconnect attempts remain prompt.
+- Returning ownership carries a still-valid physical spawn origin into the new revision, so a respawn missed during an outage is first drawn at its spawn rather than its later moving position.
 - Placement snapshots retain the original server spawn position so delayed or lost snapshots cannot make the first respawn drawing start several tiles into a run.
 - Circle sweeps starting inside an expanded box still test its rounded corner, preventing a correction from entering that corner.
 
