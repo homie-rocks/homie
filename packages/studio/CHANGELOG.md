@@ -17,23 +17,21 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
-## [0.50.3] - 2026-10-13
+## [0.50.4] - 2026-10-13
 
-**Plugin 0.50.3** · Pending release
+**Plugin 0.50.4** · Send studio events by signed webhook.
 
-A studio can send signed events to an AI or service that cannot hold a stream.
-
-<!-- pending-release: renumber before publishing -->
+Your studio can send booking updates and other events to your AI or service, even when it cannot keep a live connection open.
 
 ### Added
 
-- Opt-in outbound webhooks per studio event feed, signed with Standard Webhooks HMAC-SHA256 headers. Existing durable delivery retries failures with backoff and checks the feed's audience before each attempt.
-- `events webhook add`, `rotate`, `remove`, `status` and `test`, plus local MCP provisioning and remote owner status/test tools. Generated keys go directly to Worker secrets and are revealed once for receiver setup; delivery diagnostics never contain keys or receiver bodies.
-- Booking examples and standard-library receiver verification in app, servers and office skills and packaged guides. No messaging service, relay, default webhook or studio quota.
+- Connect each event feed to your own HTTPS receiver. Signed deliveries let the receiver verify that events came from your studio; failed deliveries retry automatically, and audience permissions are checked before each attempt.
+- Add, rotate, remove, inspect and test webhooks with `homie-studio events webhook`. Your local AI can set them up, and your remote owner AI can check their status and send a test. Signing keys are stored in Worker secrets and shown once for receiver setup; delivery diagnostics keep keys and receiver response bodies private.
+- Booking examples and receiver verification instructions in the app, servers and office guides. Webhooks run on your studio without a messaging service or relay.
 
 ### Upgrade notes
 
-- Declare an event feed, provision its receiver with `homie-studio events webhook add <feed> <https-url>`, then build and deploy through the studio's normal authorized workflow. No version files change in this PR; this section is renumbered at release with `node scripts/renumber-release.mjs` after 0.50.2 merges.
+- Webhooks are opt-in. Declare an event feed, connect it with `homie-studio events webhook add <feed> <https-url>`, then build and deploy your studio. Configure your receiver to verify Standard Webhooks HMAC-SHA256 signatures using the key shown during setup.
 
 ## [0.50.3] - 2026-10-13
 
