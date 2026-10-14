@@ -1134,13 +1134,17 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // Two-dimensional presentation follows collision too: interpolation and reconciliation are not
     // permission to cross a floor. Sweep from a valid movement pose, never feed
     // the clipped drawing back into prediction or authority.
-    const constrain = (from: Vec3, to: Vec3): Vec3 => {
-      if (dims !== 2 || !kind || kind.owner || distance(from, to) < 1e-7) return to;
+    const sweepPresentation = (from: Vec3, to: Vec3) => {
+      if (dims !== 2 || !kind || kind.owner || distance(from, to) < 1e-7) return {pos:to,hit:false};
       const body = {pos: from};
-      sweepMap(geometryAt(), body, {x:periodicDelta(from.x,to.x,map.wrap?.x),y:periodicDelta(from.y,to.y,map.wrap?.y),z:periodicDelta(from.z,to.z,map.wrap?.z)}, kind.radius, dims,
+      const hit = sweepMap(geometryAt(), body, {x:periodicDelta(from.x,to.x,map.wrap?.x),y:periodicDelta(from.y,to.y,map.wrap?.y),z:periodicDelta(from.z,to.z,map.wrap?.z)}, kind.radius, dims,
         {shape:kind.shape ?? 'circle',radius:kind.radius,height:kind.height || 2*kind.radius,terrain:kind.terrain});
-      return body.pos;
+      return {pos:body.pos,hit:!!hit};
     };
+    const constrain = (from: Vec3, to: Vec3) => sweepPresentation(from,to).pos;
+    // A near-enough endpoint can lie inside the collision skin. A route must
+    // have no hit at all, or its next edge would start from an invalid body.
+    const clear = (from: Vec3, to: Vec3) => !sweepPresentation(from,to).hit;
     pos = constrain(safeOrigin, pos);
     const predictedPosition = pos;
     const offset = visualOffset(clock(), pos, settled);
@@ -1164,13 +1168,13 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
           // moving goal can discard every search before it reaches an edge.
           if (!route.length) {
             routing ??= correctionPath(from,pos,Math.max(.25,2*(kind?.radius ?? .5)));
-            const found = routing.advance((a,b)=>distance(constrain(a,b),b)<.002);
+            const found = routing.advance(clear);
             if (found) { route=[...found];routing=null; }
           }
           while(route.length && distance(from,route[0])<.01)route.shift();
           // Spend the blend on distance, not one search-grid edge per frame.
           // Only skip waypoints when the body's own collision sweep clears them.
-          for (let i=route.length-1;i>0;i--) if (distance(constrain(from,route[i]),route[i])<.002) { route.splice(0,i);break; }
+          for (let i=route.length-1;i>0;i--) if (clear(from,route[i])) { route.splice(0,i);break; }
           const waypoint = route[0];
           if (waypoint) {
             let length=distance(from,waypoint);

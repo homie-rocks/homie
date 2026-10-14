@@ -57,10 +57,10 @@ export default defineRules({contract:2,space:{dims:2},move,map:'./map',shared:{w
       writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
 export default defineRules({contract:2,space:{dims:${dims}},move,map:'./map',entities:{runner:{player:true,input:{ax:f.i8()},body:{shape:'${dims===2?'circle':'sphere'}',radius:.2,maxSpeed:4},fields:{neighbours:f.u8()},tick(w,s){s.neighbours=w.near(s.pos,3,'runner').length;}}},room:{bots:{keep:0},join(c,p){return {kind:'runner',at:{x:p.seat===0?19:1,y:10,z:${dims===2?0:10}}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax*4,y:0,z:0};c.world.sweep(b,c.math.scale(b.vel,c.dt));}});`);
-    } else if ((runaway === 'solid-ground' || runaway === 'solid-ground-box' || runaway === 'solid-wide-box')) {
-      writeFileSync(join(dir,'map/main.json'),JSON.stringify(runaway === 'solid-wide-box' ? {bounds:{min:[-60,-20],max:[60,20]},boxes:[{min:[-30,0],max:[30,5]},{min:[-60,12],max:[60,15]}]} : {bounds:{min:[-20,-20],max:[20,20]},boxes:[{min:[-8,0],max:[0,5]},{min:[-20,12],max:[20,15]}]}));
+    } else if ((runaway === 'solid-ground' || runaway === 'solid-ground-box' || runaway === 'solid-wide-box' || runaway === 'solid-skin-route')) {
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify(runaway === 'solid-skin-route' ? {bounds:{min:[0,0],max:[64,48]},boxes:[{min:[53,35],max:[58,36]},{min:[55,39],max:[60,40]},{min:[0,43],max:[64,48]},{min:[63,0],max:[64,48]}]} : runaway === 'solid-wide-box' ? {bounds:{min:[-60,-20],max:[60,20]},boxes:[{min:[-30,0],max:[30,5]},{min:[-60,12],max:[60,15]}]} : {bounds:{min:[-20,-20],max:[20,20]},boxes:[{min:[-8,0],max:[0,5]},{min:[-20,12],max:[20,15]}]}));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
-export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{respawn:{}}},entities:{runner:{player:true,input:{ax:f.held(),jump:f.held()},motion:{air:f.bit()},body:{shape:'${runaway !== 'solid-ground' ? 'box' : 'circle'}',radius:.5,maxSpeed:30},commands:{respawn(w,s){w.place(s,{x:-3,y:-.5},{vel:{x:0,y:0}});s.motion.air=false;}}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:-3,y:-.5,z:0}};}}});`);
+export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{respawn:{}}},entities:{runner:{player:true,input:{ax:f.held(),jump:f.held()},motion:{air:f.bit()},body:{shape:'${runaway !== 'solid-ground' ? 'box' : 'circle'}',radius:.5,maxSpeed:30},commands:{respawn(w,s){w.place(s,{x:-3,y:-.5},{vel:{x:0,y:0}});s.motion.air=false;}}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:${runaway === 'solid-skin-route' ? '61.7905,y:42.4999' : '-3,y:-.5'},z:0}};}}});`);
       writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){c.substeps(b,60,s=>{const vy=i.jump&&!b.motion.air?-15:Math.min(30,b.vel.y+40*s.dt);b.vel={x:i.ax*6,y:vy,z:0};c.map.sweep(b,{x:b.vel.x*s.dt,y:0,z:0});const hit=c.map.sweep(b,{x:0,y:vy*s.dt,z:0});b.motion.air=!hit;if(hit)b.vel={x:b.vel.x,y:0,z:0};});}});`);
     } else if (runaway === 'input-steps') {
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-1000,-1000],max:[1000,1000]}}));
@@ -2876,4 +2876,25 @@ test('render lead never advances authoritative movement or the input clock',asyn
  for(let i=0;i<120;i++){await clock.wait(8);for(const {a}of rooms)void a.me;}
  for(const {a}of rooms)a.input({ax:0});await clock.wait(1000);
  assert.deepEqual(rooms[0].r.host.core.snapshot()[1],rooms[1].r.host.core.snapshot()[1]);
+});
+
+// Reduced from Tiny Platformer 300 ms / 5% trace: a nominal grid point at
+// (59.7905, 40.4999) overlaps the platform by 0.0001 m. Near-endpoint
+// tolerance used to accept it, then plan through the platform from inside.
+test('a correction route rejects waypoints inside the collision skin',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-skin-route');
+ const clock=virtualTime(t),r=rig(L,compiled,false,0,0);
+ const a=openRoom({move:{runner(b){b.vel={x:0,y:0,z:0};}},net:{config:cfg('skin correction'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);void a.me;
+ const socket=r.sockets[0],receive=socket.onmessage;const start=performance.now();let target={x:58.5042,y:36.0407};
+ socket.onmessage=event=>{const f=JSON.parse(event.data);if(f.t==='snap'){const own=f.d[1].find(e=>e[9]===a.seat);target={x:58.5042-Math.min(5,(performance.now()-start)*.015),y:36.5};own[3][0]=target.x;own[3][1]=target.y;own[4][0]=own[4][1]=0;}receive.call(socket,{data:JSON.stringify(f)});};
+ a.input({ax:-1});let previous=a.me.pos,stopped=0,worst=0;
+ for(let i=0;i<90;i++){await clock.wait(16);const p=a.me.pos;
+  stopped=Math.hypot(p.x-target.x,p.y-target.y)>1.5 && Math.hypot(p.x-previous.x,p.y-previous.y)<.001?stopped+16:0;worst=Math.max(worst,stopped);
+  assert.ok(Math.hypot(p.x-previous.x,p.y-previous.y)<=1.5,'correction stays continuous');
+  assert.ok(!(p.x>54.501&&p.x<60.499&&p.y>38.501&&p.y<40.499),'outside platform');
+  previous=p;
+ }
+ assert.ok(worst<=200,`route stopped for ${worst} ms`);
+ assert.ok(Math.hypot(previous.x-target.x,previous.y-target.y)<1.5,'correction converges');
 });
