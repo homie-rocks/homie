@@ -38,11 +38,11 @@ export async function pruneEvents(env) {
   await env.DB.batch(statements);
 }
 /** A lease is for retry after a crashed Worker, not a deadline imposed on studio code. */
-export async function runFunctions(env, cat, origin, {definitions, now = Date.now, leaseMs = 60000} = {}) {
+export async function runFunctions(env, cat, origin, {definitions, now = Date.now, leaseMs = 60000, webhookOptions = {}} = {}) {
   definitions = await syncFunctions(env,definitions,now());
   if(!definitions.length)return;
   if(typeof cat==='function')cat=await cat();
-  definitions=definitions.filter(fn=>!fn.webhook).concat(webhookSubscriptions(env,cat));
+  definitions=definitions.filter(fn=>!fn.webhook).concat(webhookSubscriptions(env,cat,webhookOptions));
   // An AI notification must not wait behind a slow function handler.
   const notify=()=>pushEvents(env,cat,origin).catch(error=>console.error('Event notification wake failed',error));
   const notifications=notify();

@@ -53,6 +53,7 @@
     "n8ao": "2.0.1",
     "postprocessing": "6.39.3",
     "simplex-noise": "4.0.3",
+    "standardwebhooks": "1.1.1",
     "three": "0.185.1",
     "typescript": "5.9.3"
   },

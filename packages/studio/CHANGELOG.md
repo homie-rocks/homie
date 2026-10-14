@@ -19,6 +19,24 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [0.50.3] - 2026-10-13
 
+**Plugin 0.50.3** · Pending release
+
+A studio can send signed events to an AI or service that cannot hold a stream.
+
+<!-- pending-release: renumber before publishing -->
+
+### Added
+
+- Opt-in outbound webhooks per studio event feed, signed with Standard Webhooks HMAC-SHA256 headers. Existing durable delivery retries failures with backoff and checks the feed's audience before each attempt.
+- `events webhook add`, `rotate`, `remove`, `status` and `test`, plus local MCP provisioning and remote owner status/test tools. Generated keys go directly to Worker secrets and are revealed once for receiver setup; delivery diagnostics never contain keys or receiver bodies.
+- Booking examples and standard-library receiver verification in app, servers and office skills and packaged guides. No messaging service, relay, default webhook or studio quota.
+
+### Upgrade notes
+
+- Declare an event feed, provision its receiver with `homie-studio events webhook add <feed> <https-url>`, then build and deploy through the studio's normal authorized workflow. No version files change in this PR; this section is renumbered at release with `node scripts/renumber-release.mjs` after 0.50.2 merges.
+
+## [0.50.3] - 2026-10-13
+
 **Plugin 0.50.3** · A counter-dash continues from where the player sees it.
 
 A player's own dash or jump pressed while prediction catches up after a knock or correction starts at once from where they see their character, never from a stale position that jumps them across the screen.

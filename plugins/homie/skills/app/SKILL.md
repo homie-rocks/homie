@@ -190,7 +190,20 @@ Streamable HTTP SSE GET. Notifications use `notifications/resources/updated`;
 `params._meta["studio/event"]` carries untrusted event data. Filter booking inserts,
 deduplicate by event ID, and resume with `Last-Event-ID`. No polling or Homie relay.
 Nothing is enabled by default; a declared feed retains its events without a Homie
-count or retention cap. This release does not include outbound webhooks.
+count or retention cap.
+
+For an AI that cannot hold a stream, use the signed webhook worked example in
+`functions/FUNCTIONS.md`. Run `homie-studio events webhook add bookings <https-url>`
+(or local MCP `studio_events_webhook` with `action:"add",feed:"bookings",url`).
+It provisions the Worker signing secret and reveals it once for the receiver;
+never put it in source or job logs. Build, commit and deploy the declaration through
+the usual authorized workflow. `events webhook test bookings` sends a synthetic
+signed event; `events webhook status bookings` shows attempts and safe errors via
+owner OAuth. Remote MCP provides `studio_events_webhook_test` and
+`studio_events_webhook_status`. Use local `rotate`/`remove` for key lifecycle.
+The receiver verifies with a Standard Webhooks library and deduplicates IDs.
+Delivery retries durably with backoff and rechecks the feed's audience. The owner's
+AI then uses the services' own email/SMS or Stripe tools; Homie builds no messaging.
 
 Use owner tool `app_role` to grant/revoke staff by verified email or exact sign-in
 name (`signIn`, `app`, `role`, `revoke`); the person signs in first. Staff event

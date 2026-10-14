@@ -158,3 +158,16 @@ test('--notes: a release\'s notes are the section with the Desktop extension\'s 
   const mine = run(['--notes', JSON.parse(readFileSync(join(dirname(SCRIPT), '..', 'packages', 'studio', 'package.json'), 'utf8')).version]);
   assert.equal(mine.status, 0, mine.stderr);
 });
+
+
+test('an explicitly pending patch can precede unchanged release versions, but cannot hide a bump or missing current section', () => {
+  const pending=section('0.19.4','0.20.4').replace('### Added','<!-- pending-release: renumber before publishing -->\n\n### Added');
+  const root=checkout('pending',{studio:'0.19.2',plugin:'0.20.2',sections:[pending,section('0.19.2','0.20.2')]});
+  assert.equal(run(['--check','--root',root]).status,0);
+  git(root,'init','-q','-b','main');git(root,'add','-A');git(root,'commit','-q','-m','base');
+  assert.equal(run(['--check','--root',root,'--base','main']).status,0);
+  writeFileSync(join(root,'packages','studio','package.json'),JSON.stringify({version:'0.19.3',files:['CHANGELOG.md']}));
+  assert.equal(run(['--check','--root',root,'--base','main']).status,1);
+  const minor=checkout('pending-minor',{studio:'0.18.2',plugin:'0.20.2',sections:[pending,section('0.18.2','0.20.2')]});
+  assert.equal(run(['--check','--root',minor]).status,1);
+});

@@ -172,3 +172,10 @@ resources and event delivery.
 `version`, where the selected role declares `delete:<collection>`. Record conflict
 messages are returned intact so the AI can reload and retry; unexpected tool
 errors remain generic to avoid exposing secrets.
+
+For clients that cannot keep a stream open, use the signed outbound webhook example
+in `functions/FUNCTIONS.md`. Local MCP `studio_events_webhook` provisions, rotates
+and removes secrets directly; remote owner tools `studio_events_webhook_status`
+and `studio_events_webhook_test` inspect delivery and test it. The receiver verifies
+Standard Webhooks signatures, deduplicates events, then wakes the owner's AI to use
+its own service connectors.

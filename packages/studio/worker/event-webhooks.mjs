@@ -40,9 +40,10 @@ export async function postWebhook(env,name,event,{fetchFn=fetch,now=Date.now,tim
 }
 export function webhookSubscriptions(env,cat,options={}) {
   return Object.entries(eventFeeds(env)).filter(([,feed])=>feed.webhook).map(([name,feed])=>({
-    name:webhookName(name),event:feed.event,webhook:true,
+    name:webhookName(name,feed.webhook),event:feed.event,webhook:true,
     matches:event=>matchesFeed(feed,event),
     async handler(event){
+      if(event.type!=='webhook.test'&&!matchesFeed(feed,event))return;
       if(!await readableWebhook(env,cat,feed))throw new WebhookFailure('Feed audience cannot read this collection');
       await postWebhook(env,name,event,options);
     },
@@ -50,8 +51,10 @@ export function webhookSubscriptions(env,cat,options={}) {
 }
 export async function webhookStatus(env,name,after=0) {
   const feed=eventFeeds(env)[name];if(!feed)throw new Error('Unknown event feed');
-  const rows=(await env.DB.prepare(`SELECT e.seq,d.event,d.state,d.attempts,d.error,d.due,d.completed FROM function_deliveries d JOIN studio_events e ON e.id=d.event WHERE d.function=?1 AND e.seq>?2 ORDER BY e.seq LIMIT 100`).bind(webhookName(name),after).all()).results;
-  return {feed:name,enabled:Boolean(feed.webhook),deliveries:rows,next:rows.length===100?rows.at(-1).seq:null};
+  if(!feed.webhook)return {feed:name,enabled:false,latest:null,deliveries:[],next:null};
+  const rows=(await env.DB.prepare(`SELECT e.seq,d.event,d.state,d.attempts,d.error,d.due,d.completed FROM function_deliveries d JOIN studio_events e ON e.id=d.event WHERE d.function=?1 AND e.seq>?2 ORDER BY e.seq LIMIT 100`).bind(webhookName(name,feed.webhook),after).all()).results;
+  const latest=await env.DB.prepare('SELECT d.event,d.state,d.attempts,d.error,d.due,d.completed FROM function_deliveries d JOIN studio_events e ON e.id=d.event WHERE d.function=?1 ORDER BY e.seq DESC LIMIT 1').bind(webhookName(name,feed.webhook)).first();
+  return {feed:name,enabled:true,latest,deliveries:rows,next:rows.length===100?rows.at(-1).seq:null};
 }
 export async function testWebhook(env,cat,name) {
   const feed=eventFeeds(env)[name];if(!feed?.webhook)throw new Error('Webhook not configured');
@@ -61,8 +64,8 @@ export async function testWebhook(env,cat,name) {
   // Only the selected delivery sees this synthetic event; no feed subscribes to this type.
   await env.DB.batch([
     env.DB.prepare('INSERT INTO studio_events(id,type,data,at) VALUES(?1,?2,?3,?4)').bind(id,'webhook.test',JSON.stringify({feed:name,test:true}),Date.now()),
-    env.DB.prepare('INSERT INTO function_deliveries(event,function) VALUES(?1,?2)').bind(id,webhookName(name)),
+    env.DB.prepare('INSERT INTO function_deliveries(event,function) VALUES(?1,?2)').bind(id,webhookName(name,feed.webhook)),
   ]);
   await runFunctions(env,cat,'https://studio.invalid');
-  return {id,...await env.DB.prepare('SELECT state,attempts,error,due FROM function_deliveries WHERE event=?1 AND function=?2').bind(id,webhookName(name)).first()};
+  return {id,...await env.DB.prepare('SELECT state,attempts,error,due FROM function_deliveries WHERE event=?1 AND function=?2').bind(id,webhookName(name,feed.webhook)).first()};
 }

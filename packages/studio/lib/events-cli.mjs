@@ -16,15 +16,16 @@ export async function eventsWebhook(root,action,name,url,{run,connect=connectToo
   }
   const cf=studio.cloudflare??{};
   if(!cf.worker||!cf.created?.includes('worker:'+cf.worker))throw new Error('Publish this studio once before provisioning its Worker secrets');
-  const binding=webhookSecret(name);
   if(action==='add'&&feed.webhook)throw new Error('Webhook already exists; remove it before changing its URL, or rotate its key');
   if(action!=='add'&&!feed.webhook)throw new Error('Webhook not configured');
-  const hook=action==='add'?{url,secret:binding}:feed.webhook;
+  const id=action==='add'?randomBytes(16).toString('hex'):feed.webhook.id;
+  const binding=webhookSecret(id);
+  const hook=action==='add'?{url,id,secret:binding}:feed.webhook;
   validateWebhook(name,hook);
   const w=run??runner(root,cf.accountId?{CLOUDFLARE_ACCOUNT_ID:cf.accountId}:{});
   const secret=action==='remove'?null:'whsec_'+randomBytes(32).toString('base64');
   // The secret travels on stdin only. Never surface provider output, even on failure.
-  let result;try{result=await w(['secret',action==='remove'?'delete':'put',binding],{input:secret?secret+'\n':'y\n'});}catch{throw new Error('Worker secret update failed; check Cloudflare sign-in and retry');}
+  let result;try{result=await w(['secret',action==='remove'?'delete':'put',binding,'--name',cf.worker],{input:secret?secret+'\n':'y\n'});}catch{throw new Error('Worker secret update failed; check Cloudflare sign-in and retry');}
   if(result.code!==0)throw new Error('Worker secret update failed; check Cloudflare sign-in and retry');
   if(action==='remove')delete feed.webhook;else feed.webhook=hook;
   writeStudio(root,studio);

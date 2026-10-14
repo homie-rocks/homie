@@ -101,7 +101,12 @@ const newest = log.versions[0]?.version ?? null;
 if (!section) {
   fail(`CHANGELOG.md has no section for @homie-rocks/studio ${version} (packages/studio/package.json).${moved}\n\n${template(newest)}`);
 }
-if (newest !== version) problems.push(`the newest section is ${newest}, but packages/studio/package.json says ${version}: the newest section is the package's own version (a section is added when the version moves, never ahead of it)`);
+// Queued patch PRs keep released version files untouched until release numbering.
+// Exactly one explicitly marked future patch may precede the current release.
+const pending = log.versions[0]?.body.includes('<!-- pending-release: renumber before publishing -->')
+  && newest?.split('.').slice(0,2).join('.') === version.split('.').slice(0,2).join('.')
+  && compareVersions(newest,version)>0 && log.versions[1]?.version===version && (!was || was===version);
+if (newest !== version && !pending) problems.push(`the newest section is ${newest}, but packages/studio/package.json says ${version}: the newest section is the package's own version (a section is added when the version moves, never ahead of it)`);
 if (!section.plugins.includes(plugin)) {
   problems.push(`the plugin is ${plugin} (plugins/homie/.claude-plugin/plugin.json), but the ${version} section's Plugin line says ${section.plugins.join(', then ') || 'nothing'}: write "**Plugin ${plugin}**"${section.plugins.length ? ` (or "**Plugin ${section.plugins.join(', then ')}, then ${plugin}**" when the plugin had a release of its own after ${version}), and say what it changed` : ''}`);
 }
@@ -137,6 +142,7 @@ if (!existsSync(COPY)) problems.push('packages/studio/CHANGELOG.md is missing: r
 else if (readFileSync(COPY, 'utf8') !== text) problems.push('packages/studio/CHANGELOG.md is not the same as CHANGELOG.md: run node scripts/changelog.mjs --sync and commit both');
 if (problems.length) fail(`CHANGELOG.md needs a fix:${moved ? `${moved}` : ''}\n${problems.map((p) => `  - ${p}`).join('\n')}`);
 out(`CHANGELOG.md: ${log.versions.length} versions, the newest ${version} (plugin ${section.plugin})${moved ? `, which this pull request moves to from ${was}` : ''}; the package's copy is the same file.`);
+if(pending)out(`Pending patch ${newest}: run node scripts/renumber-release.mjs before publishing; version files remain ${version}.`);
 out(tags.size ? `Release tags: this checkout has ${tags.size}; older sections that link theirs: ${linked}.` : 'Release tags: this checkout has none, so no section was asked to link one.');
 
 for (const note of notes) out(note);
