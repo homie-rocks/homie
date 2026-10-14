@@ -1101,3 +1101,15 @@ test('local D1 commands retain the dev binding after deploy changes the real dat
  assert.equal(args[args.indexOf('--config')+1],before.copy);
  assert.equal(JSON.parse(readFileSync(before.copy,'utf8')).d1_databases[0].database_id,active.d1_databases[0].database_id);
 });
+
+test('deploy reports app open and wall addresses', async () => {
+ const dir=studio('app-addresses');account(dir);
+ const app=run(['app','new','cards','--from','welcome','--name','Cards'],dir);
+ assert.equal(app.status,0,app.stdout+app.stderr);
+ const file=join(dir,'apps/cards/app.json');const meta=JSON.parse(readFileSync(file,'utf8'));meta.room={host:'browser'};meta.entry='src/main.ts';writeFileSync(file,JSON.stringify(meta));writeFileSync(join(dir,'apps/cards/src/main.ts'),'document.body.textContent="Cards";');
+ const result=await deploy(dir);
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.games[0].open,result.url+'/cards/open');
+ assert.equal(result.games[0].wall,result.url+'/cards/tv');
+ assert.equal(result.games[0].play,undefined);
+});

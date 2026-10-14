@@ -1,3 +1,4 @@
+import { signinTarget } from './signin-target.mjs';
 /**
  * The studio owner's private stats page (/_studio/stats) and its one-time sign-in (/_studio/signin).
  *
@@ -14,8 +15,7 @@ import { CODEX_SCRIPT } from './codex-script.mjs';
  * Where a sign-in may send the owner next: the stats, one game's codex, the back office, an ask waiting for the
  * owner's tap, or one of the studio's games (a private game's own secret road for the owner's phone).
  */
-const NEXT = /^\/(?:_studio\/(?:stats|office|codex\/[a-z0-9][a-z0-9-]{0,39}\/|confirm\/ask_[a-f0-9]{16})|[a-z0-9][a-z0-9-]{0,39}\/(?:play)?)$/;
-const nextOf = (url) => { const to = url.searchParams.get('to') ?? ''; return NEXT.test(to) ? to : '/_studio/stats'; };
+const nextOf = (url) => signinTarget(url.searchParams.get('to'));
 const signinWord = (to) => (to.startsWith('/_studio/codex/') ? 'Open the codex' : to === '/_studio/office' ? 'Open the office' : to.startsWith('/_studio/confirm/') ? 'Sign in and see what your AI asks' : to.startsWith('/_studio/stats') ? 'Open the stats' : 'Sign in and play');
 let scriptHash = null;
 async function codexScriptHash() {

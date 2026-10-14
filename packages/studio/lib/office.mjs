@@ -1,3 +1,4 @@
+import { signinTarget } from '../worker/signin-target.mjs';
 /**
  * `homie-studio office` — the studio's back office from the studio folder (worker/office.mjs says what it is).
  *
@@ -83,7 +84,7 @@ export async function officeShow(root, { url } = {}) {
 }
 
 export function officeLink(root, { url, to } = {}) {
-  const target = to && /^\/[A-Za-z0-9_/-]{1,80}$/.test(String(to)) ? String(to) : '/_studio/office';
+  const target = signinTarget(to, '/_studio/office');
   const r = signinTo(root, url, target);
   if (!r.ok) return { ok: false, command: 'office link', why: r.why };
   return {
