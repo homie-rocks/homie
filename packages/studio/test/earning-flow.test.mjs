@@ -25,7 +25,7 @@ test('phone checkout holds the last seat; signed payment confirms and expiry rel
  const [alice,bob]=await Promise.all([buy('alice',request),buy('bob',request)]);
  const winner=alice.ok?alice:bob,loser=alice.ok?bob:alice;assert.equal(winner.ok,true,JSON.stringify(winner));assert.equal(loser.status,409);assert.equal(sql.prepare('SELECT count(*) n FROM shop_orders').get().n,1,'capacity refusal rolls back its order');
  assert.equal(sql.prepare('SELECT state FROM shop_bookings').get().state,'held');
- const payment=await fetch(winner.url.replace('/checkout/','/complete/'),{method:'POST',redirect:'manual'});assert.equal(payment.status,303,await payment.text());assert.equal(sql.prepare('SELECT state FROM shop_bookings').get().state,'confirmed');
+ const payment=await fetch(winner.url.replace('/checkout/','/complete/'),{method:'POST',redirect:'manual'});assert.equal(payment.status,303,await payment.text());assert.equal(sql.prepare('SELECT state FROM shop_bookings').get().state,'confirmed');assert.equal(JSON.parse(sql.prepare("SELECT data FROM studio_events WHERE type='order.paid' AND json_extract(data,'$.order')=?").get(winner.order).data).reference,winner.booking);
  sql.prepare('INSERT INTO app_records VALUES(?,?,?,?,1,1)').run('tuning','slots','later',JSON.stringify({capacity:1}));
  const second=await buy('bob',{...request,booking:{collection:'bookings',slot:'later'}});assert.equal(second.ok,true);
  const expired=await fetch(second.url.replace('/checkout/','/expire/'),{method:'POST',redirect:'manual'});assert.equal(expired.status,303);assert.equal(sql.prepare('SELECT state FROM shop_bookings WHERE id=?').get(second.booking).state,'released');

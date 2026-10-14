@@ -519,6 +519,7 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
   if (keyless && item.price === 'choose' && lines[0].quantity !== 1) return { error: fail(400, 'quantity', 'A tip is one chosen amount; choose it on Stripe.') };
   if (keyless) lines = lines.map((l) => ({ ...l, item: { ...l.item, paymentLink: link } }));
   const order = { id: newOrderId(), player: player.id, amount, currency: shop.currency };
+  if (booking && reference === null) reference = order.id;
   const now = Date.now();
   order.createdAt = now;
   order.expiresAt = Math.floor(now / 1000) + Math.max(31, shop.checkoutMinutes ?? 1440) * 60;
