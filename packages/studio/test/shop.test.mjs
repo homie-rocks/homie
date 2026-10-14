@@ -3147,3 +3147,14 @@ test('an old worker recreating referral secrets during deploy is cleaned on requ
   oldWorker();await s.fetchSite('/');clean();await s.fetchSite('/');clean();
  } finally {s.stripe.close();}
 });
+
+test('a free item keeps the shell checkout bridge available without Stripe', async () => {
+ const s=await site({key:false,settings:{policy:{preset:'custom'},items:[{id:'volunteer',name:'Volunteer shift',price:0,game:'owl-run'},{id:'gift',name:'Gift',price:1000,game:'owl-run'}]}});
+ try {
+  const r=await s.fetchSite('/owl-run/play');
+  const html=await r.text();
+  assert.match(html,/var cfg = boot.shop/,'free booking needs the shell bridge even before payment setup');
+  const boot=JSON.parse(html.match(/window\.__HOMIE_PLAY\s*=\s*(\{[^\n]+\});/)[1]);
+  assert.ok(boot.shop);
+ }finally{s.stripe.close()}
+});
