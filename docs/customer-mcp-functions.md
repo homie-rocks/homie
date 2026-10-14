@@ -17,8 +17,11 @@ priced tools to MCP instead of bypassing payment.
 Studio functions are typed `functions/*.ts` files. D1 triggers atomically record
 order, refund, record and tool events; rooms keep a SQLite outbox until D1 accepts
 it. Functions claim durable leases and retain the same event ID on retry. The
-minute cron recovers crashes and failures without an attempt cap. Office →
-Functions exposes failures and manual retry. See the toolkit's
+event/feed minute cron recovers crashes and failures without an attempt cap.
+Scheduled-only studios install a trigger covering their declared UTC schedules.
+Office → Functions exposes failures and manual retry; the owner AI reads retained
+attempts, redacted errors and next due times with `studio_function_runs` or
+`homie-studio functions runs [<name>] [--errors]`. Build and redeploy after upgrading. See the toolkit's
 [function guide](../packages/studio/functions/FUNCTIONS.md) and
 [tool guide](../packages/studio/tools/TOOLS.md).
 

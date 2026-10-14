@@ -201,6 +201,7 @@ export function deployPlan(root) {
   return {
     ok: true, command: 'deploy plan', studio: studio.name, account: cf.accountId ?? null,
     cloudflare: [
+      {kind:'Cron triggers',name:(readConfig(root)?.triggers?.crons??[]).join('; ')||'none',what:'Installs these UTC triggers; the Worker dispatches due functions and retries. Studio custom triggers are retained.',state:'installed on deploy'},
       { kind: 'Worker', name: cf.worker, what: 'the studio\'s pages, each game\'s page and play shell, and /.well-known/homie-studio.json for the directory', state: mark(`worker:${cf.worker}`) },
       { kind: 'D1 database', name: cf.d1, what: 'the directory claim, every finished round, the studio\'s own stats (daily counters of visits, plays, rooms, rounds and songs, for the owner only; nothing about a visitor), and, for games that keep saves, player accounts (a passkey\'s public key, never a password) and their saves', state: mark(`d1:${cf.d1}`) },
       { kind: 'Durable Object', name: 'Table', what: hosted.length ? `one per public room: the netplay relay (seats, snapshots), and for ${hosted.map((h) => h.id).join(', ')} the game's own rules, which run here and nowhere else` : 'one per public room: the netplay relay (seats, host, snapshots); runs no game code', state: 'declared by the Worker' },
@@ -376,6 +377,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   if (!r2) step('no storage (R2): the studio needs none to run; `homie-studio storage add` adds it for large media');
 
   refreshWorkerConfig(root, {d1Id: db.uuid});
+  step(`Cron triggers: ${(readConfig(root)?.triggers?.crons??[]).join("; ")||"none (remove toolkit triggers)"}`);
   if (routes) step(`kept the studio's own route${routes.length === 1 ? '' : 's'} in wrangler.jsonc: ${routes.map((r) => r.pattern).join(', ')}`);
   for (const added of ensureMigrations(root)) step(`added ${added} (${migrationWord(added)})`);
   const migrate = w(['d1', 'migrations', 'apply', cf.d1, '--remote']);
@@ -591,6 +593,7 @@ export function configNames(root) {
  */
 export async function ciDeploy(root, { log = () => {} } = {}) {
   const w = runner(root, {});
+  refreshWorkerConfig(root);
   const names = configNames(root);
   const steps = [];
   const step = (what) => { steps.push({ what }); log(what); };
@@ -602,6 +605,10 @@ export async function ciDeploy(root, { log = () => {} } = {}) {
   const first = migrate.code !== 0 && /not found|could(?:n't| not) find|does not exist|no database|database_id/i.test(migrate.out);
   if (migrate.code !== 0 && !first) return refuse(`D1 migrations failed: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
   if (!first) step('D1 migrations applied');
+  const register=()=>w(['d1','execute',names.binding,'--remote','--command',functionDeploymentSQL(root)]);
+  const {functionDeploymentSQL}=await import('./functions-build.mjs');
+  if(!first) {const registered=register();if(registered.code!==0)return refuse('Could not register studio functions',registered.out);}
+  step(`Cron triggers: ${(readConfig(root)?.triggers?.crons??[]).join('; ')||'none (remove toolkit triggers)'}`);
   // Workers AI (0.17.0): bound only when a server's AI guides think with it. The checkout is thrown away after.
   if (!first && needsWorkersAi(root, w, names.binding)) {
     try {
@@ -620,6 +627,7 @@ export async function ciDeploy(root, { log = () => {} } = {}) {
     migrate = apply();
     if (migrate.code !== 0) return refuse(`D1 migrations failed after the first deploy: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
     step('D1 migrations applied (the database was created with this first deploy)');
+    const registered=register();if(registered.code!==0)return refuse('Could not register studio functions',registered.out);
   }
   // The live address, from what Wrangler printed (a custom domain in studio.json wins).
   const workersDev = /https:\/\/[a-z0-9.-]+\.workers\.dev/i.exec(dep.out)?.[0] ?? null;

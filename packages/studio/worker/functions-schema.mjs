@@ -84,3 +84,16 @@ WHEN EXISTS (SELECT 1 FROM function_subscriptions WHERE type='order.paid')
  'app',NEW.game,'reference',(SELECT value FROM meta WHERE key='shop-reference:' || NEW.id)),NEW.paid_at);
 END;
 `;
+
+/** Attempt history is independent of the prunable delivery queue. */
+export const FUNCTIONS_RUNS_MIGRATION_FILE = '0023_function_runs.sql';
+export const FUNCTIONS_RUNS_MIGRATION = `
+CREATE TABLE function_runs (
+ seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
+ function TEXT NOT NULL, event TEXT NOT NULL, trigger TEXT NOT NULL,
+ started INTEGER NOT NULL, finished INTEGER, outcome TEXT NOT NULL,
+ error TEXT, attempt INTEGER NOT NULL
+);
+CREATE INDEX function_runs_function_seq ON function_runs(function,seq);
+CREATE INDEX function_runs_errors_seq ON function_runs(seq) WHERE outcome IN ('failed','interrupted');
+`;

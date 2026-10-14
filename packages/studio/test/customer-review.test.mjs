@@ -60,7 +60,7 @@ test('upgrade removes the old default purchase limiter unless studio settings re
 test('config derives current name compatibility previews and observability and removes crons aliases AI stably',t=>{
  const {root,s,read}=studio(t);mkdirSync(join(root,'site/src/functions'),{recursive:true});writeFileSync(join(root,'site/src/functions/declarations.json'),JSON.stringify([{name:'daily',event:'daily',schedule:'0 9 * * *'}]));s.cloudflare.ai=true;writeFileSync(join(root,'studio.json'),JSON.stringify(s));writeFileSync(join(root,'shop.json'),'{}');writeFileSync(join(root,'wrangler.custom.json'),JSON.stringify({vars:{CUSTOM:'kept'},services:[{binding:'MY_SERVICE',service:'own'}]}));refreshWorkerConfig(root);assert.ok(read().alias);assert.ok(read().ai);assert.ok(read().triggers);
  const stale=read();stale.compatibility_date='2000-01-01';stale.observability={enabled:false};writeFileSync(join(root,'wrangler.jsonc'),JSON.stringify(stale));s.name='Renamed';s.cloudflare.ai=false;writeFileSync(join(root,'studio.json'),JSON.stringify(s));rmSync(join(root,'shop.json'));writeFileSync(join(root,'site/src/functions/declarations.json'),'[]');refreshWorkerConfig(root);
- const config=read();assert.equal(config.vars.STUDIO_NAME,'Renamed');assert.equal(config.previews.vars.STUDIO_NAME,'Renamed');assert.equal(config.observability.enabled,true);assert.notEqual(config.compatibility_date,'2000-01-01');for(const key of ['alias','ai','triggers'])assert.equal(config[key],undefined);assert.equal(config.vars.CUSTOM,'kept');assert.equal(config.services[0].binding,'MY_SERVICE');const bytes=readFileSync(join(root,'wrangler.jsonc'),'utf8');refreshWorkerConfig(root);assert.equal(readFileSync(join(root,'wrangler.jsonc'),'utf8'),bytes);
+ const config=read();assert.equal(config.vars.STUDIO_NAME,'Renamed');assert.equal(config.previews.vars.STUDIO_NAME,'Renamed');assert.equal(config.observability.enabled,true);assert.notEqual(config.compatibility_date,'2000-01-01');for(const key of ['alias','ai'])assert.equal(config[key],undefined);assert.deepEqual(config.triggers,{crons:[]});assert.equal(config.vars.CUSTOM,'kept');assert.equal(config.services[0].binding,'MY_SERVICE');const bytes=readFileSync(join(root,'wrangler.jsonc'),'utf8');refreshWorkerConfig(root);assert.equal(readFileSync(join(root,'wrangler.jsonc'),'utf8'),bytes);
 });
 
 test('abandoned paid work refunds without rerunning; refund outages recover on the same claim',async t=>{
@@ -89,7 +89,7 @@ test('quote cleanup tolerates pre-offer and pre-expiry schemas during rolling up
 test('event feeds opt in to configuration, retention and retry cron without a handler',async t=>{
  const {functionDeploymentSQL}=await import('../lib/functions-build.mjs');
  const {root,s,read}=studio(t),DB=database(t);
- refreshWorkerConfig(root);assert.equal(read().vars.STUDIO_EVENT_FEEDS,undefined);assert.equal(read().triggers,undefined);
+ refreshWorkerConfig(root);assert.equal(read().vars.STUDIO_EVENT_FEEDS,undefined);assert.deepEqual(read().triggers,{crons:[]});
  s.mcp={events:{bookings:{event:'record.changed',app:'cafe',collection:'bookings',audience:'owner'}}};
  writeFileSync(join(root,'studio.json'),JSON.stringify(s));refreshWorkerConfig(root);
  assert.deepEqual(JSON.parse(read().vars.STUDIO_EVENT_FEEDS),s.mcp.events);assert.ok(read().triggers.crons.includes('* * * * *'));
@@ -97,6 +97,6 @@ test('event feeds opt in to configuration, retention and retry cron without a ha
  await runFunctions({DB,STUDIO_EVENT_FEEDS:read().vars.STUDIO_EVENT_FEEDS},{games:[]},'https://test',{definitions:[]});
  assert.equal(DB.sql.prepare('SELECT count(*) n FROM studio_events').get().n,1);
  delete s.mcp;writeFileSync(join(root,'studio.json'),JSON.stringify(s));refreshWorkerConfig(root);DB.sql.exec(functionDeploymentSQL(root));
- assert.equal(read().vars.STUDIO_EVENT_FEEDS,undefined);assert.equal(read().triggers,undefined);
+ assert.equal(read().vars.STUDIO_EVENT_FEEDS,undefined);assert.deepEqual(read().triggers,{crons:[]});
  assert.equal(DB.sql.prepare('SELECT count(*) n FROM function_subscriptions').get().n,0);
 });

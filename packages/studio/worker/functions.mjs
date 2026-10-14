@@ -1,4 +1,6 @@
 import {webhookSubscriptions,webhookFailure,webhookBackoff} from './event-webhooks.mjs';
+import {parseSchedule,scheduleStatus} from './function-schedule.mjs';
+import {redactText} from '../lib/redact.mjs';
 import {feedSubscriptions,pushEvents} from './event-resources.mjs';
 import { services } from './mcp-tools.mjs';
 import { isOwner, sameOrigin } from './office.mjs';
@@ -63,16 +65,25 @@ export async function runFunctions(env, cat, origin, {definitions, now = Date.no
       if(rows.length===100)more=true;
       for (const row of rows) {
         const lease=crypto.randomUUID();
-        const claimed=await env.DB.prepare(`UPDATE function_deliveries SET state='running',lease=?3,due=?4,attempts=attempts+1 WHERE event=?1 AND function=?2 AND state!='complete' AND due<=?5`).bind(row.event,fn.name,lease,now()+leaseMs,now()).run();
+        const started=now();
+        const [claimed]=await env.DB.batch([
+          env.DB.prepare(`UPDATE function_deliveries SET state='running',lease=?3,due=?4,attempts=attempts+1 WHERE event=?1 AND function=?2 AND state!='complete' AND due<=?5`).bind(row.event,fn.name,lease,started+leaseMs,started),
+          env.DB.prepare("UPDATE function_runs SET outcome='interrupted',error='Worker lease expired before completion was recorded' WHERE event=?1 AND function=?2 AND outcome='running' AND EXISTS(SELECT 1 FROM function_deliveries WHERE event=?1 AND function=?2 AND lease=?3)").bind(row.event,fn.name,lease),
+          env.DB.prepare("INSERT INTO function_runs(id,function,event,trigger,started,outcome,attempt) SELECT ?1,?2,?3,?4,?5,'running',attempts FROM function_deliveries WHERE event=?3 AND function=?2 AND lease=?1").bind(lease,fn.name,row.event,row.event.startsWith(`schedule:${fn.name}:`)?`schedule: ${JSON.parse(row.data).cron}`:row.type,started),
+        ]);
         if (!claimed.meta.changes) continue;
+        let failure=null;
         try {
           const event=Object.freeze({id:row.event,type:row.type,at:row.at,data:JSON.parse(row.data),attempt:row.attempts+1});
           await fn.handler(event,services(env,cat,origin,{id:'studio-function',owner:true,client:null},'function:'+fn.name,fn));
-          await env.DB.prepare(`UPDATE function_deliveries SET state='complete',completed=?4,error=NULL WHERE event=?1 AND function=?2 AND lease=?3`).bind(row.event,fn.name,lease,now()).run();
-        } catch (error) {
-          // Handler errors may contain credentials. The office identifies the function/event; Worker logs are the studio's debugging surface.
-          await env.DB.prepare(`UPDATE function_deliveries SET state='failed',error=?5,due=?4 WHERE event=?1 AND function=?2 AND lease=?3`).bind(row.event,fn.name,lease,now()+(fn.webhook?webhookBackoff(row.attempts+1):leaseMs),fn.webhook?webhookFailure(error):'Function failed; inspect its code and retry').run();
-        }
+        } catch(error) {failure=fn.webhook?webhookFailure(error):functionError(error,env);}
+        const finished=now();
+        await env.DB.batch([
+          failure===null
+            ? env.DB.prepare(`UPDATE function_deliveries SET state='complete',completed=?4,error=NULL WHERE event=?1 AND function=?2 AND lease=?3`).bind(row.event,fn.name,lease,finished)
+            : env.DB.prepare(`UPDATE function_deliveries SET state='failed',error=?5,due=?4 WHERE event=?1 AND function=?2 AND lease=?3`).bind(row.event,fn.name,lease,finished+(fn.webhook?webhookBackoff(row.attempts+1):leaseMs),fn.webhook?failure:'Function failed; inspect its code and retry'),
+          env.DB.prepare("UPDATE function_runs SET outcome=?2,finished=?3,error=?4 WHERE id=?1").bind(lease,failure===null?'complete':'failed',finished,failure),
+        ]);
       }
     }
   } while(more);
@@ -82,10 +93,18 @@ export async function runFunctions(env, cat, origin, {definitions, now = Date.no
 }
 export async function scheduleFunctions(event,env,cat,origin) {
   const definitions=await syncFunctions(env);
-  for(const fn of definitions) if(fn.schedule===event.cron) await env.DB.batch([
-    env.DB.prepare(`INSERT OR IGNORE INTO studio_events(id,type,data,at) SELECT ?1,?2,?3,?4 WHERE EXISTS(SELECT 1 FROM function_subscriptions WHERE name=?5 AND last_tick<?4)`).bind(`schedule:${fn.name}:${event.scheduledTime}`,fn.event,JSON.stringify({function:fn.name,cron:event.cron,scheduledTime:event.scheduledTime}),event.scheduledTime,fn.name),
-    env.DB.prepare('UPDATE function_subscriptions SET last_tick=MAX(last_tick,?2) WHERE name=?1').bind(fn.name,event.scheduledTime),
+  const scheduledTime=Math.floor(event.scheduledTime/60000)*60000;
+  await env.DB.prepare("INSERT INTO meta(key,value) VALUES('function-last-scheduled',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(JSON.stringify({cron:event.cron,scheduledTime})).run();
+  for(const fn of definitions) {
+    if(fn.schedule===undefined)continue;
+    let due=false;
+    try {due=parseSchedule(fn.schedule).matches(scheduledTime);} catch {continue;} // An old invalid declaration stays diagnosable via the owner tool.
+    if(!due)continue;
+    await env.DB.batch([
+    env.DB.prepare(`INSERT OR IGNORE INTO studio_events(id,type,data,at) SELECT ?1,?2,?3,?4 WHERE EXISTS(SELECT 1 FROM function_subscriptions WHERE name=?5 AND last_tick<?4)`).bind(`schedule:${fn.name}:${scheduledTime}`,fn.event,JSON.stringify({function:fn.name,cron:fn.schedule,scheduledTime}),scheduledTime,fn.name),
+    env.DB.prepare('UPDATE function_subscriptions SET last_tick=MAX(last_tick,?2) WHERE name=?1').bind(fn.name,scheduledTime),
   ]);
+  }
   await runFunctions(env,cat,origin,{definitions});
 }
 export async function functionsRoute(request,env,cat) {
@@ -106,4 +125,21 @@ export async function functionsRoute(request,env,cat) {
   }
   const rows=(await env.DB.prepare(`SELECT d.*,e.type,e.at FROM function_deliveries d JOIN studio_events e ON e.id=d.event ORDER BY e.at DESC LIMIT 100`).all()).results;
   return new Response(`<!doctype html><meta charset="utf-8"><title>Studio functions</title><h1>Studio functions</h1><p>At-least-once delivery. Use the event ID to deduplicate effects.</p><table><tr><th>Function</th><th>Event ID</th><th>Event</th><th>State</th><th>Attempts</th><th>Error</th><th>Retry</th></tr>${rows.map(r=>`<tr>${[r.function,r.event,r.type,r.state,r.attempts,r.error??''].map(v=>`<td>${esc(v)}</td>`).join('')}<td>${r.state==='failed'?`<form method="post"><input type="hidden" name="retry" value="${esc(r.event)}"><button>Retry</button></form>`:''}</td></tr>`).join('')}</table>`,{headers:{'content-type':'text/html;charset=utf-8','cache-control':'no-store'}});
+}
+
+function functionError(error,env) {
+  let message=error instanceof Error?error.message:String(error);
+  // Remove known binding values as well as recognizable credential formats.
+  for(const [key,value] of Object.entries(env))if(typeof value==='string' && value && !['STUDIO_NAME','STUDIO_EVENT_FEEDS','STUDIO_FUNCTION_CRONS','STUDIO_FUNCTION_MANAGED_CRONS'].includes(key))message=message.split(value).join('[redacted]');
+  return redactText(message).text;
+}
+export async function functionRuns(env,{name,errors=false,before}={}) {
+  const rows=(await env.DB.prepare(`SELECT seq,function,event,trigger,started,finished,outcome,error,attempt FROM function_runs
+    WHERE (?1 IS NULL OR function=?1) AND (?2=0 OR outcome IN ('failed','interrupted')) AND (?3 IS NULL OR seq<?3)
+    ORDER BY seq DESC LIMIT 101`).bind(name??null,errors?1:0,before??null).all()).results;
+  const page=rows.slice(0,100),definitions=await load();
+  let crons=[];try {crons=JSON.parse(env.STUDIO_FUNCTION_CRONS??'[]');if(!Array.isArray(crons))crons=[];}catch {}
+  const schedules=scheduleStatus(definitions.filter(f=>!name||f.name===name),crons);
+  const tick=await env.DB.prepare("SELECT value FROM meta WHERE key='function-last-scheduled'").first();
+  return {runs:page.map(r=>({...r,started:new Date(r.started).toISOString(),finished:r.finished===null?null:new Date(r.finished).toISOString()})),next:rows.length>100?page.at(-1).seq:null,schedules,crons,lastScheduled:tick?JSON.parse(tick.value):null,triggerEvidence:'Generated deployment configuration; lastScheduled proves an observed tick. Provider dashboard changes are not queried.'};
 }

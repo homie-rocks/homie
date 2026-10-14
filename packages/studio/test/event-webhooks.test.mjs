@@ -6,7 +6,7 @@ import {readFileSync,readdirSync,mkdtempSync,writeFileSync,rmSync} from 'node:fs
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {Webhook} from 'standardwebhooks';
-import {runFunctions,syncFunctions,emitEvent} from '../worker/functions.mjs';
+import {runFunctions,syncFunctions,emitEvent,functionRuns} from '../worker/functions.mjs';
 import {postWebhook,webhookStatus,testWebhook} from '../worker/event-webhooks.mjs';
 import {webhookSecret} from '../worker/event-webhook-config.mjs';
 import {eventsWebhook} from '../lib/events-cli.mjs';
@@ -50,7 +50,9 @@ test('durable retries back off after 5xx and timeout, stop on success; records, 
  time+=120000;await runFunctions(env,cat,'https://studio.example',options);
  row=(await webhookStatus(env,'bookings')).deliveries[0];assert.equal(row.state,'complete');assert.equal(row.attempts,3);assert.equal(row.error,null);
  time+=3600000;await runFunctions(env,cat,'https://studio.example',options);assert.equal(calls,3);assert.equal(new Set(ids).size,1);
- for(const data of [await feedEvents(env,'bookings'),await webhookStatus(env,'bookings'),logs,env.DB.sql.prepare('SELECT * FROM studio_events').all()])assert.ok(!JSON.stringify(data).includes(secret));
+ const history=await functionRuns(env);
+ assert.deepEqual(history.runs.map(r=>[r.attempt,r.outcome,r.error]),[[3,'complete',null],[2,'failed','Webhook timed out'],[1,'failed','Webhook HTTP 503']]);
+ for(const data of [history,await feedEvents(env,'bookings'),await webhookStatus(env,'bookings'),logs,env.DB.sql.prepare('SELECT * FROM studio_events').all()])assert.ok(!JSON.stringify(data).includes(secret));
 });
 
 test('matches app and collection; audience permissions are checked again on retry',async t=>{

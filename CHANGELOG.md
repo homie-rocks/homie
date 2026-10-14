@@ -17,6 +17,26 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.50.6] - 2026-10-14
+
+**Plugin 0.50.6** · Scheduled functions run, and your AI can see every run.
+
+Your studio runs scheduled functions even when nobody has the office open. Your owner AI can check what ran, see failures and retries, and tell you when each function is next due.
+
+### Fixed
+
+- Your scheduled functions keep running when you add custom triggers. Functions run when their UTC schedule is due, and overlapping triggers do not run the same scheduled minute twice. Your custom triggers survive upgrades; removing a schedule removes only triggers managed by Homie.
+
+### Added
+
+- Ask your owner AI to inspect function runs, or use `homie-studio functions runs [<name>] [--errors]`. Each execution attempt stays in history, including failures followed by successful retries. Errors have credentials redacted, and older runs remain available through pagination.
+- Your AI can use the owner-only `studio_function_runs` tool to see run history, next due times, configured triggers and the last observed scheduled tick. Invalid schedules stop the build with the function name and reason; deploy plans show the triggers being installed.
+
+### Upgrade notes
+
+- Upgrade, build and redeploy your studio to install the required triggers and the `0023_function_runs.sql` history migration. Workers Builds redeploys register functions too. Cloudflare can take up to 15 minutes to apply trigger changes.
+- Schedules use UTC. Scheduled-only failures retry on a later scheduled tick or request; event functions and AI feeds retain their minute-by-minute retry trigger.
+
 ## [0.50.5] - 2026-10-14
 
 **Plugin 0.50.5** · Homie has no referral system.

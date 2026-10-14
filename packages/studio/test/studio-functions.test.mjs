@@ -23,7 +23,9 @@ test('functions retain event IDs through failures, concurrent dispatch, crash le
  assert.equal(JSON.parse(DB.sql.prepare('SELECT value FROM tool_data').get().value).order,'seeded-order');
  await emitEvent(env,'order.paid',{order:'crash'},{id:'crash'});
  DB.sql.exec("INSERT INTO function_deliveries(event,function,state,due) VALUES('crash','deliver','running',1000020)");
+ DB.sql.exec("INSERT INTO function_runs(id,function,event,trigger,started,outcome,attempt) VALUES('crashed-worker','deliver','crash','order.paid',1000010,'running',1)");
  await clock.wait(10);await runFunctions(env,cat,'https://studio.test',{definitions,now:clock.now,leaseMs:10});assert.equal(attempts,3);
+ const interrupted=DB.sql.prepare("SELECT * FROM function_runs WHERE id='crashed-worker'").get();assert.equal(interrupted.outcome,'interrupted');assert.equal(interrupted.finished,null);
 });
 test('record and tool events commit atomically; schedule retries deduplicate a named tick',async t=>{
  const DB=database();t.after(()=>DB.sql.close());virtualTime(t);const env={DB};
@@ -31,7 +33,7 @@ test('record and tool events commit atomically; schedule retries deduplicate a n
  DB.sql.exec("BEGIN;INSERT INTO app_records VALUES('app','jobs','one','{\"state\":\"new\"}',1,100);ROLLBACK");assert.equal(DB.sql.prepare('SELECT count(*) n FROM studio_events').get().n,0);
  DB.sql.exec("INSERT INTO app_records VALUES('app','jobs','one','{\"state\":\"new\"}',1,100);UPDATE app_records SET version=2 WHERE id='one';DELETE FROM app_records WHERE id='one'");assert.equal(DB.sql.prepare("SELECT count(*) n FROM studio_events WHERE type='record.changed'").get().n,3);
  let calls=0;useFunctions(async()=>[{name:'daily',event:'daily',schedule:'0 9 * * *',handler:()=>{calls++;}}]);
- await scheduleFunctions({cron:'0 9 * * *',scheduledTime:100},env,{games:[]},'https://studio.test');await scheduleFunctions({cron:'0 9 * * *',scheduledTime:100},env,{games:[]},'https://studio.test');assert.equal(calls,1);useFunctions(async()=>[]);
+ await scheduleFunctions({cron:'0 9 * * *',scheduledTime:Date.UTC(2026,9,13,9)},env,{games:[]},'https://studio.test');await scheduleFunctions({cron:'0 9 * * *',scheduledTime:Date.UTC(2026,9,13,9)},env,{games:[]},'https://studio.test');assert.equal(calls,1);useFunctions(async()=>[]);
 });
 test('MCP rate policy is absent until a studio sets it',async()=>{
  assert.equal(callsPerMinute({}),null);assert.equal(await rateLimit({},'public'),true);assert.equal(callsPerMinute({studio:{mcp:{callsPerMinute:1234567}}}),1234567);
@@ -82,4 +84,28 @@ test('a broken notification transport does not block server functions',async t=>
  await runFunctions(env,{games:[]},'https://studio.test',{definitions});
  assert.equal(JSON.parse((await DB.prepare("SELECT value FROM tool_data WHERE namespace='function:fulfil' AND key='one'").first()).value).done,true);
  assert.ok(await DB.prepare("SELECT id FROM studio_events WHERE id='one'").first(),'notification history remains available for retry');
+});
+
+test('owner run history retains failures, successful retries, pagination and next due after pruning',async t=>{
+ const {functionRuns,pruneEvents}=await import('../worker/functions.mjs');const {builtins,allowed}=await import('../worker/mcp-tools.mjs');
+ const DB=database();t.after(()=>DB.sql.close());const clock=virtualTime(t),env={DB,STUDIO_API_TOKEN:'private-test-token',STUDIO_FUNCTION_CRONS:'["*/15 * * * *"]'};
+ let count=0;const definitions=[{name:'cleanup',event:'cleanup.tick',schedule:'*/15 * * * *',handler(){if(++count===1)throw new Error('Cleanup service unavailable: private-test-token');}}];
+ useFunctions(async()=>definitions);t.after(()=>useFunctions(async()=>[]));
+ const time=Date.UTC(2026,9,13,9,15);
+ await scheduleFunctions({cron:'* * * * *',scheduledTime:time},env,{games:[]},'https://studio.test');
+ let report=await functionRuns(env,{errors:true});assert.equal(report.runs.length,1);assert.equal(report.runs[0].error,'Cleanup service unavailable: [redacted]');assert.equal(report.runs[0].attempt,1);
+ await clock.wait(60000);await runFunctions(env,{games:[]},'https://studio.test');
+ report=await functionRuns(env);assert.deepEqual(report.runs.map(r=>[r.outcome,r.attempt]),[['complete',2],['failed',1]]);assert.ok(report.runs.every(r=>r.finished>=r.started));
+ await pruneEvents(env);
+ assert.equal(DB.sql.prepare('SELECT count(*) n FROM function_deliveries').get().n,0,'history survives queue cleanup');
+ await scheduleFunctions({cron:'0,15,30,45 * * * *',scheduledTime:time+2000},env,{games:[]},'https://studio.test');assert.equal(count,2,'same minute deduplicates across different triggers');
+ await scheduleFunctions({cron:'* * * * *',scheduledTime:time+60000},env,{games:[]},'https://studio.test');assert.equal(count,2,'non-due minute does not deliver');
+ assert.equal((await functionRuns(env,{name:'other'})).runs.length,0);
+ const tool=builtins(env,{games:[]},'https://studio.test').find(t=>t.name==='studio_function_runs');
+ assert.equal(await allowed(tool.audience,{owner:false,id:null},env),false);assert.equal(await allowed(tool.audience,{owner:false,id:'staff'},env),false);assert.equal(await allowed(tool.audience,{owner:true,id:'owner'},env),true);
+ assert.equal(builtins(env,{studio:{mcp:{audiences:{studio_function_runs:'public'}}},games:[]},'https://studio.test').find(t=>t.name==='studio_function_runs').audience,'owner');
+ await assert.rejects(tool.handler({},{caller:{owner:false}}),/Owner only/);
+ assert.equal((await tool.handler({errors:true},{caller:{owner:true}})).runs[0].outcome,'failed');
+ for(let i=0;i<101;i++)DB.sql.prepare("INSERT INTO function_runs(id,function,event,trigger,started,outcome,attempt) VALUES(?,'other','event','manual',1,'complete',1)").run('page-'+i);
+ const page=await functionRuns(env);assert.equal(page.runs.length,100);assert.ok(page.next);assert.equal((await functionRuns(env,{before:page.next})).runs.length,3);
 });
