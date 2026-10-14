@@ -107,7 +107,8 @@ for (const d of ['mine', 'npm']) mkdirSync(join(scratch, d));
 try {
   for (const p of plan.filter((x) => x.published)) {
     const mine = npm(['pack', '--workspace', p.dir, '--pack-destination', join(scratch, 'mine'), '--json', '--ignore-scripts'], { stdio: ['ignore', 'pipe', 'pipe'] });
-    const theirs = npm(['pack', `${p.name}@${p.version}`, '--pack-destination', join(scratch, 'npm'), '--json'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    // Match onNpm's freshness: a restored npm cache can predate this version.
+    const theirs = npm(['pack', `${p.name}@${p.version}`, '--pack-destination', join(scratch, 'npm'), '--json', '--prefer-online'], { stdio: ['ignore', 'pipe', 'pipe'] });
     if (mine.status !== 0 || theirs.status !== 0) fail(`could not pack ${p.name}@${p.version} here or from npm: ${(mine.stderr || theirs.stderr).trim().split('\n')[0]}`);
     const a = unpack(join(scratch, 'mine', JSON.parse(mine.stdout)[0].filename), join(scratch, 'a', p.dir));
     const b = unpack(join(scratch, 'npm', JSON.parse(theirs.stdout)[0].filename), join(scratch, 'b', p.dir));

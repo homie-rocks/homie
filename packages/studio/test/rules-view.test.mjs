@@ -177,10 +177,10 @@ commands:{shout(w,s,e){w.emit('ping',s.pos,{n:1});w.emit('whisper',s.pos,{n:2},{
 target:{body:{shape:'box',radius:.5,height:2,maxSpeed:0}},mover:{body:{shape:'box',radius:.15,height:2,maxSpeed:2}},cover:{body:{shape:'box',radius:.5,height:2,maxSpeed:0}}},
 room:{historySeconds:1,${runaway === 'round3' ? 'rewindSeconds:.25,' : ''}bots:{keep:0},join(c,p){return{kind:'runner',at:{x:p.seat===2?40:p.seat*3,y:0,z:0}};},start(w){w.spawn('target',{x:0,y:4,z:0});w.spawn('mover',{x:8,y:0,z:0});}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.pos={x:b.pos.x+i.ax*6.4*c.dt,y:b.pos.y,z:0};},mover(b,i,c){b.pos={x:8,y:c.tick*.1,z:0};b.vel={x:0,y:.1/c.dt,z:0};}});`);
-    } else if (runaway === 'push' || runaway === 'diagonal-push') {
+    } else if (runaway === 'push' || runaway === 'push-effects' || runaway === 'diagonal-push') {
       writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-1000, -1000], max: [1000, 1000] } }));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules'; import {move} from './move';
-export default defineRules({contract:2,space:{dims:2},move,shapes:{commands:{bump:{}}},entities:{runner:{player:true,motion:{push:f.ticks()},input:{ax:f.i8()},body:{shape:'circle',radius:.5,maxSpeed:${runaway==='diagonal-push'?30:6}},commands:{bump(world,self){self.motion.push=world.ticks(.4);}}}},room:{bots:{keep:0},join(){return {kind:'runner',at:{x:0,y:0,z:0}}}},map:'./map'});`);
+export default defineRules({contract:2,space:{dims:2},move,shapes:{commands:{bump:{}}${runaway==='push-effects'?',effects:{hit:{}}':''}},entities:{runner:{player:true,motion:{push:f.ticks()},input:{ax:f.i8()},body:{shape:'circle',radius:.5,maxSpeed:${runaway==='diagonal-push'?30:6}},commands:{bump(world,self){self.motion.push=world.ticks(.4);${runaway==='push-effects'?"world.emit('hit',self.id,{});":''}}}}},room:{bots:{keep:0},join(){return {kind:'runner',at:{x:0,y:0,z:0}}}},map:'./map'});`);
       writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax/127*6,y:${runaway==='diagonal-push'?20:0},z:0};if(b.motion.push>0){b.motion.push-=1;b.vel={x:0,y:${runaway==='diagonal-push'?20:12},z:0};}c.map.sweep(b,c.math.scale(b.vel,c.dt));}});`);
     } else writeFileSync(file, readFileSync(file, 'utf8').replace('commands: {},', 'commands: { boom: {} },').replace('fields: { score:', 'commands: { boom(world, self) { self.bomb = true; } }, fields: { bomb: f.bit(), score:').replace('tick(world, self) {', 'tick(world, self) { if (self.bomb) { while (true) {} }'));
   }
@@ -1340,6 +1340,30 @@ for (const hz of [20, 30, 60]) for (const delay of [50, 150, 300]) for (const ax
   }
   assert.ok(a.me.pos.y > 2, 'the authoritative push wins');
   assert.deepEqual(bad, [], 'catch-up and its blend form one continuous path');
+});
+
+test('an effect read before a simulation step cannot leave a stale browser presentation', async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, 20, 'push-effects');
+  const clock = virtualTime(t);
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  globalThis.window = { addEventListener() {}, removeEventListener() {} };
+  t.after(() => { if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow); else delete globalThis.window; });
+  const r = rig(L, compiled, false, 25, 25);
+  const a = openRoom({ timers: false, net: { config: cfg('Effect reader'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(3000);
+  a.input({ ax: 127 });
+  let effects = 0;
+  a.on('hit', () => effects++);
+  for (let n = 0; n < 360; n++) {
+    if (n % 60 === 0) a.command('bump');
+    await clock.wait([28, 5, 17, 33][n % 4]);
+    const first = a.me;
+    assert.equal(a.me, first, 'unchanged synchronous reads share a presentation');
+    await Promise.resolve();
+    assert.deepEqual(a.me.pos, first.pos, 'clearing the cache without advancing time cannot change the drawn pose');
+  }
+  assert.equal(effects, 6, 'every authoritative effect exercised the own-entity read');
 });
 
 // Compile each fixture once; every case still opens fresh hosts, views and clocks.

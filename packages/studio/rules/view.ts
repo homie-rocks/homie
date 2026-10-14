@@ -728,6 +728,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     while (stepped < t) {
       stepped += 1;
       step(stepped, stepped === t);
+      // fire() can read/cache the own entity before this pump advances it.
+      // A renderer later in the same callback must see the completed step,
+      // not hold that effect's old pose until the next (possibly early) frame.
+      presentedEntity = null;
       if (stepped % sendEvery === sendEvery - 1) flush(now, stepped);
     }
   }

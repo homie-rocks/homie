@@ -1,8 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { balance, compatible, inventory, node24Regressions, shardCounts } from './ci-shards.mjs';
+import { balance, compatible, inventory, node24Regressions, shardCounts, checkShardBudget } from './ci-shards.mjs';
 import { verified, gates } from './ci-verified.mjs';
+test('actual shard time catches drift even when committed estimates fit', () => {
+  const files = ['old.test.mjs', 'new.test.mjs'];
+  assert.equal(balance(files, { 'old.test.mjs': 100 }, 1)[0].seconds, 115);
+  assert.doesNotThrow(() => checkShardBudget(480));
+  assert.throws(() => checkShardBudget(480.1), /eight-minute budget.*--rebalance/);
+  for (const invalid of [NaN, Infinity, -1]) assert.throws(() => checkShardBudget(invalid), /Invalid/);
+});
 test('shards include every discovered file exactly once, including new unmeasured files', () => {
   const files = [...inventory(), 'packages/new/test/new.test.mjs'];
   const bins = balance(files, {}, 12);
