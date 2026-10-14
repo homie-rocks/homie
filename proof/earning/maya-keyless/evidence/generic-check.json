@@ -1,0 +1,66 @@
+{
+  "ok": true,
+  "needs": [
+    {
+      "id": "publish",
+      "statement": "Staff-published slots remain visible after owner AI sync (publication separately proved by custom acceptance).",
+      "status": "met",
+      "captures": [
+        "/private/tmp/homie-maya-keyless-c9FGca/evidence/generic-shots/publish-staff.jpg"
+      ],
+      "why": "UI assertions passed; inspect captures against the pictured scene"
+    },
+    {
+      "id": "pay",
+      "statement": "Display the retained real sandbox-paid receipt; custom acceptance proves actual Checkout and signed payment.",
+      "status": "met",
+      "captures": [
+        "/private/tmp/homie-maya-keyless-c9FGca/evidence/generic-shots/pay-phone.jpg"
+      ],
+      "why": "UI assertions passed; inspect captures against the pictured scene"
+    },
+    {
+      "id": "wall",
+      "statement": "Wall displays the same provider-confirmed booking after movement; custom captures prove pending-to-paid transition.",
+      "status": "met",
+      "captures": [
+        "/private/tmp/homie-maya-keyless-c9FGca/evidence/generic-shots/wall-wall.jpg"
+      ],
+      "why": "UI assertions passed; inspect captures against the pictured scene"
+    },
+    {
+      "id": "capacity",
+      "statement": "Show moved target Full and freed source available; custom acceptance proves pending coexistence and refusal.",
+      "status": "met",
+      "captures": [
+        "/private/tmp/homie-maya-keyless-c9FGca/evidence/generic-shots/capacity-phone.jpg"
+      ],
+      "why": "UI assertions passed; inspect captures against the pictured scene"
+    },
+    {
+      "id": "move",
+      "statement": "Staff sees moved confirmed record at incremented version; custom acceptance proves pause gate and stale-write refusal.",
+      "status": "met",
+      "captures": [
+        "/private/tmp/homie-maya-keyless-c9FGca/evidence/generic-shots/move-staff.jpg"
+      ],
+      "why": "UI assertions passed; inspect captures against the pictured scene"
+    }
+  ],
+  "command": "check",
+  "kind": "app",
+  "isolatedRecords": false,
+  "dialogs": [],
+  "room": "check-a35c4de2becfa64ef1ad",
+  "surfaces": [
+    "staff",
+    "phone",
+    "wall"
+  ],
+  "before": null,
+  "after": null,
+  "reconnect": false,
+  "game": "tune",
+  "site": "http://127.0.0.1:8917",
+  "local": true
+}

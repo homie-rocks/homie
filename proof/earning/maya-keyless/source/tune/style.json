@@ -1,0 +1,64 @@
+{
+  "v": 1,
+  "palette": {
+    "bg": "#eaf3fb",
+    "ink": "#14243a",
+    "accent": "#3d8bff",
+    "accent2": "#8fe3ff",
+    "danger": "#ff5a6a",
+    "good": "#41c08a",
+    "gold": "#ffcc4d",
+    "ramp": [
+      "#ffffff",
+      "#eaf3fb",
+      "#cfe2f5",
+      "#a9cbee",
+      "#7fb0e6",
+      "#3d8bff",
+      "#2a5fb0",
+      "#14243a",
+      "#8fe3ff",
+      "#c7f3ff",
+      "#ffcc4d",
+      "#b4a3d9"
+    ]
+  },
+  "fonts": {
+    "display": "Fredoka",
+    "body": "Nunito"
+  },
+  "light": {
+    "time": "golden",
+    "key": [
+      -0.85,
+      -0.55,
+      -0.25
+    ],
+    "intensity": 2.4,
+    "hardness": 0.55,
+    "sky": "#94bfff",
+    "ground": "#76c9ff",
+    "fog": 0.45,
+    "bloom": 0.25
+  },
+  "camera": {
+    "angle": "high-3/4",
+    "projection": "perspective",
+    "pitch": 52,
+    "distance": 22,
+    "fov": 38
+  },
+  "render": "lowpoly-flat",
+  "materials": {
+    "model": "flat",
+    "outline": false,
+    "texelDensity": null,
+    "atlas": true
+  },
+  "rev": {
+    "style.palette": 1,
+    "style.ui": 1,
+    "style.light": 1,
+    "style.camera": 1
+  }
+}

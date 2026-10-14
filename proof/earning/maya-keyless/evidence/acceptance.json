@@ -1,0 +1,170 @@
+{
+  "name": "maya-keyless-1791982620375",
+  "profile": "Homie sandbox",
+  "origin": "http://127.0.0.1:8917",
+  "source": "proof-1791982620375-0900",
+  "target": "proof-1791982620375-1000",
+  "checks": [
+    {
+      "name": "Staff published fresh slots through UI"
+    },
+    {
+      "name": "Initial links have capacity-one completed-session limits; base64 bindings written verbatim",
+      "slots": [
+        {
+          "slot": "proof-1791982620375-0900",
+          "id": "plink_1UQRkNDz5BcOk2YtRCAOdKaA",
+          "active": true,
+          "completed": 0,
+          "limit": 1
+        },
+        {
+          "slot": "proof-1791982620375-1000",
+          "id": "plink_1UQRkPDz5BcOk2YttxaUIfmm",
+          "active": true,
+          "completed": 0,
+          "limit": 1
+        }
+      ],
+      "mode": "links",
+      "apiKey": false,
+      "apiBase": false
+    },
+    {
+      "name": "Pending does not exclude another guest",
+      "first": "ord_tufNXmI98bBZS3bfaeO0",
+      "second": "ord_7XVQcdviywsZ7n64qy1E"
+    },
+    {
+      "name": "Target has a real open Checkout before pause",
+      "order": "ord_pK2fPTOHsEArtBlgh6i0",
+      "session": "cs_test_a19sTH19Gx73RPgz8HrR3OdhgdIUhFdbm3oxCjFOsTkFqhlRa9crPp60qo"
+    },
+    {
+      "name": "Token API payment succeeded and signed webhook confirmed local booking",
+      "session": "cs_test_a1MGK4En7w8wwHnyFOjeYvnJtrOOrZnc40rVOm2RsKtarabtN1vAQJbzme",
+      "order": "ord_tufNXmI98bBZS3bfaeO0",
+      "amount": 6000,
+      "currency": "cad",
+      "livemode": false,
+      "state": "succeeded"
+    },
+    {
+      "name": "Paid source refuses additional booking",
+      "http": 409,
+      "error": "capacity"
+    },
+    {
+      "name": "Staff UI move into active paid target refused",
+      "http": 409,
+      "error": "booking capacity: ask the owner’s AI to pause the target slot and expire open links before moving; then sync confirmed seat counts",
+      "version": 2
+    },
+    {
+      "name": "Pause both slots deactivates links and expires target and competing checkouts",
+      "targetSession": "cs_test_a19sTH19Gx73RPgz8HrR3OdhgdIUhFdbm3oxCjFOsTkFqhlRa9crPp60qo",
+      "targetStatus": "expired",
+      "targetBooking": "released",
+      "competitorBooking": "released"
+    },
+    {
+      "name": "Paused staff UI move succeeds; stale version refused",
+      "before": 2,
+      "after": 3,
+      "slot": "proof-1791982620375-1000",
+      "staleHttp": 409
+    },
+    {
+      "name": "Fresh signed-state confirmed counts read after move",
+      "counts": [
+        {
+          "slot": "proof-1791982620375-0900",
+          "confirmed": 0
+        },
+        {
+          "slot": "proof-1791982620375-1000",
+          "confirmed": 1
+        }
+      ]
+    },
+    {
+      "name": "Reviewed resync reopens source and keeps target full",
+      "links": [
+        {
+          "slot": "proof-1791982620375-0900",
+          "id": "plink_1UQRkNDz5BcOk2YtRCAOdKaA",
+          "active": true,
+          "completed": 1,
+          "limit": 2
+        },
+        {
+          "slot": "proof-1791982620375-1000",
+          "id": "plink_1UQRkPDz5BcOk2YttxaUIfmm",
+          "active": false,
+          "completed": 0,
+          "limit": 1
+        }
+      ],
+      "availability": [
+        {
+          "slot": "proof-1791982620375-0900",
+          "full": false,
+          "available": 1,
+          "synced": true
+        },
+        {
+          "slot": "proof-1791982620375-1000",
+          "full": true,
+          "available": 0,
+          "synced": true
+        }
+      ]
+    },
+    {
+      "name": "Moved-full target refuses purchase",
+      "http": 409,
+      "error": "capacity"
+    },
+    {
+      "name": "Freed source accepts a fresh actual checkout; proof checkout expired without payment",
+      "order": "ord_1vHzHRISQr5dv8kZpw00",
+      "session": "cs_test_a1vXUDNYRJ06nkBSwttSY3fRiO4nuZD76xEg6Ekn9M7hrivc8zXJH3rS7Z"
+    },
+    {
+      "name": "Public staff write denied",
+      "http": 403
+    },
+    {
+      "name": "Generic check green on retained real sandbox-paid fixtures",
+      "exit": 0,
+      "isolated": false,
+      "needs": [
+        {
+          "id": "publish",
+          "status": "met"
+        },
+        {
+          "id": "pay",
+          "status": "met"
+        },
+        {
+          "id": "wall",
+          "status": "met"
+        },
+        {
+          "id": "capacity",
+          "status": "met"
+        },
+        {
+          "id": "move",
+          "status": "met"
+        }
+      ]
+    }
+  ],
+  "booking": "ord_tufNXmI98bBZS3bfaeO0",
+  "order": "ord_tufNXmI98bBZS3bfaeO0",
+  "ok": true,
+  "proofLinksDeactivated": true,
+  "cleaned": true
+}

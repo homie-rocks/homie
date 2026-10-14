@@ -1,0 +1,786 @@
+{
+  "v": 1,
+  "scope": "app",
+  "game": "tune",
+  "path": "automatic",
+  "budget": null,
+  "prompt": "Coldsmoke Tuning workshop wall with bookings and skis on a rail; warm plywood, midnight blue, frost white and safety orange",
+  "decisions": {
+    "style.render": {
+      "phase": "style",
+      "question": "How is the world drawn?",
+      "state": "auto",
+      "by": "ai",
+      "steer": [],
+      "rev": 1,
+      "dependsOn": [],
+      "history": [
+        {
+          "rev": 1,
+          "state": "auto",
+          "by": "ai",
+          "label": "Flat low-poly",
+          "at": "2026-10-14T12:35:40.236Z"
+        }
+      ],
+      "value": "lowpoly-flat",
+      "label": "Flat low-poly",
+      "why": "nothing named a look: faceted shapes in flat palette colours: the cheapest look on a phone, the most coherent, and the richest free library",
+      "options": [
+        {
+          "id": "lowpoly-flat",
+          "label": "Flat low-poly",
+          "value": "lowpoly-flat"
+        },
+        {
+          "id": "toon",
+          "label": "Toon / cel",
+          "value": "toon"
+        },
+        {
+          "id": "painted",
+          "label": "Stylised hand-painted",
+          "value": "painted"
+        },
+        {
+          "id": "stylised-pbr",
+          "label": "Stylised PBR",
+          "value": "stylised-pbr"
+        },
+        {
+          "id": "pixel-hd2d",
+          "label": "Pixel / HD-2D",
+          "value": "pixel-hd2d"
+        },
+        {
+          "id": "voxel",
+          "label": "Voxel",
+          "value": "voxel"
+        }
+      ],
+      "at": "2026-10-14T12:35:40.236Z"
+    },
+    "style.palette": {
+      "phase": "style",
+      "question": "Which colours, and what is each one for?",
+      "state": "auto",
+      "by": "ai",
+      "steer": [],
+      "rev": 1,
+      "dependsOn": [
+        "style.render",
+        "style.light"
+      ],
+      "history": [
+        {
+          "rev": 1,
+          "state": "auto",
+          "by": "ai",
+          "label": "Frost",
+          "at": "2026-10-14T12:35:40.241Z"
+        }
+      ],
+      "value": {
+        "name": "frost-blue",
+        "bg": "#eaf3fb",
+        "ink": "#14243a",
+        "accent": "#3d8bff",
+        "accent2": "#8fe3ff",
+        "danger": "#ff5a6a",
+        "good": "#41c08a",
+        "gold": "#ffcc4d",
+        "ramp": [
+          "#ffffff",
+          "#eaf3fb",
+          "#cfe2f5",
+          "#a9cbee",
+          "#7fb0e6",
+          "#3d8bff",
+          "#2a5fb0",
+          "#14243a",
+          "#8fe3ff",
+          "#c7f3ff",
+          "#ffcc4d",
+          "#b4a3d9"
+        ]
+      },
+      "label": "Frost",
+      "why": "your words \"frost\"",
+      "options": [
+        {
+          "id": "frost-blue",
+          "label": "Frost: ice blue and snow",
+          "value": {
+            "name": "frost-blue",
+            "bg": "#eaf3fb",
+            "ink": "#14243a",
+            "accent": "#3d8bff",
+            "accent2": "#8fe3ff",
+            "danger": "#ff5a6a",
+            "good": "#41c08a",
+            "gold": "#ffcc4d",
+            "ramp": [
+              "#ffffff",
+              "#eaf3fb",
+              "#cfe2f5",
+              "#a9cbee",
+              "#7fb0e6",
+              "#3d8bff",
+              "#2a5fb0",
+              "#14243a",
+              "#8fe3ff",
+              "#c7f3ff",
+              "#ffcc4d",
+              "#b4a3d9"
+            ]
+          }
+        },
+        {
+          "id": "autumn-grove",
+          "label": "Autumn grove: rust, moss and cream",
+          "value": {
+            "name": "autumn-grove",
+            "bg": "#1f2a24",
+            "ink": "#f6ecd9",
+            "accent": "#e9893a",
+            "accent2": "#8fbf5a",
+            "danger": "#e2553f",
+            "good": "#7fcf6a",
+            "gold": "#f2c14e",
+            "ramp": [
+              "#2c3b31",
+              "#3f5640",
+              "#5d7a4a",
+              "#8fbf5a",
+              "#c9d98a",
+              "#6b4a2f",
+              "#9a6a3d",
+              "#c98a4b",
+              "#e9893a",
+              "#b8442e",
+              "#f6ecd9",
+              "#d9c7a3",
+              "#f2c14e",
+              "#7a5a8c"
+            ]
+          }
+        },
+        {
+          "id": "meadow-morning",
+          "label": "Meadow morning: sky blue, grass and butter",
+          "value": {
+            "name": "meadow-morning",
+            "bg": "#cfe8f5",
+            "ink": "#1d2b3a",
+            "accent": "#ff8a5b",
+            "accent2": "#5cbf8a",
+            "danger": "#e2553f",
+            "good": "#45b36b",
+            "gold": "#ffd25a",
+            "ramp": [
+              "#9fd3ef",
+              "#cfe8f5",
+              "#f8f3e6",
+              "#8fd06a",
+              "#5cbf8a",
+              "#3f8f5a",
+              "#ffd25a",
+              "#ffb347",
+              "#ff8a5b",
+              "#e86a6a",
+              "#b07ad9",
+              "#8a6a4a",
+              "#5a4a3a",
+              "#ffffff"
+            ]
+          }
+        },
+        {
+          "id": "embers-night",
+          "label": "Embers at night: warm golds on soot",
+          "value": {
+            "name": "embers-night",
+            "bg": "#120c0a",
+            "ink": "#f6e7d3",
+            "accent": "#f4b23c",
+            "accent2": "#7ad38a",
+            "danger": "#ff5a4e",
+            "good": "#5fdc8b",
+            "gold": "#f2c14e",
+            "ramp": [
+              "#120c0a",
+              "#2b1d16",
+              "#4a2e20",
+              "#6e3b22",
+              "#a4512a",
+              "#e0702f",
+              "#f4b23c",
+              "#ffd98a",
+              "#f6e7d3",
+              "#7ad38a",
+              "#3f6b4a",
+              "#5a4a6e"
+            ]
+          }
+        },
+        {
+          "id": "neon-dusk",
+          "label": "Neon dusk: magenta and cyan on ink",
+          "value": {
+            "name": "neon-dusk",
+            "bg": "#0b0a1a",
+            "ink": "#eef0ff",
+            "accent": "#ff3fa4",
+            "accent2": "#2ee6f2",
+            "danger": "#ff4d4d",
+            "good": "#4dff9a",
+            "gold": "#ffd84a",
+            "ramp": [
+              "#0b0a1a",
+              "#1a1438",
+              "#2c1f5e",
+              "#4b2a8c",
+              "#7a35c4",
+              "#ff3fa4",
+              "#ff7ac8",
+              "#2ee6f2",
+              "#7af3ff",
+              "#ffd84a",
+              "#eef0ff",
+              "#3a3a5e"
+            ]
+          }
+        },
+        {
+          "id": "candy-pop",
+          "label": "Candy pop: bubblegum and mint",
+          "value": {
+            "name": "candy-pop",
+            "bg": "#fff2f7",
+            "ink": "#2a1f3d",
+            "accent": "#ff5fa2",
+            "accent2": "#4fd1c5",
+            "danger": "#ff4f64",
+            "good": "#40c07a",
+            "gold": "#ffc94d",
+            "ramp": [
+              "#fff2f7",
+              "#ffd6e8",
+              "#ff9ec7",
+              "#ff5fa2",
+              "#c45fd1",
+              "#8a7cff",
+              "#4fd1c5",
+              "#a6f0d9",
+              "#ffc94d",
+              "#ff9a5a",
+              "#2a1f3d",
+              "#ffffff"
+            ]
+          }
+        }
+      ],
+      "at": "2026-10-14T12:35:40.241Z"
+    },
+    "style.shape": {
+      "phase": "style",
+      "question": "What shape language: round, angular or blocky?",
+      "state": "auto",
+      "by": "ai",
+      "steer": [],
+      "rev": 1,
+      "dependsOn": [
+        "style.render"
+      ],
+      "history": [
+        {
+          "rev": 1,
+          "state": "auto",
+          "by": "ai",
+          "label": "Round and soft",
+          "at": "2026-10-14T12:35:40.241Z"
+        }
+      ],
+      "value": {
+        "language": "round",
+        "bevel": 0.6,
+        "silhouette": "every character readable black on white at 64 px tall"
+      },
+      "label": "Round and soft",
+      "why": "round silhouettes and big soft bevels: friendly at a glance",
+      "options": [
+        {
+          "id": "round",
+          "label": "Round and soft",
+          "value": {
+            "language": "round",
+            "bevel": 0.6
+          }
+        },
+        {
+          "id": "angular",
+          "label": "Angular and sharp",
+          "value": {
+            "language": "angular",
+            "bevel": 0.1
+          }
+        },
+        {
+          "id": "blocky",
+          "label": "Blocky",
+          "value": {
+            "language": "blocky",
+            "bevel": 0.25
+          }
+        }
+      ],
+      "at": "2026-10-14T12:35:40.241Z"
+    },
+    "style.proportions": {
+      "phase": "style",
+      "question": "How tall are the characters, in heads and metres?",
+      "state": "auto",
+      "by": "ai",
+      "steer": [],
+      "rev": 1,
+      "dependsOn": [
+        "style.render",
+        "style.camera"
+      ],
+      "history": [
+        {
+          "rev": 1,
+          "state": "auto",
+          "by": "ai",
+          "label": "2.5 heads tall, 1 m",
+          "at": "2026-10-14T12:35:40.241Z"
+        }
+      ],
+      "value": {
+        "heads": 2.5,
+        "heightM": 1,
+        "hands": "big"
+      },
+      "label": "2.5 heads tall, 1 m",
+      "why": "a app game seen from high three-quarter: big heads read on a phone",
+      "options": [
+        {
+          "id": "h2.5",
+          "label": "2.5 heads",
+          "value": {
+            "heads": 2.5,
+            "heightM": 0.9,
+            "hands": "big"
+          }
+        },
+        {
+          "id": "h4.5",
+          "label": "4.5 heads",
+          "value": {
+            "heads": 4.5,
+            "heightM": 1.5,
+            "hands": "normal"
+          }
+        },
+        {
+          "id": "h6.5",
+          "label": "6.5 heads",
+          "value": {
+            "heads": 6.5,
+            "heightM": 1.8,
+            "hands": "normal"
+          }
+        }
+      ],
+      "at": "2026-10-14T12:35:40.241Z"
+    },
+    "style.materials": {
+      "phase": "style",
+      "question": "What are surfaces made of: flat colour, a gradient atlas, painted pictures or PBR?",
+      "state": "auto",
+      "by": "ai",
+      "steer": [],
+      "rev": 1,
+      "dependsOn": [
+        "style.render",
+        "game.devices"
+      ],
+      "history": [
+        {
+          "rev": 1,
+          "state": "auto",
+          "by": "ai",
+          "label": "Flat palette colours",
+          "at": "2026-10-14T12:35:40.241Z"
+        }
+      ],
+      "value": {
+        "model": "flat",
+        "outline": false,
+        "texelDensity": null,
+        "atlas": true
+      },
+      "label": "Flat palette colours",
+      "why": "follows the render style (Flat low-poly); phones: one material per asset",
+      "options": [
+        {
+          "id": "flat",
+          "label": "Flat palette colours",
+          "value": {
+            "model": "flat",
+            "outline": false,
+            "texelDensity": null,
+            "atlas": true
+          }
+        },
+        {
+          "id": "toon",
+          "label": "Toon ramp",
+          "value": {
+            "model": "toon",
+            "outline": true,
+            "texelDensity": null,
+            "atlas": false
+          }
+        },
+        {
+          "id": "hand-painted",
+          "label": "Hand-painted albedo",
+          "value": {
+            "model": "hand-painted",
+            "outline": false,
+            "texelDensity": null,
+            "atlas": false
+          }
+        },
+        {
+          "id": "pbr",
+          "label": "PBR",
+          "value": {
+            "model": "pbr",
+            "outline": false,
+            "texelDensity": null,
+            "atlas": false
+          }
+        }
+      ],
+      "at": "2026-10-14T12:35:40.241Z"
+    },
+    "style.light": {
+      "phase": "style",
+      "question": "Where does the light come from, how hard, and what time of day?",
+      "state": "auto",
+      "by": "ai",
+      "steer": [],
+      "rev": 1,
+      "dependsOn": [
+        "style.render"
+      ],
+      "history": [
+        {
+          "rev": 1,
+          "state": "auto",
+          "by": "ai",
+          "label": "Golden hour",
+          "at": "2026-10-14T12:35:40.242Z"
+        }
+      ],
+      "value": {
+        "time": "golden",
+        "key": [
+          -0.85,
+          -0.55,
+          -0.25
+        ],
+        "intensity": 2.4,
+        "hardness": 0.55,
+        "sky": "#94bfff",
+        "ground": "#76c9ff",
+        "fog": 0.45,
+        "shadows": "blob",
+        "toonSteps": 3,
+        "bloom": 0.25,
+        "tiltShift": false
+      },
+      "label": "Golden hour",
+      "why": "your words \"warm\"",
+      "options": [
+        {
+          "id": "morning",
+          "label": "Soft morning",
+          "value": "morning"
+        },
+        {
+          "id": "noon",
+          "label": "Bright noon",
+          "value": "noon"
+        },
+        {
+          "id": "golden",
+          "label": "Golden hour",
+          "value": "golden"
+        },
+        {
+          "id": "night",
+          "label": "Moonlight and lamps",
+          "value": "night"
+        },
+        {
+          "id": "overcast",
+          "label": "Soft overcast",
+          "value": "overcast"
+        }
+      ],
+      "at": "2026-10-14T12:35:40.242Z"
+    },
+    "style.camera": {
+      "phase": "style",
+      "question": "Where does the camera sit?",
+      "state": "auto",
+      "by": "ai",
+      "steer": [],
+      "rev": 1,
+      "dependsOn": [],
+      "history": [
+        {
+          "rev": 1,
+          "state": "auto",
+          "by": "ai",
+          "label": "High three-quarter",
+          "at": "2026-10-14T12:35:40.242Z"
+        }
+      ],
+      "value": {
+        "angle": "high-3/4",
+        "projection": "perspective",
+        "pitch": 52,
+        "distance": 22,
+        "fov": 38
+      },
+      "label": "High three-quarter",
+      "why": "a app game: the whole arena and every player readable on a phone",
+      "options": [
+        {
+          "id": "high-3/4",
+          "label": "High three-quarter",
+          "value": "high-3/4"
+        },
+        {
+          "id": "low-3/4",
+          "label": "Low three-quarter",
+          "value": "low-3/4"
+        },
+        {
+          "id": "close-3/4",
+          "label": "Close three-quarter",
+          "value": "close-3/4"
+        },
+        {
+          "id": "iso",
+          "label": "Isometric",
+          "value": "iso"
+        },
+        {
+          "id": "top-down",
+          "label": "Top-down",
+          "value": "top-down"
+        },
+        {
+          "id": "chase",
+          "label": "Chase",
+          "value": "chase"
+        },
+        {
+          "id": "side",
+          "label": "Side",
+          "value": "side"
+        }
+      ],
+      "at": "2026-10-14T12:35:40.242Z"
+    },
+    "style.ui": {
+      "phase": "style",
+      "question": "Which fonts, icons and HUD shape?",
+      "state": "auto",
+      "by": "ai",
+      "steer": [],
+      "rev": 1,
+      "dependsOn": [
+        "style.render",
+        "style.shape"
+      ],
+      "history": [
+        {
+          "rev": 1,
+          "state": "auto",
+          "by": "ai",
+          "label": "Fredoka and Nunito",
+          "at": "2026-10-14T12:35:40.242Z"
+        }
+      ],
+      "value": {
+        "display": "Fredoka",
+        "body": "Nunito",
+        "icons": "filled",
+        "radius": 14,
+        "hud": "chips"
+      },
+      "label": "Fredoka and Nunito",
+      "why": "Google Fonts (OFL) that suit flat low-poly",
+      "options": [
+        {
+          "id": "friendly",
+          "label": "Fredoka / Nunito",
+          "value": {
+            "display": "Fredoka",
+            "body": "Nunito"
+          }
+        },
+        {
+          "id": "bold",
+          "label": "Lilita One / Nunito",
+          "value": {
+            "display": "Lilita One",
+            "body": "Nunito"
+          }
+        },
+        {
+          "id": "storybook",
+          "label": "Fraunces / Lora",
+          "value": {
+            "display": "Fraunces",
+            "body": "Lora"
+          }
+        },
+        {
+          "id": "clean",
+          "label": "Rajdhani / Inter",
+          "value": {
+            "display": "Rajdhani",
+            "body": "Inter"
+          }
+        },
+        {
+          "id": "pixel",
+          "label": "Press Start 2P / Silkscreen",
+          "value": {
+            "display": "Press Start 2P",
+            "body": "Silkscreen"
+          }
+        },
+        {
+          "id": "future",
+          "label": "Orbitron / Inter",
+          "value": {
+            "display": "Orbitron",
+            "body": "Inter"
+          }
+        }
+      ],
+      "at": "2026-10-14T12:35:40.242Z"
+    },
+    "style.vfx": {
+      "phase": "style",
+      "question": "What do effects look like?",
+      "state": "auto",
+      "by": "ai",
+      "steer": [],
+      "rev": 1,
+      "dependsOn": [
+        "style.render",
+        "style.light"
+      ],
+      "history": [
+        {
+          "rev": 1,
+          "state": "auto",
+          "by": "ai",
+          "label": "Soft glows",
+          "at": "2026-10-14T12:35:40.243Z"
+        }
+      ],
+      "value": {
+        "particles": "soft",
+        "hitFlash": true,
+        "trails": false,
+        "glow": true
+      },
+      "label": "Soft glows",
+      "why": "follows flat low-poly",
+      "options": [
+        {
+          "id": "soft",
+          "label": "Soft glows",
+          "value": {
+            "particles": "soft",
+            "hitFlash": true,
+            "trails": false,
+            "glow": true
+          }
+        },
+        {
+          "id": "toon",
+          "label": "Toon shapes",
+          "value": {
+            "particles": "toon",
+            "hitFlash": true,
+            "trails": false,
+            "glow": false
+          }
+        },
+        {
+          "id": "pixel",
+          "label": "Pixel squares",
+          "value": {
+            "particles": "pixel",
+            "hitFlash": true,
+            "trails": false,
+            "glow": false
+          }
+        }
+      ],
+      "at": "2026-10-14T12:35:40.243Z"
+    },
+    "style.refs": {
+      "phase": "style",
+      "question": "Which references, in words, and which golden images?",
+      "state": "auto",
+      "by": "ai",
+      "steer": [],
+      "rev": 1,
+      "dependsOn": [],
+      "history": [
+        {
+          "rev": 1,
+          "state": "auto",
+          "by": "ai",
+          "label": "None yet",
+          "at": "2026-10-14T12:35:40.243Z"
+        }
+      ],
+      "value": {
+        "words": [],
+        "golden": []
+      },
+      "label": "None yet",
+      "why": "golden images come once the style is locked (two to six)",
+      "options": [],
+      "at": "2026-10-14T12:35:40.243Z"
+    }
+  },
+  "board": null,
+  "golden": [],
+  "derived": {
+    "prompt": {
+      "text": "Flat low-poly 3D game asset, round and soft shapes with soft bevels, flat matte colours, no texture noise, palette #3d8bff #8fe3ff #ffcc4d #41c08a #ff5a6a #ffffff #eaf3fb #cfe2f5, golden hour feel but lit evenly and neutrally for modelling, 3/4 view, centred, whole object in frame, plain light grey background, no ground shadow, no text, no logo",
+      "rev": 1,
+      "from": {
+        "style.render": 1,
+        "style.shape": 1,
+        "style.palette": 1,
+        "style.materials": 1,
+        "style.light": 1
+      }
+    }
+  }
+}
