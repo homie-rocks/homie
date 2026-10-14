@@ -99,9 +99,9 @@ export async function reconcileMembership(env, subscription, shop) {
     expand:['items.data.price.product','latest_invoice'],
   });
   if (current.id !== subscription || idOf(current.customer) !== row.customer || current.livemode !== (row.mode === 'live')) throw new Error('Subscription identity mismatch');
-  if (current.items?.has_more) throw new Error('Subscription items require pagination');
+  if (current.items?.has_more) current.items = await allPages(env,'/v1/subscription_items',{subscription,expand:['data.price.product']});
   const invoice = current.latest_invoice;
-  if (invoice?.lines?.has_more) throw new Error('Subscription invoice lines require pagination');
+  if (invoice?.lines?.has_more) invoice.lines = await allPages(env,`/v1/invoices/${invoice.id}/lines`);
   // Every mutation is conditional on the read generation. A slower request cannot
   // overwrite a newer reconciliation, including when Stripe events share a second.
   const guard = `EXISTS(SELECT 1 FROM meta WHERE key=?1 AND value=?2)`;
@@ -128,12 +128,12 @@ export async function reconcileMembership(env, subscription, shop) {
     const paidLine = invoice?.status === 'paid' && invoice.lines?.data?.find(l =>
       (idOf(l.subscription_item ?? l.parent?.subscription_item_details?.subscription_item) === item.id) &&
       idOf(l.price ?? l.pricing?.price_details?.price) === item.price.id &&
-      !(l.proration ?? l.parent?.subscription_item_details?.proration));
+      (l.amount ?? 0) >= 0);
     const paidEnd = Number(paidLine?.period?.end) * 1000;
     const previous = await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`subscription-period:${subscription}:${item.id}`).first();
     const prior = previous ? JSON.parse(previous.value) : null;
     const end = Number.isSafeInteger(paidEnd) && paidEnd > 0 ? paidEnd : prior?.price === item.price.id ? prior.end : 0;
-    const allowedEnd = active && plan && line.status !== 'refunded' ? end : 0;
+    const allowedEnd = active && plan && line.status !== 'refunded' ? Math.min(end, plan.ends ? Date.parse(plan.ends) : Infinity) : 0;
     writes.push(env.DB.prepare(`INSERT INTO meta(key,value) SELECT ?3,?4 WHERE ${guard} ON CONFLICT(key) DO UPDATE SET value=excluded.value`)
       .bind(syncKey,revision,`subscription-period:${subscription}:${item.id}`,JSON.stringify({price:item.price.id,end})));
     // Retain old rows with zero access: removing them would activate the legacy
@@ -152,4 +152,16 @@ export async function reconcileMembership(env, subscription, shop) {
   }
   for (const line of lines) if (!used.has(line.id)) writes.push(env.DB.prepare(`UPDATE shop_entitlement_lines SET ends_at=0 WHERE line_id=?3 AND order_id=?4 AND ${guard}`).bind(syncKey,revision,line.id,row.order_id));
   await env.DB.batch(writes);
+}
+
+async function allPages(env, path, params = {}) {
+  const data=[];let after;
+  for (;;) {
+    const page=await stripeCall(env,'GET',path,{...params,limit:100,starting_after:after});
+    data.push(...page.data);
+    if (!page.has_more) return {data,has_more:false};
+    const next=page.data.at(-1)?.id;
+    if (!next || next===after) throw new Error('Stripe pagination did not advance');
+    after=next;
+  }
 }

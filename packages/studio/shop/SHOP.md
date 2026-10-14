@@ -286,3 +286,24 @@ The giving starter now reads the actual shop donation options with `shop.catalog
 opens Checkout for the selected amount and frequency. A disconnected shop displays
 a disabled preview. No intention record or unverified collected total is created.
 Use the Manage my gifts link for the buyer-owned Stripe portal in the shop.
+
+Membership grants require runtime Stripe reads. Access ends at the paid invoice
+line's period end; a failed renewal does not extend it. Reconciliation reads the
+current subscription, so delayed webhooks cannot restore cancelled/unpaid access.
+Portal changes retain the original financial order snapshot. Replacement grants
+come only from a recognised monthly catalog product, after a paid
+invoice line for that price (including a paid upgrade proration); unknown products grant nothing. Configure portal changes
+accordingly. One-time grants in the same order keep their original duration.
+
+For real sandbox acceptance without copying any API key, import `startStripeSandbox`
+from `lib/dev-stripe-sandbox.mjs` and pass `{origin, profile}` with an explicit
+sandbox CLI profile and loopback studio origin. It drives only that profile's
+Stripe CLI, starts `stripe listen --forward-to` with the required events, and
+returns local dev `bindings` and `close()`. Keep bindings private: the webhook
+signing secret is real even in test mode. Supply them to the local dev harness
+only, never source control or logs. The adapter requires the desktop CLI to stay
+running and is **not a production connection**. It never exports CLI credentials.
+Use Stripe's published CLI test fixtures/tokens to complete Checkout via API;
+never type card details into a form. Stop on an expired profile and ask the owner
+to approve `stripe login --project-name <profile>` once. Stop the adapter and remove
+dev bindings and disposable studios when finished.

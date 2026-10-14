@@ -26,3 +26,33 @@ Sources:
 - https://docs.stripe.com/keys/managed-api-keys
 - https://docs.stripe.com/payments/checkout/managing-limited-inventory
 - https://docs.stripe.com/billing/subscriptions/webhooks
+
+Continuation evidence (2026-10-14):
+- The explicit `Homie sandbox` CLI profile authenticated successfully. No login
+  renewal was needed. Only that profile was used; no CLI credential was exported.
+- The local adapter `lib/dev-stripe-sandbox.mjs` drives the CLI and forwards signed
+  real sandbox events. It is a desktop acceptance tool, not runtime authorization.
+- Actual sandbox Checkout confirmed a held last seat; a competing buyer was
+  refused; mixed cart payment retained table-7; expiry and refund released seats;
+  monthly Checkout and a buyer-owned customer portal session succeeded.
+- Membership access now follows paid invoice periods and current provider status,
+  with original order snapshots retained across recognised plan changes. Provider
+  reads have generation guards against overlapping/out-of-order reconciliations.
+
+The one-approval production blocker is **credential provisioning, not just a
+missing Checkout scope**. Current CLI login/reauth grants remain CLI sessions.
+No published Homie Stripe OAuth app/client or managed-key preview integration was
+found in this repository. Stripe Apps OAuth requires a published public app plus
+an app developer credential for exchange/refresh; managed API keys require preview
+access. These are external prerequisites, not permissions that can be added to
+`stripe login`. Do not extract the CLI's private session, switch to manual paste,
+or describe the local sandbox adapter as production setup. No new app was
+published, no external developer credential was created, and no live account was
+used in this work.
+
+A supported app integration must request Checkout Session writes, subscription /
+invoice / product reads, customer portal session writes, and the existing webhook
+setup and refund permissions, then privately provision and renew the studio's
+runtime credentials. Its browser install remains one owner approval once Homie's
+app integration exists. The unresolved prerequisite prevents a complete 0.51.0
+release claim even if the implementation PR is ready for code review.
