@@ -89,3 +89,13 @@ test('H: monthly CAD gifts create recurring Stripe prices and subscription links
  assert.ok(link.subscription_data); assert.equal(link.payment_intent_data, undefined);
  assert.match(link.after_completion.redirect.url, /^https:\/\/pantry.example\//);
 });
+
+test('H: giving thank-you and terms use the organisation wording without item-access text', async () => {
+ const { thanksPage, refundsPage } = await import('../worker/shop-page.mjs');
+ const shop = { giving: { receiptText: 'Contact our treasurer about receipts.' }, currency: 'cad', items: [], policy: {}, refundDays: null };
+ for (const page of [thanksPage, refundsPage]) {
+  const html = await page({ studio: { name: 'Pantry' } }, shop).text();
+  assert.match(html, /Contact our treasurer/);
+  assert.doesNotMatch(html, /unused items|digital items|keep access|statutory rights/);
+ }
+});
