@@ -1,6 +1,6 @@
 # Experimental MCP Events
 
-Studio MCP implements the [Triggers & Events working group's design sketch](https://github.com/modelcontextprotocol/experimental-ext-triggers-events) as inspected on 2026-10-14. This is an experimental draft, not an adopted MCP standard. Method names, envelopes, schemas, metadata keys and provisional error codes live in `worker/mcp-events-wire.mjs` so draft changes have one wire-format boundary. The studio's existing `resources/subscribe`, event resources and cursor-read tool continue to work.
+Studio MCP implements the [Triggers & Events working group's design sketch](https://github.com/modelcontextprotocol/experimental-ext-triggers-events/blob/13e0a59749cde947374aaa8e3a65f0b424468d5a/docs/design-sketch-proposal.md) as inspected on 2026-10-14. This is an experimental draft, not an adopted MCP standard. Method names, envelopes, schemas, metadata keys and provisional error codes live in `worker/mcp-events-wire.mjs` so draft changes have one wire-format boundary. The studio's existing `resources/subscribe`, event resources and cursor-read tool continue to work.
 
 Declare feeds in `studio.json` under `mcp.events`. Each map key is the extension's event `name`. For example:
 

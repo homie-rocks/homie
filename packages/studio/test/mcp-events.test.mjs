@@ -37,6 +37,7 @@ test('list and poll conform: role filtering, null bootstrap, replay, hasMore, ma
  const rest=await pollEvents(env,cat,staff,{name:'bookings',cursor:page.cursor});assert.deepEqual(rest.events.map(e=>e.eventId),['two']);assert.equal(rest.hasMore,false);
  const bounded=await pollEvents(env,cat,staff,{name:'bookings',cursor:initial.cursor,maxAgeMs:1},13);assert.equal(bounded.truncated,true);assert.equal(bounded.events[0].eventId,'two');
  await emit('not-visible',14,'private');const quiet=await pollEvents(env,cat,staff,{name:'bookings',cursor:rest.cursor});assert.equal(quiet.events.length,0);assert.notEqual(quiet.cursor,rest.cursor);
+ const last=await pollEvents(env,cat,staff,{name:'bookings',cursor:page.cursor,maxEvents:1});assert.equal(last.events[0].eventId,'two');assert.equal(last.hasMore,false,'unrelated later records are not more occurrences');
  await rejects(()=>pollEvents(env,cat,anonymous,{name:'bookings'}),-32024);
  await rejects(()=>pollEvents(env,cat,staff,{name:'missing'}),-32023);
  await rejects(()=>pollEvents(env,cat,owner,{name:'__proto__'}),-32023);

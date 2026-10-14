@@ -1,6 +1,6 @@
 /** Experimental MCP Events design sketch (2026-10-14 snapshot).
  * Keep draft method names, envelopes, schemas and provisional codes here.
- * https://github.com/modelcontextprotocol/experimental-ext-triggers-events
+ * https://github.com/modelcontextprotocol/experimental-ext-triggers-events/blob/13e0a59749cde947374aaa8e3a65f0b424468d5a/docs/design-sketch-proposal.md
  */
 export const eventsCapability={events:{listChanged:true}};
 export const eventMethods=new Set(['events/list','events/poll','events/stream','events/subscribe','events/unsubscribe']);

@@ -82,7 +82,7 @@ export async function runFunctions(env, cat, origin, {definitions, now = Date.no
         } catch(error) {permanent=error.permanent===true;failure=fn.webhook?webhookFailure(error):functionError(error,env);}
         const finished=now();
         const firstAttempt=fn.mcpEvent?(await env.DB.prepare('SELECT MIN(started) at FROM function_runs WHERE event=?1 AND function=?2').bind(row.event,fn.name).first()).at:finished;
-        const abandoned=fn.mcpEvent&&failure!==null&&(permanent||row.attempts+1>=5||finished-firstAttempt>=900000); 
+        const abandoned=fn.mcpEvent&&failure!==null&&(permanent||row.attempts+1>=5||finished-firstAttempt>=900000);
         await env.DB.batch([
           failure===null
             ? env.DB.prepare(`UPDATE function_deliveries SET state='complete',completed=?4,error=NULL WHERE event=?1 AND function=?2 AND lease=?3`).bind(row.event,fn.name,lease,finished)

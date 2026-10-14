@@ -35,14 +35,17 @@ export async function eventStart(env,params,now=Date.now()){
 }
 export async function pollEvents(env,cat,caller,params,now=Date.now()){
   const feed=await checkEvent(env,cat,caller,params),start=await eventStart(env,params,now);
-  let after=start.after;const events=[],max=Math.min(params.maxEvents??100,100),scanLimit=1000;let scanned=0;
-  while(after<start.through&&scanned<scanLimit){
-    const rows=(await env.DB.prepare('SELECT seq,id,type,data,at FROM studio_events WHERE seq>?1 AND seq<=?2 ORDER BY seq LIMIT 100').bind(after,start.through).all()).results;
-    if(!rows.length){after=start.through;break;}
-    for(const row of rows){after=row.seq;scanned++;const event={...row,data:JSON.parse(row.data)};if(matchesFeed(feed,event))events.push(occurrence(params.name,event,cursorOf(params.name,row.seq)));if(events.length===max)break;}
-    if(events.length===max)break;
-  }
-  return {events,cursor:cursorOf(params.name,after),truncated:start.truncated,hasMore:after<start.through,nextPollMs:5000};
+  const max=Math.min(params.maxEvents??100,100);
+  // Filter before limiting: unrelated collections must not create a false hasMore
+  // or force the client through pages containing no matching occurrences.
+  const rows=(await env.DB.prepare(`SELECT seq,id,type,data,at FROM studio_events
+    WHERE type=?1 AND seq>?2 AND seq<=?3
+      AND (?4 IS NULL OR (json_extract(data,'$.app')=?4 AND json_extract(data,'$.collection')=?5))
+    ORDER BY seq LIMIT ?6`).bind(feed.event,start.after,start.through,feed.event==='record.changed'?feed.app:null,feed.collection??null,max+1).all()).results;
+  const hasMore=rows.length>max,page=rows.slice(0,max);
+  const events=page.map(row=>occurrence(params.name,{...row,data:JSON.parse(row.data)},cursorOf(params.name,row.seq)));
+  const after=hasMore?page.at(-1).seq:start.through;
+  return {events,cursor:cursorOf(params.name,after),truncated:start.truncated,hasMore,nextPollMs:5000};
 }
 async function subId(caller,params,url){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify([caller.id,url,params.name,{}])));return 'sub_'+Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('');}
 async function stored(env,id){const row=await env.DB.prepare('SELECT value FROM mcp_kv WHERE key=?1').bind(prefix+id).first();return row?JSON.parse(row.value):null;}
