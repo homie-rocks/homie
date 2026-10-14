@@ -67,7 +67,7 @@ export async function startKeylessStripeSandbox({origin,profile,shop,bookingSlot
     if(!result.ok)throw Error('Sandbox Payment Link sync failed');
     // This placeholder destination is disabled; the private local listener delivers events.
     if(endpoint)await api('POST',`/v1/webhook_endpoints/${endpoint}`,{disabled:true});
-    return {bindings:{STRIPE_CHECKOUT_MODE:'links',STRIPE_SHOP_LINKS:links,STRIPE_WEBHOOK_SECRET:sandbox.bindings.STRIPE_WEBHOOK_SECRET},call:api,
-      close:async()=>{await sandbox.close();}};
+    return {links:JSON.parse(links),bindings:{STRIPE_CHECKOUT_MODE:'links',STRIPE_SHOP_LINKS:'base64:'+Buffer.from(links).toString('base64'),STRIPE_WEBHOOK_SECRET:sandbox.bindings.STRIPE_WEBHOOK_SECRET},call:api,
+      close:async()=>{try{const config=JSON.parse(links);for(const link of [...config.items,...config.menus,...config.slots])await api('POST',`/v1/payment_links/${link.id}`,{active:false});}finally{await sandbox.close();}}};
   }catch(e){await sandbox.close();throw e;}
 }

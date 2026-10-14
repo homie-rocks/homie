@@ -321,7 +321,7 @@ from `lib/dev-stripe-sandbox.mjs` and pass `{origin, profile, shop, bookingSlots
 sandbox CLI profile and loopback studio origin. It drives only that profile's
 Stripe CLI, starts `stripe listen --forward-to` with the required events, and
 returns local dev `bindings` and `close()`. Keep bindings private: the webhook
-signing secret is real even in test mode. Supply them to the local dev harness
+signing secret is real even in test mode. The keyless helper encodes link configuration for safe .dev.vars transport; do not decode or rewrite that binding. Use the helper’s `links` property for native link IDs when testing. `close()` deactivates its sandbox links and stops forwarding. Supply them to the local dev harness
 only, never source control or logs. The local webhook forwarding listener needs the desktop; production uses the signed public webhook directly. No API adapter or key is installed in the keyless Worker. It never exports CLI credentials.
 Use Stripe's published CLI test fixtures/tokens to complete Checkout via API;
 never type card details into a form. Stop on an expired profile and ask the owner

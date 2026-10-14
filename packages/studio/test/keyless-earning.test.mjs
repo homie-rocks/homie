@@ -4,7 +4,7 @@ import {createHmac} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
 import {readdirSync,readFileSync} from 'node:fs';
 import {shopRoutes,shopOf} from '../worker/shop.mjs';
-import {linkSettings,hasStripeKey} from '../worker/shop-links.mjs';
+import {linkSettings,hasStripeKey,linkConfig} from '../worker/shop-links.mjs';
 import {withToolIdentity} from '../worker/tool-identity.mjs';
 import {subscriptionPortal} from '../worker/shop-subscriptions.mjs';
 function fixture(t){
@@ -24,6 +24,7 @@ function fixture(t){
  const session=(order,kind,extra={})=>({id:'cs_test_'+order.order,client_reference_id:order.order,payment_link:'plink_'+kind,metadata:{revision:kind},currency:'cad',amount_subtotal:5000,amount_total:5000,payment_status:'paid',payment_intent:'pi_'+order.order,...extra});
  return{sql,env,config,buy,hook,session};
 }
+test('dotenv-safe keyless bindings preserve unicode and punctuation',()=>{const config={v:1,mode:'test',items:[],settings:"Maya’s #1 tune's \"shop\""};assert.deepEqual(linkConfig({STRIPE_SHOP_LINKS:'base64:'+Buffer.from(JSON.stringify(config)).toString('base64')}),config);});
 test('key alone does not select sessions',()=>{assert.equal(hasStripeKey({STRIPE_KEY:'rk_test_fixture'}),false);assert.equal(hasStripeKey({STRIPE_KEY:'rk_test_fixture',STRIPE_CHECKOUT_MODE:'sessions'}),true);});
 test('menu waits for signed paid invoice, records actual quantities and reference once, tolerates reversed delivery',async t=>{
  const f=fixture(t);const cart=await f.buy({lines:[{item:'tune',quantity:1},{item:'wax',quantity:1}],reference:'table-7'});assert.equal(cart.ok,true);assert.match(cart.url,/test_menu/);

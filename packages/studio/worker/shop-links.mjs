@@ -4,7 +4,7 @@ import { KEY_SHAPE, modeOf } from './stripe.mjs';
 export const LINKS_STRIPE_VERSION = '2026-09-30.endive';
 export const hasStripeKey = (env) => env?.STRIPE_CHECKOUT_MODE === 'sessions' && KEY_SHAPE.test(String(env?.STRIPE_KEY ?? ''));
 export function linkConfig(env) {
-  try { const c = JSON.parse(env?.STRIPE_SHOP_LINKS ?? 'null'); return c?.v === 1 && ['test', 'live'].includes(c.mode) && Array.isArray(c.items) ? c : null; } catch { return null; }
+  try { const raw=env?.STRIPE_SHOP_LINKS??'null'; const c = JSON.parse(raw.startsWith('base64:') ? new TextDecoder().decode(Uint8Array.from(atob(raw.slice(7)),c=>c.charCodeAt(0))) : raw); return c?.v === 1 && ['test', 'live'].includes(c.mode) && Array.isArray(c.items) ? c : null; } catch { return null; }
 }
 export const shopMode = (env) => hasStripeKey(env) ? modeOf(env.STRIPE_KEY) : linkConfig(env)?.mode ?? 'test';
 export function linkSettings(shop) {
