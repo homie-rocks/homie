@@ -60,3 +60,32 @@ test('I: four advertised starters exist and declare their actual workflow', asyn
   assert.notEqual(meta.check.action, '[data-join]');
  }
 });
+
+test('L: Grok Bot feedback retains its client identity', async () => {
+ const { appOf, cleanNote } = await import('../lib/feedback.mjs');
+ assert.equal(appOf({ name: 'Grok Bot' }), 'grok');
+ assert.equal(cleanNote({ kind: 'issue', text: 'App setup failed', app: 'grok' }).note.app, 'grok');
+});
+
+test('H: monthly CAD gifts create recurring Stripe prices and subscription links', async () => {
+ const { syncPaymentLinks } = await import('../lib/shop-links.mjs');
+ const { checkShop } = await import('../worker/shop-rules.mjs');
+ const calls = [];
+ const api = async (method, path, params) => {
+  calls.push({ method, path, params });
+  if (method === 'GET') return { data: [], has_more: false };
+  if (path === '/v1/products') return { id: params.id, ...params };
+  if (path === '/v1/prices') return { id: 'price_gift', active: true };
+  if (path === '/v1/payment_links') return { id: 'plink_gift', url: 'https://buy.stripe.com/test_gift', active: true };
+  if (path === '/v1/webhook_endpoints') return { id: 'we_gift', secret: 'whsec_' + 'x'.repeat(32) };
+  return {};
+ };
+ const shop = checkShop({ currency: 'cad', giving: { receiptText: 'Our own receipt wording' }, items: [{ id: 'monthly', kind: 'donation', name: 'Monthly gift', price: 2500, interval: 'month' }] }).shop;
+ const result = await syncPaymentLinks({ api, shop, slug: 'pantry', site: 'https://pantry.example', mode: 'test', w: async args => ({ code: 0, stdout: args[1] === 'list' ? '[]' : '' }), saveReceipt: () => {} });
+ assert.equal(result.ok, true);
+ const price = calls.find(c => c.method === 'POST' && c.path === '/v1/prices').params;
+ assert.equal(price.currency, 'cad'); assert.deepEqual(price.recurring, { interval: 'month' });
+ const link = calls.find(c => c.method === 'POST' && c.path === '/v1/payment_links').params;
+ assert.ok(link.subscription_data); assert.equal(link.payment_intent_data, undefined);
+ assert.match(link.after_completion.redirect.url, /^https:\/\/pantry.example\//);
+});

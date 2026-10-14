@@ -339,7 +339,7 @@ async function studioCard(ctx, root) {
     const cover = budget > 0 ? coverData(g.dir) : null;
     if (cover) budget -= cover.length;
     const isLive = live && onLine.has(g.id);
-    return { id: g.id, name: String(g.name ?? g.id).slice(0, 60), blurb: String(g.blurb ?? '').slice(0, 160), cover, live: Boolean(isLive), play: { dev: dev ? `${dev.url}/${g.id}/play` : null, live: isLive ? `${live}/${g.id}/play` : null }, page: isLive ? `${live}/${g.id}/` : null };
+    return { id: g.id, name: String(g.name ?? g.id).slice(0, 60), blurb: String(g.blurb ?? '').slice(0, 160), cover, live: Boolean(isLive), play: { dev: dev ? `${dev.url}/${g.id}/${g.kind === 'app' ? 'open' : 'play'}` : null, live: isLive ? `${live}/${g.id}/${g.kind === 'app' ? 'open' : 'play'}` : null }, page: isLive ? `${live}/${g.id}/` : null };
   });
   const posts = (() => { try { return readdirSync(join(root, 'posts')).filter((f) => /\.md$/.test(f) && f !== 'README.md' && !/^[_.]/.test(f)).length; } catch { return 0; } })();
   let rooms = [];
@@ -350,7 +350,8 @@ async function studioCard(ctx, root) {
       rooms = (Array.isArray(body?.rooms) ? body.rooms : []).slice(0, 8).map((r) => ({ game: String(r.game ?? '').slice(0, 40), room: String(r.room ?? '').slice(0, 20), players: Number(r.players) || 0 }));
     } catch { rooms = []; }
   }
-  const demo = games.length ? null : await demoGames({ timeoutMs: 4000 }).then((d) => ({ name: d.pick.name, play: d.pick.play, studio: d.studio.name })).catch(() => null);
+  const appStudio = ['business', 'cause', 'app'].includes(studio.kind);
+  const demo = games.length || appStudio ? null : await demoGames({ timeoutMs: 4000 }).then((d) => ({ name: d.pick.name, play: d.pick.play, studio: d.studio.name })).catch(() => null);
   const data = {
     kind: 'studio', folder: basename(root), root, name: studio.name, tagline: studio.tagline ?? null,
     games, songs: published(root, 'music'), videos: published(root, 'videos'), posts,
@@ -360,7 +361,7 @@ async function studioCard(ctx, root) {
   if (behind) data.behind = { ...behind, whatsNew: behind.whatsNew ? { ...behind.whatsNew, versions: behind.whatsNew.versions.slice(0, 6).map(({ version, summary, upgrade }) => ({ version, summary, upgrade: upgrade.slice(0, 2) })) } : null };
   const text = [
     `${studio.name} (${root})`,
-    games.length ? `Games: ${games.map((g) => `${g.name} (${g.id}${live ? (g.live ? ', live' : ', not deployed yet') : ''})`).join(', ')}` : 'No game yet: its home page says "First game coming soon".',
+    games.length ? `${appStudio ? 'Apps' : 'Apps and games'}: ${games.map((g) => `${g.name} (${g.id}${live ? (g.live ? ', live' : ', not deployed yet') : ''})`).join(', ')}` : appStudio ? 'No app yet: app new creates your first live app.' : 'No game yet: its home page says "First game coming soon".',
     dev ? `Running here: ${dev.url}/` : 'Not running here (preview_run starts it).',
     live ? `Live: ${live}/` : 'Not online yet (studio_deploy).',
     ...(rooms.length ? [`Live rooms: ${rooms.map((r) => `${r.game} ${r.room} (${r.players})`).join(', ')}`] : []),

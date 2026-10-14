@@ -22,7 +22,7 @@ try {
  mkdirSync(shots, { recursive: true });
  const pack = JSON.parse(run(['npm', 'pack', '--json', '--pack-destination', scratch], join(ROOT, 'packages/studio')))[0];
  const tar = join(scratch, pack.filename);
- blocker = createServer();
+ blocker = createServer(socket => { socket.on('error', () => {}); socket.end(); });
  await new Promise((ok, bad) => { blocker.once('error', e => e.code === 'EADDRINUSE' ? ok() : bad(e)); blocker.listen(8787, '127.0.0.1', ok); });
  server = mcpServer(process.execPath, [CLI, 'mcp', '--studios', scratch, '--no-install'], { cwd: ROOT });
  await server.request('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'Grok Bot', version: '1' } });

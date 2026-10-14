@@ -58,6 +58,18 @@ export async function appProof({ wrangler, shots = null, log = () => {} }) {
     const sql = (text) => { const r = spawnSync(process.execPath, [wrangler, 'd1', 'execute', 'DB', '--local', '--command', text], { cwd: studio, encoding: 'utf8', env: { ...process.env, WRANGLER_SEND_METRICS: 'false' } }); assert.equal(r.status, 0, r.stderr); };
     const checked = await check({ url: origin, game: 'welcome', log }); assert.equal(checked.ok, true, checked.why);
     sql('DELETE FROM app_records;');
+    const fallbackBrowser = await puppeteer.launch({ executablePath: findChrome(), headless: true, args: [...chromeArgs(), '--disable-webgl'] });
+    try {
+      const page = await fallbackBrowser.newPage();
+      await page.goto(`${local}/welcome/tv?room=fallback`);
+      await page.waitForFunction(() => window.__shell?.arrival?.phase === 'done', { timeout: 60000 });
+      const frame = page.frames().find(f => /\/__game\//.test(f.url()));
+      await frame.waitForSelector('[data-webgl-fallback]');
+      assert.match(await frame.$eval('[data-webgl-fallback]', el => el.textContent), /3D|graphics|screen/i);
+      assert.equal(await frame.$eval('canvas', el => el.hidden), true);
+      log('WebGL disabled: useful fallback and live queue remain visible');
+    } finally { await fallbackBrowser.close(); }
+
     browser = await puppeteer.launch({ executablePath: findChrome(), headless: true, userDataDir: join(scratch, 'chrome'), args: chromeArgs(), timeout: 150000 });
     const surface = async (name, width, height) => { const context = await browser.createBrowserContext(); const page = await context.newPage(); await page.setViewport({ width, height, isMobile: name.startsWith('phone'), hasTouch: name !== 'wall' }); page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`)); return { name, context, page }; };
     const wall = await surface('wall', 1600, 900), phone = await surface('phone', 390, 844), phone2 = await surface('phone-two', 390, 844), staff = await surface('staff-tablet', 1024, 768);
