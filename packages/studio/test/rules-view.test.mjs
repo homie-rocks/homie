@@ -147,6 +147,11 @@ export default defineRules({contract:2,space:{dims:3},move,shapes:{commands:{lau
         if(b.motion.launch){const age=c.tick-b.motion.launch;b.motion.phase=Math.min(20,age);if(age===1)b.pos={x:b.pos.x+4,y:0,z:0};b.grounded=age>=10;b.vel={x:0,y:0,z:age<10?1:0};b.pos={x:b.pos.x,y:0,z:age<10?age*.1:0};}
         else b.pos={x:0,y:0,z:b.pos.z+i.az/127};
       }});`);
+    } else if (runaway === 'counter-knock') {
+      writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-100,-100], max: [100,100] } }));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
+export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{launch:{}}},entities:{runner:{player:true,input:{dash:f.pulse()},motion:{launch:f.tick(),dash:f.tick()},body:{shape:'circle',radius:.44,maxSpeed:36},commands:{launch(w,s){s.motion.launch=w.tick;}}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:0,y:0,z:0}};}}});`);
+      writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){if(i.dash&&!b.motion.dash)b.motion.dash=c.tick;const d=b.motion.dash,k=b.motion.launch;const vx=!d&&k&&c.tick-k<=8?9:0,vy=d&&c.tick-d<8?-9:0;b.vel={x:vx,y:vy,z:0};b.pos=c.math.add(b.pos,c.math.scale(b.vel,c.dt));}});`);
     } else if (runaway === 'knock') {
       writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-100, -100, 0], max: [100, 100, 3] } }));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules'; import {move} from './move';
@@ -2441,3 +2446,23 @@ for (const seed of [17,41,83]) test(`own drawing stays outside a solid ledge und
   for(let n=0;n<60;n++){await clock.wait(16);minY=Math.min(minY,a.me.pos.y);}
   assert.ok(minY<-2,'the same contact lets the body jump away');
  });
+for(const delay of [80,150,300])test(`counter-dash leaves knock catch-up on the press without a pose discontinuity: ${delay} ms`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'counter-knock',{catchM:.44,catchUp:1});
+ const clock=virtualTime(t),r=rig(L,compiled,false,delay,delay);t.after(()=>r.stop());
+ const a=openRoom({net:{config:cfg('Ada'),WebSocketImpl:r.socket(),post:null}});t.after(()=>a.close());
+ await clock.wait(12000);a.command('launch');
+ let caught=false;
+ for(let i=0;i<120;i++){await clock.wait(16);void a.me;if(globalThis.__homieNet.probe.prediction().catchTick!==null){caught=true;break;}}
+ assert.ok(caught,'real server knock entered catch-up');
+ for(let i=0;i<12;i++){await clock.wait(16);void a.me;}
+ const before=a.me.pos;a.input({dash:1});const immediate=a.me.pos;
+ assert.ok(Math.hypot(immediate.x-before.x,immediate.y-before.y)<.001,'press preserves the drawn origin');
+ await clock.wait(16);const next=a.me.pos;
+ assert.ok(next.y<before.y-.05,`the counter moves on the next frame: ${before.y} -> ${next.y}`);
+ let previous=next,largest=0;
+ for(let i=0;i<120;i++){await clock.wait(16);const p=a.me.pos;largest=Math.max(largest,Math.hypot(p.x-previous.x,p.y-previous.y));previous=p;}
+ assert.ok(largest<.7,`continuous frames: ${largest} m`);
+ const authority=r.host.core.snapshot()[1].find(e=>e[9]===a.seat)[3];
+ assert.ok(Math.hypot(a.me.pos.x-authority[0],a.me.pos.y-authority[1])<.001,'the blend converges to authority');
+ assert.equal(r.host.core.stats.errors,0);
+});
