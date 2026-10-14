@@ -9,11 +9,13 @@ import worker from '../worker/index.mjs';
 const meta={id:'form',name:'Form',kind:'app',roles:{customer:{signIn:false,can:[]}},surfaces:{phone:'customer',wall:'customer'},records:{persist:true,collections:{}},words:{},netplay:{}};
 async function fixture(t,html,shop=null){
  const cat={studio:{name:'Test'},games:[meta]},env={ASSETS:{fetch:async req=>new URL(req.url).pathname.endsWith('index.html')?new Response(html,{headers:{'content-type':'text/html'}}):Response.json(cat)}};
+ const mark=stage=>console.log('SANDBOX',t.name,stage,Math.round(performance.now()));
+ mark('fixture');
  let loads=0;
  const server=createServer(async(req,res)=>{try{const origin=`http://localhost:${server.address().port}`;if(req.url==='/frame'){res.end('<iframe style="width:100vw;height:100vh;border:0" sandbox="allow-scripts allow-modals" src="/form/__game/"></iframe>');return;}if(req.url.startsWith('/form/__game/'))loads++;const r=req.url==='/records-with-shop'?recordsPage(meta,new URL(origin+'/form/play'),cat,shop):await worker.fetch(new Request(origin+req.url),env,{waitUntil:p=>p.catch(()=>{})});res.writeHead(r.status,Object.fromEntries(r.headers));res.end(Buffer.from(await r.arrayBuffer()));}catch(e){res.writeHead(500);res.end(e.message);}});
- server.listen(0,'127.0.0.1');await once(server,'listening');t.after(()=>new Promise(r=>(server.closeAllConnections(),server.close(r))));
- const browser=await puppeteer.launch({executablePath:findChrome(),headless:true,args:[...chromeArgs(),'--disable-webgl']});t.after(()=>browser.close());
- const page=await browser.newPage();await page.setViewport({width:390,height:844});return {page,origin:`http://localhost:${server.address().port}`,loads:()=>loads};
+ server.listen(0,'127.0.0.1');await once(server,'listening');t.after(()=>new Promise(r=>{mark('server closing');server.closeAllConnections();server.close(()=>{mark('server closed');r();});}));
+ mark('launch');const browser=await puppeteer.launch({executablePath:findChrome(),headless:true,args:[...chromeArgs(),'--disable-webgl']});mark('launched');t.after(async()=>{mark('browser closing');await browser.close();mark('browser closed');});
+ const page=await browser.newPage();mark('page');await page.setViewport({width:390,height:844});mark('viewport');page.on('load',()=>mark('load'));page.on('domcontentloaded',()=>mark('domcontentloaded'));return {page,origin:`http://localhost:${server.address().port}`,loads:()=>loads};
 }
 test('sandboxed app storage is usable and WebGL fallback does not cover the headline',{timeout:15000},async t=>{
  const {page,origin}=await fixture(t,'<!doctype html><head></head><body><h1 style="position:absolute;top:80px">Our fittings</h1><canvas></canvas><script>localStorage.setItem("draft","one");sessionStorage.setItem("draft","two");document.body.dataset.storage=localStorage.getItem("draft")+sessionStorage.getItem("draft");</script></body>');
