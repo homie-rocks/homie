@@ -19,25 +19,23 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [0.50.7] - 2026-10-14
 
-<!-- pending-release: renumber before publishing -->
+**Plugin 0.50.7** · Prove your needs on every screen, with fixes from studio testers.
 
-**Plugin 0.50.7** · Prove owner needs on every named screen and smooth studio operations.
-
-Apps can prove staff, tablet and kiosk workflows with fresh local records, while studio functions and AI clients can work safely under concurrent activity.
+Your app checks can show that your staff, tablet, kiosk, phone and wall workflows meet the needs you wrote down. Local checks use fresh records, and everyday studio work is more reliable.
 
 ### Fixed
 
-- Needs use the named surfaces and roles, observe sound/haptic/notification requests, name waits, and share the baseline arrival barrier after reload. Local check uses isolated records by default and dev-only staff sessions; production sign-in is unchanged.
-- Local function fire and tool calls work headlessly, including the first event and app/booking references. Studio-wide staff grants coexist with per-app grants.
-- Function storage offers versioned compare-and-set, atomic append/increment and prefix pages. Event feeds are readable as tools, announce changed tool lists, and support owner-requested history clearing through a sequence.
-- Dev watches root authoring HTML/CSS/JS. App Web Storage has an opaque-frame memory fallback; records-only apps need no room, map or rules and load their frame once. Checks report accepted dialogs and recover rebuilt frames. Local role links use localhost.
-- App record validation describes field and ID rules in errors and tool schemas; tool failures preserve their reason with binding credentials redacted. The WebGL fallback clears the headline on narrow screens, and codex help names the app path.
-- Local and live unconnected shop/giving pages retain items and amounts with disabled checkout. A fresh studio's shop serves an empty preview.
+- App checks use the screens and staff roles named in your needs, verify sound, vibration and notification requests, and wait for the app to be ready after a reload. If a check cannot finish, it tells you which screen and condition it was waiting for.
+- Your AI can test local functions and tools without opening a browser, including the first event and its app or booking references. Staff access across your studio works alongside access granted to individual apps.
+- Functions can safely update shared records, append entries and increment counters when several requests arrive together. Your AI can read event feeds through tools, discover feed changes, and clear history through a point you choose.
+- Local previews refresh when you edit your app's HTML, CSS or JavaScript. Records-only apps open without game rules or a room, and embedded apps can keep temporary browser storage when persistent storage is unavailable. Checks handle confirmation dialogs and rebuilt app frames; local staff links use localhost.
+- Invalid records explain which field or ID needs fixing. Tool failures keep their useful explanation while hiding credentials. On narrow screens without 3D support, the fallback message leaves the headline readable; command help points to your app's files.
+- Shop and giving previews keep your items and amounts visible before payments are connected, with checkout disabled. A new studio can preview an empty shop.
 
 ### Upgrade notes
 
-- Migration `0024_tool_data_versions.sql` adds storage versions. No studio quota or automatic retention policy is introduced. `check --no-isolate` explicitly opts into existing records; ordinary dev/check uses a private local credential.
-- Package and plugin versions are unchanged in this PR. The pending section is renumbered at release with `node scripts/renumber-release.mjs`.
+- Upgrade, build and redeploy your studio to apply migration `0024_tool_data_versions.sql`, which lets functions detect conflicting record updates. This release adds no studio quota or automatic history deletion.
+- Local app checks use isolated records and private local staff sessions by default. Use `check --no-isolate` when you deliberately want to check existing records. Production sign-in stays the same.
 
 ## [0.50.6] - 2026-10-14
 
