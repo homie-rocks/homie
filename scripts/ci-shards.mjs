@@ -3,6 +3,9 @@
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+// Refreshed CI measurements need sixteen full-suite and ten compatibility bins
+// to stay below eight minutes without relaxing the eleven-minute watchdog.
+export const shardCounts = { full: 16, compat: 10 };
 export function inventory() {
   return [...readdirSync('packages').flatMap(p => {
     try { return readdirSync(`packages/${p}/test`).filter(f => f.endsWith('.test.mjs')).map(f => `packages/${p}/test/${f}`); } catch { return []; }
@@ -40,7 +43,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     data.source = 'Measured per-file wall time from CI shard artifacts; unmeasured files retain their baseline estimate.';
     writeFileSync(timingFile, JSON.stringify(data, null, 2) + '\n');
   }
-  const bins = balance(inventory().filter(f => !subset || compatible(f)), subset ? Object.fromEntries(inventory().map(f => [f, Math.max(data.seconds[f] ?? 15, data.compatSeconds?.[f] ?? 0)])) : data.seconds, subset ? 8 : 12);
+  const bins = balance(inventory().filter(f => !subset || compatible(f)), subset ? Object.fromEntries(inventory().map(f => [f, Math.max(data.seconds[f] ?? 15, data.compatSeconds?.[f] ?? 0)])) : data.seconds, subset ? shardCounts.compat : shardCounts.full);
   if (args.includes('--list') || args[0] === '--rebalance') {
     console.log(JSON.stringify(bins, null, 2));
   } else {

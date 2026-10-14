@@ -174,12 +174,12 @@ try {
     // Keep the original starter's bots for authority, disconnection and bot-seat
     // handoff. Random enemy knockback is not a keyboard/touch direction oracle.
     const life = controls('life');
-    let originalRules = null;
+    let originalInputFile = null;
     if (game === 'gem-rush') {
       await stopDev();
       const rules = join(studio, 'games', game, 'src', 'rules.ts');
       const original = readFileSync(rules, 'utf8');
-      originalRules = { path: rules, text: original };
+      originalInputFile = { path: rules, text: original };
       const botFill = 'bots: { keep: 3 }';
       if (original.split(botFill).length !== 2) throw new Error('Gem Rush control fixture changed: review its bot-fill isolation');
       writeFileSync(rules, original.replace(botFill, 'bots: { keep: 0 }'));
@@ -187,10 +187,27 @@ try {
       await startDev();
       lines.push('- input accuracy: temporary Gem Rush fixture without random enemy knockback; original bot round, handoff and knockback lab checked separately');
     }
-    const input = controls('owner-desk,owner-phone');
-    if (originalRules) {
+    if (game === 'coin-dash') {
       await stopDev();
-      writeFileSync(originalRules.path, originalRules.text);
+      const mapFile = join(studio, 'games', game, 'map', 'main.json');
+      const original = readFileSync(mapFile, 'utf8');
+      originalInputFile = { path: mapFile, text: original };
+      const map = JSON.parse(original);
+      // Each hold lasts five seconds at up to six units/second. Give both
+      // down and left the full 30-unit runway, outside the original obstacles,
+      // so contact corrections cannot masquerade as wrong input on SwiftShader.
+      // The original bounded arena ran above; keep every input assertion.
+      map.bounds = { min: [-64, -64], max: [64, 64] };
+      map.spots.start = [[48, 48]];
+      writeFileSync(mapFile, JSON.stringify(map, null, 2) + '\n');
+      sh(cli, ['build', '--json'], studio, env);
+      await startDev();
+      lines.push('- input accuracy: temporary Coin Dash spawn with down/left runway; original map checked in the round, lifecycle and lab');
+    }
+    const input = controls('owner-desk,owner-phone');
+    if (originalInputFile) {
+      await stopDev();
+      writeFileSync(originalInputFile.path, originalInputFile.text);
       // A subsequent drive check must also exercise the unmodified starter.
       if (process.argv.includes('--drive')) {
         sh(cli, ['build', '--json'], studio, env);

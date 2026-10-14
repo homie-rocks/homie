@@ -333,8 +333,9 @@ test('storage add: refused with the dashboard link on an account without R2 (not
 });
 
 test('dev --stop stops exactly this studio\'s dev server (Wrangler with it), and nothing else', async () => {
+  // Process ownership does not need a game: a full rules build can outlast the
+  // registration deadline on CI. Game builds are exercised by the tests above.
   const dir = studio('devstop');
-  browserRulesGame(dir, 'crown-thief');
   const bin = join(dir, 'node_modules', '.bin');
   mkdirSync(bin, { recursive: true });
   // A stand-in Wrangler: `dev` runs until it is stopped, like the real one.
@@ -342,11 +343,15 @@ test('dev --stop stops exactly this studio\'s dev server (Wrangler with it), and
   chmodSync(join(bin, 'wrangler'), 0o755);
   // Another project's dev server, running the very same command line a pattern would match.
   const other = spawn(join(bin, 'wrangler'), ['dev', '--local'], { stdio: 'ignore' });
-  const devProc = spawn(process.execPath, [CLI, 'dev', '--port', '18989'], { cwd: dir, stdio: 'ignore' });
+  const devProc = spawn(process.execPath, [CLI, 'dev', '--port', '18989'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] });
+  let startup = '';
+  devProc.stdout.on('data', chunk => { startup += chunk; });
+  devProc.stderr.on('data', chunk => { startup += chunk; });
   const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
   try {
     const file = join(dir, '.wrangler', 'homie-dev.json');
-    for (let i = 0; i < 150 && !existsSync(file); i++) await new Promise((r) => setTimeout(r, 100));
+    for (let i = 0; i < 150 && !existsSync(file) && devProc.exitCode === null && devProc.signalCode === null; i++) await new Promise((r) => setTimeout(r, 100));
+    assert.ok(existsSync(file), `dev did not register within 15 seconds (exit ${devProc.exitCode}, signal ${devProc.signalCode}): ${startup}`);
     const rec = JSON.parse(readFileSync(file, 'utf8'));
     assert.equal(rec.pid, devProc.pid);
     const stopped = out(run(['dev', '--stop'], dir));
