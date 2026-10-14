@@ -785,6 +785,16 @@ export function toolDefs(ctx, avail = {}) {
       },
     },
     {
+      name: 'studio_events_webhook', title: 'Studio event webhook',
+      description: 'Add, rotate or remove a feed webhook using the studio’s Cloudflare sign-in; never deploys. Add/rotate returns the generated signing secret once for the receiver, without storing it in a job or file. Status/test use owner OAuth at the studio. Declare mcp.events first. Build and deploy declaration changes separately.',
+      inputSchema: { type:'object', properties:{ ...STUDIO_ARG, action:{type:'string',enum:['add','rotate','remove','status','test']}, feed:{type:'string'}, url:{type:'string'}, after:{type:'integer',minimum:0} }, required:['action','feed'] },
+      annotations: { title:'Studio event webhook', readOnlyHint:false, destructiveHint:true, openWorldHint:true },
+      run: async a => {
+        const result=await (await import('./events-cli.mjs')).eventsWebhook(ctx.root(a.studio),a.action,a.feed,a.url,{after:a.after});
+        return result.ok?ok(JSON.stringify(result),result):fail('Webhook operation failed',result);
+      },
+    },
+    {
       name: 'studio_connect_ai', title: 'Connect your AI to the studio',
       description: 'Give the person this studio’s own remote MCP address and connection page. Their AI connects directly with browser approval and their existing studio account; no key or local server.',
       inputSchema: { type: 'object', properties: { ...STUDIO_ARG } },
@@ -1275,6 +1285,7 @@ export function toolDefs(ctx, avail = {}) {
       run: async (a) => {
         const root = ctx.root(a.studio);
         const args = Array.isArray(a.args) ? a.args.map((x) => String(x)).filter((x) => x !== '--json') : [];
+        if(args[0]==='events'&&args[1]==='webhook')return fail('Use studio_events_webhook directly so signing secrets never enter job logs.');
         if (!args.length) return fail('args: the command\'s words, e.g. ["look"]');
         const refused = { mcp: 'this is it', new: 'studio_scaffold makes a studio', dev: 'preview_run runs the site here, preview_stop stops it', statusline: 'only for Claude Code' }[args[0]]
           ?? (args[0] === 'lab' && !['check', 'set', 'stop'].includes(args[1] ?? '') && !args.includes('--stop') ? 'game_lab starts the Game Lab here (and answers with its card)' : null);
