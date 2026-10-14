@@ -1495,8 +1495,8 @@ export function toolDefs(ctx, avail = {}) {
       },
     });
   }
-  // The media skills' own scripts, where their provider (or the free tool they need) is set up on this computer.
-  for (const [name, title, needs] of [['music', 'Music preparation', 'ffmpeg'], ['sound', 'Sound effects and a theme (free)', 'ffmpeg'], ['art', 'Art: covers, frames, painted art', 'ffmpeg'], ['video', 'Video: trailers and clips', 'ffmpeg'], ['models', 'Models: generated 3D props (paid, on your fal account)', 'node']]) {
+  // Local media processing; provider tools are discovered by the AI host.
+  for (const [name, title, needs] of [['music', 'Music preparation', 'ffmpeg'], ['sound', 'Sound effects and a theme (free)', 'ffmpeg'], ['art', 'Art: covers, frames, painted art', 'ffmpeg'], ['video', 'Video: trailers and clips', 'ffmpeg'], ['models', 'Models: import completed 3D assets', 'node']]) {
     const script = ctx.skillsDir ? join(ctx.skillsDir, name, 'scripts', `${name}.mjs`) : null;
     if (!script || !existsSync(script) || !avail[needs]) continue;
     tools.push({

@@ -155,12 +155,6 @@ function budget(root) {
   return { ok: true, command: 'budget', slug: pos[1], cap: b.cap, spent: b.spent };
 }
 
-
-
-
-
-
-
 /* ---------------------------------------------------------------- tile / fit / sheet */
 
 function tile() {

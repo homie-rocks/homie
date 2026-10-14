@@ -43,8 +43,6 @@ async function check() {
   return out;
 }
 
-
-
 function budget(root) {
   const slug = pos[1];
   const cap = Number(flags.get('cap'));
@@ -126,8 +124,6 @@ function nextRender(dir) {
   return ns.length ? Math.max(...ns) + 1 : 1;
 }
 
-
-
 /* ---------------------------------------------------------------- lyrics check */
 
 const norm = (w) => String(w).toLowerCase().replace(/[’`]/g, "'").replace(/[^a-z0-9']/g, '').replace(/^'+|'+$/g, '');
@@ -166,8 +162,6 @@ export function matchLyrics(lines, heardWords, { pass = 0.75 } = {}) {
   }
   return rows;
 }
-
-
 
 /* ---------------------------------------------------------------- master */
 
@@ -274,8 +268,6 @@ function loop(root) {
 }
 
 /* ---------------------------------------------------------------- stems */
-
-
 
 /* ---------------------------------------------------------------- reconcile */
 
@@ -413,22 +405,12 @@ function print(r) {
       if (r.rights) L.push(`Rights: ${r.rights.words}`);
       L.push(`ffmpeg: ${r.ffmpeg ? 'yes' : 'NO'}`, `Studio: ${r.studio?.ok ? r.studio.root : r.studio?.why}${r.studio?.pages && !r.studio.pages.ok ? ` (song pages: ${r.studio.pages.why})` : ''}`);
       break;
-    case 'quote':
-      L.push(`${r.seconds} s: about ${r.credits.total} credits (${r.credits.music} music${r.credits.lyricCheck ? ` + ${r.credits.lyricCheck} lyric check` : ''}); ${r.credits.basis}.`);
-      if (r.plan) L.push(`The account has ${r.plan.remaining} credits left (${r.plan.tier}).`);
-      if (r.budget) L.push(`Within a budget of ${r.budget} credits the longest render is about ${r.longestWithinBudget} s.`);
-      break;
+    
     case 'plan':
       L.push(`Plan: ${r.seconds} s, ${r.bars} bars at ${r.bpm} BPM${r.vocals ? ', with vocals' : ', instrumental'}; quote through the official ElevenLabs MCP.`, ...r.sections.map((s) => `  ${s.text} ${s.ms} ms`), ...r.warnings.map((w) => `  warning: ${w}`), `Wrote ${r.file}`);
       break;
-    case 'render':
-      if (r.dryRun) L.push(`Dry run (nothing sent): ${r.ok ? 'the request is valid' : r.why}; it would cost about ${r.quote.music} credits.`);
-      else if (r.needs) L.push(r.why);
-      else L.push(`Rendered ${r.file}: ${r.seconds.toFixed(2)} s (asked ${r.askedSeconds} s). Credits: quoted ${r.creditsQuoted}, measured ${r.creditsMeasured ?? 'unknown'}; ${r.creditsLeft ?? '?'} left. Plan ${r.tier}: ${r.rights.commercial ? 'commercial licence' : 'NO commercial licence'}.`, ...(r.note ? [r.note] : []));
-      break;
-    case 'lyrics':
-      L.push(`${r.ok ? 'Every planned line is sung.' : `NOT every line is sung: ${r.missing.length} missing.`}`, ...r.lines.map((x) => `  ${x.ok ? 'ok  ' : 'MISS'} ${Math.round(x.matched * 100)}%  "${x.line}"  heard: "${x.heard}"`));
-      break;
+    
+    
     case 'master':
       L.push(`Mastered to ${r.master.lufs} LUFS, ${r.master.truePeak} dBTP (target ${r.target.lufs} / ${r.target.truePeak}); the mp3 reads ${r.mp3.lufs} LUFS, ${r.mp3.truePeak} dBTP. ${r.master.file}, ${r.mp3.file}`);
       break;

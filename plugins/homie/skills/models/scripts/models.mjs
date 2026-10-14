@@ -95,16 +95,10 @@ function budget(root) {
 
 /** The concept's words: the thing, then the derived style prompt (never edited by hand), then how to frame it. */
 
-
-
-
 /** A character's concept words: who, the derived style prompt without its prop framing, then an A-pose, front view. */
 
 
 /** A library item's thumbnail into the job's folder, as a style reference (CC0, the library's own render). */
-
-
-
 
 /**
  * A connector's job receipt, read tolerantly (what was saved when the connector accepted the job): its request id, its
@@ -183,10 +177,6 @@ async function importJob(root) {
   const b = readBudget(budgetDir(root, game));
   return { ok: true, command: 'import', game, asset, kind, via: 'connector', model: added.model ?? added.file, before: added.before, after: added.after, usd: owed, counted: fresh.map((j) => j.requestId), alreadyCounted: jobs.filter((j) => seen.has(j.requestId)).map((j) => j.requestId), spent: b?.spent ?? null, cap: b?.cap ?? null, receipts: steps.map((s) => s.receipt), next: `homie-studio assets lineup ${game} (true scale, silhouettes, palette drift); look at it` };
 }
-
-
-
-
 
 function receiptsOf(root) {
   const game = pos[1];

@@ -76,12 +76,6 @@ function budget(root) {
   return { ok: true, command: 'budget', slug: pos[1], budget: setBudget(jobDir(root, pos[1]), { provider: 'fal', unit: 'usd', cap, approvedBy: flags.get('by') ?? 'the person, in chat', note: flags.get('note') ?? null }) };
 }
 
-
-
-
-
-
-
 /* ---------------------------------------------------------------- the song: grid, slices, lag */
 
 function songFile(root, song) {
