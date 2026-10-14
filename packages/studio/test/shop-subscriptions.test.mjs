@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { bindSubscription, subscriptionEvent, subscriptionPortal, reconcileMembership, SUBSCRIPTIONS_MIGRATION } from '../worker/shop-subscriptions.mjs';
 import { sessionParams } from '../worker/shop.mjs';
+import { fullerReason } from '../worker/shop-links.mjs';
 import { checkShop } from '../worker/shop-rules.mjs';
 function fixture(t) {
  const sql=new DatabaseSync(':memory:');t.after(()=>sql.close());
@@ -88,4 +89,10 @@ test('membership periods follow paid invoices, current status and portal plans w
  while(!resolveOld)await new Promise(r=>setImmediate(r));
  await reconcileMembership(env,'sub_test',shop);resolveOld();await old;
  assert.equal(ends('member:plus'),0);assert.equal(sql.prepare('SELECT state FROM shop_subscriptions').get().state,'canceled');
+});
+
+test('keyless setup refuses paid membership grants that require runtime reconciliation',()=>{
+ const {shop}=checkShop({till:'stripe',currency:'usd',items:[{id:'member',name:'Member',price:2000,interval:'month',gives:['member:basic']}]});
+ assert.ok(fullerReason(shop));
+ assert.equal(fullerReason({...shop,items:[{...shop.items[0],gives:[]}]}),null);
 });

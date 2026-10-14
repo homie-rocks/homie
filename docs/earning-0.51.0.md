@@ -56,3 +56,8 @@ setup and refund permissions, then privately provision and renew the studio's
 runtime credentials. Its browser install remains one owner approval once Homie's
 app integration exists. The unresolved prerequisite prevents a complete 0.51.0
 release claim even if the implementation PR is ready for code review.
+
+The completed sandbox script also passed actual subscription Checkout, the
+customer portal, test-clock renewal/failure/cancellation, and Stripe's published
+`checkout.session.completed` trigger fixture. See `proof/earning/stripe/` for the
+passing log and the distinction between Checkout and clock-fixture ownership.
