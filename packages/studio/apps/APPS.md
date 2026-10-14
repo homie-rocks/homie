@@ -114,7 +114,7 @@ information in a separate private collection. Public roles must not have write
 capabilities for slots or bookings. Staff movement is a versioned record update
 containing only `slot`; confirmation and release follow verified Checkout state.
 The default keyless connection uses one Payment Link per published slot. Call
-`stripe_bookings_sync` after publishing/changing slots. Pending checkout does not
+`stripe_shop_plan` with the complete slot manifest after publishing/changing slots. Pending checkout does not
 block others; payment secures the seat. Use record.booking.full/available/synced
 for slot display. Read SHOP.md for the complete manifest and limitations.
 

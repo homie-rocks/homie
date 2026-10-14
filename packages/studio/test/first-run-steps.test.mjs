@@ -123,8 +123,12 @@ test('first-run status delegates prerequisites and never assigns a key to a pers
   const { setupStatus } = await import('../lib/doctor.mjs');
   const r = await setupStatus({ cwd: scratch, env: {}, platform: 'linux', node: '0', chrome: () => null,
     exec: async () => ({ code: 127, stdout: '', stderr: '' }), fetchFn: async () => new Response('{}', { status: 405 }) });
-  for (const id of ['node', 'chrome', 'ffmpeg', 'fal']) assert.equal(r.rows.find((x) => x.id === id).fix.who, 'ai', id);
-  assert.doesNotMatch(r.rows.find((x) => x.id === 'fal').fix.say, /Make a key|shell profile/);
+  for (const id of ['node', 'chrome', 'ffmpeg']) assert.equal(r.rows.find((x) => x.id === id).fix.who, 'ai', id);
+  for (const id of ['fal', 'elevenlabs', 'cloudflare-mcp']) {
+    const row = r.rows.find(x => x.id === id);
+    assert.equal(row.connection, 'unknown');
+    assert.equal(row.fix.who, 'person', 'the owner completes the official browser consent');
+  }
   assert.match(r.rows.find((x) => x.id === 'cloudflare').fix.say, /cloudflare_login/);
 });
 

@@ -1,4 +1,3 @@
-import { providerKey } from './provider-key.mjs';
 /**
  * THE LOCAL MCP SERVER'S TOOLS (`homie-studio mcp`, lib/mcp.mjs): the studio toolkit as MCP tools, so the Claude
  * desktop app (through the Homie extension), Claude Code or any MCP client builds games in the SAME chat that shows
@@ -200,14 +199,14 @@ function needsInstall(ctx, root) {
 
 /* ------------------------------------------------------------------ the setup card */
 
-async function statusOf(ctx, root, { fresh = false } = {}) {
+async function statusOf(ctx, root, { fresh = false, integrations = {} } = {}) {
   const key = root ?? '';
-  if (!fresh && ctx.status && ctx.status.key === key && Date.now() - ctx.status.at < 20_000) return ctx.status.value;
+  if (!fresh && !Object.keys(integrations).length && ctx.status && ctx.status.key === key && Date.now() - ctx.status.at < 20_000) return ctx.status.value;
   const node = findNode({ fresh });
   // Claude Code's own status line is not this host's: its row stays out (CLAUDECODE says the server runs inside it).
   const env = toolEnv();
   delete env.CLAUDECODE;
-  const value = await setupStatus({ cwd: root ?? ctx.studiosDir ?? homedir(), connector: 'yes', node: node?.version ?? '0', env });
+  const value = await setupStatus({ cwd: root ?? ctx.studiosDir ?? homedir(), connector: 'yes', integrations, node: node?.version ?? '0', env });
   const row = value.rows.find((r) => r.id === 'node');
   if (row) {
     if (!node) { row.detail = 'not found on this computer (22 or newer is needed)'; row.state = 'missing'; }
@@ -240,8 +239,8 @@ function checklist(ctx, root) {
   return steps.map((label, n) => ({ n, label, state: done[n] ? 'done' : n === now ? 'now' : 'todo' }));
 }
 
-async function setupCard(ctx, root, { fresh = false, made = null, install = null, wanted = null } = {}) {
-  const status = await statusOf(ctx, root, { fresh });
+async function setupCard(ctx, root, { fresh = false, made = null, install = null, wanted = null, integrations = {} } = {}) {
+  const status = await statusOf(ctx, root, { fresh, integrations });
   const studios = ctx.studios().map(({ root: r, ...s }) => s);
   const current = root ? ctx.describe(root) : null;
   const running = root ? runningJobs(root).find((j) => j.label.startsWith('npm install')) : null;
@@ -814,13 +813,13 @@ export function toolDefs(ctx, avail = {}) {
     {
       name: 'setup_status', title: 'Setup status',
       description: 'Step 0 of a new studio, and any time the person asks what they need or whether they are set up: what this computer and their accounts have (Node, Cloudflare signed in and email verified, Chrome for the checks, ffmpeg, and the optional GitHub, ElevenLabs and fal), what each unlocks, and the exact fix; the studios in the studios folder; and the new-studio checklist with where they are on it. For a studio that is not made yet, pass its name as studio: the checklist is then the new studio\'s, never another studio\'s that happens to be in the folder. Read-only, a few seconds. Optional rows never block anything.',
-      inputSchema: { type: 'object', properties: { studio: str('Optional: which studio (its folder name or name), or the name of a new studio that is not made yet; else the one in use'), fresh: { type: 'boolean', description: 'Check again now instead of the last 20 s' } } },
+      inputSchema: { type: 'object', properties: { studio: str('Optional: which studio (its folder name or name), or the name of a new studio that is not made yet; else the one in use'), fresh: { type: 'boolean', description: 'Check again now instead of the last 20 s' }, integrations: { type: 'object', description: 'Session evidence from official MCP tools: connected only after a successful authenticated call; unavailable when absent, otherwise unknown. Never credentials.', properties: Object.fromEntries(['fal','elevenlabs','cloudflare'].map(id => [id, { type: 'string', enum: ['connected','unavailable','unknown'] }])) } } },
       annotations: { title: 'Setup status', ...RO }, _meta: ui(UI.setup),
       run: async (a) => {
         // A name with no studio of it yet is the studio about to be made: its own checklist, from step 1.
         const named = String(a.studio ?? '').trim().slice(0, 60);
-        if (named && !ctx.knows(named)) return setupCard(ctx, null, { fresh: a.fresh === true, wanted: named });
-        return setupCard(ctx, ctx.root(a.studio, { need: false }), { fresh: a.fresh === true });
+        if (named && !ctx.knows(named)) return setupCard(ctx, null, { fresh: a.fresh === true, integrations: a.integrations, wanted: named });
+        return setupCard(ctx, ctx.root(a.studio, { need: false }), { fresh: a.fresh === true, integrations: a.integrations });
       },
     },
     {
@@ -1031,13 +1030,13 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'build', title: 'Build the site',
-      description: 'Bundle every game or app and the site into site/dist. Rules builds always run strict types, the guard and deterministic generated play, including save/restore and prediction checks. Read full diagnostics and repair the named handler; info lines do not fail. Never bypass checks or switch to browser hosting to escape a failure. A running preview shows the new build on reload.',
-      inputSchema: { type: 'object', properties: { game: str('Optional: only this game'), ...STUDIO_ARG } },
+      description: 'Bundle every game or app and the site into site/dist. Rules builds run strict types, the guard and deterministic generated play. quick:true skips generated play and snapshot smoke checks for local iteration; full build before release. Read full diagnostics and repair the named handler; info lines do not fail. Never bypass checks or switch to browser hosting to escape a failure. A running preview shows the new build on reload.',
+      inputSchema: { type: 'object', properties: { game: str('Optional: only this game'), quick:{type:'boolean'}, ...STUDIO_ARG } },
       annotations: { title: 'Build', ...RW },
       run: async (a) => {
         const root = ctx.root(a.studio);
         const need = needsInstall(ctx, root); if (need) return need;
-        const r = await cli(ctx, root, 'build', ['build', ...(a.game ? [String(a.game)] : [])]);
+        const r = await cli(ctx, root, 'build', ['build', ...(a.game ? [String(a.game)] : []), ...(a.quick?['--quick']:[])]);
         if (!r.ended) return stillRunning(r.job, 'The build');
         if (r.job.code !== 0) return fail(`The build failed: ${whyOf(r.job)}`);
         const g = r.result?.games ?? [];
@@ -1178,8 +1177,30 @@ export function toolDefs(ctx, avail = {}) {
       },
     },
     {
+      name: 'stripe_shop_plan', title: 'Plan or verify the Stripe shop',
+      description: 'Default setup with Stripe official MCP. Supply public API observations as {path,params,body}, account ID, mode, and complete booking slots. Returns the exact next read/write with metadata and idempotency. Execute via Stripe stripe_api_search/details/read/write, clear observations after writes, repeat until verified. verify:true saves the public config for stripe_webhook. Never pass webhook creation responses or secrets.',
+      inputSchema: {type:'object',properties:{...STUDIO_ARG,account:{type:'string'},mode:{enum:['test','live']},url:{type:'string'},slots:{type:'array',items:{type:'object'}},observations:{type:'array',items:{type:'object'}},verify:{type:'boolean'}}},
+      annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:false},
+      run:async a=>{
+        const {shopMcpPlan,saveMcpVerification}=await import('./shop-mcp.mjs');
+        const result=await (a.verify?saveMcpVerification:shopMcpPlan)(ctx.root(a.studio),a);
+        return ok(JSON.stringify(result),result);
+      },
+    },
+    {
+      name:'stripe_webhook',title:'Install Stripe webhook privately',
+      description:'After stripe_shop_plan verify:true, create/install only the webhook and verified public links. Uses a separate official CLI browser approval if needed; never shows secrets. Follow studio_job. Never create a webhook through model-visible Stripe MCP.',
+      inputSchema:{type:'object',properties:{...STUDIO_ARG,live:{type:'boolean'},renew:{type:'boolean'}}},
+      annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:true},
+      run:async a=>{
+        const job=cliJob(ctx.root(a.studio),'Private Stripe webhook',['shop','webhook',...(a.live?['--live']:[]),...(a.renew?['--renew']:[])],{cli:join(PACKAGE_ROOT,'bin','homie-studio.mjs'),keep:false});
+        await waitJob(job,Math.min(ctx.waitMs,1000));
+        return ok('Follow studio_job; approve Stripe in the browser if requested.',{kind:'job',...jobView(job)});
+      },
+    },
+    {
       name:'stripe_bookings_sync', title:'Sync published booking slots to Stripe',
-      description:'Owner AI: after reading published slot records, supply the complete slot manifest. Creates/updates Stripe Payment Links with completed-session capacity limits through the approved CLI profile. Before moving a booking, sync target active:false to deactivate and expire open sessions. After the versioned staff move, sync current confirmed counts for affected slots to restore the remaining budget. Removed slots deactivate and expire open sessions. No Worker API key. Follow studio_job. Never increase capacity merely to reopen a full slot.',
+      description:'CLI alternative to stripe_shop_plan with Stripe official MCP: after reading published slot records, supply the complete slot manifest. Creates/updates Stripe Payment Links with completed-session capacity limits through the approved CLI profile. Before moving a booking, sync target active:false to deactivate and expire open sessions. After the versioned staff move, sync current confirmed counts for affected slots to restore the remaining budget. Removed slots deactivate and expire open sessions. No Worker API key. Follow studio_job. Never increase capacity merely to reopen a full slot.',
       inputSchema:{type:'object',properties:{...STUDIO_ARG,slots:{type:'array',items:{type:'object',properties:{app:{type:'string'},collection:{type:'string'},slots:{type:'string'},slot:{type:'string'},item:{type:'string'},capacity:{type:'integer',minimum:0},confirmed:{type:'integer',minimum:0},active:{type:'boolean'}},required:['app','collection','slots','slot','item','capacity'],additionalProperties:false}},live:{type:'boolean'}},required:['slots']},
       annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:true},
       run:async a=>{
@@ -1193,12 +1214,12 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'stripe_login', title: 'Connect the studio to Stripe',
-      description: 'Connect and sync shop.json through Stripe’s official CLI with one browser approval if needed. Creates Products, Prices, Payment Links and the webhook; installs only links and signing secret, no API key in the Worker. Repeat after edits. Follow studio_job. An existing key supports fuller checkout; manual only if explicitly chosen for those features. live only when the owner says go live.',
-      inputSchema: { type: 'object', properties: { ...STUDIO_ARG, live: { type: 'boolean' }, renew: { type: 'boolean' }, manual: { type: 'boolean' } } },
+      description: 'Connect and sync shop.json through Stripe’s official CLI with one browser approval if needed. Creates Products, Prices, Payment Links and the webhook; installs only links and signing secret, no API key in the Worker. Repeat after edits. Follow studio_job. Alternative to the default Stripe official MCP plan and private stripe_webhook flow. live only when the owner says go live.',
+      inputSchema: { type: 'object', properties: { ...STUDIO_ARG, live: { type: 'boolean' }, renew: { type: 'boolean' } } },
       annotations: { title: 'Connect Stripe', readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       run: async (a) => {
         const root = ctx.root(a.studio);
-        const args = ['shop', 'connect', ...(a.live ? ['--live'] : []), ...(a.renew ? ['--renew'] : []), ...(a.manual ? ['--manual'] : [])];
+        const args = ['shop', 'connect', ...(a.live ? ['--live'] : []), ...(a.renew ? ['--renew'] : [])];
         const job = cliJob(root, 'Stripe connection', args, { cli: join(PACKAGE_ROOT, 'bin', 'homie-studio.mjs'), keep: false });
         const ended = await waitJob(job, Math.min(ctx.waitMs, 1000));
         ctx.status = null;
@@ -1496,13 +1517,13 @@ export function toolDefs(ctx, avail = {}) {
       },
     });
   }
-  // The media skills' own scripts, where their provider (or the free tool they need) is set up on this computer.
-  for (const [name, title, needs] of [['music', 'Music (ElevenLabs)', 'elevenlabs'], ['sound', 'Sound effects and a theme (free)', 'ffmpeg'], ['art', 'Art: covers, frames, painted art', 'ffmpeg'], ['video', 'Video: trailers and clips', 'ffmpeg'], ['models', 'Models: generated 3D props (paid, on your fal account)', 'node']]) {
+  // Local media processing; provider tools are discovered by the AI host.
+  for (const [name, title, needs] of [['music', 'Music preparation', 'ffmpeg'], ['sound', 'Sound effects and a theme (free)', 'ffmpeg'], ['art', 'Art: covers, frames, painted art', 'ffmpeg'], ['video', 'Video: trailers and clips', 'ffmpeg'], ['models', 'Models: import completed 3D assets', 'node']]) {
     const script = ctx.skillsDir ? join(ctx.skillsDir, name, 'scripts', `${name}.mjs`) : null;
     if (!script || !existsSync(script) || !avail[needs]) continue;
     tools.push({
       name, title,
-      description: `The ${name} guide's own script, in the studio, by its words (studio_guide { "topic": "${name}" } says which, in what order, and what costs money): e.g. ["check"]${name === 'music' ? ', ["quote","--seconds","30"]' : name === 'sound' ? ', ["sfx","pickup"]' : ''}. Paid steps are quoted first and capped by the budget the person agreed to. Long renders hand back a job.`,
+      description: `Local ${name} preparation only; read studio_guide for the workflow. Generation, pricing and provider connections use the official provider MCP in the AI client.`,
       inputSchema: { type: 'object', properties: { args: { type: 'array', items: { type: 'string' }, description: 'The script\'s words' }, ...STUDIO_ARG }, required: ['args'] },
       annotations: { title, readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       run: async (a) => {
@@ -1523,9 +1544,9 @@ export function toolDefs(ctx, avail = {}) {
   return tools;
 }
 
-/** What the media tools need, cheaply (no network): ffmpeg on the PATH, ElevenLabs' CLI or key. */
+/** Local processing availability only; provider connections belong to the AI host. */
 export function availability(env = process.env) {
-  return { node: true, ffmpeg: Boolean(which(process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')), elevenlabs: Boolean(providerKey('elevenlabs', env).key || which(process.platform === 'win32' ? 'elevenlabs.exe' : 'elevenlabs')) };
+  return { node: true, ffmpeg: Boolean(which(process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')) };
 }
 
 /** The codex page small enough to hand a card (a tool result over ~150,000 characters is not shown). */

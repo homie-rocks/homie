@@ -21,15 +21,30 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 **Plugin 0.51.5**
 
-Recurring shop payments reach the shop and its apps even when the studio also sells parts.
+Connect your shop and media through official plugins, keep renewals and free bookings working, and see progress while you build.
+
+### Added
+
+- **Shop setup:** Stripe's official plugin can configure and verify products, prices, item and menu links, paid bookings, monthly giving and the customer portal. Homie plans only the changes your shop needs. No API keys are requested; webhook installation checks the Stripe account and passes the signing secret privately to Wrangler, never through the model. Local webhook forwarding keeps its secret private too.
+- **Build iteration:** Builds report progress, including during JSON output, and show a heartbeat while generated rules play. `build --quick` keeps type and guard checks while skipping play and snapshot smoke checks.
+- **Media placement:** `media import` places completed media, checks scene references and records file hashes, rights, provenance and explicit cost status. Video guidance and local processing tools now ship with the toolkit.
+
+### Changed
+
+- **Official media connections:** Art, models, music, sound, video and style use the official fal and ElevenLabs plugins in your AI client. Homie still handles art direction, local processing, placement and provenance. Its own provider generation clients, key-file readers and Stripe Projects credential bridge have been removed.
+- **Connection setup:** Setup reports official connections verified in the current session and explains browser sign-in. Cloudflare inspection uses its official MCP; deployment continues through Wrangler's browser login.
 
 ### Fixed
 
-- Recurring gifts and memberships now record each renewal and notify your apps once, even when your studio also sells parts. Renewals keep the reference from the original purchase, so your app can connect them to the right cause or member. Subscription updates and cancellations also reach the shop, while payments for parts continue to work as before.
+- **Recurring gifts and memberships:** Each renewal reaches your shop and notifies apps once, even when the studio also sells parts. Renewals keep the original purchase reference so apps can identify the cause or member. Subscription updates and cancellations reach the shop; parts payments retain their own route.
+- **Free volunteer shifts and services:** Free bookings in a mixed free/paid app work before Stripe is connected. They confirm locally and enforce capacity; paid checkout still requires a connection.
 
 ### Upgrade notes
 
-- If your studio added the temporary subscription-routing postinstall workaround for 0.51.3–0.51.4, remove it after upgrading.
+- Update the toolkit and Homie plugin together, run upgrade, and connect the official provider plugins in your AI client. Existing media remains usable. Upgrade replaces retired credential instructions without reading or migrating old key files. Available ElevenLabs media capabilities depend on the connected server and are checked before generation.
+- Shop setup starts with `stripe_shop_plan` / `shop plan`, then `stripe_webhook` / `shop webhook`. Private webhook setup may need a separate Stripe CLI browser approval. `shop connect` remains the full CLI alternative; `shop listen` forwards local events privately.
+- Run a full build before release, even if you used `build --quick` while iterating.
+- Remove any temporary subscription-routing postinstall workaround for 0.51.3–0.51.4 after upgrading.
 
 ## [0.51.4] - 2026-10-14
 

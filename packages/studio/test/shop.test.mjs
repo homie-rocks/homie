@@ -787,7 +787,6 @@ test('a refund Stripe holds for approval (an Agent key) is accepted, not refused
   const j = await tap.json();
   assert.equal(j.held, true);
   assert.match(j.message, /Approvals/);
-  assert.match(j.message, /plain restricted key/);
   assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(a.order).status, 'paid', 'nothing changes until Stripe refunds');
   assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: { cookie: p.cookie } })).json()).owns.length > 0, true);
   // Someone approves it in Stripe; Stripe refunds and says so: the item leaves the account.
@@ -3147,4 +3146,15 @@ test('an old worker recreating referral secrets during deploy is cleaned on requ
   oldWorker();await s.worker.scheduled({scheduledTime:Date.now()},s.env,{waitUntil:()=>{}});clean();
   oldWorker();await s.fetchSite('/');clean();await s.fetchSite('/');clean();
  } finally {s.stripe.close();}
+});
+
+test('a free item keeps the shell checkout bridge available without Stripe', async () => {
+ const s=await site({key:false,settings:{policy:{preset:'custom'},items:[{id:'volunteer',name:'Volunteer shift',price:0,game:'owl-run'},{id:'gift',name:'Gift',price:1000,game:'owl-run'}]}});
+ try {
+  const r=await s.fetchSite('/owl-run/play');
+  const html=await r.text();
+  assert.match(html,/var cfg = boot.shop/,'free booking needs the shell bridge even before payment setup');
+  const boot=JSON.parse(html.match(/window\.__HOMIE_PLAY\s*=\s*(\{[^\n]+\});/)[1]);
+  assert.ok(boot.shop);
+ }finally{s.stripe.close()}
 });

@@ -1,3 +1,4 @@
+import { upgradeMediaGuidance } from './upgrade-media.mjs';
 import {appPresetChanges} from './upgrade-app-presets.mjs';
 import {refreshWorkerConfig} from './worker-config.mjs';
 /**
@@ -199,8 +200,17 @@ export function upgradePlan(root, { history = readHistory() } = {}) {
   if (Object.keys(missingScripts).length) changes.push({ file: 'package.json', kind: 'scripts', what: `add scripts: ${Object.keys(missingScripts).join(', ')}`, scripts: missingScripts });
   if (studio.homie?.studio !== STUDIO_VERSION) changes.push({ file: 'studio.json', kind: 'version', what: `homie.studio ${studio.homie?.studio ?? '(none)'} → ${STUDIO_VERSION}`, to: STUDIO_VERSION });
 
+  const mediaFiles = new Set();
+  for (const file of ['AGENTS.md', 'CLAUDE.md', 'README.md']) {
+    const from = read(root, file);
+    if (from === null) continue;
+    const text = upgradeMediaGuidance(from);
+    if (text !== from) { changes.push({ file, kind: 'update-file', what: 'replace retired Homie credential guidance with official plugin connections', from, text }); mediaFiles.add(file); }
+  }
+
   // AGENTS.md, section by section; the other template files whole.
   for (const rel of TEMPLATE_FILES) {
+    if (mediaFiles.has(rel)) continue;
     const mine = read(root, rel);
     const want = tmpl[rel];
     if (want === undefined) continue;

@@ -1,4 +1,4 @@
-import { providerKey } from './provider-key.mjs';
+import { officialConnections } from './official-media.mjs';
 /**
  * `homie-studio setup status` (also `homie-studio doctor`): what this computer and this person's accounts have for
  * a studio, as one checklist, before anything is made. For each thing: green, missing, or "do this now", what it
@@ -35,8 +35,7 @@ import { providerKey } from './provider-key.mjs';
  *   status line        optional    (Claude Code only) the build's progress under the prompt
  *
  * It is safe at any time, inside a studio or before one exists: it only reads (local files, `--version` of a few
- * tools, `wrangler whoami`, `gh auth status`, `elevenlabs auth status`, one GET to the directory and, when a fal key
- * is set, fal's free pricing API; when a server's AI guides use Workers AI, one read of the live database and one
+ * tools, `wrangler whoami`, `gh auth status`, one GET to the directory and explicit AI-host connection evidence; when a server's AI guides use Workers AI, one read of the live database and one
  * one-word call to the model; in Codex or Grok, the `[mcp_servers.homie]` table of that app's config.toml, of which
  * it keeps only whether it is an address or a command, and the hooks' mark in this user's cache), never changes
  * anything, and never prints a key, a token, a command line or an account's name or id.
@@ -53,7 +52,6 @@ import { whyFailed } from './net.mjs';
 import { isOurs } from './statusline.mjs';
 import { findStudio, listExperiences as listGames, readLocal, readStudio } from './studio.mjs';
 import { standaloneRows } from './standalone.mjs';
-import { projectsCloudflareEnv, projectsElevenLabs } from './projects-env.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 
 /** A command's result, never throwing: code 127 when the program is not installed, 124 when it ran out of time. */
@@ -175,7 +173,7 @@ const ago = (ms) => (ms < 90_000 ? `${Math.max(1, Math.round(ms / 1000))} s` : m
  * replaceable for tests.
  */
 export async function setupStatus({
-  cwd = process.cwd(), env = process.env, platform = process.platform, connector = null, homie = null, client = null,
+  cwd = process.cwd(), env = process.env, platform = process.platform, connector = null, integrations = {}, homie = null, client = null,
   exec = defaultExec, fetchFn = globalThis.fetch, chrome = findChrome, node = process.versions.node, nowMs = Date.now(),
 } = {}) {
   const root = findStudio(cwd);
@@ -198,18 +196,12 @@ export async function setupStatus({
 
   // The Homie connector (the AI says; the network is checked here), Cloudflare, GitHub and the providers, at once.
   const said = connector === true || connector === 'yes' ? 'yes' : connector === false || connector === 'no' ? 'no' : null;
-  const [net, who, gh, eleven, fal] = await Promise.all([
+  const [net, who, gh] = await Promise.all([
     reach(`${directory}/mcp`, fetchFn),
     (async () => {
-      if (env.CLOUDFLARE_API_TOKEN) return { signedIn: true, how: 'an API token in the environment' };
       const bin = root ? join(root, 'node_modules', '.bin', win ? 'wrangler.cmd' : 'wrangler') : null;
       if (!bin || !existsSync(bin)) return { signedIn: null };
-      // Through Stripe Projects (studio.json "auth": "stripe-projects"): Wrangler with the token Projects synced.
-      const projects = projectsCloudflareEnv(root);
-      const r = await exec(bin, ['whoami', '--json'], { cwd: root, timeout: 25_000, env: { ...env, ...projects, WRANGLER_SEND_METRICS: 'false', CI: '1' } });
-      if (projects.CLOUDFLARE_API_TOKEN && r.code === 0) {
-        try { if (JSON.parse(r.stdout.slice(Math.max(0, r.stdout.indexOf('{')))).loggedIn) return { signedIn: true, how: 'through Stripe Projects (its token, in the studio\'s git-ignored .env; never shown)', accounts: 1, accountIds: [projects.CLOUDFLARE_ACCOUNT_ID].filter(Boolean) }; } catch { /* read below */ }
-      }
+      const r = await exec(bin, ['whoami', '--json'], { cwd: root, timeout: 25_000, env: { ...env, WRANGLER_SEND_METRICS: 'false', CI: '1' } });
       if (r.code === 124) return { signedIn: null, why: 'Wrangler did not answer in time' };
       // The accounts' ids stay in this process (the Workers AI row calls the studio's own account); never printed.
       try { const d = JSON.parse(r.stdout.slice(Math.max(0, r.stdout.indexOf('{')))); return { signedIn: Boolean(d.loggedIn), accounts: Array.isArray(d.accounts) ? d.accounts.length : null, accountIds: Array.isArray(d.accounts) ? d.accounts.map((a) => a?.id).filter(Boolean) : [] }; } catch { return { signedIn: false }; }
@@ -223,26 +215,6 @@ export async function setupStatus({
       const v = await exec('gh', ['--version']);
       if (v.code !== 0) return { git: git.code === 0, gh: false, signedIn: false, onGitHub };
       return { git: git.code === 0, gh: true, signedIn: (await exec('gh', ['auth', 'status'], { timeout: 10_000 })).code === 0, onGitHub };
-    })(),
-    (async () => {
-      const cliBin = env.ELEVENLABS_CLI || 'elevenlabs';
-      const v = await exec(cliBin, ['--version']);
-      let signedIn = false;
-      if (v.code === 0) {
-        const s = await exec(cliBin, ['auth', 'status', '--format', 'json'], { timeout: 10_000 });
-        try { signedIn = Boolean(JSON.parse(s.stdout)?.schemes?.some((x) => x.logged_in)); } catch { signedIn = false; }
-      }
-      const credential = providerKey('elevenlabs', env);
-      return { cli: v.code === 0, signedIn, key: Boolean(credential.key), source: credential.source, projects: root ? projectsElevenLabs(root) : false };
-    })(),
-    (async () => {
-      const { key, source } = providerKey('fal', env);
-      if (!key) return { key: false };
-      const base = String(env.FAL_API_URL || 'https://api.fal.ai').replace(/\/+$/, '');
-      try {
-        const res = await fetchFn(`${base}/v1/models/pricing?endpoint_id=fal-ai/flux/dev`, { headers: { Authorization: `Key ${key}` }, signal: AbortSignal.timeout(6000) });
-        return { key: true, source, valid: res.ok ? true : res.status === 401 || res.status === 403 ? false : null };
-      } catch { return { key: true, source, valid: null }; }
     })(),
   ]);
 
@@ -385,23 +357,7 @@ export async function setupStatus({
       : { who: 'person', open: 'https://github.com/signup', say: `Make a free GitHub account; your AI installs the GitHub CLI${mac ? ' (brew install gh)' : ''} when you want the backup.` },
   });
 
-  // ElevenLabs.
-  rows.push({
-    id: 'elevenlabs', label: 'ElevenLabs', need: 'optional', state: eleven.signedIn || eleven.key || eleven.projects ? 'ok' : 'optional',
-    detail: eleven.signedIn ? 'the elevenlabs CLI is signed in' : eleven.key ? `key from ${eleven.source}` : eleven.projects ? 'through Stripe Projects (its key, in the studio\'s git-ignored .env; never shown)' : eleven.cli ? 'the elevenlabs CLI is here, not signed in' : 'not connected',
-    unlocks: 'songs and game scores (the music skill), billed to your own ElevenLabs plan; every render is quoted first',
-    fix: eleven.signedIn || eleven.key || eleven.projects ? null : eleven.cli
-      ? { who: 'ai', run: 'elevenlabs auth login', say: 'ElevenLabs opens in your browser; sign in once. No key is pasted anywhere.' }
-      : { who: mac ? 'ai' : 'person', run: mac ? 'brew install elevenlabs/tap/elevenlabs && elevenlabs auth login' : undefined, open: 'https://elevenlabs.io/sign-up', say: 'Make an ElevenLabs account when you want songs; your AI installs their CLI and you sign in once in the browser.' },
-  });
-
-  // fal.
-  rows.push({
-    id: 'fal', label: 'fal', need: 'optional', state: fal.key ? (fal.valid === false ? 'act' : 'ok') : 'optional',
-    detail: !fal.key ? 'no fal key in the environment or Homie key files' : `key from ${fal.source}; ${fal.valid === true ? 'fal accepts it' : fal.valid === false ? 'fal refused it (wrong or revoked)' : 'fal did not answer just now'}`,
-    unlocks: 'painted art and backdrops (the art skill) and generated video clips (the video skill), on your own fal account under a budget; covers from a real frame and captured trailers are free',
-    fix: fal.key && fal.valid !== false ? null : { who: 'ai', say: 'Use local art and captured footage. Paid fal scripts need an already connected account; never ask the person to find or set a key. Offer the provider browser connection only when generated media is requested.', open: 'https://fal.ai/dashboard' },
-  });
+  rows.push(...officialConnections(integrations));
 
   // Stripe, only in a studio that sells. Installing agent tooling is not proof of Worker credentials.
   // shop connect runs browser pairing and reports the remaining steps; this read-only status never reads keys.
@@ -411,11 +367,11 @@ export async function setupStatus({
     const mcp = stripeAgentConfigured({ root, env });
     rows.push({
       id: 'stripe', label: 'Stripe', need: 'for selling', state: 'act',
-      detail: [version ? `Stripe CLI ${version} is installed` : 'Stripe CLI is not installed', mcp ? `optional MCP is set up for ${mcp}` : 'optional MCP is not set up', 'CLI access is not proof that Worker credentials or a purchase work'].join('; '),
-      unlocks: 'Connect the studio’s own Stripe with browser approval; shop connect syncs Payment Links and the webhook without a Worker API key. Verify a test purchase before calling the shop ready.',
+      detail: [version ? `Stripe CLI ${version} is installed` : 'Stripe CLI is not installed', mcp ? `official MCP is set up for ${mcp}` : 'official MCP is not set up', 'Provider sign-in is not proof that the shop and signed events work'].join('; '),
+      unlocks: 'Use Stripe’s official plugin for shop planning and verification, then install the private webhook. Verify a test purchase before calling the shop ready.',
       fix: {
-        who: 'ai', run: version ? 'npx --no-install homie-studio shop connect' : 'npm install -g @stripe/cli@latest',
-        say: 'Use stripe_login or shop connect. Never ask for a key in chat. Sync Products, Prices, Payment Links and the webhook through the approved CLI. The Worker needs only the signing secret; repeat connect after edits.',
+        who: 'ai', run: mcp ? 'npx --no-install homie-studio shop plan' : version ? 'stripe agent setup' : 'npm install -g @stripe/cli@latest',
+        say: 'Use stripe_shop_plan with Stripe’s official MCP for catalog and links, then stripe_webhook for private signing-secret installation. Never ask for a key. Repeat plan and verify after edits.',
         open: 'https://dashboard.stripe.com/register',
       },
     });

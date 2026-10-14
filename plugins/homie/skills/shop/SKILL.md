@@ -1,7 +1,7 @@
 ---
 name: shop
 description: Sell things in a Homie studio's games with the studio's OWN Stripe - a supporter pack, cosmetics, a season pass, a one-time unlock, a tip, a round of several items to a table, a paid booking with slot capacity, monthly giving or a membership - in real money, with Stripe Checkout, Stripe Tax or Stripe Managed Payments, refunds from the office, and optional studio policies with an open default; set up with Stripe's own agent tools (Stripe's MCP server and skills) with one browser approval and Payment Links by default, no human-handled key and no API key in the Worker. Use when someone asks to sell something, add a shop or store, take payments or donations, take paid bookings, set up monthly giving or memberships, make money from a game, set up or connect Stripe, make the products in Stripe, asks "how are sales?", about tax or Managed Payments, to add a supporter badge, refund a player, or about chargebacks.
-compatibility: The studio's own current toolkit with stripe_login or shop connect --renew, Wrangler, and the official Stripe CLI. Stripe's own agent plugin (MCP and skills) is optional for catalog work and analytics.
+compatibility: Stripe's official OAuth MCP/plugin, Homie's stripe_shop_plan and stripe_webhook tools, and Wrangler. Stripe CLI is used privately for webhook setup and local forwarding.
 metadata:
   providers: stripe
 ---
@@ -16,7 +16,7 @@ Studio functions (`functions/FUNCTIONS.md`), with the event ID as the idempotenc
 
 # The shop
 
-Check that the toolkit exposes `stripe_login`, or that `homie-studio --help` lists `shop connect` with `--renew` and `--manual`. An older toolkit's default is the paste page: upgrade before using this flow; do not send the owner to that old default.
+Check that the toolkit exposes `stripe_shop_plan` and `stripe_webhook`; upgrade older toolkits first.
 The guide is `node_modules/@homie-rocks/studio/shop/SHOP.md`; the owner's plain words are `SELLING.md`.
 
 **The model, said plainly to the person.** The studio sells with **its own Stripe account**. The studio is the
@@ -28,87 +28,78 @@ entity field or a command into proof of a purchase: grants still come from the s
 verified server records. Room state is replicated to players; keep payment and private
 customer data out of it. Read the game skill's RULES.md before changing game outcomes.
 
-## Connect with Stripe's own browser approval
+## Default: Stripe's official plugin
 
-Use `stripe_login` (MCP) or `npx --no-install homie-studio shop connect`. Test mode and a
-sandbox first. If the CLI is missing, run the one installation command the result gives:
-`npm install -g @stripe/cli@latest`. The toolkit opens Stripe's page and completes its official
-non-interactive login. Give the person the pairing code; they select their own account and approve.
-Use `studio_job` for the background result. Do not call a raw CLI config command: it may print secrets.
+Use Stripe's official plugin, authenticated with its browser OAuth approval, for Products,
+Prices, Payment Links, menu links, per-slot booking links, monthly giving and the customer
+portal. Install with `stripe agent setup` if needed; the MCP URL is
+`https://mcp.stripe.com`. Current tools are `stripe_api_search`, `stripe_api_details`,
+`stripe_api_read` and `stripe_api_write`. Discover the operation and its schema before
+calling it; tool argument shapes can change. See https://docs.stripe.com/mcp.
 
-The default is **keyless**: the toolkit uses the CLI's approved account to sync Products, Prices
-(including custom amounts for tips), Payment Links and the webhook. It captures the signing secret
-privately and installs it with the link configuration; it never exports the CLI credentials.
-The Worker redirects buyers to Stripe and grants purchases from signed events. No desktop agent,
-Homie service or API key is needed when someone pays. Run connect again after editing shop.json;
-it updates changed objects and archives removed ones. Existing connections need no new approval.
+1. Create/check `shop.json`. Read the app's published slot records and supply the complete
+   slot manifest described below. Select the owner's account and sandbox in Stripe's plugin;
+   read `/v1/account` to record its account ID. Live mode only after the owner requests it.
+2. Call Homie's `stripe_shop_plan` with `account`, `mode: "test"`, `slots` and
+   `observations: []`. CLI equivalent: `homie-studio shop plan --have plan-input.json`.
+   That JSON file contains the same fields. A returned `next` is the exact operation:
+   method, API path, parameters, API version and (for creates) idempotency key. Updates set desired fields; read before retrying. Metadata
+   scopes objects to this studio and origin; prices and links have content revisions.
+3. Perform each `next` through Stripe's official MCP. For GET, append
+   `{ "path": "…", "params": {…}, "body": <Stripe response> }` to `observations`
+   and plan again. Follow every pagination request. After a write, discard observations
+   and read fresh. Replanning resolves real Stripe IDs; never invent IDs or substitute
+   a different price. Reuse the supplied idempotency key where the tool supports it;
+   otherwise read before retrying and match the stable product ID/revision metadata.
+4. When no writes remain, use fresh reads with `stripe_shop_plan` `verify: true`
+   (CLI `homie-studio shop verify --have plan-input.json`). It checks the catalog,
+   actual link fields and line items, menus, slot limits and portal settings against
+   shop.json and the slot manifest. A mismatch blocks verification. It saves only public
+   configuration to `.studio/stripe-mcp.json`; local test configuration goes to `.dev.vars`.
+5. For a deployed HTTPS studio, run `stripe_webhook` (CLI `homie-studio shop webhook`).
+   Follow `studio_job`. This uses Stripe CLI only for private webhook installation,
+   checks the same account as the MCP, and installs the signing secret and verified
+   links through Wrangler stdin. The CLI needs one separate browser approval if its
+   studio profile is not already connected. MCP approval cannot be reused or exported.
+   Cloudflare authorization and an existing deployment are prerequisites.
+6. After installation, perform the returned `retire` operations through Stripe MCP to
+   archive replaced catalog objects, then verify fresh reads again. Test a sandbox
+   purchase and its signed event, order grant, booking capacity or recurring invoice;
+   a browser return is never proof. Stripe CLI `trigger` can send a test event, and
+   `events resend <event> --webhook-endpoint <endpoint>` retries a delivery. Check the
+   endpoint's delivery result and the app's verified records. Do not type a card into
+   a page for an automated proof; use Stripe's documented test PaymentMethods/fixtures.
 
-Keyless also supports mixed fixed-price menus, capacity-limited booking links and fixed
-monthly gifts/memberships. Read SHOP.md's 0.51 examples before implementing these.
-Guests choose menu quantities on Stripe. Booking links show pending without holding
-an unpaid seat; Stripe's completion limit is the hard capacity. Use
-`stripe_bookings_sync` after publishing/changing slots (complete manifest), or update
-`.studio/booking-slots.json` and rerun connect. Sync creates the no-code portal login
-through the API; no Dashboard toggle is needed. Never ask for a key.
+Never create a webhook through model-visible Stripe MCP: its response exposes the signing secret.
 
-Only when explicitly selected, an existing Worker key plus
-`STRIPE_CHECKOUT_MODE=sessions` enables exact app carts, exclusive expiring holds,
-spending reservations, provider reads and runtime refunds. A key alone never selects
-it. Default connect selects links and removes the runtime key.
+The owner never handles an API key or signing secret. No Homie backend handles payments.
+The Worker needs only public link configuration and the signing secret; buyers pay
+Stripe directly even when the AI and the owner's computer are offline. The old
+`stripe_login` / `shop connect` flow remains an alternative that syncs everything
+through Stripe CLI browser approval. `--renew` renews that approval; `--live` requires
+the owner's go-live request. Never read CLI config or print login-completion output.
 
-## Never
+For local checkout, pass `url: "http://localhost:8787"` (or the private Wi-Fi address)
+and `mode: "test"` to the same plan/verify flow; the official plugin makes the links.
+Run `homie-studio shop listen --profile <sandbox-profile>` in a background terminal.
+Stripe CLI is required for forwarding; one browser approval is enough if needed.
+The command captures and saves the listener secret privately. Start/restart
+`homie-studio dev --lan` once it reports ready and keep the listener running.
+Never copy the listener's raw output into the conversation.
 
-- Never ask a person for a Stripe key, a webhook secret or a password in chat. Never display a CLI
-  config, credential response, environment value or raw login-completion output. The toolkit captures
-  these privately. Keys belong to the studio; no Homie account or service takes payments.
-- **Never make a webhook endpoint or an event destination through Stripe's MCP**: its signing secret
-  would enter the conversation. `shop connect` handles endpoint creation and secret storage privately.
-- Never silently select `--manual`. Only when the owner chooses the fallback, run
-  `shop connect --manual` (or `--manual --live`) and give the local page link. The page explains the
-  remaining Dashboard restricted-key step and creates the webhook automatically. This fallback
-  requires copying a key and does not meet the one-approval target; say so plainly.
-- Live mode only when the owner says go live. Account activation, tax, bank details and Stripe
-  approval links are the owner's. Never approve a Stripe confirmation link for them.
-- The studio chooses its settings. Omitted policies are open; choose a preset only when requested.
-
-## The owner's steps, for a creator with a fresh Stripe account
-
-With an existing Stripe account and deployed studio, there is **one Stripe approval** for the CLI;
-if that CLI profile is already connected, there are **zero new approvals**. An existing MCP-only
-consent is not a CLI login and is not exported or borrowed. Account creation/activation, an administrator
-enabling CLI access, and an initial Cloudflare sign-in are separate Stripe/hosting requirements.
-
-| The owner | You |
-|---|---|
-| Approves Stripe's browser page, selecting their studio account and sandbox. | Create/check shop.json; run stripe_login / shop connect; follow studio_job to completion. |
-| Nothing. | Sync all items and the webhook, install the signing secret and links privately, then verify a test purchase and grant. |
-| Requests a refund in Stripe or asks their connected AI. | Use the official Stripe connection, honor any confirmation link, verify the signed refund event removes the item. |
-| Says “go live” and completes Stripe activation if needed. | shop connect --live in the authorized account; verify only an authorized real purchase. |
-
-`shop connect --renew` restarts the approval flow when needed. CLI OAuth refresh is the CLI's job;
-there is no runtime API credential to expire. `shop catalog` remains the optional older catalog planner
-for keyed shops; keyless shops use connect for the complete catalog, links and webhook sync.
-
-## Optional Stripe agent tools
-
-For catalog work, analytics and advice, `stripe agent setup` installs Stripe's own agent plugin and
-skills; its OAuth MCP is `https://mcp.stripe.com`. This is optional and separate from Worker credentials.
-Check `get_stripe_account_info` before writes; confirm the account and mode match the studio.
-For CLI refunds or event resends, use the non-secret `profile` returned by connect with `stripe --project-name <profile>`; preserve its test/live context. Do not read credentials.
-The tools include `stripe_api_read`, `stripe_api_write`, API discovery and `stripe_analytics`.
-From **2026-10-31**, MCP rejects API keys without the Agent tag; OAuth remains supported. Agent keys
-can put refunds behind Stripe approval. A returned confirmation link belongs to the owner; wait
-for approval before retrying. Do not silently replace the payment runtime with MCP; a separate persistent MCP client would need its own production verification.
+For a faster local iteration, `homie-studio build --quick` skips generated rules play
+and the snapshot smoke-run, while retaining compilation, guards and type checks.
+Run a full build before release; quick output is not evidence that play checks passed.
 
 ## Do
 
 | The person says | Run | What happens |
 |---|---|---|
 | "Sell a supporter pack for $5" | `npx --no-install homie-studio shop init --supporter` (then `shop check`) | `shop.json` with a US$5 Supporter pack (a badge on their profile and beside their name in rooms, for a year; it changes nothing about play) and `SELLING.md`. Commit both. |
-| "Sell a skin / a season pass / the full game" | edit `shop.json` `items` (`kind`: `cosmetic`, `pass`, `unlock`; `price` in Stripe currency units; `gives`: the keys the game reads), `shop check`, then `shop connect` again | Kinds are studio labels, without a fixed list. `"advantage": true` follows the studio policy for beginner and kids servers. Homie sets no price ceiling. |
+| "Sell a skin / a season pass / the full game" | edit `shop.json` `items` (`kind`: `cosmetic`, `pass`, `unlock`; `price` in Stripe currency units; `gives`: the keys the game reads), `shop check`, then the official MCP plan/verify flow again | Kinds are studio labels, without a fixed list. `"advantage": true` follows the studio policy for beginner and kids servers. Homie sets no price ceiling. |
 | "Let people tip" | an item `{ "kind": "tip", "price": "choose", "min": 200, "max": 5000 }` | Pay what you want; amounts follow Stripe currency requirements, and max is optional and chosen by the studio. |
-| "Make the products in Stripe" | `shop connect` | Idempotent Product, Price, Payment Link and webhook sync from shop.json; no secret enters tool output. |
-| "Connect my Stripe" / "turn the shop on" | `stripe_login` or `shop connect` | Approve Stripe once if needed; the Worker receives links and the signing secret only. Follow the single next step returned. Live only when requested. |
+| "Make the products in Stripe" | `stripe_shop_plan` | Idempotent Product, Price, Payment Link and webhook sync from shop.json; no secret enters tool output. |
+| "Connect my Stripe" / "turn the shop on" | `stripe_shop_plan`, then `stripe_webhook` | Approve Stripe once if needed; the Worker receives links and the signing secret only. Follow the single next step returned. Live only when requested. |
 | "Is tax set up?" | `stripe_api_read` `GET /v1/tax/settings`, and `GET /v1/tax/registrations` | Seller "stripe": Stripe Tax needs `status: active` (the business address in Settings, Tax), or checkouts fail; with no registrations it collects no tax anywhere: say so, the accountant decides where to register. Seller "stripe-managed": Stripe files the tax; the connect page's test checkout said whether Managed Payments is on. Change nothing yourself. |
 | "Is the shop working?" | `npx --no-install homie-studio shop` | Open (test or live) or exactly what is missing, the last 30 days, the webhook address. |
 | "How are sales?" / "Show me the sales" | `shop` and `shop orders` first (the studio's own books); with Stripe's MCP, read-only: `stripe_analytics`, or `stripe_api_read` on `/v1/balance`, `/v1/payouts`, `/v1/checkout/sessions` | Counts, money and payouts in a few lines; never a buyer's name, email or card. Never a write to answer a question. The owner's `/_studio/office/shop` links every Stripe page and gives the accountant a CSV. |
@@ -158,7 +149,7 @@ Read SHOP.md for a round to table 7, `shop.book` and $20 monthly giving.
 Menus let guests choose several quantities on Stripe; signed invoices provide actual
 paid lines and the app reference. Slot Payment Links enforce completed-session
 capacity. Pending guests do not block others. The owner's AI syncs published slots
-with `stripe_bookings_sync`; the app shows Full from verified availability.
+with `stripe_shop_plan` and the complete slot manifest; the app shows Full from verified availability.
 Recurring Prices provide monthly preset gifts and memberships. Connect enables the
 no-code customer portal login through Stripe's API, without a Dashboard toggle.
 Paid invoice periods govern membership; failed renewal never extends it.

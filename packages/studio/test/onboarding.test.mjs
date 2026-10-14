@@ -72,7 +72,7 @@ test('setup status before a studio exists: one checklist, what each row unlocks,
   const r = await setupStatus({ cwd: away, env: {}, platform: 'linux', exec, fetchFn: reachable, chrome: () => null, node: '22.22.0' });
   assert.equal(r.ok, true);
   assert.equal(r.studio, null);
-  assert.deepEqual(r.rows.map((x) => x.id), ['node', 'connector', 'cloudflare', 'chrome', 'ffmpeg', 'github', 'elevenlabs', 'fal']);
+  assert.deepEqual(r.rows.map((x) => x.id), ['node', 'connector', 'cloudflare', 'chrome', 'ffmpeg', 'github', 'fal', 'elevenlabs', 'cloudflare-mcp']);
   const by = Object.fromEntries(r.rows.map((x) => [x.id, x]));
   assert.equal(by.node.state, 'ok');
   assert.equal(by.connector.state, 'unknown', 'only the AI knows whether its Homie tools are there');
@@ -106,14 +106,14 @@ test('setup status in a studio: Wrangler signed in, the email proven by a deploy
   const fetchFn = async (url, init) => { seen.push([String(url), init?.headers?.Authorization ?? null]); return new Response('{}', { status: String(url).includes('fal') ? 200 : 405 }); };
   mkdirSync(join(dir, '.studio'), { recursive: true });
   writeFileSync(join(dir, '.studio', 'local.json'), JSON.stringify({ deployedAt: '2026-10-01T00:00:00Z' }));
-  const r = await setupStatus({ cwd: dir, env: { FAL_KEY: key, CLAUDECODE: '1' }, platform: 'darwin', exec, fetchFn, chrome: () => '/x/chrome', connector: 'yes' });
+  const r = await setupStatus({ cwd: dir, env: { FAL_KEY: key, CLAUDECODE: '1' }, integrations: { fal: 'connected', elevenlabs: 'connected' }, platform: 'darwin', exec, fetchFn, chrome: () => '/x/chrome', connector: 'yes' });
   const by = Object.fromEntries(r.rows.map((x) => [x.id, x]));
   assert.equal(r.studio.name, 'Lantern Works');
   assert.deepEqual(['connector', 'cloudflare', 'chrome', 'ffmpeg', 'github', 'elevenlabs', 'fal'].map((id) => by[id].state), ['ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok']);
   assert.deepEqual(by.cloudflare.parts.map((p) => p.state), ['ok', 'ok'], 'signed in, and the email is proven by a deploy');
   assert.equal(by.statusline.state, 'optional', 'Claude Code gets the status line offer');
   assert.ok(calls.includes('wrangler whoami --json'), 'the studio\'s own Wrangler is asked');
-  assert.ok(seen.some(([u, auth]) => u.includes('fal') && auth === `Key ${key}`), 'the fal key is checked with fal itself');
+  assert.ok(seen.every(([u, auth]) => !u.includes('fal') && auth === null), 'setup never calls a provider or reads its credential');
   const printed = JSON.stringify(r) + formatStatus(r);
   assert.ok(!printed.includes(key), 'the key is never printed');
   assert.ok(!printed.includes('Someone') && !printed.includes('acc1'), 'nor the Cloudflare account\'s name or id');

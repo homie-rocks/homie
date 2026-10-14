@@ -6,7 +6,8 @@ import { LINKS_STRIPE_VERSION, linkSettings, paymentLinkURL } from '../worker/sh
 import { HOOK_EVENTS, SHOP_HOOK_EVENTS } from './shop.mjs';
 const hash = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const same = (a, b) => Object.keys(a ?? {}).length === Object.keys(b).length && Object.entries(b).every(([k, v]) => a?.[k] === v);
-export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, receipt, saveReceipt, bookingSlots = [], local = false }) {
+export const matchesFields = (actual, expected) => Array.isArray(expected) ? Array.isArray(actual) && actual.length === expected.length && expected.every((v,i)=>matchesFields(actual[i],v)) : expected && typeof expected === 'object' ? Object.entries(expected).every(([k,v]) => matchesFields(actual?.[k],v)) : actual === expected;
+export async function reconcilePaymentLinks({ api, shop, slug, site, mode, bookingSlots = [], verifyObjects = false }) {
   const list = async (path, params = {}) => {
     const all = []; let cursor;
     do {
@@ -19,15 +20,16 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     } while (cursor);
     return all;
   };
-  if(local && mode!=='test')throw new Error('Local checkout requires Stripe test mode');
-  const secrets = local ? {code:0,stdout:'[]'} : await w(['secret', 'list']);
-  if (secrets.code !== 0) return { ok: false, needs: 'cloudflare', why: 'Connect Cloudflare and deploy the studio, then run shop connect again.' };
-  const names = JSON.parse(secrets.stdout ?? secrets.out);
-  const has = (name) => names.some((s) => s.name === name);
   const products = await list('/v1/products');
   const prices = await list('/v1/prices');
   const links = await list('/v1/payment_links');
   const own = (o) => o.metadata?.homie === 'shop-links-v1' && o.metadata?.studio === slug && o.metadata?.origin === site;
+  const verifyLink = async (link, params) => {
+    if (!verifyObjects) return;
+    const actual=await api('GET',`/v1/payment_links/${link.id}`,{expand:['line_items']});
+    const normalized={...actual,line_items:actual.line_items?.data?.map(line=>({...line,price:line.price?.id??line.price}))};
+    if(actual.id!==link.id || actual.active!==link.active || actual.url!==link.url || actual.line_items?.has_more===true || !matchesFields(actual.metadata,link.metadata) || !paymentLinkURL(actual.url) || !matchesFields(normalized,params)) throw new Error(`Stripe Payment Link ${link.id} differs from its planned fields. Restore its configuration through Stripe MCP before verifying.`);
+  };
   const config = { v: 1, mode, settings: linkSettings(shop), items: [] };
   const customText=shop.giving?.receiptText ? {custom_text:{submit:{message:shop.giving.receiptText}}} : {};
   const catalogPrices = new Map();
@@ -36,7 +38,7 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     const id = await productIdOf(slug, item.id);
     keepProducts.add(id);
     const metadata = { homie: 'shop-links-v1', studio: slug, origin: site };
-    const fields = { name: item.name, ...(item.blurb ? {description:item.blurb} : {}), tax_code: item.taxCode ?? defaultTaxCode(item), metadata, active: true };
+    const fields = { name: item.name, description:item.blurb??'', tax_code: item.taxCode ?? defaultTaxCode(item), metadata, active: true };
     let product = products.find((p) => p.id === id);
     if (!product) product = await api('POST', '/v1/products', { id, ...fields }, `product-${hash(id)}`);
     else if (!same(product.metadata, metadata) || product.name !== fields.name || (product.description ?? '') !== (fields.description ?? '') || (product.tax_code?.id ?? product.tax_code) !== fields.tax_code || !product.active) await api('POST', `/v1/products/${id}`, fields);
@@ -48,6 +50,8 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     const revision = hash(priceFields);
     let price = prices.find((p) => own(p) && p.product === id && p.metadata?.revision === revision);
     if (!price) price = await api('POST', '/v1/prices', { ...priceFields, metadata: { ...metadata, revision } }, `price-${hash({ priceFields, metadata })}`);
+    if (verifyObjects && ((price.recurring?.interval_count??1)!==1 || Boolean(price.recurring)!==Boolean(item.interval) || Boolean(price.custom_unit_amount)!==(item.price==='choose'))) throw new Error(`Stripe Price ${price.id} has a different payment type from shop.json`);
+    if (verifyObjects && !matchesFields({...price, product:price.product?.id??price.product, ...(price.custom_unit_amount?{custom_unit_amount:{...price.custom_unit_amount,enabled:true}}:{})},priceFields)) throw new Error(`Stripe Price ${price.id} differs from shop.json; restore or archive it through Stripe MCP before planning again.`);
     if (!price.active) await api('POST', `/v1/prices/${price.id}`, { active: true });
     keepPrices.add(price.id);
     catalogPrices.set(item.id, price.id);
@@ -61,6 +65,7 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     const linkRevision = hash({ params, item, policy: shop.policy });
     let link = links.find((p) => own(p) && p.metadata?.revision === linkRevision);
     if (!link) link = await api('POST', '/v1/payment_links', { ...params, metadata: { ...metadata, revision: linkRevision } }, `link-${linkRevision}`);
+    await verifyLink(link,params);
     if (!link.active) await api('POST', `/v1/payment_links/${link.id}`, { active: true });
     if (!paymentLinkURL(link.url) || !/^plink_\w+$/.test(link.id)) throw new Error('Invalid Payment Link');
     keepLinks.add(link.id);
@@ -83,13 +88,14 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     const revision=hash(params);
     let link=links.find(p=>own(p)&&p.metadata?.revision===revision);
     if(!link)link=await api('POST','/v1/payment_links',{...params,metadata:{...metadata,revision}},`menu-${revision}`);
+    await verifyLink(link,params);
     if(!link.active)await api('POST',`/v1/payment_links/${link.id}`,{active:true});
     keepLinks.add(link.id);
     config.menus.push({id:link.id,url:link.url,revision,items:items.map(i=>({item:i.id,price:catalogPrices.get(i.id)}))});
   }
   config.slots=[];
   const pause=async link=>{
-    await api('POST',`/v1/payment_links/${link.id}`,{active:false});
+    if(link.active) await api('POST',`/v1/payment_links/${link.id}`,{active:false});
     for(const session of await list('/v1/checkout/sessions',{payment_link:link.id,status:'open'})) {
       await api('POST',`/v1/checkout/sessions/${session.id}/expire`);
     }
@@ -107,11 +113,13 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     let link=links.find(p=>own(p)&&p.metadata?.slot===identity);
     if(!link && (!slot.capacity||slot.active===false))continue;
     if(link?.metadata?.price && link.metadata.price!==catalogPrices.get(item.id))throw new Error('Slot service price changed. Deactivate the old slot and publish a new slot ID after reviewing existing bookings.');
-    if(slot.confirmed!==undefined && link?.active && slot.active!==false)throw new Error('Pause affected slot links before recounting confirmed seats; wait for signed payments, move/refund, then sync the fresh counts.');
+    const seatsRevision=hash({slot,capacity:slot.capacity,confirmed:slot.confirmed});
+    const counted=slot.confirmed!==undefined && link?.metadata?.seats_revision===seatsRevision;
+    if(slot.confirmed!==undefined && !counted && link?.active && slot.active!==false)throw new Error('Pause affected slot links before recounting confirmed seats; wait for signed payments, move/refund, then sync the fresh counts.');
     const count=link?.restrictions?.completed_sessions?.count??0;
     // Initial publication uses capacity exactly. After a reviewed move/refund the
     // AI supplies current confirmed seats; keep the existing Stripe lifetime count.
-    const limit=slot.confirmed===undefined ? slot.capacity : count+slot.capacity-slot.confirmed;
+    const limit=counted ? Number(link.metadata.seats_limit) : slot.confirmed===undefined ? slot.capacity : count+slot.capacity-slot.confirmed;
     const active=slot.active!==false && limit>count;
     const params={...customText,line_items:[{price:catalogPrices.get(item.id),quantity:1}],payment_method_types:['card'],
       restrictions:{completed_sessions:{limit:Math.max(1,limit)}},after_completion:{type:'redirect',redirect:{url:`${site}/shop/thanks?session_id={CHECKOUT_SESSION_ID}`}}};
@@ -119,9 +127,10 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     else {
       // Pause first whenever publishing a changed budget, so old sessions cannot
       // spend a previous capacity after staff moves or removes a slot.
-      if(!active || link.restrictions?.completed_sessions?.limit!==limit)await pause(link);
-      link=await api('POST',`/v1/payment_links/${link.id}`,{restrictions:params.restrictions,active});
+      if(!active || link.restrictions?.completed_sessions?.limit!==Math.max(1,limit))await pause(link);
+      if (link.active !== active || link.restrictions?.completed_sessions?.limit !== Math.max(1,limit) || slot.confirmed!==undefined && !counted) link=await api('POST',`/v1/payment_links/${link.id}`,{restrictions:params.restrictions,active,...(slot.confirmed!==undefined?{metadata:{seats_revision:seatsRevision,seats_limit:String(limit)}}:{})});
     }
+    await verifyLink(link,params);
     keepLinks.add(link.id);
     config.slots.push({...slot,id:link.id,url:link.url,price:catalogPrices.get(item.id),revision:identity,active:link.active,count:link.restrictions?.completed_sessions?.count??0,limit,paused:slot.active===false});
   }
@@ -132,11 +141,40 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
     const portals=await list('/v1/billing_portal/configurations');
     let portal=portals.find(p=>own(p));
     const params={features:{subscription_cancel:{enabled:true},payment_method_update:{enabled:true},invoice_history:{enabled:true}},login_page:{enabled:true},business_profile:{headline:'Manage your membership or giving'},default_return_url:`${site}/shop/`,metadata};
-    portal=await api('POST',portal?`/v1/billing_portal/configurations/${portal.id}`:'/v1/billing_portal/configurations',params);
+    if (!portal || !matchesFields(portal, params)) portal=await api('POST',portal?`/v1/billing_portal/configurations/${portal.id}`:'/v1/billing_portal/configurations',params, portal?undefined:`portal-${hash({slug,site,params})}`);
     config.portal=portal.login_page?.url;
   }
-  if(local)return {ok:true,command:'shop connect',local:true,mode,config};
-  const purchases = root ? await (await import('./purchase-links.mjs')).syncPurchaseLinks({ root, api, slug, site, mode, list, till: shop.purchasesTill ?? shop.till }) : null;
+  const retire = [
+    ...links.filter(p=>own(p)&&p.active&&!keepLinks.has(p.id)).map(p=>({method:'POST',path:`/v1/payment_links/${p.id}`,params:{active:false}})),
+    ...prices.filter(p=>own(p)&&p.active&&!keepPrices.has(p.id)).map(p=>({method:'POST',path:`/v1/prices/${p.id}`,params:{active:false}})),
+    ...products.filter(p=>own(p)&&p.active&&!keepProducts.has(p.id)).map(p=>({method:'POST',path:`/v1/products/${p.id}`,params:{active:false}})),
+  ];
+  return {config, retire};
+}
+
+export async function syncPaymentLinks(options) {
+  const {root, api, shop, slug, site, mode, w, receipt, saveReceipt, local = false} = options;
+  if (local && mode !== 'test') throw new Error('Local checkout requires Stripe test mode');
+  const {config, retire} = options.catalog ?? await reconcilePaymentLinks(options);
+  if (local) return {ok:true, command:'shop connect', local:true, mode, config};
+  const list = async (path,params={}) => {
+    const all=[]; let cursor;
+    do {
+      const page=await api('GET',path,{...params,limit:100,...(cursor?{starting_after:cursor}:{})});
+      if (!Array.isArray(page.data)) throw new Error('Incomplete Stripe list');
+      all.push(...page.data);
+      const next=page.has_more?page.data.at(-1)?.id:null;
+      if(page.has_more && (!next || next===cursor))throw new Error('Incomplete Stripe pagination');
+      cursor=next;
+    }while(cursor);
+    return all;
+  };
+  const secrets=await w(['secret','list']);
+  if(secrets.code!==0)return {ok:false,needs:'cloudflare',why:'Connect Cloudflare before installing the shop.'};
+  const names=JSON.parse(secrets.stdout??secrets.out);
+  const has=name=>names.some(s=>s.name===name);
+
+  const purchases = root && !options.catalog ? await (await import('./purchase-links.mjs')).syncPurchaseLinks({ root, api, slug, site, mode, list, till: shop.purchasesTill ?? shop.till }) : null;
   const purchaseSecrets = {};
   if (purchases?.config.offers.length && !has('PURCHASE_SIGNING_KEYS')) {
     const { generateKeyPair, exportJWK } = await import('jose');
@@ -166,9 +204,7 @@ export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, r
   }
   await purchases?.retire();
   // Retire only after the replacement configuration and signing secret are installed.
-  for (const link of links.filter((p) => own(p) && p.active && !keepLinks.has(p.id))) await api('POST', `/v1/payment_links/${link.id}`, { active: false });
-  for (const price of prices.filter((p) => own(p) && p.active && !keepPrices.has(p.id))) await api('POST', `/v1/prices/${price.id}`, { active: false });
-  for (const product of products.filter((p) => own(p) && p.active && !keepProducts.has(p.id))) await api('POST', `/v1/products/${product.id}`, { active: false });
+  if (!options.catalog) for (const op of retire) await api(op.method, op.path, op.params);
   for (const e of endpoints.filter((e) => e.id !== endpoint.id && e.url === url && e.metadata?.homie === 'shop-v1' && e.status !== 'disabled')) await api('POST', `/v1/webhook_endpoints/${e.id}`, { disabled: true });
   return { ok: true, command: 'shop connect', mode, keyless: true, saved: !unchanged, alreadyConnected: Boolean(unchanged), webhook: { id: endpoint.id, url }, verifiedPurchase: false,
     message: 'Your shop uses Stripe Payment Links. No Stripe API key is stored in the Worker.',

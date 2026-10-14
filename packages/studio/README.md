@@ -513,17 +513,7 @@ npx homie-studio shop                         # open (test or live) or what is m
 npx homie-studio shop refund ord_…            # an ASK: the owner taps once (or Refund in /_studio/office/shop)
 ```
 
-Connect with `stripe_login` or `shop connect`: the owner approves Stripe's official browser page, sandbox first.
-Where the CLI supplies a transferable legacy test key, the toolkit creates the webhook and installs both Worker
-secrets privately. It reports the 90-day expiry; `shop connect --renew` obtains approval again. Current CLI OAuth
-and live mode cannot export an independent Worker's key, so the result names that limitation. Only if the owner
-chooses the fallback does `shop connect --manual` open the old local key page (`--manual --live` for live mode).
-Never request a key in chat. Login is not a verified purchase; complete the test purchase, webhook and refund check.
-
-Stripe's optional agent tools (`stripe agent setup`) provide MCP and skills for catalog work (`shop catalog`),
-tax reads and sales questions. They are separate from the Worker's credentials. Never create a webhook through
-MCP because its response contains a secret. From 2026-10-31 Stripe MCP accepts only OAuth or Agent-tagged keys;
-that change does not affect the shop's ordinary restricted API key. [SHOP.md](shop/SHOP.md) describes the flow.
+Connect through Stripe’s official OAuth plugin: `stripe_shop_plan` gives exact catalog, menu, booking and recurring operations for Stripe MCP and verifies its fresh reads. `stripe_webhook` privately installs the signing secret using one separate Stripe CLI browser approval if needed. No owner handles a key. `shop connect` remains the CLI alternative. [SHOP.md](shop/SHOP.md) describes the flow.
 
 In a game: `createShop()` from `@homie-rocks/studio/shop` (`has`, `entitlements`, `on('change')`, `open`, `used`, `add`, `checkout`, `buy`); a
 supporter's badge rides on their seat (`peer.badge`). Stripe Checkout (hosted), optional Stripe Tax, or Stripe Managed
@@ -1185,26 +1175,17 @@ no Wrangler, no rooms, the game alone and offline with its bots) and shoots that
 there (it needs rooms: use `dev` and `--url`). The result names the build the frames are of, by the hash `build`
 printed and the hashed bundle the page loaded.
 
-## Another way to Cloudflare: Stripe Projects (a prototype, 0.24.3)
+## Official media and hosting connections
 
-`npx wrangler login` stays the way. For a creator with no Cloudflare account (and no ElevenLabs), Stripe Projects
-(Stripe's CLI plugin, docs.stripe.com/projects) can make or link both on the person's own Stripe sign-in, on free
-plans, and hand the credentials to the studio folder:
+Connect fal and ElevenLabs through their official plugins in your AI client and approve
+one browser sign-in per provider. Homie never handles their credentials. Cloudflare's
+plugin provides account inspection; deployment keeps pinned Wrangler's own browser login.
+See [connection and upgrade guidance](guides/studio-setup/references/OFFICIAL-MEDIA.md).
 
-```sh
-npx homie-studio setup --via stripe-projects [--with elevenlabs] --dry-run   # what it would do; changes nothing
-npx homie-studio setup --via stripe-projects [--with elevenlabs] --accept-tos  # after the person accepted the providers' terms
-```
-
-It stops with a `needs` step at each thing that is the person's (the Stripe CLI and its Projects plugin, Stripe's
-sign-in, the providers' terms, Cloudflare's own approval page for an existing account); it never adds a paid plan or
-a payment method. The Cloudflare account id goes in studio.json with `"auth": "stripe-projects"`; the token stays in
-Projects' vault and the git-ignored `.env` it syncs, and every Wrangler run in the studio takes it from there
-(`deploy`, `dev`, secrets, the office). It checks read-only what the token can do (Wrangler signed in, D1, Workers AI;
-R2 is optional) and that `.gitignore` keeps `.env`, `.env.*`, `.projects/vault/` and `.projects/cache/` out of git.
-With `--with elevenlabs` the music skill finds the ElevenLabs key there too (ElevenLabs' free plan has no commercial
-licence). Unverified until a real run: the exact JSON of the Projects commands, and the Cloudflare token's permission
-groups, which the checks measure instead of assuming.
+`homie-studio media import --file <download> --receipt <receipt.json> --out <studio-path>
+--used-by <scene-file>` places a completed asset and records its hash, rights, style and
+cost status in `media/provenance.json`. It makes no provider calls. The scene file must
+reference the delivered path; also verify the asset in the running scene.
 
 ## No payment method needed
 

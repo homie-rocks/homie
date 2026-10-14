@@ -17,9 +17,9 @@
  *   homie-studio app role <id> <role> [--player <account>] [--revoke] [--url <site>]
  *   homie-studio game new <id> [--from gem-rush] [--name "<Game Name>"]
  *   homie-studio games
- *   homie-studio build [<id>] [--maps] [--types] [--long-check]   (--maps: also keep each bundle's source map and
+ *   homie-studio build [<id>] [--maps] [--types] [--long-check] [--quick]   (--maps: also keep each bundle's source map and
  *                                          module sizes in .studio/maps/<id>/, never in site/dist: what `perf` reads a
- *                                          CPU profile through; --types: check the games' TypeScript first, with the
+ *                                          CPU profile through; --quick: skip rules play and smoke checks; --types: check the games' TypeScript first, with the
  *                                          studio's own `typescript`; a type error stops the build; --long-check: play
  *                                          each rules game eight times as long before it is written (a rules game is
  *                                          always type-checked and played; this is more of the same play, for a
@@ -183,10 +183,11 @@
  *   homie-studio shop                     is the studio's shop selling (its own Stripe), and if not, what is missing
  *   homie-studio shop init [--supporter|--giving] [--currency <code>] [--price 500] [--managed]   shop.json and SELLING.md
  *   homie-studio shop check               shop.json against studio settings and provider requirements
- *   homie-studio shop connect [--live] [--renew] [--manual]   sync Payment Links and webhook through Stripe browser approval; --manual chooses the local page for the studio's
- *                                         restricted Stripe key; with it this makes the webhook (0.24.3), and the key
- *                                         and the webhook's secret go straight to the Worker secrets, never a chat or a
- *                                         file (test keys only unless --live)
+ *   homie-studio shop listen --profile <sandbox> [--port 8787]   private local webhook forwarding
+ *   homie-studio shop plan --have <file>    exact next operation for Stripe's official MCP (public reads only)
+ *   homie-studio shop verify --have <file>  verify fresh MCP reads and save the public link configuration
+ *   homie-studio shop webhook [--live] [--renew]   privately install webhook using one Stripe CLI browser approval
+ *   homie-studio shop connect [--live] [--renew]   alternative: full sync through Stripe CLI approval
  *   homie-studio shop catalog [--have <file>|-] [--mode test|live]   the items as Products in the studio's Stripe,
  *                                         made by the AI through Stripe's own MCP: the read first, then (with what it
  *                                         answered) the exact writes; in sync, shop.json "catalog" records the mode
@@ -226,14 +227,9 @@
  *   homie-studio setup attach <hs_…> [--client claude|codex|grok]
  *                                          (this repository is the studio the chat's setup card is making: say so, once,
  *                                          learn its live address, and give a template copy its real name)
- *   homie-studio setup --via stripe-projects [--with elevenlabs] [--accept-tos] [--dry-run]
- *                                         (a prototype, 0.24.3: Cloudflare, and ElevenLabs with --with, made or linked
- *                                          through Stripe Projects on their free plans; the person accepts the providers'
- *                                          terms (then --accept-tos) and signs in on Stripe's and the provider's own
- *                                          pages; the account id goes into studio.json, the token stays in Projects'
- *                                          vault and its git-ignored .env, and Wrangler runs with it here. The usual
- *                                          way, npx wrangler login, stays the default. lib/projects.mjs)
  *   homie-studio domain <hostname>                  AI configures DNS/TLS for the next deploy
+ *   homie-studio media import --file <download> --receipt <receipt.json> --out <studio-path> --used-by <scene-file>
+ *                                          Place completed official MCP output with provenance (no provider calls)
  *   homie-studio setup prepare                     AI installs a private Node/npm if missing
  *   homie-studio setup status [--connector yes|no] [--client claude|codex|grok]   (also: homie-studio doctor)
  *                                         what this computer and the person's accounts have for a studio: Node, the Homie
@@ -325,6 +321,7 @@
  *
  * Every command prints a few lines for a person; --json prints the result.
  */
+import { importMedia } from '../lib/media-import.mjs';
 // FIRST, before any other file of the toolkit is evaluated: a Node.js that is too old ends here, with the reason.
 import '../lib/node-version.mjs';
 import { spawn, spawnSync } from 'node:child_process';
@@ -362,8 +359,6 @@ import { agentsBrain, agentsBrainKey, agentsPass, agentsPasses, agentsRevoke, ag
 import { AgentSeat } from '../lib/agent-seat.mjs';
 import { shopCheck, shopConnect, shopDisconnect, shopInit, shopLines, shopOrders, shopRefund, shopStatus } from '../lib/shop.mjs';
 import { catalogLines, catalogPlan } from '../lib/shop-catalog.mjs';
-import { projectsLines, setupViaProjects } from '../lib/projects.mjs';
-import { projectsCloudflareEnv } from '../lib/projects-env.mjs';
 import { Feed, currentFeed, currentId, flushProgress, publicFeed, readFeed, recordChange, startProgress } from '../lib/progress.mjs';
 import { formatStatus, setupStatus } from '../lib/doctor.mjs';
 import { codexTarget, newCodex, writeCodexPage } from '../lib/codex.mjs';
@@ -384,22 +379,23 @@ import { standaloneDeployNotes } from '../lib/standalone.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['public', 'lan', 'off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'giving', 'managed', 'live', 'manual', 'renew', 'send', 'accept-tos', 'quiet', 'no-local-ai', 'timestamps', 'overwrite', 'own-route', 'before', 'release', 'device'];
+// build --quick keeps compilation and type checks, skips rules generated play/smoke checks.
+const BOOL_FLAGS = ['quick', 'public', 'lan', 'off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'giving', 'managed', 'live', 'manual', 'renew', 'send', 'accept-tos', 'quiet', 'no-local-ai', 'timestamps', 'overwrite', 'own-route', 'before', 'release', 'device'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a.startsWith('--')) {
     const [k, v] = a.slice(2).split(/=(.*)/s, 2);
     if (v !== undefined) flags.set(k, v);
-    else if (argv[i + 1] !== undefined && !argv[i + 1].startsWith('--') && !BOOL_FLAGS.includes(k)) flags.set(k, argv[++i]);
+    else if (argv[i + 1] !== undefined && !argv[i + 1].startsWith('--') && (!BOOL_FLAGS.includes(k) || k === 'profile' && argv[0] === 'shop')) flags.set(k, argv[++i]);
     else flags.set(k, true);
   } else positional.push(a);
 }
 const asJson = flags.has('json');
-const log = asJson ? () => {} : (line) => process.stderr.write(`${line}\n`);
+const log = asJson && positional[0] !== 'build' ? () => {} : (line) => process.stderr.write(`${line}\n`);
 
 function print(result) {
-  if (asJson) { process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); return; }
+  if (asJson || /^shop (plan|verify)$/.test(result.command ?? '')) { process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); return; }
   // A standalone plan or build says every target, built or not, and what a standalone copy does not have.
   if (/^standalone( |$)/.test(String(result.command ?? ''))) { process.stdout.write(`${standaloneLines(result).join('\n')}\n`); return; }
   // A check that found problems still prints them (its rows say what to fix), never a bare "failed".
@@ -635,9 +631,6 @@ function print(result) {
     case 'shop catalog':
       lines.push(...catalogLines(result));
       break;
-    case 'setup':
-      lines.push(...projectsLines(result));
-      break;
     case 'chat rules':
     case 'chat budget':
     case 'lounge rules':
@@ -846,6 +839,8 @@ const OUTWARD_FLAGS = {
   'chat remove': ['url', 'all'], 'chat budget': ['url'],
   'servers close': ['url', 'reopen'], 'servers level': ['url'], 'servers member': ['url', 'role', 'remove'],
   'parts reissue': ['claim-hash', 'receipt-verified', 'buyer'], 'parts retire': [], 'parts keys': [], 'parts refund': ['game'],
+  'shop listen': ['profile','port'],
+  'shop webhook': ['live','renew','profile'],
   'shop connect': ['local', 'profile', 'url', 'managed', 'live', 'manual', 'renew', 'from-clipboard'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note', 'manual-transaction'],
   'agents pass': ['url', 'label', 'server', 'hands', 'role', 'days'], 'agents revoke': ['url'], 'agents brain': ['url', 'budget', 'remove'],
   'agents sit': ['url', 'server', 'pass', 'label', 'brain'],
@@ -936,12 +931,7 @@ async function main() {
   if (cmd === 'progress') return progressCommand(root, sub);
   if (cmd === 'domain') return studioDomain(root, sub);
   if (cmd === 'setup' && sub === 'attach') return setupAttach(root, positional[2], { homie: flags.get('homie'), client: flags.get('client') });
-  if (cmd === 'setup' && flags.has('via')) {
-    if (flags.get('via') !== 'stripe-projects') return { ok: false, command: 'setup', why: '--via stripe-projects is the one other way this version knows (the default is npx wrangler login)' };
-    const extra = String(flags.get('with') ?? '').split(',').map((x) => x.trim()).filter(Boolean);
-    if (extra.some((x) => x !== 'elevenlabs')) return { ok: false, command: 'setup', why: '--with takes elevenlabs (Cloudflare is always set up)' };
-    return setupViaProjects(root, { withElevenlabs: extra.includes('elevenlabs'), acceptTos: flags.has('accept-tos'), dryRun: flags.has('dry-run'), log });
-  }
+  if (cmd === 'media' && sub === 'import') return importMedia(root, { file: flags.get('file'), receipt: flags.get('receipt'), out: flags.get('out'), usedBy: flags.get('used-by') });
   if (cmd === 'handoff') return handoff(root, sub, { homie: flags.get('homie'), client: flags.get('client') });
   if (cmd === 'port' && sub === 'import') return importPort(root, positional[2], flags.get('id'), { name: flags.get('name'), mode: flags.get('mode') });
   if (cmd === 'port' && sub === 'check') {
@@ -963,7 +953,7 @@ async function main() {
   // go, so an old note, an old card or an agent's memory of the toolkit does not end at "unknown command".
   if (cmd === 'game' && sub === 'remix') return { ok: false, command: 'game remix', why: 'remix was retired: a game is no longer handed over whole, and no studio serves one. Games build on each other through parts, the pieces of a game its studio chose to share: find one with `homie-studio parts find <words>` and bring it in with `homie-studio parts add` (in chat: parts_find, part_add; parts/PARTS.md)' };
   if (cmd === 'games') return { ok: true, command: 'games', games: listGames(root).map(({ dir, ...g }) => ({ ...g, dir: relative(root, dir) })) };
-  if (cmd === 'build') return tracked(root, 'build', () => build(root, { only: positional[1] ?? null, log, maps: flags.has('maps'), types: flags.has('types'), longCheck: flags.has('long-check') }), 'build');
+  if (cmd === 'build') return tracked(root, 'build', () => build(root, { only: positional[1] ?? null, log, maps: flags.has('maps'), types: flags.has('types'), longCheck: flags.has('long-check'), quick: flags.has('quick') }), 'build');
   if (cmd === 'preview') return preview(root, positional[1] ?? (listGames(root).length === 1 ? listGames(root)[0].id : null));
   if (cmd === 'perf' && sub === 'sizes') return perfSizes(root, positional[2] ?? listGames(root)[0]?.id);
   if (cmd === 'lab') return labCommand(root, sub);
@@ -1114,7 +1104,15 @@ async function main() {
     const url = flags.get('url');
     if (!sub) return shopStatus(root, { url });
     if (sub === 'init') return shopInit(root, { supporter: flags.has('supporter'), giving: flags.has('giving'), currency: flags.get('currency') ?? null, price: flags.get('price') ?? 500, managed: flags.has('managed') });
+    if(sub==='listen')return (await import('../lib/shop-listen.mjs')).shopListen(root,{profile:flags.get('profile'),port:flags.get('port')??8787,log});
     if (sub === 'check') return shopCheck(root);
+    if (sub === 'plan' || sub === 'verify') {
+      const {shopMcpPlan,saveMcpVerification}=await import('../lib/shop-mcp.mjs');
+      const file=flags.get('have');
+      const input=file?JSON.parse(readFileSync(file==='-'?0:file,'utf8')):{};
+      return (sub==='verify'?saveMcpVerification:shopMcpPlan)(root,input);
+    }
+    if (sub === 'webhook') return shopConnect(root,{webhookOnly:true,live:flags.has('live'),renew:flags.has('renew'),profile:flags.get('profile'),log:line=>process.stderr.write(`${line}\n`)});
     if (sub === 'connect' && flags.has('local')) {
       if(flags.has('live'))throw new Error('Local checkout requires test mode');
       return (await import('../lib/shop-local.mjs')).shopConnectLocal(root,{url:flags.get('url'),profile:flags.get('profile')});
@@ -1362,7 +1360,7 @@ function mediaPut(root, file, as) {
   const key = as ?? (/^(music|videos)\//.test(rel) && !rel.includes('..') ? rel : `${folder}/${basename(file)}`);
   const bin = wranglerBin(root);
   return new Promise((done) => {
-    const p = spawn(bin, ['r2', 'object', 'put', `${r2}/${key}`, '--file', resolve(file), '--content-type', typeOf(file), '--remote'], { cwd: workerDir(root), env: { ...process.env, ...projectsCloudflareEnv(root), CI: '1' }, stdio: ['ignore', 'ignore', 'inherit'] });
+    const p = spawn(bin, ['r2', 'object', 'put', `${r2}/${key}`, '--file', resolve(file), '--content-type', typeOf(file), '--remote'], { cwd: workerDir(root), env: { ...process.env, CI: '1' }, stdio: ['ignore', 'ignore', 'inherit'] });
     p.on('close', (code) => {
       if (code !== 0) return done({ ok: false, command: 'media put', why: 'wrangler r2 object put failed' });
       // The manifest is committed: it names the file by its path on the site, never the workers.dev address.

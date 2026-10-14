@@ -1,0 +1,68 @@
+{
+  "status": "completed",
+  "endpoint_id": "fal-ai/flux/schnell",
+  "request_id": "01a13c26-3085-71b2-8d3a-7e9726c0ba83",
+  "status_url": "https://queue.fal.run/fal-ai/flux/requests/01a13c26-3085-71b2-8d3a-7e9726c0ba83/status",
+  "response_url": "https://queue.fal.run/fal-ai/flux/requests/01a13c26-3085-71b2-8d3a-7e9726c0ba83",
+  "cancel_url": "https://queue.fal.run/fal-ai/flux/requests/01a13c26-3085-71b2-8d3a-7e9726c0ba83/cancel",
+  "recipe": {
+    "endpoint_id": "fal-ai/flux/schnell",
+    "input": {
+      "prompt": "Cozy moonlit forest clearing for a small game scene, a single warm amber lantern hanging from a curved tree branch, deep indigo and muted teal palette, large readable painterly flat shapes, quiet inviting mood, no text, no interface, square composition",
+      "image_size": {
+        "width": 512,
+        "height": 512
+      },
+      "num_images": 1,
+      "output_format": "png",
+      "num_inference_steps": 4
+    },
+    "returned_seed": 257841586,
+    "note": "These are the submitted inputs, not resolved server defaults. For a variation, copy them and change only requested fields; reuse returned_seed when supported by the schema. Source URLs may expire."
+  },
+  "result": {
+    "images": [
+      {
+        "url": "https://v3b.fal.media/files/b/0aae6419/oVAdlsJ75RtioBuByzs1J.png",
+        "width": 512,
+        "height": 512,
+        "content_type": "image/png"
+      }
+    ],
+    "timings": {
+      "inference": 1.3266318279784173
+    },
+    "seed": 257841586,
+    "has_nsfw_concepts": [
+      false
+    ],
+    "prompt": "Cozy moonlit forest clearing for a small game scene, a single warm amber lantern hanging from a curved tree branch, deep indigo and muted teal palette, large readable painterly flat shapes, quiet inviting mood, no text, no interface, square composition"
+  },
+  "media": [
+    {
+      "url": "https://v3b.fal.media/files/b/0aae6419/oVAdlsJ75RtioBuByzs1J.png",
+      "json_path": "result.images[0].url",
+      "output_path": "/images/0/url",
+      "media_type": "image",
+      "content_type": "image/png",
+      "reference": {
+        "$fal_ref": {
+          "kind": "job",
+          "endpoint_id": "fal-ai/flux/schnell",
+          "request_id": "01a13c26-3085-71b2-8d3a-7e9726c0ba83",
+          "response_url": "https://queue.fal.run/fal-ai/flux/requests/01a13c26-3085-71b2-8d3a-7e9726c0ba83",
+          "output_path": "/images/0/url"
+        }
+      }
+    }
+  ],
+  "display_hint": "Present completed media to the user. Forward attached image content blocks to the host's image display helper (for example, image(block)); do not stringify image blocks as text. For Markdown previews use previews[].preview_url, and separately link original_url as the full-resolution file. If no preview is available, show a clearly labeled original-file link. Do not claim a preview rendered unless it is visible. Video, audio and 3D URLs are original result files, not queue URLs.",
+  "previews": [
+    {
+      "original_url": "https://v3b.fal.media/files/b/0aae6419/oVAdlsJ75RtioBuByzs1J.png",
+      "preview_url": "https://refinery.fal.media/url/https%3A%2F%2Fv3b.fal.media%2Ffiles%2Fb%2F0aae6419%2FoVAdlsJ75RtioBuByzs1J.png/tr:w-768,h-768,c-at_max,q-75/preview.webp",
+      "mime_type": "image/webp",
+      "max_dimension": 768
+    }
+  ]
+}

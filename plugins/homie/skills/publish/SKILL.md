@@ -275,3 +275,10 @@ It prints no unmeasured Cloudflare plan or price. A running local dev server ret
 its binding configuration; local role and office commands use that same database
 after a first deploy. Restart only to load a changed runtime, not to repair a role grant.
 For staff AI connections use `<site>/mcp/auth`; `<site>/mcp` remains public.
+
+## Official Cloudflare inspection
+
+Use Cloudflare’s official plugin/MCP for Workers Issues events, logs and D1 inspection.
+Read [connection guidance](../studio-setup/references/OFFICIAL-MEDIA.md), discover current
+tools and scope reads to this studio. Keep pinned Wrangler and its own browser login for
+deploys. MCP consent and Wrangler login are separate connections.
