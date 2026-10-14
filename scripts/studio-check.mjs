@@ -193,10 +193,12 @@ try {
       const original = readFileSync(mapFile, 'utf8');
       originalInputFile = { path: mapFile, text: original };
       const map = JSON.parse(original);
-      // The shipped corner spawn leaves only 1.5 units before the left wall.
-      // Test down then left with a real runway, away from the centre obstacle;
-      // keep the walls and every input assertion. The original map ran above.
-      map.spots.start = [[0, -2]];
+      // Each hold lasts five seconds at up to six units/second. Give both
+      // down and left the full 30-unit runway, outside the original obstacles,
+      // so contact corrections cannot masquerade as wrong input on SwiftShader.
+      // The original bounded arena ran above; keep every input assertion.
+      map.bounds = { min: [-64, -64], max: [64, 64] };
+      map.spots.start = [[48, 48]];
       writeFileSync(mapFile, JSON.stringify(map, null, 2) + '\n');
       sh(cli, ['build', '--json'], studio, env);
       await startDev();
