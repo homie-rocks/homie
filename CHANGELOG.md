@@ -17,6 +17,20 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.50.3] - 2026-10-13
+
+**Plugin 0.50.3** · A counter-dash continues from where the player sees it.
+
+A player's own dash or jump pressed while prediction catches up after a knock or correction starts at once from where they see their character, never from a stale position that jumps them across the screen.
+
+### Fixed
+
+- Fresh movement actions resume live prediction immediately and carry the visible position into the correction blend. In Copperwind's Cinder Circuit, before the fix, 161 of 168 counter-dashes jumped 51–173 px in one frame; after it, all 160 of 160 moved at most 28 px, across 0–300 ms connections with loss.
+
+### Upgrade notes
+
+- Follow [RULES.md](plugins/homie/skills/game/RULES.md): declare a discrete movement button as `f.press()` (or `f.pulse()` for a byte-valued action), send it through `room.input`, and implement predicted movement in `move`. Existing games with these declarations receive the fix automatically. To retain pulses through a knock or stun until control returns, opt into `player: {control: 'canMove', pulses: 'hold'}`; the default is `'drop'`. The game's action handler still decides cooldowns. This fix changes drawing only; server authority, input timestamps and replay rules are unchanged.
+
 ## [0.50.2] - 2026-10-13
 
 **Plugin 0.50.2** · Keep your own runner out of solid ground.

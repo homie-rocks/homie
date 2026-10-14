@@ -1181,6 +1181,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       const shown = changed ? meNow()?.pos : null;
       for (const [name, fd] of kind?.input ?? []) if ((fd.t === 'press' || fd.t === 'pulse') && coerce(fd,s[name],dims)) { const value=coerce(fd,s[name],dims) as number | boolean; if(fd.t==='pulse'){pulseCount+=1;const target=Math.max(stepped+1,(pulseQueue.at(-1)?.t??stepped)+1);pulseQueue.push({name,value:Number(value),n:pulseCount,t:target});net.send('pulse',[epoch,name,value,target,pulseCount]);} else pressed.set(name,value); }
       sample = next;
+      // A discrete action belongs to the present, even while an unseen impulse is
+      // being drawn from history. Resume the live prediction and let the existing
+      // input correction below carry the drawn origin across that change of path.
+      if (shown && catchTick !== null && kind?.input.some(([name, fd]) =>
+        (fd.t === 'press' || fd.t === 'pulse') && Boolean(coerce(fd, s[name], dims)))) catchTick = null;
       if (shown) {
         const now = clock(), nextShown = meNow()?.pos;
         if (nextShown && distance(shown, nextShown) > 0.00001) {
