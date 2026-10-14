@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
-import {readFileSync,readdirSync,mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+import {readFileSync,readdirSync,mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {services,allowed,builtins} from '../worker/mcp-tools.mjs';
@@ -42,6 +42,12 @@ test('root HTML CSS and JavaScript edits all change the rebuild stamp',t=>{
  const g={dir,kind:'app'};
  for(const name of ['index.html','app.css','app.js']){const before=rulesStamp(g);writeFileSync(join(dir,name),'one');assert.notEqual(rulesStamp(g),before,name);}
  const before=rulesStamp(g);writeFileSync(join(dir,'app.css'),'different');assert.notEqual(rulesStamp(g),before);
+});
+test('generated port proof files do not restart the running game',t=>{
+ const dir=mkdtempSync(join(tmpdir(),'homie-proof-stamp-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ writeFileSync(join(dir,'index.html'),'game');const g={dir,kind:'game'},before=rulesStamp(g);
+ mkdirSync(join(dir,'.port','check-run'),{recursive:true});writeFileSync(join(dir,'.port','check-run','report.json'),'{}');
+ assert.equal(rulesStamp(g),before);
 });
 test('record field names permit underscores and describe rejected names',()=>{
  const meta={roles:{customer:{signIn:false,can:['read:jobs']}},surfaces:{phone:'customer'},records:{persist:true,collections:{jobs:{fields:{paid_at:{type:'number'}}}}}};

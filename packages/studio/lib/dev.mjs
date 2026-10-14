@@ -295,7 +295,7 @@ function passLines(stream, to, opts) {
 export function rulesStamp(g) {
   const rows=[];
   const walk=dir=>{for(const entry of readdirSync(dir,{withFileTypes:true})) {
-    if(['node_modules','.git','.wrangler','.studio','dist','codex'].includes(entry.name))continue;
+    if(['node_modules','.git','.wrangler','.studio','.port','.cache','.parcel-cache','.vite','.DS_Store','coverage','dist','codex'].includes(entry.name))continue;
     const file=join(dir,entry.name);
     if(entry.isDirectory())walk(file);
     else if(entry.isFile()){const st=statSync(file);rows.push(`${file}:${st.size}:${st.mtimeMs}:${st.ctimeMs}`);}
