@@ -621,20 +621,28 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     await (await import('./functions.mjs')).syncFunctions(env);
+    const dispatch=()=>import('./functions.mjs').then(m=>m.runFunctions(env,()=>catalogue(env,url.origin),url.origin));
+    // Some routes reconcile shop state in waitUntil after returning their page.
+    // Keep dispatch behind those writes too, preserving the runtime context's
+    // methods and OAuth verification symbols through the proxy.
+    const requestCtx=ctx?.waitUntil?new Proxy(ctx,{get(target,key){
+      if(key==='waitUntil')return work=>ctx.waitUntil(Promise.resolve(work).finally(dispatch));
+      const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
+    }}):ctx;
     // A standalone copy's Lobby call (worker/standalone.mjs): every answer to it can be read by the app's page, an
     // unknown game's 404 and a failure included, so the app can say why it plays offline. No other address is opened.
     const appRecords = isAppOrigin(request) && /^\/[^/]+\/api\/app\/records\//.test(url.pathname);
     if (appRecords && request.method === 'OPTIONS') return appCors(request, new Response(null, { status: 204, headers: { 'access-control-allow-methods': 'GET, POST, PUT, DELETE', 'access-control-allow-headers': 'content-type' } }));
     const appLobby = isAppOrigin(request) && /^\/[^/]+\/api\/lobby\/?$/.test(url.pathname);
     let res;
-    try { res = finish(await route(request, env, ctx), url.pathname); } catch (error) {
+    try { res = finish(await route(request, env, requestCtx), url.pathname); } catch (error) {
       if (!appLobby) throw error;
       try { console.error(JSON.stringify({ at: new Date().toISOString(), ev: 'lobby-route-failed', path: url.pathname, error: errorLine(error) })); } catch { /* no console */ }
       res = json({ ok: false, error: 'failed' }, 500);
     } finally {
       // A route can commit a write and then fail. Its outbox still needs delivery.
-      if(env.DB && ['POST','PUT','PATCH','DELETE'].includes(request.method)) {
-        const delivery=import('./functions.mjs').then(m=>m.runFunctions(env,()=>catalogue(env,url.origin),url.origin));
+      if(env.DB) {
+        const delivery=dispatch();
         if(ctx?.waitUntil)ctx.waitUntil(delivery);else await delivery;
       }
     }
@@ -1863,7 +1871,8 @@ export class Table {
       try {await emitEvent(this.env,row.type,JSON.parse(row.data),{id:row.id,at:row.at});sql.exec('DELETE FROM function_outbox WHERE id=?',row.id);}
       catch {this.armRoom(Date.now()+60000);await this.alarmWrite;return;}
     }
-    await (await import('./functions.mjs')).runFunctions(this.env,()=>catalogue(this.env,this.origin??'https://studio.invalid'),this.origin??'https://studio.invalid');
+    const cat=await catalogue(this.env,'https://studio.invalid');
+    await (await import('./functions.mjs')).runFunctions(this.env,cat,cat.studio?.url??'https://studio.invalid');
   }
 
   /**

@@ -42,38 +42,40 @@ export async function runFunctions(env, cat, origin, {definitions, now = Date.no
   if(!definitions.length)return;
   if(typeof cat==='function')cat=await cat();
   // An AI notification must not wait behind a slow function handler.
-  await pushEvents(env,cat,origin);
+  const notify=()=>pushEvents(env,cat,origin).catch(error=>console.error('Event notification wake failed',error));
+  const notifications=notify();
   let more;
   do {
-  more=false;
-  for (const fn of definitions) {
-    if(!fn.handler)continue;
-    const subscription=await env.DB.prepare('SELECT cursor,type FROM function_subscriptions WHERE name=?1').bind(fn.name).first();
-    if(!subscription || subscription.type!==fn.event)continue;
-    const page=(await env.DB.prepare('SELECT seq,id,data FROM studio_events WHERE type=?1 AND seq>?2 ORDER BY seq LIMIT 100').bind(fn.event,subscription.cursor).all()).results;
-    if(page.length)more=true;
-    if(page.length)await env.DB.batch([
-      ...page.filter(e=>!fn.schedule||JSON.parse(e.data).function===fn.name).map(e=>env.DB.prepare('INSERT OR IGNORE INTO function_deliveries(event,function) SELECT id,?2 FROM studio_events WHERE id=?1').bind(e.id,fn.name)),
-      env.DB.prepare('UPDATE function_subscriptions SET cursor=MAX(cursor,?2) WHERE name=?1').bind(fn.name,page.at(-1).seq),
-    ]);
-    const rows=(await env.DB.prepare(`SELECT d.*,e.type,e.data,e.at FROM function_deliveries d JOIN studio_events e ON e.id=d.event WHERE d.function=?1 AND d.state IN ('pending','failed','running') AND d.due<=?2 ORDER BY d.due LIMIT 100`).bind(fn.name,now()).all()).results;
-    if(rows.length===100)more=true;
-    for (const row of rows) {
-      const lease=crypto.randomUUID();
-      const claimed=await env.DB.prepare(`UPDATE function_deliveries SET state='running',lease=?3,due=?4,attempts=attempts+1 WHERE event=?1 AND function=?2 AND state!='complete' AND due<=?5`).bind(row.event,fn.name,lease,now()+leaseMs,now()).run();
-      if (!claimed.meta.changes) continue;
-      try {
-        const event=Object.freeze({id:row.event,type:row.type,at:row.at,data:JSON.parse(row.data),attempt:row.attempts+1});
-        await fn.handler(event,services(env,cat,origin,{id:'studio-function',owner:true,client:null},'function:'+fn.name,fn));
-        await env.DB.prepare(`UPDATE function_deliveries SET state='complete',completed=?4,error=NULL WHERE event=?1 AND function=?2 AND lease=?3`).bind(row.event,fn.name,lease,now()).run();
-      } catch {
-        // Handler errors may contain credentials. The office identifies the function/event; Worker logs are the studio's debugging surface.
-        await env.DB.prepare(`UPDATE function_deliveries SET state='failed',error='Function failed; inspect its code and retry',due=?4 WHERE event=?1 AND function=?2 AND lease=?3`).bind(row.event,fn.name,lease,now()+leaseMs).run();
+    more=false;
+    for (const fn of definitions) {
+      if(!fn.handler)continue;
+      const subscription=await env.DB.prepare('SELECT cursor,type FROM function_subscriptions WHERE name=?1').bind(fn.name).first();
+      if(!subscription || subscription.type!==fn.event)continue;
+      const page=(await env.DB.prepare('SELECT seq,id,data FROM studio_events WHERE type=?1 AND seq>?2 ORDER BY seq LIMIT 100').bind(fn.event,subscription.cursor).all()).results;
+      if(page.length)more=true;
+      if(page.length)await env.DB.batch([
+        ...page.filter(e=>!fn.schedule||JSON.parse(e.data).function===fn.name).map(e=>env.DB.prepare('INSERT OR IGNORE INTO function_deliveries(event,function) SELECT id,?2 FROM studio_events WHERE id=?1').bind(e.id,fn.name)),
+        env.DB.prepare('UPDATE function_subscriptions SET cursor=MAX(cursor,?2) WHERE name=?1').bind(fn.name,page.at(-1).seq),
+      ]);
+      const rows=(await env.DB.prepare(`SELECT d.*,e.type,e.data,e.at FROM function_deliveries d JOIN studio_events e ON e.id=d.event WHERE d.function=?1 AND d.state IN ('pending','failed','running') AND d.due<=?2 ORDER BY d.due LIMIT 100`).bind(fn.name,now()).all()).results;
+      if(rows.length===100)more=true;
+      for (const row of rows) {
+        const lease=crypto.randomUUID();
+        const claimed=await env.DB.prepare(`UPDATE function_deliveries SET state='running',lease=?3,due=?4,attempts=attempts+1 WHERE event=?1 AND function=?2 AND state!='complete' AND due<=?5`).bind(row.event,fn.name,lease,now()+leaseMs,now()).run();
+        if (!claimed.meta.changes) continue;
+        try {
+          const event=Object.freeze({id:row.event,type:row.type,at:row.at,data:JSON.parse(row.data),attempt:row.attempts+1});
+          await fn.handler(event,services(env,cat,origin,{id:'studio-function',owner:true,client:null},'function:'+fn.name,fn));
+          await env.DB.prepare(`UPDATE function_deliveries SET state='complete',completed=?4,error=NULL WHERE event=?1 AND function=?2 AND lease=?3`).bind(row.event,fn.name,lease,now()).run();
+        } catch {
+          // Handler errors may contain credentials. The office identifies the function/event; Worker logs are the studio's debugging surface.
+          await env.DB.prepare(`UPDATE function_deliveries SET state='failed',error='Function failed; inspect its code and retry',due=?4 WHERE event=?1 AND function=?2 AND lease=?3`).bind(row.event,fn.name,lease,now()+leaseMs).run();
+        }
       }
     }
-  }
   } while(more);
-  await pushEvents(env,cat,origin);
+  await notifications;
+  await notify();
   await pruneEvents(env);
 }
 export async function scheduleFunctions(event,env,cat,origin) {

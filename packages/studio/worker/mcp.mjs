@@ -54,7 +54,10 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
     const read=async(name,handler)=>{
       let outcome='error';
       try{const fresh=await currentCaller(env,ctx.props);await rate(fresh);const result=await handler(fresh);outcome='ok';return result;}
-      finally{await audit(env,caller,name,outcome);}
+      finally{
+        try{await audit(env,caller,name,outcome);}
+        finally{const delivery=import('./functions.mjs').then(m=>m.runFunctions(env,cat,origin));if(ctx?.waitUntil)ctx.waitUntil(delivery);else await delivery;}
+      }
     };
     const server=async()=>{
       const capabilities=await selling.machineCapabilities(env);
