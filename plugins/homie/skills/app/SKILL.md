@@ -110,6 +110,10 @@ await shop.checkout({ reference: booking.id });
 
 These retain their existing boolean result: true means checkout opened, not payment received. The durable `order.paid` function event includes `data.order` (the order ID), `data.reference` (your reference or null), and `data.app` (the app ID). A verified provider payment emits it. Validate the referenced record, expected amount/currency and app, deduplicate by event/order ID, then fulfil that booking or add that gift to the confirmed meal table. A buyer supplies the reference: it is correlation, never proof they own a private record or paid the expected price. Do not put personal data in it.
 
+For each offer, build the promised action and fulfilment, not just a price label: a naming purchase needs the proposed name and the staff/customer outcome; a ticket needs its receipt. Keep an unpaid request distinct when charging is unavailable.
+
+When selling or giving is a stated need, implement and locally exercise the reference-to-record `order.paid` handler before calling payment provider-blocked. A disconnected provider blocks charging; it is not a reason to omit fulfilment code. Use `function fire` with an explicitly simulated event and a separate test record, confirm the right record changes once, and keep test money out of real totals.
+
 Without Stripe, keep real services and prices visible and say payment is not connected; allow a clearly labelled unpaid request/intention if useful. Never mark it paid or add it to the paid total. Test event handlers locally with explicit test events, labelled as simulations. Report actual charging and recurring collection as not yet met until connected and verified. Do not build a new payment sandbox or pretend recurring intentions are subscriptions.
 
 ## Start and compose

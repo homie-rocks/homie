@@ -3194,8 +3194,9 @@ test('keyless: setup, changed catalog, purchase, tips, reordered refund/dispute,
   const s = await site({ key: false, settings }); Object.assign(s.env, h.state.saved);
   const p = s.player(30, { band: 'adult' });
   const config = JSON.parse(s.env.STRIPE_SHOP_LINKS), secret = s.env.STRIPE_WEBHOOK_SECRET;
-  const purchase = async (item, amount) => {
-    const r = await s.post('/api/shop/buy', { item, amount }, s.as(p));
+  subscribeAppPayments(s);
+  const purchase = async (item, amount, reference) => {
+    const r = await s.post('/api/shop/buy', { item, amount, reference }, s.as(p));
     const body = await r.json(); assert.equal(r.status, 200, JSON.stringify(body)); return body;
   };
   const eventFor = (order, item, amount, suffix = '') => {
@@ -3203,7 +3204,7 @@ test('keyless: setup, changed catalog, purchase, tips, reordered refund/dispute,
     return { id: `cs_test_${order.order}${suffix}`, payment_link: link.id, client_reference_id: order.order, metadata: { revision: link.revision },
       currency: 'usd', amount_subtotal: amount, amount_total: amount, payment_status: 'paid', payment_intent: `pi_${order.order}${suffix}` };
   };
-  const order = await purchase('supporter');
+  const order = await purchase('supporter', undefined, 'ticket:keyless-42');
   assert.equal(new URL(order.url).searchParams.get('client_reference_id'), order.order);
   assert.equal(new URL(order.url).hostname, 'buy.stripe.com');
   const session = eventFor(order, 'supporter', 1400); // Buyer changes quantity on Stripe.
@@ -3215,6 +3216,10 @@ test('keyless: setup, changed catalog, purchase, tips, reordered refund/dispute,
   assert.equal(s.DB.sql.prepare('SELECT count(*) AS n FROM shop_orders WHERE payment = ?').get(session.payment_intent).n, 1);
   await s.hook('checkout.session.completed', eventFor(order, 'supporter', 700, 'again'), { secret });
   assert.equal(s.DB.sql.prepare("SELECT count(*) AS n FROM shop_orders WHERE status = 'paid'").get().n, 2);
+  const paidEvents = s.DB.sql.prepare("SELECT data FROM studio_events WHERE type='order.paid'").all().map(r=>JSON.parse(r.data));
+  assert.equal(paidEvents.length,2,'duplicate deliveries emit once; reopened links create a second order');
+  assert.deepEqual(paidEvents.map(e=>e.reference),['ticket:keyless-42','ticket:keyless-42']);
+  assert.equal(new Set(paidEvents.map(e=>e.order)).size,2);
   const refund = { id: 're_one', payment_intent: session.payment_intent, currency: 'usd', amount: 1400, status: 'succeeded' };
   await s.hook('refund.updated', refund, { secret });
   assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(order.order).status, 'refunded');
@@ -3546,10 +3551,7 @@ test('customer purchase rates are opt-in with no implicit shop limits',()=>{
 
 test('an app checkout carries its booking reference to the durable paid event', async () => {
   const s = await site();
-  for (const file of ['0014_studio_apps.sql','0015_purchases.sql','0016_purchase_facts.sql','0017_studio_mcp.sql','0018_studio_functions.sql','0019_function_cursors.sql','0020_function_meta.sql','0021_app_payment_reference.sql']) {
-    s.DB.sql.exec(readFileSync(join(s.dir, 'site/migrations', file), 'utf8'));
-  }
-  s.DB.sql.exec("INSERT INTO function_subscriptions(name,type,started) VALUES('booking-paid','order.paid',0)");
+  subscribeAppPayments(s);
   const p = s.player(400, { band: 'adult' });
   const paid = await s.buyPaid(p, 'supporter', { reference: 'booking:maya-42', game: 'owl-run' });
   const event = JSON.parse(s.DB.sql.prepare("SELECT data FROM studio_events WHERE type='order.paid'").get().data);
@@ -3561,3 +3563,10 @@ test('an app checkout carries its booking reference to the durable paid event', 
   assert.equal(plainEvent.reference,null);
   assert.equal((await s.post('/api/shop/buy', {item:'supporter',reference:42},s.as(p))).status,400);
 });
+
+function subscribeAppPayments(s) {
+  for (const file of ['0014_studio_apps.sql','0015_purchases.sql','0016_purchase_facts.sql','0017_studio_mcp.sql','0018_studio_functions.sql','0019_function_cursors.sql','0020_function_meta.sql','0021_app_payment_reference.sql']) {
+    s.DB.sql.exec(readFileSync(join(s.dir, 'site/migrations', file), 'utf8'));
+  }
+  s.DB.sql.exec("INSERT INTO function_subscriptions(name,type,started) VALUES('booking-paid','order.paid',0)");
+}
