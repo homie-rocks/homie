@@ -1,0 +1,106 @@
+TAP version 13
+# Subtest: the maths rules are handed agrees with Math, and is the list the wall knows
+ok 1 - the maths rules are handed agrees with Math, and is the list the wall knows
+  ---
+  duration_ms: 452.082792
+  type: 'test'
+  ...
+# Subtest: a declaration that does not fit the contract is named
+ok 2 - a declaration that does not fit the contract is named
+  ---
+  duration_ms: 7.995292
+  type: 'test'
+  ...
+# Subtest: declared state is held to its type, and packs and unpacks to itself
+ok 3 - declared state is held to its type, and packs and unpacks to itself
+  ---
+  duration_ms: 0.950459
+  type: 'test'
+  ...
+# Subtest: the host runtime steps coin-dash: bots fill, a round is played, results rank the scores
+ok 4 - the host runtime steps coin-dash: bots fill, a round is played, results rank the scores
+  ---
+  duration_ms: 175.076041
+  type: 'test'
+  ...
+# Subtest: two runs on one seed are the same tick by tick, and a room packed to bytes carries on the same
+ok 5 - two runs on one seed are the same tick by tick, and a room packed to bytes carries on the same
+  ---
+  duration_ms: 147.892625
+  type: 'test'
+  ...
+# Subtest: the input protocol: on time, missing, early, too early, late, duplicate, another epoch, silence and the lead
+ok 6 - the input protocol: on time, missing, early, too early, late, duplicate, another epoch, silence and the lead
+  ---
+  duration_ms: 339.04475
+  type: 'test'
+  ...
+# Subtest: more frames buy no extra step, a command runs once, and an owner's claim is held to maxSpeed
+ok 7 - more frames buy no extra step, a command runs once, and an owner's claim is held to maxSpeed
+  ---
+  duration_ms: 5.727375
+  type: 'test'
+  ...
+# Subtest: the wall at run time: a handler that never ends is stopped and named, the room carries on, and then the room ends
+ok 8 - the wall at run time: a handler that never ends is stopped and named, the room carries on, and then the room ends
+  ---
+  duration_ms: 346.181458
+  type: 'test'
+  ...
+# Subtest: the wall at run time: a slow handler and one that grabs memory are stopped and named; one that throws is counted
+ok 9 - the wall at run time: a slow handler and one that grabs memory are stopped and named; one that throws is counted
+  ---
+  duration_ms: 2753.949542
+  type: 'test'
+  ...
+# Subtest: the overrun check: a room whose ticks keep starting late ends, and a room that only ran after a slow one does not
+ok 10 - the overrun check: a room whose ticks keep starting late ends, and a room that only ran after a slow one does not
+  ---
+  duration_ms: 83.867458
+  type: 'test'
+  ...
+# Subtest: world has no way out: everything reachable from it is plain frozen data and functions the runtime made
+ok 11 - world has no way out: everything reachable from it is plain frozen data and functions the runtime made
+  ---
+  duration_ms: 2.45525
+  type: 'test'
+  ...
+# Subtest: the room with the server as host: no browser hosts, and a forged score, state or round frame changes nothing
+ok 12 - the room with the server as host: no browser hosts, and a forged score, state or round frame changes nothing
+  ---
+  duration_ms: 14.6395
+  type: 'test'
+  ...
+# Subtest: the life of a server-hosted room: it pauses with the last person, resumes on the tick it paused on, and is forgotten when nobody returns
+ok 13 - the life of a server-hosted room: it pauses with the last person, resumes on the tick it paused on, and is forgotten when nobody returns
+  ---
+  duration_ms: 323.109584
+  type: 'test'
+  ...
+# Subtest: rules that cannot start refuse joins and say why, and a room never falls back to a browser by itself
+ok 14 - rules that cannot start refuse joins and say why, and a room never falls back to a browser by itself
+  ---
+  duration_ms: 0.737375
+  type: 'test'
+  ...
+# Subtest: late paired callbacks sustaining 20 Hz do not end a healthy room as an overrun
+ok 15 - late paired callbacks sustaining 20 Hz do not end a healthy room as an overrun
+  ---
+  duration_ms: 28.281083
+  type: 'test'
+  ...
+# Subtest: a circle starting inside an expanded box still collides with its rounded corner
+ok 16 - a circle starting inside an expanded box still collides with its rounded corner
+  ---
+  duration_ms: 0.704292
+  type: 'test'
+  ...
+1..16
+# tests 16
+# suites 0
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4973.999375

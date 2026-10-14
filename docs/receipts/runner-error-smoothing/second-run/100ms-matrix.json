@@ -1,0 +1,8676 @@
+{
+  "method": {
+    "thresholdTiles": 1.5,
+    "thresholdMs": 300,
+    "alignment": "per 3-second window, same pt4 observer alignment",
+    "respawnExclusionMs": 1500,
+    "solidToleranceTiles": 0.1
+  },
+  "runs": [
+    {
+      "tag": "b-swept-jit-0",
+      "complete": true,
+      "trace": "b-swept-jit-0-lag150-loss0-jitter100-frames.json.gz",
+      "metrics": {
+        "s": 42.95,
+        "frames": 2578,
+        "cpu": 0,
+        "load": 20.8,
+        "late": 0,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 19,
+        "slides": 10,
+        "slidesOver1": 3,
+        "slideMaxNet": 9.1,
+        "respawns": 3,
+        "respawnsNotCut": 1,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 18.4,
+        "dtMax": 31,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 1,
+        "ms": 1633,
+        "worst": [
+          {
+            "s": 0.1,
+            "ms": 1633,
+            "tiles": 10.1
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 1,
+        "ms": 1633,
+        "worst": [
+          {
+            "s": 0.1,
+            "ms": 1633,
+            "tiles": 10.1
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 150,
+        "loss": 0,
+        "jitterMs": 100,
+        "role": "replica",
+        "wire": {
+          "delay": 150,
+          "loss": 0,
+          "jitter": 100,
+          "sent": 728,
+          "received": 914,
+          "late": 0,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          20.8,
+          26.7,
+          27.7
+        ],
+        "prediction": {
+          "ticks": 860,
+          "wrongTicks": 63,
+          "placements": 3,
+          "corrections": 1,
+          "correctionsOverHalfATile": 0,
+          "worstTiles": 10.01,
+          "last": [
+            {
+              "tick": 38,
+              "d": 1.375,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 41,
+              "d": 0.4,
+              "l": 0,
+              "r": 1,
+              "j": 0.535400390625
+            },
+            {
+              "tick": 42,
+              "d": 1.601,
+              "l": 0,
+              "r": 1,
+              "j": 1
+            },
+            {
+              "tick": 43,
+              "d": 2.802,
+              "l": 0,
+              "r": 1,
+              "j": 0.5029296875
+            },
+            {
+              "tick": 46,
+              "d": 6.405,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 47,
+              "d": 7.606,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 48,
+              "d": 8.807,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 49,
+              "d": 10.008,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 51,
+              "d": 1.117,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 52,
+              "d": 1.264,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 53,
+              "d": 1.411,
+              "l": 0,
+              "r": 1,
+              "j": 0.64208984375
+            },
+            {
+              "tick": 54,
+              "d": 0.871,
+              "l": 0,
+              "r": 0.32666015625,
+              "j": 0.354736328125
+            }
+          ],
+          "room": {
+            "replaysThatMovedMe": 23,
+            "largestTiles": 10.01,
+            "catchUps": 0,
+            "snaps": 0,
+            "clockResets": 5,
+            "lateInputLeadTicks": 1.9
+          }
+        },
+        "scoreOnMyHud": 4,
+        "scoreOnTheOtherScreen": 4,
+        "seconds": 42.94829999995232,
+        "frames": 2578,
+        "againstHeldKey": 1,
+        "againstExamples": [
+          {
+            "atS": 18.983,
+            "dx": -0.16513633728027344,
+            "dy": 0.0275421142578125,
+            "direction": 1
+          }
+        ],
+        "goldVanishesMs": {
+          "n": 4,
+          "min": 17.6,
+          "median": 33.2,
+          "p90": 49.4,
+          "max": 49.4
+        },
+        "goldOnHudMs": {
+          "n": 3,
+          "min": 0,
+          "median": 100.6,
+          "p90": 199.7,
+          "max": 199.7
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 1,
+          "min": 33.2,
+          "median": 33.2,
+          "p90": 33.2,
+          "max": 33.2
+        },
+        "catches": 3,
+        "catchesWithNoMonsterOnScreen": 1,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 2,
+        "landedOnItAndStomped": 1,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 44,
+        "drawnBackSteps": 11,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 0.4,
+            "from": [
+              49.33,
+              22
+            ],
+            "to": [
+              50.29,
+              22
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.4,
+            "from": [
+              50.29,
+              22
+            ],
+            "to": [
+              50.81,
+              22
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.7,
+            "from": [
+              54.47,
+              18.7
+            ],
+            "to": [
+              54.62,
+              20.09
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.7,
+            "from": [
+              54.62,
+              20.09
+            ],
+            "to": [
+              54.86,
+              21.47
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.9,
+            "from": [
+              58.51,
+              27.43
+            ],
+            "to": [
+              58.66,
+              26.04
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.9,
+            "from": [
+              58.66,
+              26.04
+            ],
+            "to": [
+              58.75,
+              24.64
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1,
+            "from": [
+              58.75,
+              24.64
+            ],
+            "to": [
+              58.88,
+              23.25
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1,
+            "from": [
+              58.88,
+              23.25
+            ],
+            "to": [
+              59.07,
+              21.86
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "b-swept-jit-1",
+      "complete": true,
+      "trace": "b-swept-jit-1-lag150-loss0-jitter100-frames.json.gz",
+      "metrics": {
+        "s": 42.98,
+        "frames": 2580,
+        "cpu": 0,
+        "load": 22.1,
+        "late": 0,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 54,
+        "slides": 29,
+        "slidesOver1": 18,
+        "slideMaxNet": 6.36,
+        "respawns": 2,
+        "respawnsNotCut": 2,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 18.7,
+        "dtMax": 25,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 0,
+        "ms": 0,
+        "worst": []
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 0,
+        "ms": 0,
+        "worst": []
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 150,
+        "loss": 0,
+        "jitterMs": 100,
+        "role": "replica",
+        "wire": {
+          "delay": 150,
+          "loss": 0,
+          "jitter": 100,
+          "sent": 698,
+          "received": 914,
+          "late": 0,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          22.1,
+          26,
+          27.4
+        ],
+        "prediction": {
+          "ticks": 861,
+          "wrongTicks": 267,
+          "placements": 0,
+          "corrections": 20,
+          "correctionsOverHalfATile": 10,
+          "worstTiles": 39.84,
+          "last": [
+            {
+              "tick": 855,
+              "d": 0.708,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 856,
+              "d": 0.833,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 857,
+              "d": 0.958,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 858,
+              "d": 1.633,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 870,
+              "d": 0.013,
+              "l": 0.36474609375,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 871,
+              "d": 0.125,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 872,
+              "d": 0.522,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 873,
+              "d": 0.123,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 874,
+              "d": 0.074,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 875,
+              "d": 0.875,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 876,
+              "d": 1.063,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 877,
+              "d": 1.213,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            }
+          ],
+          "room": {
+            "replaysThatMovedMe": 204,
+            "largestTiles": 6.6,
+            "catchUps": 0,
+            "snaps": 0,
+            "clockResets": 3,
+            "lateInputLeadTicks": 2.25
+          }
+        },
+        "scoreOnMyHud": 3,
+        "scoreOnTheOtherScreen": 3,
+        "seconds": 42.98090000009537,
+        "frames": 2580,
+        "againstHeldKey": 18,
+        "againstExamples": [
+          {
+            "atS": 0.6827999999523163,
+            "dx": -0.10620498657226562,
+            "dy": -0.14089584350585938,
+            "direction": 1
+          },
+          {
+            "atS": 1.0490999999046327,
+            "dx": -0.15646743774414062,
+            "dy": -0.3848133087158203,
+            "direction": 1
+          },
+          {
+            "atS": 2.5655,
+            "dx": 0.15869903564453125,
+            "dy": -0.15106964111328125,
+            "direction": -1
+          },
+          {
+            "atS": 2.9375,
+            "dx": 0.01129150390625,
+            "dy": 0.19937515258789062,
+            "direction": -1
+          },
+          {
+            "atS": 2.9827999999523165,
+            "dx": 0.9899482727050781,
+            "dy": 0.9899482727050781,
+            "direction": -1
+          },
+          {
+            "atS": 3.1499000000953674,
+            "dx": 0.9899482727050781,
+            "dy": 0.9899482727050781,
+            "direction": -1
+          },
+          {
+            "atS": 3.8985999999046324,
+            "dx": 0.15276718139648438,
+            "dy": 0.9750442504882812,
+            "direction": -1
+          },
+          {
+            "atS": 4.081799999952317,
+            "dx": 0.086578369140625,
+            "dy": 0.985321044921875,
+            "direction": -1
+          },
+          {
+            "atS": 11.399200000047683,
+            "dx": -0.16036033630371094,
+            "dy": 0.03722381591796875,
+            "direction": 1
+          },
+          {
+            "atS": 13.015299999952317,
+            "dx": 0.9680995941162109,
+            "dy": -0.9681015014648438,
+            "direction": -1
+          },
+          {
+            "atS": 33.34840000009537,
+            "dx": 0.4391136169433594,
+            "dy": -0.5141334533691406,
+            "direction": -1
+          },
+          {
+            "atS": 33.364299999952316,
+            "dx": 0.23610305786132812,
+            "dy": -0.20200729370117188,
+            "direction": -1
+          }
+        ],
+        "goldVanishesMs": {
+          "n": 2,
+          "min": 17.2,
+          "median": 34.2,
+          "p90": 34.2,
+          "max": 34.2
+        },
+        "goldOnHudMs": {
+          "n": 2,
+          "min": 50.2,
+          "median": 116.8,
+          "p90": 116.8,
+          "max": 116.8
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "catches": 2,
+        "catchesWithNoMonsterOnScreen": 1,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 1,
+        "landedOnItAndStomped": 0,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 87,
+        "drawnBackSteps": 74,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 0.3,
+            "from": [
+              51.61,
+              18.38
+            ],
+            "to": [
+              51.42,
+              19.77
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.5,
+            "from": [
+              51.49,
+              21.84
+            ],
+            "to": [
+              51.94,
+              20.52
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.5,
+            "from": [
+              51.94,
+              20.52
+            ],
+            "to": [
+              52.56,
+              19.26
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.5,
+            "from": [
+              52.56,
+              19.26
+            ],
+            "to": [
+              53.32,
+              18.08
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.8,
+            "from": [
+              56.52,
+              20.39
+            ],
+            "to": [
+              57.11,
+              21.37
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.4,
+            "from": [
+              62,
+              42
+            ],
+            "to": [
+              61.98,
+              41.28
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.9,
+            "from": [
+              61.78,
+              39.27
+            ],
+            "to": [
+              61.15,
+              38.38
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.9,
+            "from": [
+              61.15,
+              38.38
+            ],
+            "to": [
+              60.41,
+              37.59
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "b-swept-jit-2",
+      "complete": true,
+      "trace": "b-swept-jit-2-lag150-loss0-jitter100-frames.json.gz",
+      "metrics": {
+        "s": 42.95,
+        "frames": 2578,
+        "cpu": 0,
+        "load": 21.5,
+        "late": 0,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 45,
+        "slides": 24,
+        "slidesOver1": 13,
+        "slideMaxNet": 6.27,
+        "respawns": 1,
+        "respawnsNotCut": 1,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 1,
+        "over50": 0,
+        "dtP99": 18.2,
+        "dtMax": 41,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 1,
+        "ms": 333,
+        "worst": [
+          {
+            "s": 2.9,
+            "ms": 333,
+            "tiles": 4.7
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 1,
+        "ms": 333,
+        "worst": [
+          {
+            "s": 2.9,
+            "ms": 333,
+            "tiles": 4.7
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 150,
+        "loss": 0,
+        "jitterMs": 100,
+        "role": "replica",
+        "wire": {
+          "delay": 150,
+          "loss": 0,
+          "jitter": 100,
+          "sent": 736,
+          "received": 915,
+          "late": 0,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          21.5,
+          25.4,
+          27
+        ],
+        "prediction": {
+          "ticks": 862,
+          "wrongTicks": 194,
+          "placements": 0,
+          "corrections": 38,
+          "correctionsOverHalfATile": 17,
+          "worstTiles": 56.82,
+          "last": [
+            {
+              "tick": 789,
+              "d": 55.147,
+              "l": 0,
+              "r": 1,
+              "j": 0.325439453125
+            },
+            {
+              "tick": 797,
+              "d": 0.021,
+              "l": 0.718994140625,
+              "r": 0.301025390625,
+              "j": 0.321044921875
+            },
+            {
+              "tick": 805,
+              "d": 0.375,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 815,
+              "d": 0.1,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 816,
+              "d": 0.458,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 822,
+              "d": 0.417,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 823,
+              "d": 0.417,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 824,
+              "d": 0.417,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 825,
+              "d": 0.417,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 826,
+              "d": 0.933,
+              "l": 0.258056640625,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 827,
+              "d": 0.933,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 828,
+              "d": 0.933,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            }
+          ],
+          "room": {
+            "replaysThatMovedMe": 120,
+            "largestTiles": 8.16,
+            "catchUps": 0,
+            "snaps": 0,
+            "clockResets": 3,
+            "lateInputLeadTicks": 1.47
+          }
+        },
+        "scoreOnMyHud": 3,
+        "scoreOnTheOtherScreen": 3,
+        "seconds": 42.94690000009537,
+        "frames": 2578,
+        "againstHeldKey": 11,
+        "againstExamples": [
+          {
+            "atS": 3.0164000000953672,
+            "dx": 0.9899482727050781,
+            "dy": 0.9899482727050781,
+            "direction": -1
+          },
+          {
+            "atS": 3.0320999999046325,
+            "dx": 0.9899482727050781,
+            "dy": 0.9899482727050781,
+            "direction": -1
+          },
+          {
+            "atS": 3.0492999999523165,
+            "dx": 0.9899482727050781,
+            "dy": 0.9899482727050781,
+            "direction": -1
+          },
+          {
+            "atS": 4.199700000047684,
+            "dx": 0.9899482727050781,
+            "dy": -0.9899482727050781,
+            "direction": -1
+          },
+          {
+            "atS": 4.215700000047684,
+            "dx": 0.9899482727050781,
+            "dy": -0.9899482727050781,
+            "direction": -1
+          },
+          {
+            "atS": 4.982900000095367,
+            "dx": 0.0316162109375,
+            "dy": -1.3996429443359375,
+            "direction": -1
+          },
+          {
+            "atS": 20.683599999904633,
+            "dx": -0.17818832397460938,
+            "dy": 0.03363037109375,
+            "direction": 1
+          },
+          {
+            "atS": 23.564700000047683,
+            "dx": 0.06541252136230469,
+            "dy": 0,
+            "direction": -1
+          },
+          {
+            "atS": 38.28129999995232,
+            "dx": -0.8247795104980469,
+            "dy": 0.38582611083984375,
+            "direction": 1
+          },
+          {
+            "atS": 38.2975,
+            "dx": -0.3924598693847656,
+            "dy": 0.100555419921875,
+            "direction": 1
+          },
+          {
+            "atS": 38.3145,
+            "dx": -0.15746307373046875,
+            "dy": -0.03879547119140625,
+            "direction": 1
+          }
+        ],
+        "goldVanishesMs": {
+          "n": 2,
+          "min": 49.7,
+          "median": 50.3,
+          "p90": 50.3,
+          "max": 50.3
+        },
+        "goldOnHudMs": {
+          "n": 2,
+          "min": 33.9,
+          "median": 84.1,
+          "p90": 84.1,
+          "max": 84.1
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 1,
+          "min": 100.3,
+          "median": 100.3,
+          "p90": 100.3,
+          "max": 100.3
+        },
+        "catches": 1,
+        "catchesWithNoMonsterOnScreen": 1,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 0,
+        "landedOnItAndStomped": 1,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 68,
+        "drawnBackSteps": 43,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 0.5,
+            "from": [
+              53.39,
+              21.78
+            ],
+            "to": [
+              54.07,
+              21.31
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.8,
+            "from": [
+              61.32,
+              36.97
+            ],
+            "to": [
+              60.37,
+              37.02
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.8,
+            "from": [
+              60.37,
+              37.02
+            ],
+            "to": [
+              59.85,
+              37.1
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 2.2,
+            "from": [
+              55.55,
+              37.99
+            ],
+            "to": [
+              55.41,
+              37.13
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 2.9,
+            "from": [
+              46,
+              39.1
+            ],
+            "to": [
+              46,
+              38.18
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 2.9,
+            "from": [
+              45.96,
+              37.7
+            ],
+            "to": [
+              45.23,
+              37.05
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 2.9,
+            "from": [
+              45.23,
+              37.05
+            ],
+            "to": [
+              44.27,
+              36.37
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 3,
+            "from": [
+              44.27,
+              36.37
+            ],
+            "to": [
+              43.73,
+              35.99
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "b-swept-jit-3",
+      "complete": true,
+      "trace": "b-swept-jit-3-lag150-loss0-jitter100-frames.json.gz",
+      "metrics": {
+        "s": 42.91,
+        "frames": 2576,
+        "cpu": 0,
+        "load": 22.6,
+        "late": 0,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 35,
+        "slides": 17,
+        "slidesOver1": 12,
+        "slideMaxNet": 6.28,
+        "respawns": 0,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.5,
+        "dtMax": 28,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 1,
+        "ms": 517,
+        "worst": [
+          {
+            "s": 35.5,
+            "ms": 517,
+            "tiles": 4.8
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 1,
+        "ms": 517,
+        "worst": [
+          {
+            "s": 35.5,
+            "ms": 517,
+            "tiles": 4.8
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 150,
+        "loss": 0,
+        "jitterMs": 100,
+        "role": "replica",
+        "wire": {
+          "delay": 150,
+          "loss": 0,
+          "jitter": 100,
+          "sent": 704,
+          "received": 911,
+          "late": 0,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          22.6,
+          24.7,
+          26.7
+        ],
+        "prediction": {
+          "ticks": 856,
+          "wrongTicks": 139,
+          "placements": 0,
+          "corrections": 25,
+          "correctionsOverHalfATile": 10,
+          "worstTiles": 9.74,
+          "last": [
+            {
+              "tick": 666,
+              "d": 0.583,
+              "l": 1,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 667,
+              "d": 0.163,
+              "l": 1,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 668,
+              "d": 0.359,
+              "l": 1,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 669,
+              "d": 0.8,
+              "l": 1,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 724,
+              "d": 1.075,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 754,
+              "d": 1.152,
+              "l": 0,
+              "r": 1,
+              "j": 1
+            },
+            {
+              "tick": 761,
+              "d": 0.422,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 762,
+              "d": 0.276,
+              "l": 0.092041015625,
+              "r": 0.926025390625,
+              "j": 0
+            },
+            {
+              "tick": 763,
+              "d": 0.595,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 769,
+              "d": 0.021,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 770,
+              "d": 0.021,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 771,
+              "d": 0.021,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            }
+          ],
+          "room": {
+            "replaysThatMovedMe": 108,
+            "largestTiles": 8.26,
+            "catchUps": 0,
+            "snaps": 0,
+            "clockResets": 2,
+            "lateInputLeadTicks": 0.5
+          }
+        },
+        "scoreOnMyHud": 3,
+        "scoreOnTheOtherScreen": 3,
+        "seconds": 42.91440000009537,
+        "frames": 2576,
+        "againstHeldKey": 13,
+        "againstExamples": [
+          {
+            "atS": 1.867600000143051,
+            "dx": 1.4000015258789062,
+            "dy": 0,
+            "direction": -1
+          },
+          {
+            "atS": 1.8821000001430512,
+            "dx": 1.4000015258789062,
+            "dy": 0,
+            "direction": -1
+          },
+          {
+            "atS": 1.899,
+            "dx": 0.13930130004882812,
+            "dy": -1.3930511474609375,
+            "direction": -1
+          },
+          {
+            "atS": 1.915600000143051,
+            "dx": 0.060695648193359375,
+            "dy": -0.6069488525390625,
+            "direction": -1
+          },
+          {
+            "atS": 2.965600000143051,
+            "dx": 0.09808349609375,
+            "dy": 0.7943458557128906,
+            "direction": -1
+          },
+          {
+            "atS": 2.9822999999523163,
+            "dx": 0.029876708984375,
+            "dy": 0.18830490112304688,
+            "direction": -1
+          },
+          {
+            "atS": 4.199200000047684,
+            "dx": 0.9899482727050781,
+            "dy": -0.9899482727050781,
+            "direction": -1
+          },
+          {
+            "atS": 4.2155,
+            "dx": 0.9899482727050781,
+            "dy": -0.9899482727050781,
+            "direction": -1
+          },
+          {
+            "atS": 4.232299999952316,
+            "dx": 0.9899482727050781,
+            "dy": -0.9899482727050781,
+            "direction": -1
+          },
+          {
+            "atS": 29.965,
+            "dx": 0.34130096435546875,
+            "dy": 0.055690765380859375,
+            "direction": -1
+          },
+          {
+            "atS": 29.981400000095366,
+            "dx": 0.25286865234375,
+            "dy": 0.013957977294921875,
+            "direction": -1
+          },
+          {
+            "atS": 35.897700000047685,
+            "dx": -0.16287612915039062,
+            "dy": 0.016872406005859375,
+            "direction": 1
+          }
+        ],
+        "goldVanishesMs": {
+          "n": 2,
+          "min": 16.6,
+          "median": 50.5,
+          "p90": 50.5,
+          "max": 50.5
+        },
+        "goldOnHudMs": {
+          "n": 2,
+          "min": 16.6,
+          "median": 116.9,
+          "p90": 116.9,
+          "max": 116.9
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 2,
+          "min": 17,
+          "median": 51.2,
+          "p90": 51.2,
+          "max": 51.2
+        },
+        "catches": 0,
+        "catchesWithNoMonsterOnScreen": 0,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 0,
+        "landedOnItAndStomped": 2,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 50,
+        "drawnBackSteps": 28,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 0.4,
+            "from": [
+              53.21,
+              22.34
+            ],
+            "to": [
+              53.99,
+              21.57
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.7,
+            "from": [
+              61.79,
+              39.85
+            ],
+            "to": [
+              60.6,
+              40.09
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.7,
+            "from": [
+              60.6,
+              40.09
+            ],
+            "to": [
+              59.81,
+              40.01
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.7,
+            "from": [
+              59.81,
+              40.01
+            ],
+            "to": [
+              59.21,
+              40
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.9,
+            "from": [
+              57.26,
+              40.16
+            ],
+            "to": [
+              58.66,
+              40.16
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.9,
+            "from": [
+              58.66,
+              40.16
+            ],
+            "to": [
+              60.06,
+              40.16
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.9,
+            "from": [
+              60.06,
+              40.16
+            ],
+            "to": [
+              60.2,
+              38.76
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.9,
+            "from": [
+              60.26,
+              38.16
+            ],
+            "to": [
+              59.27,
+              37.17
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "b-swept-jit-4",
+      "complete": true,
+      "trace": "b-swept-jit-4-lag150-loss0-jitter100-frames.json.gz",
+      "metrics": {
+        "s": 42.93,
+        "frames": 2577,
+        "cpu": 0,
+        "load": 25.7,
+        "late": 0,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 10,
+        "slides": 5,
+        "slidesOver1": 2,
+        "slideMaxNet": 7.39,
+        "respawns": 0,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.8,
+        "dtMax": 25,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 4,
+        "ms": 3283,
+        "worst": [
+          {
+            "s": 1.9,
+            "ms": 1116,
+            "tiles": 4.7
+          },
+          {
+            "s": 6,
+            "ms": 500,
+            "tiles": 4
+          },
+          {
+            "s": 26.4,
+            "ms": 600,
+            "tiles": 4.1
+          },
+          {
+            "s": 35.9,
+            "ms": 1067,
+            "tiles": 7
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 4,
+        "ms": 3283,
+        "worst": [
+          {
+            "s": 1.9,
+            "ms": 1116,
+            "tiles": 4.7
+          },
+          {
+            "s": 6,
+            "ms": 500,
+            "tiles": 4
+          },
+          {
+            "s": 26.4,
+            "ms": 600,
+            "tiles": 4.1
+          },
+          {
+            "s": 35.9,
+            "ms": 1067,
+            "tiles": 7
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 150,
+        "loss": 0,
+        "jitterMs": 100,
+        "role": "replica",
+        "wire": {
+          "delay": 150,
+          "loss": 0,
+          "jitter": 100,
+          "sent": 687,
+          "received": 915,
+          "late": 0,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          25.7,
+          25.1,
+          26.7
+        ],
+        "prediction": {
+          "ticks": 861,
+          "wrongTicks": 23,
+          "placements": 0,
+          "corrections": 4,
+          "correctionsOverHalfATile": 0,
+          "worstTiles": 7,
+          "last": [
+            {
+              "tick": 35,
+              "d": 5.253,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 36,
+              "d": 6.162,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 37,
+              "d": 5.831,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 38,
+              "d": 6.995,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 40,
+              "d": 0.774,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 41,
+              "d": 0.921,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 82,
+              "d": 0.4,
+              "l": 1,
+              "r": 0,
+              "j": 0.556640625
+            },
+            {
+              "tick": 91,
+              "d": 0.286,
+              "l": 1,
+              "r": 0,
+              "j": 0.279541015625
+            },
+            {
+              "tick": 704,
+              "d": 0.025,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 705,
+              "d": 0.884,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 706,
+              "d": 1.234,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 707,
+              "d": 1.312,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            }
+          ],
+          "room": {
+            "replaysThatMovedMe": 21,
+            "largestTiles": 6.93,
+            "catchUps": 0,
+            "snaps": 0,
+            "clockResets": 2,
+            "lateInputLeadTicks": 2.37
+          }
+        },
+        "scoreOnMyHud": 4,
+        "scoreOnTheOtherScreen": 4,
+        "seconds": 42.931599999904634,
+        "frames": 2577,
+        "againstHeldKey": 1,
+        "againstExamples": [
+          {
+            "atS": 0.9499000000953675,
+            "dx": -0.15673065185546875,
+            "dy": -0.09960365295410156,
+            "direction": 1
+          }
+        ],
+        "goldVanishesMs": {
+          "n": 2,
+          "min": 16.5,
+          "median": 50.1,
+          "p90": 50.1,
+          "max": 50.1
+        },
+        "goldOnHudMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "catches": 0,
+        "catchesWithNoMonsterOnScreen": 0,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 0,
+        "landedOnItAndStomped": 0,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 21,
+        "drawnBackSteps": 7,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 0.5,
+            "from": [
+              53.22,
+              24.3
+            ],
+            "to": [
+              53.71,
+              23.35
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.5,
+            "from": [
+              53.71,
+              23.35
+            ],
+            "to": [
+              54.23,
+              22.47
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.7,
+            "from": [
+              55.83,
+              20.99
+            ],
+            "to": [
+              56.12,
+              22.32
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.7,
+            "from": [
+              56.12,
+              22.32
+            ],
+            "to": [
+              56.33,
+              23.7
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.7,
+            "from": [
+              56.33,
+              23.7
+            ],
+            "to": [
+              56.59,
+              25.08
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.7,
+            "from": [
+              56.59,
+              25.08
+            ],
+            "to": [
+              56.91,
+              26.44
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.7,
+            "from": [
+              56.91,
+              26.44
+            ],
+            "to": [
+              57.32,
+              27.78
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.8,
+            "from": [
+              57.65,
+              28.6
+            ],
+            "to": [
+              57.8,
+              27.2
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "b-swept-jit-5",
+      "complete": true,
+      "trace": "b-swept-jit-5-lag150-loss0-jitter100-frames.json.gz",
+      "metrics": {
+        "s": 42.93,
+        "frames": 2577,
+        "cpu": 0,
+        "load": 19.2,
+        "late": 0,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 52,
+        "slides": 28,
+        "slidesOver1": 17,
+        "slideMaxNet": 6.19,
+        "respawns": 3,
+        "respawnsNotCut": 3,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.4,
+        "dtMax": 22,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 1,
+        "ms": 367,
+        "worst": [
+          {
+            "s": 6,
+            "ms": 367,
+            "tiles": 6
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 1,
+        "ms": 367,
+        "worst": [
+          {
+            "s": 6,
+            "ms": 367,
+            "tiles": 6
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 150,
+        "loss": 0,
+        "jitterMs": 100,
+        "role": "replica",
+        "wire": {
+          "delay": 150,
+          "loss": 0,
+          "jitter": 100,
+          "sent": 764,
+          "received": 912,
+          "late": 0,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          19.2,
+          23.6,
+          26.1
+        ],
+        "prediction": {
+          "ticks": 858,
+          "wrongTicks": 199,
+          "placements": 1,
+          "corrections": 44,
+          "correctionsOverHalfATile": 24,
+          "worstTiles": 9.83,
+          "last": [
+            {
+              "tick": 759,
+              "d": 0.017,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 766,
+              "d": 0.454,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 767,
+              "d": 0.517,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 768,
+              "d": 0.579,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 773,
+              "d": 1.25,
+              "l": 0,
+              "r": 1,
+              "j": 0.592041015625
+            },
+            {
+              "tick": 779,
+              "d": 4.058,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 780,
+              "d": 3.501,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 840,
+              "d": 0.021,
+              "l": 0,
+              "r": 1,
+              "j": 0.010009765625
+            },
+            {
+              "tick": 841,
+              "d": 0.083,
+              "l": 0,
+              "r": 1,
+              "j": 0.95361328125
+            },
+            {
+              "tick": 854,
+              "d": 5.719,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 855,
+              "d": 5.979,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 871,
+              "d": 3.159,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            }
+          ],
+          "room": {
+            "replaysThatMovedMe": 129,
+            "largestTiles": 8.19,
+            "catchUps": 0,
+            "snaps": 0,
+            "clockResets": 5,
+            "lateInputLeadTicks": 1.78
+          }
+        },
+        "scoreOnMyHud": 5,
+        "scoreOnTheOtherScreen": 5,
+        "seconds": 42.931,
+        "frames": 2577,
+        "againstHeldKey": 17,
+        "againstExamples": [
+          {
+            "atS": 3.016,
+            "dx": 1.0982284545898438,
+            "dy": 0.8682708740234375,
+            "direction": -1
+          },
+          {
+            "atS": 3.0325,
+            "dx": 0.6050796508789062,
+            "dy": 0.3643379211425781,
+            "direction": -1
+          },
+          {
+            "atS": 3.048899999856949,
+            "dx": 0.23208236694335938,
+            "dy": 0.036914825439453125,
+            "direction": -1
+          },
+          {
+            "atS": 3.0657000000476837,
+            "dx": 0.07964324951171875,
+            "dy": -0.09840011596679688,
+            "direction": -1
+          },
+          {
+            "atS": 3.0827000000476836,
+            "dx": 0.046665191650390625,
+            "dy": 0.03153228759765625,
+            "direction": -1
+          },
+          {
+            "atS": 3.0990999999046327,
+            "dx": 0.06282424926757812,
+            "dy": 0.17037200927734375,
+            "direction": -1
+          },
+          {
+            "atS": 3.1822000000476836,
+            "dx": 0.01767730712890625,
+            "dy": 0.10422134399414062,
+            "direction": -1
+          },
+          {
+            "atS": 3.199,
+            "dx": 0.087982177734375,
+            "dy": 0.2988929748535156,
+            "direction": -1
+          },
+          {
+            "atS": 3.2157000000476836,
+            "dx": 0.011066436767578125,
+            "dy": 0.007251739501953125,
+            "direction": -1
+          },
+          {
+            "atS": 4.299099999904633,
+            "dx": 0.9899482727050781,
+            "dy": -0.9899482727050781,
+            "direction": -1
+          },
+          {
+            "atS": 4.315700000047683,
+            "dx": 0.9899482727050781,
+            "dy": -0.9899482727050781,
+            "direction": -1
+          },
+          {
+            "atS": 4.332299999952316,
+            "dx": 0.9899482727050781,
+            "dy": -0.9899482727050781,
+            "direction": -1
+          }
+        ],
+        "goldVanishesMs": {
+          "n": 5,
+          "min": 33.2,
+          "median": 49.9,
+          "p90": 66.7,
+          "max": 66.7
+        },
+        "goldOnHudMs": {
+          "n": 5,
+          "min": 33.6,
+          "median": 133.3,
+          "p90": 216.8,
+          "max": 216.8
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "catches": 3,
+        "catchesWithNoMonsterOnScreen": 1,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 2,
+        "landedOnItAndStomped": 0,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 81,
+        "drawnBackSteps": 39,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 1.9,
+            "from": [
+              60.77,
+              37.67
+            ],
+            "to": [
+              60.19,
+              37.68
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.9,
+            "from": [
+              60.19,
+              37.68
+            ],
+            "to": [
+              59.4,
+              37.87
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 2,
+            "from": [
+              59.4,
+              37.87
+            ],
+            "to": [
+              58.94,
+              37.99
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 2.8,
+            "from": [
+              46.12,
+              40
+            ],
+            "to": [
+              46.12,
+              39
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 2.9,
+            "from": [
+              46.12,
+              39
+            ],
+            "to": [
+              45.85,
+              37.63
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 2.9,
+            "from": [
+              45.85,
+              37.63
+            ],
+            "to": [
+              45.46,
+              36.28
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 3,
+            "from": [
+              43.59,
+              34.9
+            ],
+            "to": [
+              44.69,
+              35.77
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 3,
+            "from": [
+              44.69,
+              35.77
+            ],
+            "to": [
+              45.29,
+              36.13
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "b-swept-long-0",
+      "complete": true,
+      "trace": "b-swept-long-0-lag100-loss0.02-jitter40-frames.json.gz",
+      "metrics": {
+        "s": 305.81,
+        "frames": 18350,
+        "cpu": 0,
+        "load": 8.1,
+        "late": 41,
+        "socks": 98,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 58,
+        "slides": 44,
+        "slidesOver1": 5,
+        "slideMaxNet": 20.15,
+        "respawns": 4,
+        "respawnsNotCut": 3,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.8,
+        "dtMax": 31,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 7,
+        "ms": 10351,
+        "worst": [
+          {
+            "s": 6,
+            "ms": 417,
+            "tiles": 3.5
+          },
+          {
+            "s": 68.7,
+            "ms": 317,
+            "tiles": 3.9
+          },
+          {
+            "s": 69.4,
+            "ms": 2550,
+            "tiles": 11.3
+          },
+          {
+            "s": 72.2,
+            "ms": 666,
+            "tiles": 5.1
+          },
+          {
+            "s": 76.7,
+            "ms": 2533,
+            "tiles": 10.8
+          },
+          {
+            "s": 83.5,
+            "ms": 750,
+            "tiles": 3.7
+          },
+          {
+            "s": 84.5,
+            "ms": 3117,
+            "tiles": 19.6
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 7,
+        "ms": 10351,
+        "worst": [
+          {
+            "s": 6,
+            "ms": 417,
+            "tiles": 3.5
+          },
+          {
+            "s": 68.7,
+            "ms": 317,
+            "tiles": 3.9
+          },
+          {
+            "s": 69.4,
+            "ms": 2550,
+            "tiles": 11.3
+          },
+          {
+            "s": 72.2,
+            "ms": 666,
+            "tiles": 5.1
+          },
+          {
+            "s": 76.7,
+            "ms": 2533,
+            "tiles": 10.8
+          },
+          {
+            "s": 83.5,
+            "ms": 750,
+            "tiles": 3.7
+          },
+          {
+            "s": 84.5,
+            "ms": 3117,
+            "tiles": 19.6
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 100,
+        "loss": 0.02,
+        "jitterMs": 40,
+        "role": "replica",
+        "wire": {
+          "delay": 100,
+          "loss": 0.02,
+          "jitter": 40,
+          "sent": 1007,
+          "received": 1276,
+          "late": 41,
+          "sockets": 98
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          8.1,
+          12.5,
+          18.5
+        ],
+        "prediction": {
+          "ticks": 1115,
+          "wrongTicks": 63,
+          "placements": 4,
+          "corrections": 10,
+          "correctionsOverHalfATile": 5,
+          "worstTiles": 3.02,
+          "last": [
+            {
+              "tick": 322,
+              "d": 0.752,
+              "l": 0,
+              "r": 0,
+              "j": 0.599609375
+            },
+            {
+              "tick": 323,
+              "d": 0.654,
+              "l": 0,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 324,
+              "d": 0.556,
+              "l": 0,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 326,
+              "d": 0.36,
+              "l": 0,
+              "r": 0,
+              "j": 0.814697265625
+            },
+            {
+              "tick": 327,
+              "d": 0.262,
+              "l": 0,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 328,
+              "d": 0.164,
+              "l": 0,
+              "r": 0,
+              "j": 0.0927734375
+            },
+            {
+              "tick": 329,
+              "d": 0.066,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 330,
+              "d": 0.032,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 562,
+              "d": 0.784,
+              "l": 1,
+              "r": 0,
+              "j": 0.776123046875
+            },
+            {
+              "tick": 563,
+              "d": 0.984,
+              "l": 1,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 569,
+              "d": 0.502,
+              "l": 1,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 570,
+              "d": 0.343,
+              "l": 1,
+              "r": 0,
+              "j": 1
+            }
+          ],
+          "room": {
+            "replaysThatMovedMe": 36,
+            "largestTiles": 6.07,
+            "catchUps": 0,
+            "snaps": 0,
+            "clockResets": 6,
+            "lateInputLeadTicks": 1.16
+          }
+        },
+        "scoreOnMyHud": 16,
+        "scoreOnTheOtherScreen": null,
+        "seconds": 305.805,
+        "frames": 18350,
+        "againstHeldKey": 10,
+        "againstExamples": [
+          {
+            "atS": 5.800100000143051,
+            "dx": 1,
+            "dy": 0,
+            "direction": -1
+          },
+          {
+            "atS": 25.16640000009537,
+            "dx": 0.21169281005859375,
+            "dy": 0.02813720703125,
+            "direction": -1
+          },
+          {
+            "atS": 71.047,
+            "dx": 0.1694183349609375,
+            "dy": 0.031284332275390625,
+            "direction": -1
+          },
+          {
+            "atS": 110.57920000004768,
+            "dx": -0.16919326782226562,
+            "dy": 0.018413543701171875,
+            "direction": 1
+          },
+          {
+            "atS": 118.12890000009537,
+            "dx": -0.17003822326660156,
+            "dy": 0.016963958740234375,
+            "direction": 1
+          },
+          {
+            "atS": 124.31220000004768,
+            "dx": -0.16926002502441406,
+            "dy": 0.0203094482421875,
+            "direction": 1
+          },
+          {
+            "atS": 131.862,
+            "dx": -0.15877151489257812,
+            "dy": 0.01966094970703125,
+            "direction": 1
+          },
+          {
+            "atS": 148.62790000009537,
+            "dx": -0.17089462280273438,
+            "dy": 0.035999298095703125,
+            "direction": 1
+          },
+          {
+            "atS": 174.6267000000477,
+            "dx": -0.1716785430908203,
+            "dy": 0.018711090087890625,
+            "direction": 1
+          },
+          {
+            "atS": 291.2055,
+            "dx": -0.012447357177734375,
+            "dy": 0.06807708740234375,
+            "direction": 1
+          }
+        ],
+        "goldVanishesMs": {
+          "n": 5,
+          "min": 16.9,
+          "median": 49.5,
+          "p90": 50.1,
+          "max": 50.1
+        },
+        "goldOnHudMs": {
+          "n": 4,
+          "min": 82.8,
+          "median": 166.3,
+          "p90": 217.1,
+          "max": 217.1
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 10,
+          "min": 16.3,
+          "median": 34,
+          "p90": 66.9,
+          "max": 66.9
+        },
+        "catches": 4,
+        "catchesWithNoMonsterOnScreen": 1,
+        "landedOnItOnScreenButCaught": 1,
+        "caughtFromTheSide": 2,
+        "landedOnItAndStomped": 10,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 73,
+        "drawnBackSteps": 39,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 2.8,
+            "from": [
+              46,
+              39.19
+            ],
+            "to": [
+              46,
+              38.28
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 5.8,
+            "from": [
+              25.98,
+              35.91
+            ],
+            "to": [
+              26.98,
+              35.91
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 5.8,
+            "from": [
+              26.98,
+              35.91
+            ],
+            "to": [
+              26.43,
+              35.92
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 5.9,
+            "from": [
+              26.18,
+              36.1
+            ],
+            "to": [
+              26.18,
+              35.1
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 10.7,
+            "from": [
+              36.15,
+              41
+            ],
+            "to": [
+              36.41,
+              39.62
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 10.7,
+            "from": [
+              36.41,
+              39.62
+            ],
+            "to": [
+              36.68,
+              38.25
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 10.7,
+            "from": [
+              36.68,
+              38.25
+            ],
+            "to": [
+              36.93,
+              36.99
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 10.8,
+            "from": [
+              20,
+              31
+            ],
+            "to": [
+              18.96,
+              30.49
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "b-swept-loss-0",
+      "complete": true,
+      "trace": "b-swept-loss-0-lag300-loss0.05-jitter0-frames.json.gz",
+      "metrics": {
+        "s": 43.22,
+        "frames": 2594,
+        "cpu": 0,
+        "load": 14.1,
+        "late": 84,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 341,
+        "slides": 59,
+        "slidesOver1": 49,
+        "slideMaxNet": 18.74,
+        "respawns": 3,
+        "respawnsNotCut": 3,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 18.7,
+        "dtMax": 23,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 13,
+        "ms": 8396,
+        "worst": [
+          {
+            "s": 1,
+            "ms": 317,
+            "tiles": 3
+          },
+          {
+            "s": 1.5,
+            "ms": 449,
+            "tiles": 11.6
+          },
+          {
+            "s": 12.5,
+            "ms": 383,
+            "tiles": 8.5
+          },
+          {
+            "s": 13.8,
+            "ms": 650,
+            "tiles": 11
+          },
+          {
+            "s": 14.5,
+            "ms": 683,
+            "tiles": 5.4
+          },
+          {
+            "s": 27.9,
+            "ms": 501,
+            "tiles": 4.7
+          },
+          {
+            "s": 28.4,
+            "ms": 951,
+            "tiles": 14.2
+          },
+          {
+            "s": 29.4,
+            "ms": 2333,
+            "tiles": 15
+          },
+          {
+            "s": 32.5,
+            "ms": 598,
+            "tiles": 3
+          },
+          {
+            "s": 33.5,
+            "ms": 450,
+            "tiles": 5.1
+          },
+          {
+            "s": 38.1,
+            "ms": 417,
+            "tiles": 10.4
+          },
+          {
+            "s": 39.2,
+            "ms": 350,
+            "tiles": 2.6
+          },
+          {
+            "s": 42.1,
+            "ms": 315,
+            "tiles": 4.8
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 13,
+        "ms": 8396,
+        "worst": [
+          {
+            "s": 1,
+            "ms": 317,
+            "tiles": 3
+          },
+          {
+            "s": 1.5,
+            "ms": 449,
+            "tiles": 11.6
+          },
+          {
+            "s": 12.5,
+            "ms": 383,
+            "tiles": 8.5
+          },
+          {
+            "s": 13.8,
+            "ms": 650,
+            "tiles": 11
+          },
+          {
+            "s": 14.5,
+            "ms": 683,
+            "tiles": 5.4
+          },
+          {
+            "s": 27.9,
+            "ms": 501,
+            "tiles": 4.7
+          },
+          {
+            "s": 28.4,
+            "ms": 951,
+            "tiles": 14.2
+          },
+          {
+            "s": 29.4,
+            "ms": 2333,
+            "tiles": 15
+          },
+          {
+            "s": 32.5,
+            "ms": 598,
+            "tiles": 3
+          },
+          {
+            "s": 33.5,
+            "ms": 450,
+            "tiles": 5.1
+          },
+          {
+            "s": 38.1,
+            "ms": 417,
+            "tiles": 10.4
+          },
+          {
+            "s": 39.2,
+            "ms": 350,
+            "tiles": 2.6
+          },
+          {
+            "s": 42.1,
+            "ms": 315,
+            "tiles": 4.8
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 300,
+        "loss": 0.05,
+        "jitterMs": 0,
+        "role": "replica",
+        "wire": {
+          "delay": 300,
+          "loss": 0.05,
+          "jitter": 0,
+          "sent": 907,
+          "received": 920,
+          "late": 84,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          14.1,
+          21.4,
+          25.1
+        ],
+        "prediction": {
+          "ticks": 863,
+          "wrongTicks": 701,
+          "placements": 1,
+          "corrections": 16,
+          "correctionsOverHalfATile": 7,
+          "worstTiles": 34.5,
+          "last": [
+            {
+              "tick": 834,
+              "d": 1.373,
+              "l": 1,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 867,
+              "d": 0.409,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 868,
+              "d": 1.512,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 869,
+              "d": 2.468,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 870,
+              "d": 3.277,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 871,
+              "d": 3.93,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 872,
+              "d": 4.454,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 873,
+              "d": 4.813,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 876,
+              "d": 5.035,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 877,
+              "d": 4.815,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 878,
+              "d": 4.448,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 879,
+              "d": 3.934,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            }
+          ],
+          "room": {
+            "replaysThatMovedMe": 491,
+            "largestTiles": 29.14,
+            "catchUps": 0,
+            "snaps": 0,
+            "clockResets": 5,
+            "lateInputLeadTicks": 0.5
+          }
+        },
+        "scoreOnMyHud": 8,
+        "scoreOnTheOtherScreen": 8,
+        "seconds": 43.21670000004768,
+        "frames": 2594,
+        "againstHeldKey": 110,
+        "againstExamples": [
+          {
+            "atS": 0.6827000000476837,
+            "dx": -0.053722381591796875,
+            "dy": -1.3989696502685547,
+            "direction": 1
+          },
+          {
+            "atS": 0.6989000000953675,
+            "dx": -0.04303741455078125,
+            "dy": -1.1452713012695312,
+            "direction": 1
+          },
+          {
+            "atS": 3.970200000047684,
+            "dx": 0.9899482727050781,
+            "dy": 0.9899482727050781,
+            "direction": -1
+          },
+          {
+            "atS": 3.9827000000476835,
+            "dx": 0.6311836242675781,
+            "dy": 1.016082763671875,
+            "direction": -1
+          },
+          {
+            "atS": 3.998600000143051,
+            "dx": 0.37450408935546875,
+            "dy": 0.4972686767578125,
+            "direction": -1
+          },
+          {
+            "atS": 4.0157000000476835,
+            "dx": 0.13672256469726562,
+            "dy": 0.054500579833984375,
+            "direction": -1
+          },
+          {
+            "atS": 5.767400000095368,
+            "dx": 1.3364105224609375,
+            "dy": 0.417144775390625,
+            "direction": -1
+          },
+          {
+            "atS": 5.833100000143051,
+            "dx": 0.9899482727050781,
+            "dy": 0.9899482727050781,
+            "direction": -1
+          },
+          {
+            "atS": 6.182299999952316,
+            "dx": 0.9899482727050781,
+            "dy": 0.9899482727050781,
+            "direction": -1
+          },
+          {
+            "atS": 8.132299999952316,
+            "dx": 0.7763919830322266,
+            "dy": 1.1649951934814453,
+            "direction": -1
+          },
+          {
+            "atS": 8.148799999952317,
+            "dx": 0.663172721862793,
+            "dy": 1.2329654693603516,
+            "direction": -1
+          },
+          {
+            "atS": 8.165700000047684,
+            "dx": 0.3299875259399414,
+            "dy": 0.7417411804199219,
+            "direction": -1
+          }
+        ],
+        "goldVanishesMs": {
+          "n": 4,
+          "min": 32.9,
+          "median": 34,
+          "p90": 49.5,
+          "max": 49.5
+        },
+        "goldOnHudMs": {
+          "n": 4,
+          "min": 83.8,
+          "median": 168,
+          "p90": 216.5,
+          "max": 216.5
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "catches": 3,
+        "catchesWithNoMonsterOnScreen": 2,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 1,
+        "landedOnItAndStomped": 0,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 425,
+        "drawnBackSteps": 142,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 0.7,
+            "from": [
+              53,
+              25.56
+            ],
+            "to": [
+              52.94,
+              24.16
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.7,
+            "from": [
+              52.94,
+              24.16
+            ],
+            "to": [
+              52.9,
+              23.02
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.7,
+            "from": [
+              52.97,
+              22
+            ],
+            "to": [
+              53.8,
+              23.13
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.8,
+            "from": [
+              53.8,
+              23.13
+            ],
+            "to": [
+              54.69,
+              24.21
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.8,
+            "from": [
+              54.69,
+              24.21
+            ],
+            "to": [
+              55.67,
+              25.21
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.8,
+            "from": [
+              55.67,
+              25.21
+            ],
+            "to": [
+              56.77,
+              26.07
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.8,
+            "from": [
+              56.77,
+              26.07
+            ],
+            "to": [
+              57.39,
+              26.31
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.5,
+            "from": [
+              57.82,
+              31.93
+            ],
+            "to": [
+              59.16,
+              32.34
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "b-swept-loss-1",
+      "complete": true,
+      "trace": "b-swept-loss-1-lag300-loss0.05-jitter0-frames.json.gz",
+      "metrics": {
+        "s": 43.21,
+        "frames": 2594,
+        "cpu": 0,
+        "load": 14.4,
+        "late": 100,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 267,
+        "slides": 52,
+        "slidesOver1": 47,
+        "slideMaxNet": 30.89,
+        "respawns": 5,
+        "respawnsNotCut": 4,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.9,
+        "dtMax": 23,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 12,
+        "ms": 7169,
+        "worst": [
+          {
+            "s": 0.6,
+            "ms": 584,
+            "tiles": 5
+          },
+          {
+            "s": 1.9,
+            "ms": 833,
+            "tiles": 5.4
+          },
+          {
+            "s": 2.8,
+            "ms": 350,
+            "tiles": 6.4
+          },
+          {
+            "s": 3.4,
+            "ms": 1150,
+            "tiles": 5.3
+          },
+          {
+            "s": 5.8,
+            "ms": 350,
+            "tiles": 4
+          },
+          {
+            "s": 14.7,
+            "ms": 500,
+            "tiles": 6
+          },
+          {
+            "s": 15.8,
+            "ms": 417,
+            "tiles": 4.5
+          },
+          {
+            "s": 16.4,
+            "ms": 733,
+            "tiles": 5.4
+          },
+          {
+            "s": 17.6,
+            "ms": 432,
+            "tiles": 8.1
+          },
+          {
+            "s": 18.7,
+            "ms": 301,
+            "tiles": 5
+          },
+          {
+            "s": 19.8,
+            "ms": 984,
+            "tiles": 6
+          },
+          {
+            "s": 22.6,
+            "ms": 534,
+            "tiles": 10.8
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 12,
+        "ms": 7169,
+        "worst": [
+          {
+            "s": 0.6,
+            "ms": 584,
+            "tiles": 5
+          },
+          {
+            "s": 1.9,
+            "ms": 833,
+            "tiles": 5.4
+          },
+          {
+            "s": 2.8,
+            "ms": 350,
+            "tiles": 6.4
+          },
+          {
+            "s": 3.4,
+            "ms": 1150,
+            "tiles": 5.3
+          },
+          {
+            "s": 5.8,
+            "ms": 350,
+            "tiles": 4
+          },
+          {
+            "s": 14.7,
+            "ms": 500,
+            "tiles": 6
+          },
+          {
+            "s": 15.8,
+            "ms": 417,
+            "tiles": 4.5
+          },
+          {
+            "s": 16.4,
+            "ms": 733,
+            "tiles": 5.4
+          },
+          {
+            "s": 17.6,
+            "ms": 432,
+            "tiles": 8.1
+          },
+          {
+            "s": 18.7,
+            "ms": 301,
+            "tiles": 5
+          },
+          {
+            "s": 19.8,
+            "ms": 984,
+            "tiles": 6
+          },
+          {
+            "s": 22.6,
+            "ms": 534,
+            "tiles": 10.8
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 300,
+        "loss": 0.05,
+        "jitterMs": 0,
+        "role": "replica",
+        "wire": {
+          "delay": 300,
+          "loss": 0.05,
+          "jitter": 0,
+          "sent": 890,
+          "received": 920,
+          "late": 100,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          14.4,
+          20.4,
+          24.5
+        ],
+        "prediction": {
+          "ticks": 863,
+          "wrongTicks": 697,
+          "placements": 0,
+          "corrections": 16,
+          "correctionsOverHalfATile": 7,
+          "worstTiles": 61.45,
+          "last": [
+            {
+              "tick": 868,
+              "d": 22.093,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 869,
+              "d": 3.648,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 870,
+              "d": 5.403,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 871,
+              "d": 0.475,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 872,
+              "d": 1.133,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 873,
+              "d": 1.75,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 874,
+              "d": 2.308,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 875,
+              "d": 2.862,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 876,
+              "d": 9.954,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 877,
+              "d": 10.68,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 878,
+              "d": 56.646,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 879,
+              "d": 56.597,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            }
+          ],
+          "room": {
+            "replaysThatMovedMe": 495,
+            "largestTiles": 33.57,
+            "catchUps": 0,
+            "snaps": 0,
+            "clockResets": 6,
+            "lateInputLeadTicks": 0.5
+          }
+        },
+        "scoreOnMyHud": 3,
+        "scoreOnTheOtherScreen": 3,
+        "seconds": 43.214700000047685,
+        "frames": 2594,
+        "againstHeldKey": 158,
+        "againstExamples": [
+          {
+            "atS": 2.8827999999523164,
+            "dx": 0.7845573425292969,
+            "dy": -0.18362808227539062,
+            "direction": -1
+          },
+          {
+            "atS": 2.899399999856949,
+            "dx": 0.9888801574707031,
+            "dy": -0.15071487426757812,
+            "direction": -1
+          },
+          {
+            "atS": 2.9162000000476835,
+            "dx": 0.377044677734375,
+            "dy": 0.022693634033203125,
+            "direction": -1
+          },
+          {
+            "atS": 2.933,
+            "dx": 0.1125030517578125,
+            "dy": 0.11022567749023438,
+            "direction": -1
+          },
+          {
+            "atS": 3.9322999999523165,
+            "dx": 0.7398834228515625,
+            "dy": 0.13341903686523438,
+            "direction": -1
+          },
+          {
+            "atS": 3.9492999999523164,
+            "dx": 0.659515380859375,
+            "dy": 0.00998687744140625,
+            "direction": -1
+          },
+          {
+            "atS": 3.966,
+            "dx": 0.23819732666015625,
+            "dy": -0.07981109619140625,
+            "direction": -1
+          },
+          {
+            "atS": 3.9827000000476835,
+            "dx": 0.0680999755859375,
+            "dy": -0.113677978515625,
+            "direction": -1
+          },
+          {
+            "atS": 9.882599999904633,
+            "dx": -1.0356597900390625,
+            "dy": 0,
+            "direction": 1
+          },
+          {
+            "atS": 9.898799999952317,
+            "dx": -1.3999996185302734,
+            "dy": 0,
+            "direction": 1
+          },
+          {
+            "atS": 9.915700000047684,
+            "dx": -1.3999996185302734,
+            "dy": 0,
+            "direction": 1
+          },
+          {
+            "atS": 12.049099999904632,
+            "dx": 0.6415977478027344,
+            "dy": 0,
+            "direction": -1
+          }
+        ],
+        "goldVanishesMs": {
+          "n": 1,
+          "min": 33.5,
+          "median": 33.5,
+          "p90": 33.5,
+          "max": 33.5
+        },
+        "goldOnHudMs": {
+          "n": 1,
+          "min": 149.5,
+          "median": 149.5,
+          "p90": 149.5,
+          "max": 149.5
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 1,
+          "min": 32.6,
+          "median": 32.6,
+          "p90": 32.6,
+          "max": 32.6
+        },
+        "catches": 5,
+        "catchesWithNoMonsterOnScreen": 4,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 1,
+        "landedOnItAndStomped": 1,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 315,
+        "drawnBackSteps": 107,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 1.1,
+            "from": [
+              58.72,
+              21.01
+            ],
+            "to": [
+              59.58,
+              22.11
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.1,
+            "from": [
+              59.58,
+              22.11
+            ],
+            "to": [
+              60.42,
+              23.23
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.2,
+            "from": [
+              60.42,
+              23.23
+            ],
+            "to": [
+              61.23,
+              24.38
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.9,
+            "from": [
+              62,
+              42
+            ],
+            "to": [
+              61.98,
+              41.25
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 2.9,
+            "from": [
+              56.4,
+              38
+            ],
+            "to": [
+              57.19,
+              37.82
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 2.9,
+            "from": [
+              57.19,
+              37.82
+            ],
+            "to": [
+              58.18,
+              37.67
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 3,
+            "from": [
+              58.62,
+              38
+            ],
+            "to": [
+              57.89,
+              38
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 3,
+            "from": [
+              57.89,
+              38
+            ],
+            "to": [
+              57.06,
+              38
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "b-swept-loss-2",
+      "complete": true,
+      "trace": "b-swept-loss-2-lag300-loss0.05-jitter0-frames.json.gz",
+      "metrics": {
+        "s": 43.23,
+        "frames": 2595,
+        "cpu": 0,
+        "load": 12.4,
+        "late": 82,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 336,
+        "slides": 59,
+        "slidesOver1": 51,
+        "slideMaxNet": 27.46,
+        "respawns": 5,
+        "respawnsNotCut": 4,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 18.2,
+        "dtMax": 24,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 5,
+        "ms": 3618,
+        "worst": [
+          {
+            "s": 5.5,
+            "ms": 1567,
+            "tiles": 9.9
+          },
+          {
+            "s": 7.5,
+            "ms": 384,
+            "tiles": 7.4
+          },
+          {
+            "s": 8,
+            "ms": 633,
+            "tiles": 5.1
+          },
+          {
+            "s": 8.7,
+            "ms": 533,
+            "tiles": 5
+          },
+          {
+            "s": 28,
+            "ms": 501,
+            "tiles": 9.2
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 5,
+        "ms": 3618,
+        "worst": [
+          {
+            "s": 5.5,
+            "ms": 1567,
+            "tiles": 9.9
+          },
+          {
+            "s": 7.5,
+            "ms": 384,
+            "tiles": 7.4
+          },
+          {
+            "s": 8,
+            "ms": 633,
+            "tiles": 5.1
+          },
+          {
+            "s": 8.7,
+            "ms": 533,
+            "tiles": 5
+          },
+          {
+            "s": 28,
+            "ms": 501,
+            "tiles": 9.2
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 300,
+        "loss": 0.05,
+        "jitterMs": 0,
+        "role": "replica",
+        "wire": {
+          "delay": 300,
+          "loss": 0.05,
+          "jitter": 0,
+          "sent": 897,
+          "received": 921,
+          "late": 82,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          12.4,
+          19,
+          23.7
+        ],
+        "prediction": {
+          "ticks": 865,
+          "wrongTicks": 750,
+          "placements": 0,
+          "corrections": 5,
+          "correctionsOverHalfATile": 1,
+          "worstTiles": 59.03,
+          "last": [
+            {
+              "tick": 869,
+              "d": 1.275,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 870,
+              "d": 2.633,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 871,
+              "d": 3.304,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 872,
+              "d": 2.404,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 873,
+              "d": 1.546,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 874,
+              "d": 0.796,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 875,
+              "d": 0.046,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 878,
+              "d": 1.008,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 879,
+              "d": 0.902,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 880,
+              "d": 0.665,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 881,
+              "d": 3.829,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 882,
+              "d": 3.837,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            }
+          ],
+          "room": {
+            "replaysThatMovedMe": 547,
+            "largestTiles": 27.75,
+            "catchUps": 0,
+            "snaps": 0,
+            "clockResets": 6,
+            "lateInputLeadTicks": 0.5
+          }
+        },
+        "scoreOnMyHud": 7,
+        "scoreOnTheOtherScreen": 7,
+        "seconds": 43.228900000095365,
+        "frames": 2595,
+        "againstHeldKey": 270,
+        "againstExamples": [
+          {
+            "atS": 0.768,
+            "dx": -0.33617401123046875,
+            "dy": -1.0413589477539062,
+            "direction": 1
+          },
+          {
+            "atS": 1.6149000000953675,
+            "dx": 0.6781196594238281,
+            "dy": -1.2248077392578125,
+            "direction": -1
+          },
+          {
+            "atS": 2.3649000000953673,
+            "dx": -0.034984588623046875,
+            "dy": -0.4283924102783203,
+            "direction": 1
+          },
+          {
+            "atS": 2.380799999952316,
+            "dx": -0.02269744873046875,
+            "dy": -0.37951087951660156,
+            "direction": 1
+          },
+          {
+            "atS": 2.8647000000476837,
+            "dx": -0.12477874755859375,
+            "dy": 0.05829429626464844,
+            "direction": 1
+          },
+          {
+            "atS": 3.0187000000476836,
+            "dx": -1.28680419921875,
+            "dy": 0.5514869689941406,
+            "direction": 1
+          },
+          {
+            "atS": 3.0305,
+            "dx": -1.28680419921875,
+            "dy": 0.5514869689941406,
+            "direction": 1
+          },
+          {
+            "atS": 3.048100000143051,
+            "dx": -1.28680419921875,
+            "dy": 0.5514869689941406,
+            "direction": 1
+          },
+          {
+            "atS": 3.064299999952316,
+            "dx": -1.28680419921875,
+            "dy": 0.5514869689941406,
+            "direction": 1
+          },
+          {
+            "atS": 3.0812000000476836,
+            "dx": -1.28680419921875,
+            "dy": 0.5514888763427734,
+            "direction": 1
+          },
+          {
+            "atS": 3.097299999952316,
+            "dx": -1.1256256103515625,
+            "dy": 0.8324489593505859,
+            "direction": 1
+          },
+          {
+            "atS": 3.115200000047684,
+            "dx": -1.1073951721191406,
+            "dy": 0.8565502166748047,
+            "direction": 1
+          }
+        ],
+        "goldVanishesMs": {
+          "n": 4,
+          "min": 33,
+          "median": 49.7,
+          "p90": 50.1,
+          "max": 50.1
+        },
+        "goldOnHudMs": {
+          "n": 4,
+          "min": 84,
+          "median": 116.1,
+          "p90": 149.3,
+          "max": 149.3
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 1,
+          "min": 17.5,
+          "median": 17.5,
+          "p90": 17.5,
+          "max": 17.5
+        },
+        "catches": 5,
+        "catchesWithNoMonsterOnScreen": 3,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 2,
+        "landedOnItAndStomped": 1,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 389,
+        "drawnBackSteps": 183,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 0.5,
+            "from": [
+              53.89,
+              26
+            ],
+            "to": [
+              54.89,
+              26
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.8,
+            "from": [
+              57,
+              28.23
+            ],
+            "to": [
+              56.66,
+              27.18
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.8,
+            "from": [
+              56.66,
+              27.18
+            ],
+            "to": [
+              56.78,
+              25.79
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.8,
+            "from": [
+              56.78,
+              25.79
+            ],
+            "to": [
+              56.95,
+              24.4
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.8,
+            "from": [
+              56.95,
+              24.4
+            ],
+            "to": [
+              57.21,
+              23.02
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 0.8,
+            "from": [
+              57.21,
+              23.02
+            ],
+            "to": [
+              57.56,
+              21.86
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1,
+            "from": [
+              58.93,
+              21.56
+            ],
+            "to": [
+              59.04,
+              22.96
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1,
+            "from": [
+              59.04,
+              22.96
+            ],
+            "to": [
+              59.15,
+              24.35
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "b-swept-loss-3",
+      "complete": true,
+      "trace": "b-swept-loss-3-lag300-loss0.05-jitter0-frames.json.gz",
+      "metrics": {
+        "s": 43.2,
+        "frames": 2593,
+        "cpu": 0,
+        "load": 13.1,
+        "late": 93,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 274,
+        "slides": 59,
+        "slidesOver1": 45,
+        "slideMaxNet": 23.05,
+        "respawns": 3,
+        "respawnsNotCut": 3,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.8,
+        "dtMax": 22,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 16,
+        "ms": 8899,
+        "worst": [
+          {
+            "s": 0.5,
+            "ms": 600,
+            "tiles": 8.6
+          },
+          {
+            "s": 1.3,
+            "ms": 333,
+            "tiles": 2.2
+          },
+          {
+            "s": 2,
+            "ms": 817,
+            "tiles": 6.4
+          },
+          {
+            "s": 2.8,
+            "ms": 600,
+            "tiles": 4.2
+          },
+          {
+            "s": 3.8,
+            "ms": 317,
+            "tiles": 3.6
+          },
+          {
+            "s": 4.2,
+            "ms": 534,
+            "tiles": 4
+          },
+          {
+            "s": 6.2,
+            "ms": 516,
+            "tiles": 6.9
+          },
+          {
+            "s": 15.3,
+            "ms": 783,
+            "tiles": 14.8
+          },
+          {
+            "s": 16.8,
+            "ms": 533,
+            "tiles": 6.7
+          },
+          {
+            "s": 25.9,
+            "ms": 767,
+            "tiles": 6.8
+          },
+          {
+            "s": 27.1,
+            "ms": 617,
+            "tiles": 9.1
+          },
+          {
+            "s": 27.8,
+            "ms": 617,
+            "tiles": 9.6
+          },
+          {
+            "s": 28.5,
+            "ms": 383,
+            "tiles": 4.9
+          },
+          {
+            "s": 29.3,
+            "ms": 634,
+            "tiles": 9.2
+          },
+          {
+            "s": 31.6,
+            "ms": 400,
+            "tiles": 3.3
+          },
+          {
+            "s": 37.7,
+            "ms": 450,
+            "tiles": 7
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 16,
+        "ms": 8899,
+        "worst": [
+          {
+            "s": 0.5,
+            "ms": 600,
+            "tiles": 8.6
+          },
+          {
+            "s": 1.3,
+            "ms": 333,
+            "tiles": 2.2
+          },
+          {
+            "s": 2,
+            "ms": 817,
+            "tiles": 6.4
+          },
+          {
+            "s": 2.8,
+            "ms": 600,
+            "tiles": 4.2
+          },
+          {
+            "s": 3.8,
+            "ms": 317,
+            "tiles": 3.6
+          },
+          {
+            "s": 4.2,
+            "ms": 534,
+            "tiles": 4
+          },
+          {
+            "s": 6.2,
+            "ms": 516,
+            "tiles": 6.9
+          },
+          {
+            "s": 15.3,
+            "ms": 783,
+            "tiles": 14.8
+          },
+          {
+            "s": 16.8,
+            "ms": 533,
+            "tiles": 6.7
+          },
+          {
+            "s": 25.9,
+            "ms": 767,
+            "tiles": 6.8
+          },
+          {
+            "s": 27.1,
+            "ms": 617,
+            "tiles": 9.1
+          },
+          {
+            "s": 27.8,
+            "ms": 617,
+            "tiles": 9.6
+          },
+          {
+            "s": 28.5,
+            "ms": 383,
+            "tiles": 4.9
+          },
+          {
+            "s": 29.3,
+            "ms": 634,
+            "tiles": 9.2
+          },
+          {
+            "s": 31.6,
+            "ms": 400,
+            "tiles": 3.3
+          },
+          {
+            "s": 37.7,
+            "ms": 450,
+            "tiles": 7
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 300,
+        "loss": 0.05,
+        "jitterMs": 0,
+        "role": "replica",
+        "wire": {
+          "delay": 300,
+          "loss": 0.05,
+          "jitter": 0,
+          "sent": 889,
+          "received": 920,
+          "late": 93,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          13.1,
+          18.1,
+          23.1
+        ],
+        "prediction": {
+          "ticks": 853,
+          "wrongTicks": 628,
+          "placements": 0,
+          "corrections": 18,
+          "correctionsOverHalfATile": 11,
+          "worstTiles": 74.63,
+          "last": [
+            {
+              "tick": 859,
+              "d": 3.017,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 860,
+              "d": 3.142,
+              "l": 0,
+              "r": 0.73095703125,
+              "j": 0
+            },
+            {
+              "tick": 861,
+              "d": 3.904,
+              "l": 0,
+              "r": 0.33837890625,
+              "j": 0.328369140625
+            },
+            {
+              "tick": 862,
+              "d": 4.679,
+              "l": 0,
+              "r": 1,
+              "j": 0.620361328125
+            },
+            {
+              "tick": 863,
+              "d": 5.713,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 864,
+              "d": 7.858,
+              "l": 0,
+              "r": 1,
+              "j": 0.4921875
+            },
+            {
+              "tick": 865,
+              "d": 10.783,
+              "l": 0,
+              "r": 1,
+              "j": 0.45849609375
+            },
+            {
+              "tick": 866,
+              "d": 11.441,
+              "l": 0,
+              "r": 0.39501953125,
+              "j": 0
+            },
+            {
+              "tick": 867,
+              "d": 11.139,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 868,
+              "d": 10.745,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 869,
+              "d": 2.473,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 870,
+              "d": 11.676,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            }
+          ],
+          "room": {
+            "replaysThatMovedMe": 423,
+            "largestTiles": 23.89,
+            "catchUps": 0,
+            "snaps": 0,
+            "clockResets": 4,
+            "lateInputLeadTicks": 0.68
+          }
+        },
+        "scoreOnMyHud": 9,
+        "scoreOnTheOtherScreen": 9,
+        "seconds": 43.197,
+        "frames": 2593,
+        "againstHeldKey": 197,
+        "againstExamples": [
+          {
+            "atS": 0.6819000000953674,
+            "dx": -0.2889518737792969,
+            "dy": 0.02367401123046875,
+            "direction": 1
+          },
+          {
+            "atS": 0.6987000000476837,
+            "dx": -0.017436981201171875,
+            "dy": 0.03827095031738281,
+            "direction": 1
+          },
+          {
+            "atS": 2.466200000047684,
+            "dx": 1.4000015258789062,
+            "dy": 0,
+            "direction": -1
+          },
+          {
+            "atS": 2.481799999952316,
+            "dx": 1.4000015258789062,
+            "dy": 0,
+            "direction": -1
+          },
+          {
+            "atS": 2.4984000000953674,
+            "dx": 1.4000015258789062,
+            "dy": 0,
+            "direction": -1
+          },
+          {
+            "atS": 2.5152000000476837,
+            "dx": 0.7921638488769531,
+            "dy": -0.318939208984375,
+            "direction": -1
+          },
+          {
+            "atS": 2.5312999999523162,
+            "dx": 0.308197021484375,
+            "dy": 0.5015678405761719,
+            "direction": -1
+          },
+          {
+            "atS": 2.547700000047684,
+            "dx": 0.08676528930664062,
+            "dy": 0.0343475341796875,
+            "direction": -1
+          },
+          {
+            "atS": 2.5652000000476836,
+            "dx": 0.0368194580078125,
+            "dy": -0.17516326904296875,
+            "direction": -1
+          },
+          {
+            "atS": 2.5817999999523162,
+            "dx": 0.09381103515625,
+            "dy": -0.2515754699707031,
+            "direction": -1
+          },
+          {
+            "atS": 2.6152999999523163,
+            "dx": 0.05554962158203125,
+            "dy": -0.2743339538574219,
+            "direction": -1
+          },
+          {
+            "atS": 2.6309000000953673,
+            "dx": 0.056884765625,
+            "dy": -0.2578163146972656,
+            "direction": -1
+          }
+        ],
+        "goldVanishesMs": {
+          "n": 3,
+          "min": 33.2,
+          "median": 33.6,
+          "p90": 34.3,
+          "max": 34.3
+        },
+        "goldOnHudMs": {
+          "n": 3,
+          "min": 33.6,
+          "median": 84.2,
+          "p90": 182.6,
+          "max": 182.6
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 2,
+          "min": 15.9,
+          "median": 33.7,
+          "p90": 33.7,
+          "max": 33.7
+        },
+        "catches": 3,
+        "catchesWithNoMonsterOnScreen": 2,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 1,
+        "landedOnItAndStomped": 2,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 355,
+        "drawnBackSteps": 133,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 0.7,
+            "from": [
+              53.89,
+              26
+            ],
+            "to": [
+              54.89,
+              26
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.1,
+            "from": [
+              59.38,
+              30.32
+            ],
+            "to": [
+              59.81,
+              28.99
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.1,
+            "from": [
+              59.81,
+              28.99
+            ],
+            "to": [
+              60.31,
+              27.69
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.1,
+            "from": [
+              60.31,
+              27.69
+            ],
+            "to": [
+              60.93,
+              26.43
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.1,
+            "from": [
+              60.93,
+              26.43
+            ],
+            "to": [
+              61.6,
+              25.33
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 2.5,
+            "from": [
+              55.86,
+              40.08
+            ],
+            "to": [
+              57.26,
+              40.08
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 2.5,
+            "from": [
+              57.26,
+              40.08
+            ],
+            "to": [
+              58.66,
+              40.08
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 2.5,
+            "from": [
+              58.66,
+              40.08
+            ],
+            "to": [
+              60.06,
+              40.08
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "b-swept-loss-4",
+      "complete": true,
+      "trace": "b-swept-loss-4-lag300-loss0.05-jitter0-frames.json.gz",
+      "metrics": {
+        "s": 43.23,
+        "frames": 2595,
+        "cpu": 0,
+        "load": 11.4,
+        "late": 90,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 114,
+        "slides": 31,
+        "slidesOver1": 25,
+        "slideMaxNet": 12.95,
+        "respawns": 3,
+        "respawnsNotCut": 3,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.4,
+        "dtMax": 22,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 6,
+        "ms": 3567,
+        "worst": [
+          {
+            "s": 0.7,
+            "ms": 767,
+            "tiles": 20.6
+          },
+          {
+            "s": 19.1,
+            "ms": 350,
+            "tiles": 4.8
+          },
+          {
+            "s": 22.9,
+            "ms": 1050,
+            "tiles": 16.6
+          },
+          {
+            "s": 24.5,
+            "ms": 317,
+            "tiles": 9.6
+          },
+          {
+            "s": 24.9,
+            "ms": 533,
+            "tiles": 4.7
+          },
+          {
+            "s": 39,
+            "ms": 550,
+            "tiles": 6.8
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 6,
+        "ms": 3567,
+        "worst": [
+          {
+            "s": 0.7,
+            "ms": 767,
+            "tiles": 20.6
+          },
+          {
+            "s": 19.1,
+            "ms": 350,
+            "tiles": 4.8
+          },
+          {
+            "s": 22.9,
+            "ms": 1050,
+            "tiles": 16.6
+          },
+          {
+            "s": 24.5,
+            "ms": 317,
+            "tiles": 9.6
+          },
+          {
+            "s": 24.9,
+            "ms": 533,
+            "tiles": 4.7
+          },
+          {
+            "s": 39,
+            "ms": 550,
+            "tiles": 6.8
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 300,
+        "loss": 0.05,
+        "jitterMs": 0,
+        "role": "replica",
+        "wire": {
+          "delay": 300,
+          "loss": 0.05,
+          "jitter": 0,
+          "sent": 853,
+          "received": 921,
+          "late": 90,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          11.4,
+          16.9,
+          22.4
+        ],
+        "prediction": {
+          "ticks": 857,
+          "wrongTicks": 469,
+          "placements": 0,
+          "corrections": 18,
+          "correctionsOverHalfATile": 8,
+          "worstTiles": 30.16,
+          "last": [
+            {
+              "tick": 830,
+              "d": 0.837,
+              "l": 1,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 831,
+              "d": 0.457,
+              "l": 1,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 832,
+              "d": 0.849,
+              "l": 1,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 833,
+              "d": 0.355,
+              "l": 1,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 834,
+              "d": 0.588,
+              "l": 1,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 835,
+              "d": 0.902,
+              "l": 1,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 836,
+              "d": 0.127,
+              "l": 1,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 837,
+              "d": 0.719,
+              "l": 1,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 838,
+              "d": 0.837,
+              "l": 1,
+              "r": 0,
+              "j": 1
+            },
+            {
+              "tick": 871,
+              "d": 1.008,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 872,
+              "d": 0.959,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 873,
+              "d": 0.763,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            }
+          ],
+          "room": {
+            "replaysThatMovedMe": 313,
+            "largestTiles": 17.51,
+            "catchUps": 0,
+            "snaps": 0,
+            "clockResets": 4,
+            "lateInputLeadTicks": 1.77
+          }
+        },
+        "scoreOnMyHud": 7,
+        "scoreOnTheOtherScreen": 7,
+        "seconds": 43.229700000047686,
+        "frames": 2595,
+        "againstHeldKey": 110,
+        "againstExamples": [
+          {
+            "atS": 1.9317000000476836,
+            "dx": 0.041080474853515625,
+            "dy": 0.306854248046875,
+            "direction": -1
+          },
+          {
+            "atS": 1.9817000000476837,
+            "dx": 0.0278472900390625,
+            "dy": 0.36501312255859375,
+            "direction": -1
+          },
+          {
+            "atS": 2.0313999998569487,
+            "dx": 0.029911041259765625,
+            "dy": 0.21590805053710938,
+            "direction": -1
+          },
+          {
+            "atS": 2.0815999999046326,
+            "dx": 0.019954681396484375,
+            "dy": -0.40130615234375,
+            "direction": -1
+          },
+          {
+            "atS": 2.1310999999046327,
+            "dx": 0.033359527587890625,
+            "dy": -0.3364753723144531,
+            "direction": -1
+          },
+          {
+            "atS": 2.2982000000476837,
+            "dx": 0.217926025390625,
+            "dy": -0.17781829833984375,
+            "direction": -1
+          },
+          {
+            "atS": 3.066099999904633,
+            "dx": -0.9899482727050781,
+            "dy": -0.9899482727050781,
+            "direction": 1
+          },
+          {
+            "atS": 3.081299999952316,
+            "dx": -1.1146354675292969,
+            "dy": -0.8471031188964844,
+            "direction": 1
+          },
+          {
+            "atS": 3.0978999998569487,
+            "dx": -1.0969467163085938,
+            "dy": -0.8698921203613281,
+            "direction": 1
+          },
+          {
+            "atS": 3.1145999999046325,
+            "dx": -1.0842323303222656,
+            "dy": -0.8856849670410156,
+            "direction": 1
+          },
+          {
+            "atS": 3.1308999998569487,
+            "dx": -1.0862846374511719,
+            "dy": -0.8831672668457031,
+            "direction": 1
+          },
+          {
+            "atS": 3.1477000000476836,
+            "dx": -0.9557342529296875,
+            "dy": -0.8423805236816406,
+            "direction": 1
+          }
+        ],
+        "goldVanishesMs": {
+          "n": 2,
+          "min": 49.6,
+          "median": 49.8,
+          "p90": 49.8,
+          "max": 49.8
+        },
+        "goldOnHudMs": {
+          "n": 2,
+          "min": 33.1,
+          "median": 183.1,
+          "p90": 183.1,
+          "max": 183.1
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 2,
+          "min": 33.5,
+          "median": 49.9,
+          "p90": 49.9,
+          "max": 49.9
+        },
+        "catches": 3,
+        "catchesWithNoMonsterOnScreen": 2,
+        "landedOnItOnScreenButCaught": 1,
+        "caughtFromTheSide": 0,
+        "landedOnItAndStomped": 2,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 156,
+        "drawnBackSteps": 130,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 1,
+            "from": [
+              58.3,
+              20.97
+            ],
+            "to": [
+              56.9,
+              20.93
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1,
+            "from": [
+              56.9,
+              20.93
+            ],
+            "to": [
+              56.19,
+              20.9
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.3,
+            "from": [
+              57.23,
+              22.55
+            ],
+            "to": [
+              57.56,
+              23.91
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.3,
+            "from": [
+              57.56,
+              23.91
+            ],
+            "to": [
+              57.9,
+              25.27
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.3,
+            "from": [
+              57.9,
+              25.27
+            ],
+            "to": [
+              58.25,
+              26.62
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.3,
+            "from": [
+              58.25,
+              26.62
+            ],
+            "to": [
+              58.61,
+              27.98
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.3,
+            "from": [
+              58.61,
+              27.98
+            ],
+            "to": [
+              59.02,
+              29.31
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.3,
+            "from": [
+              59.02,
+              29.31
+            ],
+            "to": [
+              59.44,
+              30.65
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "b-swept-loss-5",
+      "complete": true,
+      "trace": "b-swept-loss-5-lag300-loss0.05-jitter0-frames.json.gz",
+      "metrics": {
+        "s": 43.21,
+        "frames": 2593,
+        "cpu": 0,
+        "load": 13.5,
+        "late": 100,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 262,
+        "slides": 52,
+        "slidesOver1": 44,
+        "slideMaxNet": 21.05,
+        "respawns": 1,
+        "respawnsNotCut": 1,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 1,
+        "over50": 0,
+        "dtP99": 18,
+        "dtMax": 35,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 8,
+        "ms": 5099,
+        "worst": [
+          {
+            "s": 0.3,
+            "ms": 1299,
+            "tiles": 8.6
+          },
+          {
+            "s": 2.3,
+            "ms": 766,
+            "tiles": 10.3
+          },
+          {
+            "s": 13.7,
+            "ms": 383,
+            "tiles": 5.1
+          },
+          {
+            "s": 14.4,
+            "ms": 450,
+            "tiles": 5.7
+          },
+          {
+            "s": 20.8,
+            "ms": 683,
+            "tiles": 9.6
+          },
+          {
+            "s": 21.7,
+            "ms": 433,
+            "tiles": 3.9
+          },
+          {
+            "s": 22.4,
+            "ms": 550,
+            "tiles": 7
+          },
+          {
+            "s": 32.1,
+            "ms": 535,
+            "tiles": 1.8
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 8,
+        "ms": 5099,
+        "worst": [
+          {
+            "s": 0.3,
+            "ms": 1299,
+            "tiles": 8.6
+          },
+          {
+            "s": 2.3,
+            "ms": 766,
+            "tiles": 10.3
+          },
+          {
+            "s": 13.7,
+            "ms": 383,
+            "tiles": 5.1
+          },
+          {
+            "s": 14.4,
+            "ms": 450,
+            "tiles": 5.7
+          },
+          {
+            "s": 20.8,
+            "ms": 683,
+            "tiles": 9.6
+          },
+          {
+            "s": 21.7,
+            "ms": 433,
+            "tiles": 3.9
+          },
+          {
+            "s": 22.4,
+            "ms": 550,
+            "tiles": 7
+          },
+          {
+            "s": 32.1,
+            "ms": 535,
+            "tiles": 1.8
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 300,
+        "loss": 0.05,
+        "jitterMs": 0,
+        "role": "replica",
+        "wire": {
+          "delay": 300,
+          "loss": 0.05,
+          "jitter": 0,
+          "sent": 890,
+          "received": 921,
+          "late": 100,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          13.5,
+          16.6,
+          21.9
+        ],
+        "prediction": {
+          "ticks": 865,
+          "wrongTicks": 705,
+          "placements": 1,
+          "corrections": 11,
+          "correctionsOverHalfATile": 5,
+          "worstTiles": 31.72,
+          "last": [
+            {
+              "tick": 876,
+              "d": 26.339,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 877,
+              "d": 27.43,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 878,
+              "d": 28.412,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 879,
+              "d": 29.284,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 880,
+              "d": 30.046,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 881,
+              "d": 30.674,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 882,
+              "d": 31.155,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 883,
+              "d": 31.489,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 884,
+              "d": 31.676,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 885,
+              "d": 31.716,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 886,
+              "d": 20.163,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 887,
+              "d": 3.455,
+              "l": 0,
+              "r": 0,
+              "j": 0
+            }
+          ],
+          "room": {
+            "replaysThatMovedMe": 490,
+            "largestTiles": 22.78,
+            "catchUps": 0,
+            "snaps": 0,
+            "clockResets": 3,
+            "lateInputLeadTicks": 0.5
+          }
+        },
+        "scoreOnMyHud": 4,
+        "scoreOnTheOtherScreen": 4,
+        "seconds": 43.210900000095364,
+        "frames": 2593,
+        "againstHeldKey": 88,
+        "againstExamples": [
+          {
+            "atS": 2.179100000143051,
+            "dx": 0.01964569091796875,
+            "dy": 0.19807052612304688,
+            "direction": -1
+          },
+          {
+            "atS": 2.2292000000476837,
+            "dx": 0.019962310791015625,
+            "dy": 0.2469024658203125,
+            "direction": -1
+          },
+          {
+            "atS": 2.2792000000476835,
+            "dx": 0.016407012939453125,
+            "dy": 0.2956428527832031,
+            "direction": -1
+          },
+          {
+            "atS": 2.3285,
+            "dx": 0.0201568603515625,
+            "dy": 0.3480262756347656,
+            "direction": -1
+          },
+          {
+            "atS": 3.3785,
+            "dx": 0.07877731323242188,
+            "dy": 0.5650253295898438,
+            "direction": -1
+          },
+          {
+            "atS": 3.3952000000476836,
+            "dx": 0.02587127685546875,
+            "dy": 0.14030838012695312,
+            "direction": -1
+          },
+          {
+            "atS": 3.5284000000953673,
+            "dx": 0.03289794921875,
+            "dy": 0.08453369140625,
+            "direction": -1
+          },
+          {
+            "atS": 11.662200000047683,
+            "dx": -0.3573589324951172,
+            "dy": -0.14962387084960938,
+            "direction": 1
+          },
+          {
+            "atS": 11.678400000095367,
+            "dx": -1.3999958038330078,
+            "dy": -0.0033416748046875,
+            "direction": 1
+          },
+          {
+            "atS": 11.6955,
+            "dx": -1.3999881744384766,
+            "dy": 0.00585174560546875,
+            "direction": 1
+          },
+          {
+            "atS": 11.711400000095367,
+            "dx": -1.3997917175292969,
+            "dy": 0.024097442626953125,
+            "direction": 1
+          },
+          {
+            "atS": 11.728799999952317,
+            "dx": -1.3630237579345703,
+            "dy": 0.061916351318359375,
+            "direction": 1
+          }
+        ],
+        "goldVanishesMs": {
+          "n": 1,
+          "min": 33.8,
+          "median": 33.8,
+          "p90": 33.8,
+          "max": 33.8
+        },
+        "goldOnHudMs": {
+          "n": 1,
+          "min": 116.4,
+          "median": 116.4,
+          "p90": 116.4,
+          "max": 116.4
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "catches": 1,
+        "catchesWithNoMonsterOnScreen": 0,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 1,
+        "landedOnItAndStomped": 0,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 317,
+        "drawnBackSteps": 109,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 1.1,
+            "from": [
+              55.49,
+              21.26
+            ],
+            "to": [
+              56.62,
+              22.08
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.1,
+            "from": [
+              56.62,
+              22.08
+            ],
+            "to": [
+              57.78,
+              22.87
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.2,
+            "from": [
+              57.78,
+              22.87
+            ],
+            "to": [
+              58.88,
+              23.74
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.2,
+            "from": [
+              58.88,
+              23.74
+            ],
+            "to": [
+              59.88,
+              24.72
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.2,
+            "from": [
+              59.88,
+              24.72
+            ],
+            "to": [
+              60.75,
+              25.82
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.2,
+            "from": [
+              60.75,
+              25.82
+            ],
+            "to": [
+              61.43,
+              27.01
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 3,
+            "from": [
+              59.39,
+              37.07
+            ],
+            "to": [
+              58.01,
+              37.3
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 3,
+            "from": [
+              58.01,
+              37.3
+            ],
+            "to": [
+              56.63,
+              37.53
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "c-swept-jit-0",
+      "complete": true,
+      "trace": "c-swept-jit-0-lag150-loss0-jitter100-frames.json.gz",
+      "metrics": {
+        "s": 42.93,
+        "frames": 2577,
+        "cpu": 0,
+        "load": 20.8,
+        "late": 0,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 1,
+        "jumpMax": 2.42,
+        "skips": 1,
+        "slides": 1,
+        "slidesOver1": 1,
+        "slideMaxNet": 2.42,
+        "respawns": 4,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.5,
+        "dtMax": 30,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 0,
+        "ms": 0,
+        "worst": []
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 0,
+        "ms": 0,
+        "worst": []
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 150,
+        "loss": 0,
+        "jitterMs": 100,
+        "role": "replica",
+        "wire": {
+          "delay": 150,
+          "loss": 0,
+          "jitter": 100,
+          "sent": 865,
+          "received": 891,
+          "late": 0,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          20.8,
+          26.7,
+          27.7
+        ],
+        "prediction": null,
+        "scoreOnMyHud": 5,
+        "scoreOnTheOtherScreen": 5,
+        "seconds": 42.93240000009537,
+        "frames": 2577,
+        "againstHeldKey": 0,
+        "againstExamples": [],
+        "goldVanishesMs": {
+          "n": 3,
+          "min": 267,
+          "median": 333.2,
+          "p90": 383.4,
+          "max": 383.4
+        },
+        "goldOnHudMs": {
+          "n": 3,
+          "min": 450,
+          "median": 466.3,
+          "p90": 666.8,
+          "max": 666.8
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 1,
+          "min": 248.3,
+          "median": 248.3,
+          "p90": 248.3,
+          "max": 248.3
+        },
+        "catches": 5,
+        "catchesWithNoMonsterOnScreen": 3,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 2,
+        "landedOnItAndStomped": 1,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 0,
+        "drawnBackSteps": 3,
+        "firstOddFrames": [],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "c-swept-jit-1",
+      "complete": true,
+      "trace": "c-swept-jit-1-lag150-loss0-jitter100-frames.json.gz",
+      "metrics": {
+        "s": 42.98,
+        "frames": 2580,
+        "cpu": 0,
+        "load": 22.1,
+        "late": 0,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 0,
+        "slides": 0,
+        "slidesOver1": 0,
+        "slideMaxNet": 0,
+        "respawns": 4,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.7,
+        "dtMax": 22,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 0,
+        "ms": 0,
+        "worst": []
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 0,
+        "ms": 0,
+        "worst": []
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 150,
+        "loss": 0,
+        "jitterMs": 100,
+        "role": "replica",
+        "wire": {
+          "delay": 150,
+          "loss": 0,
+          "jitter": 100,
+          "sent": 856,
+          "received": 889,
+          "late": 0,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          22.1,
+          26,
+          27.4
+        ],
+        "prediction": null,
+        "scoreOnMyHud": 4,
+        "scoreOnTheOtherScreen": 5,
+        "seconds": 42.98129999995231,
+        "frames": 2580,
+        "againstHeldKey": 0,
+        "againstExamples": [],
+        "goldVanishesMs": {
+          "n": 2,
+          "min": 332.3,
+          "median": 433.3,
+          "p90": 433.3,
+          "max": 433.3
+        },
+        "goldOnHudMs": {
+          "n": 2,
+          "min": 549.2,
+          "median": 733.5,
+          "p90": 733.5,
+          "max": 733.5
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 1,
+          "min": 466,
+          "median": 466,
+          "p90": 466,
+          "max": 466
+        },
+        "catches": 4,
+        "catchesWithNoMonsterOnScreen": 3,
+        "landedOnItOnScreenButCaught": 1,
+        "caughtFromTheSide": 0,
+        "landedOnItAndStomped": 1,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 0,
+        "drawnBackSteps": 2,
+        "firstOddFrames": [],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "c-swept-jit-2",
+      "complete": true,
+      "trace": "c-swept-jit-2-lag150-loss0-jitter100-frames.json.gz",
+      "metrics": {
+        "s": 42.95,
+        "frames": 2578,
+        "cpu": 0,
+        "load": 21.5,
+        "late": 0,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 1,
+        "slides": 1,
+        "slidesOver1": 1,
+        "slideMaxNet": 1.08,
+        "respawns": 6,
+        "respawnsNotCut": 1,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.8,
+        "dtMax": 22,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 1,
+        "ms": 568,
+        "worst": [
+          {
+            "s": 11.1,
+            "ms": 568,
+            "tiles": 5.2
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 1,
+        "ms": 568,
+        "worst": [
+          {
+            "s": 11.1,
+            "ms": 568,
+            "tiles": 5.2
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 150,
+        "loss": 0,
+        "jitterMs": 100,
+        "role": "replica",
+        "wire": {
+          "delay": 150,
+          "loss": 0,
+          "jitter": 100,
+          "sent": 756,
+          "received": 890,
+          "late": 0,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          21.5,
+          25.4,
+          27
+        ],
+        "prediction": null,
+        "scoreOnMyHud": 6,
+        "scoreOnTheOtherScreen": 6,
+        "seconds": 42.94840000009537,
+        "frames": 2578,
+        "againstHeldKey": 0,
+        "againstExamples": [],
+        "goldVanishesMs": {
+          "n": 5,
+          "min": 283.4,
+          "median": 416.7,
+          "p90": 516.1,
+          "max": 516.1
+        },
+        "goldOnHudMs": {
+          "n": 5,
+          "min": 599.6,
+          "median": 682.5,
+          "p90": 716.5,
+          "max": 716.5
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "catches": 6,
+        "catchesWithNoMonsterOnScreen": 5,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 1,
+        "landedOnItAndStomped": 0,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 20,
+        "drawnBackSteps": 1,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 19.7,
+            "from": [
+              41.08,
+              38
+            ],
+            "to": [
+              40,
+              38
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 30.9,
+            "from": [
+              26.13,
+              36.02
+            ],
+            "to": [
+              25.63,
+              35.92
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 31.1,
+            "from": [
+              23.88,
+              36
+            ],
+            "to": [
+              23.38,
+              36
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 34.2,
+            "from": [
+              22.46,
+              36
+            ],
+            "to": [
+              22.95,
+              36
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 34.3,
+            "from": [
+              24.2,
+              36
+            ],
+            "to": [
+              24.7,
+              36
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 34.6,
+            "from": [
+              28.2,
+              35.74
+            ],
+            "to": [
+              28.7,
+              36.08
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 34.6,
+            "from": [
+              28.7,
+              36.08
+            ],
+            "to": [
+              29.2,
+              36.49
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 34.7,
+            "from": [
+              30.2,
+              37.5
+            ],
+            "to": [
+              30.7,
+              38.1
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "c-swept-jit-3",
+      "complete": true,
+      "trace": "c-swept-jit-3-lag150-loss0-jitter100-frames.json.gz",
+      "metrics": {
+        "s": 42.93,
+        "frames": 2577,
+        "cpu": 0,
+        "load": 22.6,
+        "late": 0,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 0,
+        "slides": 0,
+        "slidesOver1": 0,
+        "slideMaxNet": 0,
+        "respawns": 4,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.5,
+        "dtMax": 18,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 0,
+        "ms": 0,
+        "worst": []
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 0,
+        "ms": 0,
+        "worst": []
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 150,
+        "loss": 0,
+        "jitterMs": 100,
+        "role": "replica",
+        "wire": {
+          "delay": 150,
+          "loss": 0,
+          "jitter": 100,
+          "sent": 855,
+          "received": 890,
+          "late": 0,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          22.6,
+          24.7,
+          26.7
+        ],
+        "prediction": null,
+        "scoreOnMyHud": 2,
+        "scoreOnTheOtherScreen": 2,
+        "seconds": 42.93079999995231,
+        "frames": 2577,
+        "againstHeldKey": 0,
+        "againstExamples": [],
+        "goldVanishesMs": {
+          "n": 2,
+          "min": 16.7,
+          "median": 416.1,
+          "p90": 416.1,
+          "max": 416.1
+        },
+        "goldOnHudMs": {
+          "n": 1,
+          "min": 650,
+          "median": 650,
+          "p90": 650,
+          "max": 650
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "catches": 4,
+        "catchesWithNoMonsterOnScreen": 3,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 1,
+        "landedOnItAndStomped": 0,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 65,
+        "drawnBackSteps": 2,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 21.2,
+            "from": [
+              21.61,
+              36
+            ],
+            "to": [
+              21.8,
+              35.22
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 22.5,
+            "from": [
+              19,
+              36
+            ],
+            "to": [
+              19,
+              35.22
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 22.7,
+            "from": [
+              19,
+              36
+            ],
+            "to": [
+              19,
+              35.22
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 25,
+            "from": [
+              21.82,
+              36
+            ],
+            "to": [
+              22.27,
+              36
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 25.1,
+            "from": [
+              23.75,
+              36
+            ],
+            "to": [
+              24.25,
+              36
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 25.2,
+            "from": [
+              24.5,
+              36
+            ],
+            "to": [
+              25,
+              36
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 25.4,
+            "from": [
+              27.25,
+              35.05
+            ],
+            "to": [
+              27.75,
+              35.16
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 25.5,
+            "from": [
+              29.25,
+              35.9
+            ],
+            "to": [
+              29.75,
+              36.27
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "c-swept-jit-4",
+      "complete": true,
+      "trace": "c-swept-jit-4-lag150-loss0-jitter100-frames.json.gz",
+      "metrics": {
+        "s": 42.91,
+        "frames": 2576,
+        "cpu": 0,
+        "load": 25.7,
+        "late": 0,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 0,
+        "slides": 0,
+        "slidesOver1": 0,
+        "slideMaxNet": 0,
+        "respawns": 1,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.7,
+        "dtMax": 21,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 0,
+        "ms": 0,
+        "worst": []
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 0,
+        "ms": 0,
+        "worst": []
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 150,
+        "loss": 0,
+        "jitterMs": 100,
+        "role": "replica",
+        "wire": {
+          "delay": 150,
+          "loss": 0,
+          "jitter": 100,
+          "sent": 864,
+          "received": 889,
+          "late": 0,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          25.7,
+          25.1,
+          26.7
+        ],
+        "prediction": null,
+        "scoreOnMyHud": 6,
+        "scoreOnTheOtherScreen": 6,
+        "seconds": 42.91470000004768,
+        "frames": 2576,
+        "againstHeldKey": 0,
+        "againstExamples": [],
+        "goldVanishesMs": {
+          "n": 3,
+          "min": 349.7,
+          "median": 449.5,
+          "p90": 466.5,
+          "max": 466.5
+        },
+        "goldOnHudMs": {
+          "n": 3,
+          "min": 533.4,
+          "median": 700.6,
+          "p90": 732.9,
+          "max": 732.9
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 2,
+          "min": 399.7,
+          "median": 481.9,
+          "p90": 481.9,
+          "max": 481.9
+        },
+        "catches": 1,
+        "catchesWithNoMonsterOnScreen": 0,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 1,
+        "landedOnItAndStomped": 2,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 0,
+        "drawnBackSteps": 0,
+        "firstOddFrames": [],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "c-swept-jit-5",
+      "complete": true,
+      "trace": "c-swept-jit-5-lag150-loss0-jitter100-frames.json.gz",
+      "metrics": {
+        "s": 42.91,
+        "frames": 2576,
+        "cpu": 0,
+        "load": 19.2,
+        "late": 0,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 0,
+        "slides": 0,
+        "slidesOver1": 0,
+        "slideMaxNet": 0,
+        "respawns": 0,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.4,
+        "dtMax": 18,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 0,
+        "ms": 0,
+        "worst": []
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 0,
+        "ms": 0,
+        "worst": []
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 150,
+        "loss": 0,
+        "jitterMs": 100,
+        "role": "replica",
+        "wire": {
+          "delay": 150,
+          "loss": 0,
+          "jitter": 100,
+          "sent": 854,
+          "received": 891,
+          "late": 0,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          19.2,
+          23.6,
+          26.1
+        ],
+        "prediction": null,
+        "scoreOnMyHud": 5,
+        "scoreOnTheOtherScreen": 5,
+        "seconds": 42.914900000095365,
+        "frames": 2576,
+        "againstHeldKey": 0,
+        "againstExamples": [],
+        "goldVanishesMs": {
+          "n": 2,
+          "min": 416.7,
+          "median": 433.5,
+          "p90": 433.5,
+          "max": 433.5
+        },
+        "goldOnHudMs": {
+          "n": 2,
+          "min": 433.4,
+          "median": 700.2,
+          "p90": 700.2,
+          "max": 700.2
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 2,
+          "min": 366.5,
+          "median": 499.9,
+          "p90": 499.9,
+          "max": 499.9
+        },
+        "catches": 0,
+        "catchesWithNoMonsterOnScreen": 0,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 0,
+        "landedOnItAndStomped": 2,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 0,
+        "drawnBackSteps": 0,
+        "firstOddFrames": [],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "c-swept-long-0",
+      "complete": true,
+      "trace": "c-swept-long-0-lag100-loss0.02-jitter40-frames.json.gz",
+      "metrics": {
+        "s": 305.8,
+        "frames": 18350,
+        "cpu": 0,
+        "load": 8.1,
+        "late": 218,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 1,
+        "jumpMax": 2.21,
+        "skips": 1,
+        "slides": 1,
+        "slidesOver1": 1,
+        "slideMaxNet": 2.21,
+        "respawns": 25,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.7,
+        "dtMax": 26,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 11,
+        "ms": 6299,
+        "worst": [
+          {
+            "s": 17.6,
+            "ms": 367,
+            "tiles": 4.6
+          },
+          {
+            "s": 33,
+            "ms": 684,
+            "tiles": 6.7
+          },
+          {
+            "s": 33.8,
+            "ms": 433,
+            "tiles": 5.1
+          },
+          {
+            "s": 114,
+            "ms": 967,
+            "tiles": 6.7
+          },
+          {
+            "s": 122.3,
+            "ms": 733,
+            "tiles": 8.6
+          },
+          {
+            "s": 246.4,
+            "ms": 416,
+            "tiles": 4.8
+          },
+          {
+            "s": 263.2,
+            "ms": 817,
+            "tiles": 5.8
+          },
+          {
+            "s": 269.3,
+            "ms": 717,
+            "tiles": 5
+          },
+          {
+            "s": 278.5,
+            "ms": 517,
+            "tiles": 4.6
+          },
+          {
+            "s": 284.7,
+            "ms": 334,
+            "tiles": 3.4
+          },
+          {
+            "s": 302.3,
+            "ms": 317,
+            "tiles": 3.9
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 11,
+        "ms": 6299,
+        "worst": [
+          {
+            "s": 17.6,
+            "ms": 367,
+            "tiles": 4.6
+          },
+          {
+            "s": 33,
+            "ms": 684,
+            "tiles": 6.7
+          },
+          {
+            "s": 33.8,
+            "ms": 433,
+            "tiles": 5.1
+          },
+          {
+            "s": 114,
+            "ms": 967,
+            "tiles": 6.7
+          },
+          {
+            "s": 122.3,
+            "ms": 733,
+            "tiles": 8.6
+          },
+          {
+            "s": 246.4,
+            "ms": 416,
+            "tiles": 4.8
+          },
+          {
+            "s": 263.2,
+            "ms": 817,
+            "tiles": 5.8
+          },
+          {
+            "s": 269.3,
+            "ms": 717,
+            "tiles": 5
+          },
+          {
+            "s": 278.5,
+            "ms": 517,
+            "tiles": 4.6
+          },
+          {
+            "s": 284.7,
+            "ms": 334,
+            "tiles": 3.4
+          },
+          {
+            "s": 302.3,
+            "ms": 317,
+            "tiles": 3.9
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 100,
+        "loss": 0.02,
+        "jitterMs": 40,
+        "role": "replica",
+        "wire": {
+          "delay": 100,
+          "loss": 0.02,
+          "jitter": 40,
+          "sent": 5395,
+          "received": 6281,
+          "late": 218,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          8.1,
+          12.5,
+          18.5
+        ],
+        "prediction": null,
+        "scoreOnMyHud": 4,
+        "scoreOnTheOtherScreen": 4,
+        "seconds": 305.80380000019073,
+        "frames": 18350,
+        "againstHeldKey": 0,
+        "againstExamples": [],
+        "goldVanishesMs": {
+          "n": 25,
+          "min": 17.4,
+          "median": 284.1,
+          "p90": 382.9,
+          "max": 766.1
+        },
+        "goldOnHudMs": {
+          "n": 24,
+          "min": 283.4,
+          "median": 549.1,
+          "p90": 650.3,
+          "max": 933.5
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 3,
+          "min": 199.1,
+          "median": 266.6,
+          "p90": 283,
+          "max": 283
+        },
+        "catches": 25,
+        "catchesWithNoMonsterOnScreen": 19,
+        "landedOnItOnScreenButCaught": 2,
+        "caughtFromTheSide": 4,
+        "landedOnItAndStomped": 3,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 42,
+        "drawnBackSteps": 10,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 210.9,
+            "from": [
+              58.21,
+              40
+            ],
+            "to": [
+              57.74,
+              40.02
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 211.6,
+            "from": [
+              56.22,
+              42
+            ],
+            "to": [
+              56,
+              41.22
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 212.2,
+            "from": [
+              55.52,
+              41
+            ],
+            "to": [
+              55.65,
+              40.22
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 214.5,
+            "from": [
+              9.25,
+              27.74
+            ],
+            "to": [
+              9.75,
+              28.08
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 214.5,
+            "from": [
+              9.75,
+              28.08
+            ],
+            "to": [
+              10.25,
+              28.49
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 214.6,
+            "from": [
+              11.75,
+              30.1
+            ],
+            "to": [
+              12.25,
+              30.77
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 214.9,
+            "from": [
+              13,
+              36
+            ],
+            "to": [
+              13,
+              35.22
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 215.8,
+            "from": [
+              16.22,
+              31
+            ],
+            "to": [
+              16.69,
+              31
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "c-swept-loss-0",
+      "complete": true,
+      "trace": "c-swept-loss-0-lag300-loss0.05-jitter0-frames.json.gz",
+      "metrics": {
+        "s": 43.21,
+        "frames": 2594,
+        "cpu": 0,
+        "load": 14.1,
+        "late": 84,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 0,
+        "slides": 0,
+        "slidesOver1": 0,
+        "slideMaxNet": 0,
+        "respawns": 3,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.5,
+        "dtMax": 19,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 10,
+        "ms": 6999,
+        "worst": [
+          {
+            "s": 0.2,
+            "ms": 516,
+            "tiles": 5.6
+          },
+          {
+            "s": 1.1,
+            "ms": 550,
+            "tiles": 4.7
+          },
+          {
+            "s": 14.5,
+            "ms": 1000,
+            "tiles": 6.2
+          },
+          {
+            "s": 16.7,
+            "ms": 1017,
+            "tiles": 6
+          },
+          {
+            "s": 20.8,
+            "ms": 567,
+            "tiles": 5.5
+          },
+          {
+            "s": 28.1,
+            "ms": 467,
+            "tiles": 7.7
+          },
+          {
+            "s": 29.6,
+            "ms": 850,
+            "tiles": 8.5
+          },
+          {
+            "s": 34.5,
+            "ms": 600,
+            "tiles": 10.7
+          },
+          {
+            "s": 40.3,
+            "ms": 617,
+            "tiles": 9.3
+          },
+          {
+            "s": 41.7,
+            "ms": 817,
+            "tiles": 5.8
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 10,
+        "ms": 6999,
+        "worst": [
+          {
+            "s": 0.2,
+            "ms": 516,
+            "tiles": 5.6
+          },
+          {
+            "s": 1.1,
+            "ms": 550,
+            "tiles": 4.7
+          },
+          {
+            "s": 14.5,
+            "ms": 1000,
+            "tiles": 6.2
+          },
+          {
+            "s": 16.7,
+            "ms": 1017,
+            "tiles": 6
+          },
+          {
+            "s": 20.8,
+            "ms": 567,
+            "tiles": 5.5
+          },
+          {
+            "s": 28.1,
+            "ms": 467,
+            "tiles": 7.7
+          },
+          {
+            "s": 29.6,
+            "ms": 850,
+            "tiles": 8.5
+          },
+          {
+            "s": 34.5,
+            "ms": 600,
+            "tiles": 10.7
+          },
+          {
+            "s": 40.3,
+            "ms": 617,
+            "tiles": 9.3
+          },
+          {
+            "s": 41.7,
+            "ms": 817,
+            "tiles": 5.8
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 300,
+        "loss": 0.05,
+        "jitterMs": 0,
+        "role": "replica",
+        "wire": {
+          "delay": 300,
+          "loss": 0.05,
+          "jitter": 0,
+          "sent": 838,
+          "received": 898,
+          "late": 84,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          14.1,
+          21.4,
+          25.1
+        ],
+        "prediction": null,
+        "scoreOnMyHud": 4,
+        "scoreOnTheOtherScreen": 4,
+        "seconds": 43.21389999985695,
+        "frames": 2594,
+        "againstHeldKey": 0,
+        "againstExamples": [],
+        "goldVanishesMs": {
+          "n": 5,
+          "min": 66.6,
+          "median": 850,
+          "p90": 1083.1,
+          "max": 1083.1
+        },
+        "goldOnHudMs": {
+          "n": 4,
+          "min": 849.3,
+          "median": 1166.8,
+          "p90": 1200.6,
+          "max": 1200.6
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "catches": 3,
+        "catchesWithNoMonsterOnScreen": 2,
+        "landedOnItOnScreenButCaught": 1,
+        "caughtFromTheSide": 0,
+        "landedOnItAndStomped": 0,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 0,
+        "drawnBackSteps": 2,
+        "firstOddFrames": [],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "c-swept-loss-1",
+      "complete": true,
+      "trace": "c-swept-loss-1-lag300-loss0.05-jitter0-frames.json.gz",
+      "metrics": {
+        "s": 43.23,
+        "frames": 2595,
+        "cpu": 0,
+        "load": 14.4,
+        "late": 74,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 0,
+        "slides": 0,
+        "slidesOver1": 0,
+        "slideMaxNet": 0,
+        "respawns": 11,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.5,
+        "dtMax": 20,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 7,
+        "ms": 4900,
+        "worst": [
+          {
+            "s": 0.2,
+            "ms": 534,
+            "tiles": 4.8
+          },
+          {
+            "s": 0.8,
+            "ms": 617,
+            "tiles": 6.5
+          },
+          {
+            "s": 2.6,
+            "ms": 1183,
+            "tiles": 5.5
+          },
+          {
+            "s": 9.2,
+            "ms": 733,
+            "tiles": 5.7
+          },
+          {
+            "s": 38.8,
+            "ms": 884,
+            "tiles": 7
+          },
+          {
+            "s": 41.3,
+            "ms": 450,
+            "tiles": 5
+          },
+          {
+            "s": 41.9,
+            "ms": 500,
+            "tiles": 4.7
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 7,
+        "ms": 4900,
+        "worst": [
+          {
+            "s": 0.2,
+            "ms": 534,
+            "tiles": 4.8
+          },
+          {
+            "s": 0.8,
+            "ms": 617,
+            "tiles": 6.5
+          },
+          {
+            "s": 2.6,
+            "ms": 1183,
+            "tiles": 5.5
+          },
+          {
+            "s": 9.2,
+            "ms": 733,
+            "tiles": 5.7
+          },
+          {
+            "s": 38.8,
+            "ms": 884,
+            "tiles": 7
+          },
+          {
+            "s": 41.3,
+            "ms": 450,
+            "tiles": 5
+          },
+          {
+            "s": 41.9,
+            "ms": 500,
+            "tiles": 4.7
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 300,
+        "loss": 0.05,
+        "jitterMs": 0,
+        "role": "replica",
+        "wire": {
+          "delay": 300,
+          "loss": 0.05,
+          "jitter": 0,
+          "sent": 715,
+          "received": 910,
+          "late": 74,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          14.4,
+          20.4,
+          24.5
+        ],
+        "prediction": null,
+        "scoreOnMyHud": 4,
+        "scoreOnTheOtherScreen": 4,
+        "seconds": 43.23159999990463,
+        "frames": 2595,
+        "againstHeldKey": 0,
+        "againstExamples": [],
+        "goldVanishesMs": {
+          "n": 3,
+          "min": 732.8,
+          "median": 1066.9,
+          "p90": 1766.7,
+          "max": 1766.7
+        },
+        "goldOnHudMs": {
+          "n": 3,
+          "min": 766.3,
+          "median": 1066.9,
+          "p90": 1933.3,
+          "max": 1933.3
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "catches": 11,
+        "catchesWithNoMonsterOnScreen": 6,
+        "landedOnItOnScreenButCaught": 2,
+        "caughtFromTheSide": 3,
+        "landedOnItAndStomped": 0,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 0,
+        "drawnBackSteps": 8,
+        "firstOddFrames": [],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "c-swept-loss-2",
+      "complete": true,
+      "trace": "c-swept-loss-2-lag300-loss0.05-jitter0-frames.json.gz",
+      "metrics": {
+        "s": 43.22,
+        "frames": 2594,
+        "cpu": 0,
+        "load": 12.2,
+        "late": 112,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 0,
+        "slides": 0,
+        "slidesOver1": 0,
+        "slideMaxNet": 0,
+        "respawns": 4,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.4,
+        "dtMax": 20,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 12,
+        "ms": 8735,
+        "worst": [
+          {
+            "s": 0.3,
+            "ms": 966,
+            "tiles": 9.3
+          },
+          {
+            "s": 4,
+            "ms": 668,
+            "tiles": 5.7
+          },
+          {
+            "s": 5,
+            "ms": 716,
+            "tiles": 7.3
+          },
+          {
+            "s": 5.9,
+            "ms": 1017,
+            "tiles": 9.7
+          },
+          {
+            "s": 14.2,
+            "ms": 750,
+            "tiles": 3.4
+          },
+          {
+            "s": 16.4,
+            "ms": 750,
+            "tiles": 5.3
+          },
+          {
+            "s": 20.4,
+            "ms": 567,
+            "tiles": 8.8
+          },
+          {
+            "s": 21.4,
+            "ms": 550,
+            "tiles": 5.6
+          },
+          {
+            "s": 22.6,
+            "ms": 567,
+            "tiles": 9.3
+          },
+          {
+            "s": 23.9,
+            "ms": 483,
+            "tiles": 6.7
+          },
+          {
+            "s": 35.4,
+            "ms": 1017,
+            "tiles": 10.5
+          },
+          {
+            "s": 40.4,
+            "ms": 683,
+            "tiles": 6.7
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 12,
+        "ms": 8735,
+        "worst": [
+          {
+            "s": 0.3,
+            "ms": 966,
+            "tiles": 9.3
+          },
+          {
+            "s": 4,
+            "ms": 668,
+            "tiles": 5.7
+          },
+          {
+            "s": 5,
+            "ms": 716,
+            "tiles": 7.3
+          },
+          {
+            "s": 5.9,
+            "ms": 1017,
+            "tiles": 9.7
+          },
+          {
+            "s": 14.2,
+            "ms": 750,
+            "tiles": 3.4
+          },
+          {
+            "s": 16.4,
+            "ms": 750,
+            "tiles": 5.3
+          },
+          {
+            "s": 20.4,
+            "ms": 567,
+            "tiles": 8.8
+          },
+          {
+            "s": 21.4,
+            "ms": 550,
+            "tiles": 5.6
+          },
+          {
+            "s": 22.6,
+            "ms": 567,
+            "tiles": 9.3
+          },
+          {
+            "s": 23.9,
+            "ms": 483,
+            "tiles": 6.7
+          },
+          {
+            "s": 35.4,
+            "ms": 1017,
+            "tiles": 10.5
+          },
+          {
+            "s": 40.4,
+            "ms": 683,
+            "tiles": 6.7
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 300,
+        "loss": 0.05,
+        "jitterMs": 0,
+        "role": "replica",
+        "wire": {
+          "delay": 300,
+          "loss": 0.05,
+          "jitter": 0,
+          "sent": 743,
+          "received": 900,
+          "late": 112,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          12.2,
+          18.8,
+          23.7
+        ],
+        "prediction": null,
+        "scoreOnMyHud": 5,
+        "scoreOnTheOtherScreen": 5,
+        "seconds": 43.215299999952315,
+        "frames": 2594,
+        "againstHeldKey": 0,
+        "againstExamples": [],
+        "goldVanishesMs": {
+          "n": 4,
+          "min": 666.7,
+          "median": 1317.1,
+          "p90": 1833.5,
+          "max": 1833.5
+        },
+        "goldOnHudMs": {
+          "n": 4,
+          "min": 1000.5,
+          "median": 1500.3,
+          "p90": 2000,
+          "max": 2000
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 1,
+          "min": 1000.1,
+          "median": 1000.1,
+          "p90": 1000.1,
+          "max": 1000.1
+        },
+        "catches": 4,
+        "catchesWithNoMonsterOnScreen": 4,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 0,
+        "landedOnItAndStomped": 1,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 8,
+        "drawnBackSteps": 2,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 39.3,
+            "from": [
+              45.08,
+              27.49
+            ],
+            "to": [
+              44.58,
+              27.96
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 39.4,
+            "from": [
+              43.08,
+              29.77
+            ],
+            "to": [
+              42.58,
+              30.51
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 39.6,
+            "from": [
+              40.83,
+              33.6
+            ],
+            "to": [
+              40.33,
+              34.62
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 39.7,
+            "from": [
+              39.58,
+              36.29
+            ],
+            "to": [
+              39.08,
+              37.48
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 39.8,
+            "from": [
+              37.83,
+              36.85
+            ],
+            "to": [
+              37.33,
+              36.16
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 40,
+            "from": [
+              34.58,
+              33.55
+            ],
+            "to": [
+              34.08,
+              33.29
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 41,
+            "from": [
+              30.58,
+              41
+            ],
+            "to": [
+              30.11,
+              41
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 41.1,
+            "from": [
+              30.11,
+              41
+            ],
+            "to": [
+              29.61,
+              41
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "c-swept-loss-3",
+      "complete": true,
+      "trace": "c-swept-loss-3-lag300-loss0.05-jitter0-frames.json.gz",
+      "metrics": {
+        "s": 43.21,
+        "frames": 2594,
+        "cpu": 0,
+        "load": 13.1,
+        "late": 86,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 0,
+        "slides": 0,
+        "slidesOver1": 0,
+        "slideMaxNet": 0,
+        "respawns": 2,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.3,
+        "dtMax": 20,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 11,
+        "ms": 5116,
+        "worst": [
+          {
+            "s": 3.8,
+            "ms": 517,
+            "tiles": 5
+          },
+          {
+            "s": 8.6,
+            "ms": 316,
+            "tiles": 5.4
+          },
+          {
+            "s": 10.9,
+            "ms": 917,
+            "tiles": 8.8
+          },
+          {
+            "s": 16.2,
+            "ms": 383,
+            "tiles": 7.1
+          },
+          {
+            "s": 17.3,
+            "ms": 334,
+            "tiles": 2.3
+          },
+          {
+            "s": 18.7,
+            "ms": 350,
+            "tiles": 3.3
+          },
+          {
+            "s": 21.8,
+            "ms": 467,
+            "tiles": 5.2
+          },
+          {
+            "s": 23.4,
+            "ms": 467,
+            "tiles": 5.4
+          },
+          {
+            "s": 24.1,
+            "ms": 317,
+            "tiles": 4.4
+          },
+          {
+            "s": 24.5,
+            "ms": 367,
+            "tiles": 2.6
+          },
+          {
+            "s": 35.7,
+            "ms": 683,
+            "tiles": 7
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 11,
+        "ms": 5116,
+        "worst": [
+          {
+            "s": 3.8,
+            "ms": 517,
+            "tiles": 5
+          },
+          {
+            "s": 8.6,
+            "ms": 316,
+            "tiles": 5.4
+          },
+          {
+            "s": 10.9,
+            "ms": 917,
+            "tiles": 8.8
+          },
+          {
+            "s": 16.2,
+            "ms": 383,
+            "tiles": 7.1
+          },
+          {
+            "s": 17.3,
+            "ms": 334,
+            "tiles": 2.3
+          },
+          {
+            "s": 18.7,
+            "ms": 350,
+            "tiles": 3.3
+          },
+          {
+            "s": 21.8,
+            "ms": 467,
+            "tiles": 5.2
+          },
+          {
+            "s": 23.4,
+            "ms": 467,
+            "tiles": 5.4
+          },
+          {
+            "s": 24.1,
+            "ms": 317,
+            "tiles": 4.4
+          },
+          {
+            "s": 24.5,
+            "ms": 367,
+            "tiles": 2.6
+          },
+          {
+            "s": 35.7,
+            "ms": 683,
+            "tiles": 7
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 300,
+        "loss": 0.05,
+        "jitterMs": 0,
+        "role": "replica",
+        "wire": {
+          "delay": 300,
+          "loss": 0.05,
+          "jitter": 0,
+          "sent": 756,
+          "received": 899,
+          "late": 86,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          13.1,
+          18.1,
+          23.1
+        ],
+        "prediction": null,
+        "scoreOnMyHud": 3,
+        "scoreOnTheOtherScreen": 3,
+        "seconds": 43.214599999904635,
+        "frames": 2594,
+        "againstHeldKey": 0,
+        "againstExamples": [],
+        "goldVanishesMs": {
+          "n": 3,
+          "min": 683.3,
+          "median": 899.8,
+          "p90": 1116.4,
+          "max": 1116.4
+        },
+        "goldOnHudMs": {
+          "n": 4,
+          "min": 850.1,
+          "median": 1283.2,
+          "p90": 1833.2,
+          "max": 1833.2
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "catches": 2,
+        "catchesWithNoMonsterOnScreen": 2,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 0,
+        "landedOnItAndStomped": 0,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 0,
+        "drawnBackSteps": 1,
+        "firstOddFrames": [],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "c-swept-loss-4",
+      "complete": true,
+      "trace": "c-swept-loss-4-lag300-loss0.05-jitter0-frames.json.gz",
+      "metrics": {
+        "s": 43.23,
+        "frames": 2595,
+        "cpu": 0,
+        "load": 11.4,
+        "late": 84,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 0,
+        "slides": 0,
+        "slidesOver1": 0,
+        "slideMaxNet": 0,
+        "respawns": 2,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.3,
+        "dtMax": 18,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 13,
+        "ms": 7200,
+        "worst": [
+          {
+            "s": 0.6,
+            "ms": 467,
+            "tiles": 7.8
+          },
+          {
+            "s": 1.7,
+            "ms": 550,
+            "tiles": 6.1
+          },
+          {
+            "s": 9.6,
+            "ms": 700,
+            "tiles": 8.5
+          },
+          {
+            "s": 21,
+            "ms": 450,
+            "tiles": 3.8
+          },
+          {
+            "s": 25.2,
+            "ms": 517,
+            "tiles": 9.6
+          },
+          {
+            "s": 25.9,
+            "ms": 883,
+            "tiles": 8
+          },
+          {
+            "s": 27.3,
+            "ms": 517,
+            "tiles": 7.4
+          },
+          {
+            "s": 30.5,
+            "ms": 583,
+            "tiles": 4.8
+          },
+          {
+            "s": 34.3,
+            "ms": 450,
+            "tiles": 5.2
+          },
+          {
+            "s": 35.1,
+            "ms": 500,
+            "tiles": 4.6
+          },
+          {
+            "s": 35.8,
+            "ms": 567,
+            "tiles": 4.3
+          },
+          {
+            "s": 38.8,
+            "ms": 500,
+            "tiles": 5.5
+          },
+          {
+            "s": 39.8,
+            "ms": 517,
+            "tiles": 4.6
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 13,
+        "ms": 7200,
+        "worst": [
+          {
+            "s": 0.6,
+            "ms": 467,
+            "tiles": 7.8
+          },
+          {
+            "s": 1.7,
+            "ms": 550,
+            "tiles": 6.1
+          },
+          {
+            "s": 9.6,
+            "ms": 700,
+            "tiles": 8.5
+          },
+          {
+            "s": 21,
+            "ms": 450,
+            "tiles": 3.8
+          },
+          {
+            "s": 25.2,
+            "ms": 517,
+            "tiles": 9.6
+          },
+          {
+            "s": 25.9,
+            "ms": 883,
+            "tiles": 8
+          },
+          {
+            "s": 27.3,
+            "ms": 517,
+            "tiles": 7.4
+          },
+          {
+            "s": 30.5,
+            "ms": 583,
+            "tiles": 4.8
+          },
+          {
+            "s": 34.3,
+            "ms": 450,
+            "tiles": 5.2
+          },
+          {
+            "s": 35.1,
+            "ms": 500,
+            "tiles": 4.6
+          },
+          {
+            "s": 35.8,
+            "ms": 567,
+            "tiles": 4.3
+          },
+          {
+            "s": 38.8,
+            "ms": 500,
+            "tiles": 5.5
+          },
+          {
+            "s": 39.8,
+            "ms": 517,
+            "tiles": 4.6
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 300,
+        "loss": 0.05,
+        "jitterMs": 0,
+        "role": "replica",
+        "wire": {
+          "delay": 300,
+          "loss": 0.05,
+          "jitter": 0,
+          "sent": 684,
+          "received": 899,
+          "late": 84,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          11.4,
+          16.9,
+          22.4
+        ],
+        "prediction": null,
+        "scoreOnMyHud": 4,
+        "scoreOnTheOtherScreen": 4,
+        "seconds": 43.231,
+        "frames": 2595,
+        "againstHeldKey": 0,
+        "againstExamples": [],
+        "goldVanishesMs": {
+          "n": 4,
+          "min": 599.8,
+          "median": 1199.8,
+          "p90": 1582.9,
+          "max": 1582.9
+        },
+        "goldOnHudMs": {
+          "n": 4,
+          "min": 833.9,
+          "median": 1283.2,
+          "p90": 1666.2,
+          "max": 1666.2
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "catches": 2,
+        "catchesWithNoMonsterOnScreen": 0,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 2,
+        "landedOnItAndStomped": 0,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 0,
+        "drawnBackSteps": 1,
+        "firstOddFrames": [],
+        "errors": []
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "c-swept-loss-5",
+      "complete": true,
+      "trace": "c-swept-loss-5-lag300-loss0.05-jitter0-frames.json.gz",
+      "metrics": {
+        "s": 43.21,
+        "frames": 2594,
+        "cpu": 0,
+        "load": 13.5,
+        "late": 60,
+        "socks": 1,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 0,
+        "slides": 0,
+        "slidesOver1": 0,
+        "slideMaxNet": 0,
+        "respawns": 5,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 17.6,
+        "dtMax": 19,
+        "ev": ""
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 5,
+        "ms": 2833,
+        "worst": [
+          {
+            "s": 5.5,
+            "ms": 617,
+            "tiles": 2.2
+          },
+          {
+            "s": 17.2,
+            "ms": 767,
+            "tiles": 12.5
+          },
+          {
+            "s": 21.5,
+            "ms": 483,
+            "tiles": 5
+          },
+          {
+            "s": 29.4,
+            "ms": 567,
+            "tiles": 4.6
+          },
+          {
+            "s": 33.7,
+            "ms": 400,
+            "tiles": 2.6
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 5,
+        "ms": 2833,
+        "worst": [
+          {
+            "s": 5.5,
+            "ms": 617,
+            "tiles": 2.2
+          },
+          {
+            "s": 17.2,
+            "ms": 767,
+            "tiles": 12.5
+          },
+          {
+            "s": 21.5,
+            "ms": 483,
+            "tiles": 5
+          },
+          {
+            "s": 29.4,
+            "ms": 567,
+            "tiles": 4.6
+          },
+          {
+            "s": 33.7,
+            "ms": 400,
+            "tiles": 2.6
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 0,
+      "receipt": {
+        "delayMs": 300,
+        "loss": 0.05,
+        "jitterMs": 0,
+        "role": "replica",
+        "wire": {
+          "delay": 300,
+          "loss": 0.05,
+          "jitter": 0,
+          "sent": 755,
+          "received": 911,
+          "late": 60,
+          "sockets": 1
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [],
+        "cpu": 0,
+        "load": [
+          13.5,
+          16.6,
+          21.9
+        ],
+        "prediction": null,
+        "scoreOnMyHud": 6,
+        "scoreOnTheOtherScreen": 6,
+        "seconds": 43.21460000014305,
+        "frames": 2594,
+        "againstHeldKey": 0,
+        "againstExamples": [],
+        "goldVanishesMs": {
+          "n": 4,
+          "min": 650,
+          "median": 1083.4,
+          "p90": 1083.5,
+          "max": 1083.5
+        },
+        "goldOnHudMs": {
+          "n": 4,
+          "min": 716.7,
+          "median": 1183.4,
+          "p90": 1233.4,
+          "max": 1233.4
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 1,
+          "min": 650,
+          "median": 650,
+          "p90": 650,
+          "max": 650
+        },
+        "catches": 5,
+        "catchesWithNoMonsterOnScreen": 4,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 1,
+        "landedOnItAndStomped": 1,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 0,
+        "drawnBackSteps": 2,
+        "firstOddFrames": [],
+        "errors": []
+      },
+      "pairedComplete": true
+    }
+  ],
+  "totals": {
+    "b": {
+      "completeRuns": 13,
+      "seconds": 822.8,
+      "frames": 49380,
+      "solidFrames": 0,
+      "snaps": 0,
+      "freezesOutsideOutage": 0,
+      "displacementSpans": 75,
+      "displacementMs": 53232,
+      "displacementSpansOutsideInjectedOutages": 75,
+      "maxSpawnErrorTiles": 0,
+      "confirmedRespawnLeadMax": 0,
+      "outageScoreResets": 0,
+      "positiveScoreOutages": 0,
+      "outageFreezes": 0
+    },
+    "c": {
+      "completeRuns": 13,
+      "seconds": 822.7,
+      "frames": 49380,
+      "solidFrames": 0,
+      "snaps": 2,
+      "freezesOutsideOutage": 0,
+      "displacementSpans": 70,
+      "displacementMs": 42650,
+      "displacementSpansOutsideInjectedOutages": 70,
+      "maxSpawnErrorTiles": 0,
+      "confirmedRespawnLeadMax": 0,
+      "outageScoreResets": 0,
+      "positiveScoreOutages": 0,
+      "outageFreezes": 0
+    }
+  }
+}

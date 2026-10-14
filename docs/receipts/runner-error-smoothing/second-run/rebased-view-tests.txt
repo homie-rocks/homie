@@ -1,0 +1,352 @@
+TAP version 13
+# (node:85822) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: prediction: overlapping corrections under dropped input at 20 Hz stay bounded and converge
+ok 1 - prediction: overlapping corrections under dropped input at 20 Hz stay bounded and converge
+  ---
+  duration_ms: 1261.615208
+  type: 'test'
+  ...
+# {"backwards":1,"maxStep":0.2734065055847168}
+# Subtest: prediction: overlapping corrections under dropped input at 60 Hz stay bounded and converge
+ok 2 - prediction: overlapping corrections under dropped input at 60 Hz stay bounded and converge
+  ---
+  duration_ms: 1126.911542
+  type: 'test'
+  ...
+# {"backwards":0,"maxStep":0.14751718938350677}
+# Subtest: a late fast knock does not double its drawn speed while a large correction fades
+ok 3 - a late fast knock does not double its drawn speed while a large correction fades
+  ---
+  duration_ms: 845.680584
+  type: 'test'
+  ...
+# largest frame movement: 0.5760000190734935 m
+# Subtest: 300 Hz substeps draw the within-tick path with two seeded 150 ms views and restore
+ok 4 - 300 Hz substeps draw the within-tick path with two seeded 150 ms views and restore
+  ---
+  duration_ms: 575.277667
+  type: 'test'
+  ...
+# Subtest: a placement projects the body to its own tick without a second correction: small
+ok 5 - a placement projects the body to its own tick without a second correction: small
+  ---
+  duration_ms: 612.096416
+  type: 'test'
+  ...
+# Subtest: a placement projects the body to its own tick without a second correction: Gates
+ok 6 - a placement projects the body to its own tick without a second correction: Gates
+  ---
+  duration_ms: 786.559709
+  type: 'test'
+  ...
+# Subtest: diagonal authoritative corrections stay bounded and converge while steering
+ok 7 - diagonal authoritative corrections stay bounded and converge while steering
+  ---
+  duration_ms: 1746.949542
+  type: 'test'
+  ...
+# Subtest: counter-dash responds during a visual knock correction: 80 ms
+ok 8 - counter-dash responds during a visual knock correction: 80 ms
+  ---
+  duration_ms: 999.670709
+  type: 'test'
+  ...
+# Subtest: counter-dash responds during a visual knock correction: 150 ms
+ok 9 - counter-dash responds during a visual knock correction: 150 ms
+  ---
+  duration_ms: 1063.515917
+  type: 'test'
+  ...
+# Subtest: counter-dash responds during a visual knock correction: 300 ms
+ok 10 - counter-dash responds during a visual knock correction: 300 ms
+  ---
+  duration_ms: 1330.849666
+  type: 'test'
+  ...
+# Subtest: solid correction remains continuous after placement, seed 17
+ok 11 - solid correction remains continuous after placement, seed 17
+  ---
+  duration_ms: 2440.80375
+  type: 'test'
+  ...
+# Subtest: solid correction remains continuous after placement, seed 41
+ok 12 - solid correction remains continuous after placement, seed 41
+  ---
+  duration_ms: 2848.473333
+  type: 'test'
+  ...
+# Subtest: solid correction remains continuous after placement, seed 83
+ok 13 - solid correction remains continuous after placement, seed 83
+  ---
+  duration_ms: 2217.295083
+  type: 'test'
+  ...
+# Subtest: a correction across a ledge cannot change the drawn side in one frame
+ok 14 - a correction across a ledge cannot change the drawn side in one frame
+  ---
+  duration_ms: 787.028167
+  type: 'test'
+  ...
+# {"p":{"x":1.9999998807907104,"y":11.499999046325684,"z":0},"worst":1.399999976158142,"stats":{"handlers":219,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":760,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":804,"maxTickUnits":804}}
+# Subtest: a correction below the same ledge routes around its edge
+ok 15 - a correction below the same ledge routes around its edge
+  ---
+  duration_ms: 810.328041
+  type: 'test'
+  ...
+# {"p":{"x":-2.999999761581421,"y":11.499999046325684,"z":0},"worst":1.4000001335047338,"stats":{"handlers":219,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":760,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":804,"maxTickUnits":804}}
+# Subtest: unchanged substep forecasts execute once across repeated view reads and refresh on input
+ok 16 - unchanged substep forecasts execute once across repeated view reads and refresh on input
+  ---
+  duration_ms: 414.733625
+  type: 'test'
+  ...
+# Subtest: box presentation preserves an uncorrected substep jump arc through its apex
+ok 17 - box presentation preserves an uncorrected substep jump arc through its apex
+  ---
+  duration_ms: 1274.447917
+  type: 'test'
+  ...
+# {"worst":0}
+# Subtest: a blocked correction stays within the frame cap while steering
+ok 18 - a blocked correction stays within the frame cap while steering
+  ---
+  duration_ms: 876.311625
+  type: 'test'
+  ...
+# {"worstReverse":0.0778207778930664}
+# Subtest: legacy correction direction cannot prevent convergence at contact
+ok 19 - legacy correction direction cannot prevent convergence at contact
+  ---
+  duration_ms: 1547.298375
+  type: 'test'
+  ...
+# {"worstReverse":0.5682957172393799}
+# Subtest: a delayed rendered frame cannot spend a multi-body-length movement backlog at once
+ok 20 - a delayed rendered frame cannot spend a multi-body-length movement backlog at once
+  ---
+  duration_ms: 667.015416
+  type: 'test'
+  ...
+# {"gap":1.399999976158142}
+# Subtest: a stationary correction fast blends within the per-frame visual cap
+ok 21 - a stationary correction fast blends within the per-frame visual cap
+  ---
+  duration_ms: 740.136458
+  type: 'test'
+  ...
+# {"worst":1.399999976158142,"p":{"x":1.9999998807907104,"y":11.499999046325684,"z":0}}
+# Subtest: legacy correction intent cannot trap an opposite authoritative correction
+ok 22 - legacy correction intent cannot trap an opposite authoritative correction
+  ---
+  duration_ms: 650.104584
+  type: 'test'
+  ...
+# {"worstReverse":0}
+# Subtest: pt4 held correction converges within 300 ms to -3
+ok 23 - pt4 held correction converges within 300 ms to -3
+  ---
+  duration_ms: 860.624709
+  type: 'test'
+  ...
+# Subtest: pt4 held correction converges within 300 ms to 2
+ok 24 - pt4 held correction converges within 300 ms to 2
+  ---
+  duration_ms: 451.700417
+  type: 'test'
+  ...
+# Subtest: pt4 outage keeps local input moving beyond the old solo timeout
+ok 25 - pt4 outage keeps local input moving beyond the old solo timeout
+  ---
+  duration_ms: 842.330417
+  type: 'test'
+  ...
+# Subtest: pt4 placement is first drawn at the received server pose before replay lead
+ok 26 - pt4 placement is first drawn at the received server pose before replay lead
+  ---
+  duration_ms: 627.343708
+  type: 'test'
+  ...
+# Subtest: pt4 a delayed first snapshot of a respawn retains the exact placement origin
+ok 27 - pt4 a delayed first snapshot of a respawn retains the exact placement origin
+  ---
+  duration_ms: 559.759625
+  type: 'test'
+  ...
+# Subtest: pt4 snapshot and probe reads share one browser presentation frame
+not ok 28 - pt4 snapshot and probe reads share one browser presentation frame
+  ---
+  duration_ms: 450.55175
+  type: 'test'
+  location: '/Users/ryan/.homie/worktrees/runner-error-smoothing/packages/studio/test/rules-view.test.mjs:2745:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a second reader cannot spend another correction step
+    + actual - expected
+    ... Skipped lines
+    
+      {
+        away: false,
+        driver: 'person',
+        goal: null,
+        grounded: true,
+    ...
+        pos: {
+    +     x: -2.694453716278076,
+    -     x: -2.700477361679077,
+          y: -0.5,
+          z: 0
+        },
+        seat: 0,
+        vel: {
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    id: 'e1'
+    kind: 'runner'
+    pos:
+      x: -2.700477361679077
+      y: -0.5
+      z: 0
+    vel:
+      x: 6
+      y: 0
+      z: 0
+    heading:
+      x: 1
+      y: 0
+      z: 0
+    grounded: true
+    seat: 0
+    owner: 'p1'
+    driver: 'person'
+    away: false
+    goal: ~
+    mine: true
+    motion:
+      air: false
+  actual:
+    id: 'e1'
+    kind: 'runner'
+    pos:
+      x: -2.694453716278076
+      y: -0.5
+      z: 0
+    vel:
+      x: 6
+      y: 0
+      z: 0
+    heading:
+      x: 1
+      y: 0
+      z: 0
+    grounded: true
+    seat: 0
+    owner: 'p1'
+    driver: 'person'
+    away: false
+    goal: ~
+    mine: true
+    motion:
+      air: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/ryan/.homie/worktrees/runner-error-smoothing/packages/studio/test/rules-view.test.mjs:2757:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: pt4 placement origin survives save/restore and rejects malformed origins
+ok 29 - pt4 placement origin survives save/restore and rejects malformed origins
+  ---
+  duration_ms: 317.394333
+  type: 'test'
+  ...
+# Subtest: pt4 each game can tune visual decay without changing authoritative movement
+ok 30 - pt4 each game can tune visual decay without changing authoritative movement
+  ---
+  duration_ms: 814.453625
+  type: 'test'
+  ...
+# Subtest: pt4 a restored authority epoch blends the same living body instead of cutting
+ok 31 - pt4 a restored authority epoch blends the same living body instead of cutting
+  ---
+  duration_ms: 503.357333
+  type: 'test'
+  ...
+# Subtest: moving authority beyond a wide platform cannot starve the correction route
+ok 32 - moving authority beyond a wide platform cannot starve the correction route
+  ---
+  duration_ms: 686.421375
+  type: 'test'
+  ...
+# Subtest: a new input invalidates a pose sampled earlier in the browser frame
+ok 33 - a new input invalidates a pose sampled earlier in the browser frame
+  ---
+  duration_ms: 491.523167
+  type: 'test'
+  ...
+# {
+#   substepInputMs: [
+#     1, 1, 1, 1,
+#     1, 5, 1
+#   ]
+# }
+# Subtest: substep render lead answers steering within the display latency budget
+ok 34 - substep render lead answers steering within the display latency budget
+  ---
+  duration_ms: 616.653709
+  type: 'test'
+  ...
+# Subtest: substep render lead crosses tick boundaries without holding a moving drawing
+ok 35 - substep render lead crosses tick boundaries without holding a moving drawing
+  ---
+  duration_ms: 743.131917
+  type: 'test'
+  ...
+# Subtest: render lead never advances authoritative movement or the input clock
+ok 36 - render lead never advances authoritative movement or the input clock
+  ---
+  duration_ms: 1167.053167
+  type: 'test'
+  ...
+# Subtest: a correction route rejects waypoints inside the collision skin
+ok 37 - a correction route rejects waypoints inside the collision skin
+  ---
+  duration_ms: 539.208917
+  type: 'test'
+  ...
+# Subtest: a correction route reaches an authoritative pose touching a platform side
+ok 38 - a correction route reaches an authoritative pose touching a platform side
+  ---
+  duration_ms: 556.800083
+  type: 'test'
+  ...
+# Subtest: an authority return in a new round draws the new spawn even when the game classifier sees the old round
+ok 39 - an authority return in a new round draws the new spawn even when the game classifier sees the old round
+  ---
+  duration_ms: 467.03625
+  type: 'test'
+  ...
+# Subtest: a correction exits an exact platform corner without waiting for the target to rise
+ok 40 - a correction exits an exact platform corner without waiting for the target to rise
+  ---
+  duration_ms: 416.878583
+  type: 'test'
+  ...
+# Subtest: a reconnect revision preserves a respawn origin that was unseen while offline
+ok 41 - a reconnect revision preserves a respawn origin that was unseen while offline
+  ---
+  duration_ms: 294.048291
+  type: 'test'
+  ...
+1..41
+# tests 41
+# suites 0
+# pass 40
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 37276.481625

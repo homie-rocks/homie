@@ -1,0 +1,148 @@
+TAP version 13
+# (node:74563) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a reconnect after an outage draws the own box runner continuously to where the server moved it
+ok 1 - a reconnect after an outage draws the own box runner continuously to where the server moved it
+  ---
+  duration_ms: 1179.200208
+  type: 'test'
+  ...
+# {"worst":0.3762948513031006,"at":{"from":{"x":-1.8000011444091797,"y":-0.5,"z":0},"to":{"x":-2.1762959957122803,"y":-0.5,"z":0},"connected":true},"back":113,"end":{"x":-2.63400936126709,"y":-0.5,"z":0}}
+# Subtest: a reconnect after an outage draws a placement the game names at once
+ok 2 - a reconnect after an outage draws a placement the game names at once
+  ---
+  duration_ms: 1058.2225
+  type: 'test'
+  ...
+# {"worst":0.8340082168579102,"at":{"from":{"x":-1.8000011444091797,"y":-0.5,"z":0},"to":{"x":-2.63400936126709,"y":-0.5,"z":0},"connected":true},"back":119,"end":{"x":-2.63400936126709,"y":-0.5,"z":0}}
+# Subtest: pt4 held correction converges within 300 ms to -3
+ok 3 - pt4 held correction converges within 300 ms to -3
+  ---
+  duration_ms: 349.852875
+  type: 'test'
+  ...
+# Subtest: pt4 held correction converges within 300 ms to 2
+ok 4 - pt4 held correction converges within 300 ms to 2
+  ---
+  duration_ms: 321.885292
+  type: 'test'
+  ...
+# Subtest: pt4 outage keeps local input moving beyond the old solo timeout
+ok 5 - pt4 outage keeps local input moving beyond the old solo timeout
+  ---
+  duration_ms: 416.114416
+  type: 'test'
+  ...
+# Subtest: pt4 placement is first drawn at the received server pose before replay lead
+ok 6 - pt4 placement is first drawn at the received server pose before replay lead
+  ---
+  duration_ms: 342.823042
+  type: 'test'
+  ...
+# Subtest: pt4 a delayed first snapshot of a respawn retains the exact placement origin
+ok 7 - pt4 a delayed first snapshot of a respawn retains the exact placement origin
+  ---
+  duration_ms: 354.682208
+  type: 'test'
+  ...
+# Subtest: pt4 snapshot and probe reads share one browser presentation frame
+ok 8 - pt4 snapshot and probe reads share one browser presentation frame
+  ---
+  duration_ms: 335.714917
+  type: 'test'
+  ...
+# Subtest: pt4 placement origin survives save/restore and rejects malformed origins
+ok 9 - pt4 placement origin survives save/restore and rejects malformed origins
+  ---
+  duration_ms: 241.04975
+  type: 'test'
+  ...
+# Subtest: pt4 each game can tune visual decay without changing authoritative movement
+ok 10 - pt4 each game can tune visual decay without changing authoritative movement
+  ---
+  duration_ms: 782.226375
+  type: 'test'
+  ...
+# Subtest: pt4 a restored authority epoch blends the same living body instead of cutting
+ok 11 - pt4 a restored authority epoch blends the same living body instead of cutting
+  ---
+  duration_ms: 655.542083
+  type: 'test'
+  ...
+# Subtest: moving authority beyond a wide platform cannot starve the correction route
+ok 12 - moving authority beyond a wide platform cannot starve the correction route
+  ---
+  duration_ms: 382.93825
+  type: 'test'
+  ...
+# Subtest: a new input invalidates a pose sampled earlier in the browser frame
+ok 13 - a new input invalidates a pose sampled earlier in the browser frame
+  ---
+  duration_ms: 316.761
+  type: 'test'
+  ...
+# {
+#   substepInputMs: [
+#     1, 1, 1, 1,
+#     1, 5, 1
+#   ]
+# }
+# Subtest: substep render lead answers steering within the display latency budget
+ok 14 - substep render lead answers steering within the display latency budget
+  ---
+  duration_ms: 415.946625
+  type: 'test'
+  ...
+# Subtest: substep render lead crosses tick boundaries without holding a moving drawing
+ok 15 - substep render lead crosses tick boundaries without holding a moving drawing
+  ---
+  duration_ms: 365.367833
+  type: 'test'
+  ...
+# Subtest: render lead never advances authoritative movement or the input clock
+ok 16 - render lead never advances authoritative movement or the input clock
+  ---
+  duration_ms: 777.602167
+  type: 'test'
+  ...
+# Subtest: a correction route rejects waypoints inside the collision skin
+ok 17 - a correction route rejects waypoints inside the collision skin
+  ---
+  duration_ms: 367.6925
+  type: 'test'
+  ...
+# Subtest: a correction route reaches an authoritative pose touching a platform side
+ok 18 - a correction route reaches an authoritative pose touching a platform side
+  ---
+  duration_ms: 328.676459
+  type: 'test'
+  ...
+# Subtest: a late first snapshot after reconnect retains the living drawing beyond three seconds
+ok 19 - a late first snapshot after reconnect retains the living drawing beyond three seconds
+  ---
+  duration_ms: 865.836542
+  type: 'test'
+  ...
+# {"worst":1.4000000953674316,"asked":[[-2.63400936126709,-2.63400936126709]],"beforeId":"e1","afterId":"e1"}
+# Subtest: a late first snapshot after reconnect still cuts a real respawn
+ok 20 - a late first snapshot after reconnect still cuts a real respawn
+  ---
+  duration_ms: 849.670375
+  type: 'test'
+  ...
+# {"worst":8.63400936126709,"asked":[[-2.63400936126709,-2.63400936126709]],"beforeId":"e1","afterId":"e1"}
+# Subtest: an authority return in a new round draws the new spawn even when the game classifier sees the old round
+ok 21 - an authority return in a new round draws the new spawn even when the game classifier sees the old round
+  ---
+  duration_ms: 358.643625
+  type: 'test'
+  ...
+1..21
+# tests 21
+# suites 0
+# pass 21
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 11194.303083

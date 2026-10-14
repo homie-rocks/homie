@@ -1,0 +1,54 @@
+TAP version 13
+# (node:74248) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a late first snapshot after reconnect retains the living drawing beyond three seconds
+not ok 1 - a late first snapshot after reconnect retains the living drawing beyond three seconds
+  ---
+  duration_ms: 1126.541292
+  type: 'test'
+  location: '/Users/ryan/.homie/worktrees/runner-error-smoothing/packages/studio/test/rules-view.test.mjs:2881:35'
+  failureType: 'testCodeFailure'
+  error: 'delayed handoff moved 8.63400936126709 metres in one frame'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///Users/ryan/.homie/worktrees/runner-error-smoothing/packages/studio/test/rules-view.test.mjs:2895:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# {"worst":8.63400936126709,"asked":[],"beforeId":"e1","afterId":"e1"}
+# Subtest: a late first snapshot after reconnect still cuts a real respawn
+not ok 2 - a late first snapshot after reconnect still cuts a real respawn
+  ---
+  duration_ms: 936.935833
+  type: 'test'
+  location: '/Users/ryan/.homie/worktrees/runner-error-smoothing/packages/studio/test/rules-view.test.mjs:2881:35'
+  failureType: 'testCodeFailure'
+  error: |-
+    classify the returned revision even after a long snapshot delay
+    
+    0 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/ryan/.homie/worktrees/runner-error-smoothing/packages/studio/test/rules-view.test.mjs:2896:9)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# {"worst":8.63400936126709,"asked":[],"beforeId":"e1","afterId":"e1"}
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2203.34875

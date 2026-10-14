@@ -1,0 +1,160 @@
+TAP version 13
+# (node:74377) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a reconnect after an outage draws the own box runner continuously to where the server moved it
+ok 1 - a reconnect after an outage draws the own box runner continuously to where the server moved it
+  ---
+  duration_ms: 1277.398542
+  type: 'test'
+  ...
+# {"worst":0.3762948513031006,"at":{"from":{"x":-1.8000011444091797,"y":-0.5,"z":0},"to":{"x":-2.1762959957122803,"y":-0.5,"z":0},"connected":true},"back":195,"end":{"x":-2.63400936126709,"y":-0.5,"z":0}}
+# Subtest: a reconnect after an outage draws a placement the game names at once
+ok 2 - a reconnect after an outage draws a placement the game names at once
+  ---
+  duration_ms: 1248.731583
+  type: 'test'
+  ...
+# {"worst":0.8340082168579102,"at":{"from":{"x":-1.8000011444091797,"y":-0.5,"z":0},"to":{"x":-2.63400936126709,"y":-0.5,"z":0},"connected":true},"back":88,"end":{"x":-2.63400936126709,"y":-0.5,"z":0}}
+# Subtest: pt4 held correction converges within 300 ms to -3
+ok 3 - pt4 held correction converges within 300 ms to -3
+  ---
+  duration_ms: 364.808125
+  type: 'test'
+  ...
+# Subtest: pt4 held correction converges within 300 ms to 2
+ok 4 - pt4 held correction converges within 300 ms to 2
+  ---
+  duration_ms: 353.856542
+  type: 'test'
+  ...
+# Subtest: pt4 outage keeps local input moving beyond the old solo timeout
+ok 5 - pt4 outage keeps local input moving beyond the old solo timeout
+  ---
+  duration_ms: 515.901125
+  type: 'test'
+  ...
+# Subtest: pt4 placement is first drawn at the received server pose before replay lead
+ok 6 - pt4 placement is first drawn at the received server pose before replay lead
+  ---
+  duration_ms: 487.822417
+  type: 'test'
+  ...
+# Subtest: pt4 a delayed first snapshot of a respawn retains the exact placement origin
+ok 7 - pt4 a delayed first snapshot of a respawn retains the exact placement origin
+  ---
+  duration_ms: 350.839916
+  type: 'test'
+  ...
+# Subtest: pt4 snapshot and probe reads share one browser presentation frame
+ok 8 - pt4 snapshot and probe reads share one browser presentation frame
+  ---
+  duration_ms: 331.547041
+  type: 'test'
+  ...
+# Subtest: pt4 placement origin survives save/restore and rejects malformed origins
+ok 9 - pt4 placement origin survives save/restore and rejects malformed origins
+  ---
+  duration_ms: 241.511208
+  type: 'test'
+  ...
+# Subtest: pt4 each game can tune visual decay without changing authoritative movement
+not ok 10 - pt4 each game can tune visual decay without changing authoritative movement
+  ---
+  duration_ms: 467.955083
+  type: 'test'
+  location: '/Users/ryan/.homie/worktrees/runner-error-smoothing/packages/studio/test/rules-view.test.mjs:2757:1'
+  failureType: 'testCodeFailure'
+  error: 'decay timings differ: 0.00035262107849121094,0.00035262107849121094'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///Users/ryan/.homie/worktrees/runner-error-smoothing/packages/studio/test/rules-view.test.mjs:2767:9)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: pt4 a restored authority epoch blends the same living body instead of cutting
+ok 11 - pt4 a restored authority epoch blends the same living body instead of cutting
+  ---
+  duration_ms: 316.796
+  type: 'test'
+  ...
+# Subtest: moving authority beyond a wide platform cannot starve the correction route
+ok 12 - moving authority beyond a wide platform cannot starve the correction route
+  ---
+  duration_ms: 370.810416
+  type: 'test'
+  ...
+# Subtest: a new input invalidates a pose sampled earlier in the browser frame
+ok 13 - a new input invalidates a pose sampled earlier in the browser frame
+  ---
+  duration_ms: 327.402084
+  type: 'test'
+  ...
+# {
+#   substepInputMs: [
+#     1, 1, 1, 1,
+#     1, 5, 1
+#   ]
+# }
+# Subtest: substep render lead answers steering within the display latency budget
+ok 14 - substep render lead answers steering within the display latency budget
+  ---
+  duration_ms: 433.230167
+  type: 'test'
+  ...
+# Subtest: substep render lead crosses tick boundaries without holding a moving drawing
+ok 15 - substep render lead crosses tick boundaries without holding a moving drawing
+  ---
+  duration_ms: 354.046917
+  type: 'test'
+  ...
+# Subtest: render lead never advances authoritative movement or the input clock
+ok 16 - render lead never advances authoritative movement or the input clock
+  ---
+  duration_ms: 616.380833
+  type: 'test'
+  ...
+# Subtest: a correction route rejects waypoints inside the collision skin
+ok 17 - a correction route rejects waypoints inside the collision skin
+  ---
+  duration_ms: 328.372875
+  type: 'test'
+  ...
+# Subtest: a correction route reaches an authoritative pose touching a platform side
+ok 18 - a correction route reaches an authoritative pose touching a platform side
+  ---
+  duration_ms: 315.011167
+  type: 'test'
+  ...
+# Subtest: a late first snapshot after reconnect retains the living drawing beyond three seconds
+ok 19 - a late first snapshot after reconnect retains the living drawing beyond three seconds
+  ---
+  duration_ms: 765.498166
+  type: 'test'
+  ...
+# {"worst":1.4000000953674316,"asked":[[-2.63400936126709,-2.63400936126709]],"beforeId":"e1","afterId":"e1"}
+# Subtest: a late first snapshot after reconnect still cuts a real respawn
+ok 20 - a late first snapshot after reconnect still cuts a real respawn
+  ---
+  duration_ms: 762.815958
+  type: 'test'
+  ...
+# {"worst":8.63400936126709,"asked":[[-2.63400936126709,-2.63400936126709]],"beforeId":"e1","afterId":"e1"}
+# Subtest: an authority return in a new round draws the new spawn even when the game classifier sees the old round
+ok 21 - an authority return in a new round draws the new spawn even when the game classifier sees the old round
+  ---
+  duration_ms: 298.54025
+  type: 'test'
+  ...
+1..21
+# tests 21
+# suites 0
+# pass 20
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 10649.824666

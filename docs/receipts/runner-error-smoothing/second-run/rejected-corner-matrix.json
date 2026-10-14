@@ -1,0 +1,1701 @@
+{
+  "method": {
+    "thresholdTiles": 1.5,
+    "thresholdMs": 300,
+    "alignment": "per 3-second window, same pt4 observer alignment",
+    "respawnExclusionMs": 1500,
+    "solidToleranceTiles": 0.1
+  },
+  "runs": [
+    {
+      "tag": "b-corner-rc-0",
+      "complete": true,
+      "trace": "b-corner-rc-0-lag80-loss0.01-jitter0-frames.json.gz",
+      "metrics": {
+        "s": 90.79,
+        "frames": 5448,
+        "cpu": 0,
+        "load": 11.6,
+        "late": 34,
+        "socks": 13,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 80,
+        "slides": 23,
+        "slidesOver1": 10,
+        "slideMaxNet": 28.05,
+        "respawns": 3,
+        "respawnsNotCut": 2,
+        "respawnLeadMax": 3.47,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 2,
+        "over50": 0,
+        "dtP99": 18.6,
+        "dtMax": 36,
+        "ev": "reconnect,reconnect,reconnect"
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 8,
+        "ms": 8869,
+        "worst": [
+          {
+            "s": 0.6,
+            "ms": 650,
+            "tiles": 4.2
+          },
+          {
+            "s": 12.2,
+            "ms": 549,
+            "tiles": 4
+          },
+          {
+            "s": 24,
+            "ms": 501,
+            "tiles": 2.7
+          },
+          {
+            "s": 50.1,
+            "ms": 4767,
+            "tiles": 39.8
+          },
+          {
+            "s": 58.9,
+            "ms": 416,
+            "tiles": 5.5
+          },
+          {
+            "s": 75,
+            "ms": 301,
+            "tiles": 3
+          },
+          {
+            "s": 76.5,
+            "ms": 1284,
+            "tiles": 14.4
+          },
+          {
+            "s": 78.2,
+            "ms": 402,
+            "tiles": 2.6
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 7,
+        "ms": 6151,
+        "worst": [
+          {
+            "s": 0.6,
+            "ms": 650,
+            "tiles": 4.2
+          },
+          {
+            "s": 12.2,
+            "ms": 549,
+            "tiles": 4
+          },
+          {
+            "s": 24,
+            "ms": 501,
+            "tiles": 2.7
+          },
+          {
+            "s": 52.1,
+            "ms": 2851,
+            "tiles": 39.7
+          },
+          {
+            "s": 58.9,
+            "ms": 416,
+            "tiles": 5.5
+          },
+          {
+            "s": 77,
+            "ms": 783,
+            "tiles": 14.4
+          },
+          {
+            "s": 78.2,
+            "ms": 402,
+            "tiles": 2.6
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 3.47,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 3,
+      "receipt": {
+        "delayMs": 80,
+        "loss": 0.01,
+        "jitterMs": 0,
+        "role": "replica",
+        "wire": {
+          "delay": 80,
+          "loss": 0.01,
+          "jitter": 0,
+          "sent": 1320,
+          "received": 1651,
+          "late": 34,
+          "sockets": 13
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [
+          {
+            "what": "reconnect",
+            "at": 25488,
+            "ms": 2000,
+            "backMsAfterNetwork": 1051,
+            "scoreBefore": 2,
+            "scoreAfter": 3,
+            "reconnects": 3,
+            "back": 28546.599999904633
+          },
+          {
+            "what": "reconnect",
+            "at": 50513,
+            "ms": 2000,
+            "backMsAfterNetwork": 2585,
+            "scoreBefore": 7,
+            "scoreAfter": 7,
+            "reconnects": 7,
+            "back": 55102
+          },
+          {
+            "what": "reconnect",
+            "at": 75480.19999980927,
+            "ms": 2000,
+            "backMsAfterNetwork": 655,
+            "scoreBefore": 9,
+            "scoreAfter": 10,
+            "reconnects": 12,
+            "back": 78138.59999990463
+          }
+        ],
+        "cpu": 0,
+        "load": [
+          11.6,
+          9.9,
+          11.5
+        ],
+        "prediction": {
+          "ticks": 1660,
+          "wrongTicks": 215,
+          "placements": 2,
+          "corrections": 13,
+          "correctionsOverHalfATile": 7,
+          "worstTiles": 38.44,
+          "last": [
+            {
+              "tick": 1449,
+              "d": 11.695,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 1450,
+              "d": 12.021,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 1451,
+              "d": 12.421,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 1452,
+              "d": 12.621,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 1453,
+              "d": 13.104,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 1454,
+              "d": 13.704,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 1455,
+              "d": 14.379,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 1456,
+              "d": 15.121,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 1457,
+              "d": 16.637,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 1458,
+              "d": 17.692,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 1459,
+              "d": 5.504,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            },
+            {
+              "tick": 1464,
+              "d": 0.017,
+              "l": 0,
+              "r": 1,
+              "j": 0
+            }
+          ],
+          "room": {
+            "replaysThatMovedMe": 29,
+            "largestTiles": 29.77,
+            "catchUps": 0,
+            "snaps": 0,
+            "clockResets": 12,
+            "lateInputLeadTicks": 0.68
+          }
+        },
+        "scoreOnMyHud": 11,
+        "scoreOnTheOtherScreen": 11,
+        "seconds": 90.79429999995232,
+        "frames": 5448,
+        "againstHeldKey": 51,
+        "againstExamples": [
+          {
+            "atS": 2.3134000000953674,
+            "dx": 0.40911102294921875,
+            "dy": 0.01874542236328125,
+            "direction": -1
+          },
+          {
+            "atS": 9.880099999904633,
+            "dx": -0.3951892852783203,
+            "dy": 0.01750946044921875,
+            "direction": 1
+          },
+          {
+            "atS": 28.1135,
+            "dx": 0.02861785888671875,
+            "dy": 0.00455474853515625,
+            "direction": -1
+          },
+          {
+            "atS": 28.1455,
+            "dx": 0.029521942138671875,
+            "dy": 0.044963836669921875,
+            "direction": -1
+          },
+          {
+            "atS": 28.162599999904632,
+            "dx": 0.028202056884765625,
+            "dy": 0.06851959228515625,
+            "direction": -1
+          },
+          {
+            "atS": 28.213900000095368,
+            "dx": 0.054107666015625,
+            "dy": 0.13029861450195312,
+            "direction": -1
+          },
+          {
+            "atS": 28.262599999904634,
+            "dx": 0.10494232177734375,
+            "dy": 0.14710617065429688,
+            "direction": -1
+          },
+          {
+            "atS": 29.547299999952315,
+            "dx": 0.06909561157226562,
+            "dy": 0,
+            "direction": -1
+          },
+          {
+            "atS": 29.563,
+            "dx": 0.04757881164550781,
+            "dy": 0,
+            "direction": -1
+          },
+          {
+            "atS": 33.66309999990463,
+            "dx": -0.4061698913574219,
+            "dy": 0.01862335205078125,
+            "direction": 1
+          },
+          {
+            "atS": 48.878200000047684,
+            "dx": -0.39337158203125,
+            "dy": 0.015625,
+            "direction": 1
+          },
+          {
+            "atS": 54.59970000004768,
+            "dx": 1.3982696533203125,
+            "dy": 0.06958389282226562,
+            "direction": -1
+          }
+        ],
+        "goldVanishesMs": {
+          "n": 11,
+          "min": 15.7,
+          "median": 33.3,
+          "p90": 50.4,
+          "max": 67.1
+        },
+        "goldOnHudMs": {
+          "n": 11,
+          "min": 0,
+          "median": 100.4,
+          "p90": 151.7,
+          "max": 183.4
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 3,
+          "min": 17.1,
+          "median": 32.9,
+          "p90": 33.7,
+          "max": 33.7
+        },
+        "catches": 2,
+        "catchesWithNoMonsterOnScreen": 1,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 1,
+        "landedOnItAndStomped": 3,
+        "unexplainedJumpsOfMyRunner": 1,
+        "drawnJerks": 90,
+        "drawnBackSteps": 28,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 2.3,
+            "from": [
+              54.2,
+              38
+            ],
+            "to": [
+              53.2,
+              38
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 5.8,
+            "from": [
+              26,
+              36.02
+            ],
+            "to": [
+              26,
+              35.02
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 9.9,
+            "from": [
+              25.96,
+              36
+            ],
+            "to": [
+              26.96,
+              36
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 12.1,
+            "from": [
+              26,
+              36.02
+            ],
+            "to": [
+              26,
+              35.02
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 19.4,
+            "from": [
+              20,
+              31
+            ],
+            "to": [
+              19.79,
+              29.62
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 19.4,
+            "from": [
+              19.79,
+              29.62
+            ],
+            "to": [
+              19.56,
+              28.23
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 19.4,
+            "from": [
+              19.56,
+              28.23
+            ],
+            "to": [
+              19.28,
+              26.86
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 23.4,
+            "from": [
+              8,
+              25.86
+            ],
+            "to": [
+              8.61,
+              25.12
+            ]
+          }
+        ],
+        "errors": [
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT"
+        ]
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "b-corner-rc-1",
+      "complete": true,
+      "trace": "b-corner-rc-1-lag80-loss0.01-jitter0-frames.json.gz",
+      "metrics": {
+        "s": 90.78,
+        "frames": 5448,
+        "cpu": 0,
+        "load": 12.2,
+        "late": 35,
+        "socks": 16,
+        "inSolid": 0,
+        "jumps": 0,
+        "jumpMax": 0,
+        "skips": 57,
+        "slides": 20,
+        "slidesOver1": 5,
+        "slideMaxNet": 23.88,
+        "respawns": 1,
+        "respawnsNotCut": 1,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 18.1,
+        "dtMax": 26,
+        "ev": "reconnect,reconnect,reconnect"
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 6,
+        "ms": 11484,
+        "worst": [
+          {
+            "s": 24.9,
+            "ms": 2650,
+            "tiles": 14.9
+          },
+          {
+            "s": 30.8,
+            "ms": 1033,
+            "tiles": 14.1
+          },
+          {
+            "s": 53.8,
+            "ms": 1367,
+            "tiles": 11.6
+          },
+          {
+            "s": 55.3,
+            "ms": 1901,
+            "tiles": 16.3
+          },
+          {
+            "s": 75,
+            "ms": 2600,
+            "tiles": 12.7
+          },
+          {
+            "s": 80.3,
+            "ms": 1933,
+            "tiles": 21.8
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 3,
+        "ms": 3234,
+        "worst": [
+          {
+            "s": 31,
+            "ms": 850,
+            "tiles": 14.1
+          },
+          {
+            "s": 56,
+            "ms": 1167,
+            "tiles": 16.3
+          },
+          {
+            "s": 81,
+            "ms": 1217,
+            "tiles": 21.8
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 3,
+      "receipt": {
+        "delayMs": 80,
+        "loss": 0.01,
+        "jitterMs": 0,
+        "role": "replica",
+        "wire": {
+          "delay": 80,
+          "loss": 0.01,
+          "jitter": 0,
+          "sent": 1113,
+          "received": 1512,
+          "late": 35,
+          "sockets": 16
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [
+          {
+            "what": "reconnect",
+            "at": 25712.5,
+            "ms": 6000,
+            "backMsAfterNetwork": 713,
+            "scoreBefore": 6,
+            "scoreAfter": 6,
+            "reconnects": 5,
+            "back": 32433.599999904633
+          },
+          {
+            "what": "reconnect",
+            "at": 50731.200000047684,
+            "ms": 6000,
+            "backMsAfterNetwork": 1038,
+            "scoreBefore": 9,
+            "scoreAfter": 12,
+            "reconnects": 10,
+            "back": 57771.09999990463
+          },
+          {
+            "what": "reconnect",
+            "at": 75713.59999990463,
+            "ms": 6000,
+            "backMsAfterNetwork": 987,
+            "scoreBefore": 12,
+            "scoreAfter": 12,
+            "reconnects": 15,
+            "back": 82703.5
+          }
+        ],
+        "cpu": 0,
+        "load": [
+          12.2,
+          10.9,
+          11.7
+        ],
+        "prediction": {
+          "ticks": 1570,
+          "wrongTicks": 221,
+          "placements": 1,
+          "corrections": 8,
+          "correctionsOverHalfATile": 5,
+          "worstTiles": 23.8,
+          "last": [
+            {
+              "tick": 1669,
+              "d": 0.196,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 1670,
+              "d": 0.375,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 1671,
+              "d": 0.683,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 1672,
+              "d": 1.183,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 1757,
+              "d": 0.033,
+              "l": 0.470458984375,
+              "r": 0.54345703125,
+              "j": 0
+            },
+            {
+              "tick": 1758,
+              "d": 0.333,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 1759,
+              "d": 0.525,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 1760,
+              "d": 0.55,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 1762,
+              "d": 0.625,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 1763,
+              "d": 0.425,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 1764,
+              "d": 0.525,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            },
+            {
+              "tick": 1765,
+              "d": 0.925,
+              "l": 1,
+              "r": 0,
+              "j": 0
+            }
+          ],
+          "room": {
+            "replaysThatMovedMe": 30,
+            "largestTiles": 19.52,
+            "catchUps": 0,
+            "snaps": 0,
+            "clockResets": 6,
+            "lateInputLeadTicks": 0.68
+          }
+        },
+        "scoreOnMyHud": 13,
+        "scoreOnTheOtherScreen": 13,
+        "seconds": 90.78029999995232,
+        "frames": 5448,
+        "againstHeldKey": 14,
+        "againstExamples": [
+          {
+            "atS": 12.282599999904633,
+            "dx": 0.11913681030273438,
+            "dy": -0.2868194580078125,
+            "direction": -1
+          },
+          {
+            "atS": 12.333799999952316,
+            "dx": 0.9899482727050781,
+            "dy": 0.9899482727050781,
+            "direction": -1
+          },
+          {
+            "atS": 13.8325,
+            "dx": -0.5817947387695312,
+            "dy": 0.02460479736328125,
+            "direction": 1
+          },
+          {
+            "atS": 31.266,
+            "dx": -0.4078807830810547,
+            "dy": 0.029560089111328125,
+            "direction": 1
+          },
+          {
+            "atS": 31.734799999952315,
+            "dx": -0.9899482727050781,
+            "dy": -0.9899482727050781,
+            "direction": 1
+          },
+          {
+            "atS": 31.749700000047685,
+            "dx": -0.9899501800537109,
+            "dy": -0.9899482727050781,
+            "direction": 1
+          },
+          {
+            "atS": 60.8975,
+            "dx": -0.4045581817626953,
+            "dy": 0.02663421630859375,
+            "direction": 1
+          },
+          {
+            "atS": 73.88120000004768,
+            "dx": 0.010438919067382812,
+            "dy": 0.1398468017578125,
+            "direction": -1
+          },
+          {
+            "atS": 74.63089999985695,
+            "dx": -0.41132354736328125,
+            "dy": 0.0211181640625,
+            "direction": 1
+          },
+          {
+            "atS": 76.01459999990463,
+            "dx": 0.6344795227050781,
+            "dy": 0.018001556396484375,
+            "direction": -1
+          },
+          {
+            "atS": 81.99920000004768,
+            "dx": -0.9899482727050781,
+            "dy": -0.9899482727050781,
+            "direction": 1
+          },
+          {
+            "atS": 82.01339999985694,
+            "dx": -1.393798828125,
+            "dy": -0.13161468505859375,
+            "direction": 1
+          }
+        ],
+        "goldVanishesMs": {
+          "n": 10,
+          "min": 16,
+          "median": 33.3,
+          "p90": 66.5,
+          "max": 66.5
+        },
+        "goldOnHudMs": {
+          "n": 9,
+          "min": 0,
+          "median": 67.7,
+          "p90": 182.9,
+          "max": 182.9
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 2,
+          "min": 15.9,
+          "median": 49,
+          "p90": 49,
+          "max": 49
+        },
+        "catches": 1,
+        "catchesWithNoMonsterOnScreen": 1,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 0,
+        "landedOnItAndStomped": 2,
+        "unexplainedJumpsOfMyRunner": 0,
+        "drawnJerks": 64,
+        "drawnBackSteps": 24,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 5.9,
+            "from": [
+              26,
+              36.02
+            ],
+            "to": [
+              26,
+              35.02
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 11.6,
+            "from": [
+              60,
+              41
+            ],
+            "to": [
+              59.43,
+              40.53
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 12.3,
+            "from": [
+              55.63,
+              40.58
+            ],
+            "to": [
+              56.62,
+              41.57
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 12.4,
+            "from": [
+              56.62,
+              41.57
+            ],
+            "to": [
+              56.08,
+              41.95
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 12.4,
+            "from": [
+              56,
+              41.27
+            ],
+            "to": [
+              56,
+              40.27
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 12.4,
+            "from": [
+              56,
+              40.27
+            ],
+            "to": [
+              54.68,
+              40.03
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 12.9,
+            "from": [
+              50,
+              40.22
+            ],
+            "to": [
+              50,
+              39.22
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 13.8,
+            "from": [
+              49.96,
+              40
+            ],
+            "to": [
+              50.96,
+              40
+            ]
+          }
+        ],
+        "errors": [
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT"
+        ]
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "c-corner-rc-0",
+      "complete": true,
+      "trace": "c-corner-rc-0-lag80-loss0.01-jitter0-frames.json.gz",
+      "metrics": {
+        "s": 90.76,
+        "frames": 5447,
+        "cpu": 0,
+        "load": 11.6,
+        "late": 23,
+        "socks": 13,
+        "inSolid": 0,
+        "jumps": 2,
+        "jumpMax": 31.27,
+        "skips": 4,
+        "slides": 4,
+        "slidesOver1": 3,
+        "slideMaxNet": 31.27,
+        "respawns": 2,
+        "respawnsNotCut": 1,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 18.4,
+        "dtMax": 30,
+        "ev": "reconnect,reconnect,reconnect"
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 6,
+        "ms": 3450,
+        "worst": [
+          {
+            "s": 20.1,
+            "ms": 767,
+            "tiles": 5.4
+          },
+          {
+            "s": 38.5,
+            "ms": 500,
+            "tiles": 4.3
+          },
+          {
+            "s": 47.1,
+            "ms": 350,
+            "tiles": 3
+          },
+          {
+            "s": 47.7,
+            "ms": 482,
+            "tiles": 4
+          },
+          {
+            "s": 57.2,
+            "ms": 550,
+            "tiles": 3.9
+          },
+          {
+            "s": 71.2,
+            "ms": 801,
+            "tiles": 6.2
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 6,
+        "ms": 3450,
+        "worst": [
+          {
+            "s": 20.1,
+            "ms": 767,
+            "tiles": 5.4
+          },
+          {
+            "s": 38.5,
+            "ms": 500,
+            "tiles": 4.3
+          },
+          {
+            "s": 47.1,
+            "ms": 350,
+            "tiles": 3
+          },
+          {
+            "s": 47.7,
+            "ms": 482,
+            "tiles": 4
+          },
+          {
+            "s": 57.2,
+            "ms": 550,
+            "tiles": 3.9
+          },
+          {
+            "s": 71.2,
+            "ms": 801,
+            "tiles": 6.2
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 3,
+      "receipt": {
+        "delayMs": 80,
+        "loss": 0.01,
+        "jitterMs": 0,
+        "role": "replica",
+        "wire": {
+          "delay": 80,
+          "loss": 0.01,
+          "jitter": 0,
+          "sent": 1282,
+          "received": 1644,
+          "late": 23,
+          "sockets": 13
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [
+          {
+            "what": "reconnect",
+            "at": 25470.39999985695,
+            "ms": 2000,
+            "backMsAfterNetwork": 2057,
+            "scoreBefore": 3,
+            "scoreAfter": 3,
+            "reconnects": 4,
+            "back": 29542.199999809265
+          },
+          {
+            "what": "reconnect",
+            "at": 50455,
+            "ms": 2000,
+            "backMsAfterNetwork": 1993,
+            "scoreBefore": 2,
+            "scoreAfter": 2,
+            "reconnects": 8,
+            "back": 54458.09999990463
+          },
+          {
+            "what": "reconnect",
+            "at": 75454.89999985695,
+            "ms": 2000,
+            "backMsAfterNetwork": 1990,
+            "scoreBefore": 3,
+            "scoreAfter": 3,
+            "reconnects": 12,
+            "back": 79448.59999990463
+          }
+        ],
+        "cpu": 0,
+        "load": [
+          11.6,
+          9.9,
+          11.5
+        ],
+        "prediction": null,
+        "scoreOnMyHud": 3,
+        "scoreOnTheOtherScreen": 3,
+        "seconds": 90.76129999995231,
+        "frames": 5447,
+        "againstHeldKey": 0,
+        "againstExamples": [],
+        "goldVanishesMs": {
+          "n": 9,
+          "min": 199.3,
+          "median": 233.2,
+          "p90": 1067.8,
+          "max": 1067.8
+        },
+        "goldOnHudMs": {
+          "n": 9,
+          "min": 316.3,
+          "median": 400.5,
+          "p90": 1117.9,
+          "max": 1117.9
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 1,
+          "min": 199.4,
+          "median": 199.4,
+          "p90": 199.4,
+          "max": 199.4
+        },
+        "catches": 2,
+        "catchesWithNoMonsterOnScreen": 1,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 1,
+        "landedOnItAndStomped": 1,
+        "unexplainedJumpsOfMyRunner": 2,
+        "drawnJerks": 5,
+        "drawnBackSteps": 2,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 0.7,
+            "from": [
+              30.45,
+              41
+            ],
+            "to": [
+              29.95,
+              41
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 1.9,
+            "from": [
+              21.92,
+              36
+            ],
+            "to": [
+              21.42,
+              36
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 8.3,
+            "from": [
+              23.18,
+              36
+            ],
+            "to": [
+              23.68,
+              36
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 10.2,
+            "from": [
+              3,
+              16.08
+            ],
+            "to": [
+              3,
+              15
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 29.1,
+            "from": [
+              3.23,
+              27
+            ],
+            "to": [
+              4.14,
+              27
+            ]
+          },
+          {
+            "what": "jump",
+            "atS": 54,
+            "from": [
+              33.92,
+              31
+            ],
+            "to": [
+              8.63,
+              41
+            ],
+            "next": [
+              8.64,
+              41
+            ]
+          },
+          {
+            "what": "jump",
+            "atS": 79,
+            "from": [
+              44.96,
+              38.46
+            ],
+            "to": [
+              40.28,
+              7.54
+            ],
+            "next": [
+              40.28,
+              7.56
+            ]
+          }
+        ],
+        "errors": [
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT"
+        ]
+      },
+      "pairedComplete": true
+    },
+    {
+      "tag": "c-corner-rc-1",
+      "complete": true,
+      "trace": "c-corner-rc-1-lag80-loss0.01-jitter0-frames.json.gz",
+      "metrics": {
+        "s": 90.78,
+        "frames": 5448,
+        "cpu": 0,
+        "load": 12.2,
+        "late": 32,
+        "socks": 16,
+        "inSolid": 0,
+        "jumps": 4,
+        "jumpMax": 32.53,
+        "skips": 3,
+        "slides": 3,
+        "slidesOver1": 3,
+        "slideMaxNet": 32.53,
+        "respawns": 2,
+        "respawnsNotCut": 0,
+        "respawnLeadMax": 0,
+        "stalls": 0,
+        "stallMs": 0,
+        "over33": 0,
+        "over50": 0,
+        "dtP99": 18.7,
+        "dtMax": 21,
+        "ev": "reconnect,reconnect,reconnect"
+      },
+      "freezesOutsideOutage": [],
+      "displacement": {
+        "n": 2,
+        "ms": 1035,
+        "worst": [
+          {
+            "s": 12,
+            "ms": 450,
+            "tiles": 6.5
+          },
+          {
+            "s": 86.4,
+            "ms": 585,
+            "tiles": 4.7
+          }
+        ]
+      },
+      "displacementOutsideInjectedOutages": {
+        "n": 2,
+        "ms": 1035,
+        "worst": [
+          {
+            "s": 12,
+            "ms": 450,
+            "tiles": 6.5
+          },
+          {
+            "s": 86.4,
+            "ms": 585,
+            "tiles": 4.7
+          }
+        ]
+      },
+      "scoreResetsDuringOutage": [],
+      "confirmedRespawnLeadMax": 0,
+      "roundMetadataOnlyFlags": [],
+      "outageFreezes": [],
+      "positiveScoreOutages": 2,
+      "receipt": {
+        "delayMs": 80,
+        "loss": 0.01,
+        "jitterMs": 0,
+        "role": "replica",
+        "wire": {
+          "delay": 80,
+          "loss": 0.01,
+          "jitter": 0,
+          "sent": 1285,
+          "received": 1399,
+          "late": 32,
+          "sockets": 16
+        },
+        "runKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpKeyFeedbackMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpHeightTiles": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "jumpAirSeconds": 0,
+        "pressesThatFoundNoGround": 0,
+        "events": [
+          {
+            "what": "reconnect",
+            "at": 25551.699999809265,
+            "ms": 6000,
+            "backMsAfterNetwork": 1988,
+            "scoreBefore": 1,
+            "scoreAfter": 1,
+            "reconnects": 5,
+            "back": 33543.699999809265
+          },
+          {
+            "what": "reconnect",
+            "at": 50522.09999990463,
+            "ms": 6000,
+            "backMsAfterNetwork": 1991,
+            "scoreBefore": 0,
+            "scoreAfter": 0,
+            "reconnects": 10,
+            "back": 58516.199999809265
+          },
+          {
+            "what": "reconnect",
+            "at": 75546.69999980927,
+            "ms": 6000,
+            "backMsAfterNetwork": 1985,
+            "scoreBefore": 1,
+            "scoreAfter": 1,
+            "reconnects": 15,
+            "back": 83534
+          }
+        ],
+        "cpu": 0,
+        "load": [
+          12.2,
+          10.9,
+          11.7
+        ],
+        "prediction": null,
+        "scoreOnMyHud": 1,
+        "scoreOnTheOtherScreen": 1,
+        "seconds": 90.77940000009536,
+        "frames": 5448,
+        "againstHeldKey": 0,
+        "againstExamples": [],
+        "goldVanishesMs": {
+          "n": 3,
+          "min": 34.6,
+          "median": 183.1,
+          "p90": 199.9,
+          "max": 199.9
+        },
+        "goldOnHudMs": {
+          "n": 3,
+          "min": 167.8,
+          "median": 366.7,
+          "p90": 534,
+          "max": 534
+        },
+        "stompedMonsterVanishesMs": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p90": null,
+          "max": null
+        },
+        "catches": 3,
+        "catchesWithNoMonsterOnScreen": 1,
+        "landedOnItOnScreenButCaught": 0,
+        "caughtFromTheSide": 2,
+        "landedOnItAndStomped": 0,
+        "unexplainedJumpsOfMyRunner": 2,
+        "drawnJerks": 212,
+        "drawnBackSteps": 4,
+        "firstOddFrames": [
+          {
+            "what": "jerk",
+            "atS": 24.4,
+            "from": [
+              36.37,
+              41
+            ],
+            "to": [
+              36.87,
+              41
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 24.4,
+            "from": [
+              37.12,
+              41
+            ],
+            "to": [
+              37.62,
+              41
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 25.5,
+            "from": [
+              33.2,
+              41
+            ],
+            "to": [
+              32.72,
+              41
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 25.7,
+            "from": [
+              30.47,
+              38.54
+            ],
+            "to": [
+              29.97,
+              37.99
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 25.9,
+            "from": [
+              26.97,
+              36.02
+            ],
+            "to": [
+              26.47,
+              35.92
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 26.1,
+            "from": [
+              23.47,
+              36
+            ],
+            "to": [
+              22.97,
+              36
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 26.9,
+            "from": [
+              19,
+              36
+            ],
+            "to": [
+              19,
+              35.22
+            ]
+          },
+          {
+            "what": "jerk",
+            "atS": 27.5,
+            "from": [
+              19,
+              36
+            ],
+            "to": [
+              19,
+              35.22
+            ]
+          }
+        ],
+        "errors": [
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT",
+          "console: WebSocket connection to 'ws://127.0.0.1:9/offline' failed: Error in connection establishment: net::ERR_UNSAFE_PORT"
+        ]
+      },
+      "pairedComplete": true
+    }
+  ],
+  "totals": {
+    "b": {
+      "completeRuns": 2,
+      "seconds": 181.6,
+      "frames": 10896,
+      "solidFrames": 0,
+      "snaps": 0,
+      "freezesOutsideOutage": 0,
+      "displacementSpans": 14,
+      "displacementMs": 20353,
+      "displacementSpansOutsideInjectedOutages": 10,
+      "maxSpawnErrorTiles": 3.47,
+      "confirmedRespawnLeadMax": 3.47,
+      "outageScoreResets": 0,
+      "positiveScoreOutages": 6,
+      "outageFreezes": 0
+    },
+    "c": {
+      "completeRuns": 2,
+      "seconds": 181.5,
+      "frames": 10895,
+      "solidFrames": 0,
+      "snaps": 6,
+      "freezesOutsideOutage": 0,
+      "displacementSpans": 8,
+      "displacementMs": 4485,
+      "displacementSpansOutsideInjectedOutages": 8,
+      "maxSpawnErrorTiles": 0,
+      "confirmedRespawnLeadMax": 0,
+      "outageScoreResets": 0,
+      "positiveScoreOutages": 5,
+      "outageFreezes": 0
+    }
+  }
+}

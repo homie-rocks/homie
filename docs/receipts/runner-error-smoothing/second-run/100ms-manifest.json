@@ -1,0 +1,25 @@
+{
+  "toolkitCommit": "7a65eb0adf6051756feaafeca789847743bf7d5d",
+  "controlCommit": "a81acbdf9f1fa22b7f2fa4893517cf7f3faecd6c",
+  "candidateSource": {
+    "rules/view.ts": "ce0a75b92c571336249dc659ad0f24d2620679147db80e08419748f467a90668",
+    "rules/rules.ts": "7668cf63ba5e8a6f82e9c14e7c70920a465097020ae343b03f99a3358368dac6",
+    "rules/core.ts": "a7858a34a2ee8a5dcf5ffc125efba6dd71ee371608a81e7f83b9922197ac25f3",
+    "rules/pack.ts": "4c281687c6ba0a814bfa64e98fcfeb2deb3595d85e9a1379b2c048f7a923e76f",
+    "rules/interest.mjs": "d70e0e01c1b3701ce7d68f4d9f334fcd857831542adcf2873a3119676c5747f8",
+    "rules/math.ts": "6fbe93b45ce7a3732a9ddc21f6cfdc3f4e8c92f3ecfcf041d09e8d7f21bbcd4c",
+    "rules/correction-path.ts": "755101d07cf9dce553403f92ed5cc46df5c96f115eba04ef4d0f37070a247d89",
+    "netplay/netplay.ts": "2b8de819f996618c084c0775cd2f7a0197c37303544b932e4b4cd5e058b471a5"
+  },
+  "worker": "/Users/ryan/Studios/homie-arcade-rules/site/src/runtime/e6dee9d8c538bd7e6d5d0105/worker.js",
+  "settings": {
+    "host": "server",
+    "predict": {
+      "blendMs": 100,
+      "maxFrameM": 1.4,
+      "renderAheadMs": 16
+    }
+  },
+  "controlVersion": "0.51.3",
+  "studioBase": "ef64911"
+}

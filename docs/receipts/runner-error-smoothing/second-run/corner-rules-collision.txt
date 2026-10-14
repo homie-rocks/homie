@@ -1,0 +1,148 @@
+TAP version 13
+# Subtest: bake: the triangles in the scene's own space, a grid beside the model, and the plan at true scale
+ok 1 - bake: the triangles in the scene's own space, a grid beside the model, and the plan at true scale
+  ---
+  duration_ms: 1025.324542
+  type: 'test'
+  ...
+# Subtest: check: authored routes are walked, a route off the model fails where it fell, and a re-bake keeps what was authored
+ok 2 - check: authored routes are walked, a route off the model fails where it fell, and a re-bake keeps what was authored
+  ---
+  duration_ms: 34.338167
+  type: 'test'
+  ...
+# Subtest: stale: a model whose surface moved fails by name; one that changed without moving does not
+ok 3 - stale: a model whose surface moved fails by name; one that changed without moving does not
+  ---
+  duration_ms: 11.320041
+  type: 'test'
+  ...
+# Subtest: the plan draws proxies, routes and problem marks at 40 px to the metre
+ok 4 - the plan draws proxies, routes and problem marks at 40 px to the metre
+  ---
+  duration_ms: 1.543167
+  type: 'test'
+  ...
+# Subtest: the CLI: collision bake and collision check, in words and as JSON
+ok 5 - the CLI: collision bake and collision check, in words and as JSON
+  ---
+  duration_ms: 1372.124125
+  type: 'test'
+  ...
+# Subtest: in chat: collision_bake and collision_check are tools, and work in a studio that installed nothing but the toolkit
+ok 6 - in chat: collision_bake and collision_check are tools, and work in a studio that installed nothing but the toolkit
+  ---
+  duration_ms: 1595.301583
+  type: 'test'
+  ...
+# Subtest: the maths rules are handed agrees with Math, and is the list the wall knows
+ok 7 - the maths rules are handed agrees with Math, and is the list the wall knows
+  ---
+  duration_ms: 186.865084
+  type: 'test'
+  ...
+# Subtest: a declaration that does not fit the contract is named
+ok 8 - a declaration that does not fit the contract is named
+  ---
+  duration_ms: 5.4255
+  type: 'test'
+  ...
+# Subtest: declared state is held to its type, and packs and unpacks to itself
+ok 9 - declared state is held to its type, and packs and unpacks to itself
+  ---
+  duration_ms: 1.82975
+  type: 'test'
+  ...
+# Subtest: the host runtime steps coin-dash: bots fill, a round is played, results rank the scores
+ok 10 - the host runtime steps coin-dash: bots fill, a round is played, results rank the scores
+  ---
+  duration_ms: 105.109625
+  type: 'test'
+  ...
+# Subtest: two runs on one seed are the same tick by tick, and a room packed to bytes carries on the same
+ok 11 - two runs on one seed are the same tick by tick, and a room packed to bytes carries on the same
+  ---
+  duration_ms: 70.866291
+  type: 'test'
+  ...
+# Subtest: the input protocol: on time, missing, early, too early, late, duplicate, another epoch, silence and the lead
+ok 12 - the input protocol: on time, missing, early, too early, late, duplicate, another epoch, silence and the lead
+  ---
+  duration_ms: 146.797209
+  type: 'test'
+  ...
+# Subtest: more frames buy no extra step, a command runs once, and an owner's claim is held to maxSpeed
+ok 13 - more frames buy no extra step, a command runs once, and an owner's claim is held to maxSpeed
+  ---
+  duration_ms: 3.497
+  type: 'test'
+  ...
+# Subtest: the wall at run time: a handler that never ends is stopped and named, the room carries on, and then the room ends
+ok 14 - the wall at run time: a handler that never ends is stopped and named, the room carries on, and then the room ends
+  ---
+  duration_ms: 178.941292
+  type: 'test'
+  ...
+# Subtest: the wall at run time: a slow handler and one that grabs memory are stopped and named; one that throws is counted
+ok 15 - the wall at run time: a slow handler and one that grabs memory are stopped and named; one that throws is counted
+  ---
+  duration_ms: 1932.31525
+  type: 'test'
+  ...
+# Subtest: the overrun check: a room whose ticks keep starting late ends, and a room that only ran after a slow one does not
+ok 16 - the overrun check: a room whose ticks keep starting late ends, and a room that only ran after a slow one does not
+  ---
+  duration_ms: 55.569875
+  type: 'test'
+  ...
+# Subtest: world has no way out: everything reachable from it is plain frozen data and functions the runtime made
+ok 17 - world has no way out: everything reachable from it is plain frozen data and functions the runtime made
+  ---
+  duration_ms: 1.61825
+  type: 'test'
+  ...
+# Subtest: the room with the server as host: no browser hosts, and a forged score, state or round frame changes nothing
+ok 18 - the room with the server as host: no browser hosts, and a forged score, state or round frame changes nothing
+  ---
+  duration_ms: 12.112375
+  type: 'test'
+  ...
+# Subtest: the life of a server-hosted room: it pauses with the last person, resumes on the tick it paused on, and is forgotten when nobody returns
+ok 19 - the life of a server-hosted room: it pauses with the last person, resumes on the tick it paused on, and is forgotten when nobody returns
+  ---
+  duration_ms: 133.477042
+  type: 'test'
+  ...
+# Subtest: rules that cannot start refuse joins and say why, and a room never falls back to a browser by itself
+ok 20 - rules that cannot start refuse joins and say why, and a room never falls back to a browser by itself
+  ---
+  duration_ms: 1.0455
+  type: 'test'
+  ...
+# Subtest: late paired callbacks sustaining 20 Hz do not end a healthy room as an overrun
+ok 21 - late paired callbacks sustaining 20 Hz do not end a healthy room as an overrun
+  ---
+  duration_ms: 16.722791
+  type: 'test'
+  ...
+# Subtest: a circle starting inside an expanded box still collides with its rounded corner
+ok 22 - a circle starting inside an expanded box still collides with its rounded corner
+  ---
+  duration_ms: 1.784334
+  type: 'test'
+  ...
+# Subtest: a square runner can leave an exact terrain corner without a zero-time collision
+ok 23 - a square runner can leave an exact terrain corner without a zero-time collision
+  ---
+  duration_ms: 0.523291
+  type: 'test'
+  ...
+1..23
+# tests 23
+# suites 0
+# pass 23
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4129.639292
