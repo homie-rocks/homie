@@ -2,7 +2,7 @@ import {rateLimit,callsPerMinute} from './mcp-store.mjs';
 import {eventFeeds,readableFeed,matchesFeed,eventHub} from './event-resources.mjs';
 import {currentCaller} from './mcp-tools.mjs';
 import {signedWebhook,WebhookFailure} from './event-webhooks.mjs';
-import {EventsError,invalid,eventError,eventDescriptor,occurrence,cursorOf,cursorPosition,validateEventParams,callbackUrl,signingSecret,subscriptionResult,subscriptionHeaders,control} from './mcp-events-wire.mjs';
+import {EVENTS,EVENT_ERRORS,eventsResult,EventsError,invalid,eventError,eventDescriptor,occurrence,cursorOf,cursorPosition,validateEventParams,callbackUrl,signingSecret,subscriptionResult,subscriptionHeaders,control} from './mcp-events-wire.mjs';
 
 const prefix='mcp-event-hook:';
 export const eventSource=feed=>JSON.stringify([feed.event,feed.app??null,feed.collection??null]);
@@ -10,13 +10,13 @@ export const hookFunction=id=>'@mcp-webhook/'+id;
 const head=async env=>(await env.DB.prepare('SELECT COALESCE(MAX(seq),0) seq FROM studio_events').first()).seq;
 export async function eventCaller(env,connection){
   if(connection==='local-test-owner'&&env.HOMIE_LOCAL_TEST_SECRET)return {id:'local-test-owner',owner:true,connection};
-  try{return await currentCaller(env,{connection});}catch{throw new EventsError(-32024);}
+  try{return await currentCaller(env,{connection});}catch{throw new EventsError(EVENT_ERRORS.forbidden);}
 }
 export async function checkEvent(env,cat,caller,params){
   validateEventParams(params);
   const feeds=eventFeeds(env),feed=Object.hasOwn(feeds,params.name)?feeds[params.name]:null;
-  if(!feed)throw new EventsError(-32023,{kind:'event'});
-  if(!await readableFeed(env,cat,caller,params.name))throw new EventsError(-32024);
+  if(!feed)throw new EventsError(EVENT_ERRORS.notFound,{kind:'event'});
+  if(!await readableFeed(env,cat,caller,params.name))throw new EventsError(EVENT_ERRORS.forbidden);
   return feed;
 }
 export async function listEvents(env,cat,caller,params={}){
@@ -69,16 +69,16 @@ async function watermark(env,sub){
   return cursorOf(sub.name,Math.max(sub.start,Math.min(registry?.cursor??sub.start,pending.seq===null?Number.MAX_SAFE_INTEGER:pending.seq-1)));
 }
 export async function subscribeEvents(env,cat,caller,params,{now=Date.now}={}){
-  if(!caller.id)throw new EventsError(-32024);
+  if(!caller.id)throw new EventsError(EVENT_ERRORS.forbidden);
   const feed=await checkEvent(env,cat,caller,params);
   if(!params.delivery||typeof params.delivery!=='object')invalid();
-  if(params.delivery.mode!==undefined&&params.delivery.mode!=='webhook')throw new EventsError(-32026,{feature:'deliveryMode',value:params.delivery.mode});
+  if(params.delivery.mode!==undefined&&params.delivery.mode!=='webhook')throw new EventsError(EVENT_ERRORS.unsupported,{feature:'deliveryMode',value:params.delivery.mode});
   const url=callbackUrl(params.delivery.url),secret=signingSecret(params.delivery.secret);
-  if(!permittedCallback(env,params.name,url))throw new EventsError(-32027,{reason:'challenge_failed'});
+  if(!permittedCallback(env,params.name,url))throw new EventsError(EVENT_ERRORS.callback,{reason:'challenge_failed'});
   const id=await subId(caller,params,url),previous=await stored(env,id),live=previous&&previous.expires>now();
-  if(live&&previous.source!==eventSource(feed)){await removeEventHook(env,id);throw new EventsError(-32026,{feature:'payloadSchema',reason:'schema_changed'});}
+  if(live&&previous.source!==eventSource(feed)){await removeEventHook(env,id);throw new EventsError(EVENT_ERRORS.unsupported,{feature:'payloadSchema',reason:'schema_changed'});}
   if(previous&&!live)await removeEventHook(env,id);
-  if(!live&&feed.maxSubscriptions!==undefined){const rows=(await env.DB.prepare("SELECT value FROM mcp_kv WHERE key LIKE 'mcp-event-hook:%'").all()).results;if(rows.filter(row=>{const sub=JSON.parse(row.value);return sub.name===params.name&&sub.expires>now();}).length>=feed.maxSubscriptions)throw new EventsError(-32025,{limit:'subscriptions',max:feed.maxSubscriptions});}
+  if(!live&&feed.maxSubscriptions!==undefined){const rows=(await env.DB.prepare("SELECT value FROM mcp_kv WHERE key LIKE 'mcp-event-hook:%'").all()).results;if(rows.filter(row=>{const sub=JSON.parse(row.value);return sub.name===params.name&&sub.expires>now();}).length>=feed.maxSubscriptions)throw new EventsError(EVENT_ERRORS.exhausted,{limit:'subscriptions',max:feed.maxSubscriptions});}
   const start=await eventStart(env,params,now());
   const sub={id,name:params.name,source:eventSource(feed),url,secret,principal:caller.id,connection:caller.connection??'local-test-owner',start:live?previous.start:start.after,expires:now()+Math.min(params.ttlMs??3600000,86400000)};
   if(live){if(previous.secret!==secret){sub.previous=previous.secret;sub.rotateUntil=now()+300000;}else if(previous.rotateUntil>now()){sub.previous=previous.previous;sub.rotateUntil=previous.rotateUntil;}}
@@ -90,9 +90,9 @@ export async function subscribeEvents(env,cat,caller,params,{now=Date.now}={}){
   return subscriptionResult(sub,await watermark(env,sub),live?false:start.truncated,{active:true,lastError:latest?.error??null,lastDeliveryAt:latest?.completed?new Date(latest.completed).toISOString():null});
 }
 export async function unsubscribeEvents(env,caller,params){
-  if(!caller.id)throw new EventsError(-32024);validateEventParams(params);
+  if(!caller.id)throw new EventsError(EVENT_ERRORS.forbidden);validateEventParams(params);
   const id=await subId(caller,params,callbackUrl(params.delivery?.url)),sub=await stored(env,id);
-  if(!sub||sub.expires<=Date.now())throw new EventsError(-32023,{kind:'subscription'});
+  if(!sub||sub.expires<=Date.now())throw new EventsError(EVENT_ERRORS.notFound,{kind:'subscription'});
   await removeEventHook(env,id);return {};
 }
 /** Dynamic hooks become ordinary durable function deliveries: one queue and retry engine. */
@@ -101,7 +101,7 @@ export async function eventHookSubscriptions(env,cat,options={}){
   for(;;){const rows=(await env.DB.prepare("SELECT key,value FROM mcp_kv WHERE key LIKE 'mcp-event-hook:%' AND key>?1 ORDER BY key LIMIT 100").bind(after).all()).results;
     for(const row of rows){const sub=JSON.parse(row.value);if(sub.expires<=now()){await removeEventHook(env,sub.id);continue;}
       let feed;
-      try{feed=await checkEvent(env,cat,await eventCaller(env,sub.connection),{name:sub.name});if(!permittedCallback(env,sub.name,sub.url))throw new EventsError(-32024);if(sub.source!==eventSource(feed))throw new EventsError(-32026,{feature:'payloadSchema',reason:'schema_changed'});}
+      try{feed=await checkEvent(env,cat,await eventCaller(env,sub.connection),{name:sub.name});if(!permittedCallback(env,sub.name,sub.url))throw new EventsError(EVENT_ERRORS.forbidden);if(sub.source!==eventSource(feed))throw new EventsError(EVENT_ERRORS.unsupported,{feature:'payloadSchema',reason:'schema_changed'});}
       catch(error){try{await send(env,sub,control('terminated',{error:eventError(error)}),'msg_terminated_'+crypto.randomUUID(),options);}catch{}await removeEventHook(env,sub.id);continue;}
       definitions.push({name:hookFunction(sub.id),event:feed.event,webhook:true,mcpEvent:true,matches:event=>matchesFeed(feed,event),async handler(event){
         const fresh=await stored(env,sub.id);if(!fresh||fresh.expires<=now())return;
@@ -117,17 +117,16 @@ export async function eventHookSubscriptions(env,cat,options={}){
 export async function eventsRequest(request,env,ctx,cat,caller,body){
   const params=body.params??{};
   try{
-    if(!await rateLimit(env,caller.id??`public:${request.headers.get('cf-connecting-ip')??'local'}`,callsPerMinute(cat)))throw new EventsError(-32025,{limit:'requests'});
+    if(!await rateLimit(env,caller.id??`public:${request.headers.get('cf-connecting-ip')??'local'}`,callsPerMinute(cat)))throw new EventsError(EVENT_ERRORS.exhausted,{limit:'requests'});
     if(body.jsonrpc!=='2.0'||!['string','number'].includes(typeof body.id))invalid();
-    if(body.method==='events/stream'){
+    if(body.method===EVENTS.stream){
       await checkEvent(env,cat,caller,params);
-      if(!env.LOBBY)throw new EventsError(-32026,{feature:'deliveryMode',value:'push'});
+      if(!env.LOBBY)throw new EventsError(EVENT_ERRORS.unsupported,{feature:'deliveryMode',value:'push'});
       const connection=caller.connection??'local-test-owner';
       return eventHub(env,connection).fetch('https://events/__studio_events',{method:'POST',body:JSON.stringify({op:'extension-stream',connection,cat,id:body.id,params})});
     }
-    let result=body.method==='events/list'?await listEvents(env,cat,caller,params):body.method==='events/poll'?await pollEvents(env,cat,caller,params):body.method==='events/subscribe'?await subscribeEvents(env,cat,caller,params):await unsubscribeEvents(env,caller,params);
-    if(body.method==='events/poll')result={...result,events:result.events.map(({cursor,...event})=>event)};
-    if(body.method==='events/subscribe'){const work=import('./functions.mjs').then(m=>m.runFunctions(env,cat,new URL(request.url).origin));if(ctx?.waitUntil)ctx.waitUntil(work);else await work;}
-    return Response.json({jsonrpc:'2.0',id:body.id,result},{headers:{'cache-control':'no-store'}});
+    const result=body.method===EVENTS.list?await listEvents(env,cat,caller,params):body.method===EVENTS.poll?await pollEvents(env,cat,caller,params):body.method===EVENTS.subscribe?await subscribeEvents(env,cat,caller,params):await unsubscribeEvents(env,caller,params);
+    if(body.method===EVENTS.subscribe){const work=import('./functions.mjs').then(m=>m.runFunctions(env,cat,new URL(request.url).origin));if(ctx?.waitUntil)ctx.waitUntil(work);else await work;}
+    return Response.json({jsonrpc:'2.0',id:body.id,result:eventsResult(body.method,result)},{headers:{'cache-control':'no-store'}});
   }catch(error){return Response.json({jsonrpc:'2.0',id:body.id??null,error:eventError(error)},{headers:{'cache-control':'no-store'}});}
 }

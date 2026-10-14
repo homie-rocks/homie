@@ -3,7 +3,9 @@
  * https://github.com/modelcontextprotocol/experimental-ext-triggers-events/blob/13e0a59749cde947374aaa8e3a65f0b424468d5a/docs/design-sketch-proposal.md
  */
 export const eventsCapability={events:{listChanged:true}};
-export const eventMethods=new Set(['events/list','events/poll','events/stream','events/subscribe','events/unsubscribe']);
+export const EVENTS=Object.freeze({list:'events/list',poll:'events/poll',stream:'events/stream',subscribe:'events/subscribe',unsubscribe:'events/unsubscribe'});
+export const eventMethods=new Set(Object.values(EVENTS));
+export const EVENT_ERRORS=Object.freeze({invalid:-32602,notFound:-32023,forbidden:-32024,exhausted:-32025,unsupported:-32026,callback:-32027});
 const messages={[-32602]:'InvalidParams',[-32023]:'NotFound',[-32024]:'Forbidden',[-32025]:'ResourceExhausted',[-32026]:'Unsupported',[-32027]:'CallbackEndpointError'};
 export class EventsError extends Error {
   constructor(code,data){super(messages[code]);this.code=code;this.data=data;}
@@ -30,3 +32,10 @@ export const streamResult=id=>({jsonrpc:'2.0',id,result:{_meta:{}}});
 export const control=(type,fields)=>({type,...fields});
 export const subscriptionResult=(sub,cursor,truncated,deliveryStatus)=>({id:sub.id,refreshBefore:new Date(sub.expires).toISOString(),cursor,truncated,...(deliveryStatus?{deliveryStatus}:{})});
 export const subscriptionHeaders=id=>({'X-MCP-Subscription-Id':id});
+/** Internal pages keep stable names; draft field changes stay at the transport boundary. */
+export function eventsResult(method,value){
+  if(method===EVENTS.list)return {events:value.events};
+  if(method===EVENTS.poll)return {events:value.events.map(({cursor,...event})=>event),cursor:value.cursor,truncated:value.truncated,hasMore:value.hasMore,nextPollMs:value.nextPollMs};
+  return value;
+}
+export const terminalEventError=code=>[EVENT_ERRORS.notFound,EVENT_ERRORS.forbidden,EVENT_ERRORS.unsupported].includes(code);

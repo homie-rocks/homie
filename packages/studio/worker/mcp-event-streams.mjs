@@ -1,5 +1,5 @@
 import {eventSource,eventCaller,checkEvent,eventStart,pollEvents} from './mcp-events.mjs';
-import {EventsError,eventError,notification,sseFrame,streamResult,cursorOf} from './mcp-events-wire.mjs';
+import {EVENT_ERRORS,terminalEventError,EventsError,eventError,notification,sseFrame,streamResult,cursorOf} from './mcp-events-wire.mjs';
 
 /** Connection-scoped push subscriptions hosted by the existing per-connection Lobby. */
 export class McpEventStreams {
@@ -35,7 +35,7 @@ export class McpEventStreams {
       while(more&&!stream.closed){
         const caller=await eventCaller(this.env,stream.connection);
         const feed=await checkEvent(this.env,stream.cat,caller,stream.params);
-        if(stream.source!==eventSource(feed))throw new EventsError(-32026,{feature:'payloadSchema',reason:'schema_changed'});
+        if(stream.source!==eventSource(feed))throw new EventsError(EVENT_ERRORS.unsupported,{feature:'payloadSchema',reason:'schema_changed'});
         const start=await eventStart(this.env,{name:stream.params.name,cursor:stream.cursor});
         if(start.truncated){stream.cursor=cursorOf(stream.params.name,start.after);await this.write(stream,notification('active',{cursor:stream.cursor,truncated:true},stream.id));}
         const page=await pollEvents(this.env,stream.cat,caller,{...stream.params,maxAgeMs:undefined,cursor:stream.cursor});
@@ -50,7 +50,7 @@ export class McpEventStreams {
       await this.write(stream,notification('heartbeat',{cursor:stream.cursor},stream.id));
     }catch(error){
       const details=eventError(error);
-      if([-32023,-32024,-32026].includes(details.code)){
+      if(terminalEventError(details.code)){
         await this.write(stream,notification('terminated',{error:details},stream.id));await this.write(stream,streamResult(stream.id));this.close(stream);
       }else await this.write(stream,notification('error',{error:details},stream.id));
     }
