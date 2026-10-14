@@ -243,7 +243,7 @@
  *                                         also says whether Homie's holds are on (the plugin's hooks ran just now), and
  *                                         when another MCP server named homie has taken the connector's name there.
  *
- *   homie-studio codex new <id> [--name "<Name>"]
+ *   homie-studio codex new <id> [--kind app|game] [--name "<Name>"]
  *                                         games/<id>/CODEX.md: the Game Codex, every section, in the game's colours (a game
  *                                          is planned before it is made: with no game <id> yet, it starts its folder)
  *   homie-studio codex <id> [--artifact] [--open]
@@ -680,7 +680,7 @@ function print(result) {
       lines.push(formatHandoff(result));
       break;
     case 'codex':
-      lines.push(`The Game Codex for ${result.title}: ${result.file}${result.opened ? ' (opened in the browser)' : ''}`,
+      lines.push(`The ${result.kind === 'app' ? 'App' : 'Game'} Codex for ${result.title}: ${result.file}${result.opened ? ' (opened in the browser)' : ''}`,
         `  tabs: ${result.sections.map((x) => x.title).join(' · ')} · Build status${result.build ? ` (${result.build.state}, ${result.build.percent}%)` : ''}`,
         ...(result.missing.length ? [`  not decided yet: ${result.missing.join(', ')}`] : ['  every section has something in it']),
         `  open questions: ${result.openQuestions}`,
@@ -1172,7 +1172,7 @@ async function labCommand(root, sub) {
 
 /** `homie-studio codex …` (lib/codex.mjs): the Game Codex of one game. */
 function codexCommand(root, sub) {
-  const games = listGames(root);
+  const games = listExperiences(root);
   if (sub === 'new') return newCodex(root, positional[2] ?? (games.length === 1 ? games[0].id : undefined), { name: flags.get('name') ?? null, kind: flags.get('kind') ?? null });
   if (sub === 'link') {
     const id = positional[2] ?? (games.length === 1 ? games[0].id : null);

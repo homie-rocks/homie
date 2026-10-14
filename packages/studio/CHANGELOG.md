@@ -26,7 +26,7 @@ Apps now follow their owner’s words through planning, a living scene and evide
 ### Added
 
 - Apps use the shared Codex planning page: their own words, pictured scene, people, offers and demonstrable needs. A plan can precede app plumbing and survives creation.
-- Opt-in app checks run the Codex's real UI flows and attach wall/phone captures to each need; the Codex shows their status. Existing apps without a Codex retain their checks.
+- Opt-in app checks run the Codex's real UI flows and attach wall/phone captures to each need; the Codex shows their status. Existing apps without an executable needs block retain their checks.
 - App checkout accepts a reference to a booking, ticket or gift. Verified paid events include that reference, the app and order ID, including reopened Payment Links.
 
 ### Changed
@@ -36,7 +36,7 @@ Apps now follow their owner’s words through planning, a living scene and evide
 
 ### Upgrade notes
 
-- Existing apps and games keep their behavior. Add an app Codex to opt into needs evidence; omitted payment references remain null. The new migration updates only the paid-event payload.
+- Existing apps and games keep their behavior. Add the executable needs block to an app Codex to opt into needs evidence; omitted payment references remain null. The new migration updates only the paid-event payload.
 
 ## [0.49.0] - 2026-10-13
 

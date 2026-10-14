@@ -9,7 +9,7 @@ export function readAppNeeds(root, id) {
   if (!existsSync(file)) return null;
   const source = readFileSync(file, 'utf8');
   const block = /^```needs\s*\n([\s\S]*?)^```/m.exec(source);
-  if (!block) throw new Error('App Codex needs a ```needs JSON array: capture each need from the owner’s words before checking');
+  if (!block) return null; // An existing prose Codex has not opted into executable needs.
   const needs = JSON.parse(block[1]);
   if (!Array.isArray(needs) || !needs.length) throw new Error('App Codex has no demonstrable needs yet');
   const ids = new Set();

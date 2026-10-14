@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { newCodex, renderCodex, parseCodex, codexGaps } from '../lib/codex.mjs';
@@ -39,6 +39,9 @@ test('an app is planned before plumbing, keeps its Codex, and renders needs stat
 test('Codex needs run real flow operations, retain failures, capture both surfaces and leave older apps opted out',async t=>{
   const root=mkdtempSync(join(tmpdir(),'homie-needs-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
   assert.equal(readAppNeeds(root,'old-app'),null);
+  mkdirSync(join(root,'apps/old-app'),{recursive:true});
+  writeFileSync(join(root,'apps/old-app/CODEX.md'),'# Our existing plan\nNo executable acceptance contract.');
+  assert.equal(readAppNeeds(root,'old-app'),null,'an older prose Codex does not opt an app in');
   const events=[];
   const surfaces=['wall','phone'].map(name=>({name,frame:{waitForSelector:async selector=>{if(selector==='#missing')throw new Error('not visible');events.push([name,'visible',selector]);},click:async selector=>events.push([name,'click',selector])},page:{screenshot:async options=>events.push([name,'capture',options.path])}}));
   const plan={needs:[{id:'book',statement:'Book from my phone',steps:[{surface:'phone',selector:'#book',click:true}],assertions:[{surface:'phone',selector:'#receipt'},{surface:'wall',selector:'#gear'}]},{id:'track',statement:'Follow my own gear',assertions:[{surface:'phone',selector:'#missing'},{surface:'wall',selector:'#gear'}]}]};

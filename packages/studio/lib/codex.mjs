@@ -548,8 +548,8 @@ export function renderCodex(root, id, { mode = 'file', feed, now = new Date() } 
   const game = codexGame(root, id);
   if (!game) throw new Error(`no game "${id}" in games/, and no codex planning it`);
   const file = join(game.dir, CODEX_FILE);
-  if (!existsSync(file)) throw new Error(`games/${id}/${CODEX_FILE} does not exist yet: npx --no-install homie-studio codex new ${id}`);
-  if (statSync(file).size > LIMITS.source) throw new Error(`games/${id}/${CODEX_FILE} is over ${LIMITS.source / 1024} KB`);
+  if (!existsSync(file)) throw new Error(`${relative(root, file)} does not exist yet: npx --no-install homie-studio codex new ${id}`);
+  if (statSync(file).size > LIMITS.source) throw new Error(`${relative(root, file)} is over ${LIMITS.source / 1024} KB`);
   const parsed = parseCodex(readFileSync(file, 'utf8'));
   if (game.kind === 'app') parsed.meta.kind = 'app';
   const { meta } = parsed;
@@ -597,13 +597,13 @@ export function renderCodex(root, id, { mode = 'file', feed, now = new Date() } 
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>${esc(title)} · Game Codex</title>
+<title>${esc(title)} · ${game.kind === 'app' ? 'App' : 'Game'} Codex</title>
 ${look.links.map((href) => `<link rel="stylesheet" href="${esc(href)}">`).join('\n')}
 <style>${look.faces.join('')}${css(look.palette, look.fonts, ctx.pixel)}</style>
 </head>
 <body data-mode="${esc(mode)}" data-start="${esc(start)}"${ctx.pixel ? ' class="pixel"' : ''}>
 <header class="hero">${cover ? `<div class="bgimg" style="background-image:url(${cover})"></div>` : ''}<div class="wrap">
-<p class="kicker">Game Codex · ${esc(studio.name ?? '')}</p>
+<p class="kicker">${game.kind === 'app' ? 'App' : 'Game'} Codex · ${esc(studio.name ?? '')}</p>
 <h1>${esc(title)}</h1>
 ${tagline ? `<p class="tagline">${esc(tagline)}</p>` : ''}
 ${pitch ? `<div class="pitch">${pitch}</div>` : ''}
@@ -618,7 +618,7 @@ ${status}
 </body>
 </html>
 `;
-  return { html, title, sections: sections.map((x) => ({ id: x.id, title: x.title, key: x.key })), missing: gaps.missing, openQuestions: gaps.openQuestions, warnings: emb.warnings, build: s ? { state: s.state, percent: s.percent } : null };
+  return { html, kind: game.kind ?? 'game', title, sections: sections.map((x) => ({ id: x.id, title: x.title, key: x.key })), missing: gaps.missing, openQuestions: gaps.openQuestions, warnings: emb.warnings, build: s ? { state: s.state, percent: s.percent } : null };
 }
 
 /** `homie-studio codex <id>`: the page on this computer (or the artifact copy). */
@@ -628,7 +628,7 @@ export function writeCodexPage(root, id, { mode = 'file' } = {}) {
   mkdirSync(dir, { recursive: true });
   const file = join(dir, mode === 'artifact' ? `${id}.artifact.html` : `${id}.html`);
   writeFileSync(file, r.html);
-  return { ok: true, command: 'codex', id, mode, file: relative(root, file), path: file, bytes: Buffer.byteLength(r.html), title: r.title, sections: r.sections, missing: r.missing, openQuestions: r.openQuestions, warnings: r.warnings, build: r.build };
+  return { ok: true, command: 'codex', kind: r.kind, id, mode, file: relative(root, file), path: file, bytes: Buffer.byteLength(r.html), title: r.title, sections: r.sections, missing: r.missing, openQuestions: r.openQuestions, warnings: r.warnings, build: r.build };
 }
 
 /** Called whenever a progress feed changes: the local page redraws itself (only when it exists already). */
@@ -669,7 +669,7 @@ export function newCodex(root, id, { name = null, kind = null } = {}) {
   if (!game) return { ok: false, command: 'codex new', why: `"${id}" is not a game id (lowercase letters, digits and hyphens, up to 40)` };
   if (game.planned) { game.name = name ? String(name).slice(0, 60) : id.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' '); mkdirSync(game.dir, { recursive: true }); }
   const file = join(game.dir, CODEX_FILE);
-  if (existsSync(file)) return { ok: false, command: 'codex new', why: `games/${id}/${CODEX_FILE} exists already: change it, never replace it` };
+  if (existsSync(file)) return { ok: false, command: 'codex new', why: `${relative(root, file)} exists already: change it, never replace it` };
   const theme = readTheme(root);
   const land = game.landing?.theme ?? {};
   const q = (v) => JSON.stringify(String(v));
