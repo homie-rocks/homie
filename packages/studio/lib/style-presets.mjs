@@ -6,6 +6,7 @@
 
 /** How the world is drawn. `family`: the starter library family that fits; `materials`: the material model. */
 export const RENDERS = Object.freeze({
+  illustrated: { label: 'Illustrated place', words: /\b(illustrated|illustration|pictorial)\b/i, materials: 'flat', outline: false, family: 'kenney', fonts: { display: 'Fraunces', body: 'Inter' }, vfx: 'soft', note: 'readable objects, clear typography and purposeful motion for the work of this place' },
   'lowpoly-flat': { label: 'Flat low-poly', words: /\b(low[- ]?poly|cozy|cosy|cute|toy|minimal|clean|simple|wholesome|chill)\b/i, materials: 'flat', outline: false, family: 'kenney', fonts: { display: 'Fredoka', body: 'Nunito' }, vfx: 'soft', note: 'faceted shapes in flat palette colours: the cheapest look on a phone, the most coherent, and the richest free library' },
   toon: { label: 'Toon / cel', words: /\b(toon|cel|cartoon|anime|comic|neon|cyber|synth|arcade)\b/i, materials: 'toon', outline: true, family: 'kaykit', fonts: { display: 'Lilita One', body: 'Nunito' }, vfx: 'toon', note: 'banded light and ink outlines: reads at any size, loud on a TV' },
   painted: { label: 'Stylised hand-painted', words: /\b(painterly|painted|storybook|watercolou?r|ghibli-like|fairy ?tale|whimsical|hand[- ]painted)\b/i, materials: 'hand-painted', outline: false, family: 'kaykit', fonts: { display: 'Fraunces', body: 'Lora' }, vfx: 'soft', note: 'soft painted albedo with the light baked gently in: warm and storybook' },

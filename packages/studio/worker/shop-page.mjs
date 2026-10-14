@@ -90,7 +90,7 @@ export function thanksPage(cat, shop, { session = null, game = null } = {}) {
 <p class="kicker">${esc(studio)}</p>
 <h1 data-thanks-title>Thank you</h1>
 <p class="lead" data-thanks-line>Stripe is confirming the payment. ${shop.giving ? 'Thank you for supporting our work.' : 'This page says when it is yours (a few seconds).'}</p>
-<p>${g ? `<a class="btn" href="/${esc(g.id)}/play">Back to ${esc(g.name)}</a>` : '<a class="btn" href="/">Back to the studio</a>'} <a href="/account/">Your account</a></p>
+<p>${g ? `<a class="btn" href="/${esc(g.id)}/${g.kind === 'app' ? 'open' : 'play'}">Back to ${esc(g.name)}</a>` : `<a class="btn" href="/">Back to ${esc(studio)}</a>`} <a href="/account/">Your account</a></p>
 <p class="note">Your receipt comes from Stripe by email. ${shop.giving ? esc(shop.giving.receiptText ?? '') : refundWords(shop)}</p>
 </section>
 <script type="application/json" id="shop-boot">${JSON.stringify(boot).replace(/</g, '\\u003c')}</script>

@@ -125,7 +125,7 @@ export function playPage(cat, g, { embed = false, origin = '', preview = false, 
   const shopControl = Boolean(shop && !screen && g.screen?.shop !== false);
   const accent = cat?.studio?.theme?.accent ?? '#ffcf5a';
   const corner = (name, fallback) => (['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(g.screen?.[name]) ? g.screen[name] : fallback);
-  const places = sharePlaces(g.screen?.share);
+  const places = sharePlaces(g.screen?.share ?? (g.kind === 'app' ? 'top-right' : undefined));
   // The phone's glass belongs to the game: no page pan, pinch-zoom, text selection or callout under a thumb
   // (a pinch between a stick thumb and a button thumb made the browser cancel both touches).
   // A game with an art direction (games.json `ui`, from its style.json): the pills wear its paper and text, like its HUD.
@@ -448,6 +448,7 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
   place();
   addEventListener('resize', place);
   function labelOf(room) {
+    if(boot.kind === 'app') return boot.name;
     var m = /^pub-(\d+)$/.exec(room);
     if (m) return 'Room ' + m[1];
     // A room of this page's server (s-<server>-<n>) is "Room <n>" too: the server pill beside the button names it.
@@ -816,6 +817,11 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
   }
 
   function paint() {
+    if(boot.kind === 'app') {
+      say(state.link?.state === 'reconnecting' ? 'Reconnecting…' : 'Connected');
+      var count=ui && ui.querySelector('[data-room-count]'); if(count)count.hidden=true;
+      serverUi(); return;
+    }
     var f = state.facts;
     var n = f && f.counts ? f.counts.players : null;
     var bits = [];
@@ -861,7 +867,7 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
   function serverUi() {
     if (!sToggle || !sSheet) return;
     var f = state.facts; var pol = f && f.policy ? f.policy : null;
-    var show = Boolean(state.server) || (hasAi() && readsDial());
+    var show = boot.kind === 'app' ? Boolean(state.server && state.server.id !== 'public') : Boolean(state.server) || (hasAi() && readsDial());
     sToggle.hidden = !show;
     if (!show) return;
     var name = state.server ? state.server.name : 'Quick play';
@@ -1300,7 +1306,7 @@ const WATCH_JS = String.raw`${BUILD_RETRY_JS}(function () {
   }
   sizeUp();
   addEventListener('resize', sizeUp);
-  function labelOf(room) { var m = /^pub-(\d+)$/.exec(room || ''); return m ? 'Room ' + m[1] : (room || ''); }
+  function labelOf(room) { if(boot.kind === 'app') return boot.name; var m = /^pub-(\d+)$/.exec(room || ''); return m ? 'Room ' + m[1] : (room || ''); }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined && text !== null) e.textContent = String(text); return e; }
   function svg(path) { var s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '2'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.innerHTML = path; return s; }
   var AUTO_ICON = '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>';

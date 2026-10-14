@@ -209,6 +209,9 @@ export function devConfig(root, remoteAi) {
   const copy = join(base, '.wrangler', 'homie-dev.wrangler.json');
   mkdirSync(dirname(copy), { recursive: true });
   writeFileSync(copy, `${JSON.stringify(json, null, 2)}\n`);
+  const localSecrets=join(root,'.dev.vars'), generatedSecrets=join(dirname(copy),'.dev.vars');
+  if(existsSync(localSecrets))writeFileSync(generatedSecrets,readFileSync(localSecrets),{mode:0o600});
+  else rmSync(generatedSecrets,{force:true});
   const notes = [
     ...(routed ? [`Local dev leaves out the production route${stripped.length === 1 ? '' : 's'} in wrangler.jsonc (${stripped.join(', ') || 'route keys'}): rooms here use this computer's own address, never the live site's. wrangler.jsonc is unchanged.`] : []),
     ...(aiChanged ? [remoteAi ? aiNote : 'No Workers AI under dev (--remote-ai for the real one, billed): AI guides think with Clef on this computer when Ollama has it, else scripted.'] : aiNote ? [aiNote] : []),

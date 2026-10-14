@@ -50,3 +50,13 @@ test('a reload holding an old entry retains its complete module graph across a b
   assert.equal(workerEntry(root),null,'an explicit custom entry is never overridden by a generated generation');
   assert.equal(JSON.parse(readFileSync(devConfig(root,true).copy,'utf8')).main,join(root,config.main));
 });
+
+test('dev loads root local secrets beside its generated config and removes stale copies', t=>{
+ const root=mkdtempSync(join(tmpdir(),'homie-dev-vars-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ writeFileSync(join(root,'wrangler.jsonc'),JSON.stringify({name:'local',main:'worker.js'}));
+ writeFileSync(join(root,'.dev.vars'),'LOCAL_VALUE="local # value"\n');
+ const config=devConfig(root,false);
+ assert.equal(readFileSync(join(root,'.wrangler/.dev.vars'),'utf8'),'LOCAL_VALUE="local # value"\n');
+ rmSync(join(root,'.dev.vars'));devConfig(root,false);
+ assert.equal(readdirSync(join(root,'.wrangler')).includes('.dev.vars'),false);
+});

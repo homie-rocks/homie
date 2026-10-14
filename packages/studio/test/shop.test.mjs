@@ -3137,3 +3137,14 @@ test('removal migration preserves paid and pending orders, grants and refund fac
     } finally { db.close(); }
   }
 });
+
+test('an old worker recreating referral secrets during deploy is cleaned on requests and schedules', async () => {
+ const s=await site();
+ try {
+  const oldWorker=()=>{for(const key of ['referral_signing_key','referral_cookie_key','referral-send:old'])s.DB.sql.prepare('INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)').run(key,'old-worker-value');};
+  const clean=()=>assert.equal(s.DB.sql.prepare("SELECT count(*) n FROM meta WHERE key GLOB 'referral*'").get().n,0);
+  oldWorker();await s.fetchSite('/');clean();
+  oldWorker();await s.worker.scheduled({scheduledTime:Date.now()},s.env,{waitUntil:()=>{}});clean();
+  oldWorker();await s.fetchSite('/');clean();await s.fetchSite('/');clean();
+ } finally {s.stripe.close();}
+});

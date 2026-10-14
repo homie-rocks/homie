@@ -607,9 +607,15 @@ function finish(res, path) {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
+// Repeat after migration: an older isolate may recreate these during a rolling deploy.
+async function removeReferralLeftovers(env) {
+  if(env.DB)await env.DB.prepare("DELETE FROM meta WHERE key GLOB 'referral_*' OR key GLOB 'referral-*'").run();
+}
+
 export default {
   async scheduled(event, env, ctx) {
     const maintenance=(async () => {
+      await removeReferralLeftovers(env);
       const cat = await catalogue(env, 'https://studio.invalid');
       await notifyTools(env,cat,cat.studio?.url??'https://studio.invalid').catch(error=>console.warn('Tool catalogue refresh:',error.message));
       await reconcileOrders(env, shopOf(cat));
@@ -619,6 +625,7 @@ export default {
     await maintenance;
   },
   async fetch(request, env, ctx) {
+    await removeReferralLeftovers(env);
     const url = new URL(request.url);
     await (await import('./functions.mjs')).syncFunctions(env);
     const dispatch=()=>import('./functions.mjs').then(m=>m.runFunctions(env,()=>catalogue(env,url.origin),url.origin));

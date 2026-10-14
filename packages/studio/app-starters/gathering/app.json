@@ -39,14 +39,8 @@
     "many": "people",
     "action": "Check in",
     "total": "Check-ins",
-    "choice": "Choose an option",
-    "monthly": "Gift frequency",
-    "once": "One time",
-    "month": "Monthly",
-    "give": "Give securely on Stripe",
-    "goal": "Intention goal \u00b7 not payments received",
+    "choice": "Choose a task",
     "prompt": "Choose what works for you.",
-    "finished": "All three answers are in. Thank you!",
     "complete": "Mark complete",
     "done": "Complete",
     "pending": "Checked in",
@@ -68,14 +62,6 @@
             "type": "string",
             "required": true,
             "maxLength": 60
-          },
-          "amount": {
-            "type": "number",
-            "required": true
-          },
-          "monthly": {
-            "type": "boolean",
-            "required": true
           }
         }
       }
@@ -129,34 +115,6 @@
       "Packing",
       "Deliveries"
     ],
-    "color": "#184b43",
-    "currency": "CAD",
-    "goal": 2500,
-    "questions": [
-      {
-        "text": "Which planet is called the red planet?",
-        "choices": [
-          "Venus",
-          "Mars",
-          "Jupiter"
-        ]
-      },
-      {
-        "text": "How many sides does a hexagon have?",
-        "choices": [
-          "5",
-          "6",
-          "8"
-        ]
-      },
-      {
-        "text": "Which is a mammal?",
-        "choices": [
-          "Dolphin",
-          "Trout",
-          "Octopus"
-        ]
-      }
-    ]
+    "color": "#184b43"
   }
 }
