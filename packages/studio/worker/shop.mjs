@@ -525,7 +525,8 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
     if(!slot || JSON.parse(slot.value).capacity!==link.capacity)return {error:fail(409,'slot-sync','This slot changed; ask the owner’s AI to sync its Stripe link.')};
     const confirmed=await env.DB.prepare("SELECT COALESCE(SUM(quantity),0) n FROM shop_bookings WHERE app=?1 AND slots=?2 AND slot=?3 AND state='confirmed'").bind(booking.app,booking.slots,booking.slot).first();
     const update=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-slot-link:${link.id}`).first();
-    const status=update?JSON.parse(update.value):link;
+    const observed=update?JSON.parse(update.value):null;
+    const status=observed && observed.capacity===link.capacity ? observed : link;
     if(!status.active || status.count>=link.capacity || confirmed.n>=link.capacity)return {error:fail(409,'capacity','That slot is full. Choose another slot.')};
   }
   if(keyless && item.price==='choose' && lines[0].quantity!==1)return {error:fail(400,'quantity','A tip is one chosen amount; choose it on Stripe.')};
@@ -835,7 +836,11 @@ async function hook(request, env, cat, shop, ready) {
   if (typeof ev.livemode === 'boolean' && (hasStripeKey(env) || linkConfig(env)) && ev.livemode !== (shopMode(env) === 'live')) return json({ ok: true, ignored: 'mode' });
   try {
     if(ev.type==='payment_link.updated') {
-      if(linkConfig(env)?.slots?.some(l=>l.id===obj.id))await env.DB.prepare('INSERT INTO meta(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(`shop-slot-link:${obj.id}`,JSON.stringify({active:obj.active,count:obj.restrictions?.completed_sessions?.count??0,at:ev.created})).run();
+      if(linkConfig(env)?.slots?.some(l=>l.id===obj.id))await env.DB.prepare(`INSERT INTO meta(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value
+        WHERE json_extract(excluded.value,'$.count') >= json_extract(meta.value,'$.count') AND
+        (json_extract(excluded.value,'$.at') > json_extract(meta.value,'$.at') OR
+         (json_extract(excluded.value,'$.at') = json_extract(meta.value,'$.at') AND json_extract(excluded.value,'$.active')=0))`)
+        .bind(`shop-slot-link:${obj.id}`,JSON.stringify({active:obj.active,count:obj.restrictions?.completed_sessions?.count??0,capacity:obj.restrictions?.completed_sessions?.limit,at:ev.created})).run();
       return json({ok:true,did:'slot-updated'});
     }
     if(ev.type==='invoice.paid' && obj.status==='paid' && (obj.metadata?.homie==='shop-links-v1' || obj.parent?.subscription_details?.metadata?.homie==='shop-links-v1' || obj.subscription_details?.metadata?.homie==='shop-links-v1')) {

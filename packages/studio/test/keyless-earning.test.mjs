@@ -41,6 +41,7 @@ test('keyless pending does not consume last seat; paid confirms, full rejects an
  await f.hook('checkout.session.expired',f.session(b,'slot',{payment_status:'unpaid'}));assert.equal(f.sql.prepare('SELECT state FROM shop_bookings WHERE id=?').get(b.order).state,'released');
  await f.hook('refund.created',{id:'re_test',payment_intent:'pi_'+a.order,status:'succeeded',amount:5000,currency:'cad'});assert.equal(f.sql.prepare('SELECT state FROM shop_bookings WHERE id=?').get(a.order).state,'released');
  await f.hook('payment_link.updated',{id:'plink_slot',active:false,restrictions:{completed_sessions:{count:1,limit:1}}});assert.equal((await f.buy(req)).status,409);
+ await f.hook('payment_link.updated',{id:'plink_slot',active:true,restrictions:{completed_sessions:{count:0,limit:1}}});assert.equal((await f.buy(req)).status,409,'stale active event cannot reopen full slot');
 });
 test('keyless membership paid periods renew, failure does not extend, cancellation defeats delayed invoice; portal ownership',async t=>{
  const f=fixture(t);const a=await f.buy({item:'monthly',reference:'gift-20'});await f.hook('checkout.session.completed',f.session(a,'monthly',{amount_subtotal:2000,amount_total:2000,subscription:'sub_member',customer:'cus_member',invoice:'in_first'}));

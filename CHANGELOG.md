@@ -21,6 +21,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 **Plugin 0.51.0** · Take the money through your own Stripe, keyless by default.
 
+One Stripe approval enables mixed menus, paid capacity bookings and monthly giving through the owner’s own account.
+
 ### Added
 
 - Mixed-item Stripe menus with adjustable quantities, signed paid invoice lines

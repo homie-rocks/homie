@@ -104,7 +104,8 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
         const link=linkConfig(env)?.slots?.find(l=>l.app===meta.id&&l.slots===collection&&l.slot===r.id);
         if(link) {
           const saved=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-slot-link:${link.id}`).first();
-          const status=saved?JSON.parse(saved.value):link;
+          const observed=saved?JSON.parse(saved.value):null;
+          const status=observed && observed.capacity===link.capacity ? observed : link;
           const count=await env.DB.prepare("SELECT COALESCE(SUM(quantity),0) n FROM shop_bookings WHERE app=?1 AND slots=?2 AND slot=?3 AND state='confirmed'").bind(recordApp,collection,r.id).first();
           record.booking={full:!status.active||Math.max(status.count,count.n)>=link.capacity,available:status.active?Math.max(0,link.capacity-Math.max(status.count,count.n)):0,synced:link.capacity===record.data.capacity};
         }
