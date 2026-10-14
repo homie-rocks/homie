@@ -1,5 +1,5 @@
 {
-  "source": "Maximum completed per-file wall seconds from main CI 38573393181, 38607076457 and 38615876324 attempt 1 and available shard 7/9 reruns; prior estimates retained only for unobserved files. Split build-pages weights use its measured subtest times rounded up (200/50/85s); failed/timed-out files excluded.",
+  "source": "Maximum completed per-file wall seconds from main CI 38573393181, 38607076457 and 38615876324 attempt 1 and available shard 7/9 reruns; prior estimates retained only for unobserved files. Split build-pages weights use its measured subtest times rounded up (200/50/85s); failed/timed-out files excluded. Split rules-build weights use PR 117 run 38623071254 subtest times rounded up (280/215s).",
   "seconds": {
     "packages/arcade/test/package.test.mjs": 0.5,
     "packages/audio/test/package.test.mjs": 0.5,
@@ -207,7 +207,7 @@
     "packages/studio/test/rules-boundaries.test.mjs": 80.8,
     "packages/studio/test/rules-browser-exit.test.mjs": 90.1,
     "packages/studio/test/rules-browser.test.mjs": 80.3,
-    "packages/studio/test/rules-build.test.mjs": 455.3,
+    "packages/studio/test/rules-build.test.mjs": 280,
     "packages/studio/test/rules-check-features.test.mjs": 7.5,
     "packages/studio/test/rules-check.test.mjs": 43.3,
     "packages/studio/test/rules-companion-pacing.test.mjs": 39.3,
@@ -315,7 +315,8 @@
     "packages/studio/test/mcp-events.test.mjs": 0.3,
     "packages/studio/test/rules-map-index.test.mjs": 0.2,
     "packages/studio/test/build-hero.test.mjs": 50,
-    "packages/studio/test/build-preview.test.mjs": 85
+    "packages/studio/test/build-preview.test.mjs": 85,
+    "packages/studio/test/rules-build-hashes.test.mjs": 215
   },
   "compatSeconds": {
     "packages/arcade/test/package.test.mjs": 0.3,
@@ -469,7 +470,7 @@
     "packages/studio/test/purchase-regressions.test.mjs": 84.2,
     "packages/studio/test/resource-purchases.test.mjs": 1.3,
     "packages/studio/test/rooms-pages.test.mjs": 366.8,
-    "packages/studio/test/rules-build.test.mjs": 390.8,
+    "packages/studio/test/rules-build.test.mjs": 280,
     "packages/studio/test/rules-mcp.test.mjs": 1.9,
     "packages/studio/test/schema.test.mjs": 197.6,
     "packages/studio/test/shop-workerd.test.mjs": 7.0,
@@ -512,6 +513,7 @@
     "packages/studio/test/shop-subscriptions.test.mjs": 0.2,
     "packages/studio/test/mcp-events-workerd.test.mjs": 2.1,
     "packages/studio/test/build-hero.test.mjs": 50,
-    "packages/studio/test/build-preview.test.mjs": 85
+    "packages/studio/test/build-preview.test.mjs": 85,
+    "packages/studio/test/rules-build-hashes.test.mjs": 215
   }
 }

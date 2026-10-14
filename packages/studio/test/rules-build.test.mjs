@@ -52,44 +52,6 @@ test('a new studio\'s Worker imports the table of its server-hosted games, and i
   assert.equal(list.find((s) => s.id === 'gem-rush').example, undefined);
 });
 
-test('game hashes are reproducible, isolate unrelated builds, and distinguish code from state shape', () => {
-  const dir = studio('hashes');
-  assert.equal(run(['game', 'new', 'coin-dash', '--from', 'coin-dash'], dir).status, 0);
-  browserRulesGame(dir, 'gems');
-  const build = () => {
-    const r = run(['build'], dir); assert.equal(r.status, 0, r.stdout + r.stderr);
-    const trial = out(r).games.find(g => g.id === 'coin-dash').capacityTrial;
-    assert.equal(trial.seats, 32); assert.equal(trial.host, 'Node'); assert.equal(trial.cloudflare, false);
-    assert.equal(out(r).games.find(g => g.id === 'gems').capacityTrial.cloudflare, false, 'browser rules do not claim Cloudflare capacity');
-    return JSON.parse(read(dir, 'site/dist/games.json')).games.find((g) => g.id === 'coin-dash');
-  };
-  const first = build();
-  assert.deepEqual(build().room, first.room);
-  assert.equal(first.netplay.version, first.room.build);
-  const unrelated = 'games/gems/src/main.ts';
-  writeFileSync(join(dir, unrelated), read(dir, unrelated) + '\nconsole.log("other game changed");\n');
-  assert.deepEqual(build().room, first.room, 'another game does not reload this one');
-  const view = 'games/coin-dash/src/view.ts';
-  writeFileSync(join(dir, view), read(dir, view) + '\nconsole.log("view changed");\n');
-  const viewed = build();
-  assert.notEqual(viewed.room.build, first.room.build); assert.equal(viewed.room.stateHash, first.room.stateHash);
-  const tunePath = 'games/coin-dash/tunables.json'; const tune = JSON.parse(read(dir, tunePath));
-  tune.public.speed.value = 5;
-  writeFileSync(join(dir, tunePath), JSON.stringify(tune));
-  const tuned = build();
-  assert.notEqual(tuned.room.build, viewed.room.build); assert.equal(tuned.room.stateHash, first.room.stateHash);
-  const path = 'games/coin-dash/src/rules.ts'; const src = read(dir, path);
-  writeFileSync(join(dir, path), src.replace('self.score += 1;', 'self.score += 2;'));
-  const coded = build();
-  assert.notEqual(coded.room.build, tuned.room.build); assert.equal(coded.room.stateHash, first.room.stateHash);
-  writeFileSync(join(dir, path), src.replace('score: f.u16({ score: true })', 'score: f.u32({ score: true })'));
-  const shaped = build(); assert.notEqual(shaped.room.stateHash, first.room.stateHash);
-  const mapPath = 'games/coin-dash/map/main.json'; const map = JSON.parse(read(dir, mapPath));
-  map.spots.start[0][0] += 1;
-  writeFileSync(join(dir, mapPath), JSON.stringify(map));
-  const mapped = build(); assert.notEqual(mapped.room.stateHash, shaped.room.stateHash); assert.notEqual(mapped.room.build, shaped.room.build);
-});
-
 test('server and browser rules games build the same rules-plus-view contract', async () => {
   const dir = studio('both');
   assert.equal(run(['game', 'new', 'coin-dash', '--from', 'coin-dash'], dir).status, 0);
