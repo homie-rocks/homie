@@ -612,7 +612,7 @@ export default {
   async scheduled(event, env, ctx) {
     const maintenance=(async () => {
       const cat = await catalogue(env, 'https://studio.invalid');
-      await notifyTools(env,cat,cat.studio?.url??'https://studio.invalid');
+      await notifyTools(env,cat,cat.studio?.url??'https://studio.invalid').catch(error=>console.warn('Tool catalogue refresh:',error.message));
       await reconcileOrders(env, shopOf(cat));
       await (await import('./functions.mjs')).scheduleFunctions(event,env,cat,cat.studio?.url??'https://studio.invalid');
     })();
@@ -622,7 +622,6 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     await (await import('./functions.mjs')).syncFunctions(env);
-    if(env.DB&&env.LOBBY&&ctx?.waitUntil)ctx.waitUntil(catalogue(env,url.origin).then(cat=>notifyTools(env,cat,url.origin)).catch(()=>{}));
     const dispatch=()=>import('./functions.mjs').then(m=>m.runFunctions(env,()=>catalogue(env,url.origin),url.origin));
     // Some routes reconcile shop state in waitUntil after returning their page.
     // Keep dispatch behind those writes too, preserving the runtime context's
@@ -642,6 +641,8 @@ export default {
       try { console.error(JSON.stringify({ at: new Date().toISOString(), ev: 'lobby-route-failed', path: url.pathname, error: errorLine(error) })); } catch { /* no console */ }
       res = json({ ok: false, error: 'failed' }, 500);
     } finally {
+      // Refresh after the route has populated the catalogue cache.
+      if(env.DB&&env.LOBBY&&ctx?.waitUntil)ctx.waitUntil(catalogue(env,url.origin).then(cat=>notifyTools(env,cat,url.origin)).catch(()=>{}));
       // A route can commit a write and then fail. Its outbox still needs delivery.
       if(env.DB) {
         const delivery=dispatch();
@@ -929,7 +930,7 @@ async function route(request, env, ctx) {
           if (a.status === 401) return Response.redirect(`${url.origin}/account/?next=${encodeURIComponent(url.pathname + url.search)}`, 302);
           return json({ ok: false, error: a.error }, a.status);
         }
-        if(!meta.room)return recordsPage(meta,url);
+        if(!meta.room)return recordsPage(meta,url,cat);
       }
     }
     const lobby = () => env.LOBBY.get(env.LOBBY.idFromName(game));
