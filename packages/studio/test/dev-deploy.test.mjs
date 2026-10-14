@@ -1069,3 +1069,12 @@ test('committed studio stays clean after npm build and dry deploy, with and with
    assert.match(cf.calls().filter(c=>c.startsWith('deploy ')).at(-1),/runtime\/[a-f0-9]{24}\/worker\.js/,'deployment selects one immutable generation');
  }
 });
+
+test('boolean listing choice publishes without crashing', async () => {
+  const dir = studio('boolean-directory');
+  const s=readStudio(dir);s.homie.directory=true;writeStudio(dir,s);
+  let sent;
+  const result=await publish(dir,{site:'https://example.test',fetchFn:async(u,init)=>{sent={url:String(u),body:JSON.parse(init.body)};return Response.json({ok:true});}});
+  assert.equal(result.ok,true);
+  assert.equal(sent.url,'https://homie.rocks/api/studio/publish');
+});
