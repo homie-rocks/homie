@@ -1,0 +1,43 @@
+{
+  "view-part-1.txt": {
+    "tests": 90,
+    "pass": 90,
+    "fail": 0
+  },
+  "view-part-2.txt": {
+    "tests": 90,
+    "pass": 90,
+    "fail": 0
+  },
+  "view-part-3.txt": {
+    "tests": 77,
+    "pass": 77,
+    "fail": 0
+  },
+  "view-tests-tail-final.txt": {
+    "tests": 43,
+    "pass": 43,
+    "fail": 0
+  },
+  "core-final.txt": {
+    "tests": 39,
+    "pass": 39,
+    "fail": 0
+  },
+  "studio-tests-final.txt": {
+    "tests": 34,
+    "pass": 34,
+    "fail": 0
+  },
+  "viewTotal": {
+    "tests": 300,
+    "pass": 300,
+    "fail": 0,
+    "method": "257 early cases in three fresh processes plus 43 tail cases; avoids heap accumulation in one process"
+  },
+  "initialFullViewAttempt": {
+    "passed": 258,
+    "failure": "Node heap exhaustion; partitioned final-source rerun passes",
+    "log": "/tmp/runner-error-proof/view-tests-final.txt"
+  }
+}

@@ -1398,9 +1398,9 @@ against the geometry of those ticks. It never repeats commands or effects. An
 external body/motion write or placement fences that history. Beyond a fence or
 the retained history, input applies on the next tick instead. Entries carrying
 press handlers also apply next tick: world actions are never rerun as movement. Snapshot control
-rows report the application tick and the view uses it for replay. Within the
-replay window a snapshot still missing a predicted input does not replace live
-movement; an explicit placement always does. Legacy wire
+rows report the application tick and the view uses it for replay. Two-dimensional prediction adopts each snapshot and replays pending inputs immediately;
+only the visual error is blended. Three-dimensional views retain the existing
+application-receipt guard. An explicit placement always replaces prediction. Legacy wire
 entries retain their old compensation; current views do not receive negative
 held values to repay late releases.
 
@@ -1425,18 +1425,24 @@ changes authoritative movement. Use `ctx.substeps` for custom integration so
 the toolkit draws the same path, without a second view-side displacement.
 Substep previews include the remaining duration of controls currently held.
 
-Residual drawing corrections use `room.predict.blendMs` (100 ms by default),
-slowed on each moving axis to avoid reversing movement (jumping cannot spend
-horizontal correction faster), with a one-second maximum
-(or the explicitly longer blendMs). Any remainder drains over the final 250 ms
-rather than disappearing on the deadline. `snapM` selects the large-error threshold;
-placements still snap. A placement keeps the established clock phase and
-projects the new body from the snapshot tick to the own tick; it never labels an
-old pose as a future one. Projection is bounded to one second and sends the
-controls it used. Queued held state from an earlier placement cannot later
-change the new body. Newly received discrete presses still belong to the player
-when the browser has not yet learned of that placement. `idleHold` no longer keeps a stopped body displaced
-indefinitely. These drawing settings never alter server truth.
+For 2D runners, `room.predict.blendMs` sets exponential visual-error decay (100 ms
+by default, about 99% removed in that time). Reconciliation immediately adopts the
+server state and replays pending inputs; drawing adds the remaining offset.
+Held direction never blocks a correction. Collision shortens the offset or routes
+its drawing around the obstacle. `room.predict.maxFrameM` optionally sets the
+maximum correction-frame travel (default 2.8 times the body radius). Large errors
+fast-blend under that cap instead of becoming slow run-speed slides. A browser
+frame has one shared presentation for the renderer, HUD and probes.
+
+A server placement carries its original position even in later snapshots. A
+respawn first draws that exact position, then blends toward current prediction.
+During a server outage the view keeps predicting local input and retains the last
+server score and round; it does not start a separate solo room. Initial offline
+practice and browser hosting retain their existing behaviour. Reconnects resume
+server reconciliation. These settings change presentation, never server physics.
+
+Three-dimensional corrections retain their existing catch-up and blend behaviour.
+`correctionDirection` is deprecated and ignored; remove it from 2D views.
 
 A fresh discrete movement action (press or pulse) exits the own body's historical
 catch-up path. It resumes live prediction at once and carries the drawn pose into
@@ -1444,24 +1450,13 @@ the normal correction blend, so a counter-dash or jump does not wait for the
 unseen impulse's history to finish. This changes drawing only; authority, input
 timestamps, cooldowns and replay rules are unchanged.
 
-Own box-bodied 2D presentation also sweeps from its last displayed position. Reconciliation
-cannot switch sides of a solid merely because the new predicted origin is on
-the other side. Travel is limited by elapsed time plus a body-sized blend. Horizontal travel uses the adjacent
-actual velocities; vertical travel uses the recorded substeps with interpolation headroom, so an apex or landing is not trimmed.
-A stationary correction spends only blend speed, not the declared terminal falling speed.
-A large falling-speed limit cannot accelerate a horizontal correction. If sliding cannot reach a correction, a bounded
-incremental route searches collision-tested edges around the obstruction. No
-route means holding the last valid position, never crossing a solid. Explicit
-placements and epoch changes reset presentation immediately. These positions
-never feed movement, hits, scoring, input timestamps, or authority.
-
-A platformer can supply `openRoom({ correctionDirection: input => Number(input.r || 0) - Number(input.l || 0) })`
-for box-bodied 2D presentation. This is horizontal control intent (-1, 0, +1), not authority or a second movement loop.
-It prevents a visual correction from reversing held controls even when contact sets velocity to zero; neutral input
-allows convergence in either direction. Actual predicted braking against a newly reversed control remains allowed.
-
-After a delayed render, box-bodied 2D presentation spends at most 1.4 body widths per drawn frame,
-then continues toward prediction. This affects drawing only; an explicit placement remains immediate.
+Own 2D presentation sweeps from its last displayed position and routes around
+solid obstacles when necessary. The frame cap bounds fast correction travel;
+it is not a run-speed limit and it does not depend on held input. Collision-safe
+routing can take longer than `blendMs` for large errors or a long detour. Those
+positions never feed movement, hits, scoring, input timestamps, or authority.
+A real placement cuts immediately. An authority epoch change also cuts unless
+`respawned` identifies the same living body; that handoff retains its visual error.
 
 When a player's connection comes back, the server hands the body back where it has it, with a new placement
 revision. Within three seconds of the link coming back online, box-bodied 2D presentation treats that revision as the

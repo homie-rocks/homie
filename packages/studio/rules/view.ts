@@ -109,7 +109,7 @@ export interface OpenRoomOptions {
   predict?: Record<string, Predictor>;
   /** Camera axes on the rules' x/y plane for the testing tools. Default: x right, y up. */
   screenBasis?: PortProbeOptions['basis'];
-  /** Horizontal intent for box-bodied 2D visual corrections: -1 left, 0 neutral, +1 right. Does not affect simulation. */
+  /** @deprecated Visual reconciliation no longer depends on control direction. */
   correctionDirection?: (input: Readonly<Record<string, unknown>>, velocity: Vec3) => number;
   /**
    * After this browser's connection comes back, the server hands the own body back where it has it (a new placement
@@ -322,6 +322,15 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const correction = { count: 0, max: 0, last: 0, catches: 0, snaps: 0, rebases: 0, rebaseReason: '', rebaseError: 0 };
   function visualOffset(now: number, path?: Vec3, settled = false): Vec3 {
     if (predict.blendMs <= 0) { offsets = []; return { x: 0, y: 0, z: 0 }; }
+    if (dims === 2) {
+      const sum = {x:0,y:0,z:0};
+      offsets = offsets.filter(o => now - o.at < predict.blendMs * 2);
+      for (const o of offsets) {
+        const fade = Math.exp(-5 * Math.max(0, now-o.at) / predict.blendMs);
+        sum.x += o.delta.x*fade; sum.y += o.delta.y*fade;
+      }
+      return sum;
+    }
     offsets = offsets.filter(o => o.fade > 0);
     const sum = { x: 0, y: 0, z: 0 };
     let waiting = false;
@@ -454,7 +463,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   /** `motion` as this browser's own `move` may change it in place: what a snapshot carries is frozen, so every list, map and struct in it is copied. */
   const motionOf = (kindName: string, motion: Record<string, unknown>): Record<string, unknown> => thawFields(kindOf.get(kindName)?.motion ?? [], motion);
   function adopt(u: Unpacked): void {
-    presentedEntity = null;
+    if (typeof requestAnimationFrame === 'undefined') presentedEntity = null;
     mine = { id: u.id, kind: u.kind, r: u.r, pos: u.pos, vel: u.vel, heading: u.heading, grounded: u.grounded, motion: motionOf(u.kind, u.motion), fields: predictors[u.kind] ? thawFields(kindOf.get(u.kind)?.fields ?? [], u.fields) : u.fields };
   }
   /** The game's guarded `move` for one tick, counted as the server counts it, with the result rounded as the server rounds it. */
@@ -710,7 +719,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const hidden = typeof document !== 'undefined' && document.hidden === true;
     // Effects play for everyone who draws the room: a watcher has no body and still sees them.
     fire();
-    if (!mine || !base || net.seat === null || (!net.connected && !net.rulesHosting)) return;
+    if (!mine || !base || net.seat === null || net.link === 'closed' || dims !== 2 && !net.connected && !net.rulesHosting) return;
     if (hidden) {
       // A hidden tab's timers are too slow to keep input alive, and a body must not run on without its player:
       // one neutral entry at once (every field at its init, no press), then no more steps until the tab shows again.
@@ -721,7 +730,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     hiddenSent = false;
     // Feedback can be sparse (idle keepalives or dropped snapshots). Re-evaluate the
     // steering every frame so a stale +/-5% command cannot drive past its target.
-    steer(now);
+    if (net.connected || net.rulesHosting) steer(now);
     let t = Math.floor(tickAt(now));
     // A frame longer than a quarter of a second: set the clock again from the newest snapshot and carry on from there.
     if (t - stepped > Math.ceil(tickHz / 4) && latest) { rebase(latest.k, 'frame'); t = Math.floor(tickAt(now)); }
@@ -760,7 +769,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     hostMedian = quantile(hostAges, .5);
     if (before && before.e !== f.e) fxQueue.length = 0;
     const changedEpoch = f.e !== epoch;
-    if (changedEpoch) { presented=null; routing=null; route=[]; }
+    if (changedEpoch) placementPose=null;
     epoch = f.e;
     const seat = net.seat;
     let me: Unpacked | null = null;
@@ -772,23 +781,43 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       if(row?.[6]===471){for(let i=7;i+1<row.length;i+=2)applications.set(row[i],row[i+1]);while(applications.size>128)applications.delete(applications.keys().next().value!);}
       // A return hands the body back at the server's pose with a new revision. It is the same body, still on the
       // screen: keep drawing it from where it is shown unless the game says it was really placed meanwhile.
-      const prior = held2.at(-2)?.ents.get(me.id) ?? null;
+      const prior = before?.ents.get(me.id) ?? null;
+      if (changedEpoch) {
+        let sameLife = false;
+        if (dims === 2 && mine?.id === me.id && prior && opts.respawned) {
+          try { sameLife = !opts.respawned(entityOf(prior, true, false), entityOf(me, true, false)); }
+          catch (err) { console.warn('[room] respawned', err); }
+        }
+        // Restoring authority changes its clock epoch, not necessarily the
+        // runner's life. Retain only the drawing across that handoff.
+        if (sameLife && presented?.id === me.id) { presented.r=me.r; returningUntil=0; }
+        else presented=null;
+      }
       if (placed && !changedEpoch && returningUntil > clock() && mine?.id === me.id && mine.r !== me.r && presented?.id === me.id && presented.r === mine.r) {
         let respawn = false;
         if (opts.respawned && prior) { try { respawn = Boolean(opts.respawned(entityOf(prior, true, false), entityOf(me, true, false))); } catch (err) { console.warn('[room] respawned', err); } }
         if (!respawn) { presented.r = me.r; presented.at = clock(); }
         returningUntil = 0;
       }
+      let returned = false;
+      if (placed && presented?.r === me.r && returningUntil === 0) returned = true;
       if (placed || !base) {
+        const shown = presented?.pos;
         adopt(me); rebase(f.k, changedEpoch ? 'epoch' : 'placement');
+        if (dims === 2 && !kindOf.get(me.kind)?.owner) {
+          const target = meNow()?.pos ?? mine!.pos;
+          const origin = returned && shown ? shown : me.placement ?? me.pos;
+          offsets = [{delta:{x:periodicDelta(target.x,origin.x,map.wrap?.x),y:periodicDelta(target.y,origin.y,map.wrap?.y),z:0},at:clock(),path:target,fade:1,last:clock()}];
+          if (!returned && prior) placementPose = {id:me.id,r:me.r,pos:me.placement ?? me.pos,at:clock()};
+        }
         if (placed) emit('placed', entityOf(me, true));
       } else if (kindOf.get(me.kind)?.owner) {
         mine!.motion = motionOf(me.kind, me.motion);
         if (predictors[me.kind]) mine!.fields = thawFields(kindOf.get(me.kind)?.fields ?? [], me.fields);
-      } else if (!pending.some(entry => entry.seq !== undefined && entry.t <= f.k && f.k - entry.t < tickHz && (applications.get(entry.seq) ?? Infinity) > f.k)) {
-        // This snapshot predates an input we already predicted. Within the rewind
-        // window it is provisional movement truth: wait for its application receipt
-        // rather than briefly adopting the path made with the missing control.
+      } else if (dims === 2 || !pending.some(entry => entry.seq !== undefined && entry.t <= f.k && f.k - entry.t < tickHz && (applications.get(entry.seq) ?? Infinity) > f.k)) {
+        // 2D always adopts authority and replays pending input. The legacy 3D
+        // guard above waits for missing application receipts within its rewind
+        // window; presentation below remains independent of simulation.
         const previous = mine!.pos;
         const shownBody = meNow();
         const shown = shownBody?.pos ?? previous;
@@ -853,7 +882,12 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         if (error > 0.00001) { correction.count++; correction.max = Math.max(correction.max, error); }
         // A snapshot can replace the historical segment being drawn even when replay reaches
         // the same current position. Preserve that drawn pose on every catch-up reconciliation.
-        if (error > 0.00001 || catchTick !== null) {
+        if (dims === 2) {
+          catchTick = null; offsets = [];
+          const corrected = meNow()?.pos ?? mine!.pos;
+          const delta = {x:periodicDelta(corrected.x,shown.x,map.wrap?.x),y:periodicDelta(corrected.y,shown.y,map.wrap?.y),z:0};
+          offsets = [{delta,at:clock(),path:corrected,fade:1,last:clock()}];
+        } else if (error > 0.00001 || catchTick !== null) {
           if (catchTick === null && error > (predict.catchM ?? myKind()!.maxSpeed * 3 / tickHz) + 0.00001) {
             catchTick = f.k; catchAt = clock(); correction.catches++;
           }
@@ -942,7 +976,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   net.on('role', (e) => { if (e.snap) onSnapshot(e.snap); if (net.offline && !net.rulesHosting) setStatus(net.closedWhy ? 'closed' : 'offline'); });
   net.on('link', (e) => {
     if (e.why === 'subscribe') return;
-    if (e.state === 'online') { returningUntil = clock() + 3000; base = null; if (status !== 'playing') setStatus('connecting'); } else if (e.state === 'closed') setStatus('closed'); else if (e.state === 'alone' || e.state === 'offline') setStatus('offline');
+    if (e.state === 'online') { returningUntil = clock() + 3000; if (dims !== 2) base = null; if (status !== 'playing') setStatus('connecting'); } else if (e.state === 'closed') setStatus('closed'); else if (e.state === 'alone' || e.state === 'offline') setStatus('offline');
   });
   net.on('round', (r) => { if (r.results) { results = r.results; if (round) { round = { ...round, results }; emit('round', roundNow()); } } });
   net.on('event', (e) => {
@@ -991,11 +1025,16 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
    */
   let routing: ReturnType<typeof correctionPath> | null = null;
   let route: Vec3[] = [];
-  let routeDirection = 0;
+  let placementPose: {id:string;r:number;pos:Vec3;at:number} | null = null;
   let presentedEntity: Entity | null = null;
-  let presentationQueued = false;
+  let presentationFrame: number | null = null;
+  const beginPresentation = () => {
+    presentedEntity = null;
+    presentationFrame = requestAnimationFrame(beginPresentation);
+  };
+  if (typeof requestAnimationFrame !== 'undefined') presentationFrame = requestAnimationFrame(beginPresentation);
   let forecast: { mine: Mine; pos: Vec3; motion: Record<string, unknown>; tick: number; key: string; geometry: unknown; next: ReturnType<typeof runMove> } | null = null;
-  let presented: { id: string; r: number; pos: Vec3; vel: Vec3; at: number } | null = null;
+  let presented: { id: string; r: number; pos: Vec3; at: number } | null = null;
   function meNow(present = false): Entity | null {
     if (present && presentedEntity) return presentedEntity;
     if (predicting) { const u = mine && predictionFrame?.ents.get(mine.id); return u ? entityOf(u, true) : null; }
@@ -1078,85 +1117,49 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         {shape:kind.shape ?? 'circle',radius:kind.radius,height:kind.height || 2*kind.radius,terrain:kind.terrain});
       return body.pos;
     };
-    // An established box cursor is swept below from the actual displayed side.
-    // Sweeping its target from a second origin first duplicates the same query
-    // and does not add safety. New placements and other body types keep it.
-    const hasCursor = present && dims === 2 && kind?.shape === 'box' && !kind.owner && presented?.id === mine.id && presented.r === mine.r;
-    if (!hasCursor) pos = constrain(safeOrigin, pos);
+    pos = constrain(safeOrigin, pos);
+    const predictedPosition = pos;
     const offset = visualOffset(clock(), pos, settled);
-    const offsetTarget = wrapPoint({ x: pos.x + offset.x, y: pos.y + offset.y, z: pos.z + offset.z },map.wrap);
-    pos = hasCursor ? offsetTarget : constrain(pos, offsetTarget);
-    if (present && dims === 2 && kind?.shape === 'box' && !kind.owner) {
+    // Sweep from prediction toward the visual error. Contact shortens only the
+    // offset; it never becomes a second movement state or blocks local input.
+    pos = constrain(pos, wrapPoint({x:pos.x+offset.x,y:pos.y+offset.y,z:pos.z+offset.z},map.wrap));
+    if (placementPose && (placementPose.id !== mine.id || placementPose.r !== mine.r)) placementPose = null;
+    const placing = placementPose !== null;
+    if (dims === 2 && placementPose?.id === mine.id && placementPose.r === mine.r) {
+      pos = placementPose.pos;
+      if (present && clock() > placementPose.at) placementPose = null;
+    }
+    if (present && dims === 2 && kind && !kind.owner) {
       const now = clock();
-      if (presented && presented.id === mine.id && presented.r === mine.r) {
+      if (presented?.id === mine.id && presented.r === mine.r && !placing && (kind.shape === 'box' || now-presented.at < 100)) {
         const from = presented.pos;
-        let forward = velocity.x * presented.vel.x >= 0 ? Math.sign(velocity.x) : 0;
-        if (opts.correctionDirection) {
-          try {
-            const intent = opts.correctionDirection(sample, mine.vel);
-            // An explicit intent must not be overridden by stale replay velocity.
-            // A game can return neutral during genuine braking/reversal inertia.
-            if (Number.isFinite(intent)) forward = Math.sign(intent);
+        const limit = predict.maxFrameM ?? Math.max(.1, (kind?.radius ?? .5)*2.8);
+        const direct = constrain(from,pos);
+        if (distance(direct,pos) > .002) {
+          const goal = routing?.goal ?? route.at(-1);
+          if (goal && distance(goal,pos)>2) { routing=null;route=[]; }
+          if (!route.length) {
+            routing ??= correctionPath(from,pos,Math.max(.25,2*(kind?.radius ?? .5)));
+            const found = routing.advance((a,b)=>distance(constrain(a,b),b)<.002);
+            if (found) { route=[...found];routing=null; }
           }
-          catch (err) { console.warn('[room] correctionDirection', err); }
-        }
-        if ((routing || route.length) && forward !== routeDirection) { routing=null; route=[]; }
-        routeDirection = forward;
-        const routeGoal = routing?.goal ?? route.at(-1);
-        if (routeGoal && distance(routeGoal, pos) > Math.max(2,kind.radius*4)) { routing=null; route=[]; }
-        if (route[0] && forward * periodicDelta(from.x,route[0].x,map.wrap?.x) < -.001) { routing=null; route=[]; }
-        if (route.length) {
           while(route.length && distance(from,route[0])<.01)route.shift();
-        }
-        const destination = route[0] ?? pos;
-        const elapsed = Math.max(0, now - presented.at);
-        // Bound presentation by time, including expiring offsets and changed catch-up paths.
-        const length = distance(from, destination);
-        // Falling cannot spend a horizontal correction. Corrections add only
-        // blend speed to the actual movement, not a body's declared speed cap.
-        const blendSpeed = kind.radius / Math.max(.1,predict.blendMs/1000);
-        // Include the whole recorded tick's velocities: a takeoff/landing can
-        // change velocity abruptly between samples without being a correction.
-        let verticalSpeed = Math.max(Math.abs(velocity.y),Math.abs(presented.vel.y),Math.abs(mine.vel.y),Math.abs(preview?.vel.y ?? 0));
-        const recorded = preview?.steps;
-        if (recorded) for (let i=0;i<recorded.length;i++) verticalSpeed = Math.max(verticalSpeed,Math.abs(recorded[i].vel.y));
-        // Leave headroom for a substep entered part-way through a render interval.
-        verticalSpeed *= 1.5;
-        const advance = (axis: 'x' | 'y') => {
-          const delta = periodicDelta(from[axis],destination[axis],map.wrap?.[axis]);
-          // A landing can set velocity to zero before the sampled pose reaches
-          // contact. The adjacent movement velocities retain that real travel.
-          const travel = axis === 'y' ? verticalSpeed : Math.max(Math.abs(velocity.x),Math.abs(presented!.vel.x));
-          const allowance = (travel + blendSpeed) * elapsed / 1000;
-          return from[axis]+Math.max(-allowance,Math.min(allowance,delta));
-        };
-        const target = {...wrapPoint({x:advance('x'),y:advance('y'),z:0},map.wrap)};
-        // A route is a correction too: it cannot pull against continuing motion.
-        if (forward * periodicDelta(from.x,target.x,map.wrap?.x) < 0) target.x = from.x;
-        // A stalled frame cannot spend its whole elapsed-time allowance in one
-        // visible jump. Keep backlog travel below 1.4 body widths per drawing;
-        // authority/prediction keep their real clock and placements bypass this.
-        const frameDistance = distance(from,target), frameLimit = Math.max(.1,kind.radius*2.8);
-        if (frameDistance > frameLimit) {
-          const fraction = frameLimit / frameDistance;
-          target.x = from.x + periodicDelta(from.x,target.x,map.wrap?.x)*fraction;
-          target.y = from.y + periodicDelta(from.y,target.y,map.wrap?.y)*fraction;
-        }
-        let next = constrain(from, target);
-        // Slide the residual along the contact, starting on the side actually drawn.
-        if (distance(next, target) > .002) {
-          next = constrain(next, {x:target.x,y:next.y,z:0});
-          next = constrain(next, {x:next.x,y:target.y,z:0});
-        }
-        if (!route.length && distance(next, target) > .01 && distance(from,next) < .01 && length > .1) {
-          routing ??= correctionPath(from,pos,Math.max(.25,2*kind.radius));
-          const found=routing.advance((a,b)=>forward * periodicDelta(a.x,b.x,map.wrap?.x) >= -.001 && distance(constrain(a,b),b)<.002);
-          if(found) { route=[...found]; routing=null; }
-        }
-        pos = next;
-      }
-      if (!presented || presented.id !== mine.id || presented.r !== mine.r) { routing=null;route=[]; }
-      presented = {id:mine.id,r:mine.r,pos,vel:velocity,at:now};
+          const waypoint = route[0];
+          if (waypoint) {
+            let length=distance(from,waypoint);
+            for(let i=1;i<route.length;i++)length+=distance(route[i-1],route[i]);
+            const travel=Math.min(limit,Math.max(distance(from,pos),length*(1-Math.exp(-5*Math.max(0,now-presented.at)/Math.max(1,predict.blendMs)))));
+            pos=blendPosition(from,waypoint,Math.min(1,travel/Math.max(.001,distance(from,waypoint))),map.wrap);
+          } else pos=direct;
+        } else { routing=null;route=[]; }
+        const length=distance(from,pos);
+        if(length>limit)pos=blendPosition(from,pos,limit/length,map.wrap);
+        pos=constrain(from,pos);
+        // Retain only visual error. Neither collision nor the per-frame cap
+        // changes prediction, held input, replay, or authoritative fields.
+        offsets=[{delta:{x:periodicDelta(predictedPosition.x,pos.x,map.wrap?.x),y:periodicDelta(predictedPosition.y,pos.y,map.wrap?.y),z:0},at:now,path:predictedPosition,fade:1,last:now}];
+      } else { routing=null;route=[]; }
+      presented = {id:mine.id,r:mine.r,pos,at:now};
     }
     if (headingBlend) {
       const t = predict.blendMs > 0 ? Math.min(1, (clock() - headingBlend.at) / predict.blendMs) : 1;
@@ -1164,18 +1167,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       if (t >= 1) headingBlend = null;
     }
     const result = entityOf({ ...server, ...(kind && predictors[kind.name] ? { fields: (base ? previewFields : null) ?? mine.fields } : {}), pos, vel: velocity, heading, grounded, motion }, true);
-    // Synchronous readers (HUD, scene, probes) share one presentation. Clear at
-    // the microtask boundary: an rAF clear can run after the next drawing callback,
-    // reusing an old pose and then spending two callbacks' travel at once.
-    // Inputs and snapshots still invalidate immediately.
-    if (present && typeof window !== 'undefined') {
-      presentedEntity = result;
-      if (!presentationQueued) {
-        presentationQueued = true;
-        const clear = () => { presentedEntity = null; presentationQueued = false; };
-        queueMicrotask(clear);
-      }
-    }
+    // All readers share one drawing per browser frame, including snapshot
+    // handlers and probes. A dedicated rAF registered before the game's loop
+    // clears it before the next drawing, never after that drawing callback.
+    if (present && presentationFrame !== null) presentedEntity = result;
     return result;
   }
   function drawn(id: string, s = net.sample()): Entity | null {
@@ -1352,7 +1347,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       if (changed) pump();
       const shown = changed ? meNow()?.pos : null;
       for (const [name, fd] of kind?.input ?? []) if ((fd.t === 'press' || fd.t === 'pulse') && coerce(fd,s[name],dims)) { const value=coerce(fd,s[name],dims) as number | boolean; if(fd.t==='pulse'){pulseCount+=1;const target=Math.max(stepped+1,(pulseQueue.at(-1)?.t??stepped)+1);pulseQueue.push({name,value:Number(value),n:pulseCount,t:target});net.send('pulse',[epoch,name,value,target,pulseCount]);} else pressed.set(name,value); }
-      if (changed) presentedEntity = null;
+      if (changed && typeof requestAnimationFrame === 'undefined') presentedEntity = null;
       sample = next;
       // A discrete action belongs to the present, even while an unseen impulse is
       // being drawn from history. Resume the live prediction and let the existing
@@ -1382,6 +1377,6 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     askButtons(id, offer = {}) { if (solo) return []; const e = latest?.ents.get(id); return e && e.seat !== undefined ? agents?.askButtons(e.seat, offer) ?? [] : []; },
     tune, get map(){return solo ? solo.map : mapAt(latest?.k??0);}, net: net as Netplay,
     pump,
-    close() { stopSolo(); disposeMoveContext(moveCtx as object); closed = true; if (timer) clearInterval(timer); if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onShow); agents?.stop(); net.close(); setStatus('closed'); },
+    close() { if(presentationFrame!==null)cancelAnimationFrame(presentationFrame); stopSolo(); disposeMoveContext(moveCtx as object); closed = true; if (timer) clearInterval(timer); if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onShow); agents?.stop(); net.close(); setStatus('closed'); },
   };
 }

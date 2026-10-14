@@ -17,6 +17,19 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [Unreleased]
+
+### Changed
+
+- 2D own-runner reconciliation adopts server state immediately and replays pending input. Visual error decays exponentially with `room.predict.blendMs`; held direction no longer gates corrections. `room.predict.maxFrameM` bounds fast blends, collision-safe routing keeps box runners outside terrain, and all readers share one browser-frame presentation.
+- Server-game outages retain local prediction and server scores instead of starting a visible solo game. Reconnect attempts remain prompt.
+- Placement snapshots retain the original server spawn position so delayed or lost snapshots cannot make the first respawn drawing start several tiles into a run.
+- Circle sweeps starting inside an expanded box still test its rounded corner, preventing a correction from entering that corner.
+
+### Upgrade notes
+
+- Remove deprecated `openRoom({ correctionDirection })` callbacks. No package version bump in this change; renumber at release.
+
 ## [0.57.0] - 2026-10-16
 
 **Plugin 0.57.0**
@@ -253,6 +266,7 @@ Keep each customer's exact basket through payment, and check that your studio me
 ### Upgrade notes
 
 - Saved baskets are opt-in through `shop.json.basket` and require Stripe with tax-inclusive menu prices. Automatic tax and Managed Payments are refused for basket mode. Staff can use the reported basket total, actual payment and settlement status to collect a shortfall.
+
 
 ## [0.51.5] - 2026-10-14
 

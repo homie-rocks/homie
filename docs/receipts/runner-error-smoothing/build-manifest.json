@@ -1,0 +1,19 @@
+{
+  "toolkitBase": "f01f0c8a",
+  "controlCommit": "1cc44a3",
+  "controlVersion": "0.51.2",
+  "studioBase": "dd4a42f",
+  "studioVersion": "0.51.1",
+  "candidateSource": {
+    "rules/view.ts": "d8af53544d7f64ce8472a290ea11a2f51bfdbcec851b71185760319b544a12e8",
+    "rules/rules.ts": "f47eb496dd4629687d20b6e7f610fcfa29ad66e64da4af515fd1cf2de4d61bfe",
+    "rules/core.ts": "a7858a34a2ee8a5dcf5ffc125efba6dd71ee371608a81e7f83b9922197ac25f3",
+    "rules/pack.ts": "4c281687c6ba0a814bfa64e98fcfeb2deb3595d85e9a1379b2c048f7a923e76f",
+    "rules/interest.mjs": "d70e0e01c1b3701ce7d68f4d9f334fcd857831542adcf2873a3119676c5747f8",
+    "rules/math.ts": "bc31fd55262a0e7066ea0784b9001860791b6cffcc0d67da49e231208f24e05a",
+    "netplay/netplay.ts": "2b8de819f996618c084c0775cd2f7a0197c37303544b932e4b4cd5e058b471a5"
+  },
+  "worker": {
+    "main": "/Users/ryan/Studios/homie-arcade-rules/site/src/runtime/dc4393c12b313735496cf667/worker.js"
+  }
+}

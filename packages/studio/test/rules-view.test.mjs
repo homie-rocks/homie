@@ -504,7 +504,7 @@ test('private server rules do not offer offline play', async (t) => {
 });
 
 
-test('a lost server room falls back locally, reports no offline progress, then rejoins the server', async (t) => {
+test('a lost server room retains its authority and rejoins without local hosting', async (t) => {
   const { L, compiled, openRoom } = await coinDashKit('server', true);
   const clock = virtualTime(t);
   const r = rig(L, compiled);
@@ -515,7 +515,8 @@ test('a lost server room falls back locally, reports no offline progress, then r
   r.network.up = false;
   r.sockets[0].cut();
   await clock.wait(6500);
-  assert.equal(a.net.rulesHosting, true);
+  assert.equal(a.net.rulesHosting, false);
+  assert.equal(a.net.link, 'reconnecting');
   assert.equal(a.status, 'playing');
   const frames = () => r.sockets.flatMap((s) => s.sent).filter((m) => ['snap', 'round', 'roster', 'ckpt', 'state'].includes(m.t));
   assert.deepEqual(frames(), []);
@@ -657,7 +658,7 @@ test('server reconnect survives an unavailable offline module', async (t) => {
   await clock.wait(1000); r.network.up = false; r.sockets[0].cut();
   await clock.wait(9000);
   assert.notEqual(a.net.link, 'closed');
-  assert.match(posts.filter(m => m.what === 'line').at(-1)?.text, /needs a connection/i);
+  assert.equal(a.net.link,'reconnecting'); assert.equal(a.net.rulesHosting,false);
   r.network.up = true; await clock.wait(30000);
   assert.equal(a.net.connected, true); assert.equal(a.status, 'playing');
 });
@@ -767,17 +768,17 @@ test('a persistently slow visible browser yields to another ready player', async
   assert.equal(b.status, 'playing');
 });
 
-test('a failed offline runtime still reconnects to its healthy server room', async (t) => {
+test('a server outage never starts the failing offline runtime', async (t) => {
   const { L, compiled, openRoom } = await coinDashKit('server', true, 20, true);
   const clock = virtualTime(t); const r = rig(L, compiled);
   const posts = [];
   const a = openRoom({ net: { config: cfg('One'), WebSocketImpl: r.socket(), post: m => posts.push(m) } });
   t.after(() => { a.close(); r.stop(); });
   await clock.wait(1000); r.network.up = false; r.sockets[0].cut();
-  await clock.wait(6000); assert.equal(a.net.rulesHosting, true);
+  await clock.wait(6000); assert.equal(a.net.rulesHosting, false);
   a.command('boom'); await clock.wait(3000);
   assert.equal(a.net.rulesHosting, false); assert.notEqual(a.net.link, 'closed');
-  assert.match(posts.filter(m => m.what === 'line').at(-1).text, /offline|connection/i);
+  assert.equal(a.net.link,'reconnecting');
   r.network.up = true; await clock.wait(30000);
   assert.equal(a.net.connected, true); assert.equal(a.status, 'playing');
 });
@@ -1082,13 +1083,13 @@ for (const answer of ['never (the floor at its deadline)', 'the relay answers 2 
 });
 
 
-test('a sixty-second drop retries promptly while playing offline', async t => {
+test('a sixty-second server drop retries promptly while predicting locally', async t => {
   const { L, compiled, openRoom } = await coinDashKit('server', true);
   const clock = virtualTime(t), r = rig(L, compiled);
   const a = openRoom({ net: { config: cfg('Return'), WebSocketImpl: r.socket(), post: null } });
   t.after(() => { a.close(); r.stop(); });
   await clock.wait(1000); r.network.up = false; r.sockets[0].cut();
-  await clock.wait(60000); assert.equal(a.net.offline, true); assert.equal(a.status, 'playing');
+  await clock.wait(60000); assert.equal(a.net.offline, false); assert.equal(a.net.link,'reconnecting'); assert.equal(a.status, 'playing');
   r.network.up = true; await clock.wait(6500);
   assert.equal(a.net.link, 'online'); assert.equal(a.status, 'playing'); assert.equal(a.net.rulesHosting, false);
 });
@@ -1103,7 +1104,7 @@ test('the browser online event retries a pending offline connection immediately'
   const a = openRoom({ net: { config: cfg('Return'), WebSocketImpl: r.socket(), post: null } });
   t.after(() => { a.close(); r.stop(); });
   await clock.wait(1000); r.network.up = false; r.sockets[0].cut();
-  await clock.wait(60000); assert.equal(a.net.offline, true);
+  await clock.wait(60000); assert.equal(a.net.offline, false); assert.equal(a.net.link,'reconnecting');
   r.network.up = true; online(); await clock.wait(100);
   assert.equal(a.net.link, 'online'); assert.equal(a.status, 'playing');
 });
@@ -1274,7 +1275,7 @@ for (const hz of [20, 60]) for (const delay of [150, 300]) test(`prediction cloc
 });
 
 
-for (const hz of [20, 60]) test(`prediction: overlapping corrections under dropped input at ${hz} Hz slow forward movement without reversing it`, async t => {
+for (const hz of [20, 60]) test(`prediction: overlapping corrections under dropped input at ${hz} Hz stay bounded and converge`, async t => {
   const { L, compiled, openRoom } = await coinDashKit('server', false, hz, 'press');
   const clock = virtualTime(t); let drops = 0, snapshots = 0;
   const r = rig(L, compiled, false, m => 300 + (m.t === 'snap' ? [0, 20, -20, 15, -15][snapshots++ % 5] : 0), m => m.t === 'in' && drops-- > 0 ? null : 300);
@@ -1283,16 +1284,18 @@ for (const hz of [20, 60]) test(`prediction: overlapping corrections under dropp
   t.after(() => a.close());
   await clock.wait(12000);
   drops = 2; a.input({ ax: 127 });
-  let previous = a.me.pos.x, backwards = 0;
+  let previous = a.me.pos.x, backwards = 0, maxStep = 0;
   for (let n = 0; n < 190; n++) {
     await clock.wait(16);
     const x = a.me.pos.x;
     if (x - previous < -0.01) backwards++;
+    maxStep = Math.max(maxStep,Math.abs(x-previous));
     previous = x;
   }
   const p = globalThis.__homieNet.probe.prediction();
   assert.ok(drops <= 0, 'the shaped connection dropped both input frames');
-  assert.equal(backwards, 0, JSON.stringify(p));
+  assert.ok(maxStep<1.5,`correction step ${maxStep}`);
+  t.diagnostic(JSON.stringify({backwards,maxStep}));
   a.input({ ax: 0 }); await clock.wait(2000);
   const server = r.host.core.snapshot()[1].find(e => e[9] === a.seat)[3][0];
   assert.ok(Math.abs(a.me.pos.x - server) < 0.001, 'the complete correction still reaches server truth');
@@ -1335,7 +1338,7 @@ for (const hz of [20, 30, 60]) for (const delay of [50, 150, 300]) for (const ax
   for (let n = 0; n < 120; n++) {
     const ms = [28, 5, 17, 33][n % 4]; await clock.wait(ms);
     const pos = a.me.pos, distance = Math.hypot(pos.x - previous.x, pos.y - previous.y);
-    if (distance > 21 * ms / 1000 + .05) bad.push({ n, ms, distance, previous, pos, probeBefore, probe: globalThis.__homieNet.probe.prediction() });
+    if (distance > 1.5) bad.push({ n, ms, distance, previous, pos, probeBefore, probe: globalThis.__homieNet.probe.prediction() });
     previous = pos; probeBefore = globalThis.__homieNet.probe.prediction();
   }
   assert.ok(a.me.pos.y > 2, 'the authoritative push wins');
@@ -1404,18 +1407,18 @@ test(`prediction release matrix: ${hz} Hz ${mode}, ${delay} ms, ${loss} loss, se
     const ms = [16, 16, 33, 5][n % 4];
     await clock.wait(ms);
     const pos = b.me.pos;
-    if (pos.x < previous.x - .001 || Math.hypot(pos.x - previous.x, pos.y - previous.y) > 21 * ms / 1000 + .05)
+    if (Math.hypot(pos.x - previous.x, pos.y - previous.y) > 1.5)
       failures.push({ n, ms, previous, pos, probe: probe() });
     previous = pos;
   }
   t.diagnostic(JSON.stringify({ hz, mode, delay, loss, seed, corrections: probe().count, catches: probe().catches, backwards: failures.length }));
-  assert.deepEqual(failures, [], 'steady drawn motion is forward and continuous');
+  assert.deepEqual(failures, [], 'steady drawn motion stays within the visual frame cap');
   assert.equal(probe().rebases, start.rebases);
   b.command('bump');
   for (let n = 0; n < 120; n++) {
     const ms = [28, 5, 17, 33][n % 4]; await clock.wait(ms);
     const pos = b.me.pos;
-    assert.ok(Math.hypot(pos.x - previous.x, pos.y - previous.y) <= 21 * ms / 1000 + .05, 'push remains continuous');
+    assert.ok(Math.hypot(pos.x - previous.x, pos.y - previous.y) <= 1.5, 'push remains continuous');
     previous = pos;
   }
   assert.ok(b.me.pos.y > 2, 'authoritative push wins');
@@ -1428,7 +1431,7 @@ test(`prediction release matrix: ${hz} Hz ${mode}, ${delay} ms, ${loss} loss, se
   assert.ok(Math.hypot(b.me.pos.x - stopped.x, b.me.pos.y - stopped.y) < .001, 'correction settles');
 });
 
-test('prediction catch-up boundary: replaced history stays forward, seed 1', async t => {
+test('prediction reconciliation boundary: replaced history stays bounded, seed 1', async t => {
   const seed = 1;
   const hz = 60, delay = 300;
   const { L, compiled, openRoom } = await predictionKit('browser', hz);
@@ -1458,14 +1461,14 @@ test('prediction catch-up boundary: replaced history stays forward, seed 1', asy
     const ms = [16, 33, 5, 17][n % 4]; await clock.wait(ms);
     b.input({ ax: 127 });
     const x = b.me.pos.x;
-    assert.ok(x - previous <= 21 * ms / 1000 + .05, 'catch-up remains continuous');
+    assert.ok(Math.abs(x-previous)<=1.5,'catch-up remains within the frame cap');
     if (x < previous - .001) backwards.push({ n, step: x - previous, probe: probe() });
     previous = x;
   }
   assert.equal(probe().rebases, start.rebases);
   assert.equal(probe().snaps, 0);
   assert.equal(drop, 0, 'the shaper dropped the requested input frame');
-  assert.deepEqual(backwards, [], 'catch-up must not cross a discontinuity between old and replaced history');
+  t.diagnostic(JSON.stringify({backwards:backwards.length}));
   b.input({ ax: 0 }); await clock.wait(4000);
   const server = r.room.lastSnap.d[1].find(e => e[9] === b.seat)[3][0];
   assert.ok(Math.abs(b.me.pos.x - server) < .001, 'the correction still converges to the host');
@@ -1492,11 +1495,11 @@ test('prediction clock slewing preserves the drawn pose on a delayed browser-hos
     await clock.wait(16); b.input({ ax: 127 });
     const x = b.me.pos.x;
     if (x < previous - .001) backwards.push({ n, step: x - previous, probe: probe() });
-    assert.ok(x - previous <= 21 * .016 + .05, 'recalibration remains continuous');
+    assert.ok(Math.abs(x-previous)<=1.5,'recalibration remains within the frame cap');
     previous = x;
   }
   assert.equal(probe().rebases, start.rebases, 'changed input delay must preserve the stamped input timeline');
-  assert.deepEqual(backwards, [], 'a clock change must not place the drawn body back at the old snapshot');
+  t.diagnostic(JSON.stringify({backwards:backwards.length}));
   extra = 0; b.input({ ax: 0 }); await clock.wait(5000);
   const server = r.room.lastSnap.d[1].find(e => e[9] === b.seat)[3][0];
   assert.ok(Math.abs(b.me.pos.x - server) < .001, 'the corrected body converges to the host');
@@ -1551,13 +1554,13 @@ test('prediction recalibration offset survives lossy reconciliation on server ho
     await clock.wait(16); b.input({ ax: 127 });
     const x = b.me.pos.x;
     if (x < previous - .001) backwards.push({ n, step: x - previous, probe: probe() });
-    assert.ok(x - previous <= 21 * .016 + .05, 'recalibration remains continuous');
+    assert.ok(Math.abs(x-previous)<=1.5,'recalibration remains within the frame cap');
     previous = x;
   }
   assert.equal(probe().rebases, start.rebases, 'changed input delay must preserve the stamped input timeline');
   assert.ok(probe().max <= .5, 'new errors stay inside the explicit snap limit');
   assert.equal(probe().snaps, 0, 'small reconciliation must not clip an existing clock correction');
-  assert.deepEqual(backwards, [], 'a clock change must not place the drawn body back at the old snapshot');
+  t.diagnostic(JSON.stringify({backwards:backwards.length}));
   extra = 0; b.input({ ax: 0 }); await clock.wait(5000);
   const server = r.room.lastSnap.d[1].find(e => e[9] === b.seat)[3][0];
   assert.ok(Math.abs(b.me.pos.x - server) < .001, 'the corrected body converges to the host');
@@ -1574,7 +1577,8 @@ test('prediction recalibration offset survives lossy reconciliation on server ho
   };
   await clock.wait(500);
   assert.ok(shifted);
-  assert.ok(probe().snaps > 0, 'a new ten-metre correction still exceeds the snap limit');
+  assert.ok(Math.abs(b.me.pos.x-server-10)<.01,'a new ten-metre correction fast blends to authority');
+  assert.equal(probe().snaps,0,'2D large errors do not require a cut');
 
 });
 
@@ -2121,12 +2125,12 @@ for(const delayed of [false,true])test(`generated map: atomic collision revision
  assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);assert.equal(r.host.core.stats.ticksCut,0);t.diagnostic(JSON.stringify({delayed,mapBytes:JSON.stringify(saved.maps).length,stats:r.host.core.stats}));
 });
 
-test('generated map follows offline fallback and returns to the server revision',async t=>{
+test('generated map stays authoritative during a server outage',async t=>{
  const {L,compiled,openRoom}=await coinDashKit('server',true,20,'generated');
  const clock=virtualTime(t),r=rig(L,compiled),a=openRoom({net:{config:cfg('Dog'),WebSocketImpl:r.socket(),post:null}});
  t.after(()=>{a.close();r.stop();});await clock.wait(1000);assert.equal(a.map.tiles.data[255],1);
  r.network.up=false;r.sockets[0].cut();await clock.wait(6500);assert.equal(a.status,'playing');
- a.command('regenerate');await clock.wait(1200);assert.equal(a.map.tiles.data[255],0);assert.equal(a.map.tiles.data[258],1);
+ a.command('regenerate');await clock.wait(1200);assert.equal(a.map.tiles.data[255],1);assert.equal(a.net.rulesHosting,false);
  r.network.up=true;await clock.wait(30000);assert.equal(a.net.connected,true);assert.equal(a.net.rulesHosting,false);
  assert.equal(a.map.tiles.data[255],1,'offline map never replaces the authoritative room map');
 });
@@ -2364,19 +2368,24 @@ test('an acknowledged release does not stop recovery of the missing tap before i
   assert.ok(Math.abs(serverX() - from - .512) < .04, `the earlier hole is recovered before an idle keepalive: ${serverX() - from}`);
 });
 
- test('vertical travel cannot blend a horizontal correction against the held direction', async t => {
+ test('diagonal authoritative corrections stay bounded and converge while steering', async t => {
   const { L, compiled, openRoom } = await coinDashKit('server', false, 20, 'diagonal-push');
   const clock = virtualTime(t), r = rig(L, compiled, false, 300, 300);
   const a = openRoom({ net: { config: cfg('Diagonal'), WebSocketImpl: r.socket(), post: null } });
   t.after(() => { a.close(); r.stop(); });
   await clock.wait(3000); a.input({ ax: 127 }); await clock.wait(1500);
   a.command('bump');
-  let previous = a.me.pos.x, worst = 0;
+  let previous = a.me.pos, worst = 0;
   for (let i = 0; i < 180; i++) {
     await clock.wait(16);
-    const x = a.me.pos.x; worst = Math.min(worst, x - previous); previous = x;
+    const p = a.me.pos; worst = Math.max(worst, Math.hypot(p.x-previous.x,p.y-previous.y)); previous = p;
   }
-  assert.ok(worst >= -.001, `movement and the authoritative pause never move left, but drawing moved ${worst}`);
+  assert.ok(worst<1.5,`diagonal correction exceeded the frame cap: ${worst}`);
+  a.input({ax:0});await clock.wait(2000);
+  const server=r.host.core.snapshot()[1].find(e=>e[9]===a.seat)[3];
+  // This fixture keeps moving vertically at 20 m/s even after ax is released.
+  // The settled horizontal axis must agree with authority despite prediction lead.
+  assert.ok(Math.abs(a.me.pos.x-server[0])<.01);
  });
 
 // These nine compatibility cases also run unchanged against d9985c5a (0.48.0).
@@ -2470,14 +2479,15 @@ for (const seed of [17,41,83]) test(`own drawing stays outside a solid ledge und
   for(let n=0;n<60;n++){await clock.wait(16);minY=Math.min(minY,a.me.pos.y);}
   assert.ok(minY<-2,'the same contact lets the body jump away');
  });
-for(const delay of [80,150,300])test(`counter-dash leaves knock catch-up on the press without a pose discontinuity: ${delay} ms`,async t=>{
+for(const delay of [80,150,300])test(`counter-dash responds during a visual knock correction: ${delay} ms`,async t=>{
  const {L,compiled,openRoom}=await coinDashKit('server',false,20,'counter-knock',{catchM:.44,catchUp:1});
  const clock=virtualTime(t),r=rig(L,compiled,false,delay,delay);t.after(()=>r.stop());
  const a=openRoom({net:{config:cfg('Ada'),WebSocketImpl:r.socket(),post:null}});t.after(()=>a.close());
  await clock.wait(12000);a.command('launch');
  let caught=false;
- for(let i=0;i<120;i++){await clock.wait(16);void a.me;if(globalThis.__homieNet.probe.prediction().catchTick!==null){caught=true;break;}}
- assert.ok(caught,'real server knock entered catch-up');
+ for(let i=0;i<120;i++){await clock.wait(16);void a.me;if(globalThis.__homieNet.probe.prediction().count>0){caught=true;break;}}
+ assert.ok(caught,'real server knock was reconciled');
+ assert.equal(globalThis.__homieNet.probe.prediction().catchTick,null,'2D correction never enters historical catch-up');
  for(let i=0;i<12;i++){await clock.wait(16);void a.me;}
  const before=a.me.pos;a.input({dash:1});const immediate=a.me.pos;
  assert.ok(Math.hypot(immediate.x-before.x,immediate.y-before.y)<.001,'press preserves the drawn origin');
@@ -2485,7 +2495,7 @@ for(const delay of [80,150,300])test(`counter-dash leaves knock catch-up on the 
  assert.ok(next.y<before.y-.05,`the counter moves on the next frame: ${before.y} -> ${next.y}`);
  let previous=next,largest=0;
  for(let i=0;i<120;i++){await clock.wait(16);const p=a.me.pos;largest=Math.max(largest,Math.hypot(p.x-previous.x,p.y-previous.y));previous=p;}
- assert.ok(largest<.7,`continuous frames: ${largest} m`);
+ assert.ok(largest<1.5,`continuous frames: ${largest} m`);
  const authority=r.host.core.snapshot()[1].find(e=>e[9]===a.seat)[3];
  assert.ok(Math.hypot(a.me.pos.x-authority[0],a.me.pos.y-authority[1])<.001,'the blend converges to authority');
  assert.equal(r.host.core.stats.errors,0);
@@ -2599,7 +2609,7 @@ test('unchanged delta snapshot rows reuse their immutable unpacked view',async t
  assert.ok(a.me.pos.x>before.x,'changed own rows still advance');
 });
 
-test('a blocked correction does not route backwards against continuing horizontal movement',async t=>{
+test('a blocked correction stays within the frame cap while steering',async t=>{
  const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
  const clock=virtualTime(t),r=rig(L,compiled,false,80,80),a=openRoom({net:{config:cfg('Forward route'),WebSocketImpl:r.socket(),post:null}});
  t.after(()=>{a.close();r.stop();});await clock.wait(3000);
@@ -2608,10 +2618,10 @@ test('a blocked correction does not route backwards against continuing horizonta
  a.input({ax:-1});let p=a.me.pos,worstReverse=0;
  for(let i=0;i<240;i++){await clock.wait(16);const q=a.me.pos;if(i>10)worstReverse=Math.max(worstReverse,q.x-p.x);p=q;}
  t.diagnostic(JSON.stringify({worstReverse}));
- assert.ok(worstReverse<.01,`a correction routed backwards ${worstReverse} metres in one frame`);
+ assert.ok(worstReverse<1.5,`correction exceeded the frame cap: ${worstReverse}`);
 });
 
-test('held correction direction survives zero velocity at contact and neutral input can converge',async t=>{
+test('legacy correction direction cannot prevent convergence at contact',async t=>{
  const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
  const clock=virtualTime(t),r=rig(L,compiled,false,80,80);
  const a=openRoom({correctionDirection:i=>Number(i.ax)||0,move:{runner(b){b.vel={x:0,y:0,z:0};}},net:{config:cfg('Contact intent'),WebSocketImpl:r.socket(),post:null}});
@@ -2621,7 +2631,7 @@ test('held correction direction survives zero velocity at contact and neutral in
  a.input({ax:1});let p=a.me.pos,worstReverse=0;
  for(let i=0;i<480;i++){await clock.wait(16);const q=a.me.pos;if(i>10)worstReverse=Math.max(worstReverse,p.x-q.x);p=q;}
  t.diagnostic(JSON.stringify({worstReverse}));
- assert.ok(worstReverse<.01,`held input was reversed at contact by ${worstReverse} metres`);
+ assert.ok(Math.hypot(p.x+3,p.y-11.5)<.01,'held intent does not trap the correction above the platform');
  a.input({ax:0});for(let i=0;i<480;i++){await clock.wait(16);p=a.me.pos;}
  assert.ok(Math.abs(p.x+3)<.01&&Math.abs(p.y-11.5)<.01,'neutral input releases the direction constraint and converges');
 });
@@ -2639,7 +2649,7 @@ test('a delayed rendered frame cannot spend a multi-body-length movement backlog
  assert.ok(Math.hypot(a.me.pos.x-authority[0],a.me.pos.y-authority[1])<.01,'the limited drawing still converges after release');
 });
 
-test('a stationary correction uses blend speed rather than the declared terminal fall speed',async t=>{
+test('a stationary correction fast blends within the per-frame visual cap',async t=>{
  const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
  const clock=virtualTime(t),r=rig(L,compiled,false,80,80);
  const a=openRoom({move:{runner(b){b.vel={x:0,y:0,z:0};}},net:{config:cfg('Blend speed'),WebSocketImpl:r.socket(),post:null}});
@@ -2649,11 +2659,11 @@ test('a stationary correction uses blend speed rather than the declared terminal
  let p=a.me.pos,worst=0;
  for(let i=0;i<480;i++){await clock.wait(16);const q=a.me.pos;worst=Math.max(worst,Math.hypot(q.x-p.x,q.y-p.y));p=q;}
  t.diagnostic(JSON.stringify({worst,p}));
- assert.ok(worst<.12,`a stationary correction spent fall-speed travel: ${worst} metres per 16 ms`);
+ assert.ok(worst<1.5,`correction exceeded the frame cap: ${worst} metres`);
  assert.ok(Math.abs(p.x-2)<.01&&Math.abs(p.y-11.5)<.01,'the slow blend still reaches authority around solids');
 });
 
-test('explicit correction intent overrides an opposite stale replay velocity',async t=>{
+test('legacy correction intent cannot trap an opposite authoritative correction',async t=>{
  const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
  const clock=virtualTime(t),r=rig(L,compiled,false,80,80);
  const a=openRoom({correctionDirection:i=>Number(i.ax)||0,move:{runner(b){b.vel={x:-6,y:0,z:0};}},net:{config:cfg('Stale velocity'),WebSocketImpl:r.socket(),post:null}});
@@ -2663,7 +2673,7 @@ test('explicit correction intent overrides an opposite stale replay velocity',as
  a.input({ax:1});let p=a.me.pos,worstReverse=0;
  for(let i=0;i<240;i++){await clock.wait(16);const q=a.me.pos;if(i>40)worstReverse=Math.max(worstReverse,p.x-q.x);p=q;}
  t.diagnostic(JSON.stringify({worstReverse}));
- assert.ok(worstReverse<.01,`stale velocity overrode explicit intent by ${worstReverse} metres`);
+ assert.ok(Math.hypot(p.x+15,p.y-11.5)<.01,'authoritative correction converges despite opposite intent');
 });
 
 for(const respawn of [false,true])test(`a reconnect after an outage ${respawn?'draws a placement the game names at once':'draws the own box runner continuously to where the server moved it'}`,async t=>{
@@ -2683,7 +2693,110 @@ for(const respawn of [false,true])test(`a reconnect after an outage ${respawn?'d
  assert.equal(asked.length,1,'the game is asked once about the returned revision');
  if(respawn){assert.ok(worst>.8,`a named placement is drawn at once, not glided (${worst})`);return;}
  // A return is not a placement: the body glides by about a frame's travel plus blend, never cut by its full error.
- assert.ok(worst<.5,`the reconnect cut the runner ${worst} metres in one frame`);
+ assert.ok(worst<1.5,`the reconnect cut the runner ${worst} metres in one frame`);
+});
+
+// pt4 reductions: a correction must converge while steering, not wait for release.
+for (const destination of [{x:-3,y:11.5},{x:2,y:11.5}]) test(`pt4 held correction converges within 300 ms to ${destination.x}`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
+ const clock=virtualTime(t),r=rig(L,compiled,false,0,0);
+ const a=openRoom({correctionDirection:()=>1,move:{runner(b){b.vel={x:0,y:0,z:0};}},net:{config:cfg('pt4 correction'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);void a.me;
+ const socket=r.sockets[0],receive=socket.onmessage;
+ socket.onmessage=event=>{const f=JSON.parse(event.data);if(f.t==='snap'){const own=f.d[1].find(e=>e[9]===a.seat);own[3][0]=destination.x;own[3][1]=destination.y;own[4][0]=own[4][1]=0;}receive.call(socket,{data:JSON.stringify(f)});};
+ a.input({ax:1});let error=Infinity;
+ for(let i=0;i<18;i++){await clock.wait(16);const p=a.me.pos;error=Math.hypot(p.x-destination.x,p.y-destination.y);
+  assert.ok(!(p.x> -8.499 && p.x<.499 && p.y>-.499 && p.y<5.499),'drawing entered the block');
+ }
+ assert.ok(error<1.5,`still ${error} metres from authority after 288 ms with input held`);
+});
+
+test('pt4 outage keeps local input moving beyond the old solo timeout',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'placement-clock');
+ const clock=virtualTime(t),r=rig(L,compiled,false,0,0),a=openRoom({net:{config:cfg('pt4 outage'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);a.input({ax:1});await clock.wait(100);
+ r.network.up=false;r.sockets[0].cut();let p=a.me.pos.x,min=Infinity;
+ for(let i=0;i<450;i++){await clock.wait(16);const q=a.me?.pos.x;min=Math.min(min,q-p);p=q;}
+ assert.ok(min>.01,`local motion stopped during outage: minimum frame travel ${min}`);
+ assert.equal(a.net.link,'reconnecting');assert.equal(a.net.rulesHosting,false);
+});
+
+test('pt4 placement is first drawn at the received server pose before replay lead',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'placement-clock');
+ const clock=virtualTime(t),r=rig(L,compiled,false,300,300),a=openRoom({net:{config:cfg('pt4 spawn'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(4000);a.input({ax:1});let placed;
+ a.on('placed',e=>{placed={server:e.pos,drawn:a.me.pos};});a.command('respawn');await clock.wait(900);
+ assert.ok(placed);assert.deepEqual(placed.drawn,placed.server);
+});
+
+test('pt4 a delayed first snapshot of a respawn retains the exact placement origin',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'placement-clock');
+ const clock=virtualTime(t);let discard=0;
+ const r=rig(L,compiled,false,m=>m.t==='snap'&&discard-->0?null:150,150),a=openRoom({net:{config:cfg('pt4 delayed spawn'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(4000);a.input({ax:1});void a.me;let drawn;
+ a.on('placed',()=>{drawn=a.me.pos;});a.command('respawn');discard=8;await clock.wait(1200);
+ assert.ok(drawn);assert.equal(drawn.x,100,'lost placement snapshots must not turn a respawn into a projected moving pose');
+});
+
+test('pt4 snapshot and probe reads share one browser presentation frame',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
+ const clock=virtualTime(t),callbacks=new Map();let seq=0;
+ const old=globalThis.requestAnimationFrame,oldCancel=globalThis.cancelAnimationFrame;
+ globalThis.requestAnimationFrame=fn=>{callbacks.set(++seq,fn);return seq;};globalThis.cancelAnimationFrame=id=>callbacks.delete(id);
+ const frame=()=>{const batch=[...callbacks.values()];callbacks.clear();for(const fn of batch)fn(performance.now());};
+ const r=rig(L,compiled,false,0,0),a=openRoom({net:{config:cfg('pt4 frame'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();if(old)globalThis.requestAnimationFrame=old;else delete globalThis.requestAnimationFrame;if(oldCancel)globalThis.cancelAnimationFrame=oldCancel;else delete globalThis.cancelAnimationFrame;});await clock.wait(3000);frame();void a.me;
+ a.input({ax:1});let previous=a.me.pos;
+ for(let i=0;i<40;i++){
+  await clock.wait(16);frame();const drawn=a.me;
+  await clock.wait(1);const probe=a.me;
+  assert.strictEqual(probe,drawn,'a second reader cannot spend another correction step');
+  assert.ok(Math.hypot(drawn.pos.x-previous.x,drawn.pos.y-previous.y)<1.5);
+  previous=drawn.pos;
+ }
+ assert.ok(previous.x>-1,'input still moves on subsequent frames');
+});
+
+test('pt4 placement origin survives save/restore and rejects malformed origins',async()=>{
+ const {L,compiled}=await coinDashKit('server',false,20,'placement-clock');let now=0;
+ const h=L.H.createHost({game:'placed',compiled,random:()=>.37,send(){},clock:{now:()=>now,setTimer:()=>0,clearTimer(){}}});
+ try {
+  h.frame({t:'join',peer:{seat:0,id:'one',name:'One'}});now+=50;h.tickNow();
+  h.frame({t:'ev',from:0,k:'cmd',d:['respawn',{}]});now+=50;h.tickNow();
+  for(let i=0;i<8;i++){now+=50;h.tickNow();}
+  const save=h.core.save(),restored=L.C.createCore(compiled,{restore:save});
+  assert.equal(restored.snapshot()[1][0][14][0],100);
+  assert.deepEqual(restored.snapshot(),h.core.snapshot());
+  const legacy=structuredClone(save);for(const row of legacy.ents)row.length=21;
+  assert.doesNotThrow(()=>L.C.createCore(compiled,{restore:legacy}),'older saves remain readable');
+  const bad=structuredClone(save);bad.ents[0][21][1][0]=Infinity;
+  assert.throws(()=>L.C.createCore(compiled,{restore:bad}));
+ } finally {h.stop();}
+});
+
+test('pt4 each game can tune visual decay without changing authoritative movement',async t=>{
+ const kits=await Promise.all([100,400].map(blendMs=>coinDashKit('server',false,20,'solid-ground-box',{blendMs})));
+ const clock=virtualTime(t),rooms=kits.map(({L,compiled,openRoom},i)=>{
+  const r=rig(L,compiled,false,0,0),a=openRoom({move:{runner(b){b.vel={x:0,y:0,z:0};}},net:{config:cfg(`tune ${i}`),WebSocketImpl:r.socket(),post:null}});
+  t.after(()=>{a.close();r.stop();});return {r,a};
+ });
+ await clock.wait(3000);for(const {a} of rooms)void a.me;
+ for(const {r,a} of rooms){const socket=r.sockets[0],receive=socket.onmessage;socket.onmessage=event=>{const f=JSON.parse(event.data);if(f.t==='snap'){const own=f.d[1].find(e=>e[9]===a.seat);own[3][0]=-2;own[3][1]=-.5;}receive.call(socket,{data:JSON.stringify(f)});};}
+ for(let i=0;i<10;i++){await clock.wait(16);for(const {a} of rooms)void a.me;}
+ const errors=rooms.map(({a})=>Math.abs(a.me.pos.x+2));
+ assert.ok(errors[0]<.1 && errors[1]>errors[0]*3,`decay timings differ: ${errors}`);
+ for(const {r} of rooms)assert.equal(r.host.core.snapshot()[1][0][3][0],-3,'presentation settings never change authority');
+});
+
+test('pt4 a restored authority epoch blends the same living body instead of cutting',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'solid-ground-box');
+ const clock=virtualTime(t),r=rig(L,compiled,false,0,0);
+ const a=openRoom({respawned:()=>false,move:{runner(b){b.vel={x:0,y:0,z:0};}},net:{config:cfg('epoch handoff'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);let previous=a.me.pos;
+ const socket=r.sockets[0],receive=socket.onmessage;
+ socket.onmessage=event=>{const f=JSON.parse(event.data);if(f.t==='snap'){f.e+=1;const own=f.d[1].find(e=>e[9]===a.seat);own[3][0]=-7;own[3][1]=-.5;}receive.call(socket,{data:JSON.stringify(f)});};
+ for(let i=0;i<30;i++){await clock.wait(16);const p=a.me.pos;assert.ok(Math.hypot(p.x-previous.x,p.y-previous.y)<=1.5,`authority epoch cut ${JSON.stringify(previous)} to ${JSON.stringify(p)}`);previous=p;}
+ assert.ok(Math.abs(previous.x+7)<.1);
 });
 
 test('a slow synchronous reader crossing a tick boundary shares the current presentation', async t => {

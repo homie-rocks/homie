@@ -222,8 +222,13 @@ export function rayBox(px: number, py: number, dx: number, dy: number, min: Vec3
     if (tb < t1) t1 = tb;
     if (t0 > t1) return null;
   }
-  // No entering face: the point started inside the grown box. A body already overlapping is let out, never held.
-  if (nx === 0 && ny === 0) return null;
+  // Inside the expanded rectangle can still be outside a rounded corner.
+  // Test that arc before treating the body as already overlapping.
+  if (nx === 0 && ny === 0) {
+    const cx = px < min.x ? min.x : px > max.x ? max.x : null;
+    const cy = py < min.y ? min.y : py > max.y ? max.y : null;
+    return r > 0 && cx !== null && cy !== null ? rayCircle(px, py, dx, dy, cx, cy, r) : null;
+  }
   const hx = px + dx * t0; const hy = py + dy * t0;
   const cornerX = hx < min.x ? min.x : hx > max.x ? max.x : null;
   const cornerY = hy < min.y ? min.y : hy > max.y ? max.y : null;

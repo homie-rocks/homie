@@ -106,7 +106,9 @@ export interface Body { seat: number; id: string; kind: string; driver: Driver; 
 
 interface Ent {
   id: string; n: number; kind: KindTable; pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean;
-  /** The placement counter: raised whenever the runtime or a handler puts the body somewhere at once. */
+  /** The exact origin of a handler placement, retained for delayed snapshots. */
+  placement?: {r:number;pos:Vec3};
+  /** Raised whenever the runtime or a handler puts the body somewhere at once. */
   r: number; born: number; arrived: boolean; why: 'join' | 'spawn'; dead: boolean;
   f: Record<string, unknown>; m: Record<string, unknown>;
   seat: number; owner: string; driver: Driver; away: boolean; goal: unknown;
@@ -689,6 +691,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       if (heading !== undefined) e.heading = dir(heading, dims);
       e.grounded = dims === 2 || restsOnMap(currentMap, e.pos, e.kind.body ?? { shape: 'sphere', radius: 0, height: 0 });
       e.r = (e.r + 1) & 0xffff;
+      e.placement = {r:e.r,pos:e.pos};
       e.allow = 0;
     },
     near: (pos: unknown, r: unknown, kind?: unknown): readonly unknown[] => {
@@ -1323,7 +1326,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
   /* ---------------------------------------------------------------- the save */
 
   const saveEnt = (e: Ent): unknown[] => [e.id, e.n, e.kind.index, e.r, e.born, e.arrived ? 1 : 0, e.why, packVec(e.pos, 3), packVec(e.vel, 3), packVec(e.heading, 3), e.grounded ? 1 : 0, e.seat, e.driver, e.owner, e.away ? 1 : 0, e.goal ?? (e.driver === 'ai' ? restoredGoals.get(e.seat) : null) ?? null, e.allow,
-    packFields(e.kind.fields, e.f, dims), packFields(e.kind.motion, e.m, dims), packFields(e.kind.input, e.input as Record<string, unknown>, dims), e.cmds];
+    packFields(e.kind.fields, e.f, dims), packFields(e.kind.motion, e.m, dims), packFields(e.kind.input, e.input as Record<string, unknown>, dims), e.cmds, ...(e.placement?.r===e.r ? [[e.placement.r,packVec(e.placement.pos,3)]] : [])];
   function loadEnt(w: any[]): Ent {
     const kind = c.kinds[w[2]];
     const e: Ent = {
@@ -1331,6 +1334,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       seat: w[11], driver: w[12], owner: w[13], away: w[14] === 1, goal: null, allow: w[16],
       f: unpackFields(kind.fields, w[17], dims), m: unpackFields(kind.motion, w[18], dims), input: Object.freeze(unpackFields(kind.input, w[19], dims)), cmds: (w[20] as { name: string; data: unknown }[]).map((x) => ({ name: x.name, data: deepFreeze(coerceFields(c.commands[x.name] ?? [], x.data, dims)) })), self: {}, mself: {},
     };
+    if(w[21])e.placement={r:w[21][0],pos:unpackVec(w[21][1],3)};
     if (kind.player) restoredGoals.set(e.seat, w[15]);
     makeSelf(e);
     return e;
@@ -1399,7 +1403,8 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     const ids = new Set();
     const bodySeats = new Set();
     for (const w of [...r.ents, ...r.spawns]) {
-      check(Array.isArray(w) && w.length === 21);
+      check(Array.isArray(w) && (w.length === 21 || w.length === 22));
+      if(w.length===22) { const p=w[21] as unknown[]; check(Array.isArray(p) && p.length===2 && p[0]===w[3]); check(Array.isArray(p[1]) && p[1].length===3 && p[1].every(v=>typeof v==='number' && Number.isFinite(v))); }
       const k = c.kinds[w[2] as number];
       check(k && uint(w[2]) && typeof w[0] === 'string' && !ids.has(w[0])); ids.add(w[0]);
       for (const i of [1, 3, 4]) check(uint(w[i]));
