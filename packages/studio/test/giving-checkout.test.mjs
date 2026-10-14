@@ -24,6 +24,7 @@ test('giving phone opens the selected monthly Checkout; disconnected shop is a d
  await load(true);
  await page.select('#monthly', 'month'); await page.select('#choice', 'monthly'); await page.click('[data-action]');
  assert.deepEqual(await page.evaluate(() => window.bought), ['monthly', 1, null]);
+ assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'phone has no horizontal overflow');
  await page.select('#choice', 'custom'); await page.type('input', '20'); await page.click('[data-action]');
  assert.deepEqual(await page.evaluate(() => window.bought), ['custom', 1, 2000]);
  assert.equal(await page.$eval('#goal', e => e.hidden), true, 'no unverified collected total');

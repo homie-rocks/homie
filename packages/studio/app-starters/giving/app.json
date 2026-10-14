@@ -64,7 +64,8 @@
   "watch": "overview",
   "screen": {
     "join": "bottom-right",
-    "share": "top-right"
+    "share": "top-right",
+    "shopPreview": true
   },
   "needs": {
     "three": "0.185.1",
@@ -72,10 +73,7 @@
     "@homie-rocks/geom": "0.1.1",
     "@types/three": "0.185.1"
   },
-  "check": {
-    "action": "[data-action]",
-    "observe": "[data-count]"
-  },
+  "check": {},
   "landing": {
     "pitch": "Support our work with a one-time or monthly gift, paid securely through Stripe."
   },

@@ -493,7 +493,7 @@ export const SHOP_SHELL_JS = String.raw`(function () {
       return refresh().then(function () { reply({ ok: true, open: true, kids: false, screen: screen, owns: owns }); });
     }
     if (m.op === 'catalog') {
-      if (!cfg || kids) return reply({ ok: true, open: false, items: [] });
+      if (kids) return reply({ ok: true, open: false, items: [] });
       return api('GET', '/api/shop?game=' + encodeURIComponent(GAME) + '&server=' + encodeURIComponent(SERVER) + '&cursor=' + encodeURIComponent(typeof m.cursor === 'string' ? m.cursor : '')).then(function (r) {
         reply({ ok: r.ok, open: r.open, currency: r.currency, currencyScale: r.currencyScale, items: r.items, nextCursor: r.nextCursor });
       }).catch(function () { reply({ ok: false }); });

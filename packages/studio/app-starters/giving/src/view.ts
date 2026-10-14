@@ -9,11 +9,12 @@ const action = $<HTMLButtonElement>('[data-action]');
 const choice = $<HTMLSelectElement>('#choice');
 const frequency = $<HTMLSelectElement>('#monthly');
 let catalog: ShopCatalog | undefined, busy = false;
+const wall = room.net.params.role === 'wall';
 document.body.className = room.net.params.role ?? 'customer';
 document.body.style.setProperty('--tone', app.starter.color);
 $('h1').textContent = app.name;
 $('#intro').textContent = app.blurb;
-$('#label').textContent = 'Your gift';
+$('#label').textContent = wall ? 'Give with us' : 'Your gift';
 $('#choice-label').textContent = 'Choose a gift';
 $('#frequency-label').textContent = 'Gift frequency';
 $('#once').textContent = 'One time'; $('#month').textContent = 'Monthly';
@@ -30,7 +31,7 @@ function paint() {
  amountLabel.hidden = item?.price !== 'choose';
  action.disabled = busy || !catalog?.open || !item || item.way === 'closed';
  action.textContent = frequency.value === 'month' ? 'Give monthly on Stripe' : 'Give on Stripe';
- $('[data-count]').textContent = item?.shown ?? 'Preview';
+ $('[data-count]').textContent = wall ? 'Thank you' : item?.shown ?? 'Preview';
  if (item?.price === 'choose') {
   const scale = catalog!.currencyScale;
   amount.min = String((item.min ?? 0) / scale);
@@ -63,7 +64,7 @@ action.onclick = async () => {
 };
 async function refresh() {
  catalog = await shop.catalog(); options();
- $('#status').textContent = catalog.open ? 'Monthly gifts renew until you cancel through Stripe. Manage your gifts using the link below.' : 'Preview — giving is unavailable until the organisation connects Stripe.';
+ $('#status').textContent = wall ? 'Join on your phone to choose a one-time or monthly gift.' : catalog.open ? 'Monthly gifts renew until you cancel through Stripe. Manage your gifts using the link below.' : 'Preview — giving is unavailable until the organisation connects Stripe.';
  $('#connection').textContent = room.net.link === 'online' ? 'Together · live' : 'Connecting…';
  room.net.playable();
 }

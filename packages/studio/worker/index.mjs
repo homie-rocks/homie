@@ -185,7 +185,10 @@ async function sellingShop(env, cat) {
 }
 
 async function availableShellShop(env, cat, game, options) {
-  return await sellingShop(env, cat) ? shellShop(cat, game, options) : null;
+  // The shell can show a disabled catalog before payment setup is complete.
+  // Checkout readiness is enforced by the shop API, separately from visibility.
+  const preview = (cat.games ?? []).find(g => g.id === game)?.screen?.shopPreview === true;
+  return (preview && !shopOf(cat)?.broken || await sellingShop(env, cat)) ? shellShop(cat, game, options) : null;
 }
 
 async function postsOf(env, origin) {
