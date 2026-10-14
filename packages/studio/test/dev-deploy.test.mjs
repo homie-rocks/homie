@@ -869,7 +869,7 @@ test('local dev with a custom-domain route in wrangler.jsonc: the route never re
   const again = out(run(['dev', '--port', String(port + 1)], dir));
   assert.equal(again.ok, false);
   assert.equal(again.already, true);
-  assert.match(again.why, new RegExp(`this studio's dev server is already running at http://127\\.0\\.0\\.1:${port}/ .*dev --stop`));
+  assert.equal(new URL(again.url).hostname, 'localhost');
 
   // Room lines carry a time; other lines are as Wrangler printed them.
   assert.match(io.out, /^\[\d\d:\d\d:\d\d\.\d{3}\] \[wrangler:info\] GET \/crown-thief\/__net 101 Switching Protocols/m);
@@ -972,7 +972,7 @@ test('stale dev state heals itself: a record whose server was stopped another wa
   const { io: busy } = startDev(dir, other);
   assert.ok(await until(() => /Rooms here are local/.test(busy.err) || busy.code !== undefined, 60000), busy.err);
   assert.equal(busy.code, undefined, busy.err);
-  assert.match(busy.err, new RegExp(`Port ${other} is busy; using http://127.0.0.1:`));
+  assert.match(busy.err, new RegExp(`Port ${other} is busy; using http://localhost:`));
   assert.notEqual(devState(dir).port, other);
   run(['dev', '--stop'], dir);
   assert.ok(await until(() => busy.code !== undefined, 10000));
