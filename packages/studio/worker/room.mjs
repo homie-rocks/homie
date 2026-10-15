@@ -1,11 +1,13 @@
+import {RoomControls} from './room-controls.mjs';
+import {RoomChat} from './room-chat.mjs';
 /** Stateful netplay relay; shared wire validation lives in room-protocol.mjs. */
 import { STUDIO_BUILD } from './build-id.mjs';
 import { snapshotEncoder, scheduledView } from '../rules/interest.mjs';
 import { LIMITS, capOf, RATES, EV_RATES, STATE_CAPS, rulesRates, RULES_FRAMES, takeRulesToken } from './limits.mjs';
 import { aiName, skillPreset, stripAi } from './agents.mjs';
 import { DECIDE, checkArgs, checkDecide, talks, vocabularyOf } from './brain.mjs';
-import { CHAT_LIMITS, CHAT_RATES, HELD_WORDS, allows, cleanText, floor, normalizeChat, publicChat, windowMsOf } from './chat.mjs';
-import { NET_VERSION, NET_REVISION, STALL, stallOf, versionOf, featuresOf, errorLine, DEFAULT_POLICY, AGENT_SPEECH, VOTE, AGENTS_ALONE_MS, CAPS, AGENT_FRAMES, SAY, d0, ASK, normalizePolicy, policySig, medianVote, byteLength, PALETTE_SIZE, DEVICE_RANK, CONTROL_LIMITS, SPEECH, WATCH_POLICIES, oneLine, browserTag, handleFor, randomId, clampPresses, keptRef } from './room-protocol.mjs';
+import { publicChat, windowMsOf } from './chat.mjs';
+import { NET_VERSION, NET_REVISION, versionOf, featuresOf, errorLine, DEFAULT_POLICY, AGENT_SPEECH, VOTE, AGENTS_ALONE_MS, CAPS, AGENT_FRAMES, SAY, d0, ASK, normalizePolicy, policySig, medianVote, byteLength, PALETTE_SIZE, DEVICE_RANK, SPEECH, WATCH_POLICIES, oneLine, browserTag, handleFor, randomId, clampPresses } from './room-protocol.mjs';
 export * from './room-protocol.mjs';
 
 export class NetRoom {
@@ -31,6 +33,8 @@ export class NetRoom {
     holdMs = 60_000, forgetMs = 60_000, persistMs = 30_000, store = null, now = Date.now, log = () => {},
     rates = null, agentsAloneMs = AGENTS_ALONE_MS, voteMs = VOTE.ms, voteCooldownMs = VOTE.cooldownMs, autoVoteMs = VOTE.autoMs,
   }) {
+    this.chatOps = new RoomChat(this);
+    this.controls = new RoomControls(this);
     this.rates = rates;
     this.agentsAloneMs = agentsAloneMs;
     this.voteMs = voteMs;
@@ -1164,82 +1168,31 @@ export class NetRoom {
   /* ------------------------------------------------------------ room chat (revision 8, section 19) */
 
   /** The room's chat rules: the Worker's (in the policy), else the defaults for this server's speech and kids. */
-  chatRules() {
-    if (this.policy.chat) return this.policy.chat;
-    const sig = `${this.policy.kids}|${this.policy.speech}`;
-    if (!this.defaultChat || this.defaultChat.sig !== sig) this.defaultChat = { sig, rules: normalizeChat(null, { kids: this.policy.kids, speech: this.policy.speech }) };
-    return this.defaultChat.rules;
-  }
+  chatRules(...args) {return this.chatOps.chatRules(...args);}
 
   /** The window a page that just opened gets: the last `keep` messages of the last `keepMs`. */
-  recentChat(now = this.now()) {
-    const keep = windowMsOf(this.chatRules());
-    return this.chatLog.filter((r) => now - r.at <= keep).slice(-CHAT_LIMITS.keep);
-  }
+  recentChat(...args) {return this.chatOps.recentChat(...args);}
 
   /**
    * The lines a room kept (its `history`, read back by the Table): into the window under what was said since, oldest
    * first, never twice. A line taken down meanwhile is not in what the Table read.
    */
-  hydrate(recs) {
-    const have = new Set(this.chatLog.map((r) => r.id));
-    const old = (Array.isArray(recs) ? recs : []).filter((r) => r && typeof r.id === 'string' && !have.has(r.id));
-    this.chatLog = [...old, ...this.chatLog].sort((a, b) => a.at - b.at).slice(-CHAT_LIMITS.keep);
-    this.hydrated = true;
-    return old.length;
-  }
+  hydrate(...args) {return this.chatOps.hydrate(...args);}
 
   /** A line or a reaction as every screen gets it (homie.rocks's room chat shapes: `line` and `react`). */
-  wireLine(r) {
-    const base = { id: r.id, at: r.at, name: r.name, seat: r.seat, colour: r.colour, by: r.by, ...(r.bubble ? { bubble: true } : {}), ...(r.acct ? { acct: true } : {}), ...(r.owner ? { owner: true } : {}), ...(r.mod ? { mod: true } : {}), ...(r.kept ? { kept: true } : {}) };
-    if (r.kind === 'react') return { t: 'react', ...base, react: r.react, glyph: r.glyph };
-    // A show-what-you-made card (0.29.0): a page that knows cards draws one; any other shows its words.
-    return { t: 'line', ...base, text: r.text, ...(r.say ? { say: r.say } : {}), ...(r.kind === 'card' && r.card ? { card: r.card } : {}) };
-  }
+  wireLine(...args) {return this.chatOps.wireLine(...args);}
 
-  watchIdOf(conn) {
-    let id = this.watchIds.get(conn);
-    if (!id) { id = randomId(6); this.watchIds.set(conn, id); }
-    return id;
-  }
+  watchIdOf(...args) {return this.chatOps.watchIdOf(...args);}
 
   /**
    * Who is speaking: a game socket's own client, or for a shell's watch socket the client of the same browser (or
    * account) in this room: its seat, name and colour. A page with no client here (a homie.rocks room page, a watch
    * page before its game connects) is a watcher with a handle. Signed in, a member, the owner: the Worker's word.
    */
-  chatter(client, conn) {
-    let g = client;
-    if (!g && conn) {
-      const mine = this.live().filter((o) => !o.agent && ((conn.browser && o.browser === conn.browser) || (conn.player && o.player === conn.player)));
-      g = mine.find((o) => o.seat !== null) ?? mine.find((o) => o.watch) ?? mine[0] ?? null;
-    }
-    const via = String(g?.via ?? conn?.via ?? '');
-    const owner = via.split('~').includes('o');
-    const seat = g ? g.seat : null;
-    const handle = handleFor(g?.token || g?.browser || conn?.browser || `w-${this.watchIdOf(conn ?? g?.conn ?? {})}`);
-    // A watcher's name: its game's, else the account name the Worker vouched for (the Lounge), else a handle.
-    const name = seat !== null ? g.name : oneLine(g?.typed, CHAT_LIMITS.name) || oneLine(conn?.name, CHAT_LIMITS.name) || handle;
-    return {
-      key: g ? `c:${g.id}` : `w:${this.watchIdOf(conn)}`, client: g, seat, name, colour: seat !== null ? g.colour : null,
-      player: g?.player ?? conn?.player ?? null, acct: Boolean(g?.acct || conn?.acct), member: Boolean(g?.member || conn?.member) || owner,
-      // A moderator the owner named (the Lounge): only the Worker's word, shown on their lines.
-      mod: Boolean(conn?.mod) && !owner,
-      owner, browser: g?.browser ?? conn?.browser ?? null, token: g?.token ?? null, ip: g?.ip ?? conn?.ip ?? null,
-      watch: seat === null, hub: Boolean(conn?.hub) && !g, agent: Boolean(g?.agent), conn: conn ?? g?.conn ?? null,
-    };
-  }
+  chatter(...args) {return this.chatOps.chatter(...args);}
 
   /** A token bucket: true (and one token spent) when there is one. */
-  takeToken(map, key, rate, now) {
-    let b = map.get(key);
-    if (!b) { b = { tokens: rate.burst, at: now }; map.set(key, b); }
-    b.tokens = Math.min(rate.burst, b.tokens + (now - b.at) / rate.refillMs);
-    b.at = now;
-    if (b.tokens < 1) return false;
-    b.tokens -= 1;
-    return true;
-  }
+  takeToken(...args) {return this.chatOps.takeToken(...args);}
 
   /**
    * One message from anyone in the room: `{ t: 'say', text }` (typed), `{ t: 'say', say: '<line id>' }` (a quick line)
@@ -1247,172 +1200,31 @@ export class NetRoom {
    * over my character). Refused with `held` (or homie.rocks's `slow`) to the sender only; else published to everyone,
    * after the studio's review for typed text when there is one.
    */
-  onChat({ client = null, conn = null }, m) {
-    const now = this.now();
-    const rules = this.chatRules();
-    const who = this.chatter(client, conn);
-    const n = typeof m.n === 'string' && /^[A-Za-z0-9_-]{1,16}$/.test(m.n) ? m.n : null;
-    const kind = m.t === 'react' ? 'react' : typeof m.say === 'string' || typeof m.line === 'string' ? 'line' : 'text';
-    const stats = this.stats;
-    const reply = (why, extra = {}) => {
-      stats.chatHeld = stats.chatHeld ?? {};
-      stats.chatHeld[why] = (stats.chatHeld[why] ?? 0) + 1;
-      const out = JSON.stringify({ t: why === 'slow' ? 'slow' : 'held', why, message: HELD_WORDS[why] ?? HELD_WORDS.unknown, ...(n ? { n } : {}), ...extra });
-      if (who.conn) this.sendText(who.conn, out);
-      return { ok: false, why };
-    };
-    if (who.agent) return reply('ai_seat');
-    if (!allows(rules, kind)) return reply(rules.mode === 'off' ? 'off' : rules.mode === 'emoji' ? 'emoji' : 'lines');
-    if (who.hub && !rules.hub) return reply('hub');
-    if (who.watch && !rules.watchers && !who.owner) return reply('watchers');
-    const need = kind === 'text' ? rules.who : rules.react;
-    if (!who.owner && need === 'signed-in' && !who.acct) return reply(kind === 'text' ? 'sign-in' : 'sign-in-react');
-    if (!who.owner && need === 'members' && !who.member) return reply(kind === 'text' ? 'members' : 'members-react');
-    const mute = this.muteOf({ token: who.token, browser: who.browser, player: who.player });
-    if (mute) return reply('muted', { until: mute.until });
-    const b = this.chatBuckets.get(who.key) ?? { lastSayAt: -Infinity, lastText: '', lastTextAt: -Infinity };
-    this.chatBuckets.set(who.key, b);
-    if (!this.takeToken(this.chatBuckets, `${who.key}|${kind === 'react' ? 'react' : 'say'}`, kind === 'react' ? CHAT_RATES.react : CHAT_RATES.say, now)) return reply('slow');
-    if (who.ip && !this.takeToken(this.chatAddress, who.ip, CHAT_RATES.address, now)) return reply('slow');
-    if (kind !== 'react' && rules.slow && !who.owner && now - b.lastSayAt < rules.slow * 1000) return reply('slow', { until: b.lastSayAt + rules.slow * 1000, slow: rules.slow });
-    let rec;
-    if (kind === 'react') {
-      const k = String(m.kind ?? m.react ?? '');
-      const r = rules.emoji.find((x) => x.k === k);
-      if (!r) return reply('unknown');
-      // A storm of reactions: the room fans out at most so many a second (the sender's own still floats for them).
-      while (this.chatReacts.length && this.chatReacts[0] <= now - 1000) this.chatReacts.shift();
-      if (this.chatReacts.length >= CHAT_RATES.roomReactsPerSecond) { stats.chatDrops = (stats.chatDrops ?? 0) + 1; return { ok: true, dropped: true }; }
-      this.chatReacts.push(now);
-      rec = { kind: 'react', react: r.k, glyph: r.e };
-    } else if (kind === 'line') {
-      const id = String(m.say ?? m.line ?? '');
-      const l = rules.lines.find((x) => x.id === id);
-      if (!l) return reply('unknown');
-      rec = { kind: 'line', say: l.id, text: l.text };
-    } else {
-      const text = cleanText(m.text, rules.max);
-      if (!text) return reply('empty');
-      const f = floor(text, rules);
-      if (!f.ok) return reply(f.why);
-      if (b.lastText === text.toLowerCase() && now - b.lastTextAt < CHAT_LIMITS.repeatMs) return reply('repeat');
-      b.lastText = text.toLowerCase();
-      b.lastTextAt = now;
-      rec = { kind: 'text', text };
-    }
-    if (kind !== 'react') b.lastSayAt = now;
-    Object.assign(rec, {
-      name: who.name, seat: who.seat, colour: who.colour, by: who.hub ? 'hub' : who.watch ? 'watcher' : 'player',
-      bubble: m.bubble !== false && rules.bubbles && who.seat !== null, acct: who.acct, owner: who.owner, ...(who.mod ? { mod: true } : {}),
-      // Only the office sees these: who sent it, so a mute or a kick from the line reaches them (never an address).
-      from: { client: who.client?.id ?? null, token: who.token, browser: who.browser, player: who.player },
-    });
-    if (kind === 'text' && rules.ai && typeof this.review === 'function' && !who.owner) {
-      if (this.chatPending >= CHAT_LIMITS.pending) return reply('busy');
-      this.chatPending += 1;
-      const t0 = now;
-      Promise.resolve()
-        .then(() => this.review(rec.text, { room: this.code, links: rules.links }))
-        .then((v) => v, (error) => ({ ok: true, by: 'error', error: String(error?.message ?? error).slice(0, 120) }))
-        .then((v) => {
-          this.chatPending = Math.max(0, this.chatPending - 1);
-          if (v && v.ok === false) {
-            stats.chatAiHeld = (stats.chatAiHeld ?? 0) + 1;
-            // What the review thought it was (insult, hate, sexual, grooming, harm, spam): counts for the office only.
-            stats.chatAiWhy = stats.chatAiWhy ?? {};
-            const why = String(v.why ?? 'held').slice(0, 24);
-            stats.chatAiWhy[why] = (stats.chatAiWhy[why] ?? 0) + 1;
-            reply('ai');
-            return;
-          }
-          if (v?.by === 'error') stats.chatAiErrors = (stats.chatAiErrors ?? 0) + 1;
-          rec.review = { by: v?.by ?? 'ai', ms: this.now() - t0, ...(Number.isFinite(v?.p) ? { p: v.p } : {}) };
-          // A mute that came while it was being reviewed still holds it.
-          if (this.muteOf({ token: who.token, browser: who.browser, player: who.player })) { reply('muted'); return; }
-          this.publishChat(rec, who.conn, n);
-        });
-      return { ok: true, pending: true };
-    }
-    return this.publishChat(rec, who.conn, n);
-  }
+  onChat(...args) {return this.chatOps.onChat(...args);}
 
   /** A message every socket and every watching shell gets now (the sender's own copy carries its `n`). */
-  publishChat(rec, senderConn = null, n = null) {
-    const now = this.now();
-    rec.id = randomId(6);
-    rec.at = now;
-    this.chatLog.push(rec);
-    const keep = windowMsOf(this.chatRules());
-    while (this.chatLog.length > CHAT_LIMITS.keep || (this.chatLog.length && now - this.chatLog[0].at > keep)) this.chatLog.shift();
-    const msg = this.wireLine(rec);
-    const text = JSON.stringify(msg);
-    const mine = n ? JSON.stringify({ ...msg, n }) : text;
-    const hub = this.chatRules().hub;
-    for (const o of this.live()) if (!this.lite(o)) this.sendText(o.conn, o.conn === senderConn ? mine : text);
-    for (const w of this.watchers) if (!w.hub || hub) this.sendText(w, w === senderConn ? mine : text);
-    if (rec.kind === 'react') this.stats.chatReacts = (this.stats.chatReacts ?? 0) + 1;
-    else this.stats.chatLines = (this.stats.chatLines ?? 0) + 1;
-    // Kept chat (0.29.0): a room whose rules keep history hands what was said to the Table (never a reaction).
-    if (rec.kind !== 'react' && this.chatRules().history > 0 && typeof this.onPublished === 'function') { try { this.onPublished(rec); } catch { /* kept next time */ } }
-    return { ok: true, id: rec.id };
-  }
+  publishChat(...args) {return this.chatOps.publishChat(...args);}
 
   /** Take messages down (the owner's `unsay`): from the window, and from every screen that shows them. */
-  unsay(ids) {
-    const gone = new Set(ids);
-    const before = this.chatLog.length;
-    this.chatLog = this.chatLog.filter((r) => !gone.has(r.id));
-    const text = JSON.stringify({ t: 'unline', ids: [...gone] });
-    for (const o of this.live()) if (!this.lite(o)) this.sendText(o.conn, text);
-    for (const w of this.watchers) this.sendText(w, text);
-    // Kept chat: what is taken down here is deleted where it was kept, older lines than the window too.
-    if (typeof this.onUnsaid === 'function' && gone.size) { try { this.onUnsaid([...gone]); } catch { /* best effort */ } }
-    return before - this.chatLog.length;
-  }
+  unsay(...args) {return this.chatOps.unsay(...args);}
 
   /**
    * A person takes their own message down (0.29.0): a watching shell of the browser or the signed-in account that sent
    * it. Kept lines carry only the account, so a guest's own line comes down only while it is in this window.
    */
   /** Whether a line is this socket's own: its account's, or (a guest's) its browser's. */
-  ownLine(r, conn) {
-    const f = r?.from ?? {};
-    if (!conn || r?.kind === 'studio') return false;
-    return Boolean((conn.player && f.player && f.player === conn.player) || (conn.browser && f.browser && f.browser === conn.browser && !f.player));
-  }
+  ownLine(...args) {return this.chatOps.ownLine(...args);}
 
-  unsayOwn(conn, id) {
-    if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,16}$/.test(id)) return { ok: false, error: 'no-line' };
-    const r = this.chatLog.find((x) => x.id === id);
-    if (!r || r.kind === 'studio') return { ok: false, error: 'no-line' };
-    if (!this.ownLine(r, conn)) return { ok: false, error: 'not-yours' };
-    this.unsay([id]);
-    this.stats.chatOwnRemoved = (this.stats.chatOwnRemoved ?? 0) + 1;
-    return { ok: true, removed: 1 };
-  }
+  unsayOwn(...args) {return this.chatOps.unsayOwn(...args);}
 
   /**
    * A mute or a kick for a chat line whose sender holds no socket in this room now (a watcher, a homie.rocks page): held
    * by that browser and account, as a kick holds a player's other tabs.
    */
-  holdSender(line, minutes, now, { kick = false, message = '', purge = false } = {}) {
-    const f = line.from ?? {};
-    if (!f.token && !f.browser && !f.player) return { ok: false, error: 'no-player', message: 'that line has nobody to hold' };
-    const until = now + minutes * 60_000;
-    const hold = { token: f.token ?? null, browser: f.browser ?? null, player: f.player ?? null, name: line.name, seat: line.seat, until, at: now };
-    if (kick) this.bans = [...this.bans, { ...hold, ip: null, pass: null, message }].slice(-CONTROL_LIMITS.bans);
-    else this.mutes = [...this.mutes, hold].slice(-CONTROL_LIMITS.mutes);
-    this.tellBrowser(hold, kick ? { t: 'kicked', room: this.code, until, message } : { t: 'muted', room: this.code, until });
-    const removed = purge ? this.unsay(this.linesOf(f)) : 0;
-    this.tellWatchers();
-    return { ok: true, op: kick ? 'kick' : 'mute', name: line.name, seat: line.seat, until, sockets: 0, ...(removed ? { removed } : {}) };
-  }
+  holdSender(...args) {return this.chatOps.holdSender(...args);}
 
   /** The lines of one sender (a line's `from`), for a mute or a kick that also takes their messages down. */
-  linesOf(from) {
-    if (!from) return [];
-    return this.chatLog.filter((r) => (from.client && r.from?.client === from.client) || (from.token && r.from?.token === from.token) || (from.browser && r.from?.browser === from.browser) || (from.player && r.from?.player === from.player)).map((r) => r.id);
-  }
+  linesOf(...args) {return this.chatOps.linesOf(...args);}
 
   /* ------------------------------------------------------------ watchers (section 16) */
 
@@ -1889,325 +1701,55 @@ export class NetRoom {
   /* ------------------------------------------------------------ the owner's controls (section 15) */
 
   /** A live client by socket id, else the present client in a seat. */
-  findClient({ id = null, seat = null } = {}) {
-    if (typeof id === 'string' && id) { const c = this.clients.get(id); if (c && c.helloed) return c; }
-    if (Number.isInteger(seat)) return this.live().find((c) => c.seat === seat) ?? null;
-    return null;
-  }
+  findClient(...args) {return this.controls.findClient(...args);}
 
   /** The hold that keeps this client out, if any: by its seat token, its browser's room key, its account, or (only when the owner asked) its address. */
-  banOf(c, token = c.token) {
-    const now = this.now();
-    const pass = c.agent?.pass ?? c.agentWord?.pass ?? null;
-    return this.bans.find((b) => b.until > now && ((b.token && b.token === token) || (b.browser && b.browser === c.browser) || (b.player && b.player === c.player) || (b.ip && b.ip === c.ip) || (b.pass && b.pass === pass))) ?? null;
-  }
+  banOf(...args) {return this.controls.banOf(...args);}
 
-  muteOf(c) {
-    const now = this.now();
-    return this.mutes.find((m) => m.until > now && ((m.token && m.token === c.token) || (m.browser && m.browser === c.browser) || (m.player && m.player === c.player))) ?? null;
-  }
+  muteOf(...args) {return this.controls.muteOf(...args);}
 
-  liveAnnouncement() {
-    const a = this.announcement;
-    return a && a.until > this.now() ? a : null;
-  }
+  liveAnnouncement(...args) {return this.controls.liveAnnouncement(...args);}
 
   /** What a watching shell is told on arrival: the room is closed, or its browser is held out or muted. */
-  heldNotice(conn) {
-    const now = this.now();
-    if (this.closedUntil > now) return { t: 'closed', room: this.code, until: this.closedUntil, message: this.closedWhy || 'The studio closed this room.' };
-    const probe = { token: null, browser: conn.browser ?? null, player: conn.player ?? null, ip: null };
-    if (!probe.browser && !probe.player) return null;
-    const ban = this.banOf(probe, null);
-    if (ban) return { t: 'kicked', room: this.code, until: ban.until, message: ban.message };
-    const mute = this.muteOf(probe);
-    return mute ? { t: 'muted', room: this.code, until: mute.until } : null;
-  }
+  heldNotice(...args) {return this.controls.heldNotice(...args);}
 
   /** Tell the watching shells of one browser (or account) something meant for that player alone. */
-  tellBrowser(who, msg) {
-    const text = JSON.stringify(msg);
-    for (const w of this.watchers) if ((who.browser && w.browser === who.browser) || (who.player && w.player === who.player)) this.sendText(w, text);
-  }
+  tellBrowser(...args) {return this.controls.tellBrowser(...args);}
 
   /**
    * One control, already verified by the caller (the Table checks the owner's signature). Returns what happened:
    * `{ ok: true, ... }`, or `{ ok: false, error }` when there is nobody to act on.
    */
-  control(op, a = {}) {
-    const now = this.now();
-    const minutes = Math.max(1, Math.min(CONTROL_LIMITS.minutes, Math.floor(Number(a.minutes) || 10)));
-    this.bans = this.bans.filter((b) => b.until > now);
-    this.mutes = this.mutes.filter((m) => m.until > now);
-    switch (op) {
-      case 'kick': {
-        // From a chat line (section 19): its sender, in this room now or not (a watcher with no seat is held too). A line
-        // older than the window comes from the room's kept history (the Worker read it: its sender's account only).
-        const line = typeof a.line === 'string' ? this.chatLog.find((r) => r.id === a.line) ?? keptRef(a) : null;
-        const target = this.findClient(a) ?? (line?.from?.client ? this.clients.get(line.from.client) ?? null : null);
-        if (!target && line) return this.holdSender(line, minutes, now, { kick: true, message: oneLine(a.message, CONTROL_LIMITS.message) || 'The studio removed you from this room.', purge: a.purge === true });
-        if (!target) return { ok: false, error: 'no-player', message: 'nobody is in that seat now' };
-        const purged = a.purge === true ? this.unsay(this.linesOf({ client: target.id, token: target.token, browser: target.browser, player: target.player })) : 0;
-        const until = now + minutes * 60_000;
-        // The message is the studio's words; `until` says when (the shell says it in the player's own time).
-        const message = oneLine(a.message, CONTROL_LIMITS.message) || 'The studio removed you from this room.';
-        // An AI is held out by its pass (its seat becomes a brainless AI seat again); a person by token, browser, account.
-        const ban = { token: target.token, browser: target.browser, player: target.player, ip: a.address ? target.ip : null, pass: target.agent?.pass ?? null, name: line?.name ?? target.name, seat: target.seat, until, at: now, message };
-        this.bans = [...this.bans, ban].slice(-CONTROL_LIMITS.bans);
-        // Every socket of that player in this room: the seat itself, and its browser's or account's other tabs.
-        const out = this.live().filter((o) => o === target || (ban.browser && o.browser === ban.browser) || (ban.player && o.player === ban.player));
-        for (const o of out) {
-          const seat = o.seat;
-          const token = o.token;
-          this.error(o, 'kicked', message, { until });
-          this.onClose(o, 'kicked');
-          // The seat is free for somebody else at once, and its token resumes nothing.
-          const s = seat === null ? null : this.seats.get(seat);
-          if (s && s.token === token) { this.seats.delete(seat); this.seatsDirty = true; }
-          try { o.conn.close(1008, 'kicked'); } catch { /* gone */ }
-        }
-        this.stats.ownerKicks = (this.stats.ownerKicks ?? 0) + 1;
-        this.tellBrowser(ban, { t: 'kicked', room: this.code, until, message });
-        this.persist(now);
-        this.tellWatchers();
-        return { ok: true, op, name: ban.name, seat: ban.seat, sockets: out.length, until, ...(purged ? { removed: purged } : {}) };
-      }
-      case 'mute': {
-        const line = typeof a.line === 'string' ? this.chatLog.find((r) => r.id === a.line) ?? keptRef(a) : null;
-        const target = this.findClient(a) ?? (line?.from?.client ? this.clients.get(line.from.client) ?? null : null);
-        if (!target && line && a.off !== true) return this.holdSender(line, minutes, now, { kick: false, purge: a.purge === true });
-        if (!target) return { ok: false, error: 'no-player', message: 'nobody is in that seat now' };
-        const off = a.off === true;
-        const purged = !off && a.purge === true ? this.unsay(this.linesOf({ client: target.id, token: target.token, browser: target.browser, player: target.player })) : 0;
-        const same = (m) => (m.token && m.token === target.token) || (m.browser && m.browser === target.browser) || (m.player && m.player === target.player);
-        this.mutes = this.mutes.filter((m) => !same(m));
-        const until = off ? 0 : now + minutes * 60_000;
-        if (!off) this.mutes = [...this.mutes, { token: target.token, browser: target.browser, player: target.player, name: line?.name ?? target.name, seat: target.seat, until, at: now }].slice(-CONTROL_LIMITS.mutes);
-        const note = { t: 'mute', id: target.id, seat: target.seat, until };
-        for (const o of this.live()) this.send(o, note);
-        this.tellBrowser(target, { t: 'muted', room: this.code, until });
-        this.tellWatchers();
-        return { ok: true, op, name: line?.name ?? target.name, seat: target.seat, until, ...(purged ? { removed: purged } : {}) };
-      }
-      case 'card': {
-        // Show what you made (0.29.0): a link card to a studio's game, which the Worker read from that studio's own
-        // manifest and checked (its words passed the floor and the review there). Its sender's name and account are the
-        // Worker's word; a mute holds a card as it holds a line.
-        const c = a.card && typeof a.card === 'object' ? a.card : null;
-        if (!c || typeof c.url !== 'string' || !/^https?:\/\//.test(c.url)) return { ok: false, error: 'card', message: 'no card' };
-        const who = { token: null, browser: typeof a.browser === 'string' ? a.browser : null, player: typeof a.player === 'string' ? a.player : null, ip: null };
-        if (a.owner !== true && this.banOf(who, null)) return { ok: false, error: 'kicked', message: 'The studio has held you out of this room for now.' };
-        if (a.owner !== true && this.muteOf(who)) return { ok: false, error: 'muted', message: HELD_WORDS.muted };
-        const card = { url: c.url.slice(0, 300), title: oneLine(c.title, 80), studio: oneLine(c.studio, 60), pitch: oneLine(c.pitch, 160), image: typeof c.image === 'string' && /^https:\/\//.test(c.image) ? c.image.slice(0, 400) : null, ...(typeof c.game === 'string' ? { game: c.game.slice(0, 40) } : {}) };
-        const note = oneLine(a.note, CHAT_LIMITS.text);
-        const rules = this.chatRules();
-        if (rules.mode !== 'text' && a.owner !== true) return { ok: false, error: 'held', why: rules.mode === 'off' ? 'off' : 'lines', message: 'The Lounge isn\'t taking cards right now.' };
-        // The card's words (the person's note, the game's own title and pitch) pass the floor like any typed line.
-        const words = [note, card.title, card.pitch].filter(Boolean).join(' · ');
-        const f = floor(words, { ...rules, links: 'block' });
-        if (!f.ok && a.owner !== true) return { ok: false, error: 'held', why: f.why, message: HELD_WORDS[f.why] ?? HELD_WORDS.unknown };
-        const rec = {
-          kind: 'card', card, text: note || `Made: ${card.title}${card.studio ? ` by ${card.studio}` : ''}`,
-          name: oneLine(a.name, CHAT_LIMITS.name) || 'Someone', seat: null, colour: null, by: 'watcher', bubble: false,
-          acct: a.acct === true, owner: a.owner === true, ...(a.mod === true ? { mod: true } : {}),
-          from: { client: null, token: null, browser: who.browser, player: who.player },
-        };
-        // And the studio's review, as a typed line gets it (the owner's own card is never reviewed).
-        if (rules.ai && typeof this.review === 'function' && a.owner !== true) {
-          return Promise.resolve()
-            .then(() => this.review(words, { room: this.code, links: 'block' }))
-            .then((v) => v, () => ({ ok: true, by: 'error' }))
-            .then((v) => {
-              if (v && v.ok === false) { this.stats.chatAiHeld = (this.stats.chatAiHeld ?? 0) + 1; return { ok: false, error: 'held', why: 'ai', message: HELD_WORDS.ai }; }
-              rec.review = { by: v?.by ?? 'ai' };
-              if (this.muteOf(who)) return { ok: false, error: 'muted', message: HELD_WORDS.muted };
-              return { ...this.publishChat(rec), op };
-            });
-        }
-        return { ...this.publishChat(rec), op };
-      }
-      case 'unsay': {
-        // Room chat (section 19): the owner takes a message down (or every message: `all`), on every screen at once.
-        const ids = a.all === true ? this.chatLog.map((r) => r.id) : (Array.isArray(a.ids) ? a.ids : [a.id]).filter((x) => typeof x === 'string' && /^[A-Za-z0-9_-]{1,16}$/.test(x)).slice(0, 64);
-        if (!ids.length) return { ok: false, error: 'no-line', message: 'which message?' };
-        const removed = this.unsay(ids);
-        this.stats.chatRemoved = (this.stats.chatRemoved ?? 0) + removed;
-        return { ok: true, op, removed };
-      }
-      case 'announce': {
-        const text = oneLine(a.text, CONTROL_LIMITS.announce);
-        const prev = this.announcement;
-        if (!text) {
-          this.announcement = null;
-          if (prev) { const clear = JSON.stringify({ t: 'announce', id: prev.id, text: null }); for (const o of this.live()) this.sendText(o.conn, clear); for (const w of this.watchers) this.sendText(w, clear); }
-          this.tellWatchers();
-          return { ok: true, op, cleared: Boolean(prev) };
-        }
-        const seconds = Math.max(5, Math.min(CONTROL_LIMITS.announceSeconds, Math.floor(Number(a.seconds) || 30)));
-        this.announcement = { id: typeof a.id === 'string' && /^[A-Za-z0-9_-]{1,24}$/.test(a.id) ? a.id : randomId(6), text, at: now, until: now + seconds * 1000, from: 'studio' };
-        const msg = JSON.stringify({ t: 'announce', ...this.announcement });
-        for (const o of this.live()) this.sendText(o.conn, msg);
-        for (const w of this.watchers) this.sendText(w, msg);
-        // The room's chat shows it too, as the studio's own line (section 19).
-        this.publishChat({ kind: 'studio', text, name: 'Studio', seat: null, colour: null, by: 'studio', bubble: false, acct: false, owner: true, from: null });
-        this.tellWatchers();
-        return { ok: true, op, id: this.announcement.id, people: this.live().length, until: this.announcement.until };
-      }
-      case 'close': {
-        if (a.reopen === true) { this.closedUntil = 0; this.closedWhy = ''; this.tellWatchers(); return { ok: true, op, reopened: true }; }
-        // `seconds` (10 s to a day) is a short close: everyone comes back through the game's door (a launch state change).
-        const seconds = Math.floor(Number(a.seconds));
-        const until = now + (seconds >= 10 ? Math.min(seconds, CONTROL_LIMITS.minutes * 60) * 1000 : minutes * 60_000);
-        const message = oneLine(a.message, CONTROL_LIMITS.message) || 'The studio closed this room. Thanks for playing!';
-        this.closedUntil = until;
-        this.closedWhy = message;
-        const people = this.live().length;
-        for (const c of [...this.clients.values()]) {
-          if (c.helloed) this.error(c, 'room-closed', message, { until });
-          this.clients.delete(c.id);
-          try { c.conn.close(1000, 'room-closed'); } catch { /* gone */ }
-        }
-        // Everything the room held goes, as when an empty room forgets (section 4).
-        this.hostId = null;
-        this.lastSnap = null; this.lastSnapText = null; this.lastCkpt = null; this.lastRound = null; this.lastRoster = null; this.rosterSent = null;
-        this.state.clear(); this.stateBytes = 0; this.seats.clear(); this.preferHost = null; this.openedAt = 0; this.askedMax = null;
-        this.emptySince = now; this.seatsDirty = false; this.persistDirty = false;
-        try { this.store?.clear?.(); } catch { /* best effort */ }
-        this.hosted.clear();
-        try { this.onForget?.(); } catch { /* the room is closed either way */ }
-        const msg = JSON.stringify({ t: 'closed', room: this.code, until, message });
-        for (const w of this.watchers) this.sendText(w, msg);
-        this.tellWatchers();
-        return { ok: true, op, people, until };
-      }
-      case 'regate': {
-        // A game's launch state changed (NETPLAY.md section 15): who may play is now narrower (`allow`: ticket kinds o,
-        // i, p), or anyone again (`allow` absent: a pending change is cancelled). The current round finishes first.
-        if (!Array.isArray(a.allow)) { const had = Boolean(this.regate); this.regate = null; this.tellWatchers(); return { ok: true, op, cancelled: had }; }
-        const allow = a.allow.filter((k) => ['o', 'i', 'p'].includes(k));
-        const leaving = this.live().filter((c) => !this.allowedAfter(c, allow)).length;
-        if (!leaving) { this.regate = null; this.tellWatchers(); return { ok: true, op, leaving: 0 }; }
-        const r = this.lastRound;
-        const playing = Boolean(r && r.phase === 'live' && Number(r.endsAt) > now);
-        const until = Math.min(now + 15 * 60_000, playing ? Number(r.endsAt) + 20_000 : now + 30_000);
-        this.regate = { allow, roundN: playing ? Number(r.n) : null, until, at: now, message: oneLine(a.message, CONTROL_LIMITS.message) || 'Thanks for playing!' };
-        const notice = oneLine(a.notice, CONTROL_LIMITS.announce);
-        if (notice) this.control('announce', { text: notice, seconds: Math.ceil((until - now) / 1000) + 5 });
-        this.tellWatchers();
-        return { ok: true, op, leaving, until, afterRound: playing ? Number(r.n) : null };
-      }
-      case 'seats': {
-        const n = Math.floor(Number(a.max));
-        if (!(n >= 1)) return { ok: false, error: 'max', message: 'seats is a number of at least 1' };
-        this.setSeats(n);
-        this.tellWatchers();
-        return { ok: true, op, max: this.maxPlayers };
-      }
-      case 'policy': {
-        // The owner changed the server (section 17): its new policy now, and AI out after the round if it is humans-only.
-        const r = this.setPolicy(a.pol, { force: true });
-        return r.ok ? { ...r, op } : { ...r, op };
-      }
-      case 'level': {
-        // The owner sets this room's dial (room_level): it applies at once, as a vote's result does.
-        const n = Math.floor(Number(a.level));
-        if (!(n >= 1 && n <= 5)) return { ok: false, error: 'level', message: 'level is 1 to 5' };
-        this.level = Math.min(this.policy.levelMax, n);
-        this.levelBy = 'owner';
-        this.seatsDirty = true;
-        this.tellPolicy();
-        this.tellWatchers();
-        return { ok: true, op, level: this.level, name: skillPreset(this.level, { kids: this.policy.kids }).name };
-      }
-      default:
-        return { ok: false, error: 'op', message: `no control called ${String(op).slice(0, 24)}` };
-    }
-  }
+  control(...args) {return this.controls.control(...args);}
 
   /** Whether a client may stay once the room re-gates: one of its ticket's holders (o, i-…, p-…) is of an allowed kind. */
-  allowedAfter(c, allow) {
-    // The owner's own agent passes count as the owner's (only the owner can mint one).
-    return String(c.via ?? '').split('~').some((part) => (part === 'o' && allow.includes('o')) || (part.startsWith('i-') && allow.includes('i')) || (part.startsWith('p-') && allow.includes('p'))
-      || (part.startsWith('a-') && allow.includes('o') && c.agent?.by === 'studio'));
-  }
+  allowedAfter(...args) {return this.controls.allowedAfter(...args);}
 
   /** The launch change, now: everyone it leaves out is sent out of the room with the studio's words; the rest play on. */
-  applyRegate(now = this.now()) {
-    const g = this.regate;
-    if (!g) return 0;
-    this.regate = null;
-    // The holder of the room's storage keeps the owner's state (the Table writes it on its next tick).
-    this.officeDirty = true;
-    const out = this.live().filter((c) => !this.allowedAfter(c, g.allow));
-    for (const c of out) {
-      const seat = c.seat;
-      const token = c.token;
-      this.error(c, 'room-closed', g.message);
-      this.onClose(c, 'regated');
-      const s = seat === null ? null : this.seats.get(seat);
-      if (s && s.token === token) { this.seats.delete(seat); this.seatsDirty = true; }
-      try { c.conn.close(1000, 'room-closed'); } catch { /* gone */ }
-      this.tellBrowser(c, { t: 'closed', room: this.code, message: g.message });
-    }
-    this.persist(now);
-    this.tellWatchers();
-    return out.length;
-  }
+  applyRegate(...args) {return this.controls.applyRegate(...args);}
 
   /**
    * The room's seats, changed while it runs (the owner's "max players per room"). Players already seated above the
    * new number keep their seat until they leave; nobody new is seated there. Never above the room's own cap.
    */
   /** The game's own stall time (game.json `netplay.stallMs`), held to STALL's bounds; anything else: the default. */
-  setStall(ms) {
-    this.stallMs = stallOf(ms) ?? STALL.ms;
-    return this.stallMs;
-  }
+  setStall(...args) {return this.controls.setStall(...args);}
 
   /** The build that is live now (the Worker's word, from the catalogue): a string, or null when the game names none. */
-  setCurrent(ver) {
-    this.currentVer = ver === undefined ? undefined : versionOf(ver);
-  }
+  setCurrent(...args) {return this.controls.setCurrent(...args);}
 
   /**
    * The room changes build (section 23): everything the old build's rules wrote is dropped, so the new build's first
    * host starts a fresh round. Seats keep their tokens and names (a player who reloads comes back to their seat).
    */
-  forgetWorld(next) {
-    this.log({ ev: 'build-changed', room: this.code, from: this.gameVer ?? null, to: next ?? null });
-    this.lastSnap = null; this.lastSnapText = null; this.lastCkpt = null; this.lastRound = null; this.lastRoster = null; this.rosterSent = null;
-    this.state.clear(); this.stateBytes = 0; this.preferHost = null;
-    this.persistDirty = true;
-  }
+  forgetWorld(...args) {return this.controls.forgetWorld(...args);}
 
-  setSeats(n, perIp = null) {
-    this.seatCap = Math.max(1, Math.floor(n));
-    this.maxPlayers = Math.max(1, Math.min(this.seatCap, (this.server || this.rules) ? this.seatCap : this.askedMax ?? this.seatCap));
-    if (Number.isFinite(perIp) && perIp >= 0) this.perIp = perIp;
-  }
+  setSeats(...args) {return this.controls.setSeats(...args);}
 
   /** The owner's holds, the banner and a closed door: kept apart from the room's play (they outlive an empty room). */
-  officeSaved() {
-    const now = this.now();
-    return {
-      bans: this.bans.filter((b) => b.until > now), mutes: this.mutes.filter((m) => m.until > now),
-      announcement: this.liveAnnouncement(), closedUntil: this.closedUntil > now ? this.closedUntil : 0, closedWhy: this.closedWhy,
-      regate: this.regate, agentsOut: this.agentsOut,
-    };
-  }
+  officeSaved(...args) {return this.controls.officeSaved(...args);}
 
-  restoreOffice(o) {
-    if (!o || typeof o !== 'object') return;
-    const now = this.now();
-    this.bans = (Array.isArray(o.bans) ? o.bans : []).filter((b) => b && b.until > now).slice(-CONTROL_LIMITS.bans);
-    this.mutes = (Array.isArray(o.mutes) ? o.mutes : []).filter((m) => m && m.until > now).slice(-CONTROL_LIMITS.mutes);
-    this.announcement = o.announcement && o.announcement.until > now ? o.announcement : null;
-    this.closedUntil = Number(o.closedUntil) > now ? Number(o.closedUntil) : 0;
-    this.closedWhy = this.closedUntil ? String(o.closedWhy ?? '') : '';
-    // A launch change still waiting comes back; one long past is over (whoever it was for has gone).
-    this.regate = o.regate && Array.isArray(o.regate.allow) && Number(o.regate.until) > now - 120_000 ? o.regate : null;
-    this.agentsOut = o.agentsOut && Number(o.agentsOut.until) > now - 120_000 ? o.agentsOut : null;
-  }
+  restoreOffice(...args) {return this.controls.restoreOffice(...args);}
 
   /** The room as its owner sees it: the facts, plus who each player is to the studio (never an address). */
   officeFacts() {
