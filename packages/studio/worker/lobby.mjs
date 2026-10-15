@@ -1,5 +1,5 @@
 import {lobbyStore} from './lobby-store.mjs';
-import { errorLine, versionOf } from './room.mjs';
+import { errorLine, versionOf } from './room-protocol.mjs';
 import { ROOM_ID } from './pages.mjs';
 import { SERVER_ID, pooledRoom, roomCode, roomServer } from './servers.mjs';
 import { seatCount } from './seats.mjs';

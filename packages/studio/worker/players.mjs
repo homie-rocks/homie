@@ -25,7 +25,7 @@ import { toolIdentity } from './tool-identity.mjs';
  * THE OWNER sees counts and names (`players.count`, `players.list`), never a passkey, a session or an email.
  * A player sees, downloads (/api/player/export) and deletes (/api/player/delete) everything of theirs.
  */
-import { handleFor } from './room.mjs';
+import { handleFor } from './room-protocol.mjs';
 import { isAiName } from './agents.mjs';
 import { cookieValue } from './stats.mjs';
 import { adoptGuest, bumpPlayerStats, dropPlayerData, fall, fallenList, getSave, listSaves, playerData, readPlayerStats, SAVE_LIMITS, savesSummary, wipeSaves, writeSaves } from './saves.mjs';

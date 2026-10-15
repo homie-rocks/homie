@@ -96,7 +96,7 @@ import { appRole, openPath } from './app-format.mjs';
  * it when a server uses it), or the owner's own key (secret HOMIE_BRAIN_KEY).
  */
 import { playerEnabled, EMBED_GAME_JS } from './embed.mjs';
-import { departure, errorLine, versionOf } from './room.mjs';
+import { departure, errorLine, versionOf } from './room-protocol.mjs';
 import { hostedGame } from './hosted-registry.mjs';
 
 import { appCors, isAppOrigin } from './standalone.mjs';

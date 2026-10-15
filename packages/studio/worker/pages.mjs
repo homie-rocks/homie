@@ -7,7 +7,7 @@ import { APP_SHELL_JS } from './app-shell.mjs';
  */
 import { playerAncestors, PLAYER_SANDBOX, PLAYER_SIZE } from './embed.mjs';
 import { esc, layout, gameSocialTags } from './site.mjs';
-import { NET_PALETTE } from './room.mjs';
+import { NET_PALETTE } from './room-protocol.mjs';
 import { PARAM_VALUE, PREFS_LIMITS, playParams } from './seats.mjs';
 import { STUDIO_VERSION_TAG } from './version.mjs';
 
