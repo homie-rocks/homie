@@ -54,6 +54,6 @@ export async function loadShopLinks(env, origin='https://studio.invalid') {
   try {
     const response=await env.ASSETS.fetch(new Request(new URL(env.STRIPE_SHOP_LINKS_ASSET,origin)));
     if(response.ok)value=await response.json();
-  } catch {}
+  } catch(error) { console.warn('Built shop links unavailable:',error.message); }
   return {...env,STRIPE_SHOP_LINKS:JSON.stringify(value?.config??null),...(value?.purchases?{PURCHASE_LINKS:JSON.stringify(value.purchases)}:{}),STRIPE_SHOP_SETUP:value?.next??'Ask your AI to finish stripe_shop_plan with verify:true.'};
 }

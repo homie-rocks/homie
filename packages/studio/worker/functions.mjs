@@ -153,7 +153,7 @@ export async function functionRuns(env,{name,errors=false,before}={}) {
     WHERE (?1 IS NULL OR function=?1) AND (?2=0 OR outcome IN ('failed','interrupted')) AND (?3 IS NULL OR seq<?3)
     ORDER BY seq DESC LIMIT 101`).bind(name??null,errors?1:0,before??null).all()).results;
   const page=rows.slice(0,100),definitions=await load();
-  let crons=[];try {crons=JSON.parse(env.STUDIO_FUNCTION_CRONS??'[]');if(!Array.isArray(crons))crons=[];}catch {}
+  let crons=[];try {crons=JSON.parse(env.STUDIO_FUNCTION_CRONS??'[]');if(!Array.isArray(crons))crons=[];}catch(error) {console.warn('Invalid STUDIO_FUNCTION_CRONS:',error.message);}
   const schedules=scheduleStatus(definitions.filter(f=>!name||f.name===name),crons);
   const tick=await env.DB.prepare("SELECT value FROM meta WHERE key='function-last-scheduled'").first();
   return {runs:page.map(r=>({...r,started:new Date(r.started).toISOString(),finished:r.finished===null?null:new Date(r.finished).toISOString()})),next:rows.length>100?page.at(-1).seq:null,schedules,crons,lastScheduled:tick?JSON.parse(tick.value):null,triggerEvidence:'Generated deployment configuration; lastScheduled proves an observed tick. Provider dashboard changes are not queried.'};

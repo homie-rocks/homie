@@ -70,7 +70,7 @@ export async function pushEvents(env,cat,origin) {
 const streamCaller=(env,connection)=>connection.startsWith('public:')?Promise.resolve({id:null,owner:false,client:null,connection}):currentCaller(env,{connection});
 export class EventStreams {
   constructor(env,ctx){this.env=env;this.ctx=ctx;this.stream=null;this.tail=Promise.resolve();this.extensions=new McpEventStreams(env,ctx);}
-  close(stream){stream.cancelled=true;clearTimeout(stream.reconnect);stream.resume?.();try{stream.controller.close();}catch{}if(this.stream===stream){this.stream=null;this.ctx.waitUntil(this.env.DB.prepare('DELETE FROM mcp_kv WHERE key=?1').bind('tools-stream:'+stream.connection).run().catch(()=>{}));}}
+  close(stream){stream.cancelled=true;clearTimeout(stream.reconnect);stream.resume?.();try{stream.controller.close();}catch{/* The reader already cancelled or the stream already closed. */}if(this.stream===stream){this.stream=null;this.ctx.waitUntil(this.env.DB.prepare('DELETE FROM mcp_kv WHERE key=?1').bind('tools-stream:'+stream.connection).run().catch(()=>{}));}}
   background(input){this.ctx.waitUntil(this.wake(input).catch(error=>{if(this.stream)this.close(this.stream);console.error('Event stream delivery failed',error);}));}
   async fetch(request) {
     const input=await request.json();
@@ -166,5 +166,10 @@ export async function pushToolList(env,cat,tools,origin) {
 
 /** Bounded expiry work belongs to cron, never to each mutation or page. */
 export async function pruneMcpKeys(env) {
-  if(env.DB) await env.DB.prepare('DELETE FROM mcp_kv WHERE key IN (SELECT key FROM mcp_kv WHERE expires IS NOT NULL AND expires<?1 ORDER BY expires LIMIT 1000)').bind(Date.now()).run();
+  if(!env.DB)return;
+  try { await env.DB.prepare('DELETE FROM mcp_kv WHERE key IN (SELECT key FROM mcp_kv WHERE expires IS NOT NULL AND expires<?1 ORDER BY expires LIMIT 1000)').bind(Date.now()).run(); }
+  catch(error) {
+    // Older embedded shop workers have no MCP schema to prune.
+    if(!/no such table: mcp_kv/i.test(String(error?.message)))throw error;
+  }
 }

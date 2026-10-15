@@ -538,7 +538,7 @@ export class Table {
     const player=client?.player??sql.exec('SELECT player FROM round_players WHERE owner=?',owner).toArray()[0]?.player;
     if(!player){
       // Never dropped in silence (0.46.5): the log says so, and the person is told on their own screen.
-      try{console.error(JSON.stringify({at:new Date().toISOString(),ev:'record-unsaved',why:'no-player',game:this.game??null,room:this.code??null,key,id:value?.id??null}));}catch{}
+      try{console.error(JSON.stringify({at:new Date().toISOString(),ev:'record-unsaved',why:'no-player',game:this.game??null,room:this.code??null,key,id:value?.id??null}));}catch{/* Logging must not mask the missing-player recovery path. */}
       if(client)this.room.error(client,'unsaved','This round was not saved to your history. Reload the page to keep the next one.');
       return;
     }

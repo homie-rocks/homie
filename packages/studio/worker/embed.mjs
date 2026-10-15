@@ -61,7 +61,7 @@ export function playerOrigins(value) {
       const origin = 'https://' + (wildcard ? '*.' : '') + u.host;
       if (!origins.includes(origin)) origins.push(origin);
       if (origins.length === 8) break;
-    } catch {}
+    } catch { /* Invalid configured origins grant no framing permission. */ }
   }
   return origins;
 }

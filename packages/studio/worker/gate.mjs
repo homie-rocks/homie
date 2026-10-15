@@ -99,7 +99,7 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
   const timing = stageTimings();
   const stats = { frames: 0, rows: 0, bytes: 0, peakQueueBytes: 0, coalesced: 0, ackMs: 0, maxAckMs: 0, rttMs: 0 };
   const close = () => { closed = true; queue = []; views.clear(); strings.clear(); pending.clear(); inFlightBytes = 0; bytes = 0; if (timer !== null) clearTimer(timer); timer = null; };
-  const fail = (reason) => { close(); try { socket.close(1011, reason); } catch {} };
+  const fail = (reason) => { close(); try { socket.close(1011, reason); } catch { /* The peer already closed; local shutdown still runs. */ } };
   const schedule = () => { if (!closed && (receipt || pending.size < maxFrames && !blockedByBytes && (queue.length || views.size)) && timer === null) timer = setTimer(flush, delay > 1 ? Math.max(0, lastSentAt + delay - now()) : delay); };
   const flush = () => {
     if (timer !== null) clearTimer(timer); timer = null;
@@ -279,7 +279,7 @@ export function multiplexSession(socket, connect, { onMetrics = () => {}, delay 
       }
       out.consumed(rows);
       if (admissions.length && !attaching) { if (admissionTimer !== null) clearTimeout(admissionTimer); pump(); }
-    }).catch(error => { console.log(JSON.stringify({ ev: 'room-link-failed', stage: 'receive', error: String(error?.message ?? error).slice(0,160) })); shutdown(); try { socket.close(1011, 'room link failed'); } catch {} });
+    }).catch(error => { console.log(JSON.stringify({ ev: 'room-link-failed', stage: 'receive', error: String(error?.message ?? error).slice(0,160) })); shutdown(); try { socket.close(1011, 'room link failed'); } catch { /* The peer already closed; local shutdown still runs. */ } });
   });
   socket.addEventListener('close', shutdown);
   socket.addEventListener('error', shutdown);
@@ -385,10 +385,10 @@ export class Gate {
         console.log(JSON.stringify({ ev: 'room-link-lost', room: name, gate: url.searchParams.get('gate'), layer: 'gate', code: event.code ?? null, reason: event.reason ?? null, error: event.error?.message ?? null, clients: this.clients.size, transport: link.facts() }));
         this.link = null; this.worlds = null; link.close();
         for (const timer of this.admissions.values()) clearTimeout(timer); this.admissions.clear();
-        for (const client of this.clients.values()) { try { client.close(1012, 'room link restarted'); } catch {} }
+        for (const client of this.clients.values()) { try { client.close(1012, 'room link restarted'); } catch { /* The peer already closed; local shutdown still runs. */ } }
         this.clients.clear();
       };
-      const drop = (id, client) => { this.clients.delete(id); link.send(['close', id]); try { client.close(1011, 'client connection ended'); } catch {} };
+      const drop = (id, client) => { this.clients.delete(id); link.send(['close', id]); try { client.close(1011, 'client connection ended'); } catch { /* The peer already closed; local shutdown still runs. */ } };
       socket.addEventListener('message', event => {
         if (typeof event.data !== 'string') return;
         try {
@@ -400,12 +400,12 @@ export class Gate {
               if (op === 'seat') { if (client) { client.seat = value; client.subscribed = true; } }
               else if (op === 'view') { if (client) this.deliverOne(id, client, value, reason, settings, rate, drop); }
               else if (op === 'data') { try { client?.send(value); } catch { if (client) drop(id, client); } }
-              else if (op === 'close') { this.clients.delete(id); try { client?.close(value, reason); } catch {} }
+              else if (op === 'close') { this.clients.delete(id); try { client?.close(value, reason); } catch { /* The peer already closed; local shutdown still runs. */ } }
             }
           }
           link.consumed(rows);
           if (hz && Date.now() - this.metricsAt >= 1000) this.publishMetrics(url, link);
-        } catch (error) { lost({ error, reason: 'invalid room frame' }); try { socket.close(1011, 'room link failed'); } catch {} }
+        } catch (error) { lost({ error, reason: 'invalid room frame' }); try { socket.close(1011, 'room link failed'); } catch { /* The peer already closed; local shutdown still runs. */ } }
       });
       socket.addEventListener('close', lost); socket.addEventListener('error', lost);
       // A Gate nobody is on gives its channel back after ten seconds: an open channel keeps the room and this Gate in
@@ -470,7 +470,7 @@ export class Gate {
     let opened = false;
     const deadline = setTimeout(() => {
       this.admissions.delete(id);
-      if (!opened && this.clients.delete(id)) { try { server.close(4000, 'no-hello'); } catch {} }
+      if (!opened && this.clients.delete(id)) { try { server.close(4000, 'no-hello'); } catch { /* The peer already closed; local shutdown still runs. */ } }
     }, 5000);
     deadline?.unref?.(); this.admissions.set(id, deadline);
     server.addEventListener('message', event => {
@@ -481,7 +481,7 @@ export class Gate {
       if (event.data.length > 128 * 1024) {
         clearTimeout(deadline); this.admissions.delete(id); this.clients.delete(id);
         if (opened) link.send(['close', id]);
-        try { server.close(1009, 'message too large'); } catch {}
+        try { server.close(1009, 'message too large'); } catch { /* The peer already closed; local shutdown still runs. */ }
         return;
       }
       if (!opened) {

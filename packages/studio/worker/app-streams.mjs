@@ -32,7 +32,7 @@ export async function pushAppRecords(env,cat){
 export class AppRecordStreams {
  constructor(env,ctx){this.env=env;this.ctx=ctx;this.streams=new Set();}
  dispose(){for(const s of [...this.streams])this.close(s);}
- close(s){if(!this.streams.delete(s))return;clearInterval(s.timer);clearTimeout(s.reconnect);try{s.controller.close();}catch{}this.presence();}
+ close(s){if(!this.streams.delete(s))return;clearInterval(s.timer);clearTimeout(s.reconnect);try{s.controller.close();}catch{/* The reader already cancelled or the stream already closed. */}this.presence();}
  count(s){return [...this.streams].filter(x=>x.app===s.app&&x.room===s.room).length;}
  send(s,data){if(s.controller.desiredSize<=0){this.close(s);return;}try{s.controller.enqueue(frame(data));}catch{this.close(s);}}
  presence(){for(const s of this.streams)this.send(s,{presence:this.count(s)});}
