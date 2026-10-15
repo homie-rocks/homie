@@ -212,10 +212,7 @@ export function checkShop(raw, { games = null, audience = 'general', studioName 
   const kids = audience === 'kids' && !policy.kidsStudio;
   const finalTill = kids ? 'off' : TILLS.includes(till) ? till : 'off';
   if (kids && till !== 'off') warnings.push({ at: 'till', message: 'studio.json says "audience": "kids": the studio sells nothing in its games (the till is off under policy.kidsStudio).' });
-  if (raw.basket !== undefined && (!isObj(raw.basket) || typeof raw.basket.name !== "string" || !raw.basket.name.trim() || raw.basket.name.length > 120 || typeof raw.basket.description !== "string" || raw.basket.description.length > 500)) errors.push({at:"basket",message:"A basket needs a name (1–120 characters) and description (up to 500 characters)."});
-  if (raw.basket && (raw.automaticTax || till !== "stripe")) errors.push({at:"basket",message:"Saved baskets use Stripe with tax already included in the menu prices."});
   const shop = {
-    ...(isObj(raw.basket) ? {basket:{name:raw.basket.name,description:raw.basket.description}} : {}),
     v: 1, ...(isObj(raw.giving) ? { giving: { receiptText: String(raw.giving.receiptText ?? '') } } : {}), policy, purchasesTill: TILLS.includes(raw.purchasesTill ?? till) ? (raw.purchasesTill ?? till) : 'off', ...(/^https:\/\/billing\.stripe\.com\/p\/login\/[A-Za-z0-9_]+$/.test(raw.purchasesPortalLogin ?? '') ? { purchasesPortalLogin: raw.purchasesPortalLogin } : {}), checkoutMinutes, requestBytes, automaticTax: raw.automaticTax === true, guestBuyersPerAddressPerHour, purchaseAttemptsPerMinute, purchaseAttemptsPerAddressPerMinute, till: finalTill, currency: CURRENCY.test(currency) ? currency : 'usd', refundDays, capPerPlayerMonth: cap, items,
     open: finalTill !== 'off' && items.length > 0, ...(kids ? { audience: 'kids' } : {}), ...(catalog.length ? { catalog } : {}),
   };
