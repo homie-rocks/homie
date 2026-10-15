@@ -1,6 +1,6 @@
 import {needsHeadless} from './needs-headless.mjs';
 import {randomBytes} from 'node:crypto';
-import {actInApp,appReady,observeEffects,waitInApp,answerDialogs} from './app-ready.mjs';
+import {actInApp,appReady,observeEffects,forceWebglFailure,waitInApp,answerDialogs} from './app-ready.mjs';
 import {localCredential,localCookie} from './local-test.mjs';
 import { readAppNeeds, proveAppNeeds, saveAppNeeds } from './app-needs.mjs';
 /**
@@ -132,7 +132,7 @@ export function judgeRounds(browsers, missed = new Map()) {
   return null;
 }
 
-export async function check({ isolate = true, root = null, url, game, roundTimeoutMs = 150_000, rounds = 3, shots = null, userAgentTag = 'homie-studio-check', log = () => {}, report = null }) {
+export async function check({ webglFailure = false, isolate = true, root = null, url, game, roundTimeoutMs = 150_000, rounds = 3, shots = null, userAgentTag = 'homie-studio-check', log = () => {}, report = null }) {
   if (!url || !game) throw new Error('usage: homie-studio check <game> --url <site url>');
   const base = String(url).replace(/\/+$/, '');
   const play = `${base}/${game}/play`;
@@ -152,14 +152,15 @@ export async function check({ isolate = true, root = null, url, game, roundTimeo
   if(appMeta && !appMeta.check?.action) {
     try {
       const plan=readAppNeeds(root,game);
-      if(plan && !plan.needs.some(n=>[...(n.steps??[]),...(n.assertions??[])].some(i=>i.surface)))return checkApp({isolate,root,url:base,game,meta:appMeta,shots,log,report});
+      if(plan && !plan.needs.some(n=>[...(n.steps??[]),...(n.assertions??[])].some(i=>i.surface)))return checkApp({webglFailure,isolate,root,url:base,game,meta:appMeta,shots,log,report});
     } catch(error) {return {ok:false,command:'check',kind:'app',why:error.message};}
   }
   const chrome = findChrome();
   if (!chrome) return { ok: false, command: 'check', why: noChrome() };
   let puppeteer;
   try { puppeteer = (await import('puppeteer-core')).default; } catch { return { ok: false, command: 'check', why: 'puppeteer-core is not installed (it comes with @homie-rocks/studio; run npm install)' }; }
-  if (appMeta) return checkApp({ isolate, root, url: base, game, meta: appMeta, shots, log, report, puppeteer, chrome });
+  if (appMeta) return checkApp({ webglFailure, isolate, root, url: base, game, meta: appMeta, shots, log, report, puppeteer, chrome });
+  if(webglFailure)return {ok:false,command:'check',why:'--webgl-failure requires an app with UI checks'};
   if (shots) mkdirSync(shots, { recursive: true });
   const profiles = [];
   const browsers = [];
@@ -354,7 +355,7 @@ export async function check({ isolate = true, root = null, url, game, roundTimeo
 }
 
 /** Apps prove a real action crossing surfaces and a reconnect, without inventing a round. */
-export async function checkApp({ isolate = true, root = null, url, game, meta, shots = null, log = () => {}, report = null, puppeteer, chrome }) {
+export async function checkApp({ webglFailure = false, isolate = true, root = null, url, game, meta, shots = null, log = () => {}, report = null, puppeteer, chrome }) {
   let plan;
   try { plan = readAppNeeds(root, game); } catch (error) { return { ok: false, command: 'check', kind: 'app', why: error.message }; }
   const secret=localCredential(root,url);
@@ -364,6 +365,7 @@ export async function checkApp({ isolate = true, root = null, url, game, meta, s
   const proof = meta.check??{};
   const baseline=typeof proof.action==='string'&&typeof proof.observe==='string';
   if (!baseline && !plan) return { ok: false, command: 'check', kind: 'app', why: 'app.json check needs action and observe CSS selectors for a real shared action' };
+  if(webglFailure&&!baseline&&!plan?.needs.some(n=>[...(n.steps??[]),...(n.assertions??[])].some(i=>i.surface)))return {ok:false,command:'check',why:'--webgl-failure requires UI steps or assertions'};
   const captureWarnings=[];
   const profile = mkdtempSync(join(tmpdir(), 'homie-app-check-'));
   let browser;
@@ -382,6 +384,7 @@ export async function checkApp({ isolate = true, root = null, url, game, meta, s
       const page=await context.newPage();
       answerDialogs(page,name,dialogs,report);
       await page.evaluateOnNewDocument(observeEffects);
+      if(webglFailure)await page.evaluateOnNewDocument(forceWebglFailure);
       const [width,height]=dimensions[name];
       await page.setViewport({width,height,isMobile:name!=='wall',hasTouch:name!=='wall'});
       const params=new URLSearchParams(proof.params??{});params.set('room',room);params.set('role',role);params.set('surface',name==='staff'?'tablet':name==='phone-two'?'phone':name);
@@ -423,7 +426,7 @@ export async function checkApp({ isolate = true, root = null, url, game, meta, s
     const needs = plan ? await proveAppNeeds({ plan, surfaces, shots, report, ready:appReady, root, headless:needsHeadless({url,secret,app:game,meta,scope:isolate?room:null}) }) : null;
     if (plan) { saveAppNeeds(root, game, plan, needs); const { refreshCodexFile } = await import('./codex.mjs'); refreshCodexFile(root, game); }
     const ok = !needs || needs.every(n => n.status === 'met');
-    return { ok, ...(needs ? { needs, why: ok ? undefined : 'Some needs from the person’s Codex are not yet met; see needs and captures' } : {}), command: 'check', kind: 'app', isolatedRecords:isolate, captureWarnings, dialogs, room, surfaces: surfaces.map((s) => s.name), action: proof.action, before, after, reconnect: baseline };
+    return { ok, ...(needs ? { needs, why: ok ? undefined : 'Some needs from the person’s Codex are not yet met; see needs and captures' } : {}), command: 'check', kind: 'app', webglFailure, isolatedRecords:isolate, captureWarnings, dialogs, room, surfaces: surfaces.map((s) => s.name), action: proof.action, before, after, reconnect: baseline };
   } catch (error) { return { ok: false, command: 'check', kind: 'app', dialogs, why: error.message }; }
   finally { await browser?.close().catch(() => {}); rmSync(profile, { recursive: true, force: true }); }
 }

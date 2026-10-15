@@ -45,10 +45,14 @@ export function compileTiles(raw: any, wrap?: MapWrap): {
     return { tiles, boxes };
 }
 export function tileApi(get: () => GameMap) {
-    const cell = (x: unknown, y: unknown) => { const t = get().tiles; if (!t || typeof x !== 'number' || typeof y !== 'number' || !Number.isInteger(x) || !Number.isInteger(y))
-        return -1; const w = get().wrap; if (w?.x)
-        x = ((x % t.width) + t.width) % t.width; if (w?.y)
-        y = ((y % t.height) + t.height) % t.height; return x < 0 || y < 0 || x >= t.width || y >= t.height ? -1 : y * t.width + x; };
+    const cell = (x: unknown, y: unknown) => {
+        const t = get().tiles;
+        if (!t || typeof x !== 'number' || typeof y !== 'number' || !Number.isInteger(x) || !Number.isInteger(y)) return -1;
+        const w = get().wrap;
+        const cx = w?.x ? ((x % t.width) + t.width) % t.width : x;
+        const cy = w?.y ? ((y % t.height) + t.height) % t.height : y;
+        return cx < 0 || cy < 0 || cx >= t.width || cy >= t.height ? -1 : cy * t.width + cx;
+    };
     return {
         tile: (x: unknown, y: unknown) => { charge(4); const id = cell(x, y); return id < 0 ? 1 : get().tiles!.data[id]; },
         distance: (name: unknown, x: unknown, y: unknown) => { charge(4); const id = cell(x, y), f = typeof name === 'string' && get().tiles ? fields.get(get().tiles!)?.get(name) : null; return id < 0 || !f ? -1 : f.distance[id]; },

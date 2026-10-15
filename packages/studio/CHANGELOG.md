@@ -17,6 +17,28 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.51.8] - 2026-10-15
+
+**Plugin 0.51.8**
+
+Run your studio across more screens with reliable shared records, clearer checks and a simpler owner connection.
+
+### Fixed
+
+- **Reliable screens and saved settings:** App screens share simultaneous record reads across tabs, queue bursts and back off after connection failures. Writes stay separate and refresh cached reads; reconnect notices use plain language. Records-only apps remember device preferences and saved references after reload while keeping their iframe sandbox.
+- **Room for your wall display:** TV join cards reserve a measured safe area for your app, stay within a bounded size and wrap long addresses. Hiding the card returns that space to your content.
+- **Checks that match what people can use:** Covered controls fail checks immediately with the blocking element identified, including overlays outside the app frame. You can also check text navigation with graphics disabled using `check --webgl-failure`; fallback notices stay in the page flow so controls remain reachable.
+- **Clean toolkit type checks:** Collision, terrain and tile-coordinate code now passes strict `build --types` checks when imported into your app or game.
+
+### Added
+
+- **Connect your owner's AI with your existing login:** `connector` uses your Wrangler sign-in to save a private MCP configuration limited to the chosen tools, studio origin and expiry. You can revoke access; the server stores only token hashes and command output contains no bearer secret.
+
+### Changed
+
+- **Safer bookings and usable text controls:** Authoring guides show server-owned capacity with atomic versioned writes, tested with six simultaneous requests and one successful reservation. They explain how to initialise text controls before graphics and keep the app usable when 3D is unavailable.
+- **Clear deploy guidance:** Wrangler remains the path for uploading your site's static assets. The guide explains why Cloudflare's official MCP request interface cannot perform the required upload authorization.
+
 ## [0.51.7] - 2026-10-14
 
 **Plugin 0.51.7**
