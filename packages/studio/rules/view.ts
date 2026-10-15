@@ -1303,22 +1303,40 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (sceneCached && sceneFrame === frame) return sceneCached;
     sceneFrame = frame;
     let target = raw.a.k + (raw.b.k - raw.a.k) * raw.alpha;
-    let maxStep = Infinity, newestOwner = Infinity;
+    let newestOwner = Infinity;
     for (const [id, q] of ownerHistory) {
-      const u = q.samples.at(-1)!.u, kind = kindOf.get(u.kind)!;
+      const u = q.samples.at(-1)!.u;
       if (id === mine?.id || u.away || latest?.ents.get(id)?.driver !== 'person') continue;
       // One source cannot supply an interpolated pose beyond its newest report.
       // Hold the scene there instead of advancing only the monsters.
       newestOwner = Math.min(newestOwner, q.samples.at(-1)!.t);
-      maxStep = Math.min(maxStep, kind.radius * 2.8 / Math.max(kind.maxSpeed, kind.radius * 4) * tickHz);
     }
     // The shared buffer supplies an age, while accepted input ticks supply the
     // simulation time. Server callbacks may pause without pausing owner input.
     if (Number.isFinite(newestOwner) && latest) target = newestOwner - Math.max(0, latest.k - target);
     if (sceneCursor === null || !sceneHistory.length || raw.b.e !== sceneHistory[0].e) sceneCursor = target;
     else {
-      const ticks = Math.max(0, Math.min(.05, (now - sceneAt) / 1000)) * tickHz * 1.5;
-      sceneCursor = Math.max(sceneCursor, Math.min(target, sceneCursor + Math.min(ticks, maxStep)));
+      // A long pause may contain a stationary section before fresh movement.
+      // Drain that backlog faster, bounding actual sampled travel rather than
+      // charging every frame for the body's theoretical maximum fall speed.
+      const rate = target - sceneCursor > tickHz * .25 ? 4 : 1.5;
+      let ticks = Math.max(0, Math.min(.05, (now - sceneAt) / 1000)) * tickHz * rate;
+      for (const [id, q] of ownerHistory) {
+        const u=q.samples.at(-1)!.u;
+        if (id===mine?.id || u.away || latest?.ents.get(id)?.driver!=='person') continue;
+        const limit=kindOf.get(u.kind)!.radius*2.8;
+        // Each revision has its own continuous path; placements still cut.
+        for (let h:OwnerHistory|undefined=q;h;h=h.previous) {
+          for (let i=1;i<h.samples.length;i++) {
+            const a=h.samples[i-1],b=h.samples[i];
+            if(b.t<=sceneCursor)continue;
+            if(a.t>=sceneCursor+ticks)break;
+            const speed=Math.hypot(b.u.pos.x-a.u.pos.x,b.u.pos.y-a.u.pos.y,b.u.pos.z-a.u.pos.z)/(b.t-a.t);
+            if(speed>0)ticks=Math.min(ticks,limit/speed);
+          }
+        }
+      }
+      sceneCursor = Math.max(sceneCursor, Math.min(target, sceneCursor + ticks));
     }
     sceneAt = now;
     while (sceneHistory.length > 2 && sceneHistory[1].k <= sceneCursor) sceneHistory.shift();

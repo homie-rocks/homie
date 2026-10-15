@@ -2944,3 +2944,25 @@ test('receiving a placement preserves the moving runner history before its scene
  viewer.net.sample=()=>({a:b,b:c,alpha:.05});
  assert.ok(Math.abs(viewer.get(id).pos.x-(x+(tick-oldTick)*.2))<.002,'the last interval before the cut still samples the old input trajectory');
 });
+
+test('a stalled scene reaches fresh movement without replaying a long stationary tail',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t);let until=0;
+ const r=rig(L,compiled,{enforceOverrun:true,clock:{now:()=>Date.now(),setTimer:(fn,ms)=>{
+  const run=()=>Date.now()<until?setTimeout(run,until-Date.now()):fn();return setTimeout(run,ms);
+ },clearTimer:h=>clearTimeout(h)}},80,80);
+ const viewer=openRoom({net:{config:cfg('Paused scene'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const owner=openRoom({net:{config:cfg('Starts during pause'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{viewer.close();owner.close();r.stop();});await clock.wait(1500);
+ const id=owner.me.id,start=viewer.get(id).pos.x;until=Date.now()+3000;
+ for(let i=0;i<188;i++){if(i===100)owner.input({ax:1});await clock.wait(16);viewer.get(id);}
+ let first=null,previous=viewer.get(id).pos.x;
+ for(let i=0;i<125;i++){
+  await clock.wait(16);const x=viewer.get(id).pos.x;
+  assert.ok(Math.abs(x-previous)<1.4+1e-6,`catch-up step exceeded the display bound: ${previous} -> ${x}`);
+  if(first===null&&x>start+.02)first=(i+1)*16;previous=x;
+ }
+ assert.ok(owner.me.pos.x>8,'the owner continued moving during and after the pause');
+ assert.ok(first!==null&&first<700,`observer kept replaying stationary history for ${first} ms after resume`);
+ t.diagnostic({firstMotionAfterResumeMs:first});
+});
