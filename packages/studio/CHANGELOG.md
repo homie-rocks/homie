@@ -37,6 +37,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 - Skip unchanged analytics counters and watermarks, paginate rollups by UTC day, and show delayed counts in owner statistics.
 
 - Set `stats.analytics: true` in studio.json to count page activity with Analytics Engine and hourly, replay-safe D1 rollups that preserve historical totals. Owner statistics explain ingestion lag and sampling.
+- Use Chrome debugging pipes and capture child stderr, exits, shared-memory availability and concurrent Chrome processes in CI artifacts.
 
 ## [0.54.0] - 2026-10-15
 

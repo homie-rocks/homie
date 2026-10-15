@@ -3,6 +3,7 @@
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { resolve } from 'node:path';
 export const shardCounts = { pr: 16, full: 20, compat: 1 };
 export const shardBudgetSeconds = 480;
 export function checkShardBudget(seconds) {
@@ -90,7 +91,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     for (const file of bins[index].files) {
       console.log(`\n::group::${file}`);
       const start = performance.now();
-      const result = spawnSync(process.execPath, ['--test', '--test-reporter=tap', '--test-concurrency=1', file], { stdio: 'inherit', timeout: 600_000, killSignal: 'SIGKILL' });
+      const result = spawnSync(process.execPath, ['--import', './scripts/chrome-launch-evidence.mjs', '--test', '--test-reporter=tap', '--test-concurrency=1', file], { env: { ...process.env, HOMIE_CHROME_EVIDENCE: resolve('ci-results/chrome') }, stdio: 'inherit', timeout: 600_000, killSignal: 'SIGKILL' });
       seconds[file] = Math.round((performance.now() - start) / 100) / 10;
       console.log(`::endgroup::\nFILE_DURATION ${file} ${seconds[file]}s`);
       if (result.status !== 0) {
