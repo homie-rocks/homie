@@ -74,11 +74,15 @@ function noSandboxNeeded() {
   try { return readFileSync('/proc/sys/kernel/apparmor_restrict_unprivileged_userns', 'utf8').trim() === '1'; } catch { return false; }
 }
 
+/** Puppeteer detects --remote-debugging-pipe and opens dedicated inherited FDs.
+ * This avoids waiting for a DevTools URL on Chrome stderr during parallel CI launches.
+ * The launch deadline still bounds startup; GPU and sandbox settings are unchanged.
+ */
 /** The launch flags for this machine (the GPU on a Mac; SwiftShader, headless and container-safe on Linux). */
 export function chromeArgs() {
-  if (process.platform === 'darwin') return ['--use-angle=metal', '--enable-gpu-rasterization', '--ignore-gpu-blocklist'];
+  if (process.platform === 'darwin') return ['--remote-debugging-pipe', '--use-angle=metal', '--enable-gpu-rasterization', '--ignore-gpu-blocklist'];
   return [
-    '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-dev-shm-usage',
+    '--remote-debugging-pipe', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-dev-shm-usage',
     ...(noSandboxNeeded() ? ['--no-sandbox'] : []),
   ];
 }
