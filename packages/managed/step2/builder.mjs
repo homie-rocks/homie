@@ -10,6 +10,9 @@ export class BuildSandbox extends DurableObject {
   await this.ctx.storage.setAlarm(Date.now()+600000);
   try {
    c.start({image:'cloudflare/debian-trixie',entrypoint:['sleep','infinity'],enableInternet:true,instance:'standard-1'});
+   // exec alone does not prevent DO eviction during a long browser check.
+   // monitor keeps the controller active for up to 15 minutes; our alarm is 10.
+   this.ctx.waitUntil(c.monitor().catch(error=>console.error('Container stopped',error.message)));
    const p=await c.exec(['node','-e',buildProgram],{stdin:new Blob([JSON.stringify(job)]).stream()});
    const read=async (stream,limit)=>{const reader=stream.getReader();let size=0;const chunks=[];for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>limit){await c.destroy();throw new Error('Output limit');}chunks.push(value);}return new TextDecoder().decode(await new Blob(chunks).arrayBuffer());};
    const [stdout,stderr,exitCode]=await Promise.all([read(p.stdout,32*1024*1024),read(p.stderr,64*1024),p.exitCode]);

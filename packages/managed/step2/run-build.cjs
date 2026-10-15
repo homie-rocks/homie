@@ -19,7 +19,7 @@ run('npm',['ci','--no-audit','--no-fund']);
 if(JSON.parse(fs.readFileSync('/work/node_modules/@homie-rocks/studio/package.json')).version!==job.toolkit)throw new Error('Installed toolkit mismatch');
 run('npm',['run','build']);
 if(job.mode==='check'){
- run('apt-get',['install','-y','-qq','chromium']);
+ run('apt-get',['install','-y','-qq','--no-install-recommends','chromium'],{DEBIAN_FRONTEND:'noninteractive'});
  // The toolkit's authenticated staff checks deliberately require its local test
  // session. Run that documented dev/check pair inside this disposable VM.
  const config=JSON.parse(fs.readFileSync('/work/studio.json'));

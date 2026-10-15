@@ -10,7 +10,7 @@ async function wait(commit,want){let last;for(let i=0;i<60;i++){
  if(j?.status==='complete'){if(want==='failed')throw new Error('Expected failure was accepted');return j;}
  await new Promise(r=>setTimeout(r,20000));
  }throw new Error('Proof deadline exceeded');}
-const first=state().pushes.find(p=>p.variant==='three').commit;
+const first=process.argv[2]??state().pushes.find(p=>p.variant==='three').commit;
 await wait(first,'verified');
 run('control-release.mjs',['promote',first]);run('continuity.mjs',['seed']);
 run('push.mjs',['four']);const second=state().pushes.at(-1).commit;await wait(second,'verified');
