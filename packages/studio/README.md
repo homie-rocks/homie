@@ -513,7 +513,7 @@ npx homie-studio shop                         # open (test or live) or what is m
 npx homie-studio shop refund ord_…            # an ASK: the owner taps once (or Refund in /_studio/office/shop)
 ```
 
-Use `stripe_login` or `homie-studio shop connect` for one approval of the official Homie Stripe App. The tool decrypts the studio's restricted key and webhook secret locally and installs them privately. The studio Worker creates every Checkout Session; only signed events grant purchases. [SHOP.md](shop/SHOP.md) describes setup and migration.
+Use `stripe_login` or `homie-studio shop connect` for Homie Stripe App install and Copy. The local clipboard watcher installs the App-generated restricted key privately; the Worker creates its webhook. The studio Worker creates every Checkout Session; only signed events grant purchases. [SHOP.md](shop/SHOP.md) describes setup and migration.
 
 In a game: `createShop()` from `@homie-rocks/studio/shop` (`has`, `entitlements`, `on('change')`, `open`, `used`, `add`, `checkout`, `buy`); a
 supporter's badge rides on their seat (`peer.badge`). Stripe Checkout (hosted), optional Stripe Tax, or Stripe Managed

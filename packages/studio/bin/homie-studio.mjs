@@ -186,7 +186,7 @@
  *   homie-studio shop init [--supporter|--giving] [--currency <code>] [--price 500] [--managed]   shop.json and SELLING.md
  *   homie-studio shop check               shop.json against studio settings and provider requirements
  *   homie-studio shop listen --profile <sandbox> [--port 8787]   private local webhook forwarding
- *   homie-studio shop connect [--live] [--renew]   one Homie Stripe App approval installs the private Worker connection
+ *   homie-studio shop connect [--live] [--renew]   Homie App install and Copy installs the private Worker connection
  *   homie-studio shop catalog [--have <file>|-] [--mode test|live]   the items as Products in the studio's Stripe,
  *                                         made by the AI through Stripe's own MCP: the read first, then (with what it
  *                                         answered) the exact writes; in sync, shop.json "catalog" records the mode
@@ -842,7 +842,7 @@ const OUTWARD_FLAGS = {
   'servers close': ['url', 'reopen'], 'servers level': ['url'], 'servers member': ['url', 'role', 'remove'],
   'parts reissue': ['claim-hash', 'receipt-verified', 'buyer'], 'parts retire': [], 'parts keys': [], 'parts refund': ['game'],
   'shop listen': ['profile','port'],
-  'shop connect': ['live', 'renew'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note', 'manual-transaction'],
+  'shop connect': ['live', 'renew', 'finish'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note', 'manual-transaction'],
   'agents pass': ['url', 'label', 'server', 'hands', 'role', 'days'], 'agents revoke': ['url'], 'agents brain': ['url', 'budget', 'remove'],
   'agents sit': ['url', 'server', 'pass', 'label', 'brain'],
   'events webhook': ['url','after'],
@@ -1109,7 +1109,7 @@ async function main() {
     if (sub === 'init') return shopInit(root, { supporter: flags.has('supporter'), giving: flags.has('giving'), currency: flags.get('currency') ?? null, price: flags.get('price') ?? 500, managed: flags.has('managed') });
     if(sub==='listen')return (await import('../lib/shop-listen.mjs')).shopListen(root,{profile:flags.get('profile'),port:flags.get('port')??8787,log});
     if (sub === 'check') return shopCheck(root);
-    if (sub === 'connect') return shopConnect(root, { onEvent:event=>process.stderr.write('HOMIE_EVENT '+JSON.stringify(event)+'\n'), managed: flags.has('managed') ? true : null, live: flags.has('live'), renew: flags.has('renew'), log: (line) => process.stderr.write(`${line}\n`) });
+    if (sub === 'connect') return shopConnect(root, { onEvent:event=>process.stderr.write('HOMIE_EVENT '+JSON.stringify(event)+'\n'), managed: flags.has('managed') ? true : null, live: flags.has('live'), renew: flags.has('renew'), finish: flags.has('finish'), log: (line) => process.stderr.write(`${line}\n`) });
     if (sub === 'disconnect') return shopDisconnect(root);
     if (sub === 'catalog') {
       const from = flags.get('have');

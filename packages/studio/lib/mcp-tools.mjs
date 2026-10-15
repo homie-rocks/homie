@@ -1178,17 +1178,17 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'stripe_login', title: 'Connect the studio to Stripe',
-      description: 'Connect the studio through one approval of the official Homie Stripe App. Installs an encrypted, restricted Checkout credential and webhook secret privately in the studio Worker. Follow studio_job. No key copying. live only when the owner says go live.',
-      inputSchema: { type: 'object', properties: { ...STUDIO_ARG, live: { type: 'boolean' }, renew: { type: 'boolean' } } },
+      description: 'Connect the studio through the official Homie Stripe App install and Copy on its API key settings page. The local clipboard watcher installs the restricted key privately into the studio Worker. Never paste keys into chat. Follow studio_job. live only when the owner says go live.',
+      inputSchema: { type: 'object', properties: { ...STUDIO_ARG, live: { type: 'boolean' }, renew: { type: 'boolean' }, finish: { type: 'boolean' } } },
       annotations: { title: 'Connect Stripe', readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       run: async (a) => {
         const root = ctx.root(a.studio);
-        const args = ['shop', 'connect', ...(a.live ? ['--live'] : []), ...(a.renew ? ['--renew'] : [])];
+        const args = ['shop', 'connect', ...(a.live ? ['--live'] : []), ...(a.renew ? ['--renew'] : []), ...(a.finish ? ['--finish'] : [])];
         const job = cliJob(root, 'Stripe connection', args, { cli: join(PACKAGE_ROOT, 'bin', 'homie-studio.mjs'), keep: false });
         const ended = await waitJob(job, Math.min(ctx.waitMs, 1000));
         ctx.status = null;
         if (ended && job.code !== 0) return fail(whyOf(job), { kind: 'job', ...jobView(job) });
-        return ok(ended ? jobView(job).tail.join('\n') || 'Stripe connection finished; inspect the job result.' : 'Stripe connection is running. Approve Stripe in the browser when it opens. Check this job for the result and any remaining setup step.', { kind: 'job', ...jobView(job) });
+        return ok(ended ? jobView(job).tail.join('\n') || 'Stripe connection finished; inspect the job result.' : 'Stripe connection is running. Install Homie, generate the restricted key and Copy in the browser when it opens. Check this job for the result and any remaining setup step.', { kind: 'job', ...jobView(job) });
       },
     },
     {

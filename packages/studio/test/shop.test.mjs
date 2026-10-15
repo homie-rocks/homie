@@ -1547,8 +1547,14 @@ test('resource_missing releases a session, other errors retain it, and late paid
     assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 500 }, s.as(p))).status, missing ? 200 : 403);
     assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(row.id).status, missing ? 'missing' : 'processing');
     await s.hook('checkout.session.expired', { id: row.session });
-    // Stripe's own closing event is the truth for a row marked missing: the player stops seeing it as in progress.
-    if (missing) assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(row.id).status, 'expired');
+    // Signed notification alone cannot override a failed provider retrieval.
+    if (missing) {
+      assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(row.id).status, 'missing');
+      s.stripe.behave.error = null;
+      Object.assign(row.truth, {status:'expired'});
+      await s.hook('checkout.session.expired',row.truth);
+      assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(row.id).status, 'expired');
+    }
     s.stripe.close();
   }
   const s = await site({ settings: { capPerPlayerMonth: 500 } });
@@ -2270,6 +2276,7 @@ test('legacy tips, deleted players and paid 404s leave reconciliation; unknown o
     s.stripe.behave.error = null;
   }
   const obj = { id: 'cs_early_own', metadata: { homie: 'shop-v1', origin: 'https://owls.example', order: 'ord_' + 'x'.repeat(20) }, payment_status: 'paid' };
+  s.stripe.behave.sessions.set(obj.id,obj);
   assert.equal((await s.hook('checkout.session.completed', obj)).status, 200);
   assert.equal((await s.hook('checkout.session.completed', obj, { created: Math.floor(Date.now() / 1000) - 16 * 60 })).status, 200);
   s.stripe.close();

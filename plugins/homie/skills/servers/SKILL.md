@@ -185,8 +185,8 @@ problems reach the AI without polling; Homie hosts nothing for this. See
 
 ## Selling and operational checks over MCP
 
-Use the shop skill and the existing `stripe_login` tool for one approval of the official Homie Stripe App.
-The AI starts the tool; the owner approves Homie once in Stripe. The tool installs the encrypted credentials privately. No secrets or API keys pass through chat. Deploy distinguishes **claimed, not listed** from
+Use the shop skill and the existing `stripe_login` tool for Homie Stripe App install and Copy.
+The AI starts the tool; the owner approves Homie once in Stripe. The owner chooses Generate key (sandbox: Reveal key), then Copy; the local tool installs it privately. No secrets or API keys pass through chat. Deploy distinguishes **claimed, not listed** from
 an actual directory listing; publishing is a separate action.
 
 On the existing signed-in studio connector (`<site>/mcp/auth`), call

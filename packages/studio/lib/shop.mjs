@@ -101,12 +101,8 @@ export async function shopRefund(root, order, { url, reason, note, manualTransac
 export const hookUrlOf = (site) => `${String(site).replace(/\/+$/, '')}/api/shop/hook`;
 
 /** Stop new purchases while keeping signed in-flight fulfilment available. */
-export function shopDisconnect(root) {
-  const studio = readStudio(root);
-  const w = runner(root, studio.cloudflare?.accountId ? { CLOUDFLARE_ACCOUNT_ID: studio.cloudflare.accountId } : {});
-  const result = w(['secret', 'delete', 'STRIPE_KEY'], { input: 'y\n' });
-  return result.code === 0 ? { ok: true, command: 'shop disconnect', message: 'New checkout is closed. Reconnect by approving the Homie Stripe App.' }
-    : { ok: false, command: 'shop disconnect', why: 'Cloudflare could not disconnect Stripe. No credentials were printed.' };
+export async function shopDisconnect(root) {
+  return (await import('./stripe-connect.mjs')).disconnectStripe(root);
 }
 
 /** Lines for a person (the CLI's print). */

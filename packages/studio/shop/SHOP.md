@@ -14,15 +14,17 @@ homie-studio shop connect
 ```
 
 The existing `stripe_login` tool runs this command and opens the official Homie
-Stripe App. Approve it once in the browser. Local RSA key generation, encrypted
-credential collection, decryption and `wrangler secret put` over stdin are
-automatic. No owner copies or pastes a key. Test is the default; `--live` is an
-explicit owner choice. `--manual` and clipboard key entry are removed.
+Stripe App. Install Homie, choose View API keys → Generate new key (sandbox:
+Reveal key) → Copy. The local tool captures only a new restricted key in the
+expected mode, validates read access and installs it through Wrangler stdin.
+It clears the clipboard afterward; never paste keys into chat. `--renew` uses
+Roll key and Copy. If capture fails, use the hidden Wrangler prompt in your own
+terminal and resume with `shop connect --finish`.
 
-Managed API keys are a Stripe preview requiring `api_key_write` approval and
-App review. The local fake exercises the documented JSON request and JWE
-response until access is available. An unapproved endpoint is a setup failure,
-not permission to fall back to a different payment architecture.
+The App has public distribution; use its External test link until Stripe review
+passes. No Homie service handles setup or payments. The Worker creates its own
+webhook and encrypts the signing secret in D1 with a separate Worker secret.
+See the repository's `docs/stripe-rak-owner-guide.md` for release gates.
 
 ## Catalogue and checkout
 
@@ -102,21 +104,19 @@ receipts already committed by signed events. It then deploys the new Worker,
 installs its credentials, disables old webhook endpoints and removes retired
 configuration. No orders or bookings are deleted or granted by the drain check.
 
-Revoked or expired credentials cause checkout to ask for reconnection. App
-lifecycle notifications are setup records only. Buying and delivery do not call
+Revoked or expired credentials cause checkout to ask for reconnection. Uninstall behavior is tested separately; do not assume uninstall revokes a key. Buying and delivery do not call
 Homie to check authorization.
 
 ## Testing
 
 Local fake: the shop, booking, functions and MCP tests use provider doubles and
-real Worker/D1 tests. App tests validate encrypted delivery, replay rejection,
-wrong mode, missing ownership proof, expiry and migration ordering.
+real Worker/D1 tests. App tests validate private clipboard capture, stale/wrong-mode rejection,
+secret-free output, lifecycle cleanup and migration ordering.
 
 Real sandbox acceptance is `test/checkout-sandbox-acceptance.mjs`. It accepts a
 Dashboard-made restricted **test** key only on stdin and uses only the CLI
-profile `Homie sandbox` for payment test helpers and signed webhook forwarding.
+profile `homie-636e9d423df0184d0af88019` for payment test helpers and signed webhook forwarding.
 No card digits, live keys, production deployment or global CLI profile are used.
-A sandbox payment test does not prove managed-key preview access.
-
-See the App service's managed-key acceptance script for the one real mint test
-to run after Stripe grants preview access.
+A CLI-authenticated sandbox payment test does not prove App-generated RAK
+permissions or developer-key isolation. Follow `docs/stripe-rak-owner-guide.md`
+for the separately owner-authorized App installation and security checks.

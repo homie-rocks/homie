@@ -1,3 +1,4 @@
+import {bindLinkSession,paidBasket} from './shop-legacy.mjs';
 import {webhookSecret} from './stripe-bootstrap.mjs';
 import {claimHoldStatement,ownedHold} from './booking-holds.mjs';
 import { stripeEventOwner } from './stripe-ownership.mjs';
@@ -793,7 +794,8 @@ async function hook(request, env, cat, shop, ready) {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) return fail(503, 'setting', 'SHOP_WEBHOOK_BYTES is a positive whole number.');
   const payload = await boundedText(request, maxBytes);
   if (payload === null) return fail(413, 'too-large', 'The studio webhook byte limit was reached.');
-  const v = await verifyWebhook(payload, request.headers.get('stripe-signature'), await webhookSecret(env));
+  let v = await verifyWebhook(payload, request.headers.get('stripe-signature'), await webhookSecret(env));
+  if(!v.ok && env.STRIPE_WEBHOOK_SECRET)v=await verifyWebhook(payload,request.headers.get('stripe-signature'),env.STRIPE_WEBHOOK_SECRET);
   if (!v.ok) return fail(v.why === 'no-secret' ? 503 : 400, v.why, 'not a webhook from this studio\'s Stripe');
   const ev = v.event;
   const notified = ev.data?.object ?? {};
@@ -819,6 +821,13 @@ async function hook(request, env, cat, shop, ready) {
     const subscriptionResult = await subscriptionEvent(env, ev, shop);
     if (subscriptionResult !== null) return json({ ok: true, did: subscriptionResult });
     const sessionEvent = ev.type.startsWith('checkout.session.');
+    if(sessionEvent && obj.payment_link) {
+      if(obj.invoice) {
+        const invoice=await stripeCall(env,'GET',`/v1/invoices/${encodeURIComponent(typeof obj.invoice==='string'?obj.invoice:obj.invoice.id)}`);
+        await env.DB.prepare('INSERT OR REPLACE INTO meta(key,value) VALUES(?1,?2)').bind(`shop-invoice:${invoice.id}`,JSON.stringify(invoice)).run();
+      }
+      if(!await bindLinkSession(env,obj,ev.livemode?'live':'test'))return json({ok:true,did:'mismatch'});
+    }
     if (!sessionEvent) await rememberMoneyEvent(env, ev);
     if (sessionEvent && obj.metadata?.order) {
       await env.DB.prepare(`UPDATE shop_orders SET session=?2 WHERE id=?1 AND session IS NULL AND mode=?3
@@ -909,9 +918,13 @@ export async function paid(env, shop, session, paidAt = Date.now()) {
   const o = await orderBySession(env, session.id);
   if (!o) return 'unknown-order';
   // The session must be the one this order opened, for this player and this price.
-  if (session.metadata?.order !== o.id) return 'mismatch';
+  const savedLines=await orderLines(env,o.id);
+  const legacy=savedLines.some(l=>JSON.parse(l.snapshot??'{}').paymentLink);
+  if(legacy && !await bindLinkSession(env,session,o.mode))return 'mismatch';
+  if(legacy && JSON.parse(savedLines[0].snapshot).paymentLink?.basket)return paidBasket(env,shop,o,savedLines,session,paidAt);
+  if (!legacy && session.metadata?.order !== o.id) return 'mismatch';
   const reference = await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-reference:${o.id}`).first();
-  if (session.client_reference_id && session.client_reference_id !== (reference?.value ?? o.checkout_player ?? o.player)) return 'mismatch';
+  if (!legacy && session.client_reference_id && session.client_reference_id !== (reference?.value ?? o.checkout_player ?? o.player)) return 'mismatch';
   if (session.currency !== o.currency || !Number.isSafeInteger(session.amount_subtotal) || session.amount_subtotal !== Number(o.amount)) return 'mismatch';
   if (['refunded', 'lost', 'disputed'].includes(o.status)) {
     if (o.payment) await syncRefunds(env, o.payment);

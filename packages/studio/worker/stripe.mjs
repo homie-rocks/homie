@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import {workerPermission} from './stripe-permissions.mjs';
 /** The studio's own Stripe account, through Stripe's official SDK.
  * Credentials stay in Worker secrets; App setup owns endpoint creation.
  * STRIPE_API_BASE permits only loopback fakes in tests. */
@@ -83,6 +84,7 @@ export async function productIdOf(slug, item) {
 
 /** One call with the studio's key. `idempotencyKey` makes a retried POST do the work once (Stripe keeps it 24 h). */
 export async function stripeCall(env, method, path, params = null, { idempotencyKey = null, fetcher = fetch, version = STRIPE_VERSION, timeout = 15_000 } = {}) {
+  if(!workerPermission(method,path))throw new StripeError(403,{error:{code:'permission_not_granted',message:'This capability is outside the studio Checkout permissions.'}});
   const key = String(env?.STRIPE_KEY ?? '');
   if (!KEY_SHAPE.test(key)) throw new StripeError(0, { error: { message: 'no Stripe key on this Worker', code: 'no-key' } });
   const base = new URL(apiBase(env));
@@ -93,11 +95,11 @@ export async function stripeCall(env, method, path, params = null, { idempotency
   try { return await sdk.rawRequest(method, path + query, method === 'POST' ? params : null,
     { ...(idempotencyKey ? { idempotencyKey } : {}) }); }
   catch (error) {
-    if ((error.statusCode === 401 || error.code === 'api_key_expired') && env.DB) {
+    if ((error.statusCode === 401) && env.DB) {
       const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key))), b => b.toString(16).padStart(2, '0')).join('');
       await env.DB.prepare('INSERT INTO meta(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind('stripe-reconnect', digest).run();
     }
-    throw new StripeError(error.statusCode ?? 502, { error: { message: (error.statusCode === 401 || error.code === 'api_key_expired') ? 'Reconnect Stripe by approving the Homie app.' : redactStripe(error.message, env), code: error.code, type: error.type, param: error.param } });
+    throw new StripeError(error.statusCode ?? 502, { error: { message: (error.statusCode === 401) ? 'Reconnect Stripe with Homie App settings: Roll key, then Copy.' : redactStripe(error.message, env), code: error.code, type: error.type, param: error.param } });
   }
 }
 

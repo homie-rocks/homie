@@ -1,110 +1,75 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, cpSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, cpSync, rmSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CompactEncrypt, importSPKI } from 'jose';
-import { shopConnect } from '../lib/stripe-connect.mjs';
+import { shopConnect, captureRestrictedKey, disconnectStripe } from '../lib/stripe-connect.mjs';
 function studio(t) {
-  const root = mkdtempSync(join(tmpdir(), 'homie-app-connect-'));
-  cpSync(new URL('./fixtures/studio-0.51.6-shop/', import.meta.url), root, { recursive: true });
-  rmSync(join(root, '.studio', 'stripe-mcp.json'), { force: true });
-  t.after(() => rmSync(root, { recursive: true, force: true })); return root;
+ const root=mkdtempSync(join(tmpdir(),'homie-rak-'));
+ cpSync(new URL('./fixtures/studio-0.51.6-shop/',import.meta.url),root,{recursive:true});
+ rmSync(join(root,'.studio','stripe-mcp.json'),{force:true});
+ t.after(()=>rmSync(root,{recursive:true,force:true}));return root;
 }
-test('one approval installs the key privately and bootstraps the Worker-owned webhook', async t => {
-  const root = studio(t), writes = [], logs = []; let started, opened = 0, ack = 0;
-  const fetcher = async (url, options) => {
-    if(url.endsWith('/api/shop/stripe-setup'))return Response.json({ok:true,webhookId:'we_fixture'});
-    const body = JSON.parse(options.body);
-    if (url.endsWith('/start')) { started = body; return Response.json({ id: 'setup', url: 'https://marketplace.stripe.com/oauth/v2/authorize?state=nonce' }); }
-    assert.equal(body.collectToken, started.collectToken);
-    if (url.endsWith('/ack')) { ack++; return Response.json({ ok: true }); }
-    const key = await importSPKI(started.publicKey, 'RSA-OAEP-256');
-    const encrypt = value => new CompactEncrypt(new TextEncoder().encode(value)).setProtectedHeader({ alg: 'RSA-OAEP-256', enc: 'A256GCM' }).encrypt(key);
-    return Response.json({ status: 'ready', account: 'acct_fixture', mode: 'test', origin: started.origin,
-      key: await encrypt('rk_test_fixture'), webhookSecret: await encrypt('whsec_fixture'), keyId: 'apikey_fixture', webhookId: 'we_fixture' });
-  };
-  const result = await shopConnect(root, { storage: join(root, 'private'), fetcher, open: () => opened++, log: x => logs.push(x),
-    wrangler: async (args, options) => { writes.push({ args, input: options.input }); return { code: 0, out: 'private output' }; } });
-  assert.equal(result.ok, true); assert.equal(opened, 1); assert.equal(ack, 1);
-  assert.deepEqual(writes.map(w => w.args), [['secret','put','STRIPE_SETUP_CHALLENGE'], ['secret','put','STRIPE_KEY']]);
-  assert.equal(writes[1].input, 'rk_test_fixture');
-  assert.doesNotMatch(JSON.stringify({ result, logs }), /rk_test_fixture|whsec_fixture|private output|PRIVATE KEY/);
+function setup(t, changes={}) {
+ const root=studio(t), writes=[], logs=[];let value='prior clipboard';
+ const options={storage:join(root,'private'),installUrl:'https://marketplace.stripe.com/apps/test/example',
+  open:()=>{value='rk_test_fixture';},clipboard:{read:()=>value,clear:()=>{value='';}},log:s=>logs.push(s),
+  wrangler:async(args,opts={})=>{writes.push({args,input:opts.input});return {code:0,stdout:args[0]==='secret'&&args[1]==='list'?'[]':'private output rk_test_neverprint'};},
+  fetcher:async url=>url.endsWith('/api/shop/stripe-setup')?Response.json({ok:true,webhookId:'we_fixture',account:'acct_fixture',name:'Fixture'}):url.endsWith('/v1/account')?Response.json({id:'acct_fixture',business_profile:{name:'Fixture'}}):Response.json({data:[]}),...changes};
+ return {root,options,writes,logs,clipboard:()=>value};
+}
+test('copy validates, installs over stdin and clears clipboard without leaking any credential',async t=>{
+ const f=setup(t);const result=await shopConnect(f.root,f.options);
+ assert.deepEqual(result,{ok:true,command:'shop connect',message:'connected to Fixture'});
+ assert.equal(f.writes.find(x=>x.args.at(-1)==='STRIPE_KEY').input,'rk_test_fixture');
+ assert.equal(f.clipboard(),'');assert.doesNotMatch(JSON.stringify([result,f.logs]),/rk_test_/);
+ const dir=join(f.options.storage,readdirSync(f.options.storage)[0]);
+ for(const file of readdirSync(dir).filter(f=>f.endsWith('.json')))assert.doesNotMatch(readFileSync(join(dir,file),'utf8'),/rk_test_|whsec_/);
 });
-test('malformed ciphertext and mismatched mode install no payment credentials; manual entry is refused', async t => {
-  for (const mode of ['live', 'test']) {
-    const root = studio(t), writes = [];
-    const result = await shopConnect(root, { storage: join(root, 'private'), open: () => {}, wrangler: async args => { writes.push(args); return { code: 0 }; },
-      fetcher: async url => Response.json(url.endsWith('/start') ? { id: 'setup', url: 'https://dashboard.stripe.com/approve' } : { status: 'ready', mode, origin: 'https://golf.example', account: 'acct_fixture', key: 'bad', webhookSecret: 'bad' }) });
-    assert.equal(result.ok, false); assert.equal(writes.length, 1);
-  }
-  assert.equal((await shopConnect(studio(t), { manual: true })).needs, 'app-approval');
-});
-
-test('retry requests a new approval after decrypted private key deletion', async t => {
-  const root=studio(t), storage=join(root,'private');let started, opened=0, fail=true;
-  const fetcher=async(url,options)=>{
-    if(url.endsWith('/api/shop/stripe-setup'))return Response.json({ok:true,webhookId:'we_fixture'});
-    const body=JSON.parse(options.body);
-    if(url.endsWith('/start')){started=body;return Response.json({id:'setup',url:'https://marketplace.stripe.com/oauth/v2/authorize?state=nonce'});}
-    if(url.endsWith('/ack'))return Response.json({ok:true});
-    const publicKey=await importSPKI(started.publicKey,'RSA-OAEP-256');
-    const encrypt=value=>new CompactEncrypt(new TextEncoder().encode(value)).setProtectedHeader({alg:'RSA-OAEP-256',enc:'A256GCM'}).encrypt(publicKey);
-    return Response.json({status:'ready',mode:'test',origin:started.origin,account:'acct_fixture',keyId:'apikey_fixture',webhookId:'we_fixture',key:await encrypt('rk_test_fixture'),webhookSecret:await encrypt('whsec_fixture')});
-  };
-  const options={storage,fetcher,open:()=>opened++,wrangler:async args=>({code:args.at(-1)==='STRIPE_KEY'&&fail?1:0})};
-  assert.equal((await shopConnect(root,options)).ok,false);fail=false;
-  assert.equal((await shopConnect(root,options)).ok,true);assert.equal(opened,2);
-});
-
-test('migration deploys Checkout before cutover and drains before removing retired bindings', async t => {
-  const root=studio(t); const {writeFileSync}=await import('node:fs');
-  writeFileSync(join(root,'.studio','stripe-mcp.json'),'{}');
-  const sequence=[];let started, collected=0, drained=false, cutover=false;
-  const fetcher=async(url,options)=>{
-    if(url.endsWith('/api/shop/stripe-setup'))return Response.json({ok:true,webhookId:'we_fixture'});
-    const body=JSON.parse(options.body);
-    if(url.endsWith('/start')){started=body;assert.equal(body.migration,true);return Response.json({id:'setup',url:'https://marketplace.stripe.com/oauth/v2/authorize?state=nonce'});}
-    if(url.endsWith('/cutover')){cutover=true;sequence.push('cutover');return Response.json({ok:true});}
-    if(url.endsWith('/drained')){sequence.push('drained');drained=true;return Response.json({ok:true});}
-    if(url.endsWith('/ack')){sequence.push('ack');return Response.json({ok:true});}
-    if(cutover&&!drained)return Response.json({status:'draining',open:collected++===0?1:0,complete:['cs_existing']});
-    const key=await importSPKI(started.publicKey,'RSA-OAEP-256');const encrypt=value=>new CompactEncrypt(new TextEncoder().encode(value)).setProtectedHeader({alg:'RSA-OAEP-256',enc:'A256GCM'}).encrypt(key);
-    return Response.json({status:'ready',mode:'test',origin:started.origin,account:'acct_fixture',keyId:'apikey_fixture',webhookId:'we_fixture',key:await encrypt('rk_test_fixture'),webhookSecret:await encrypt('whsec_fixture')});
-  };
-  const wrangler=async(args,options)=>{
-    if(args[0]==='d1'){sequence.push('receipt');return {code:0,stdout:JSON.stringify([{success:true,results:args.at(-1).includes('sqlite_master')?[{name:'shop_orders'}]:[{session:'cs_existing'}]}])};}
-    if(args[1]==='list')return {code:0,stdout:JSON.stringify([{name:'STRIPE_SHOP_LINKS'}])};
-    sequence.push(args[1]+':'+args[2]);return {code:0};
-  };
-  const result=await shopConnect(root,{storage:join(root,'private'),fetcher,wrangler,open:()=>{},wait:async()=>{},deploy:async()=>{sequence.push('deploy');return {ok:true};}});
-  assert.equal(result.ok,true);assert.ok(sequence.indexOf('receipt')<sequence.indexOf('drained'));
-  assert.ok(sequence.indexOf('deploy')<sequence.indexOf('cutover'));assert.ok(sequence.indexOf('put:STRIPE_KEY')<sequence.indexOf('deploy'));
-  assert.ok(sequence.indexOf('drained')<sequence.indexOf('delete:STRIPE_SHOP_LINKS'));
-  assert.equal(sequence.at(-1),'ack');
-});
-
-test('round2 approval URL and state never enter job events',async t=>{
- const root=studio(t),events=[];
- await shopConnect(root,{storage:join(root,'private'),open:()=>{},onEvent:e=>events.push(e),wrangler:async()=>({code:0}),fetcher:async url=>Response.json(url.endsWith('/start')?{id:'setup',url:'https://marketplace.stripe.com/approve?state=private-state'}:{status:'failed'})});
- assert.doesNotMatch(JSON.stringify(events),/private-state|https:/);
-});
-test('round2 loopback displays account and requires local POST before confirm',async()=>{
- const {createApprovalListener}=await import('../lib/stripe-connect.mjs');let confirmed=0;
- const listener=await createApprovalListener({confirm:async value=>{assert.equal(value.account,'acct_owner');confirmed++;}});
- try{
- const page=await fetch(listener.url+'?id=setup&confirm='+ 'a'.repeat(64)+'&account=acct_owner');
- const html=await page.text();assert.match(html,/acct_owner/);assert.equal(confirmed,0);
- const token=/name="token" value="([a-f0-9]+)"/.exec(html)[1];
- assert.equal((await fetch(listener.url,{method:'POST',headers:{origin:new URL(listener.url).origin,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({token})})).status,200);
- assert.equal(confirmed,1);
- }finally{await listener.close();}
-});
-test('round2 documented RSA-OAEP and RSA-OAEP-256 envelopes decrypt',async()=>{
- const {decryptManagedKey}=await import('../lib/stripe-connect.mjs');const {generateKeyPairSync}=await import('node:crypto');
- const pair=generateKeyPairSync('rsa',{modulusLength:2048,publicKeyEncoding:{type:'spki',format:'pem'},privateKeyEncoding:{type:'pkcs8',format:'pem'}});
- for(const alg of ['RSA-OAEP','RSA-OAEP-256']){
- const key=await importSPKI(pair.publicKey,alg);const ciphertext=await new CompactEncrypt(new TextEncoder().encode('rk_test_fixture')).setProtectedHeader({alg,enc:'A256GCM'}).encrypt(key);
- assert.equal(await decryptManagedKey(ciphertext,pair.privateKey),'rk_test_fixture');
+test('wrong mode and timeout install nothing; stale clipboard key is never consumed',async t=>{
+ for(const value of ['rk_live_fixture','rk_test_fixture']) {
+  let now=0,reads=0;
+  const f=setup(t,{clipboard:{read:()=>++reads===1?'rk_test_fixture':value,clear:()=>{}},open:()=>{},now:()=>now,timeout:1000,wait:async ms=>{now+=ms;}});
+  assert.equal((await shopConnect(f.root,f.options)).needs,'private-terminal');assert.equal(f.writes.length,0);
  }
+});
+test('validation denial does not install, and captures no provider error text',async t=>{
+ const f=setup(t,{fetcher:async()=>Response.json({error:{message:'rk_test_sensitive'}},{status:403})});
+ const result=await shopConnect(f.root,f.options);assert.equal(result.ok,false);assert.equal(f.writes.length,0);
+ assert.equal(f.clipboard(),'');assert.doesNotMatch(JSON.stringify(result),/sensitive/);
+});
+test('clipboard changed by user is not overwritten during cleanup',async t=>{
+ let value='old';const f=setup(t,{clipboard:{read:()=>value,clear:()=>assert.fail('must preserve newer content')},open:()=>{value='rk_test_fixture';},fetcher:async()=>{value='new clipboard';return Response.json({error:{}},{status:403});}});
+ assert.equal((await shopConnect(f.root,f.options)).ok,false);
+});
+test('disconnect deletes endpoint before Worker key and explains independent key expiry',async t=>{
+ const f=setup(t),order=[];
+ const result=await disconnectStripe(f.root,{...f.options,fetcher:async(url,opts)=>{assert.equal(JSON.parse(opts.body).action,'disconnect');order.push('endpoint');return Response.json({ok:true});},wrangler:async args=>{if(args[1]==='delete'&&args[2]==='STRIPE_KEY')order.push('key');return{code:0};}});
+ assert.equal(result.ok,true);assert.deepEqual(order,['endpoint','key']);assert.match(result.message,/roll\/expire/);
+});
+test('uninstall revocation still removes local credential and names endpoint cleanup',async t=>{
+ const f=setup(t);const result=await disconnectStripe(f.root,{...f.options,fetcher:async()=>Response.json({ok:false,needs:'remove-endpoint-in-stripe'})});
+ assert.equal(result.ok,true);assert.match(result.message,/already revoked/);
+});
+test('migration drains every cursor twice with 30 seconds between passes before retiring hooks',async()=>{
+ const {drainStripeLinks}=await import('../lib/stripe-migration.mjs');const actions=[];
+ const run=async args=>{
+  const [method,path]=args;actions.push([method,path,...args.slice(2)]);
+  let body={};
+  if(path==='/v1/account')body={id:'acct_owner'};
+  else if(path==='/v1/payment_links')body={data:[{id:'plink_ours',active:true,metadata:{origin:'https://studio.example',homie:'shop-links-v1'}},{id:'plink_other',active:true,metadata:{origin:'https://other.example',homie:'shop-links-v1'}}]};
+  else if(path==='/v1/webhook_endpoints')body={data:[{id:'we_new',url:'https://studio.example/api/shop/hook',status:'enabled'},{id:'we_old',url:'https://studio.example/api/shop/hook',status:'enabled'}]};
+  else if(path==='/v1/checkout/sessions')body=args.includes('status=open')?{data:[{id:'cs_open'}]}:args.includes('starting_after=cs_first')?{data:[{id:'cs_last',payment_status:'paid'}]}:{data:[{id:'cs_first',payment_status:'paid'}],has_more:true};
+  return {code:0,stdout:JSON.stringify(body)};
+ };
+ await drainStripeLinks({origin:'https://studio.example',account:'acct_owner',mode:'test',keepHook:'we_new',process:run,wait:async ms=>actions.push(['wait',ms]),w:async args=>({code:0,stdout:JSON.stringify([{results:args.at(-1).includes('sqlite_master')?[{name:'shop_orders'}]:[{session:'cs_first'},{session:'cs_last'}]}])})});
+ assert.deepEqual(actions.filter(a=>a[0]==='wait'),[['wait',30000]]);
+ assert.ok(actions.filter(a=>a.includes('starting_after=cs_first')).length>=2);
+ assert.deepEqual(actions.at(-1).slice(0,2),['post','/v1/webhook_endpoints/we_old']);
+ assert.equal(actions.some(a=>a[1]==='/v1/payment_links/plink_other'),false);
+});
+test('migration mismatched owner CLI account cannot deactivate anything',async()=>{
+ const {drainStripeLinks}=await import('../lib/stripe-migration.mjs');let n=0;
+ await assert.rejects(drainStripeLinks({account:'acct_owner',mode:'test',process:async()=>{n++;return{code:0,stdout:'{"id":"acct_other"}'};}}));
+ assert.equal(n,1);
 });

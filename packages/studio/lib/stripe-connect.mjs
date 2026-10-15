@@ -1,34 +1,24 @@
-import { createServer } from 'node:http';
-import { needsStripeMigration, stripeSessionsDrained, finishStripeMigration } from './stripe-migration.mjs';
-import { compactDecrypt, importPKCS8, decodeProtectedHeader } from 'jose';
-import { KEY_SHAPE, WEBHOOK_SECRET_SHAPE, modeOf } from '../worker/stripe.mjs';
-/** Stripe owns browser authorization. This module owns only secret transport and a non-secret receipt.
- * See docs/stripe-connect-research.md: current CLI OAuth is NOT a Worker credential issuer. */
-import { spawn } from 'node:child_process';
-import { createHash, generateKeyPairSync, randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash, randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { runner } from './cloudflare.mjs';
 import { lockDeploy } from './deploy-state.mjs';
 import { readStudio, siteUrl } from './studio.mjs';
 import { hookUrlOf, readShop } from './shop.mjs';
-import { redactStripe } from '../worker/stripe.mjs';
-
-const hash = (s) => createHash('sha256').update(s).digest('hex');
-const failure = (needs, why, extra = {}) => ({ ok: false, command: 'shop connect', needs, why, ...extra });
+import { needsStripeMigration, finishStripeMigration, drainStripeLinks } from './stripe-migration.mjs';
+const hash = value => createHash('sha256').update(value).digest('hex');
+const failure = (needs, why) => ({ ok: false, command: 'shop connect', needs, why });
 const receiptHome = () => join(homedir(), '.config', 'homie', 'stripe');
 const receiptDir = (root, storage) => join(storage, hash(realpathSync(root)).slice(0, 24));
-
-/** Local non-secret receipt. Runtime checks determine whether the key still works. */
-export function stripeConnectionInfo(root, { storage = receiptHome() } = {}) {
+export function stripeConnectionInfo(root, { storage = receiptHome(), mode = 'test' } = {}) {
   try {
-    const r = JSON.parse(readFileSync(join(receiptDir(root, storage), 'test.json'), 'utf8'));
-    if (r.url !== hookUrlOf(siteUrl(root)) || !r.keyId) return null;
-    return { mode: 'test', connectedAt: r.connectedAt, renew: 'homie-studio shop connect --renew' };
+    const receipt = JSON.parse(readFileSync(join(receiptDir(root, storage), mode + '.json'), 'utf8'));
+    if (receipt.url !== hookUrlOf(siteUrl(root))) return null;
+    return { mode, connectedAt: receipt.connectedAt, renew: 'homie-studio shop connect --renew' };
   } catch { return null; }
 }
-
 const json = (s) => { try { return JSON.parse(s); } catch { return null; } };
 // This output stays private, including CLI config, completion, errors and API responses.
 export function stripeProcess(args, { cwd, env = process.env, command = 'stripe' } = {}) {
@@ -65,43 +55,59 @@ export function completionArgs(step) {
   return stripeURL(url) ? ['login', '--complete', url] : null;
 }
 
-/** The remote callback can only reach the computer that owns this loopback listener.
- * Display the Stripe-verified account before sending the local collect capability. */
-export async function createApprovalListener({ confirm, port = 0 }) {
-  let url, approval = null;
-  const server = createServer(async (req, res) => {
-    const respond = (status, body) => { res.writeHead(status, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', 'content-security-policy': "default-src 'none'; form-action 'self'; frame-ancestors 'none'" }); res.end(body); };
-    try {
-      if (req.headers.host !== new URL(url).host) return respond(400, 'Invalid host');
-      const target = new URL(req.url, url);
-      if (target.pathname !== '/stripe/confirm') return respond(404, 'Not found');
-      if (req.method === 'GET') {
-        const account = target.searchParams.get('account'), value = target.searchParams.get('confirm'), id = target.searchParams.get('id');
-        if (!/^acct_[A-Za-z0-9]+$/.test(account ?? '') || !/^[a-f0-9]{64}$/.test(value ?? '') || !id) return respond(400, 'Invalid approval');
-        approval = { account, confirm: value, id, token: randomBytes(32).toString('hex') };
-        return respond(200, `<h1>Connect Stripe account ${account}</h1><p>Connect this account to your studio on this computer?</p><form method="post"><input type="hidden" name="token" value="${approval.token}"><button>Connect this account</button></form>`);
-      }
-      if (req.method !== 'POST' || req.headers.origin !== new URL(url).origin) return respond(403, 'Invalid origin');
-      let body = ''; for await (const chunk of req) { body += chunk; if (body.length > 1024) return respond(413, 'Too large'); }
-      if (!approval || new URLSearchParams(body).get('token') !== approval.token) return respond(403, 'Invalid confirmation');
-      const value = approval; approval = null;
-      await confirm(value);
-      respond(200, '<h1>Stripe account confirmed</h1><p>You can close this window.</p>');
-    } catch { respond(400, 'Setup could not finish. Retry shop connect.'); }
-  });
-  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });
-  url = `http://127.0.0.1:${server.address().port}/stripe/confirm`;
-  return { url, close: () => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }) };
+/** Clipboard subprocess output is private and bounded. Never pass it to a logger. */
+export function clipboardAccess(platform = process.platform) {
+  const command = platform === 'darwin' ? ['pbpaste', [], 'pbcopy', []]
+    : platform === 'win32' ? ['powershell.exe', ['-NoProfile', '-Command', 'Get-Clipboard -Raw'], 'powershell.exe', ['-NoProfile', '-Command', '$input | Set-Clipboard']]
+    : process.env.WAYLAND_DISPLAY ? ['wl-paste', ['--no-newline'], 'wl-copy', []] : ['xclip', ['-selection', 'clipboard', '-o'], 'xclip', ['-selection', 'clipboard']];
+  const run = (cmd, args, input) => {
+    const result = spawnSync(cmd, args, { input, encoding: 'utf8', timeout: 2000, maxBuffer: 16384, stdio: ['pipe','pipe','pipe'] });
+    if (result.status !== 0) throw new Error('Clipboard unavailable');
+    return result.stdout.trim();
+  };
+  return { read: () => run(command[0], command[1]), clear: () => run(command[2], command[3], '') };
 }
+export async function captureRestrictedKey({ clipboard, mode, open, url, wait, timeout, now = Date.now }) {
+  const initial = await clipboard.read();
+  open(url);
+  const deadline = now() + timeout;
+  while (now() < deadline) {
+    const value = await clipboard.read();
+    if (value !== initial && /^rk_(test|live)_[A-Za-z0-9]+$/.test(value)) {
+      if (!value.startsWith('rk_' + mode + '_')) throw new Error('Wrong Stripe mode');
+      return value;
+    }
+    await wait(500);
+  }
+  throw new Error('Clipboard timeout');
+}
+/** Reads prove authentication and resource read access, not write grants or exact scope.
+ * The App manifest is the scope contract; actual writes still fail closed at Stripe. */
+export async function validateRestrictedKey(key, mode, fetcher = fetch) {
+  if (!new RegExp('^rk_' + mode + '_[A-Za-z0-9]+$').test(key)) throw new Error('Wrong key mode');
+  const call = async path => {
+    const response = await fetcher('https://api.stripe.com' + path, {
+      headers: { authorization: 'Bearer ' + key }, redirect: 'error', signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) throw new Error('Stripe validation failed');
+    return response.json();
+  };
+  const account = await call('/v1/account');
+  if (!/^acct_[A-Za-z0-9]+$/.test(account.id)) throw new Error('Account unavailable');
+  for (const resource of ['checkout/sessions','payment_intents','charges','subscriptions','billing_portal/configurations','webhook_endpoints','disputes','invoices','products','prices']) {
+    const page = await call('/v1/' + resource + '?limit=1');
+    if (!Array.isArray(page.data) || page.data.some(item => typeof item.livemode === 'boolean' && item.livemode !== (mode === 'live'))) throw new Error('Stripe validation failed');
+  }
+  const name = account.business_profile?.name || account.settings?.dashboard?.display_name || account.id;
+  return { id: account.id, name: String(name).replace(/[\r\n\x00-\x1f]/g, ' ').replace(/(?:sk|rk)_(?:live|test)_[A-Za-z0-9]+/g, '[redacted]').slice(0, 120) };
+}
+const fallback = mode => failure('private-terminal', 'Clipboard capture could not finish. In your own terminal, from the studio site directory, run npx wrangler secret put STRIPE_KEY and paste only into its hidden prompt. Never paste a key into chat. Then run homie-studio shop connect --finish' + (mode === 'live' ? ' --live' : '') + '.');
 
-/** One approval; ciphertext is the only credential representation crossing Homie. */
 export async function shopConnect(root, options = {}) {
-  if (options.manual || options.fromClipboard) return failure('app-approval', 'Approve the Homie Stripe App; key entry is not supported.');
-  const { live = false, log = () => {}, open = openBrowser, fetcher = fetch,
-    storage = receiptHome(), wait = ms => new Promise(resolve => setTimeout(resolve, ms)), timeout = 10 * 60_000 } = options;
+  const { live = false, log = () => {}, open = openBrowser, fetcher = fetch, storage = receiptHome(),
+    wait = ms => new Promise(resolve => setTimeout(resolve, ms)), timeout = 10 * 60_000 } = options;
   const mode = live ? 'live' : 'test';
-  const checked = readShop(root);
-  if (!checked.ok || checked.absent) return failure('shop', 'Create and check shop.json first.');
+  if (!readShop(root).ok || readShop(root).absent) return failure('shop', 'Create and check shop.json first.');
   let site;
   try { site = new URL(siteUrl(root)); } catch { return failure('deploy', 'Deploy the studio to its HTTPS address first.'); }
   if (site.protocol !== 'https:' || site.username || site.password || site.port) return failure('deploy', 'The studio needs a public HTTPS address.');
@@ -109,113 +115,96 @@ export async function shopConnect(root, options = {}) {
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const lock = lockDeploy(dir);
   if (!lock.ok) return failure('busy', 'Stripe setup is already running for this studio.');
-  let listener;
+  let clipboard, captured;
   try {
-    for (const file of readdirSync(dir).filter(name => /^(test|live)-pending\.json(?:\.tmp)?$/.test(name))) {
-      const path=join(dir,file), saved=json(readFileSync(path,'utf8'));
-      if(file.endsWith('.tmp') || !saved || saved.expires < Date.now())rmSync(path,{force:true});
-    }
+    for(const mode of ['test','live'])for(const suffix of ['-pending.json','-pending.json.tmp'])rmSync(join(dir,mode+suffix),{force:true});
     const studio = readStudio(root);
     const receiptFile = join(dir, mode + '.json');
     const prior = existsSync(receiptFile) ? json(readFileSync(receiptFile, 'utf8')) : null;
     const migration = needsStripeMigration(root, prior, mode);
     const w = options.wrangler ?? runner(root, studio.cloudflare?.accountId ? { CLOUDFLARE_ACCOUNT_ID: studio.cloudflare.accountId } : {});
-    const service = options.service ?? 'https://homie.rocks/api/stripe-app';
-    const endpoint = new URL(service);
-    if (endpoint.origin !== 'https://homie.rocks' && !(endpoint.protocol === 'http:' && ['localhost','127.0.0.1'].includes(endpoint.hostname))) throw new Error('Invalid setup service');
-    const pendingFile = join(dir, mode + '-pending.json');
+    const pendingFile = join(dir, mode + '-rak.json');
     let pending = existsSync(pendingFile) ? json(readFileSync(pendingFile, 'utf8')) : null;
-    if (!pending || !pending.privateKey || options.renew || pending.origin !== site.origin || pending.expires < Date.now()) { pending = null; rmSync(pendingFile, { force: true }); }
-    const savePending = () => { writeFileSync(pendingFile + '.tmp', JSON.stringify(pending), { mode: 0o600 }); renameSync(pendingFile + '.tmp', pendingFile); };
-    const call = async (path, body) => {
-      const response = await fetcher(service + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), redirect: 'error', signal: AbortSignal.timeout(30_000) });
-      if (!response.ok) throw new Error('Setup service refused request');
-      return response.json();
-    };
-    listener = await createApprovalListener({ port: pending?.loopback ? Number(new URL(pending.loopback).port) : 0,
-      confirm: async value => {
-        if (!pending || value.id !== pending.started.id) throw new Error('Wrong setup');
-        await call('/confirm', { id: value.id, confirm: value.confirm, collectToken: pending.collectToken });
-      } });
-    if (!pending) {
-      const keys = generateKeyPairSync('rsa', { modulusLength: 2048,
-        publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' } });
-      const nonce = randomBytes(32).toString('hex'), collectToken = randomBytes(32).toString('hex');
-      if ((await w(['secret', 'put', 'STRIPE_SETUP_CHALLENGE'], { input: hash(nonce) })).code !== 0) return failure('cloudflare', 'Cloudflare could not prepare Stripe setup. Retry shop connect.');
-      const started = await call('/start', { nonce, collectToken, publicKey: keys.publicKey, origin: site.origin, mode, migration, loopback: listener.url, expectedAccount: prior?.account });
-      if (!stripeURL(started.url) || typeof started.id !== 'string') throw new Error('Invalid approval response');
-      pending = { ...keys, nonce, collectToken, started, loopback: listener.url, origin: site.origin, expires: Date.now() + (migration ? 48 * 60 * 60_000 : timeout) };
-      savePending();
-      log('Approve Homie in Stripe. Your studio will receive its Checkout connection automatically.');
-      options.onEvent?.({ type: 'stripe.approval', message: 'Approval opened in your browser.' });
-      open(started.url);
+    if (pending?.origin !== site.origin) pending = null;
+    const save = () => { writeFileSync(pendingFile + '.tmp', JSON.stringify(pending), { mode: 0o600 }); renameSync(pendingFile + '.tmp', pendingFile); };
+    if (!options.finish) {
+      const url = options.installUrl ?? process.env.HOMIE_STRIPE_INSTALL_URL;
+      if (!stripeURL(url)) return failure('app-install-link', 'The Homie App must be uploaded and an External test link configured as HOMIE_STRIPE_INSTALL_URL before connecting.');
+      clipboard = options.clipboard ?? clipboardAccess();
+      log(options.renew ? 'On the Homie App settings page, choose View API keys → Roll key → Copy.' : 'Install Homie in your chosen Stripe account. Choose View API keys → Generate new key (sandbox: Reveal key) → Copy.');
+      options.onEvent?.({ type: 'stripe.approval', message: 'Install Homie, generate the restricted key, then Copy. Do not paste it into chat.' });
+      try { captured = await captureRestrictedKey({ clipboard, mode, open, url, wait, timeout, now: options.now }); }
+      catch { return fallback(mode); }
+      const account = await validateRestrictedKey(captured, mode, fetcher);
+      if (prior?.account && account.id !== prior.account) return failure('account-mismatch', 'Select the previously connected Stripe account.');
+      pending = { origin: site.origin, account: account.id, name: account.name, nonce: randomBytes(32).toString('hex'), mode };
+      // Never include subprocess output in tool output, including errors.
+      if ((await w(['secret', 'put', 'STRIPE_KEY'], { input: captured })).code !== 0) return failure('cloudflare', 'Cloudflare could not install the connection. Retry shop connect.');
+      save();
+      if (await clipboard.read() === captured) await clipboard.clear();
+      captured = null;
+    } else {
+      // A private-terminal fallback does not expose the installed key to the tool.
+      pending ??= { origin: site.origin, account: prior?.account, nonce: randomBytes(32).toString('hex'), mode };
+      save();
     }
-    const { started, collectToken, privateKey } = pending;
-    const deadline = pending.expires;
-    let result;
-    while (Date.now() < deadline) {
-      result = await call('/collect', { id: started.id, collectToken });
-      if (result.status === 'ready') break;
-      if (result.status === 'draining' && result.open === 0 && await stripeSessionsDrained(w, studio.cloudflare.d1, result.complete)) {
-        await call('/drained', { id: started.id, collectToken });
-      }
-      if (result.status === 'failed') { rmSync(pendingFile, { force: true }); return failure('app-approval', 'Stripe setup could not finish. Retry shop connect after the Homie app is approved for managed keys.'); }
-      await wait(30_000);
+    if ((await w(['secret', 'put', 'STRIPE_SETUP_CHALLENGE'], { input: hash(pending.nonce) })).code !== 0) throw new Error('Setup challenge failed');
+    if (migration && !pending.deployed) {
+      const deployStudio = options.deploy ?? (root => import('./cloudflare.mjs').then(m => m.deploy(root)));
+      if (!(await deployStudio(root)).ok) return failure('migration', 'Checkout deployment failed; run shop connect --finish to resume.');
+      pending.deployed = true; save();
     }
-    if (result?.status !== 'ready') { rmSync(pendingFile, {force:true}); return failure('app-approval', 'Approval timed out. Run shop connect again.'); }
-    if (result.mode !== mode || result.origin !== site.origin || !/^acct_[A-Za-z0-9]+$/.test(result.account)) throw new Error('Setup binding mismatch');
-    const key = await decryptManagedKey(result.key, privateKey);
-    delete pending.privateKey; delete pending.publicKey; savePending();
-    if (!KEY_SHAPE.test(key) || modeOf(key) !== mode) throw new Error('Invalid credential envelope');
-    // Capture and discard all Wrangler output, including failures. Never return provider error text.
-    for (const [name, value] of [['STRIPE_KEY', key]]) {
-      if ((await w(['secret', 'put', name], { input: value })).code !== 0) return failure('cloudflare', 'Cloudflare could not finish installing Stripe. Run shop connect again.');
+    const secrets = await w(['secret','list']);
+    const installedSecrets = json(secrets.stdout ?? secrets.out);
+    if (secrets.code !== 0 || !Array.isArray(installedSecrets)) throw new Error('Cannot inspect secret names');
+    if (!installedSecrets.some(s => s.name === 'STRIPE_WEBHOOK_WRAP_KEY')) {
+      if ((await w(['secret','put','STRIPE_WEBHOOK_WRAP_KEY'],{input:randomBytes(32).toString('hex')})).code !== 0) throw new Error('Cannot protect webhook secret');
     }
+    const response = await fetcher(site.origin + '/api/shop/stripe-setup', {
+      method: 'POST', headers: { authorization: 'Bearer ' + pending.nonce, 'content-type': 'application/json' },
+      body: JSON.stringify({ mode, account: pending.account }), redirect: 'error', signal: AbortSignal.timeout(30000),
+    });
+    if (!response.ok) throw new Error('Webhook setup failed');
+    const installed = await response.json();
+    if (!installed.ok || !/^we_[A-Za-z0-9]+$/.test(installed.webhookId) || !/^acct_[A-Za-z0-9]+$/.test(installed.account)) throw new Error('Invalid setup');
+    if (pending.account && pending.account !== installed.account) throw new Error('Wrong account');
     if (migration) {
-      const deployStudio = options.deploy ?? ((root) => import('./cloudflare.mjs').then(m => m.deploy(root)));
-      const deployed = await deployStudio(root);
-      if (!deployed.ok) return failure('migration', 'Studio Checkout deployment could not finish; retry shop connect.');
-    }
-    const boot = await fetcher(site.origin + '/api/shop/stripe-setup', { method: 'POST', headers: { authorization: 'Bearer ' + pending.nonce }, redirect: 'error', signal: AbortSignal.timeout(30_000) });
-    if (!boot.ok) throw new Error('Studio webhook setup failed');
-    const installed = await boot.json();
-    if (!installed.ok || !/^we_[A-Za-z0-9]+$/.test(installed.webhookId)) throw new Error('Studio webhook unavailable');
-    result.webhookId = installed.webhookId;
-    if (migration) {
-      await call('/cutover', {id:started.id,collectToken,webhookId:result.webhookId});
-      let drained = false;
-      while (Date.now() < deadline) {
-        const page = await call('/collect', {id:started.id,collectToken});
-        if (page.status === 'failed') throw new Error('Cutover failed');
-        if (page.status === 'drained') {drained=true;break;}
-        if (page.status === 'draining' && page.open === 0 && await stripeSessionsDrained(w,studio.cloudflare.d1,page.complete)) {
-          const done = await call('/drained',{id:started.id,collectToken});
-          if(done.ok){drained=true;break;}
-        }
-        await wait(30_000);
-      }
-      if(!drained)throw new Error('Drain timeout');
+      await drainStripeLinks({ root, origin: site.origin, account: installed.account, mode, w, database: studio.cloudflare.d1,
+        keepHook: installed.webhookId, process: options.stripeProcess ?? stripeProcess, wait, profile: options.profile });
       const listed = await w(['secret', 'list']);
       const names = json(listed.stdout ?? listed.out);
-      if (listed.code !== 0 || !Array.isArray(names)) return failure('cloudflare', 'Stripe is installed; retry shop connect to finish removing the retired configuration.');
-      for (const name of ['STRIPE_SHOP_LINKS', 'PURCHASE_LINKS', 'STRIPE_CHECKOUT_MODE']) {
-        if (names.some(entry => entry.name === name) && (await w(['secret', 'delete', name], { input: 'y\n' })).code !== 0) return failure('cloudflare', 'Stripe is installed; retry shop connect to finish removing the retired configuration.');
-      }
+      if (listed.code !== 0 || !Array.isArray(names)) throw new Error('Secret list failed');
+      for (const name of ['STRIPE_SHOP_LINKS','PURCHASE_LINKS','STRIPE_CHECKOUT_MODE'])
+        if (names.some(entry => entry.name === name) && (await w(['secret','delete',name], { input:'y\n' })).code !== 0) throw new Error('Cleanup failed');
+      finishStripeMigration(root);
     }
-    await call('/ack', { id: started.id, collectToken, webhookId: result.webhookId });
-    rmSync(pendingFile, { force: true });
-    if (migration) finishStripeMigration(root);
-    const receipt = { mode, account: result.account, keyId: result.keyId, webhookId: result.webhookId, url: hookUrlOf(site.origin), connectedAt: new Date().toISOString() };
-    writeFileSync(join(dir, mode + '.json.tmp'), JSON.stringify(receipt), { mode: 0o600 });
-    renameSync(join(dir, mode + '.json.tmp'), join(dir, mode + '.json'));
-    return { ok: true, command: 'shop connect', mode, account: result.account, message: 'Stripe connected. Purchases and signed fulfilment run on your studio.' };
-  } catch { return failure('stripe-setup', 'Stripe setup could not finish. Retry shop connect. No credentials were printed.'); }
-  finally { if (listener) await listener.close(); lock.release(); }
+    const name = pending.name || String(installed.name ?? installed.account).replace(/(?:sk|rk)_(?:live|test)_[A-Za-z0-9]+/g,'[redacted]').replace(/[\r\n\x00-\x1f]/g,' ').slice(0,120);
+    writeFileSync(receiptFile + '.tmp', JSON.stringify({ mode, account: installed.account, webhookId: installed.webhookId, url: hookUrlOf(site.origin), connectedAt: new Date().toISOString() }), { mode: 0o600 });
+    renameSync(receiptFile + '.tmp', receiptFile); rmSync(pendingFile, { force: true });
+    await w(['secret','delete','STRIPE_SETUP_CHALLENGE'], { input:'y\n' });
+    return { ok: true, command: 'shop connect', message: 'connected to ' + name };
+  } catch { return failure('stripe-setup', 'Connection could not finish. Run shop connect --finish to resume after private key installation, or shop connect to copy a new key. Migration retains old webhook configuration until draining succeeds.'); }
+  finally {
+    if (captured && clipboard) { try { if (await clipboard.read() === captured) await clipboard.clear(); } catch {} }
+    lock.release();
+  }
 }
 
-export async function decryptManagedKey(ciphertext, privateKey) {
- const {alg,enc}=decodeProtectedHeader(ciphertext);
- if(!['RSA-OAEP','RSA-OAEP-256'].includes(alg)||enc!=='A256GCM')throw new Error('Unsupported key envelope');
- const key=await importPKCS8(privateKey,alg);
- return new TextDecoder().decode((await compactDecrypt(ciphertext,key,{keyManagementAlgorithms:[alg],contentEncryptionAlgorithms:['A256GCM']})).plaintext);
+export async function disconnectStripe(root, options = {}) {
+  const studio = readStudio(root), fetcher = options.fetcher ?? fetch;
+  const w = options.wrangler ?? runner(root, studio.cloudflare?.accountId ? { CLOUDFLARE_ACCOUNT_ID: studio.cloudflare.accountId } : {});
+  const nonce = randomBytes(32).toString('hex');
+  let endpointRemoved = false;
+  try {
+    if ((await w(['secret','put','STRIPE_SETUP_CHALLENGE'], {input:hash(nonce)})).code !== 0) throw new Error();
+    const r = await fetcher(new URL('/api/shop/stripe-setup',siteUrl(root)), {method:'POST',headers:{authorization:'Bearer '+nonce,'content-type':'application/json'},body:JSON.stringify({action:'disconnect'}),redirect:'error',signal:AbortSignal.timeout(30000)});
+    const result = await r.json();
+    if (!r.ok || (!result.ok && result.needs !== 'remove-endpoint-in-stripe')) throw new Error();
+    endpointRemoved = result.ok;
+    if ((await w(['secret','delete','STRIPE_KEY'],{input:'y\n'})).code !== 0) throw new Error();
+    for (const name of ['STRIPE_WEBHOOK_SECRET','STRIPE_WEBHOOK_WRAP_KEY','STRIPE_SETUP_CHALLENGE']) await w(['secret','delete',name],{input:'y\n'});
+    const dir=receiptDir(root,options.storage??receiptHome());
+    for(const mode of ['test','live'])for(const suffix of ['.json','-rak.json'])rmSync(join(dir,mode+suffix),{force:true});
+    return {ok:true,command:'shop disconnect',message:'Worker key removed. '+(endpointRemoved?'Webhook endpoint deleted. ':'The key was already revoked; delete this studio’s webhook endpoint in Stripe Workbench. ')+'In Stripe Settings → Installed apps → Homie → View API keys, roll/expire the old key. Uninstall alone is not assumed to revoke it.'};
+  } catch { return {ok:false,command:'shop disconnect',why:'Disconnect could not finish. Retry before expiring the key; endpoint cleanup must precede removal of the Worker key.'}; }
 }

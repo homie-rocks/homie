@@ -1,0 +1,60 @@
+{
+  "$schema": "https://stripe.com/stripe-app.schema.json",
+  "id": "rocks.homie.checkout",
+  "name": "Homie",
+  "version": "0.0.1",
+  "ui_extension": {
+    "views": [
+      {
+        "viewport": "settings",
+        "component": "AppSettings"
+      }
+    ]
+  },
+  "extensions": null,
+  "permissions": [
+    {
+      "permission": "checkout_session_write",
+      "purpose": "Create and expire exact-price Checkout Sessions and retrieve payment truth before fulfilment."
+    },
+    {
+      "permission": "payment_intent_write",
+      "purpose": "Create and retrieve studio payments and verify payment state."
+    },
+    {
+      "permission": "charge_write",
+      "purpose": "Retrieve charges and create owner-authorized refunds."
+    },
+    {
+      "permission": "subscription_write",
+      "purpose": "Manage studio subscriptions and reconcile renewals and cancellation."
+    },
+    {
+      "permission": "customer_portal_write",
+      "purpose": "Create ownership-checked customer portal sessions and portal configuration."
+    },
+    {
+      "permission": "webhook_write",
+      "purpose": "Create, inspect and remove this studio’s webhook endpoint."
+    },
+    {
+      "permission": "dispute_read",
+      "purpose": "Reconcile disputes against studio orders."
+    },
+    {
+      "permission": "invoice_read",
+      "purpose": "Verify subscription invoices and legacy order invoice lines."
+    },
+    {
+      "permission": "product_read",
+      "purpose": "Read existing products used by studio checkout."
+    },
+    {
+      "permission": "plan_read",
+      "purpose": "Read Prices used by studio checkout."
+    }
+  ],
+  "distribution_type": "public",
+  "stripe_api_access_type": "restricted_api_key",
+  "sandbox_install_compatible": true
+}
