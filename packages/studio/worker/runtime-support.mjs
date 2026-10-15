@@ -1,3 +1,6 @@
+import {studioTools,directoryOf} from './tool-registry.mjs';
+export {useTools,getStudioTools} from './tool-registry.mjs';
+import {json,finish} from './responses.mjs';
 import {liveRoomSummaries} from './lobby-summary.mjs';
 /** Shared catalogue, assets, and room presentation helpers. */
 import {catalogue,builtPosts} from './catalogue.mjs';
@@ -21,19 +24,20 @@ import { paramsFrom, seatsOf } from './seats.mjs';
 import { mediaArt, notFoundPage, roomView, watchOf } from './site.mjs';
 import { count, isQa, playedThisWeek, today } from './stats.mjs';
 import { players as playerAccounts } from './players.mjs';
-import { appAssetTicket, holders, launchOf, settingsOf, usePlayers } from './office.mjs';
+import { appAssetTicket, holders, launchOf, settingsOf } from './office.mjs';
 
 import { STUDIO_VERSION_TAG } from './version.mjs';
 import { readiness, shellShop, shopOf } from './shop.mjs';
 
-import { PART_FILES } from './parts.mjs';
-usePlayers(playerAccounts);
+import {PART_FILES} from './asset-paths.mjs';
+import {defaultPlayers} from './player-registry.mjs';
+defaultPlayers(playerAccounts);
 
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
 const POST_SLUG = /^[a-z0-9][a-z0-9-]{0,79}$/;
 
-const GAME_FILES = /^\/[a-z0-9][a-z0-9-]{0,39}\/(?:__game|__assets)(?:\/|$)/;
+import {GAME_FILES} from './asset-paths.mjs';
 
 const MEDIA_FILE = /\.(mp4|webm|m4v|mov|mp3|m4a|aac|ogg|opus|wav|flac)$/i;
 
@@ -41,9 +45,7 @@ const BROWSER_KEY = /^[A-Za-z0-9_-]{16,43}$/;
 
 const TICKET_TEXT = /^[a-z0-9]{6,12}\.[A-Za-z0-9_~-]{1,140}\.[A-Za-z0-9_-]{32}$/;
 
-const json = (body, status = 200, extra = {}) => new Response(`${JSON.stringify(body)}\n`, {
-  status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...extra },
-});
+
 
 async function sellingShop(env, cat) {
   const shop = shopOf(cat);
@@ -92,9 +94,7 @@ const repoOf = (env) => { const r = String(env.HOMIE_REPO ?? '').trim(); return 
 
 const repoSaid = new Map();
 
-export function directoryOf(cat) {
-  return directoryUrl(cat?.studio?.directory);
-}
+export {directoryOf} from './tool-registry.mjs';
 
 async function claimOf(env, cat, url) {
   const origin = url.origin;
@@ -403,20 +403,6 @@ async function mediaBeat(request, env, ctx, url) {
   return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
 }
 
-function finish(res, path) {
-  if (!res || res.status === 101 || res.webSocket) return res;
-  if (!/text\/html/i.test(res.headers.get('content-type') ?? '')) return res;
-  const cache = res.headers.get('cache-control') ?? '';
-  const addNt = !/no-transform/i.test(cache);
-  // GAME PARTS: a shared part's preview page is framed by the part's page and the hub, sandboxed (worker/parts.mjs).
-  const playerFrame = /^\/[a-z0-9][a-z0-9-]{0,39}\/play\/embed$/.test('/' + path.split('/').filter(Boolean).join('/')) && res.status === 200 && /frame-ancestors/.test(res.headers.get('content-security-policy') ?? '');
-  const addXfo = !playerFrame && !res.headers.has('x-frame-options') && !GAME_FILES.test(path) && !PART_FILES.test(path);
-  if (!addNt && !addXfo) return res;
-  const headers = new Headers(res.headers);
-  if (addNt) headers.set('cache-control', cache ? `${cache}, no-transform` : 'no-transform');
-  if (addXfo) headers.set('x-frame-options', 'DENY');
-  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
-}
 
 async function notifyTools(env,cat,origin) {
   if(!env.DB||!env.LOBBY)return;
@@ -424,11 +410,6 @@ async function notifyTools(env,cat,origin) {
   await pushToolList(env,cat,[...builtins(env,cat,origin),...await studioTools()],origin);
 }
 
-let studioTools = async () => [];
-
-export function useTools(load) { studioTools = load; }
-
-export function getStudioTools() { return studioTools(); }
 
 async function serverLive(env, meta, servers, origin, lobby) {
   let list = [];

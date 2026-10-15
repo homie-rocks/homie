@@ -20,13 +20,13 @@ export async function buildWorker(root,esbuild,metadata=null) {
   // classes in the generated bundle without rewriting the studio's source/customizations.
   const standardRooms=/export\s*\{[^}]*\bTable\b[^}]*\bLobby\b[^}]*\}\s*from\s*['"]@homie-rocks\/studio\/worker['"]/.test(readFileSync(source,'utf8'));
   const lazyRooms=standardRooms?`export {Table,Lobby} from ${JSON.stringify(join(PACKAGE_ROOT,'worker/lazy-objects.mjs'))};\n`:'';
-  const contents=`${lazyRooms}export * from ${JSON.stringify(source)};\nexport { default } from ${JSON.stringify(source)};\nexport { Gate, Concentrator } from ${JSON.stringify(join(PACKAGE_ROOT,'worker/gate.mjs'))};\nexport {AppRecordHub, EventHub} from ${JSON.stringify(join(PACKAGE_ROOT,'worker/stream-objects.mjs'))};\n`;
+  const contents=`${lazyRooms}export * from ${JSON.stringify(source)};\nexport { default } from ${JSON.stringify(source)};\nexport { Gate, Concentrator } from ${JSON.stringify(join(PACKAGE_ROOT,'worker/lazy-objects.mjs'))};\nexport {AppRecordHub, EventHub} from ${JSON.stringify(join(PACKAGE_ROOT,'worker/lazy-objects.mjs'))};\n`;
   const result=await esbuild.build({stdin:{contents,resolveDir:root,sourcefile:'worker.mjs'},entryNames:'worker',absWorkingDir:root,alias,outdir:out,bundle:true,splitting:true,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*'],target:'es2022',write:false,minify:true,metafile:true,logLevel:'silent',plugins:[{name:'studio-runtime',setup(build){
     if(metadata)build.onLoad({filter:/[/\\]worker[/\\]built-metadata\.mjs$/},()=>({contents:'export default '+JSON.stringify(metadata),loader:'js'}));
     // Merely overriding entry exports still evaluates the barrel's dependencies.
     // Standard generated rooms use lazy exports at that barrel as well; a studio
     // with custom subclasses retains the original class constructors.
-    if(standardRooms)build.onLoad({filter:/[/\\]worker[/\\]index\.mjs$/},({path})=>path===join(PACKAGE_ROOT,'worker/index.mjs')?{contents:readFileSync(path,'utf8').replace("export {Table} from './table.mjs';","export {Table} from './lazy-objects.mjs';").replace("export {Lobby} from './lobby.mjs';","export {Lobby} from './lazy-objects.mjs';"),loader:'js'}:undefined);
+    if(standardRooms)build.onLoad({filter:/[/\\]worker[/\\]index\.mjs$/},({path})=>path===join(PACKAGE_ROOT,'worker/index.mjs')?{contents:readFileSync(path,'utf8').replace("export {Table} from './table.mjs';","export {Table} from './lazy-objects.mjs';").replace("export {Lobby} from './lobby.mjs';","export {Lobby} from './lazy-objects.mjs';").replace("export { Gate, Concentrator } from './gate.mjs';","export { Gate, Concentrator } from './lazy-objects.mjs';").replace("export {AppRecordHub, EventHub} from './stream-objects.mjs';","export {AppRecordHub, EventHub} from './lazy-objects.mjs';"),loader:'js'}:undefined);
   }}]});
   // A watcher may already have read the previous entry while this build is
   // publishing. Keep its entire graph available. Publish immutable modules first,

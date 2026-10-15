@@ -17,7 +17,8 @@ import { esc, icon, layout, notFoundPage } from './site.mjs';
 const PART_ID = /^[a-z0-9][a-z0-9-]{0,47}$/;
 const VERSION = /^\d{1,6}\.\d{1,6}\.\d{1,6}(?:-[0-9A-Za-z.-]{1,40})?$/;
 /** A packed part's files: framed by the part's own page and by the hub, so they keep their own frame rule (index.mjs finish). */
-export const PART_FILES = /^\/parts\/[a-z0-9][a-z0-9-]{0,47}\/\d{1,6}\.\d{1,6}\.\d{1,6}[^/]*\//;
+import {PART_FILES} from './asset-paths.mjs';
+export {PART_FILES} from './asset-paths.mjs';
 export const PARTS_WELL_KNOWN = '/.well-known/homie-parts.json';
 export const isPartsPath = (path) => path === '/openapi.json' || path === '/.well-known/api-catalog' || path === '/parts/catalog.json' || path === '/purchases/keys.json' || path === PARTS_WELL_KNOWN || path === '/parts' || path.startsWith('/parts/');
 

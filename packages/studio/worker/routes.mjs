@@ -16,7 +16,7 @@ import { REPORT_REASONS, chatOf, chatRowsOf, fileReport } from './chat-store.mjs
 import { isLoungePath, loungeRoutes } from './lounge.mjs';
 import { doorPage, serverPage, serversPage } from './site.mjs';
 import { isLocalOrigin, qrSvg } from './qr.mjs';
-import { gateFor } from './gate.mjs';
+import { gateFor } from './gate-routing.mjs';
 
 import { SITE_JS, atomFeed, creditsPage, customPage, gameCover, gameLanding, gamesPage, homeLd, homePage, jsonFeed, landingLd, mediaIndexPage, notFoundPage, postPage, postsPage, roomsPage, sectionsOf, songPage, videoPage, watchOf } from './site.mjs';
 import { cookieValues, countVisit, onlyOf, ownerAllowed, playedByGame, playedThisWeek, rangeOf, readStats } from './stats.mjs';

@@ -17,3 +17,24 @@ export class Lobby {
   async fetch(request) {await this.ready;return this.lobby.fetch(request);}
   async alarm() {await this.ready;return this.lobby.alarm();}
 }
+
+export class Gate {
+  constructor(ctx,env) {
+    this.ready=ctx.blockConcurrencyWhile(async()=>{this.gate=new (await import('./gate.mjs')).Gate(ctx,env);});
+  }
+  async fetch(request) {await this.ready;return this.gate.fetch(request);}
+}
+export class Concentrator extends Gate {}
+
+export class AppRecordHub {
+  constructor(ctx,env) {
+    this.ready=ctx.blockConcurrencyWhile(async()=>{this.hub=new (await import('./stream-objects.mjs')).AppRecordHub(ctx,env);});
+  }
+  async fetch(request) {await this.ready;return this.hub.fetch(request);}
+}
+export class EventHub {
+  constructor(ctx,env) {
+    this.ready=ctx.blockConcurrencyWhile(async()=>{this.hub=new (await import('./stream-objects.mjs')).EventHub(ctx,env);});
+  }
+  async fetch(request) {await this.ready;return this.hub.fetch(request);}
+}

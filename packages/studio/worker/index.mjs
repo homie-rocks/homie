@@ -8,15 +8,15 @@ import { errorLine } from './room-protocol.mjs';
 
 import { appCors, isAppOrigin } from './standalone.mjs';
 
-import { reconcileOrders, shopOf } from './shop.mjs';
 
-import { json, finish, notifyTools } from './runtime-support.mjs';
+
+import {json,finish} from './responses.mjs';
 
 export { useFunctions } from './function-registry.mjs';
 export { Gate, Concentrator } from './gate.mjs';
 export { seatCount, SEAT_MAX } from './seats.mjs';
 export { hostRules } from './hosted-registry.mjs';
-export { usePlayers } from './office.mjs';
+export {usePlayers} from './player-registry.mjs';
 export { countVisit } from './stats.mjs';
 export { players, cleanName } from './players.mjs';
 export { mergeSaves } from './saves.mjs';
@@ -25,7 +25,7 @@ export {roomEndAt} from './room-lifecycle.mjs';
 export {Lobby} from './lobby.mjs';
 export {LOBBY_APP_VERSIONS, LOBBY_ROOMS_MAX} from './lobby-limits.mjs';
 export {AppRecordHub, EventHub} from './stream-objects.mjs';
-export {directoryOf,useTools,getStudioTools} from './runtime-support.mjs';
+export {directoryOf,useTools,getStudioTools} from './tool-registry.mjs';
 const route = async (...args) => (await import('./routes.mjs')).default(...args);
 export default {
   async queue(batch,env) {return (await import('./background-queue.mjs')).consumeBackground(batch,await loadShopLinks(env));},
@@ -34,6 +34,7 @@ export default {
     const analytics = event.cron === '17 * * * *' ? (await import('./analytics.mjs')).rollupAnalytics(env) : Promise.resolve();
     ctx.waitUntil(analytics);
     const maintenance=(async () => {
+      const [{notifyTools},{reconcileOrders,shopOf}]=await Promise.all([import('./runtime-support.mjs'),import('./shop.mjs')]);
       const cat = await catalogue(env, 'https://studio.invalid');
       await notifyTools(env,cat,cat.studio?.url??'https://studio.invalid').catch(error=>console.warn('Tool catalogue refresh:',error.message));
       await reconcileOrders(env, shopOf(cat));

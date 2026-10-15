@@ -63,7 +63,7 @@ import { toolIdentity } from './tool-identity.mjs';
  * from an office key it is ALWAYS an ask (the AI may only propose one).
  */
 import { seatsOf } from './seats.mjs';
-import { diagnosticsOf, gatePlayers, roomLayout } from './gate.mjs';
+import { diagnosticsOf, gatePlayers, roomLayout } from './gate-routing.mjs';
 import { PUBLIC_SERVER, SERVER_LIMITS, checkServer, levelName, narrows, policyOf, roomServer, rowFor, serverView, serversOf, serverPassCookie, writeServer } from './servers.mjs';
 import { BRAIN_BUDGET, aiName, brainFor, fillSpot, passById, passCreate, passList, passRevoke, think } from './agents.mjs';
 import { DEFAULT_MODEL, NEURONS_PER_M, OWNER_MODEL, vocabularyOf } from './brain.mjs';
@@ -142,12 +142,8 @@ export function canonical(v) {
 
 /* ------------------------------------------------------------------ player accounts (a seam) */
 
-let players = null;
-/**
- * The player-accounts API, handed over once by a studio's Worker that has it:
- * `{ get(id, env), of?(request, env), isOwner?(request, env) }` (worker/players.mjs `players` is exactly this).
- */
-export function usePlayers(api) { players = api && typeof api === 'object' ? api : null; }
+import {players} from './player-registry.mjs';
+export {usePlayers} from './player-registry.mjs';
 
 async function playerOf(env, id) {
   if (!players?.get || !id) return null;
