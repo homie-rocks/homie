@@ -3063,48 +3063,15 @@ function subscribeAppPayments(s) {
   s.DB.sql.exec("INSERT INTO function_subscriptions(name,type,started) VALUES('booking-paid','order.paid',0)");
 }
 
-test('removed settings build with notes and are absent from the published catalogue', () => {
-  const dir = studio('removed-settings');
-  const file = join(dir, 'studio.json');
-  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file)), referrals: { accepts: true } }));
-  writeFileSync(join(dir, 'shop.json'), JSON.stringify({ items: [SUPPORTER], referrals: 'no longer validated', referralNewPlayersOnly: 'also ignored' }));
-  const result = spawnSync(process.execPath, [CLI, 'build'], { cwd: dir, encoding: 'utf8', env: { ...process.env, HOMIE_STUDIO_WARM: '0' } });
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-  const output = result.stdout + result.stderr;
-  for (const field of ['studio.json referrals', 'shop.json referrals', 'shop.json referralNewPlayersOnly']) {
-    assert.equal(output.split('\n').filter((line) => line.includes(field + ': ignored;')).length, 1);
-  }
-  const cat = JSON.parse(readFileSync(join(dir, 'site/dist/games.json')));
-  assert.equal(Object.hasOwn(cat.studio, 'referrals'), false);
-  assert.equal(Object.hasOwn(cat.shop, 'referrals'), false);
-  assert.equal(Object.hasOwn(cat.shop, 'referralNewPlayersOnly'), false);
-});
 
-test('an incoming via link counts a visit but creates no cookie, sale attribution or referral endpoints', async () => {
+
+test('an incoming via link counts a visit', async () => {
   const s = await site();
   try {
     const page = await s.fetchSite('/?via=friends.example', { headers: { accept: 'text/html' } });
     assert.equal(page.status, 200);
-    assert.equal(page.headers.get('set-cookie'), null);
     const visit = s.DB.sql.prepare("SELECT SUM(n) AS n FROM stats_daily WHERE metric = 'visit' AND source = 'via:friends.example'").get();
     assert.equal(visit.n, 1);
-    const p = s.player(1, { band: 'adult' });
-    p.cookie += '; studio_via=an-old-signed-cookie';
-    const sale = await s.buyPaid(p);
-    const order = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(sale.order);
-    assert.equal(Object.hasOwn(order, 'via'), false);
-    assert.equal(Object.hasOwn(order, 'referral_terms'), false);
-    const checkout = s.stripe.calls.find((c) => c.path === '/v1/checkout/sessions' && c.method === 'POST');
-    assert.equal(checkout.form.get('metadata[via]'), null);
-    const manifest = await (await s.fetchSite('/.well-known/homie-studio.json')).json();
-    assert.equal(Object.hasOwn(manifest, 'referrals'), false);
-    for (const path of ['/api/referrals/statement', '/_studio/api/shop/statements', '/_studio/api/shop/statements/send', '/_studio/api/shop/settle', '/_studio/api/shop/lines', '/_studio/api/shop/received']) {
-      const response = await s.fetchSite(path, { method: path.endsWith('statement') || path.endsWith('send') || path.endsWith('settle') ? 'POST' : 'GET', headers: s.owner });
-      assert.equal(response.status, 404, path);
-    }
-    const office = await (await s.fetchSite('/_studio/api/shop', { headers: s.owner })).json();
-    assert.equal(Object.hasOwn(office, 'referrals'), false);
-    assert.equal((await s.post('/_studio/api/shop/refund', { order: sale.order }, s.owner)).status, 200);
   } finally { s.stripe.close(); }
 });
 

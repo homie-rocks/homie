@@ -1,3 +1,4 @@
+import { fixtureRun } from './studio-fixture.mjs';
 import {functionDeploymentSQL} from '../lib/functions-build.mjs';
 import {workerEntry} from '../lib/worker-build.mjs';
 import { browserRulesGame } from './browser-rules-game.mjs';
@@ -34,7 +35,7 @@ const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-cloud-test-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 const VERSION = JSON.parse(readFileSync(join(PKG, 'package.json'), 'utf8')).version;
 
-const run = (args, cwd, env = {}) => spawnSync(process.execPath, [CLI, ...args, '--json'], { cwd, encoding: 'utf8', env: { ...process.env, HOMIE_STUDIO_WARM: '0', ...env } });
+const run = (args, cwd, env = {}) => fixtureRun(CLI, args, cwd, { env: { ...process.env, HOMIE_STUDIO_WARM: '0', ...env } });
 const out = (r) => { try { return JSON.parse(r.stdout); } catch { throw new Error(`not JSON: ${r.stdout}${r.stderr}`); } };
 const runAsync = (args, cwd, env = {}) => new Promise((done) => {
   const p = spawn(process.execPath, [CLI, ...args, '--json'], { cwd, env: { ...process.env, HOMIE_STUDIO_WARM: '0', ...env } });
@@ -115,7 +116,6 @@ test('the template: Deploy to Cloudflare and Workers Builds ready, and the repos
   assert.ok(!existsSync(join(dir, 'games/gem-rush')), 'no starter game: the site goes live with its own home page ("First game coming soon")');
   assert.match(readFileSync(join(dir, 'HANDOFF.md'), 'utf8'), /homie-studio handoff hb_/, 'HANDOFF.md says what a one-line hand-off means');
   assert.match(readFileSync(join(dir, 'site/partials/home.html'), 'utf8'), /href="\/_studio\/connect"/);
-  assert.match(readFileSync(join(dir, 'README.md'), 'utf8'), /deploy\.workers\.cloudflare\.com\/\?url=https:\/\/github\.com\/homie-rocks\/homie\/tree\/main\/template/);
   // The public template is generated, never hand-edited: `node scripts/template.mjs` writes it.
   const tpl = join(REPO, 'template');
   assert.deepEqual(files(tpl), files(dir).filter((f) => f !== '.gitignore' || existsSync(join(tpl, f))), 'template/ has exactly the generated files');

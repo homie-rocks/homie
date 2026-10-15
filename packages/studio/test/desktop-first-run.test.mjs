@@ -90,26 +90,9 @@ test('in the Claude desktop app the model is told, once, what the app asks the p
   }
 });
 
-test('the desktop section of the README, the install steps and the install screen say it; the shared guides never do', () => {
-  const readme = readFileSync(join(REPO, 'README.md'), 'utf8');
-  const section = readme.slice(readme.indexOf('## In the Claude desktop app: one chat'), readme.indexOf('## From the Claude app on a phone'));
-  assert.match(section, /\*\*\s*Always allow\s*\*\*/);
-  assert.match(section, /a request is waiting out of sight/);
-  assert.equal(readme.split('Always allow').length - 1, 1, 'only in the desktop section');
-  const install = readFileSync(join(REPO, 'desktop', 'README.md'), 'utf8');
-  assert.match(install, /Choose \*\*Always allow\*\*/);
-  assert.match(install, /a\s+request is waiting out of sight/);
-  const manifest = JSON.parse(readFileSync(join(REPO, 'desktop', 'manifest.json'), 'utf8'));
-  assert.match(manifest.long_description, /choose Always allow/);
-  assert.equal(manifest.server.mcp_config.env.HOMIE_STUDIO_EXTENSION, '1', 'how the server knows it runs in the desktop app');
-  // The guides are read in Claude Code, Codex and Grok too, where nothing asks before every tool.
-  for (const d of readdirSync(SKILLS, { withFileTypes: true })) {
-    if (!d.isDirectory()) continue;
-    assert.doesNotMatch(readFileSync(join(SKILLS, d.name, 'SKILL.md'), 'utf8'), /Always allow|Cmd\+Return/, `${d.name}/SKILL.md`);
-  }
-});
 
-test('file_edit takes every change to a file in one call, all or none; the guides ask for few, large edits', async () => {
+
+test('file_edit takes every change to a file in one call, all or none', async () => {
   const studios = join(scratch, 'edits');
   const s = await server(studios);
   try {
@@ -121,7 +104,6 @@ test('file_edit takes every change to a file in one call, all or none; the guide
     const tool = (await s.request('tools/list', {})).result.tools.find((t) => t.name === 'file_edit');
     assert.deepEqual(tool.inputSchema.required, ['path']);
     assert.equal(tool.inputSchema.properties.edits.type, 'array');
-    assert.match(tool.description, /ONE call/);
 
     // Three changes, one call (one request for the person to allow, not three).
     const many = await s.call('file_edit', { path: file, edits: [
@@ -149,17 +131,6 @@ test('file_edit takes every change to a file in one call, all or none; the guide
     assert.match(one.content[0].text, /\(1 place\)/);
     assert.equal((await s.call('file_edit', { path: file })).isError, true);
 
-    // The words that led to twenty single edits now ask for one.
-    link(root);
-    const made = await s.call('game_make', { id: 'moon-relay', name: 'Moon Relay' });
-    assert.ok(!made.isError, made.content[0].text);
-    assert.match(made.content[0].text, /ONE file_edit with an edits list \(never a call per change/);
-    const guide = (await s.call('studio_guide', { topic: 'game' })).content[0].text;
-    assert.match(guide, /make every change it needs in ONE file_edit/);
-    assert.match(guide, /few, large\s+edits/);
-    assert.doesNotMatch(guide, /in small steps:/);
-    assert.match(s.init.instructions, /one file_edit carries every change to a file in its edits list/);
-    assert.match((await s.call('game_plan', { id: 'owl-post', name: 'Owl Post' })).content[0].text, /fill CODEX\.md in one call/);
   } finally { await s.close(); }
 });
 

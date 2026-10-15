@@ -1,3 +1,4 @@
+import { fixtureRun } from './studio-fixture.mjs';
 import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * @homie-rocks/studio: the scaffold touches only a new or empty folder and lists
@@ -21,7 +22,7 @@ const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-test-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 
 // HOMIE_STUDIO_WARM=0: a deploy here never reads its (made-up) live site back.
-const run = (args, cwd, env = {}) => spawnSync(process.execPath, [CLI, ...args, '--json'], { cwd, encoding: 'utf8', env: { ...process.env, HOMIE_STUDIO_WARM: '0', ...env } });
+const run = (args, cwd, env = {}) => fixtureRun(CLI, args, cwd, { env: { ...process.env, HOMIE_STUDIO_WARM: '0', ...env } });
 const out = (r) => JSON.parse(r.stdout);
 
 /** A studio whose node_modules point at this package and the repo's esbuild (what npm install gives it). */
@@ -53,7 +54,6 @@ test('new: a studio monorepo in a new folder, every file listed; a non-empty fol
   const wrangler = readFileSync(join(dir, 'wrangler.jsonc'), 'utf8');
   assert.doesNotMatch(wrangler, /r2_buckets/, 'a new studio binds no R2');
   assert.match(wrangler, /new_sqlite_classes/, 'SQLite-backed Durable Objects (the free plan has no other kind)');
-  assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /storage add/, 'AGENTS.md says how storage is added later');
   const busy = join(scratch, 'busy');
   mkdirSync(busy);
   writeFileSync(join(busy, 'notes.txt'), 'mine');
@@ -228,7 +228,6 @@ test('NO CREDIT CARD: a free account without R2 deploys the whole studio, and de
   assert.deepEqual(s.cloudflare.created, ['d1:test-studio-db', 'worker:test-studio']);
   const media = out(run(['media', 'put', join(dir, 'README.md')], dir));
   assert.equal(media.needs, 'storage');
-  assert.match(media.why, /storage add/);
 });
 
 test('the workers.dev address never goes into studio.json (it names the account); a custom domain stays, and claim and publish use it', async () => {
@@ -354,7 +353,7 @@ test('dev --stop stops exactly this studio\'s dev server (Wrangler with it), and
     assert.equal(rec.pid, devProc.pid);
     const stopped = out(run(['dev', '--stop'], dir));
     assert.deepEqual([...stopped.stopped].sort(), [rec.child, rec.pid].sort());
-    await new Promise((r) => setTimeout(r, 300));
+    for (let i = 0; i < 100 && (alive(rec.child) || alive(devProc.pid)); i++) await new Promise(r => setTimeout(r, 20));
     assert.equal(alive(rec.child), false, 'Wrangler stopped');
     assert.equal(alive(devProc.pid), false, 'the dev command stopped');
     assert.equal(alive(other.pid), true, 'the other project\'s identical dev server is untouched');

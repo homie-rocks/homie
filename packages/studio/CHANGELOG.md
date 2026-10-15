@@ -17,7 +17,13 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
-## Unreleased
+## [Unreleased]
+
+### Changed
+
+- Reduce pull-request CI work through shared studio fixtures, focused compatibility coverage, and nightly release checks.
+
+### Fixed
 
 - Fresh held steering and releases resume live prediction during correction catch-up, carrying the painted origin without a position cut instead of delaying input behind historical motion.
 

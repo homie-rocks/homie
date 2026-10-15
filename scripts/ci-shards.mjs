@@ -3,9 +3,7 @@
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-// Refreshed first-attempt CI measurements need twenty full-suite and twelve compatibility bins
-// to stay below eight minutes without relaxing the eleven-minute watchdog.
-export const shardCounts = { full: 20, compat: 12 };
+export const shardCounts = { pr: 16, full: 20, compat: 1 };
 export const shardBudgetSeconds = 480;
 export function checkShardBudget(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) throw new Error('Invalid measured shard duration');
@@ -16,19 +14,42 @@ export function inventory() {
     try { return readdirSync(`packages/${p}/test`).filter(f => f.endsWith('.test.mjs')).map(f => `packages/${p}/test/${f}`); } catch { return []; }
   }), ...readdirSync('scripts').filter(f => f.endsWith('.test.mjs')).map(f => `scripts/${f}`)].sort();
 }
-// Observed failure locations in the audited Actions logs, including PR #78's
-// Node 24/npm 11 MCP resolution failure (run 37992524039). Keep regressions on 24
-// even if their names no longer match a broad runtime-integration category.
+// Runtime boundary smoke on Node 24; packaging separately checks every workspace.
 export const node24Regressions = new Set([
-  'event-delivery-workerd', 'event-resources-workerd', 'event-webhooks', 'event-webhooks-workerd',
-  'changelog', 'cloud', 'machine-payments', 'paid-parts-review4-mcp',
-  'paid-parts-review5-agent', 'paid-parts-workerd', 'player-image', 'port-input',
-  'purchase-deploy', 'rooms-pages', 'rules-3d-prediction-chrome',
-  'rules-prediction-chrome', 'selling-entry', 'settlement-crash', 'shop', 'upgrade',
+  'scripts/mcp-stdio.test.mjs',
+  'packages/studio/test/studio-mcp-workerd.test.mjs',
+  'packages/studio/test/event-delivery-workerd.test.mjs',
+]);
+export const nightlyFiles = new Set([
+  'apps-interactions', 'apps-browser', 'shell-update-chrome', 'rules-traffic-chrome', 'rules-terrain-chrome', 'embed-browser', 'signin-browser',
+  'rooms-pages', 'rules-prediction-chrome', 'rules-3d-prediction-chrome',
+  'rules-browser-exit', 'lab', 'settlement-crash', 'paid-parts-review5-faults', 'watch',
 ].map(name => `packages/studio/test/${name}.test.mjs`));
-export function compatible(file) {
-  // npm/ESM resolution, native modules, SQLite, subprocess/stdio and packed installs.
-  return node24Regressions.has(file) || !file.startsWith('packages/studio/') || /(?:mcp|paid-parts|purchase|wallet|payment|shop|standalone|desktop|first-run|studio\.test|schema\.test|upgrade|identity|authoring|build(?:-[a-z]+)?\.test|dev-deploy|parts\.test|starter-3d|changelog|rooms-pages|apps-browser)/.test(file);
+export function compatible(file) { return node24Regressions.has(file); }
+export function affectedPackages(paths, manifests) {
+  if (!paths || paths.some(p => !p.startsWith('packages/'))) return null;
+  const affected = new Set(paths.map(p => p.split('/')[1]));
+  // Include consumers transitively: a dependency change can break its dependents.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [dir, manifest] of Object.entries(manifests)) {
+      const deps = { ...manifest.dependencies, ...manifest.devDependencies, ...manifest.peerDependencies };
+      if (!affected.has(dir) && Object.entries(manifests).some(([d, m]) => affected.has(d) && m.name in deps)) {
+        affected.add(dir); changed = true;
+      }
+    }
+  }
+  return affected;
+}
+export function selected(files, { full = false, compat = false, paths = null } = {}) {
+  if (full) return files;
+  const manifests = Object.fromEntries(readdirSync('packages').flatMap(p => {
+    try { return [[p, JSON.parse(readFileSync(`packages/${p}/package.json`))]]; } catch { return []; }
+  }));
+  const affected = affectedPackages(paths, manifests);
+  return files.filter(file => compat ? compatible(file) : !nightlyFiles.has(file) &&
+    (!affected || !file.startsWith('packages/') || file.startsWith('packages/studio/') || affected.has(file.split('/')[1])));
 }
 export function balance(files, timings, count) {
   const bins = Array.from({ length: count }, () => ({ seconds: 0, files: [] }));
@@ -48,12 +69,20 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     data.source = 'Measured per-file wall time from CI shard artifacts; unmeasured files retain their baseline estimate.';
     writeFileSync(timingFile, JSON.stringify(data, null, 2) + '\n');
   }
-  const bins = balance(inventory().filter(f => !subset || compatible(f)), subset ? Object.fromEntries(inventory().map(f => [f, Math.max(data.seconds[f] ?? 15, data.compatSeconds?.[f] ?? 0)])) : data.seconds, subset ? shardCounts.compat : shardCounts.full);
+  const full = args.includes('--full');
+  const files = selected(inventory(), { full, compat: subset, paths: process.env.CI_CHANGED_PATHS ? JSON.parse(process.env.CI_CHANGED_PATHS) : null });
+  const mode = full ? 'full' : subset ? 'compat' : 'pr';
+  const bins = balance(files, subset ? Object.fromEntries(files.map(f => [f, Math.max(data.seconds[f] ?? 15, data.compatSeconds?.[f] ?? 0)])) : data.seconds, shardCounts[mode]);
+  if (args.includes('--files')) {
+    console.log(bins[Number(args[0])].files.join('\n'));
+    process.exit(0);
+  }
   if (args.includes('--list') || args[0] === '--rebalance') {
     console.log(JSON.stringify(bins, null, 2));
   } else {
     const index = Number(args[0]);
     if (!Number.isInteger(index) || !bins[index]) throw new Error('usage: node scripts/ci-shards.mjs INDEX [--compat | --list]');
+    process.env.HOMIE_TEST_FIXTURES ??= `${process.env.RUNNER_TEMP || '/tmp'}/homie-fixtures-${process.pid}`;
     const seconds = {}; let failed = false;
     const shardStart = performance.now();
     mkdirSync('ci-results', { recursive: true });

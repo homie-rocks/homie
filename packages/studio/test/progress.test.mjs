@@ -1,3 +1,4 @@
+import { fixtureRun } from './studio-fixture.mjs';
 import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * The progress feed (lib/progress.mjs): a build the person can watch from the Claude app.
@@ -25,7 +26,7 @@ const REPO_NM = join(PKG, '..', '..', 'node_modules');
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-progress-test-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 
-const run = (args, cwd) => spawnSync(process.execPath, [CLI, ...args, '--json'], { cwd, encoding: 'utf8' });
+const run = (args, cwd) => fixtureRun(CLI, args, cwd);
 const out = (r) => JSON.parse(r.stdout);
 /** The CLI without blocking this process (a stand-in directory answers from here). */
 const runAsync = (args, cwd) => new Promise((done) => {

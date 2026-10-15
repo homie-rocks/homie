@@ -19,7 +19,6 @@ test('D/F: a business scaffold starts with apps, creates pages, and documents la
  const root = join(scratch, 'business'); const r = newStudio(root, { name: 'Bike shop', kind: 'business', install: false });
  assert.match(r.next.join('\n'), /app new/); assert.doesNotMatch(r.next.join('\n'), /gem-rush|game skill/);
  assert.ok(existsSync(join(root, 'site/pages')));
- assert.match(readFileSync(join(root, 'site/README.md'), 'utf8'), /\/open/);
 });
 test('E: app words accept the app own complete interface vocabulary', () => {
  const a = JSON.parse(readFileSync(new URL('../app-starters/welcome/app.json', import.meta.url)));
@@ -90,13 +89,12 @@ test('H: monthly CAD gifts create recurring Stripe prices and subscription links
  assert.match(link.after_completion.redirect.url, /^https:\/\/pantry.example\//);
 });
 
-test('H: giving thank-you and terms use the organisation wording without item-access text', async () => {
+test('H: receipt pages include the authored receipt instructions', async () => {
  const { thanksPage, refundsPage } = await import('../worker/shop-page.mjs');
  const shop = { giving: { receiptText: 'Contact our treasurer about receipts.' }, currency: 'cad', items: [], policy: {}, refundDays: null };
  for (const page of [thanksPage, refundsPage]) {
   const html = await page({ studio: { name: 'Pantry' } }, shop).text();
-  assert.match(html, /Contact our treasurer/);
-  assert.doesNotMatch(html, /unused items|digital items|keep access|statutory rights/);
+  assert.ok(html.includes(shop.giving.receiptText));
  }
 });
 

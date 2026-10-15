@@ -1,3 +1,4 @@
+import { fixtureRun } from './studio-fixture.mjs';
 import { legacyGame } from './legacy-game.mjs';
 import { browserRulesGame } from './browser-rules-game.mjs';
 /**
@@ -48,7 +49,7 @@ test.after(() => {
   rmSync(scratch, { recursive: true, force: true });
 });
 
-const run = (args, cwd, env = {}) => spawnSync(process.execPath, [CLI, ...args, '--json'], { cwd, encoding: 'utf8', env: { ...process.env, HOMIE_STUDIO_WARM: '0', ...env } });
+const run = (args, cwd, env = {}) => fixtureRun(CLI, args, cwd, { env: { ...process.env, HOMIE_STUDIO_WARM: '0', ...env } });
 const out = (r) => JSON.parse(r.stdout);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function until(fn, ms = 30_000, every = 150) {

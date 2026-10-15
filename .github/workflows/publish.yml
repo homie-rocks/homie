@@ -4,7 +4,7 @@
 #
 # A release is a tag named release-*, pushed directly or made with a GitHub release:
 #   git tag release-2026-10-01 && git push origin release-2026-10-01
-# The job verifies successful CI on the exact commit, builds, checks packaging, then publishes
+# The job runs the full suite on the exact commit, builds, checks packaging, then publishes
 # each package whose package.json version is not on npm yet, in dependency order
 # (scripts/publish.mjs). Versions already on npm are skipped, so re-running a release
 # is safe. A studio version with no section in CHANGELOG.md is refused before anything
@@ -38,7 +38,11 @@ permissions:
   id-token: write # trusted publishing and provenance
 
 jobs:
+  full-suite:
+    uses: ./.github/workflows/nightly.yml
+
   publish:
+    needs: full-suite
     if: github.event_name != 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/release-')
     runs-on: ubuntu-latest
     timeout-minutes: 8
@@ -48,15 +52,6 @@ jobs:
     environment: npm
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          # The rolling-upgrade tests need preceding release tags and their ancestry.
-          fetch-depth: 0
-      - name: Require successful CI on this exact commit (Checks API, fail closed)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          export TARGET_SHA=$(git rev-parse HEAD)
-          node scripts/ci-verified.mjs
       - uses: ./.github/actions/ci-setup
         with:
           node: 24
@@ -71,22 +66,17 @@ jobs:
       - name: What goes out
         run: node scripts/publish.mjs --check
       - name: Publish
+        env:
+          HOMIE_FULL_SUITE_SHA: ${{ github.sha }}
         run: node scripts/publish.mjs
 
   dry-run:
+    needs: full-suite
     if: github.event_name == 'workflow_dispatch' && inputs.dry-run
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          fetch-depth: 0
-      - name: Require successful CI on this exact commit (Checks API, fail closed)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          export TARGET_SHA=$(git rev-parse HEAD)
-          node scripts/ci-verified.mjs
       - uses: ./.github/actions/ci-setup
         with:
           node: 24
@@ -134,6 +124,7 @@ jobs:
           gh release upload "$TAG" "desktop/dist/homie-studio-$v.mcpb" desktop/dist/homie-studio.mcpb --clobber
 
   queue-watchdog:
+    needs: full-suite
     if: github.event_name != 'workflow_dispatch'
     name: Fail a release stuck waiting for a runner or environment
     runs-on: ubuntu-latest
