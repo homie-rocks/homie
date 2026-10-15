@@ -157,9 +157,9 @@ for lobby). The fast local tests cover the 0–1 D1 budget separately.
 [cold redeploy samples](proof/managed-step-1-round2/cold.json) retain unexpected
 cold starts and warm-after-redeploy samples instead of concealing them.
 
-- **Rendered data:** [browser facts](proof/managed-step-1-round2/app.json) and
-  [screenshot](proof/managed-step-1-round2/app.png) show both October 17 volunteer
-  shifts and the loaded giving panel. The probe waits for actual records/text,
+- **Rendered data:** [browser facts](proof/managed-step-1-round2/app.json) show both October 17 volunteer
+  shifts and the loaded giving panel; the [screenshot](proof/managed-step-1-round2/app.png)
+  captures the giving panel above the fold. The probe waits for actual records/text,
   not a canvas or loading placeholder. No payment was attempted.
 - **Room readiness:** [browser facts](proof/managed-step-1-round2/room-ready.json)
   show replica seat 0 and `arrival.by=auto` (the helper's playable signal) on both

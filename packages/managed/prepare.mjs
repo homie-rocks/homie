@@ -8,7 +8,7 @@ export const read = path => {
   if(errors.length)throw new Error(`Invalid JSONC ${path}: ${errors.map(e=>printParseErrorCode(e.error)).join(', ')}`);
   return value;
 };
-export function prepare({studio, output, name, databaseId, accountId, hostname}) {
+export function prepare({studio, output, name, databaseId, accountId, hostname, controlHosts}) {
   if (!/^hm-test-[a-z0-9-]+$/.test(name)) throw new Error('Step 1 only accepts hm-test- resource names');
   if (!/^[0-9a-f-]{36}$/.test(databaseId) || !/^[0-9a-f]{32}$/.test(accountId)) throw new Error('Explicit database/account IDs required');
   if (!hostname || new URL('https://' + hostname).hostname !== hostname) throw new Error('Exact hostname required');
@@ -75,7 +75,7 @@ export default {
     tail_consumers:[{service:'hm-test-outbound'}],observability:{enabled:true}};
   writeFileSync(join(output,'user.json'),JSON.stringify(config,null,2)+'\n');
   const here=dirname(fileURLToPath(import.meta.url));
-  writeFileSync(join(output,'outbound.json'),JSON.stringify({name:'hm-test-outbound',account_id:accountId,main:join(here,'outbound.mjs'),compatibility_date:'2026-10-01',compatibility_flags:['global_fetch_strictly_public'],workers_dev:false,observability:{enabled:true},vars:{CONTROL_HOSTS:['homie.rocks','api.cloudflare.com',hostname]}},null,2));
+  writeFileSync(join(output,'outbound.json'),JSON.stringify({name:'hm-test-outbound',account_id:accountId,main:join(here,'outbound.mjs'),compatibility_date:'2026-10-01',compatibility_flags:['global_fetch_strictly_public'],workers_dev:false,observability:{enabled:true},vars:{CONTROL_HOSTS:controlHosts??[hostname]}},null,2));
   writeFileSync(join(output,'dispatch.json'),JSON.stringify({name:'hm-test-dispatch',account_id:accountId,main:join(here,'dispatch.mjs'),compatibility_date:'2026-10-01',workers_dev:true,
     dispatch_namespaces:[{binding:'STUDIOS',namespace:'homie-managed-test',outbound:{service:'hm-test-outbound',parameters:['tenant']}}],
     queues:{producers:[{binding:'TICKS',queue:'hm-test-ticks'}],consumers:[{queue:'hm-test-ticks',max_batch_size:1,max_retries:3,dead_letter_queue:'hm-test-ticks-dlq'}]},

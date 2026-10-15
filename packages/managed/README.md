@@ -50,7 +50,9 @@ alarms. For an active abuse incident, remove the user script (`force=true`) and
 verify termination; that is destructive and separate from reversible route removal.
 
 Outbound stamps `x-homie-tenant` from dispatch parameters, overwriting caller
-values. It permits public HTTP(S), blocks configured control hosts and internal
+values. The operator supplies `controlHosts` to preparation (the test dispatcher
+host is the default); source studio configuration cannot set it. It permits
+public HTTP(S), blocks configured control hosts and internal
 literal/name destinations, and returns redirects without following them. The
 header is attribution, not a credential. Cloudflare's outbound hook does not
 intercept DO fetches. DNS aliases/rebinding are not a proven IP policy here;
