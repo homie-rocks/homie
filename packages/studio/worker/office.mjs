@@ -1473,7 +1473,9 @@ export async function appRoleSession(response,request,env,meta,launch) {
  const ticket=(handoff&&await appAssetTicket(env,meta.id,handoff,{request,meta,launch,purpose:'handoff',expectedRole:role,renew:true}))||await appAssetTicket(env,meta.id,undefined,{request,meta,launch,purpose:'handoff'});
  if(ticket) {
   response=new Response(response.body,{status:response.status,statusText:response.statusText,headers:response.headers});
-  response.headers.append('set-cookie',`studio_app_${meta.id}_${role}=${ticket}; Path=/${meta.id}/; Max-Age=300; HttpOnly; Secure; SameSite=Strict`);
+  // LAN dev uses HTTP: a Secure cookie is discarded before the shell removes access.
+  const secure=new URL(request.url).protocol==='https:'?'; Secure':'';
+  response.headers.append('set-cookie',`studio_app_${meta.id}_${role}=${ticket}; Path=/${meta.id}/; Max-Age=300; HttpOnly${secure}; SameSite=Strict`);
  }
  return response;
 }
