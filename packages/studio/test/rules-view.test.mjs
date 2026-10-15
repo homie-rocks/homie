@@ -2685,3 +2685,47 @@ for(const respawn of [false,true])test(`a reconnect after an outage ${respawn?'d
  // A return is not a placement: the body glides by about a frame's travel plus blend, never cut by its full error.
  assert.ok(worst<.5,`the reconnect cut the runner ${worst} metres in one frame`);
 });
+
+for (const delay of [0, 300]) test(`ownTick exposes fractional prediction time for wrapped projectiles at ${delay} ms`, async t => {
+  const {L, compiled, openRoom} = await coinDashKit('server', false, 20, 'wrap2');
+  const clock = virtualTime(t), shape = predictionShaper({delay, loss: .05, seed: 5310});
+  const r = rig(L, compiled, false, shape, shape);
+  const a = openRoom({net: {config: cfg('Pilot'), WebSocketImpl: r.socket(), post: null}});
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(2500);
+  assert.equal(typeof a.ownTick, 'number', 'the view needs its predicted clock, not the delayed remote interpolation clock');
+  a.input({ax: 1});
+  await clock.wait(1600);
+  let previous = a.ownTick, previousX = a.me.pos.x, fractional = false;
+  for (let i = 0; i < 80; i++) {
+    await clock.wait(16);
+    const now = a.ownTick;
+    assert.ok(Number.isFinite(now));
+    assert.ok(now >= previous - 1e-6, `clock reversed: ${previous} -> ${now}`);
+    assert.ok(now - previous < 1, 'one frame must not advance a whole 50 ms tick');
+    if (Math.abs(now - Math.round(now)) > .01) fractional = true;
+    const x = a.me.pos.x, dx = ((x - previousX + 30) % 20) - 10;
+    assert.ok(Math.abs(dx - (now - previous) * 4 / 20) < .005, `clock and drawn path disagree: ${dx} at ${now - previous} ticks`);
+    previousX = x; previous = now;
+  }
+  assert.ok(fractional, 'projectiles must move between room ticks');
+  assert.ok(a.ownTick > a.viewTick, 'predicted and remote interpolation clocks are distinct');
+  assert.equal(r.host.core.stats.errors, 0);
+});
+
+for (const delay of [0, 300]) test(`future input recovers after host clock pauses at ${delay} ms`, async t => {
+  const {L, compiled, openRoom} = await coinDashKit('server', false, 20, 'wrap2');
+  const clock = virtualTime(t), r = rig(L, compiled, false, delay, delay);
+  const a = openRoom({net:{config:cfg('Pilot'),WebSocketImpl:r.socket(),post:null}});
+  t.after(()=>{a.close();r.stop();}); await clock.wait(2500);
+  a.input({ax:1}); await clock.wait(2000);
+  r.host.pause(); await clock.wait(1600); r.host.resume();
+  a.input({ax:-1}); await clock.wait(6000);
+  const b = r.host.core.bodies().find(b=>b.seat===a.seat);
+  assert.ok(b, 'server body remains present');
+  assert.ok(a.ownTick-r.host.core.tick < 20, 'prediction must return inside the unchanged one-second admission bound');
+  // An accepted reversal reaches authority, rather than flying only on the local screen.
+  const saved = r.host.core.save().ents.find(e=>e[11]===a.seat);
+  assert.ok(saved[8][0] < 0, `server ignored reversal: velocity ${saved[8][0]}`);
+  assert.equal(r.host.core.stats.errors,0);
+});

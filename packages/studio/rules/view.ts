@@ -149,6 +149,8 @@ export interface PredictContext extends RayQueries {
 }
 export type Predictor = (me: any, input: any, ctx: PredictContext) => void;
 export interface Room<R = unknown> extends RayQueries {
+  /** Fractional tick underlying the own predicted pose, before visual correction; null without a controlled body. */
+  readonly ownTick: number | null;
   readonly viewTick: number;
   /** Where a body was at a tick, from the snapshots this browser holds (0.46.5); `known: false` past the newest one. */
   poseAt(id: string, tick: number): { pos: Vec3; vel: Vec3; known: boolean } | null;
@@ -896,9 +898,12 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         leadTarget = .5 + Math.max(0, quantile(leads, .5) - quantile(leads, .05));
         leadMedian = quantile(leads.slice(-8), .5);
         const med = medianLead(), target = targetLead();
-        // A changing jitter estimate must not discard already stamped input. Slew the
-        // clock; late movement is settled by the server's retained history.
-        steer(now);
+        // Ordinary jitter is settled by movement replay and gentle slewing.
+        // A host scheduling pause can leave the clock hundreds of milliseconds
+        // ahead; 0.5% slewing would reject fresh input for minutes. Recalibrate
+        // gross excess lead using the existing pose-preserving rebase path.
+        if (med > target + 6) rebase(f.k, 'lead');
+        else steer(now);
       }
       previewKey = '';
       settlePredictions(f, before && before.e === f.e ? before : null, row?.[2] ?? 0);
@@ -1311,6 +1316,16 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   };
   const viewRay = (from: unknown, direction: unknown, max: number, options?: RayOptions, all=false) => rayQuery(mapAt(latest?.k??0),viewTargets(atTickOf(options)),dims,from,direction,max,options,mine?.id,all);
   return {
+    get ownTick() {
+      if (solo) return solo.ownTick;
+      pump();
+      if (!mine || !latest) return null;
+      const server = latest.ents.get(mine.id), kind = myKind();
+      if (!server) return null;
+      if (kind?.control && !server.motion[kind.control]) return latest.k;
+      const now = clock(), live = stepped + Math.max(0, Math.min(1, tickAt(now) - stepped));
+      return catchTick === null ? live : Math.min(live, catchTick + Math.max(0, now - catchAt) / period * predict.catchUp);
+    },
     get viewTick() { return solo ? solo.viewTick : viewTickNow(); },
     get status() { return solo ? 'offline' : status; },
     get seat() { return solo ? solo.seat : net.seat; },

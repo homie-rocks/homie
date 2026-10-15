@@ -497,9 +497,12 @@ export function createHost(o: HostOptions): Host {
       const action = kind.input.some(([, fd], index) => fd.t === 'press' && raw[index + 1] === 1);
       if (seq && r !== body.r && !action) continue;
       if (seq ? q.received?.includes(seq) : j <= q.newest) continue;
-      // Too early: more than a second ahead. This entry and the rest of the frame are dropped.
-      if (j > K + tickHz) { stats.dropped += 1; break; }
+      // Report the clock lead even when its input is too far in the future.
+      // Otherwise a view whose clock outlived a host scheduling pause receives
+      // no feedback and keeps sending inputs outside the admission window.
       if(j >= q.newest && lead < q.lead)q.lead=lead;
+      // Too early: more than a second ahead. Admission remains unchanged.
+      if (j > K + tickHz) { stats.dropped += 1; break; }
       q.newest = Math.max(q.newest,j);
       if(seq){q.received??=[];q.received.push(seq);if(q.received.length>256)q.received.shift();}
       const values: Record<string, unknown> = {};

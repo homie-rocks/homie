@@ -17,6 +17,16 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## Unreleased
+
+### Added
+
+- `room.ownTick` exposes the fractional own prediction/catch-up clock for deterministic projectile and obstacle presentation in wrapped games. No authority or hit-policy change.
+
+### Fixed
+
+- Recover the rules input clock after a host scheduling pause: report excess lead for rejected future inputs and recalibrate gross clock drift without widening the one-second admission bound.
+
 ## [0.53.0] - 2026-10-15
 
 **Plugin 0.53.0**
