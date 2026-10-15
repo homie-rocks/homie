@@ -1,3 +1,4 @@
+import {databaseBinding, ORIGINAL_DB} from './request-db.mjs';
 /**
  * ROOM CHAT IN THE STUDIO'S OWN D1 (@homie-rocks/studio 0.23.0, NETPLAY.md section 19): the owner's chat rules per game
  * and per server, and the reports players make. Never the chat itself: what people say lives a few minutes in the
@@ -51,8 +52,8 @@ const cache = new WeakMap();
 /** Every chat rule row (D1), read at most every 5 s per Worker instance; empty before migration 0007. */
 export async function chatRowsOf(env, { fresh = false } = {}) {
   if (!env?.DB || env.HOMIE_PREVIEW === '1') return new Map();
-  const hit = cache.get(env.DB);
-  if (!fresh && hit && Date.now() - hit.at < 5000) return hit.map;
+  const hit = cache.get(databaseBinding(env.DB));
+  if (!env.DB[ORIGINAL_DB] && !fresh && hit && Date.now() - hit.at < 5000) return hit.map;
   let map = new Map();
   try {
     const { results } = await env.DB.prepare('SELECT game, server, rules, updated_at FROM chat_rules LIMIT 1000').all();
@@ -62,10 +63,10 @@ export async function chatRowsOf(env, { fresh = false } = {}) {
       if (rules && typeof rules === 'object') map.set(`${r.game}/${r.server ?? ''}`, { ...rules, at: Number(r.updated_at) || 0 });
     }
   } catch { map = new Map(); }
-  cache.set(env.DB, { at: Date.now(), map });
+  cache.set(databaseBinding(env.DB), { at: Date.now(), map });
   return map;
 }
-export const forgetChat = (env) => { if (env?.DB) cache.delete(env.DB); };
+export const forgetChat = (env) => { if (env?.DB) cache.delete(databaseBinding(env.DB)); };
 
 /**
  * A room's chat rules: the game's game.json "chat", the owner's rules for the game, then for this server (a server's

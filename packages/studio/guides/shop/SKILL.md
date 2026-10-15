@@ -210,3 +210,9 @@ and Stripe CLI `listen --all-snapshot --forward-to http://localhost:8787/api/sho
 recipe is in the installed toolkit’s `apps/APPS.md`, “Real Stripe test checkout on
 this computer”. It uses root `.dev.vars`, needs no public HTTPS or Cloudflare, and
 keeps the existing approved Stripe CLI session. Do not write a stand-in checkout.
+
+### Batch setup and reconciliation
+
+Set each menu item's `maxQuantity` in `shop.json` when the studio has an order limit; the default is 99. Slot links support group quantities up to published remaining seats. Supply reviewed `confirmed` seat totals when resyncing: Stripe counts sessions, not people. The database confirms the entire paid group atomically. If a payment differs from the saved deposit/basket or a group no longer fits, inspect the `review` order and `payment.review` event, arrange fulfillment or refund, and show the customer the saved notice. Never discard a paid event.
+
+Full `shop connect` and plugin verification both save public JSON assets; rebuild/deploy those assets before retiring replaced links. Checkout mode is a public Worker variable, not a secret. If a product search misses an existing deterministic ID, perform the planner's GET for that ID before creating it. Preserve Wrangler's diagnostic when setup fails.

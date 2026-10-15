@@ -1,3 +1,4 @@
+import {trackBackground,requestDatabase,databaseBinding,MUTATIONS} from './request-db.mjs';
 import {appGraphicsFallback} from './app-graphics.mjs';
 import {JOIN_AREA_FRAME_JS} from './join-area.mjs';
 import {loadShopLinks} from './shop-links.mjs';
@@ -123,7 +124,7 @@ import { cookieValues, count, countVisit, counter, isQa, onlyOf, ownerAllowed, p
 import { ownerRoutes } from './stats-page.mjs';
 import { playerRoutes, players as playerAccounts } from './players.mjs';
 import {
-  appAssetTicket, accessOf, accountSub, gatePage, holders, isOwner, joinHolders, launchOf, regateArgs, officeRoutes, publicCatalogue, redeemInvite, sameOrigin, seatsFor, settingsOf, ticketAllows,
+  appRoleSession, appAssetTicket, accessOf, accountSub, gatePage, holders, isOwner, joinHolders, launchOf, regateArgs, officeRoutes, publicCatalogue, redeemInvite, sameOrigin, seatsFor, settingsOf, ticketAllows,
   ticketFor, ticketSub, usePlayers, verifyControl,
 } from './office.mjs';
 
@@ -168,13 +169,15 @@ const json = (body, status = 200, extra = {}) => new Response(`${JSON.stringify(
 const catalogueCache = new WeakMap();
 async function catalogue(env, origin) {
   try {
+    const cached=catalogueCache.get(env.ASSETS);
+    if(cached?.origin===origin && env.HOMIE_PREVIEW!=='1' && env.HOMIE_DEV!=='1')return cached.value;
     const res = await env.ASSETS.fetch(new Request(`${origin}/games.json`));
     if (!res.ok) return { studio: { name: env.STUDIO_NAME || 'Studio' }, games: [] };
     const tag = res.headers.get('etag');
     const hit = catalogueCache.get(env.ASSETS);
     if (tag && hit?.tag === tag && hit.origin === origin) { await res.body?.cancel(); return hit.value; }
     const value = await res.json();
-    if (tag) catalogueCache.set(env.ASSETS, { tag, origin, value });
+    catalogueCache.set(env.ASSETS, { tag, origin, value });
     return value;
   } catch { return { studio: { name: env.STUDIO_NAME || 'Studio' }, games: [] }; }
 }
@@ -539,7 +542,13 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
   };
   let html = await res.text();
   const fallback = meta?.kind === 'app' ? `<script>addEventListener('DOMContentLoaded',()=>(${appGraphicsFallback.toString()})(${JSON.stringify(meta.words?.fallback ?? 'This device cannot display the 3D scene. Use the text controls to continue.').replace(/</g, '\\u003c')}));</script>` : '';
-  const assetBase = meta.kind === 'app' && !url.pathname.includes('/__assets/') && launchOf(meta, await settingsOf(env, {fresh:true}), env) !== 'public' ? `<base href="/${game}/__assets/${await appAssetTicket(env,game)}/">` : '';
+  let assetBase='';
+  const assetLaunch=meta.kind==='app'?launchOf(meta,await settingsOf(env,{fresh:true}),env):'public';
+  if(meta.kind==='app'&&!url.pathname.includes('/__assets/')&&assetLaunch!=='public') {
+    const ticket=await appAssetTicket(env,game,undefined,{request,meta,launch:assetLaunch});
+    if(!ticket)return new Response('Sign in again to load this private app.',{status:403,headers:{'cache-control':'no-store'}});
+    assetBase=`<base href="/${game}/__assets/${ticket}/">`;
+  }
   const head = assetBase + `<script>${JOIN_AREA_FRAME_JS}</script>` + (meta.kind==='app'?`<script>${APP_STORAGE_JS}</script>`:'') + fallback + `${embedded ? `<script>${EMBED_GAME_JS}</script>` : ''}<script>window.HOMIE_NET=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script>`;
   html = /<head[^>]*>/i.test(html) ? html.replace(/<head([^>]*)>/i, `<head$1>${head}`) : head + html;
   return new Response(html, {
@@ -616,16 +625,10 @@ function finish(res, path) {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
-// Repeat after migration: an older isolate may recreate these during a rolling deploy.
-async function removeReferralLeftovers(env) {
-  if(env.DB)await env.DB.prepare("DELETE FROM meta WHERE key GLOB 'referral_*' OR key GLOB 'referral-*'").run();
-}
-
 export default {
   async scheduled(event, env, ctx) {
     env=await loadShopLinks(env);
     const maintenance=(async () => {
-      await removeReferralLeftovers(env);
       const cat = await catalogue(env, 'https://studio.invalid');
       await notifyTools(env,cat,cat.studio?.url??'https://studio.invalid').catch(error=>console.warn('Tool catalogue refresh:',error.message));
       await reconcileOrders(env, shopOf(cat));
@@ -635,20 +638,19 @@ export default {
     await maintenance;
   },
   async fetch(request, env, ctx) {
+    const staticPath=new URL(request.url).pathname;
+    if(['GET','HEAD'].includes(request.method)&&staticPath==='/_homie/site.js')return finish(await route(request,env,ctx),staticPath);
     env=await loadShopLinks(env,new URL(request.url).origin);
-    await removeReferralLeftovers(env);
+    env={...env,DB:requestDatabase(env.DB,request)};
     const url = new URL(request.url);
     if(env.HOMIE_CONCEPT==='1' && url.pathname==='/robots.txt')return new Response('User-agent: *\nDisallow: /\n',{headers:{'content-type':'text/plain','x-robots-tag':'noindex, nofollow'}});
     if(env.HOMIE_CONCEPT==='1' && url.pathname==='/.well-known/homie-studio.json')return json({ok:false,error:'concept-unlisted'},404,{'x-robots-tag':'noindex, nofollow'});
-    await (await import('./functions.mjs')).syncFunctions(env);
     const dispatch=()=>import('./functions.mjs').then(m=>m.runFunctions(env,()=>catalogue(env,url.origin),url.origin));
     // Some routes reconcile shop state in waitUntil after returning their page.
     // Keep dispatch behind those writes too, preserving the runtime context's
     // methods and OAuth verification symbols through the proxy.
-    const requestCtx=ctx?.waitUntil?new Proxy(ctx,{get(target,key){
-      if(key==='waitUntil')return work=>ctx.waitUntil(Promise.resolve(work).finally(dispatch));
-      const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
-    }}):ctx;
+    const background=trackBackground(ctx,()=>env.DB?.[MUTATIONS]?dispatch():undefined);
+    const requestCtx=background.context;
     // A standalone copy's Lobby call (worker/standalone.mjs): every answer to it can be read by the app's page, an
     // unknown game's 404 and a failure included, so the app can say why it plays offline. No other address is opened.
     const appRecords = isAppOrigin(request) && /^\/[^/]+\/api\/app\/records\//.test(url.pathname);
@@ -661,10 +663,16 @@ export default {
       res = json({ ok: false, error: 'failed' }, 500);
     } finally {
       // Refresh after the route has populated the catalogue cache.
-      if(env.DB&&env.LOBBY&&ctx?.waitUntil)ctx.waitUntil(catalogue(env,url.origin).then(cat=>notifyTools(env,cat,url.origin)).catch(()=>{}));
+      if(env.DB&&env.LOBBY&&ctx?.waitUntil) {
+        const binding=databaseBinding(env.DB),mutation=url.pathname.startsWith('/_studio/')&&env.DB[MUTATIONS];
+        if(!toolCatalogues.has(binding)||mutation) {
+          toolCatalogues.add(binding);
+          ctx.waitUntil(catalogue(env,url.origin).then(cat=>notifyTools(env,cat,url.origin)).catch(()=>toolCatalogues.delete(binding)));
+        }
+      }
       // A route can commit a write and then fail. Its outbox still needs delivery.
       if(env.DB) {
-        const delivery=dispatch();
+        const delivery=background.finish();
         if(ctx?.waitUntil)ctx.waitUntil(delivery);else await delivery;
       }
     }
@@ -683,6 +691,8 @@ export default {
   },
 };
 
+// Refresh once per isolate/binding, and again after studio mutations. No shared pending I/O.
+const toolCatalogues=new WeakSet();
 async function notifyTools(env,cat,origin) {
   if(!env.DB||!env.LOBBY)return;
   const [{pushToolList},{builtins}]=await Promise.all([import('./event-resources.mjs'),import('./mcp-tools.mjs')]);
@@ -950,8 +960,11 @@ async function route(request, env, ctx) {
     const meta = (all.games ?? []).find((g) => g.id === game);
     if (!meta) return fallback(request, env, url, getCat);
     if (parts.length === 1 && !path.endsWith('/')) return Response.redirect(`${url.origin}/${game}/`, 301);
-    const cat = await getCat();
     let sub = parts.slice(1).join('/');
+    // Game bundles were already public assets; only the document carries access context.
+    // Apps retain their session/role checks even for individual asset files.
+    if(read&&meta.kind!=='app'&&sub.startsWith('__game/')&&!['__game/','__game/index.html'].includes(sub))return gameAsset(request,env,url,game,sub.slice('__game/'.length));
+    const cat = await getCat();
     if (meta.kind === 'app' && /^open(?:\/(embed|preview))?$/.test(sub)) sub = sub.replace(/^open/, 'play');
     if (sub === '__restart') {
       if (env.HOMIE_PREVIEW !== '1' || request.method !== 'POST' || !hostedGame(game)) return new Response('not found', { status: 404 });
@@ -968,7 +981,7 @@ async function route(request, env, ctx) {
     if (meta.kind === 'app') {
       const asset=/^__assets\/([^/]+)\/(.+)$/.exec(sub);
       if(asset) {
-        if(!(await appAssetTicket(env,game,asset[1])))return json({ok:false,error:'not-found'},404);
+        if(!(await appAssetTicket(env,game,asset[1],{request,meta,launch})))return json({ok:false,error:'not-found'},404);
         const response=asset[2]==='index.html'?await gameDocument(request,env,url,game,meta,cat):await gameAsset(request,env,url,game,asset[2]);
         response.headers.set('cache-control','private, no-store');
         response.headers.set('referrer-policy','no-referrer');
@@ -980,14 +993,18 @@ async function route(request, env, ctx) {
         const web=await (await import('./app-web.mjs')).appWeb(request,env,meta,url,sub,()=>gameDocument(request,env,url,game,meta,cat));
         if(web)return web;
       }
+      const apiSession=async response=>{
+        const access=await appAccess(request,env,meta,url);
+        return access.ok?appRoleSession(response,request,env,meta,launch):response;
+      };
       if(sub==='api/app/live') {
         if(request.method!=='GET')return new Response('GET required',{status:405});
         const {appHub}=await import('./app-streams.mjs');
-        return appHub(env,meta.id).fetch('https://app/__app_records',{method:'POST',body:JSON.stringify({op:'open',meta,url:request.url,headers:Object.fromEntries(request.headers),collections:url.searchParams.getAll('collection')})});
+        return apiSession(await appHub(env,meta.id).fetch('https://app/__app_records',{method:'POST',body:JSON.stringify({op:'open',meta,url:request.url,headers:Object.fromEntries(request.headers),collections:url.searchParams.getAll('collection')})}));
       }
-      if(sub==='api/app/tools')return (await import('./app-tools.mjs')).appToolsRoute(request,env,meta,url,cat,await studioTools());
+      if(sub==='api/app/tools')return apiSession(await (await import('./app-tools.mjs')).appToolsRoute(request,env,meta,url,cat,await studioTools()));
       const api = await appRecordsRoute(request, env, meta, url, sub);
-      if (api) return api;
+      if (api) return sub.startsWith('api/app/records/')?apiSession(api):api;
       if (['play', 'tv', 'watch'].includes(sub)) {
         let a;
         try { a = await appAccess(request, env, meta, url); } catch { return json({ ok: false, error: 'app roles unavailable; apply studio migrations' }, 503); }
@@ -995,7 +1012,7 @@ async function route(request, env, ctx) {
           if (a.status === 401) return Response.redirect(`${url.origin}/account/?next=${encodeURIComponent(url.pathname + url.search)}`, 302);
           return json({ ok: false, error: a.error }, a.status);
         }
-        if(!meta.room)return recordsPage(meta,url,cat,await availableShellShop(env,cat,game),Boolean(await (await import('./local-test.mjs')).localSession(request,env)),launch!=='public'?await appAssetTicket(env,game):null);
+        if(!meta.room)return appRoleSession(recordsPage(meta,url,cat,await availableShellShop(env,cat,game),Boolean(await (await import('./local-test.mjs')).localSession(request,env)),launch!=='public'?await appAssetTicket(env,game,undefined,{request,meta,launch}):null),request,env,meta,launch);
       }
     }
     const lobby = () => env.LOBBY.get(env.LOBBY.idFromName(game));
@@ -1140,11 +1157,11 @@ async function route(request, env, ctx) {
         const sh = await availableShellShop(env, cat, game, { kids: pol.kids });
         let shopQr = null;
         if (sh && !local) try { shopQr = qrSvg(`${url.origin}/shop/?game=${encodeURIComponent(game)}`, { title: `Shop: ${meta.name ?? game}` }); } catch { shopQr = null; }
-        return playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, screen: true, joinUrl, qr, local, room, ticket, owner: d.owner, launch, server, shop: sh ? { ...sh, qr: shopQr, url: `${url.origin}/shop/?game=${game}` } : null });
+        return appRoleSession(playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, screen: true, joinUrl, qr, local, room, ticket, owner: d.owner, launch, server, shop: sh ? { ...sh, qr: shopQr, url: `${url.origin}/shop/?game=${game}` } : null }),request,env,meta,launch);
       }
       await countVisit(request, env, ctx, game, 'play');
       shareDaily(cat, url, ctx);
-      const page=playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, embed, preview: env.HOMIE_EMBED_PREVIEW === '1', ticket: embed ? null : ticket, owner: !embed && d.owner, launch, server, ...(embed ? {} : await chatWho(env, game, srv, d.acct)), shop: await availableShellShop(env, cat, game, { kids: pol.kids }) });
+      const page=await appRoleSession(playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, embed, preview: env.HOMIE_EMBED_PREVIEW === '1', ticket: embed ? null : ticket, owner: !embed && d.owner, launch, server, ...(embed ? {} : await chatWho(env, game, srv, d.acct)), shop: await availableShellShop(env, cat, game, { kids: pol.kids }) }),request,env,meta,launch);
       for(const cookie of recordsGuest?.cookies??[])page.headers.append('set-cookie',cookie);return page;
     }
     if (sub === 'watch') {

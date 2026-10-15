@@ -45,7 +45,14 @@ export async function proveAppNeeds({ plan, surfaces, shots, report, ready = asy
     let waiting = 'validating assertions';
     const result = { id: need.id, statement: need.statement, status: 'not', captures: [] };
     try {
-      if (!Array.isArray(need.assertions) || !need.assertions.length) throw new Error('need requires at least one assertion (UI, result, records or file)');
+      if (need.assertions === undefined || Array.isArray(need.assertions) && !need.assertions.length) {
+        result.status = 'pending';
+        result.why = 'Placeholder: add assertions to prove this need';
+        report?.check?.(`need-${need.id}`, 'skip', { label: need.statement, note: result.why });
+        results.push(result);
+        continue;
+      }
+      if (!Array.isArray(need.assertions)) throw new Error('assertions must be an array');
       const popupNames=new Set((need.steps??[]).map(s=>s.popup).filter(Boolean));
       for(const item of [...needSteps(need.steps),...need.assertions])if(item.surface&&!popupNames.has(item.surface))surface(item.surface,item.role);
       for(const target of new Set(need.assertions.filter(a=>a.effect).map(a=>surface(a.surface,a.role))))await target.frame.evaluate(()=>{window.__homieNeedsEffects=[];});

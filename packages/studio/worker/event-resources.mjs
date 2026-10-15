@@ -1,3 +1,4 @@
+import {databaseBinding} from './request-db.mjs';
 import {McpEventStreams} from './mcp-event-streams.mjs';
 import {listEvents} from './mcp-events.mjs';
 import {notification,sseFrame} from './mcp-events-wire.mjs';
@@ -141,13 +142,16 @@ export class EventStreams {
   }
 }
 
+const toolCatalogues=new WeakMap();
 /** Refresh active streams whenever this Worker observes a new tool catalogue. */
 export async function pushToolList(env,cat,tools,origin) {
   if(!env.LOBBY)return;
   const publicShape=tools.map(({name,description,inputSchema,audience,kind})=>({name,description,inputSchema,audience,kind}));
   const signature=JSON.stringify([publicShape,eventFeeds(env)]);
+  const binding=databaseBinding(env.DB);
+  if(toolCatalogues.get(binding)===signature)return;
   const previous=await env.DB.prepare("SELECT value FROM mcp_kv WHERE key='tools-catalogue'").first();
-  if(previous?.value===signature)return;
+  if(previous?.value===signature){toolCatalogues.set(binding,signature);return;}
   await env.DB.prepare("INSERT INTO mcp_kv(key,value) VALUES('tools-catalogue',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(signature).run();
   let after='';
   for(;;){
@@ -155,4 +159,5 @@ export async function pushToolList(env,cat,tools,origin) {
     for(const row of rows){const connection=JSON.parse(row.value).connection;await eventHub(env,connection).fetch('https://events/__studio_events',{method:'POST',body:JSON.stringify({op:'tools',connection,cat,tools:publicShape,origin})});}
     if(rows.length<100)break;after=rows.at(-1).key;
   }
+  toolCatalogues.set(binding,signature);
 }

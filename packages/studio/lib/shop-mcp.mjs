@@ -65,11 +65,17 @@ export async function shopMcpPlan(root, {observations = [], mode = 'test', url, 
         found={...written,body:{...written.body,...(lines?{line_items:Array.isArray(lines)?{data:lines.map(l=>({...l,price:typeof l.price==='string'?{id:l.price}:l.price}))}:lines}:{})}};
       }
     }
+    if (!found && method==='POST' && path==='/v1/products' && params.id) {
+      const existing=observations.findLast(o=>(o.method??'GET')==='GET' && o.path===`/v1/products/${params.id}`);
+      if (!existing) throw {next:{method:'GET',path:`/v1/products/${params.id}`,params:{expand:['default_price']}}};
+      if (existing.body?.id===params.id) return existing.body;
+      if (existing.body?.error?.code!=='resource_missing') throw new Error('Stripe product lookup failed; resolve the read before creating a product');
+    }
     if(!found)throw {next:{method,path,params,...(idempotency?{idempotency}:{})}};
     let body=found.body;
     if(method==='GET' && Array.isArray(body?.data) && !params.starting_after && !params.page && !body.has_more) {
       const kind=path.split('/')[2], rows=new Map(body.data.map(o=>[o.id,o]));
-      for(const o of observations.slice(observations.indexOf(found)+1))if(o.method==='POST') {
+      for(const o of observations.slice(observations.indexOf(found)+1))if(o.method==='POST' || (o.method??'GET')==='GET' && /^\/v1\/products\/[^/]+$/.test(o.path) && o.body?.id) {
         if(o.path.split('/')[2]===kind && o.body?.id)rows.set(o.body.id,o.body);
         if(kind==='prices' && o.body?.default_price?.id)rows.set(o.body.default_price.id,o.body.default_price);
       }

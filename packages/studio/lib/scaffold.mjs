@@ -1,3 +1,4 @@
+import {TOOL_NAMESPACE_MIGRATION,TOOL_NAMESPACE_MIGRATION_FILE,CACHE_MIGRATION,CACHE_MIGRATION_FILE,OPERATIONAL_MIGRATION,OPERATIONAL_MIGRATION_FILE} from '../worker/operational-schema.mjs';
 import {BOOKING_RESOURCES_MIGRATION,BOOKING_RESOURCES_MIGRATION_FILE} from '../worker/booking-resources.mjs';
 import {BOOKING_HOLDS_MIGRATION,BOOKING_HOLDS_MIGRATION_FILE} from '../worker/booking-holds.mjs';
 import {BUSINESS_EVENTS_MIGRATION,BUSINESS_EVENTS_MIGRATION_FILE} from '../worker/business-events.mjs';
@@ -829,6 +830,9 @@ export { default, Table, Lobby, Gate, Concentrator } from '@homie-rocks/studio/w
     [`site/migrations/${APPS_MIGRATION_FILE}`]: APPS_MIGRATION,
     [`site/migrations/${BUSINESS_EVENTS_MIGRATION_FILE}`]: BUSINESS_EVENTS_MIGRATION,
     [`site/migrations/${BOOKING_RESOURCES_MIGRATION_FILE}`]: BOOKING_RESOURCES_MIGRATION,
+    [`site/migrations/${OPERATIONAL_MIGRATION_FILE}`]: OPERATIONAL_MIGRATION,
+    [`site/migrations/${CACHE_MIGRATION_FILE}`]: CACHE_MIGRATION,
+    [`site/migrations/${TOOL_NAMESPACE_MIGRATION_FILE}`]: TOOL_NAMESPACE_MIGRATION,
     [`site/migrations/${BOOKING_HOLDS_MIGRATION_FILE}`]: BOOKING_HOLDS_MIGRATION,
     [`site/migrations/${APP_LIVE_MIGRATION_FILE}`]: APP_LIVE_MIGRATION,
     [`site/migrations/${TOOL_DATABASE_MIGRATION_FILE}`]: TOOL_DATABASE_MIGRATION,
@@ -1076,8 +1080,23 @@ function ensureBookingResources(root) {
   if(existsSync(file))return null;
   mkdirSync(dirname(file),{recursive:true});writeFileSync(file,BOOKING_RESOURCES_MIGRATION);return `site/migrations/${BOOKING_RESOURCES_MIGRATION_FILE}`;
 }
+function ensureToolNamespaces(root) {
+ const file=join(root,'site','migrations',TOOL_NAMESPACE_MIGRATION_FILE);
+ if(existsSync(file))return null;
+ mkdirSync(dirname(file),{recursive:true});writeFileSync(file,TOOL_NAMESPACE_MIGRATION);return `site/migrations/${TOOL_NAMESPACE_MIGRATION_FILE}`;
+}
+function ensureCache(root) {
+ const file=join(root,'site','migrations',CACHE_MIGRATION_FILE);
+ if(existsSync(file))return null;
+ mkdirSync(dirname(file),{recursive:true});writeFileSync(file,CACHE_MIGRATION);return `site/migrations/${CACHE_MIGRATION_FILE}`;
+}
+function ensureOperational(root) {
+ const file=join(root,'site','migrations',OPERATIONAL_MIGRATION_FILE);
+ if(existsSync(file))return null;
+ mkdirSync(dirname(file),{recursive:true});writeFileSync(file,OPERATIONAL_MIGRATION);return `site/migrations/${OPERATIONAL_MIGRATION_FILE}`;
+}
 export function ensureMigrations(root) {
-  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root), ensureFunctionReference(root), ensureShopRemoveReferrals(root), ensureFunctionRuns(root), ensureToolDatabase(root), ensureBookings(root), ensureSubscriptions(root), ensureAppLive(root), ensureBusinessEvents(root), ensureBookingHolds(root),ensureBookingResources(root)].filter(Boolean);
+  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root), ensureFunctionReference(root), ensureShopRemoveReferrals(root), ensureFunctionRuns(root), ensureToolDatabase(root), ensureBookings(root), ensureSubscriptions(root), ensureAppLive(root), ensureBusinessEvents(root), ensureBookingHolds(root),ensureBookingResources(root),ensureOperational(root),ensureCache(root),ensureToolNamespaces(root)].filter(Boolean);
 }
 
 /** What a migration file the template added is for, in a few words (deploy and dev say it). */
