@@ -1178,8 +1178,8 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'stripe_shop_plan', title: 'Plan or verify the Stripe shop',
-      description: 'Default setup with Stripe official MCP. Supply public API observations as {method,path,params,body}, account ID, mode, and complete booking slots. Returns every independent operation in a dependency-ordered batch, with metadata and idempotency. Execute via Stripe stripe_api_search/details/read/write, retain write responses as observations and replan until verified. verify:true saves compact public config for deploy and stripe_webhook. Never pass webhook creation responses or secrets.',
-      inputSchema: {type:'object',properties:{...STUDIO_ARG,account:{type:'string'},mode:{enum:['test','live']},url:{type:'string'},slots:{type:'array',items:{type:'object'}},observations:{type:'array',items:{type:'object'}},verify:{type:'boolean'}}},
+      description: 'Default setup with Stripe official MCP. Supply public API observations as {method,path,params,body}, account ID, mode, and complete booking slots. Returns every independent operation in a dependency-ordered batch, with metadata and idempotency. Execute via Stripe stripe_api_search/details/read/write, supply new write responses as observations and replan until verified; earlier public observations are saved automatically. refresh:true checks external Stripe changes using paginated expanded link lists. verify:true saves compact public config for deploy and stripe_webhook. Never pass webhook creation responses or secrets.',
+      inputSchema: {type:'object',properties:{...STUDIO_ARG,account:{type:'string'},mode:{enum:['test','live']},url:{type:'string'},slots:{type:'array',items:{type:'object'}},observations:{type:'array',items:{type:'object'}},verify:{type:'boolean'},refresh:{type:'boolean',description:'Discard saved observations and read current Stripe state (after Dashboard edits or before private webhook installation).'}}},
       annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:false},
       run:async a=>{
         const {shopMcpPlan,saveMcpVerification}=await import('./shop-mcp.mjs');

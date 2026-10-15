@@ -1,0 +1,237 @@
+{
+  "options": {
+    "slots": [
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time0",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time1",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time2",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time3",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time4",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time5",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time6",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time7",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time8",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time9",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time10",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time11",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time12",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time13",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time14",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time15",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time16",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time17",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time18",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time19",
+        "item": "round",
+        "capacity": 4
+      }
+    ],
+    "observations": [
+      {
+        "method": "GET",
+        "path": "/v1/products",
+        "params": {
+          "limit": 100
+        },
+        "body": {
+          "data": [],
+          "has_more": false
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/prices",
+        "params": {
+          "limit": 100
+        },
+        "body": {
+          "data": [],
+          "has_more": false
+        }
+      }
+    ],
+    "account": "acct_fixture"
+  },
+  "result": {
+    "command": "shop plan",
+    "mode": "test",
+    "site": "https://golf.example",
+    "apiVersion": "2026-09-30.endive",
+    "webhook": {
+      "method": "POST",
+      "path": "/v1/webhook_endpoints",
+      "private": true,
+      "params": {
+        "url": "https://golf.example/api/shop/hook",
+        "enabled_events": [
+          "payment_link.updated",
+          "invoice.paid",
+          "invoice.payment_failed",
+          "customer.subscription.updated",
+          "customer.subscription.deleted",
+          "checkout.session.completed",
+          "checkout.session.async_payment_succeeded",
+          "checkout.session.async_payment_failed",
+          "checkout.session.expired",
+          "charge.refunded",
+          "refund.created",
+          "refund.updated",
+          "refund.failed",
+          "charge.dispute.created",
+          "charge.dispute.closed"
+        ],
+        "api_version": "2026-09-30.endive",
+        "metadata": {
+          "homie": "shop-v1"
+        },
+        "description": "Studio shop"
+      }
+    },
+    "ok": true,
+    "verified": false,
+    "next": {
+      "method": "GET",
+      "path": "/v1/prices",
+      "params": {
+        "limit": 100
+      }
+    },
+    "instructions": "Read through Stripe MCP; append {path,params,body} to observations, including every pagination page."
+  }
+}

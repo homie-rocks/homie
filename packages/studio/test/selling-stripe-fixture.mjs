@@ -6,7 +6,12 @@ export function stripeFixture() {
    const segments=op.path.split('/'),kind=segments[2]==='billing_portal'?'configurations':segments[2];
    const data=rows[kind];assert.ok(data,op.path);const id=segments.at(-1)===kind||segments.at(-1)==='search'?null:segments.at(-1);
    if(op.method==='GET') {
-     if(!id)return {data:structuredClone(data),has_more:false};
+     if(!id){
+       const start=op.params.starting_after?data.findIndex(o=>o.id===op.params.starting_after)+1:0;
+       const page=structuredClone(data.slice(start,start+(op.params.limit??100)));
+       if(kind==='payment_links'&&op.params.expand?.includes('data.line_items'))for(const o of page)o.line_items={data:o.line_items.map(l=>({...l,price:{id:l.price}})),has_more:false};
+       return {data:page,has_more:start+page.length<data.length};
+     }
      const object=structuredClone(data.find(o=>o.id===id));
      if(kind==='payment_links')object.line_items={data:object.line_items.map(line=>({...line,price:{id:line.price}}))};
      return object;

@@ -154,7 +154,7 @@ export async function readiness(env, shop) {
   let migration = null;
   if (!env?.DB) missing.push('database');
   else if ((migration = await migrationNeeded(env))) missing.push('migration');
-  return { ready: missing.length === 0, missing, next: missing.length ? MISSING_WORDS[missing[0]] : null, migration, mode: paidItems ? shopMode(env) : null };
+  return { ready: missing.length === 0, missing, next: missing.length ? (missing[0]==='payment-links' && env.STRIPE_SHOP_SETUP || MISSING_WORDS[missing[0]]) : null, migration, mode: paidItems ? shopMode(env) : null };
 }
 
 export const MISSING_WORDS = Object.freeze({

@@ -45,3 +45,15 @@ export async function rememberedMoney(env, payment, mode) {
   const rows = (await env.DB.prepare('SELECT value FROM meta WHERE key >= ?1 AND key < ?2').bind(prefix, prefix + '\uffff').all()).results ?? [];
   return rows.map((r) => JSON.parse(r.value));
 }
+
+/** Asset configuration overrides legacy secrets, including an explicitly closed setup.
+ * Return a request-local env: never mutate shared bindings or cache across deployments. */
+export async function loadShopLinks(env, origin='https://studio.invalid') {
+  if(!env.STRIPE_SHOP_LINKS_ASSET)return env;
+  let value;
+  try {
+    const response=await env.ASSETS.fetch(new Request(new URL(env.STRIPE_SHOP_LINKS_ASSET,origin)));
+    if(response.ok)value=await response.json();
+  } catch {}
+  return {...env,STRIPE_SHOP_LINKS:JSON.stringify(value?.config??null),STRIPE_SHOP_SETUP:value?.next??'Ask your AI to finish stripe_shop_plan with verify:true.'};
+}

@@ -37,11 +37,11 @@ const stripeReason = (result, call) => {
 };
 
 // This output stays private, including CLI config, completion, errors and API responses.
-export function stripeProcess(args, { cwd, env = process.env } = {}) {
+export function stripeProcess(args, { cwd, env = process.env, command = 'stripe' } = {}) {
   const childEnv = { ...env, CI: '1', NO_COLOR: '1' };
   for (const k of Object.keys(childEnv)) if (k.startsWith('STRIPE_')) delete childEnv[k];
   return new Promise((resolve) => {
-    const p = spawn('stripe', args, { cwd, env: childEnv, stdio: ['ignore', 'pipe', 'pipe'] });
+    const p = spawn(command, args, { cwd, env: childEnv, shell: process.platform==='win32' && command==='npm.cmd', stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '', stderr = '', ended = false;
     const end = (r) => { if (!ended) { ended = true; clearTimeout(timer); resolve(r); } };
     const timer = setTimeout(() => { p.kill(); end({ code: 1 }); }, 10 * 60_000);
@@ -92,7 +92,7 @@ export async function shopConnect(root, options = {}) {
     try {
       const {verifiedMcpConfig} = await import('./shop-mcp.mjs');
       const saved=verifiedMcpConfig(root);
-      if(!saved.result?.verifiedAt || Date.now()-Date.parse(saved.result.verifiedAt)>15*60_000) return fail('verify','Run shop verify with fresh Stripe MCP reads before installing the webhook (verification is valid for 15 minutes).');
+      if(!saved?.result?.verifiedAt || Date.now()-Date.parse(saved.result.verifiedAt)>15*60_000) return fail('verify','Run shop verify with fresh Stripe MCP reads before installing the webhook (verification is valid for 15 minutes).');
       const verified=saved.result;
       if(!verified.verified || verified.local || verified.mode!==mode || verified.site!==new URL(siteUrl(root)).origin) return fail('verify','Run shop verify with fresh Stripe MCP reads for this site and mode first.');
       mcpAccount=saved.options.account;
@@ -110,7 +110,12 @@ export async function shopConnect(root, options = {}) {
   try {
     const cli = (args) => exec(['--project-name', profile, ...args], { cwd: root });
     const installed = await cli(['--version']);
-    if (installed.code !== 0) return fail('stripe-cli', 'Install Stripe’s official CLI, then run shop connect again.', { next: ['npm install -g @stripe/cli@latest'] });
+    if (installed.code !== 0) {
+      log('Installing Stripe’s official CLI with npm…');
+      const install=options.installExec??((command,args)=>stripeProcess(args,{cwd:root,command}));
+      const result=await install(process.platform==='win32'?'npm.cmd':'npm',['install','--global','@stripe/cli@latest']);
+      if(result.code!==0 || (await cli(['--version'])).code!==0)return fail('stripe-cli','Automatic Stripe CLI installation failed. Check npm install permissions and PATH, then run shop connect again.',{next:['npm install --global @stripe/cli@latest']});
+    }
 
     // A read both checks existing credentials and lets Stripe refresh its OAuth session itself.
     let probe = renew ? { code: 1 } : await cli(['get', '/v1/products', '-d', 'limit=1', ...(live ? ['--live'] : [])]);

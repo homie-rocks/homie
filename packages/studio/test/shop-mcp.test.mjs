@@ -16,7 +16,7 @@ function studio(t) {
 async function reconcile(root,f,options={}) {
  let observations=[],writes=[];
  for(let i=0;i<150;i++) {
-   const p=await shopMcpPlan(root,{...options,observations});
+   const p=await shopMcpPlan(root,{refresh:true,...options,observations});
    if(p.verified){await saveMcpVerification(root,{...options,observations});return {p,observations,writes};}
    assert.ok(p.operations,JSON.stringify(p));
    for(const op of p.operations) {
@@ -47,7 +47,7 @@ test('verification rejects wrong mode, secrets, pagination gaps and drifted link
  const root=studio(t),f=fixture();await reconcile(root,f);
  f.rows.payment_links[0].after_completion.redirect.url='https://wrong.example';
  await assert.rejects(()=>reconcile(root,f),/differs from its planned fields/);
- const first=await shopMcpPlan(root);assert.equal(first.next.method,'GET');
+ const first=await shopMcpPlan(root,{refresh:true});assert.equal(first.next.method,'GET');
  await assert.rejects(()=>shopMcpPlan(root,{observations:[{...first.next,body:{data:[{livemode:true}],has_more:false}}]}),/wrong mode/);
  await assert.rejects(()=>shopMcpPlan(root,{observations:[{body:{secret:'whsec_fixture'}}]}),/never credentials/);
  const page=await shopMcpPlan(root,{observations:[{...first.next,body:{data:[{id:'prod_cursor'}],has_more:true,next_page:'page_cursor'}}]});
@@ -135,7 +135,7 @@ test('verified public links become deploy bindings and storage omits observation
  const saved=JSON.parse(readFileSync(join(root,'.studio','stripe-mcp.json')));assert.equal(saved.options.observations,undefined);
  refreshWorkerConfig(root);
  const config=JSON.parse(readFileSync(join(root,'wrangler.jsonc'),'utf8').replace(/^\s*\/\/.*$/gm,''));
- assert.equal(config.vars.STRIPE_CHECKOUT_MODE,'links');assert.equal(JSON.parse(config.vars.STRIPE_SHOP_LINKS).items.length,3);
+ assert.equal(config.vars.STRIPE_CHECKOUT_MODE,'links');assert.equal(config.vars.STRIPE_SHOP_LINKS_ASSET,'/_site/stripe-shop-links.json');
 });
 
 test('public checkout with verified links names only the private webhook step',async t=>{
@@ -153,8 +153,8 @@ test('public checkout with verified links names only the private webhook step',a
 test('partial batches resume from responses without account-wide reads or separate default updates',async t=>{
  const root=studio(t),f=fixture(),observations=[];
  writeFileSync(join(root,'shop.json'),JSON.stringify({till:'stripe',currency:'usd',automaticTax:false,items:[{id:'one',name:'One',price:300},{id:'tip',name:'Tip',price:'choose',min:200,max:2000},{id:'month',name:'Monthly',price:500,interval:'month'}]}));
- const first=await shopMcpPlan(root);assert.deepEqual(first.operations.map(o=>o.path),['/v1/products/search','/v1/prices/search']);
- for(const op of first.operations){assert.match(op.params.query,/metadata\['studio'\]:'proof'/);observations.push({...op,body:f.call(op)});}
+ const first=await shopMcpPlan(root);assert.deepEqual(first.operations.map(o=>o.path),['/v1/products/search','/v1/prices/search','/v1/payment_links']);
+ for(const op of first.operations){if(op.params.query)assert.match(op.params.query,/metadata\['studio'\]:'proof'/);observations.push({...op,body:f.call(op)});}
  const products=await shopMcpPlan(root,{observations});assert.equal(products.operations.length,3);
  const op=products.operations[0];observations.push({...op,body:f.call(op)});
  const resumed=await shopMcpPlan(root,{observations});assert.equal(resumed.operations.filter(o=>o.path==='/v1/products').length,2);assert.equal(resumed.operations.some(o=>o.method==='GET'),false);

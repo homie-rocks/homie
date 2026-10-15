@@ -17,6 +17,16 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## Unreleased
+
+### Fixed
+
+- Official Stripe plugin shops keep matching 0.51.6 verifications across upgrades; real shop, slot or site changes explain what needs verification.
+- Unfinished plugin setup builds and deploys with checkout closed and the next verification step.
+- Verified public links ship as a JSON build asset rather than a size-limited Worker text binding, including catalogues with more than 100 links.
+- Replanning reuses saved public observations; explicit refresh uses paginated expanded Payment Link lists instead of individual reads.
+- Private webhook setup automatically installs Stripe's official npm CLI when missing, then continues to the browser approval.
+
 ## [0.51.8] - 2026-10-15
 
 **Plugin 0.51.8**

@@ -595,8 +595,8 @@ export function configNames(root) {
  * nothing back (a CI checkout is thrown away). On the very first deploy the database may not exist yet: Wrangler
  * creates the one the binding names while it deploys, and the migrations run right after.
  */
-export async function ciDeploy(root, { log = () => {} } = {}) {
-  const w = runner(root, {});
+export async function ciDeploy(root, { log = () => {}, wrangler = null } = {}) {
+  const w = wrangler ?? runner(root, {});
   refreshWorkerConfig(root);
   const names = configNames(root);
   const steps = [];
