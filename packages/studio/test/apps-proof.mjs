@@ -63,16 +63,16 @@ export async function appProof({ wrangler, shots = null, log = () => {} }) {
     const checked = await check({ root:studio, url: local, game: 'welcome', log }); assert.equal(checked.ok, true, checked.why);
     sql('DELETE FROM app_records;');
     const needs = [
-      { id: 'arrival', statement: 'A new arrival appears on the wall and phone', assertions: [{surface:'wall',selector:'[data-count]',text:'1'},{surface:'phone',selector:'[data-count]',text:'1'}] },
-      { id: 'crew', statement: 'My crew calls the next fitting from a tablet',role:'staff',steps:[{surface:'tablet',selector:'[data-next]',click:true}],assertions:[{surface:'tablet',selector:'[data-count]',text:'0'},{surface:'kiosk',selector:'[data-count]',text:'0'},{surface:'staff',selector:'[data-count]',text:'0'}]},
-      { id: 'crew-reload', statement: 'My tablet retains the completed fitting after reload', role:'staff', steps:[{surface:'tablet',reload:true}], assertions:[{surface:'tablet',selector:'[data-count]',text:'0'}]},
+      { id: 'arrival', statement: 'A new arrival appears on the wall and phone', steps:[{surface:'phone',selector:'[data-join]',click:true}], assertions: [{surface:'wall',selector:'[data-count]',text:'1'},{surface:'phone',selector:'[data-count]',text:'1'}] },
+      { id: 'crew', statement: 'My crew calls the next fitting from a tablet',role:'staff',surface:'tablet',steps:[{surface:'phone',role:'customer',selector:'[data-join]',click:true},{surface:'tablet',selector:'[data-next]:not(:disabled)',click:true}],assertions:[{surface:'tablet',selector:'[data-count]',text:'0'},{surface:'kiosk',selector:'[data-count]',text:'0'},{surface:'staff',selector:'[data-count]',text:'0'}]},
+      { id: 'crew-reload', statement: 'My tablet sees the saved arrival after reload', role:'staff',surface:'tablet', steps:[{surface:'phone',role:'customer',selector:'[data-join]',click:true},{surface:'tablet',reload:true}], assertions:[{surface:'tablet',selector:'[data-count]',text:'1'}]},
       { id: 'unbuilt', statement: 'My unbuilt tracking view works', assertions: [{surface:'wall',selector:'[data-count]'},{surface:'phone',selector:'#unbuilt-tracking'}] },
     ];
     writeFileSync(join(studio, 'apps/welcome/CODEX.md'), '# Welcome\n\n## Needs\n```needs\n' + JSON.stringify(needs) + '\n```\n');
     const evidence = join(scratch, 'needs');
     const judged = await check({root:studio,url:local,game:'welcome',shots:evidence,log});
     assert.equal(judged.ok,false,'an unmet Codex need prevents completion');
-    assert.ok(Array.isArray(judged.needs),JSON.stringify(judged));
+    assert.ok(Array.isArray(judged.needs),JSON.stringify(judged)+'\n'+serverLog);
     assert.deepEqual(judged.needs.map(n=>n.status),['met','met','met','not'],JSON.stringify(judged.needs));
     for(const need of judged.needs) for(const capture of need.captures) assert.ok(existsSync(capture));
     const saved = JSON.parse(readFileSync(join(studio,'.studio/checks/welcome-needs.json'),'utf8'));

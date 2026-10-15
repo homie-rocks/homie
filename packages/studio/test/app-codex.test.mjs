@@ -67,3 +67,15 @@ test('readiness recognizes a private frame served through its signed asset path'
  const surface={name:'phone',page:{waitForFunction:async()=>{},frames:()=>[frame]}};
  await appReady(surface,{timeout:10});assert.equal(surface.frame,frame);assert.equal(rendered,true);
 });
+
+test('an explicit UI step role selects its own context on the same surface',async()=>{
+ const clicked=[];const surfaces=['customer','staff'].map(role=>({name:'phone',role,frame:{waitForSelector:async()=>{},click:async()=>clicked.push(role)},page:{}}));
+ const [need]=await proveAppNeeds({plan:{needs:[{id:'staff-step',statement:'Use the named role',role:'customer',steps:[{surface:'phone',role:'staff',selector:'#act',click:true}],assertions:[{surface:'phone',role:'staff',selector:'#ready'}]}]},surfaces});
+ assert.equal(need.status,'met',need.why);assert.deepEqual(clicked,['staff']);
+});
+
+test('wall-first assertions keep the wall role while the need role belongs to the phone',async()=>{
+ const surfaces=[['wall','display'],['phone','customer']].map(([name,role])=>({name,role,frame:{waitForSelector:async()=>{}},page:{}}));
+ const [need]=await proveAppNeeds({plan:{needs:[{id:'wall-first',statement:'Both surfaces show the change',role:'customer',assertions:[{surface:'wall',selector:'#ready'},{surface:'phone',selector:'#ready'}]}]},surfaces});
+ assert.equal(need.status,'met',need.why);
+});

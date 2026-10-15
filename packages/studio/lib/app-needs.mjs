@@ -22,16 +22,23 @@ export function readAppNeeds(root, id) {
   return { needs, hash: createHash('sha256').update(source).digest('hex') };
 }
 
+/** An action names its actor; an observation-only need prefers its phone or a matching role. */
+export function primaryNeedSurface(need,roleFor=()=>undefined) {
+ const action=needSteps(need.steps).find(s=>s.surface)?.surface;
+ const assertions=(need.assertions??[]).filter(s=>s.surface);
+ return need.surface??action??assertions.find(s=>['phone','phone-two'].includes(s.surface))?.surface??assertions.find(s=>!need.role||roleFor(s.surface)===need.role)?.surface;
+}
+
 /** Run real UI actions. A failed or absent flow stays visible; continue collecting other needs. */
 export async function proveAppNeeds({ plan, surfaces, shots, report, ready = async () => {}, root, headless, restart }) {
   const results = [];
   const appBarrier=ready;
   ready=async (s,options)=>{await s.page.bringToFront?.();if(s.external){s.frame=s.page.mainFrame();return;}await appBarrier(s,options);};
   let activeRole, primarySurface;
-  const surface = name => { const s = surfaces.find(s => s.name === name && (name!==primarySurface || !activeRole || s.role === activeRole)) ?? surfaces.find(s => s.name === name); if (!s) throw new Error(`unknown surface ${name}`); return s; };
+  const surface = (name, explicitRole) => { const role=explicitRole??(name===primarySurface?activeRole:undefined); const s=surfaces.find(s=>s.name===name&&(!role||s.role===role)); if(!s)throw new Error(role?`${name} requires role ${role}`:`unknown surface ${name}`);return s; };
   for (const need of plan.needs) {
     activeRole = need.role;
-    primarySurface = need.surface ?? needSteps(need.steps).find(s=>s.surface)?.surface ?? need.assertions?.find(s=>s.surface)?.surface;
+    primarySurface = primaryNeedSurface(need,name=>surfaces.find(s=>s.name===name)?.role);
     const names = [...new Set([...needSteps(need.steps), ...(need.assertions ?? [])].map(s => s.surface).filter(Boolean))];
     const saved = new Map();
     const run = async item => { if (!headless) throw new Error('headless MCP proof requires local dev and its test credential'); return headless(item,item.role ?? need.role); };
@@ -40,8 +47,8 @@ export async function proveAppNeeds({ plan, surfaces, shots, report, ready = asy
     try {
       if (!Array.isArray(need.assertions) || !need.assertions.length) throw new Error('need requires at least one assertion (UI, result, records or file)');
       const popupNames=new Set((need.steps??[]).map(s=>s.popup).filter(Boolean));
-      for (const name of names) { if(popupNames.has(name))continue; const s = surface(name); if (name===primarySurface && need.role && s.role !== need.role) throw new Error(`${name} requires role ${need.role}, got ${s.role ?? 'unspecified'}`); }
-      for (const name of new Set(need.assertions.filter(a => a.effect).map(a => a.surface))) await surface(name).frame.evaluate(() => { window.__homieNeedsEffects = []; });
+      for(const item of [...needSteps(need.steps),...need.assertions])if(item.surface&&!popupNames.has(item.surface))surface(item.surface,item.role);
+      for(const target of new Set(need.assertions.filter(a=>a.effect).map(a=>surface(a.surface,a.role))))await target.frame.evaluate(()=>{window.__homieNeedsEffects=[];});
       const perform = async rawStep => {
         const step=resolveNeedResults(rawStep,saved);
         if(step.concurrent){
@@ -58,7 +65,7 @@ export async function proveAppNeeds({ plan, surfaces, shots, report, ready = asy
           if (step.save) { if(saved.has(step.save))throw new Error(`duplicate saved result ${step.save}`); saved.set(step.save,value); }
           return;
         }
-        const target=surface(step.surface);
+        const target=surface(step.surface,step.role);
         if(!step.reload)await ready(target);
         const { page } = target;
         if(step.capabilities){
@@ -69,7 +76,7 @@ export async function proveAppNeeds({ plan, surfaces, shots, report, ready = asy
         if(Object.hasOwn(step,'clock')){await page.evaluate(value=>window.homieApp.setTestClock(value),step.clock);return;}
 
         waiting = `${step.surface}: ${step.reload ? 'reload and arrival readiness' : step.selector}`;
-        if (step.reload) { await page.reload({ waitUntil: 'domcontentloaded' }); await ready(surface(step.surface)); return; }
+        if (step.reload) { await page.reload({ waitUntil: 'domcontentloaded' }); await ready(surface(step.surface,step.role)); return; }
         const act = fn => actInApp(target,step.selector,fn,{ready});
         if (step.click && step.popup) {
           let listener,timer;
@@ -119,7 +126,7 @@ export async function proveAppNeeds({ plan, surfaces, shots, report, ready = asy
           continue;
         }
         waiting = `${assertion.surface}: ${assertion.effect ? assertion.effect + ' ' + (assertion.name ?? '') : assertion.selector + (assertion.text === undefined ? '' : ' containing ' + JSON.stringify(assertion.text))}`;
-        const target=surface(assertion.surface);
+        const target=surface(assertion.surface,assertion.role);
         await ready(target);
         await waitInApp(target,waiting,async frame=>{
         if (assertion.effect) {
@@ -135,9 +142,10 @@ export async function proveAppNeeds({ plan, surfaces, shots, report, ready = asy
       result.why = 'Assertions passed';
     } catch (error) { result.why = `Waiting for ${waiting}: ${error.message}`; }
     if (!shots) for (const name of names) result.why += `; ${name} capture not requested: rerun check with --shots .checks and inspect the scene`;
-    if (shots) for (const name of names) {
-      const file = join(shots, `${need.id}-${name}.jpg`);
-      try { mkdirSync(shots,{recursive:true}); await ready(surface(name)); await surface(name).page.screenshot({ path: file, type: 'jpeg', quality: 85 }); result.captures.push(file); }
+    if (shots) for (const target of surfaces.filter(s=>names.includes(s.name))) {
+      const name=target.name, suffix=surfaces.filter(s=>s.name===name).length>1?'-'+target.role:'';
+      const file = join(shots, `${need.id}-${name}${suffix}.jpg`);
+      try { mkdirSync(shots,{recursive:true}); await ready(target); await target.page.screenshot({ path: file, type: 'jpeg', quality: 85 }); result.captures.push(file); }
       catch (error) { result.why += `; ${name} capture failed: ${error.message}. Resolve this capture error and rerun check with --shots .checks`;  }
     }
     report?.check?.(`need-${need.id}`, result.status === 'met' ? 'pass' : 'fail', { label: need.statement, note: result.why });

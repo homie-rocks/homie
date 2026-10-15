@@ -2,7 +2,7 @@ import {needsHeadless} from './needs-headless.mjs';
 import {randomBytes} from 'node:crypto';
 import {actInApp,appReady,observeEffects,forceWebglFailure,waitInApp,answerDialogs} from './app-ready.mjs';
 import {localCredential,localCookie} from './local-test.mjs';
-import { readAppNeeds, proveAppNeeds, saveAppNeeds, needSteps } from './app-needs.mjs';
+import { readAppNeeds, proveAppNeeds, saveAppNeeds, needSteps, primaryNeedSurface } from './app-needs.mjs';
 /**
  * `homie-studio check [<game>] [--url <site> | --live]` — the promise, measured (where it runs and on which games
  * when nobody says: lib/check-site.mjs; never the live site unless asked): two fresh
@@ -438,11 +438,12 @@ export async function checkApp({ webglFailure = false, isolate = true, root = nu
       for(const context of new Set(surfaces.map(surface=>surface.page.browserContext())))await context.close();
       surfaces.length=0;
       room=`check-${randomBytes(10).toString('hex')}`;
-      const primary=need.surface??needSteps(need.steps).find(s=>s.surface)?.surface??need.assertions?.find(s=>s.surface)?.surface;
+      const declaredRole=name=>meta.surfaces?.[name==='phone-two'?'phone':name]??(name==='staff'?'staff':undefined);
+      const primary=primaryNeedSurface(need,declaredRole);
       log(`Need ${need.id}: fresh room ${room}; records ${isolate?'isolated':'shared (--no-isolate)'}.`);
       for(const item of [...needSteps(need.steps),...(need.assertions??[])]) {
         if(!item.surface || (need.steps??[]).some(s=>s.popup===item.surface))continue;
-        const role=item.role??(item.surface===primary?need.role:undefined)??meta.surfaces?.[item.surface]??(item.surface==='staff'?'staff':undefined);
+        const role=item.role??(item.surface===primary?need.role:undefined)??declaredRole(item.surface);
         if(!surfaces.some(s=>s.name===item.surface&&s.role===role))await openSurface(item.surface,role);
       }
       needs.push(...await proveAppNeeds({plan:{...plan,needs:[need]},surfaces,shots,report,ready:appReady,root,restart:()=>import('./dev-restart.mjs').then(m=>m.requestDevRestart(root,url)),headless:needsHeadless({url,secret,app:game,meta,scope:isolate?room:null,sessionFor})}));
