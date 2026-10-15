@@ -1,4 +1,4 @@
-import {ensureBackgroundQueues} from './background-queue.mjs';
+import {ensureBackgroundQueues,backgroundQueues} from './background-queue.mjs';
 import { directoryUrl } from '../worker/directory-choice.mjs';
 import { roomLayout } from '../worker/gate.mjs';
 import {workerEntry} from './worker-build.mjs';
@@ -211,6 +211,9 @@ export function deployPlan(root) {
       { kind: 'Durable Object', name: 'Table', what: hosted.length ? `one per public room: the netplay relay (seats, snapshots), and for ${hosted.map((h) => h.id).join(', ')} the game's own rules, which run here and nowhere else` : 'one per public room: the netplay relay (seats, host, snapshots); runs no game code', state: 'declared by the Worker' },
       ...hosted.map((h) => ({ kind: 'Game rules', name: h.id, what: `One full ${h.seats}-player room activates ${h.objects} objects (${h.layout.gates > 1 ? `${h.layout.gates} Gates, the room and its diagnostics` : 'the room'}): approximately ${h.gbSeconds} GB-seconds/hour before Lobby activity. Player input/ping alone contributes ${h.requests} request units/hour; relay frames and receipts, HTTP and storage are additional. Occupancy, batching and account usage determine the bill.`, state: 'in the Worker' })),
       { kind: 'Durable Object', name: 'Lobby', what: 'one per game: puts strangers who press Play into the same room', state: 'declared by the Worker' },
+      ...['Gate','Concentrator','AppRecordHub','EventHub'].map(name=>({kind:'Durable Object',name,what:name==='Gate'?'room transport and diagnostics':name==='Concentrator'?'compatibility for existing studios':'independent live subscriptions',state:'declared by the Worker'})),
+      ...Object.values(backgroundQueues(cf.worker)).map(name=>({kind:'Queue',name,what:'durable background delivery with retries and a dead-letter queue',state:mark('queue:'+name)})),
+      {kind:'Analytics Engine',name:`${cf.worker.replace(/-/g,'_')}_visits`,what:'page counts, rolled into historical D1 totals hourly',state:'bound by the Worker'},
       storage
         ? { kind: 'R2 bucket', name: storage, what: 'the studio\'s big media: songs and videos over the size studio.json media.r2Over names (1 MiB unless set) or that git leaves out, uploaded and checked by SHA-256 before the site stops carrying them, served at their same addresses', state: 'exists (this studio made it)', plan: 'R2 (payment method on the account; 10 GB-month free)' }
         : { kind: 'R2 bucket', name: null, what: 'none: a new studio needs no storage. `homie-studio storage add` adds it later, for large media only', state: 'not created', plan: null },

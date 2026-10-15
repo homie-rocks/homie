@@ -92,7 +92,7 @@ test('game new + build: the starter becomes this studio\'s game, bundled with ne
 test('the Lobby: two strangers pressing Play together land in the same room; a full room opens the next', async () => {
   const { Lobby } = await import('../worker/index.mjs'); // workerd-only globals are touched at request time, not import
   const store = new Map();
-  const ctx = { storage: { get: async (k) => store.get(k), put: async (k, v) => { store.set(k, v); } }, blockConcurrencyWhile: async (fn) => fn() };
+  const ctx = { waitUntil: () => {}, storage: { get: async (k) => store.get(k), put: async (k, v) => { store.set(k, v); } }, blockConcurrencyWhile: async (fn) => fn() };
   const lobby = new Lobby(ctx);
   await new Promise((r) => setTimeout(r, 0));
   const join2 = async (max = 3) => (await (await lobby.fetch(new Request(`https://lobby/join?max=${max}`, { method: 'POST' }))).json()).room;
@@ -116,6 +116,7 @@ test('deploy: never a Worker, database or bucket this studio did not create; not
   assert.match(signedOut.why, /npx wrangler login/);
   // Signed in, and a Worker of the studio's name already exists on the account.
   fake(`case "$1" in
+  queues) if [ "$2" = info ]; then echo "Queue does not exist" >&2; exit 1; fi; echo created;;
     whoami) echo '{"loggedIn":true,"authType":"OAuth Token","accounts":[{"id":"acc1","name":"Test"}]}';;
     versions) echo '[{"id":"v1"}]'; exit 0;;
     *) echo "unexpected: $*" >&2; exit 9;;
@@ -125,6 +126,7 @@ test('deploy: never a Worker, database or bucket this studio did not create; not
   assert.match(worker.why, /already exists on this Cloudflare account and this studio did not create it/);
   // No Worker, but a D1 database of that name that someone else made.
   fake(`case "$1" in
+  queues) if [ "$2" = info ]; then echo "Queue does not exist" >&2; exit 1; fi; echo created;;
     whoami) echo '{"loggedIn":true,"authType":"OAuth Token","accounts":[{"id":"acc1","name":"Test"}]}';;
     versions) echo 'This Worker does not exist on your account. [code: 10007]' >&2; exit 1;;
     d1) echo '[{"uuid":"11111111-1111-1111-1111-111111111111","name":"test-studio-db"}]';;
@@ -148,6 +150,7 @@ test('deploy resumes after a cut: a resource it created is recorded the moment i
   writeFileSync(join(bin, 'wrangler'), `#!/bin/sh
 S=${state}
 case "$1" in
+  queues) if [ "$2" = info ]; then echo "Queue does not exist" >&2; exit 1; fi; echo created;;
   whoami) echo '{"loggedIn":true,"authType":"OAuth Token","accounts":[{"id":"acc1","name":"Test"}]}';;
   versions) echo 'This Worker does not exist on your account. [code: 10007]' >&2; exit 1;;
   d1) case "$2" in
@@ -184,6 +187,7 @@ function noCardAccount(dir, { r2Enabled = false, buckets = [] } = {}) {
 S=${state}
 echo "$*" >> $S/calls
 case "$1" in
+  queues) if [ "$2" = info ]; then echo "Queue does not exist" >&2; exit 1; fi; echo created;;
   whoami) echo '{"loggedIn":true,"authType":"OAuth Token","accounts":[{"id":"acc1","name":"Test"}]}';;
   versions) echo 'This Worker does not exist on your account. [code: 10007]' >&2; exit 1;;
   d1) case "$2" in
@@ -209,8 +213,8 @@ test('NO CREDIT CARD: a free account without R2 deploys the whole studio, and de
   const plan = out(run(['deploy', '--plan'], dir));
   assert.equal(plan.ok, true, JSON.stringify(plan));
   assert.deepEqual(account.calls(), [], 'the plan calls nothing');
-  assert.deepEqual(plan.cloudflare.map((r) => r.kind), ['Cron triggers', 'Worker', 'D1 database', 'Durable Object', 'Durable Object', 'R2 bucket']);
-  assert.equal(plan.cloudflare.find(r=>r.kind==='Cron triggers').name,'none','no cron without a declared need');
+  assert.deepEqual(plan.cloudflare.map((r) => r.kind), ['Cron triggers', 'Worker', 'D1 database', ...Array(6).fill('Durable Object'), 'Queue', 'Queue', 'Analytics Engine', 'R2 bucket']);
+  assert.equal(plan.cloudflare.find(r=>r.kind==='Cron triggers').name,'17 * * * *','hourly analytics rollup is installed');
   assert.equal(plan.cloudflare.at(-1).name, null, 'no R2 bucket in the plan');
   assert.equal(plan.cost, null, 'no billing claim without a measured account plan');
   assert.match(plan.directory.stores, /Never code, media, keys or accounts/);
@@ -225,7 +229,7 @@ test('NO CREDIT CARD: a free account without R2 deploys the whole studio, and de
   assert.doesNotMatch(wrangler, /r2_buckets/);
   assert.match(wrangler, /22222222-2222-2222-2222-222222222222/, 'the D1 id is filled in');
   const s = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'));
-  assert.deepEqual(s.cloudflare.created, ['d1:test-studio-db', 'worker:test-studio']);
+  assert.deepEqual(s.cloudflare.created, ['d1:test-studio-db', 'queue:test-studio-background', 'queue:test-studio-background-dlq', 'worker:test-studio']);
   const media = out(run(['media', 'put', join(dir, 'README.md')], dir));
   assert.equal(media.needs, 'storage');
 });
@@ -381,6 +385,7 @@ test('a new account\'s first deploy says the next step: verify the email (10034)
   mkdirSync(bin, { recursive: true });
   writeFileSync(join(bin, 'wrangler'), `#!/bin/sh
 case "$1" in
+  queues) if [ "$2" = info ]; then echo "Queue does not exist" >&2; exit 1; fi; echo created;;
   whoami) echo '{"loggedIn":true,"authType":"OAuth Token","accounts":[{"id":"acc1","name":"Test"}]}';;
   versions) echo 'This Worker does not exist on your account. [code: 10007]' >&2; exit 1;;
   d1) case "$2" in list) echo '[]';; create) echo '"database_id": "22222222-2222-2222-2222-222222222222"';; *) echo ok;; esac;;

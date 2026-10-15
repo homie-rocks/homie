@@ -80,6 +80,7 @@ function account(dir, { deployOut = null, deployCode = 0 } = {}) {
 S=${state}
 echo "$*" >> $S/calls
 case "$1" in
+  queues) if [ "$2" = info ]; then echo "Queue does not exist" >&2; exit 1; fi; echo created;;
   whoami) echo '{"loggedIn":true,"authType":"OAuth Token","accounts":[{"id":"acc1","name":"Test"}]}';;
   versions) echo 'This Worker does not exist on your account. [code: 10007]' >&2; exit 1;;
   d1) case "$2" in
@@ -230,7 +231,7 @@ test('deploy and its plan warn before Wrangler changes anything, read only, and 
   const said = [];
   const warned = await deploy(dir, { homie: 'http://127.0.0.1:9', fetchFn: api.fetchFn, log: (line) => said.push(line) });
   assert.equal(warned.ok, true, JSON.stringify(warned));
-  assert.deepEqual(readConfig(dir).triggers, { crons: ['*/5 * * * *'] });
+  assert.deepEqual(readConfig(dir).triggers, { crons: ['*/5 * * * *','17 * * * *'] });
   assert.deepEqual(JSON.parse(readFileSync(join(cf.state, 'deployed-config'), 'utf8').replace(/^\s*\/\/.*$/gm, '')).triggers, readConfig(dir).triggers);
   assert.equal(warned.zone.state, 'foreign');
   assert.deepEqual(warned.zone.foreign, [{ pattern: '*/*', worker: 'main-site', kind: 'catch-all' }]);
@@ -383,7 +384,7 @@ test('a studio beneath a zone\'s wildcard Worker route: the deploy says which ex
   assert.deepEqual(shadowed.steps.find((s) => s.route)?.route, { pattern: 'play.example.com/*', zone_name: 'example.com' });
   // The domain's routes are only ever read, and here they could not be (this stand-in Wrangler hands out no
   // sign-in): the deploy says that as unmeasured before it deploys, and changes no route.
-  assert.deepEqual([...new Set(cf.calls().map((c) => c.split(' ')[0]))].sort(), ['auth', 'd1', 'deploy', 'versions', 'whoami']);
+  assert.deepEqual([...new Set(cf.calls().map((c) => c.split(' ')[0]))].sort(), ['auth', 'd1', 'deploy', 'queues', 'versions', 'whoami']);
   assert.equal(shadowed.zone.state, 'unmeasured');
   assert.equal(zone.asked.some((u) => u.includes('api.cloudflare.com')), false, 'with no sign-in to read with, Cloudflare is asked nothing');
   assert.deepEqual(readConfig(dir).routes, [{ pattern: 'play.example.com', custom_domain: true }], 'the custom domain stayed; nothing was added by itself');
