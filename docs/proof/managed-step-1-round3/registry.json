@@ -1,0 +1,127 @@
+{
+  "routes": [
+    {
+      "tenant": "hm-test-inlet",
+      "routes": [
+        {
+          "hostname": "hm-test-dispatch.ryan-d2f.workers.dev",
+          "prefix": "/"
+        }
+      ],
+      "ticks": true,
+      "disabled": false
+    },
+    {
+      "tenant": "hm-test-missing",
+      "routes": [
+        {
+          "hostname": "hm-test-dispatch.ryan-d2f.workers.dev",
+          "prefix": "/missing"
+        }
+      ],
+      "ticks": true,
+      "disabled": false
+    },
+    {
+      "tenant": "hm-test-other",
+      "routes": [
+        {
+          "hostname": "hm-test-dispatch.ryan-d2f.workers.dev",
+          "prefix": "/other"
+        }
+      ],
+      "ticks": false,
+      "disabled": false
+    }
+  ],
+  "otherHasNoDO": [],
+  "http": [
+    {
+      "path": "/probe/echo",
+      "status": 200,
+      "ray": "a4b1c337cd7c58e5-YVR"
+    },
+    {
+      "path": "/other/probe/echo",
+      "status": 200,
+      "ray": "a4b1c3390f8ccb90-PDX"
+    },
+    {
+      "path": "/otherness/probe/echo",
+      "status": 404,
+      "ray": "a4b1c33ace7058e5-YVR"
+    }
+  ],
+  "injected": {
+    "script": "hm-test-missing",
+    "scheduledTime": 1792098131804,
+    "cron": "* * * * *",
+    "at": "2026-10-15T21:02:11.804Z"
+  },
+  "alerts": [
+    {
+      "script": "hm-test-missing",
+      "scheduledTime": 1792098131804,
+      "cron": "* * * * *",
+      "at": 1792098156885
+    }
+  ],
+  "queue": {
+    "queue_id": "3778c43c63e6440a98da69e5808b13d8",
+    "queue_name": "hm-test-ticks",
+    "settings": {
+      "delivery_delay": 0,
+      "message_retention_period": 345600
+    },
+    "created_on": "2026-10-15T20:54:10.372372Z",
+    "modified_on": "2026-10-15T20:54:10.372372Z",
+    "producers_total_count": 1,
+    "producers": [
+      {
+        "script": "hm-test-dispatch",
+        "type": "worker"
+      }
+    ],
+    "consumers_total_count": 1,
+    "consumers": [
+      {
+        "script": "hm-test-dispatch",
+        "dead_letter_queue": "hm-test-ticks-dlq",
+        "settings": {
+          "batch_size": 1,
+          "max_retries": 3,
+          "max_wait_time_ms": 5000,
+          "retry_delay": 0
+        },
+        "consumer_id": "a4ae0a33b7f04b179ceb8ff318da9bc9",
+        "type": "worker"
+      }
+    ]
+  },
+  "dlq": {
+    "queue_id": "2a2dd99e8a0b4c52a74095b04840b1c4",
+    "queue_name": "hm-test-ticks-dlq",
+    "settings": {
+      "delivery_delay": 0,
+      "message_retention_period": 345600
+    },
+    "created_on": "2026-10-15T20:54:06.921447Z",
+    "modified_on": "2026-10-15T20:54:06.921447Z",
+    "producers_total_count": 0,
+    "producers": [],
+    "consumers_total_count": 1,
+    "consumers": [
+      {
+        "script": "hm-test-dispatch",
+        "settings": {
+          "batch_size": 1,
+          "max_retries": 3,
+          "max_wait_time_ms": 5000,
+          "retry_delay": 0
+        },
+        "consumer_id": "41a32c05904b4040be58a1ffeac7f82c",
+        "type": "worker"
+      }
+    ]
+  }
+}

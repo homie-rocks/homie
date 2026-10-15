@@ -1,0 +1,5 @@
+import {writeFileSync} from 'node:fs';
+const base='https://hm-test-dispatch.ryan-d2f.workers.dev';const echo='https://hm-test-plain.ryan-d2f.workers.dev/probe/echo';const rows=[];
+for(const path of ['/__managed/tick','/__operator/route','/probe/bindings','/probe/worker-fetch?target='+encodeURIComponent(echo),'/probe/worker-fetch?target='+encodeURIComponent(base+'/probe/echo'),'/probe/worker-fetch?target='+encodeURIComponent('http://127.0.0.1/'),'/probe/owner/fetch?target='+encodeURIComponent(echo),'/probe/owner/tcp']){
+ const at=performance.now();const r=await fetch(base+path,{headers:{'x-homie-tenant':'victim','x-homie-managed-tick':'true','x-forwarded-host':'victim.test','x-original-url':'/__managed/tick','cf-worker':'victim','authorization':'Bearer forged'},signal:AbortSignal.timeout(15000)});rows.push({path,status:r.status,body:(await r.text()).slice(0,1500),ms:Math.round(performance.now()-at),ray:r.headers.get('cf-ray')});writeFileSync(process.argv[2],JSON.stringify(rows,null,2)+'\n');
+}console.log(rows);

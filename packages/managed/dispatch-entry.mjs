@@ -10,6 +10,7 @@ export class Registry extends DurableObject {
  scheduled(){return this.core.scheduled()}
  claim(...args){return this.core.claim(...args)}
  finish(...args){return this.core.finish(...args)}
+ alerts(){return this.core.alerts()}
  alert(...args){return this.core.alert(...args)}
 }
 export default {
@@ -17,10 +18,13 @@ export default {
  async fetch(request,env){
   const url=new URL(request.url);
   if(url.pathname.startsWith('/__operator/')){
-   if(!env.OPERATOR_TOKEN||request.headers.get('authorization')!=='Bearer '+env.OPERATOR_TOKEN)return new Response('Not found',{status:404});
+   const actual=new TextEncoder().encode(request.headers.get('authorization')??'');
+   const expected=new TextEncoder().encode('Bearer '+(env.OPERATOR_TOKEN??''));
+   if(!env.OPERATOR_TOKEN||actual.byteLength!==expected.byteLength||!crypto.subtle.timingSafeEqual(actual,expected))return new Response('Not found',{status:404});
    const registry=env.REGISTRY.getByName('routes');
    if(request.method==='PUT'&&url.pathname==='/__operator/route'){const {tenant,routes,ticks}=await request.json();await registry.put(tenant,routes,ticks);return new Response(null,{status:204})}
    if(request.method==='POST'&&url.pathname==='/__operator/kill'){await registry.kill((await request.json()).tenant);return new Response(null,{status:204})}
+   if(request.method==='GET'&&url.pathname==='/__operator/alerts')return Response.json(await registry.alerts());
    if(request.method==='GET'&&url.pathname==='/__operator/routes')return Response.json(await registry.routes());
    return new Response('Not found',{status:404});
   }

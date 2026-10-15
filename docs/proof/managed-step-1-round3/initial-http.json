@@ -1,0 +1,58 @@
+[
+  {
+    "path": "/probe/echo",
+    "status": 200,
+    "ms": 1439,
+    "ray": "a4b1bb58688b5d45-FRA",
+    "body": "{\"tenant\":null}"
+  },
+  {
+    "path": "/cafe/open",
+    "status": 200,
+    "ms": 596,
+    "ray": "a4b1bb5f2a93c25f-YVR",
+    "body": "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Cafe</title><style>\n.shopsheet { position: fixed; inset: 0; z-index: 21; display: grid; place-items: end center; padding: 12px; background: rgba(2,4,10,.6); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); touch-action: manipulation; -webkit-user-select: text; user-select: text; }\n.shopsheet .box { box-sizing: border-box; width: min(440px, 100%); max-height: min(78vh, 640px); overflow: auto; padding: 18px; border-radius: 20px; background: rgba(10,14,24,.98); border: 1px solid rgba(255,255,255,.16); color: #eef1f8; font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, sans-serif; box-shadow: 0 24px 70px rgba(0,0,0,.6); }\n@media (min-width: 700px) { .sh"
+  },
+  {
+    "path": "/cafe/api/app/records/notes",
+    "status": 200,
+    "ms": 800,
+    "ray": "a4b1bb629f065d45-FRA",
+    "body": "{\"ok\":true,\"records\":[]}"
+  },
+  {
+    "path": "/mcp",
+    "status": 406,
+    "ms": 265,
+    "ray": "a4b1bb671af2c25f-YVR",
+    "body": "{\"error\":\"Accept text/event-stream required\"}"
+  },
+  {
+    "path": "/race/api/lobby",
+    "status": 200,
+    "ms": 1305,
+    "ray": "a4b1bb693b035d45-FRA",
+    "body": "{\"room\":\"pub-1\",\"players\":0,\"max\":4,\"server\":\"public\"}\n"
+  },
+  {
+    "path": "/probe/gate/a",
+    "status": 200,
+    "ms": 893,
+    "ray": "a4b1bb716fc15d45-FRA",
+    "body": "{\"toolkit\":{\"version\":\"0.54.0\",\"sha256\":\"4f65918ccb0f52120d8d0fa6cf761f2243b4636fdf10ccef395479318d603370\"},\"room\":null,\"gates\":[],\"diagnostics\":{\"cached\":true,\"at\":null,\"ageMs\":null}}"
+  },
+  {
+    "path": "/probe/concentrator/a",
+    "status": 200,
+    "ms": 846,
+    "ray": "a4b1bb76fab45d45-FRA",
+    "body": "{\"toolkit\":{\"version\":\"0.54.0\",\"sha256\":\"4f65918ccb0f52120d8d0fa6cf761f2243b4636fdf10ccef395479318d603370\"},\"room\":null,\"gates\":[],\"diagnostics\":{\"cached\":true,\"at\":null,\"ageMs\":null}}"
+  },
+  {
+    "path": "/probe/owner/status",
+    "status": 200,
+    "ms": 893,
+    "ray": "a4b1bb7c5da95d45-FRA",
+    "body": "{\"alarms\":0,\"n\":0}"
+  }
+]

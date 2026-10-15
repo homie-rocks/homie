@@ -1,0 +1,203 @@
+{
+  "samples": [
+    {
+      "path": "/",
+      "name": "counter",
+      "status": 200,
+      "body": "{\"n\":1}",
+      "startedAt": 1792098189898,
+      "ms": 553,
+      "ray": "a4b1c4d7db852554-YVR",
+      "colo": "YVR"
+    },
+    {
+      "path": "/",
+      "name": "counter",
+      "status": 200,
+      "body": "{\"n\":2}",
+      "startedAt": 1792098190452,
+      "ms": 264,
+      "ray": "a4b1c4db4f9a4ad5-YVR",
+      "colo": "YVR"
+    },
+    {
+      "path": "/fetch?target=https%3A%2F%2Fhm-test-facets-r3.ryan-d2f.workers.dev%2F",
+      "name": "egress",
+      "status": 403,
+      "body": "Managed destination denied",
+      "startedAt": 1792098190717,
+      "ms": 736,
+      "ray": "a4b1c4dc6a582554-YVR",
+      "colo": "YVR"
+    },
+    {
+      "path": "/fetch?target=http%3A%2F%2F127.0.0.1%2F",
+      "name": "egress",
+      "status": 403,
+      "body": "Managed destination denied",
+      "startedAt": 1792098191453,
+      "ms": 83,
+      "ray": "a4b1c4e10dde4ad5-YVR",
+      "colo": "YVR"
+    },
+    {
+      "path": "/fetch?target=https%3A%2F%2Fhm-test-plain.ryan-d2f.workers.dev%2Fprobe%2Fecho",
+      "name": "egress",
+      "status": 200,
+      "body": "{\"tenant\":\"ordinary-studio\"}",
+      "startedAt": 1792098191537,
+      "ms": 460,
+      "ray": "a4b1c4e17a4b2554-YVR",
+      "colo": "YVR"
+    },
+    {
+      "path": "/tcp",
+      "name": "tcp",
+      "status": 200,
+      "body": "{\"intercepted\":\"connect\",\"tenant\":\"ordinary-studio\",\"address\":\"127.0.0.1:80\",\"denied\":true}",
+      "startedAt": 1792098191997,
+      "ms": 508,
+      "ray": "a4b1c4e458084ad5-YVR",
+      "colo": "YVR"
+    },
+    {
+      "path": "/alarm",
+      "name": "alarm",
+      "status": 500,
+      "body": "Error: Facets currently cannot set alarms.",
+      "startedAt": 1792098192505,
+      "ms": 302,
+      "ray": "a4b1c4e78f0f2554-YVR",
+      "colo": "YVR"
+    },
+    {
+      "path": "/abort",
+      "name": "ws",
+      "status": 200,
+      "body": "aborted",
+      "startedAt": 1792098211149,
+      "ms": 384,
+      "ray": "a4b1c55d7bfca14f-YVR",
+      "colo": "YVR"
+    },
+    {
+      "path": "/status",
+      "name": "counter",
+      "status": 200,
+      "body": "{\"n\":2,\"alarms\":0,\"pending\":true}",
+      "startedAt": 1792098212038,
+      "ms": 509,
+      "ray": "a4b1c562ab8c6e09-PDX",
+      "colo": "PDX"
+    },
+    {
+      "path": "/abort",
+      "name": "counter",
+      "status": 200,
+      "body": "aborted",
+      "startedAt": 1792098212548,
+      "ms": 235,
+      "ray": "a4b1c5656c0258a4-YVR",
+      "colo": "YVR"
+    },
+    {
+      "path": "/pending",
+      "name": "counter",
+      "status": 500,
+      "body": "Error: operator stopped",
+      "startedAt": 1792098212036,
+      "ms": 748,
+      "ray": "a4b1c561a820a14f-YVR",
+      "colo": "YVR"
+    },
+    {
+      "path": "/resume",
+      "name": "counter",
+      "status": 200,
+      "body": "resumed",
+      "startedAt": 1792098212784,
+      "ms": 256,
+      "ray": "a4b1c566697e6e09-PDX",
+      "colo": "PDX"
+    },
+    {
+      "path": "/status",
+      "name": "counter",
+      "status": 200,
+      "body": "{\"n\":2,\"alarms\":0,\"pending\":true}",
+      "startedAt": 1792098213041,
+      "ms": 78,
+      "ray": "a4b1c567e9d2a14f-YVR",
+      "colo": "YVR"
+    },
+    {
+      "path": "/delete",
+      "name": "counter",
+      "status": 200,
+      "body": "deleted",
+      "startedAt": 1792098213119,
+      "ms": 121,
+      "ray": "a4b1c56879f26e09-PDX",
+      "colo": "PDX"
+    },
+    {
+      "path": "/status",
+      "name": "counter",
+      "status": 200,
+      "body": "{\"n\":0,\"alarms\":0,\"pending\":false}",
+      "startedAt": 1792098213241,
+      "ms": 371,
+      "ray": "a4b1c5691d64a14f-YVR",
+      "colo": "YVR"
+    }
+  ],
+  "sockets": [
+    {
+      "name": "ws",
+      "messages": [
+        {
+          "at": 1792098193633,
+          "body": "before-idle"
+        },
+        {
+          "at": 1792098210323,
+          "body": "after-idle"
+        }
+      ],
+      "ray": "a4b1c4eae905148b-PDX",
+      "colo": "PDX",
+      "openAt": 1792098193552,
+      "abortStarted": 1792098211149,
+      "closeAt": 1792098211506,
+      "closeCode": 1006,
+      "abortToCloseMs": 357,
+      "stillOpen": false
+    },
+    {
+      "name": "hibernate",
+      "messages": [
+        {
+          "at": 1792098194146,
+          "body": "before-idle"
+        }
+      ],
+      "ray": "a4b1c4ef0e3adf04-YVR",
+      "colo": "YVR",
+      "openAt": 1792098194110,
+      "closeAt": 1792098202659,
+      "closeCode": 1006
+    }
+  ],
+  "pendingAbortStarted": 1792098212548,
+  "pendingResponse": {
+    "path": "/pending",
+    "name": "counter",
+    "status": 500,
+    "body": "Error: operator stopped",
+    "startedAt": 1792098212036,
+    "ms": 748,
+    "ray": "a4b1c561a820a14f-YVR",
+    "colo": "YVR"
+  },
+  "pendingAbortToResponseMs": 236
+}

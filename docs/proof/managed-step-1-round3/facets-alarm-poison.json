@@ -1,0 +1,102 @@
+[
+  {
+    "path": "/delete",
+    "status": 200,
+    "body": "deleted",
+    "ms": 475,
+    "ray": "a4b1b5140f13c4b4-YVR",
+    "colo": "YVR"
+  },
+  {
+    "path": "/resume",
+    "status": 200,
+    "body": "resumed",
+    "ms": 214,
+    "ray": "a4b1b5164d26804a-YVR",
+    "colo": "YVR"
+  },
+  {
+    "path": "/",
+    "status": 200,
+    "body": "{\"n\":1}",
+    "ms": 424,
+    "ray": "a4b1b51729cfc4b4-YVR",
+    "colo": "YVR"
+  },
+  {
+    "path": "/",
+    "status": 200,
+    "body": "{\"n\":2}",
+    "ms": 138,
+    "ray": "a4b1b519ce1e804a-YVR",
+    "colo": "YVR"
+  },
+  {
+    "path": "/fetch?target=https%3A%2F%2Fhm-test-facets-r3.ryan-d2f.workers.dev%2F",
+    "status": 403,
+    "body": "{\"intercepted\":\"fetch\",\"tenant\":\"ordinary-studio\",\"blocked\":true,\"url\":\"https://hm-test-facets-r3.ryan-d2f.workers.dev/\"}",
+    "ms": 392,
+    "ray": "a4b1b51abd12c4b4-YVR",
+    "colo": "YVR"
+  },
+  {
+    "path": "/fetch?target=http%3A%2F%2F127.0.0.1%2F",
+    "status": 403,
+    "body": "{\"intercepted\":\"fetch\",\"tenant\":\"ordinary-studio\",\"blocked\":true,\"url\":\"http://127.0.0.1/\"}",
+    "ms": 71,
+    "ray": "a4b1b51d2c80c4b4-YVR",
+    "colo": "YVR"
+  },
+  {
+    "path": "/fetch?target=https%3A%2F%2Fpublic.example%2F",
+    "status": 200,
+    "body": "{\"intercepted\":\"fetch\",\"tenant\":\"ordinary-studio\",\"blocked\":false,\"url\":\"https://public.example/\"}",
+    "ms": 250,
+    "ray": "a4b1b51d9dbbc4b4-YVR",
+    "colo": "YVR"
+  },
+  {
+    "path": "/tcp",
+    "status": 200,
+    "body": "{\"intercepted\":\"connect\",\"tenant\":\"ordinary-studio\",\"address\":\"127.0.0.1:80\",\"denied\":true}",
+    "ms": 102,
+    "ray": "a4b1b51f2a51c4b4-YVR",
+    "colo": "YVR"
+  },
+  {
+    "path": "/alarm",
+    "status": 500,
+    "body": "Error: Facets currently cannot set alarms.",
+    "ms": 114,
+    "ray": "a4b1b51fcc42c4b4-YVR",
+    "colo": "YVR"
+  },
+  {
+    "path": "/status",
+    "status": 500,
+    "body": "Error: internal error; reference = 5d8lp3ags16c3e4av67cko4n",
+    "ms": 71,
+    "ray": "a4b1b529ea98c4b4-YVR",
+    "colo": "YVR"
+  },
+  {
+    "path": "/ws",
+    "status": 500,
+    "ray": "a4b1b52ef9aa688e-FRA",
+    "body": "Error: internal error; reference = ot5nren3kljsft81so1otbh5"
+  },
+  {
+    "path": "/hibernate",
+    "status": 500,
+    "ray": "a4b1b53e692d1611-DUS",
+    "body": "Error: internal error; reference = s2j5dv2lvcadou9kiv6q1t8a"
+  },
+  {
+    "path": "/status",
+    "status": 500,
+    "body": "Error: internal error; reference = laic9mp2duvbsb22vbdlc8o2",
+    "ms": 135,
+    "ray": "a4b1b543ea879d3e-YVR",
+    "colo": "YVR"
+  }
+]

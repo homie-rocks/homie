@@ -1,0 +1,589 @@
+[
+  {
+    "client": 0,
+    "frames": [
+      {
+        "t": "welcome",
+        "v": 1,
+        "rev": 12,
+        "id": "PuIm3Of7",
+        "room": "r3-proof-1792097927219",
+        "seat": 0,
+        "token": "[redacted]",
+        "name": "Managed probe 0",
+        "colour": 0,
+        "stall": 1500,
+        "role": "host",
+        "why": "first",
+        "host": {
+          "id": "PuIm3Of7",
+          "seat": 0
+        },
+        "peers": [
+          {
+            "id": "PuIm3Of7",
+            "seat": 0,
+            "name": "Managed probe 0",
+            "colour": 0,
+            "device": "desk",
+            "want": "play",
+            "role": "host",
+            "occ": 1
+          }
+        ],
+        "st": 1792097927919,
+        "max": 4,
+        "round": null,
+        "roster": null,
+        "snap": null,
+        "state": {},
+        "ckpt": null,
+        "policy": {
+          "v": 1,
+          "at": 0,
+          "server": null,
+          "kind": "open",
+          "aiSeats": 0,
+          "guides": 0,
+          "bots": "fill",
+          "level": 3,
+          "levelMax": 5,
+          "speech": "game",
+          "kids": false,
+          "brain": "script",
+          "chat": {
+            "v": 1,
+            "at": 0,
+            "mode": "text",
+            "who": "signed-in",
+            "react": "anyone",
+            "slow": 2,
+            "max": 140,
+            "links": "block",
+            "swears": "block",
+            "ai": true,
+            "bubbles": true,
+            "watchers": true,
+            "hub": true,
+            "history": 0,
+            "emoji": [
+              {
+                "k": "fire",
+                "e": "🔥"
+              },
+              {
+                "k": "clap",
+                "e": "👏"
+              },
+              {
+                "k": "laugh",
+                "e": "😂"
+              },
+              {
+                "k": "heart",
+                "e": "❤️"
+              },
+              {
+                "k": "wow",
+                "e": "🤯"
+              }
+            ],
+            "lines": [
+              {
+                "id": "hi",
+                "text": "Hi!"
+              },
+              {
+                "id": "gg",
+                "text": "Good game!"
+              },
+              {
+                "id": "nice",
+                "text": "Nice one!"
+              },
+              {
+                "id": "go",
+                "text": "Let's go!"
+              },
+              {
+                "id": "wait",
+                "text": "Wait for me!"
+              },
+              {
+                "id": "help",
+                "text": "Help!"
+              },
+              {
+                "id": "thanks",
+                "text": "Thanks!"
+              },
+              {
+                "id": "again",
+                "text": "Again?"
+              }
+            ],
+            "kids": false
+          },
+          "skill": {
+            "level": 3,
+            "name": "Fair",
+            "reactionMs": 250,
+            "aimNoise": 0.15,
+            "aggression": 0.5,
+            "positioning": 0.5,
+            "card": "plays like a regular"
+          }
+        }
+      },
+      {
+        "t": "pong",
+        "c": 1792097927972,
+        "st": 1792097928021
+      },
+      {
+        "t": "pong",
+        "c": 1792097928224,
+        "st": 1792097928299
+      },
+      {
+        "t": "join",
+        "peer": {
+          "id": "GLLOwc1A",
+          "seat": 1,
+          "name": "Managed probe 1",
+          "colour": 1,
+          "device": "desk",
+          "want": "play",
+          "role": "replica",
+          "occ": 2
+        }
+      },
+      {
+        "t": "pong",
+        "c": 1792097928474,
+        "st": 1792097928529
+      },
+      {
+        "t": "pong",
+        "c": 1792097928725,
+        "st": 1792097928828
+      },
+      {
+        "t": "pong",
+        "c": 1792097928977,
+        "st": 1792097929032
+      },
+      {
+        "t": "pong",
+        "c": 1792097929228,
+        "st": 1792097929362
+      },
+      {
+        "t": "pong",
+        "c": 1792097929480,
+        "st": 1792097929537
+      },
+      {
+        "t": "pong",
+        "c": 1792097929730,
+        "st": 1792097929887
+      },
+      {
+        "t": "pong",
+        "c": 1792097929981,
+        "st": 1792097930042
+      },
+      {
+        "t": "pong",
+        "c": 1792097930232,
+        "st": 1792097930411
+      },
+      {
+        "t": "pong",
+        "c": 1792097930483,
+        "st": 1792097930545
+      }
+    ],
+    "ray": "a4b1be6e2fd62ae2-YVR",
+    "colo": "YVR"
+  },
+  {
+    "client": 1,
+    "frames": [
+      {
+        "t": "welcome",
+        "v": 1,
+        "rev": 12,
+        "id": "GLLOwc1A",
+        "room": "r3-proof-1792097927219",
+        "seat": 1,
+        "token": "[redacted]",
+        "name": "Managed probe 1",
+        "colour": 1,
+        "stall": 1500,
+        "role": "replica",
+        "why": "joined",
+        "host": {
+          "id": "PuIm3Of7",
+          "seat": 0
+        },
+        "peers": [
+          {
+            "id": "PuIm3Of7",
+            "seat": 0,
+            "name": "Managed probe 0",
+            "colour": 0,
+            "device": "desk",
+            "want": "play",
+            "role": "host",
+            "occ": 1
+          },
+          {
+            "id": "GLLOwc1A",
+            "seat": 1,
+            "name": "Managed probe 1",
+            "colour": 1,
+            "device": "desk",
+            "want": "play",
+            "role": "replica",
+            "occ": 2
+          }
+        ],
+        "st": 1792097928364,
+        "max": 4,
+        "round": null,
+        "roster": null,
+        "snap": {
+          "k": 2,
+          "st": 1792097928224,
+          "d": {
+            "score": 2
+          }
+        },
+        "state": {},
+        "policy": {
+          "v": 1,
+          "at": 0,
+          "server": null,
+          "kind": "open",
+          "aiSeats": 0,
+          "guides": 0,
+          "bots": "fill",
+          "level": 3,
+          "levelMax": 5,
+          "speech": "game",
+          "kids": false,
+          "brain": "script",
+          "chat": {
+            "v": 1,
+            "at": 0,
+            "mode": "text",
+            "who": "signed-in",
+            "react": "anyone",
+            "slow": 2,
+            "max": 140,
+            "links": "block",
+            "swears": "block",
+            "ai": true,
+            "bubbles": true,
+            "watchers": true,
+            "hub": true,
+            "history": 0,
+            "emoji": [
+              {
+                "k": "fire",
+                "e": "🔥"
+              },
+              {
+                "k": "clap",
+                "e": "👏"
+              },
+              {
+                "k": "laugh",
+                "e": "😂"
+              },
+              {
+                "k": "heart",
+                "e": "❤️"
+              },
+              {
+                "k": "wow",
+                "e": "🤯"
+              }
+            ],
+            "lines": [
+              {
+                "id": "hi",
+                "text": "Hi!"
+              },
+              {
+                "id": "gg",
+                "text": "Good game!"
+              },
+              {
+                "id": "nice",
+                "text": "Nice one!"
+              },
+              {
+                "id": "go",
+                "text": "Let's go!"
+              },
+              {
+                "id": "wait",
+                "text": "Wait for me!"
+              },
+              {
+                "id": "help",
+                "text": "Help!"
+              },
+              {
+                "id": "thanks",
+                "text": "Thanks!"
+              },
+              {
+                "id": "again",
+                "text": "Again?"
+              }
+            ],
+            "kids": false
+          },
+          "skill": {
+            "level": 3,
+            "name": "Fair",
+            "reactionMs": 250,
+            "aimNoise": 0.15,
+            "aggression": 0.5,
+            "positioning": 0.5,
+            "card": "plays like a regular"
+          }
+        }
+      },
+      {
+        "t": "snap",
+        "from": 0,
+        "k": 3,
+        "st": 1792097928474,
+        "d": {
+          "score": 3
+        }
+      },
+      {
+        "t": "pong",
+        "c": 1792097928474,
+        "st": 1792097928529
+      },
+      {
+        "t": "snap",
+        "from": 0,
+        "k": 5,
+        "st": 1792097928726,
+        "d": {
+          "score": 5
+        }
+      },
+      {
+        "t": "pong",
+        "c": 1792097928726,
+        "st": 1792097928829
+      },
+      {
+        "t": "round",
+        "round": {
+          "n": 1,
+          "phase": "live",
+          "startedAt": 1792097928859,
+          "endsAt": 1792097930059
+        }
+      },
+      {
+        "t": "state",
+        "k": "score",
+        "d": {
+          "player": 0,
+          "score": 1
+        }
+      },
+      {
+        "t": "snap",
+        "from": 0,
+        "k": 7,
+        "st": 1792097928978,
+        "d": {
+          "score": 7
+        }
+      },
+      {
+        "t": "pong",
+        "c": 1792097928978,
+        "st": 1792097929032
+      },
+      {
+        "t": "pong",
+        "c": 1792097929228,
+        "st": 1792097929362
+      },
+      {
+        "t": "snap",
+        "from": 0,
+        "k": 9,
+        "st": 1792097929228,
+        "d": {
+          "score": 9
+        }
+      },
+      {
+        "t": "pong",
+        "c": 1792097929480,
+        "st": 1792097929537
+      },
+      {
+        "t": "snap",
+        "from": 0,
+        "k": 11,
+        "st": 1792097929480,
+        "d": {
+          "score": 11
+        }
+      },
+      {
+        "t": "pong",
+        "c": 1792097929730,
+        "st": 1792097929887
+      },
+      {
+        "t": "snap",
+        "from": 0,
+        "k": 13,
+        "st": 1792097929730,
+        "d": {
+          "score": 13
+        }
+      },
+      {
+        "t": "pong",
+        "c": 1792097929982,
+        "st": 1792097930039
+      },
+      {
+        "t": "snap",
+        "from": 0,
+        "k": 15,
+        "st": 1792097929982,
+        "d": {
+          "score": 15
+        }
+      },
+      {
+        "t": "round",
+        "round": {
+          "n": 1,
+          "phase": "over",
+          "results": [
+            {
+              "seat": 0,
+              "score": 1,
+              "bot": false,
+              "name": "Managed probe 0"
+            },
+            {
+              "seat": 1,
+              "score": 0,
+              "bot": false,
+              "name": "Managed probe 1"
+            }
+          ]
+        }
+      },
+      {
+        "t": "pong",
+        "c": 1792097930232,
+        "st": 1792097930411
+      },
+      {
+        "t": "snap",
+        "from": 0,
+        "k": 17,
+        "st": 1792097930232,
+        "d": {
+          "score": 17
+        }
+      },
+      {
+        "t": "pong",
+        "c": 1792097930483,
+        "st": 1792097930545
+      },
+      {
+        "t": "snap",
+        "from": 0,
+        "k": 19,
+        "st": 1792097930483,
+        "d": {
+          "score": 19
+        }
+      },
+      {
+        "t": "leave",
+        "id": "PuIm3Of7",
+        "seat": 0,
+        "why": "closed"
+      },
+      {
+        "t": "role",
+        "role": "host",
+        "why": "host-left",
+        "host": {
+          "id": "GLLOwc1A",
+          "seat": 1
+        },
+        "peers": [
+          {
+            "id": "GLLOwc1A",
+            "seat": 1,
+            "name": "Managed probe 1",
+            "colour": 1,
+            "device": "desk",
+            "want": "play",
+            "role": "host",
+            "occ": 2
+          }
+        ],
+        "ckpt": null,
+        "snap": {
+          "k": 19,
+          "st": 1792097930483,
+          "d": {
+            "score": 19
+          }
+        },
+        "round": {
+          "n": 1,
+          "phase": "over",
+          "results": [
+            {
+              "seat": 0,
+              "score": 1,
+              "bot": false,
+              "name": "Managed probe 0"
+            },
+            {
+              "seat": 1,
+              "score": 0,
+              "bot": false,
+              "name": "Managed probe 1"
+            }
+          ]
+        },
+        "roster": null,
+        "state": {
+          "score": {
+            "player": 0,
+            "score": 1
+          }
+        }
+      }
+    ],
+    "ray": "a4b1be727f9ad9c8-YVR",
+    "colo": "YVR"
+  }
+]

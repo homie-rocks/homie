@@ -1,0 +1,172 @@
+[
+  {
+    "path": "/delete",
+    "status": 200,
+    "body": "deleted",
+    "ms": 1194,
+    "ray": "a4b1b5fb3d80d9d6-FRA",
+    "colo": "FRA"
+  },
+  {
+    "path": "/resume",
+    "status": 200,
+    "body": "resumed",
+    "ms": 779,
+    "ray": "a4b1b601de2e917d-FRA",
+    "colo": "FRA"
+  },
+  {
+    "path": "/",
+    "status": 500,
+    "body": "Error: internal error; reference = aaidgljdupjtg4ekn6qaoemb",
+    "ms": 412,
+    "ray": "a4b1b60378e9d9d6-FRA",
+    "colo": "FRA"
+  },
+  {
+    "path": "/",
+    "status": 500,
+    "body": "Error: internal error; reference = uul82cn9rpueuoep9ceip2ap",
+    "ms": 492,
+    "ray": "a4b1b60619f5917d-FRA",
+    "colo": "FRA"
+  },
+  {
+    "path": "/fetch?target=https%3A%2F%2Fhm-test-facets-r3.ryan-d2f.workers.dev%2F",
+    "status": 403,
+    "body": "{\"intercepted\":\"fetch\",\"tenant\":\"ordinary-studio\",\"blocked\":true,\"url\":\"https://hm-test-facets-r3.ryan-d2f.workers.dev/\"}",
+    "ms": 1492,
+    "ray": "a4b1b6091c22d9d6-FRA",
+    "colo": "FRA"
+  },
+  {
+    "path": "/fetch?target=http%3A%2F%2F127.0.0.1%2F",
+    "status": 403,
+    "body": "{\"intercepted\":\"fetch\",\"tenant\":\"ordinary-studio\",\"blocked\":true,\"url\":\"http://127.0.0.1/\"}",
+    "ms": 277,
+    "ray": "a4b1b6128a84d9d6-FRA",
+    "colo": "FRA"
+  },
+  {
+    "path": "/fetch?target=https%3A%2F%2Fpublic.example%2F",
+    "status": 200,
+    "body": "{\"intercepted\":\"fetch\",\"tenant\":\"ordinary-studio\",\"blocked\":false,\"url\":\"https://public.example/\"}",
+    "ms": 278,
+    "ray": "a4b1b6143804d9d6-FRA",
+    "colo": "FRA"
+  },
+  {
+    "path": "/tcp",
+    "status": 200,
+    "body": "{\"intercepted\":\"connect\",\"tenant\":\"ordinary-studio\",\"address\":\"127.0.0.1:80\",\"denied\":true}",
+    "ms": 228,
+    "ray": "a4b1b615fcc1d9d6-FRA",
+    "colo": "FRA"
+  },
+  {
+    "path": "/alarm?case=alarm",
+    "status": 500,
+    "body": "Error: Facets currently cannot set alarms.",
+    "ms": 1084,
+    "ray": "a4b1b6176932d9d6-FRA",
+    "colo": "FRA"
+  },
+  {
+    "path": "/status?case=alarm",
+    "status": 500,
+    "body": "Error: internal error; reference = cf0j0qu074a6ed77t7ltg76r",
+    "ms": 296,
+    "ray": "a4b1b627980ed9d6-FRA",
+    "colo": "FRA"
+  },
+  {
+    "path": "/ws?case=ws",
+    "status": 500,
+    "ray": "a4b1b6296874bdbf-YVR",
+    "body": "Error: internal error; reference = 9rda51ncbms74gv0de0kjcp7"
+  },
+  {
+    "path": "/hibernate?case=hibernate",
+    "openMs": 453,
+    "echo": "facet-echo",
+    "close": {
+      "code": 1006,
+      "reason": "",
+      "at": 1792097592782
+    },
+    "killToCloseMs": 2450,
+    "stillOpen": false
+  },
+  {
+    "path": "/status",
+    "status": 200,
+    "body": "{\"n\":0,\"alarms\":0,\"pending\":true}",
+    "ms": 1095,
+    "ray": "a4b1b6318e5fae27-BOS",
+    "colo": "BOS"
+  },
+  {
+    "path": "/pending",
+    "status": 500,
+    "body": "Error: operator stopped",
+    "ms": 1863,
+    "ray": "a4b1b62dcc48d9d6-FRA",
+    "colo": "FRA"
+  },
+  {
+    "path": "/abort",
+    "status": 200,
+    "body": "aborted",
+    "ms": 768,
+    "ray": "a4b1b634ac5318fa-YVR",
+    "colo": "YVR"
+  },
+  {
+    "path": "/abort?case=hibernate",
+    "status": 200,
+    "body": "aborted",
+    "ms": 857,
+    "ray": "a4b1b63ffb47d9d6-FRA",
+    "colo": "FRA"
+  },
+  {
+    "path": "/status",
+    "status": 410,
+    "body": "stopped",
+    "ms": 252,
+    "ray": "a4b1b644db67ae27-BOS",
+    "colo": "BOS"
+  },
+  {
+    "path": "/resume",
+    "status": 200,
+    "body": "resumed",
+    "ms": 212,
+    "ray": "a4b1b6469ad1d9d6-FRA",
+    "colo": "FRA"
+  },
+  {
+    "path": "/status",
+    "status": 200,
+    "body": "{\"n\":0,\"alarms\":0,\"pending\":true}",
+    "ms": 299,
+    "ray": "a4b1b647bcbaae27-BOS",
+    "colo": "BOS"
+  },
+  {
+    "path": "/delete",
+    "status": 200,
+    "body": "deleted",
+    "ms": 224,
+    "ray": "a4b1b649dcc3d9d6-FRA",
+    "colo": "FRA"
+  },
+  {
+    "path": "/status",
+    "status": 200,
+    "body": "{\"n\":0,\"alarms\":0,\"pending\":false}",
+    "ms": 300,
+    "ray": "a4b1b64afeb4ae27-BOS",
+    "colo": "BOS"
+  }
+]

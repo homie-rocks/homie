@@ -1,0 +1,473 @@
+{
+  "summary": [
+    {
+      "endpoint": "page",
+      "cold": false,
+      "n": 0,
+      "colos": [],
+      "managedMs": null,
+      "plainMs": null
+    },
+    {
+      "endpoint": "page",
+      "cold": true,
+      "n": 0,
+      "colos": [],
+      "managedMs": null,
+      "plainMs": null
+    },
+    {
+      "endpoint": "asset",
+      "cold": false,
+      "n": 0,
+      "colos": [],
+      "managedMs": null,
+      "plainMs": null
+    },
+    {
+      "endpoint": "asset",
+      "cold": true,
+      "n": 0,
+      "colos": [],
+      "managedMs": null,
+      "plainMs": null
+    },
+    {
+      "endpoint": "records",
+      "cold": false,
+      "n": 0,
+      "colos": [],
+      "managedMs": null,
+      "plainMs": null
+    },
+    {
+      "endpoint": "records",
+      "cold": true,
+      "n": 0,
+      "colos": [],
+      "managedMs": null,
+      "plainMs": null
+    },
+    {
+      "endpoint": "mcp",
+      "cold": false,
+      "n": 0,
+      "colos": [],
+      "managedMs": null,
+      "plainMs": null
+    },
+    {
+      "endpoint": "mcp",
+      "cold": true,
+      "n": 0,
+      "colos": [],
+      "managedMs": null,
+      "plainMs": null
+    },
+    {
+      "endpoint": "seat",
+      "cold": false,
+      "n": 0,
+      "colos": [],
+      "managedMs": null,
+      "plainMs": null
+    },
+    {
+      "endpoint": "seat",
+      "cold": true,
+      "n": 0,
+      "colos": [],
+      "managedMs": null,
+      "plainMs": null
+    }
+  ],
+  "pairs": [],
+  "excluded": [
+    {
+      "round": 0,
+      "endpoint": "page",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "true",
+      "plainFirst": "true"
+    },
+    {
+      "round": 0,
+      "endpoint": "asset",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "true"
+    },
+    {
+      "round": 0,
+      "endpoint": "records",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 0,
+      "endpoint": "mcp",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 0,
+      "endpoint": "seat",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "true"
+    },
+    {
+      "round": 1,
+      "endpoint": "page",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 1,
+      "endpoint": "asset",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 1,
+      "endpoint": "records",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 1,
+      "endpoint": "mcp",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 1,
+      "endpoint": "seat",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "true"
+    },
+    {
+      "round": 2,
+      "endpoint": "page",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 2,
+      "endpoint": "asset",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "true"
+    },
+    {
+      "round": 2,
+      "endpoint": "records",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 2,
+      "endpoint": "mcp",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "true"
+    },
+    {
+      "round": 2,
+      "endpoint": "seat",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 3,
+      "endpoint": "page",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "true"
+    },
+    {
+      "round": 3,
+      "endpoint": "asset",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 3,
+      "endpoint": "records",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 3,
+      "endpoint": "mcp",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "true",
+      "plainFirst": "false"
+    },
+    {
+      "round": 3,
+      "endpoint": "seat",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 4,
+      "endpoint": "page",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 4,
+      "endpoint": "asset",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 4,
+      "endpoint": "records",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 4,
+      "endpoint": "mcp",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 4,
+      "endpoint": "seat",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 5,
+      "endpoint": "page",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 5,
+      "endpoint": "asset",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "false",
+      "plainFirst": "false"
+    },
+    {
+      "round": 5,
+      "endpoint": "records",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "true",
+      "plainFirst": "false"
+    },
+    {
+      "round": 5,
+      "endpoint": "mcp",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "true",
+      "plainFirst": "false"
+    },
+    {
+      "round": 5,
+      "endpoint": "seat",
+      "managedColo": "YVR",
+      "plainColo": "PDX",
+      "managedFirst": "true",
+      "plainFirst": "false"
+    }
+  ],
+  "firstSamples": [
+    {
+      "round": 0,
+      "kind": "managed",
+      "endpoint": "page",
+      "ms": 481,
+      "status": 200,
+      "ray": "a4b1c0bc6b722ed2-YVR",
+      "colo": "YVR",
+      "first": "true",
+      "calls": "{\"d1\":3,\"assets\":1,\"do\":0}",
+      "bytes": 22973
+    },
+    {
+      "round": 0,
+      "kind": "plain",
+      "endpoint": "page",
+      "ms": 670,
+      "status": 200,
+      "ray": "a4b1c0c099f3d0a0-PDX",
+      "colo": "PDX",
+      "first": "true",
+      "calls": "{\"d1\":2,\"assets\":1,\"do\":0}",
+      "bytes": 22973
+    },
+    {
+      "round": 0,
+      "kind": "plain",
+      "endpoint": "asset",
+      "ms": 228,
+      "status": 200,
+      "ray": "a4b1c0c75e07d0a0-PDX",
+      "colo": "PDX",
+      "first": "true",
+      "calls": "{\"d1\":0,\"assets\":1,\"do\":0}",
+      "bytes": 6771
+    },
+    {
+      "round": 0,
+      "kind": "plain",
+      "endpoint": "seat",
+      "ms": 724,
+      "status": 200,
+      "ray": "a4b1c0d9183ed0a0-PDX",
+      "colo": "PDX",
+      "first": "true",
+      "calls": "{\"d1\":3,\"assets\":1,\"do\":1}",
+      "bytes": 55
+    },
+    {
+      "round": 1,
+      "kind": "plain",
+      "endpoint": "seat",
+      "ms": 333,
+      "status": 200,
+      "ray": "a4b1c0efd873d0a0-PDX",
+      "colo": "PDX",
+      "first": "true",
+      "calls": "{\"d1\":3,\"assets\":1,\"do\":1}",
+      "bytes": 55
+    },
+    {
+      "round": 2,
+      "kind": "plain",
+      "endpoint": "asset",
+      "ms": 274,
+      "status": 200,
+      "ray": "a4b1c0fceb3bd0a0-PDX",
+      "colo": "PDX",
+      "first": "true",
+      "calls": "{\"d1\":0,\"assets\":1,\"do\":0}",
+      "bytes": 6771
+    },
+    {
+      "round": 2,
+      "kind": "plain",
+      "endpoint": "mcp",
+      "ms": 581,
+      "status": 200,
+      "ray": "a4b1c106bde5d0a0-PDX",
+      "colo": "PDX",
+      "first": "true",
+      "calls": "{\"d1\":1,\"assets\":1,\"do\":0}",
+      "bytes": 3126
+    },
+    {
+      "round": 3,
+      "kind": "plain",
+      "endpoint": "page",
+      "ms": 326,
+      "status": 200,
+      "ray": "a4b1c111dd96d0a0-PDX",
+      "colo": "PDX",
+      "first": "true",
+      "calls": "{\"d1\":3,\"assets\":1,\"do\":0}",
+      "bytes": 22973
+    },
+    {
+      "round": 3,
+      "kind": "managed",
+      "endpoint": "mcp",
+      "ms": 332,
+      "status": 200,
+      "ray": "a4b1c1221da02ed2-YVR",
+      "colo": "YVR",
+      "first": "true",
+      "calls": "{\"d1\":1,\"assets\":1,\"do\":0}",
+      "bytes": 3126
+    },
+    {
+      "round": 5,
+      "kind": "managed",
+      "endpoint": "records",
+      "ms": 324,
+      "status": 200,
+      "ray": "a4b1c14b7cab2ed2-YVR",
+      "colo": "YVR",
+      "first": "true",
+      "calls": "{\"d1\":2,\"assets\":1,\"do\":0}",
+      "bytes": 24
+    },
+    {
+      "round": 5,
+      "kind": "managed",
+      "endpoint": "mcp",
+      "ms": 317,
+      "status": 200,
+      "ray": "a4b1c1507a892ed2-YVR",
+      "colo": "YVR",
+      "first": "true",
+      "calls": "{\"d1\":1,\"assets\":1,\"do\":0}",
+      "bytes": 3126
+    },
+    {
+      "round": 5,
+      "kind": "managed",
+      "endpoint": "seat",
+      "ms": 456,
+      "status": 200,
+      "ray": "a4b1c1568b482ed2-YVR",
+      "colo": "YVR",
+      "first": "true",
+      "calls": "{\"d1\":3,\"assets\":1,\"do\":1}",
+      "bytes": 55
+    }
+  ]
+}

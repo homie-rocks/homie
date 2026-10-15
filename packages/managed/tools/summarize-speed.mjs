@@ -1,0 +1,6 @@
+import {readFileSync,writeFileSync} from 'node:fs';
+const rows=JSON.parse(readFileSync(process.argv[2]));const pairs=[],excluded=[];
+for(const m of rows.filter(x=>x.kind==='managed')){const p=rows.find(x=>x.kind==='plain'&&x.round===m.round&&x.endpoint===m.endpoint);if(m.status!==200||p?.status!==200||!m.colo||p.colo!==m.colo||m.first!==p.first){excluded.push({round:m.round,endpoint:m.endpoint,managedColo:m.colo,plainColo:p?.colo,managedFirst:m.first,plainFirst:p?.first});continue}pairs.push({endpoint:m.endpoint,round:m.round,colo:m.colo,cold:m.first==='true',managedMs:m.ms,plainMs:p.ms,managedRay:m.ray,plainRay:p.ray});}
+const median=x=>{const a=x.slice().sort((a,b)=>a-b);return a.length%2?a[(a.length-1)/2]:(a[a.length/2-1]+a[a.length/2])/2};const summary=[];
+for(const endpoint of [...new Set(rows.map(r=>r.endpoint))])for(const cold of [false,true]){const found=pairs.filter(p=>p.endpoint===endpoint&&p.cold===cold);summary.push({endpoint,cold,n:found.length,colos:[...new Set(found.map(p=>p.colo))],managedMs:found.length?median(found.map(p=>p.managedMs)):null,plainMs:found.length?median(found.map(p=>p.plainMs)):null})}
+const firstSamples=rows.filter(r=>r.first==='true');writeFileSync(process.argv[3],JSON.stringify({summary,pairs,excluded,firstSamples},null,2)+'\n');console.log(summary);console.log('Isolate-first samples:',firstSamples.length);

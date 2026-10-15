@@ -25,9 +25,9 @@ export default {
   },
   async queue(batch,env) {
     for(const message of batch.messages) {
-      const {script,scheduledTime,cron}=message.body;
       // Recheck at delivery: queued ticks cannot bypass a tenant kill switch.
       if(batch.queue==='hm-test-ticks-dlq'){await registry(env).alert(message.body);message.ack();continue;}
+      const {script,scheduledTime,cron}=message.body??{};
       const claim=await registry(env).claim(script,scheduledTime);
       if(claim==='skip'){message.ack();continue;}
       if(claim==='busy'){message.retry({delaySeconds:5});continue;}

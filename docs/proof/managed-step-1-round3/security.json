@@ -1,0 +1,58 @@
+[
+  {
+    "path": "/__managed/tick",
+    "status": 404,
+    "body": "Not found",
+    "ms": 436,
+    "ray": "a4b1bde77eed5ef0-PDX"
+  },
+  {
+    "path": "/__operator/route",
+    "status": 404,
+    "body": "Not found",
+    "ms": 182,
+    "ray": "a4b1bde8eec1ba29-YVR"
+  },
+  {
+    "path": "/probe/bindings",
+    "status": 200,
+    "body": "{\"bindings\":[\"CONCENTRATOR\",\"DB\",\"GATE\",\"HOMIE_CONCEPT\",\"LOBBY\",\"OWNER\",\"STUDIO_FUNCTION_CRONS\",\"STUDIO_FUNCTION_MANAGED_CRONS\",\"STUDIO_NAME\",\"TABLE\",\"ASSETS\"],\"props\":{},\"cf\":false}",
+    "ms": 302,
+    "ray": "a4b1bde958515ef0-PDX"
+  },
+  {
+    "path": "/probe/worker-fetch?target=https%3A%2F%2Fhm-test-plain.ryan-d2f.workers.dev%2Fprobe%2Fecho",
+    "status": 200,
+    "body": "{\"tenant\":\"victim\"}",
+    "ms": 418,
+    "ray": "a4b1bdeb7a4e5ef0-PDX"
+  },
+  {
+    "path": "/probe/worker-fetch?target=https%3A%2F%2Fhm-test-dispatch.ryan-d2f.workers.dev%2Fprobe%2Fecho",
+    "status": 200,
+    "body": "{\"tenant\":\"victim\"}",
+    "ms": 191,
+    "ray": "a4b1bdeddce4ba29-YVR"
+  },
+  {
+    "path": "/probe/worker-fetch?target=http%3A%2F%2F127.0.0.1%2F",
+    "status": 403,
+    "body": "error code: 1003\n",
+    "ms": 339,
+    "ray": "a4b1bdef3d3d5ef0-PDX"
+  },
+  {
+    "path": "/probe/owner/fetch?target=https%3A%2F%2Fhm-test-plain.ryan-d2f.workers.dev%2Fprobe%2Fecho",
+    "status": 200,
+    "body": "{\"tenant\":\"victim\"}",
+    "ms": 1044,
+    "ray": "a4b1bdf14e53ba29-YVR"
+  },
+  {
+    "path": "/probe/owner/tcp",
+    "status": 200,
+    "body": "Error: proxy request failed, cannot connect to the specified address. It looks like you might be trying to connect to a HTTP-based service — consider using fetch instead",
+    "ms": 643,
+    "ray": "a4b1bdf7bd045ef0-PDX"
+  }
+]

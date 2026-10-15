@@ -1,0 +1,30 @@
+[
+  {
+    "name": "Lobby",
+    "status": 500,
+    "body": "DataCloneError: This ServiceStub cannot be serialized.",
+    "ms": 630,
+    "ray": "a4b1be7629b0b646-YVR"
+  },
+  {
+    "name": "Gate",
+    "status": 500,
+    "body": "DataCloneError: This ServiceStub cannot be serialized.",
+    "ms": 784,
+    "ray": "a4b1be7b2e12f4ab-YVR"
+  },
+  {
+    "name": "Concentrator",
+    "status": 500,
+    "body": "DataCloneError: This ServiceStub cannot be serialized.",
+    "ms": 525,
+    "ray": "a4b1be7ddff3b646-YVR"
+  },
+  {
+    "name": "Table",
+    "status": 500,
+    "body": "DataCloneError: This ServiceStub cannot be serialized.",
+    "ms": 252,
+    "ray": "a4b1be812acff4ab-YVR"
+  }
+]

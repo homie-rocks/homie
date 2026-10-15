@@ -37,5 +37,6 @@ export class Registry {
     if(success)await tx.put('tick:'+tenant,time);
     await tx.delete('running:'+tenant);
   });}
+  async alerts(){return [...(await this.ctx.storage.list({prefix:'alert:',limit:100})).values()];}
   async alert(body){await this.ctx.storage.put('alert:'+crypto.randomUUID(),{...body,at:Date.now()});console.error(JSON.stringify({event:'managed-tick-dlq',...body}));}
 }

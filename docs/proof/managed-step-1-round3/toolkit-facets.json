@@ -1,0 +1,30 @@
+[
+  {
+    "name": "Lobby",
+    "status": 200,
+    "body": "{\"room\":\"pub-1\",\"players\":0,\"max\":4,\"server\":\"public\"}\n",
+    "ms": 638,
+    "ray": "a4b1c0fa280f95a2-YVR"
+  },
+  {
+    "name": "Gate",
+    "status": 200,
+    "body": "{\"toolkit\":{\"version\":\"0.54.0\",\"sha256\":\"4f65918ccb0f52120d8d0fa6cf761f2243b4636fdf10ccef395479318d603370\"},\"room\":\"probe\",\"gates\":[],\"diagnostics\":{\"cached\":true,\"at\":null,\"ageMs\":null}}",
+    "ms": 430,
+    "ray": "a4b1c0fd694595a2-YVR"
+  },
+  {
+    "name": "Concentrator",
+    "status": 200,
+    "body": "{\"toolkit\":{\"version\":\"0.54.0\",\"sha256\":\"4f65918ccb0f52120d8d0fa6cf761f2243b4636fdf10ccef395479318d603370\"},\"room\":\"probe\",\"gates\":[],\"diagnostics\":{\"cached\":true,\"at\":null,\"ageMs\":null}}",
+    "ms": 523,
+    "ray": "a4b1c10019ab95a2-YVR"
+  },
+  {
+    "name": "Table",
+    "status": 500,
+    "body": "TypeError: Worker tried to return a WebSocket in a response to a request which did not contain the header \"Upgrade: websocket\".",
+    "ms": 522,
+    "ray": "a4b1c1036b4595a2-YVR"
+  }
+]

@@ -1,0 +1,13 @@
+import {build} from 'esbuild';
+import {readFileSync,writeFileSync} from 'node:fs';
+import {resolve,join} from 'node:path';
+const dir=resolve(process.argv[2]);
+const toolkit=resolve('packages/studio/worker/index.mjs');
+const contents=`import {DurableObject} from 'cloudflare:workers';import {Table as T,Lobby as L,Gate as G,Concentrator as C} from ${JSON.stringify(toolkit)};\n`+Object.entries({Table:'T',Lobby:'L',Gate:'G',Concentrator:'C'}).map(([name,base])=>`export class ${name} extends DurableObject {constructor(ctx,env){super(ctx,env);this.core=new ${base}(ctx,env)}fetch(r){return this.core.fetch(r)}alarm(){return this.core.alarm?.()}webSocketMessage(...a){return this.core.webSocketMessage?.(...a)}webSocketClose(...a){return this.core.webSocketClose?.(...a)}}`).join('\n');
+const result=await build({stdin:{contents,resolveDir:process.cwd()},bundle:true,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['cloudflare:*','node:*'],minify:true,write:false,logLevel:'silent'});
+let source=readFileSync('packages/managed/tools/facet-spike.mjs','utf8').replace("'../outbound.mjs'",JSON.stringify(resolve('packages/managed/outbound.mjs')));
+source=source.replace('const code=',()=>`const toolkitCode=${JSON.stringify(result.outputFiles[0].text)};\nconst code=`);
+source=source.replace("const facet=this.ctx.facets.get", "const className=new URL(r.url).searchParams.get('class')||'Tenant';\n  const facet=this.ctx.facets.get");
+source=source.replace("this.env.LOADER.get('r3-v1'", "this.env.LOADER.get('toolkit-'+className").replace("compatibilityFlags:['global_fetch_strictly_public']", "compatibilityFlags:['global_fetch_strictly_public','nodejs_compat']").replace("modules:{'tenant.js':code}","modules:{'tenant.js':className==='Tenant'?code:toolkitCode}").replace("getDurableObjectClass('Tenant')","getDurableObjectClass(className)");
+writeFileSync(join(dir,'facet-toolkit-generated.mjs'),source);
+const config=JSON.parse(readFileSync(join(dir,'facets.json')));config.main=join(dir,'facet-toolkit-generated.mjs');config.d1_databases=[{binding:'DB',database_id:JSON.parse(readFileSync(join(dir,'run/resources.json'))).databases[0].id}];writeFileSync(join(dir,'facets-toolkit.json'),JSON.stringify(config));

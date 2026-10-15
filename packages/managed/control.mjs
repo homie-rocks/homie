@@ -6,7 +6,7 @@ import {resolve,join} from 'node:path';
 import {prepare} from './prepare.mjs';
 import {waitForDatabase,removeResource} from './lifecycle.mjs';
 import {functionDeploymentSQL} from '../studio/lib/functions-build.mjs';
-const [command,folder,studio,name,hostname]=process.argv.slice(2);
+const [command,folder,studio,name,hostname,prefix="/"]=process.argv.slice(2);
 if (!folder) throw new Error('Usage: control.mjs init|deploy|cleanup STATE [STUDIO NAME HOSTNAME]');
 const stateDir=resolve(folder);mkdirSync(stateDir,{recursive:true});
 const lock=join(stateDir,'.control.lock');
@@ -87,6 +87,10 @@ if(command==='init') {
   db.info=await api(`d1/database/${db.id}`);save();
   const output=join(stateDir,name);
   const deployed=await api(command==='deploy-plain'?`workers/scripts/${name}/settings`:`workers/dispatch/namespaces/${state.namespace}/scripts/${name}/settings`);
+  if(deployed){
+    const metadata=await api(command==='deploy-plain'?`workers/services/${name}`:`workers/dispatch/namespaces/${state.namespace}/scripts/${name}`);
+    deployed.migration_tag=(command==='deploy-plain'?metadata?.default_environment?.script:metadata?.script)?.migration_tag;
+  }
   prepare({studio,output,name,databaseId:db.id,accountId:state.accountId,hostname,deployed});
   run(['d1','migrations','apply','DB','--remote','--config',join(output,'user.json')]);
   // Same deploy-time reconciliation as self-hosted, including removed/changed declarations.
@@ -123,8 +127,9 @@ if(command==='init') {
     save();
   }
   const cfg=JSON.parse(readFileSync(join(output,'user.json')));
-  const ticks=JSON.parse(cfg.vars.STUDIO_FUNCTION_CRONS).length>0||JSON.parse(cfg.vars.STUDIO_FUNCTION_MANAGED_CRONS).length>0;
-  await operator('route',{tenant:name,routes:[{hostname,prefix:'/'}],ticks});
+  const declarations=join(resolve(studio),'site/src/functions/declarations.json');
+  const ticks=JSON.parse(cfg.vars.STUDIO_FUNCTION_CRONS).length>0||JSON.parse(cfg.vars.STUDIO_FUNCTION_MANAGED_CRONS).length>0||(existsSync(declarations)&&JSON.parse(readFileSync(declarations)).length>0);
+  await operator('route',{tenant:name,routes:[{hostname,prefix}],ticks});
   save();
 } else if(command==='kill') {
   if(!/^hm-test-[a-z0-9-]+$/.test(studio??''))throw new Error('kill STATE SCRIPT');

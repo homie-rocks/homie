@@ -137,3 +137,13 @@ test('tick claim serializes retries across schedule boundaries and DLQ is draine
  assert.equal(await r.claim('one',now-1000),'run');assert.equal(await r.claim('one',now),'busy');await r.finish('one',now-1000,false);assert.equal(await r.claim('one',now-1000),'run');await r.finish('one',now-1000,true);assert.equal(await r.claim('one',now-1000),'skip');assert.equal(await r.claim('one',now-60001),'skip');
  let alerted=false,acked=false;await dispatch.queue({queue:'hm-test-ticks-dlq',messages:[{body:{script:'one'},ack(){assert.ok(alerted);acked=true}}]},{REGISTRY:{getByName:()=>({async alert(){alerted=true}})}});assert.ok(acked);
 });
+test('migration plan uses provider tag after local output loss; compatibility rejects unapproved settings',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'managed-migrations-'));try{
+  const studio=join(dir,'studio');mkdirSync(join(studio,'site/src/runtime/built'),{recursive:true});mkdirSync(join(studio,'site/dist'),{recursive:true});
+  writeFileSync(join(studio,'site/dist/games.json'),'{"studio":{},"games":[]}');writeFileSync(join(studio,'site/src/runtime/built/worker.js'),'export default {}; export class Old {} export class Added {}');writeFileSync(join(studio,'site/src/runtime/current.json'),JSON.stringify({main:join(studio,'site/src/runtime/built/worker.js')}));
+  const source={compatibility_date:'2026-10-15',durable_objects:{bindings:[{name:'OLD',class_name:'Old'},{name:'ADDED',class_name:'Added'}]}};const path=join(studio,'wrangler.jsonc');writeFileSync(path,JSON.stringify(source));
+  const opts={studio,output:join(dir,'fresh-output'),name:'hm-test-unit',databaseId:'11111111-1111-1111-1111-111111111111',accountId:'a'.repeat(32),hostname:'test.example',deployed:{migration_tag:'provider-17',bindings:[{type:'durable_object_namespace',class_name:'Old'}]}};
+  assert.deepEqual(prepare(opts).migrations,[{tag:'provider-17'},{tag:'provider-17-next',new_sqlite_classes:['Added']}]);
+  source.compatibility_flags=['no_global_fetch_strictly_public'];writeFileSync(path,JSON.stringify(source));assert.throws(()=>prepare(opts),/not approved/);
+ }finally{rmSync(dir,{recursive:true,force:true})}
+});
