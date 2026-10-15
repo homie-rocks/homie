@@ -123,9 +123,23 @@ if(command==='init') {
     state.cleanup.push({name,...result});state.deleted.push(name);save();
     console.log(`${result.result}: ${name}; absence verified`);
   };
+  // Queue consumers must be detached before Cloudflare permits Worker deletion.
+  for(const name of state.queues??[]) {
+    if(!/^hm-test-/.test(name))throw new Error('Unexpected queue');
+    const queue=(await api('queues')).find(q=>q.queue_name===name);
+    if(!queue)continue;
+    const info=await api(`queues/${queue.queue_id}`);
+    for(const consumer of info.consumers??[]) {
+      if(!state.workers.includes(consumer.script))throw new Error('Queue has an unrecorded consumer');
+      await api(`queues/${queue.queue_id}/consumers/${consumer.consumer_id}`,'DELETE');
+      const after=await api(`queues/${queue.queue_id}`);
+      if(after.consumers.some(c=>c.consumer_id===consumer.consumer_id))throw new Error('Queue consumer still exists');
+      state.cleanup.push({name:name+' consumer',id:consumer.consumer_id,existed:true,result:'deleted',absent:true});save();
+    }
+  }
   // Capture DO existence before script deletion can cascade to DO deletion.
   for(const object of state.durableObjects??[]) {
-    object.existedBeforeCleanup=(await api(`workers/durable_objects/namespaces/${object.id}`))!==null;save();
+    object.existedBeforeCleanup??=(await api(`workers/durable_objects/namespaces/${object.id}`))!==null;save();
   }
   for(const worker of [...state.workers].reverse())await remove(worker,`workers/scripts/${worker}?force=true`,`workers/scripts/${worker}/settings`);
   for(const user of state.users??[])await remove(user,`workers/dispatch/namespaces/${state.namespace}/scripts/${user}?force=true`,`workers/dispatch/namespaces/${state.namespace}/scripts/${user}/settings`);

@@ -1,0 +1,34 @@
+{
+  "before": [
+    {
+      "name": "paid-gift",
+      "type": "order.paid",
+      "cursor": 0,
+      "started": 1792089885000,
+      "last_tick": 0
+    },
+    {
+      "name": "rolling-slots",
+      "type": "slots.refresh",
+      "cursor": 0,
+      "started": 1792089885000,
+      "last_tick": 1792090260000
+    }
+  ],
+  "after": [
+    {
+      "name": "paid-gift",
+      "type": "order.paid",
+      "cursor": 0,
+      "started": 1792089885000,
+      "last_tick": 0
+    },
+    {
+      "name": "rolling-slots",
+      "type": "slots.refresh",
+      "cursor": 0,
+      "started": 1792089885000,
+      "last_tick": 1792090260000
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 /** Only the operator registry grants a script capability. Headers carry no authority. */
-export const HTTP_LIMITS = {cpuMs:100, subRequests:64};
-export const TICK_LIMITS = {cpuMs:1000, subRequests:256};
+export const HTTP_LIMITS = {cpuMs:100, subRequests:32};
+export const TICK_LIMITS = {cpuMs:1000, subRequests:128};
 const active = env => env.ROUTES.filter(r => !r.disabled);
 function worker(env, script, tick=false) {
   return env.STUDIOS.get(script, tick ? {props:{managedTick:true}} : {}, {

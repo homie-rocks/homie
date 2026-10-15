@@ -1,0 +1,28 @@
+[
+  {
+    "outcome": "ok",
+    "exceptions": [],
+    "logs": [
+      {
+        "message": [
+          "{\"tenant\":\"hm-test-egress-probe\",\"event\":\"egress\",\"host\":\"hm-test-plain.ryan-d2f.workers.dev\"}"
+        ],
+        "level": "log",
+        "timestamp": 1792090874815
+      }
+    ]
+  },
+  {
+    "outcome": "ok",
+    "exceptions": [],
+    "logs": [
+      {
+        "message": [
+          "{\"tenant\":\"hm-test-inlet\",\"event\":\"egress\",\"host\":\"hm-test-plain.ryan-d2f.workers.dev\"}"
+        ],
+        "level": "log",
+        "timestamp": 1792090906335
+      }
+    ]
+  }
+]

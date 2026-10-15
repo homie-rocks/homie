@@ -1,0 +1,36 @@
+[
+  {
+    "outcome": "ok",
+    "exceptions": [],
+    "logs": [
+      {
+        "message": [
+          "{\"tenant\":\"hm-test-inlet\",\"event\":\"tick-failed\",\"error\":\"Error: D1_ERROR: no such table: app_tool_namespaces: SQLITE_ERROR\"}"
+        ],
+        "level": "error",
+        "timestamp": 1792090311867
+      }
+    ],
+    "event": {
+      "batchSize": 1,
+      "queue": "hm-test-ticks"
+    }
+  },
+  {
+    "outcome": "ok",
+    "exceptions": [],
+    "logs": [
+      {
+        "message": [
+          "{\"tenant\":\"hm-test-inlet\",\"event\":\"tick-complete\",\"calls\":\"{\\\"d1\\\":30,\\\"assets\\\":1,\\\"do\\\":1}\"}"
+        ],
+        "level": "log",
+        "timestamp": 1792091039833
+      }
+    ],
+    "event": {
+      "batchSize": 1,
+      "queue": "hm-test-ticks"
+    }
+  }
+]

@@ -32,6 +32,7 @@ payments use server-created Checkout Sessions. No payment integration changed.
    This follows [Queues retry semantics](https://developers.cloudflare.com/queues/configuration/batching-retries/).
    Queues are preferable here to a DO scheduler per tenant because retry and DLQ
    handling are built in and each delivery already has a durable schedule key.
+   Measured user-Worker calls peaked at five for the HTTP probes and 32 for a queued tick (30 D1, one asset, one DO). Dispatch subrequest budgets are 32 for HTTP and 128 for ticks: over six times and four times those observations. CPU budgets remain provisional at 100/1000 ms because provider CPU analytics were unavailable. These are not arbitrary-code or DO workload capacity guarantees.
    The enqueue producer still iterates the test registry; a production registry
    needs paginated/sharded scheduling, not one unbounded list in a cron invocation.
 5. **Trust boundary.** No decorative header stripping. Public `/__managed/*`
@@ -133,3 +134,82 @@ Only `homie-managed-test` and `hm-test-*` resources were created. Original examp
 studios, production Workers and homie.rocks were not changed. The per-resource
 inventory, final measurement table, browser facts and verified deletion receipts
 are recorded with the completion of this experiment below.
+
+## Final deployed results
+
+Milliseconds, **median [min–max], n**. Cold includes observed `first:true` invocations after redeploys and in the alternating sequence; warm uses rounds 1–5 with `first:false`. Excluded samples remain in the raw JSON.
+
+| Probe | Managed cold | Plain cold | Managed warm | Plain warm |
+| --- | --- | --- | --- | --- |
+| page | 1479 [934–2024], n=2 | 1647 [1428–1866], n=2 | 88 [63–121], n=5 | 394 [278–479], n=5 |
+| asset | 486 [467–529], n=3 | 464.5 [435–494], n=2 | 174 [46–222], n=5 | 223 [109–527], n=5 |
+| records | 1054 [686–1422], n=2 | 2117.5 [1412–2823], n=2 | 110 [62–129], n=5 | 345 [317–633], n=5 |
+| mcp | 617 [609–1313], n=3 | 1503 [1470–1536], n=2 | 111 [74–242], n=5 | 326 [245–1220], n=5 |
+| seat | 1414 [1035–1793], n=2 | 2202.5 [1756–2649], n=2 | 201 [119–292], n=5 | 372 [285–849], n=5 |
+
+The paired run shows no WFP latency penalty here; it does not establish a general
+WFP speed advantage. D1 placement, edge/isolate placement and network variability
+remain confounders. Both databases were WNAM/SEA. Steady managed counts were
+one D1 round trip for page, records, MCP and lobby, zero for the asset. A cold
+request included catalogue/metadata work (up to three D1 + one asset + one DO
+for lobby). The fast local tests cover the 0–1 D1 budget separately.
+[All alternating samples](proof/managed-step-1-round2/speed.json) and
+[cold redeploy samples](proof/managed-step-1-round2/cold.json) retain unexpected
+cold starts and warm-after-redeploy samples instead of concealing them.
+
+- **Rendered data:** [browser facts](proof/managed-step-1-round2/app.json) and
+  [screenshot](proof/managed-step-1-round2/app.png) show both October 17 volunteer
+  shifts and the loaded giving panel. The probe waits for actual records/text,
+  not a canvas or loading placeholder. No payment was attempted.
+- **Room readiness:** [browser facts](proof/managed-step-1-round2/room-ready.json)
+  show replica seat 0 and `arrival.by=auto` (the helper's playable signal) on both
+  deployments: managed 4,657 ms, plain 5,598 ms. These are single browser samples,
+  not distributions or explicit game-authored `net.playable()` evidence; neither
+  cover lifted by timeout.
+- **Isolation/egress:** [live probes](proof/managed-step-1-round2/security.json)
+  show absent `request.cf`, only test tenant bindings, overwritten spoofed identity,
+  internal/control destination 403s and public-tick 404. An arbitrary self-bound
+  `ArbitraryRoom` DO wrote storage and fetched the test echo with no tenant stamp,
+  demonstrating the documented DO exception rather than hiding it.
+- **Scheduling:** [Queue traces](proof/managed-step-1-round2/queue-traces.json)
+  show the schema failure and later independent successful tick (32 calls).
+  [DLQ contents](proof/managed-step-1-round2/dlq.json) include failed deliveries;
+  [function receipts](proof/managed-step-1-round2/functions.json) show completion
+  after schema repair. A deliberate missing-script tick also exercised failure
+  routing without creating a missing script. Queue messages are at-least-once.
+- **Redeploy:** [before/after subscriptions](proof/managed-step-1-round2/redeploy.json)
+  preserve existing cursors/start times and eliminate the injected stale entry.
+- **Observability:** [egress logs](proof/managed-step-1-round2/tenant-traces.json)
+  attribute requests to platform-supplied tenant IDs.
+  [GraphQL results](proof/managed-step-1-round2/metrics-final.json) contain scoped
+  DO CPU counters for Lobby and Table. Worker metrics returned an empty result;
+  an earlier attempt hit the shared account query budget. No Worker CPU percentile
+  or zero-usage claim is made. Tail-consumer wiring is deployed; the captured
+  egress logs alone are not proof that every tenant trace was delivered.
+- **Kill switch:** [live result](proof/managed-step-1-round2/kill.json) shows the
+  disabled studio returning 404 while the second test route remains 200. Unit
+  tests also prove pending ticks cannot invoke a removed route.
+
+## Final resource accounting
+
+[Live binding/resource inventory](proof/managed-step-1-round2/existed.json) and
+[cleanup receipts](proof/managed-step-1-round2/resources.json) record IDs and
+verified absence. Created and removed: namespace `homie-managed-test`; ordinary
+Workers `hm-test-dispatch`, `hm-test-outbound`, `hm-test-plain`; user Workers
+`hm-test-inlet`, `hm-test-egress-probe`; D1 `hm-test-inlet-db`, `hm-test-plain-db`;
+Queues `hm-test-ticks`, `hm-test-ticks-dlq` and their consumer; nine DO namespaces
+(four standard classes per studio plus `hm-test-inlet_ArbitraryRoom`). Associated
+asset-serving deployments disappear with their scripts; no claim of immediate
+physical CDN blob erasure is made. API tails closed and their sessions were deleted.
+
+Cleanup initially failed because the dispatcher still consumed the Queue. The
+harness now detaches and verifies the consumer before deleting Workers. Script
+removal cascaded to the DO namespaces; subsequent DO checks truthfully reported
+`already absent`. Plain-Worker DO checks on the resumed cleanup occurred after
+that Worker had already been deleted; their earlier binding inventory proves the
+allocation. No broad account cleanup or unrelated process termination was used.
+
+Validation: 12 managed tests, eight arrival tests, nine request-budget tests, and
+one real-workerd MCP budget test pass. The generated runtime identity was refreshed
+without changing version 0.54.0. The remote customer-build runner and PSL work are
+explicit step-2/public-launch work, not completed capabilities of this harness.

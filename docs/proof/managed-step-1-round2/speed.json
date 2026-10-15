@@ -1,0 +1,602 @@
+[
+  {
+    "round": 0,
+    "kind": "managed",
+    "endpoint": "page",
+    "ms": 339,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 23363
+  },
+  {
+    "round": 0,
+    "kind": "plain",
+    "endpoint": "page",
+    "ms": 1428,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":2,\"assets\":1,\"do\":0}",
+    "bytes": 23363
+  },
+  {
+    "round": 0,
+    "kind": "managed",
+    "endpoint": "asset",
+    "ms": 486,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":0,\"assets\":1,\"do\":0}",
+    "bytes": 6771
+  },
+  {
+    "round": 0,
+    "kind": "plain",
+    "endpoint": "asset",
+    "ms": 279,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":0,\"assets\":0,\"do\":0}",
+    "bytes": 6771
+  },
+  {
+    "round": 0,
+    "kind": "managed",
+    "endpoint": "records",
+    "ms": 252,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":2,\"assets\":0,\"do\":0}",
+    "bytes": 24
+  },
+  {
+    "round": 0,
+    "kind": "plain",
+    "endpoint": "records",
+    "ms": 483,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 24
+  },
+  {
+    "round": 0,
+    "kind": "managed",
+    "endpoint": "mcp",
+    "ms": 609,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":2,\"assets\":1,\"do\":0}",
+    "bytes": 5844
+  },
+  {
+    "round": 0,
+    "kind": "plain",
+    "endpoint": "mcp",
+    "ms": 635,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 5844
+  },
+  {
+    "round": 0,
+    "kind": "managed",
+    "endpoint": "seat",
+    "ms": 194,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":3,\"assets\":0,\"do\":1}",
+    "bytes": 55
+  },
+  {
+    "round": 0,
+    "kind": "plain",
+    "endpoint": "seat",
+    "ms": 998,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":2,\"assets\":0,\"do\":1}",
+    "bytes": 55
+  },
+  {
+    "round": 1,
+    "kind": "plain",
+    "endpoint": "page",
+    "ms": 479,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 23363
+  },
+  {
+    "round": 1,
+    "kind": "managed",
+    "endpoint": "page",
+    "ms": 121,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 23363
+  },
+  {
+    "round": 1,
+    "kind": "plain",
+    "endpoint": "asset",
+    "ms": 527,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":0,\"assets\":0,\"do\":0}",
+    "bytes": 6771
+  },
+  {
+    "round": 1,
+    "kind": "managed",
+    "endpoint": "asset",
+    "ms": 46,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":0,\"assets\":0,\"do\":0}",
+    "bytes": 6771
+  },
+  {
+    "round": 1,
+    "kind": "plain",
+    "endpoint": "records",
+    "ms": 345,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 24
+  },
+  {
+    "round": 1,
+    "kind": "managed",
+    "endpoint": "records",
+    "ms": 129,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 24
+  },
+  {
+    "round": 1,
+    "kind": "plain",
+    "endpoint": "mcp",
+    "ms": 326,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 5844
+  },
+  {
+    "round": 1,
+    "kind": "managed",
+    "endpoint": "mcp",
+    "ms": 242,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 5844
+  },
+  {
+    "round": 1,
+    "kind": "plain",
+    "endpoint": "seat",
+    "ms": 354,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":1}",
+    "bytes": 55
+  },
+  {
+    "round": 1,
+    "kind": "managed",
+    "endpoint": "seat",
+    "ms": 292,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":1}",
+    "bytes": 55
+  },
+  {
+    "round": 2,
+    "kind": "managed",
+    "endpoint": "page",
+    "ms": 88,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 23363
+  },
+  {
+    "round": 2,
+    "kind": "plain",
+    "endpoint": "page",
+    "ms": 278,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 23363
+  },
+  {
+    "round": 2,
+    "kind": "managed",
+    "endpoint": "asset",
+    "ms": 174,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":0,\"assets\":0,\"do\":0}",
+    "bytes": 6771
+  },
+  {
+    "round": 2,
+    "kind": "plain",
+    "endpoint": "asset",
+    "ms": 223,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":0,\"assets\":0,\"do\":0}",
+    "bytes": 6771
+  },
+  {
+    "round": 2,
+    "kind": "managed",
+    "endpoint": "records",
+    "ms": 115,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 24
+  },
+  {
+    "round": 2,
+    "kind": "plain",
+    "endpoint": "records",
+    "ms": 325,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 24
+  },
+  {
+    "round": 2,
+    "kind": "managed",
+    "endpoint": "mcp",
+    "ms": 111,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 5844
+  },
+  {
+    "round": 2,
+    "kind": "plain",
+    "endpoint": "mcp",
+    "ms": 448,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 5844
+  },
+  {
+    "round": 2,
+    "kind": "managed",
+    "endpoint": "seat",
+    "ms": 201,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":1}",
+    "bytes": 55
+  },
+  {
+    "round": 2,
+    "kind": "plain",
+    "endpoint": "seat",
+    "ms": 285,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":1}",
+    "bytes": 55
+  },
+  {
+    "round": 3,
+    "kind": "plain",
+    "endpoint": "page",
+    "ms": 320,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 23363
+  },
+  {
+    "round": 3,
+    "kind": "managed",
+    "endpoint": "page",
+    "ms": 86,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 23363
+  },
+  {
+    "round": 3,
+    "kind": "plain",
+    "endpoint": "asset",
+    "ms": 123,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":0,\"assets\":0,\"do\":0}",
+    "bytes": 6771
+  },
+  {
+    "round": 3,
+    "kind": "managed",
+    "endpoint": "asset",
+    "ms": 169,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":0,\"assets\":0,\"do\":0}",
+    "bytes": 6771
+  },
+  {
+    "round": 3,
+    "kind": "plain",
+    "endpoint": "records",
+    "ms": 633,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 24
+  },
+  {
+    "round": 3,
+    "kind": "managed",
+    "endpoint": "records",
+    "ms": 110,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 24
+  },
+  {
+    "round": 3,
+    "kind": "plain",
+    "endpoint": "mcp",
+    "ms": 245,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 5844
+  },
+  {
+    "round": 3,
+    "kind": "managed",
+    "endpoint": "mcp",
+    "ms": 110,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 5844
+  },
+  {
+    "round": 3,
+    "kind": "plain",
+    "endpoint": "seat",
+    "ms": 510,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":1}",
+    "bytes": 55
+  },
+  {
+    "round": 3,
+    "kind": "managed",
+    "endpoint": "seat",
+    "ms": 119,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":1}",
+    "bytes": 55
+  },
+  {
+    "round": 4,
+    "kind": "managed",
+    "endpoint": "page",
+    "ms": 108,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 23363
+  },
+  {
+    "round": 4,
+    "kind": "plain",
+    "endpoint": "page",
+    "ms": 394,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 23363
+  },
+  {
+    "round": 4,
+    "kind": "managed",
+    "endpoint": "asset",
+    "ms": 222,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":0,\"assets\":0,\"do\":0}",
+    "bytes": 6771
+  },
+  {
+    "round": 4,
+    "kind": "plain",
+    "endpoint": "asset",
+    "ms": 249,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":0,\"assets\":0,\"do\":0}",
+    "bytes": 6771
+  },
+  {
+    "round": 4,
+    "kind": "managed",
+    "endpoint": "records",
+    "ms": 62,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 24
+  },
+  {
+    "round": 4,
+    "kind": "plain",
+    "endpoint": "records",
+    "ms": 585,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 24
+  },
+  {
+    "round": 4,
+    "kind": "managed",
+    "endpoint": "mcp",
+    "ms": 74,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 5844
+  },
+  {
+    "round": 4,
+    "kind": "plain",
+    "endpoint": "mcp",
+    "ms": 1220,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 5844
+  },
+  {
+    "round": 4,
+    "kind": "managed",
+    "endpoint": "seat",
+    "ms": 201,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":1}",
+    "bytes": 55
+  },
+  {
+    "round": 4,
+    "kind": "plain",
+    "endpoint": "seat",
+    "ms": 849,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":1}",
+    "bytes": 55
+  },
+  {
+    "round": 5,
+    "kind": "plain",
+    "endpoint": "page",
+    "ms": 410,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 23363
+  },
+  {
+    "round": 5,
+    "kind": "managed",
+    "endpoint": "page",
+    "ms": 63,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 23363
+  },
+  {
+    "round": 5,
+    "kind": "plain",
+    "endpoint": "asset",
+    "ms": 109,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":0,\"assets\":0,\"do\":0}",
+    "bytes": 6771
+  },
+  {
+    "round": 5,
+    "kind": "managed",
+    "endpoint": "asset",
+    "ms": 186,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":0,\"assets\":0,\"do\":0}",
+    "bytes": 6771
+  },
+  {
+    "round": 5,
+    "kind": "plain",
+    "endpoint": "records",
+    "ms": 317,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 24
+  },
+  {
+    "round": 5,
+    "kind": "managed",
+    "endpoint": "records",
+    "ms": 66,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 24
+  },
+  {
+    "round": 5,
+    "kind": "plain",
+    "endpoint": "mcp",
+    "ms": 305,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 5844
+  },
+  {
+    "round": 5,
+    "kind": "managed",
+    "endpoint": "mcp",
+    "ms": 162,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}",
+    "bytes": 5844
+  },
+  {
+    "round": 5,
+    "kind": "plain",
+    "endpoint": "seat",
+    "ms": 372,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":1}",
+    "bytes": 55
+  },
+  {
+    "round": 5,
+    "kind": "managed",
+    "endpoint": "seat",
+    "ms": 187,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":1}",
+    "bytes": 55
+  }
+]

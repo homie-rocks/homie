@@ -1,0 +1,191 @@
+[
+  {
+    "round": 0,
+    "kind": "managed",
+    "endpoint": "page",
+    "ms": 934,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":2,\"assets\":1,\"do\":0}"
+  },
+  {
+    "round": 0,
+    "kind": "plain",
+    "endpoint": "page",
+    "ms": 1866,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":2,\"assets\":1,\"do\":0}"
+  },
+  {
+    "round": 0,
+    "kind": "managed",
+    "endpoint": "asset",
+    "ms": 467,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":0,\"assets\":1,\"do\":0}"
+  },
+  {
+    "round": 0,
+    "kind": "plain",
+    "endpoint": "asset",
+    "ms": 435,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":0,\"assets\":1,\"do\":0}"
+  },
+  {
+    "round": 0,
+    "kind": "managed",
+    "endpoint": "records",
+    "ms": 1422,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":2,\"assets\":1,\"do\":0}"
+  },
+  {
+    "round": 0,
+    "kind": "plain",
+    "endpoint": "records",
+    "ms": 2823,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":2,\"assets\":1,\"do\":0}"
+  },
+  {
+    "round": 0,
+    "kind": "managed",
+    "endpoint": "mcp",
+    "ms": 1313,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":2,\"assets\":1,\"do\":0}"
+  },
+  {
+    "round": 0,
+    "kind": "plain",
+    "endpoint": "mcp",
+    "ms": 1470,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":2,\"assets\":1,\"do\":0}"
+  },
+  {
+    "round": 0,
+    "kind": "managed",
+    "endpoint": "seat",
+    "ms": 1793,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":3,\"assets\":1,\"do\":1}"
+  },
+  {
+    "round": 0,
+    "kind": "plain",
+    "endpoint": "seat",
+    "ms": 2649,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":3,\"assets\":1,\"do\":1}"
+  },
+  {
+    "round": 1,
+    "kind": "plain",
+    "endpoint": "page",
+    "ms": 495,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}"
+  },
+  {
+    "round": 1,
+    "kind": "managed",
+    "endpoint": "page",
+    "ms": 2024,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":2,\"assets\":1,\"do\":0}"
+  },
+  {
+    "round": 1,
+    "kind": "plain",
+    "endpoint": "asset",
+    "ms": 494,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":0,\"assets\":1,\"do\":0}"
+  },
+  {
+    "round": 1,
+    "kind": "managed",
+    "endpoint": "asset",
+    "ms": 529,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":0,\"assets\":1,\"do\":0}"
+  },
+  {
+    "round": 1,
+    "kind": "plain",
+    "endpoint": "records",
+    "ms": 1412,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":2,\"assets\":1,\"do\":0}"
+  },
+  {
+    "round": 1,
+    "kind": "managed",
+    "endpoint": "records",
+    "ms": 686,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":2,\"assets\":1,\"do\":0}"
+  },
+  {
+    "round": 1,
+    "kind": "plain",
+    "endpoint": "mcp",
+    "ms": 716,
+    "status": 200,
+    "first": "false",
+    "calls": "{\"d1\":1,\"assets\":0,\"do\":0}"
+  },
+  {
+    "round": 1,
+    "kind": "managed",
+    "endpoint": "mcp",
+    "ms": 617,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":2,\"assets\":1,\"do\":0}"
+  },
+  {
+    "round": 1,
+    "kind": "plain",
+    "endpoint": "seat",
+    "ms": 1756,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":3,\"assets\":1,\"do\":1}"
+  },
+  {
+    "round": 1,
+    "kind": "managed",
+    "endpoint": "seat",
+    "ms": 1035,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":3,\"assets\":1,\"do\":1}"
+  },
+  {
+    "round": 2,
+    "kind": "plain",
+    "endpoint": "mcp",
+    "ms": 1536,
+    "status": 200,
+    "first": "true",
+    "calls": "{\"d1\":2,\"assets\":1,\"do\":0}"
+  }
+]

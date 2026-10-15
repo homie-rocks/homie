@@ -33,7 +33,7 @@ test('queue retries failing tenants independently; killed tenants never dispatch
   assert.deepEqual(calls,[]);
   assert.equal((await dispatch.fetch(new Request('https://studio.test/'),env)).status,404);
 });
-import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,rmSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -70,6 +70,8 @@ test('adapter excludes production capabilities; tick requires unforgeable dispat
   const req=()=>new Request('https://test.example/__managed/tick',{method:'POST',headers:{'x-homie-managed-tick':'true'},body:'{"scheduledTime":123,"cron":"* * * * *"}'});
   assert.equal((await worker.fetch(req(),env,{})).status,404);assert.equal(env.ticks.length,0);
   assert.equal((await worker.fetch(req(),env,{props:{managedTick:true}})).status,204);assert.equal(env.ticks[0].scheduledTime,123);
+  symlinkSync('/etc/hosts',join(studio,'site/dist/escape'));
+  assert.throws(()=>prepare({studio,output,name:'hm-test-unit',databaseId:'11111111-1111-1111-1111-111111111111',accountId:'a'.repeat(32),hostname:'test.example'}),/symlinks/);
  } finally {rmSync(dir,{recursive:true,force:true})}
 });
 import {waitForDatabase,removeResource} from './lifecycle.mjs';

@@ -1,0 +1,48 @@
+{
+  "errors": [],
+  "responses": [
+    {
+      "url": "https://hm-test-dispatch.ryan-d2f.workers.dev/gathering/api/app/records/shifts?",
+      "status": 200,
+      "body": "{\"ok\":true,\"records\":[{\"id\":\"planting\",\"data\":{\"label\":\"Saturday 17 October 2026 · Planting · 10 am–noon\",\"capacity\":2},\"version\":2,\"updatedAt\":0,\"booking\":{\"full\":false,\"available\":2,\"synced\":true}},{\"id\":\"shoreline\",\"data\":{\"label\":\"Saturday 17 October 2026 · Shoreline · 9–11 am\",\"capacity\":3},\"version\":2,\"updatedAt\":0,\"booking\":{\"full\":false,\"available\":3,\"synced\":true}},{\"id\":\"2026-10-17-shoreline\",\"data\":{\"label\":\"Saturday, October 17, 2026 · Shoreline · 9–11 am\",\"capacity\":3},\"version\":1,\"updatedAt\":1792090635369,\"booking\":{\"full\":false,\"available\":3,\"synced\":true}},{\"id\":\"2026-10-17-planting\",\"data\":{\"label\":\"Saturday, October 17, 2026 · Planting · 10 am–noon\",\"capacity\":2},\"version\":1,\"updatedAt\":1792090635560,\"booking\":{\"full\":false,\"available\":2,\"synced\":true}}]}"
+    },
+    {
+      "url": "https://hm-test-dispatch.ryan-d2f.workers.dev/gathering/api/app/records/signups?",
+      "status": 200,
+      "body": "{\"ok\":true,\"records\":[]}"
+    },
+    {
+      "url": "https://hm-test-dispatch.ryan-d2f.workers.dev/gathering/api/app/records/shift-tickets?",
+      "status": 200,
+      "body": "{\"ok\":true,\"records\":[]}"
+    },
+    {
+      "url": "https://hm-test-dispatch.ryan-d2f.workers.dev/gathering/api/app/records/gifts?",
+      "status": 200,
+      "body": "{\"ok\":true,\"records\":[]}"
+    },
+    {
+      "url": "https://hm-test-dispatch.ryan-d2f.workers.dev/gathering/api/app/records/volunteers?",
+      "status": 200,
+      "body": "{\"ok\":true,\"records\":[]}"
+    },
+    {
+      "url": "https://hm-test-dispatch.ryan-d2f.workers.dev/gathering/api/app/records/settings/current?",
+      "status": 200,
+      "body": "{\"ok\":true,\"records\":[]}"
+    }
+  ],
+  "arrival": {
+    "phase": "done"
+  },
+  "frames": [
+    {
+      "url": "https://hm-test-dispatch.ryan-d2f.workers.dev/gathering/open?room=hm-test-app",
+      "text": "TEST / CONCEPT"
+    },
+    {
+      "url": "https://hm-test-dispatch.ryan-d2f.workers.dev/gathering/__game/?room=hm-test-app&pf=1&role=supporter&surface=phone",
+      "text": "TEST / CONCEPT\nlittle inlet ≈\nTogether, live\nMake your own with your AI ↗\n\nTHE INLET GATHERING\n\nA little from you.\nA living shoreline.\n\nMake room for roots. Bring life back to the water’s edge.\n\n$0\nverified test gifts · $1,000 CAD goal\nOne-time\nMonthly\n$10\n$25\n$50\n$100\n\nRestore native shoreline plants.\n\nName on your lantern optional · public\nGive on Stripe · $25\n\nPayments are not connected yet.\n\nFictional non-profit · test payments only. Stripe records your test payment receipt; this demo does not issue charitable tax receipts.\n\nManage my gifts & receipts on Stripe ↗\n\nMANY HANDS · VOLUNTEER SHIFTS\n\n0 volunteers booked\n\nFirst name public on the welcome list\nSaturday, October 17, 2026 · Shoreline · 9–11 am\n0 / 3 places filled\nJoin this shift · free\nSaturday, October 17, 2026 · Planting · 10 am–noon\n0 / 2 places filled\nJoin this shift · free\nSound on\nReduce motion\nFictional non-profit · Stripe test payments only. · Made with Homie"
+    }
+  ]
+}

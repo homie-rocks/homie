@@ -1,0 +1,26 @@
+{
+  "isolation": {
+    "status": 200,
+    "body": "{\"cfPresent\":false,\"bindings\":[\"ASSETS\",\"CONCENTRATOR\",\"DB\",\"GATE\",\"HM_TEST_GENERATION\",\"HOMIE_CONCEPT\",\"LOBBY\",\"PROBE\",\"STUDIO_FUNCTION_CRONS\",\"STUDIO_FUNCTION_MANAGED_CRONS\",\"STUDIO_NAME\",\"TABLE\"]}"
+  },
+  "egress": {
+    "status": 200,
+    "body": "{\"tenant\":\"hm-test-inlet\"}"
+  },
+  "internal": {
+    "status": 403,
+    "body": "Managed destination denied"
+  },
+  "control": {
+    "status": 403,
+    "body": "Managed destination denied"
+  },
+  "arbitraryDO": {
+    "status": 200,
+    "body": "{\"tenant\":null}"
+  },
+  "spoofedTick": {
+    "status": 404,
+    "body": "Not found"
+  }
+}

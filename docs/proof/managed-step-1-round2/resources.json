@@ -1,0 +1,356 @@
+{
+  "namespace": "homie-managed-test",
+  "databases": [
+    {
+      "name": "hm-test-inlet-db",
+      "id": "7718910b-2568-4033-a7e3-4fe58b835247",
+      "info": {
+        "uuid": "7718910b-2568-4033-a7e3-4fe58b835247",
+        "name": "hm-test-inlet-db",
+        "created_at": "2026-10-15T18:44:06.534Z",
+        "version": "production",
+        "num_tables": 66,
+        "file_size": 700416,
+        "running_in_region": "WNAM",
+        "read_replication": {
+          "mode": "disabled"
+        },
+        "jurisdiction": null
+      },
+      "probe": [
+        {
+          "results": [
+            {
+              "ready": 1
+            }
+          ],
+          "success": true,
+          "meta": {
+            "served_by": "v3-prod",
+            "served_by_region": "WNAM",
+            "served_by_colo": "SEA",
+            "served_by_primary": true,
+            "timings": {
+              "sql_duration_ms": 0.3469
+            },
+            "duration": 0.3469,
+            "changes": 0,
+            "last_row_id": 0,
+            "changed_db": false,
+            "size_after": 700416,
+            "rows_read": 0,
+            "rows_written": 0,
+            "total_attempts": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "hm-test-plain-db",
+      "id": "978fe3a0-6e5d-41b4-bb6d-e0d58ac697aa",
+      "readiness": [
+        {
+          "results": [
+            {
+              "ready": 1
+            }
+          ],
+          "success": true,
+          "meta": {
+            "served_by": "v3-prod",
+            "served_by_region": "WNAM",
+            "served_by_colo": "SEA",
+            "served_by_primary": true,
+            "timings": {
+              "sql_duration_ms": 0.7248
+            },
+            "duration": 0.7248,
+            "changes": 0,
+            "last_row_id": 0,
+            "changed_db": false,
+            "size_after": 12288,
+            "rows_read": 0,
+            "rows_written": 0,
+            "total_attempts": 1
+          }
+        }
+      ],
+      "info": {
+        "uuid": "978fe3a0-6e5d-41b4-bb6d-e0d58ac697aa",
+        "name": "hm-test-plain-db",
+        "created_at": "2026-10-15T18:45:58.136Z",
+        "version": "production",
+        "num_tables": 66,
+        "file_size": 700416,
+        "running_in_region": "WNAM",
+        "read_replication": {
+          "mode": "disabled"
+        },
+        "jurisdiction": null
+      },
+      "probe": [
+        {
+          "results": [
+            {
+              "ready": 1
+            }
+          ],
+          "success": true,
+          "meta": {
+            "served_by": "v3-prod",
+            "served_by_region": "WNAM",
+            "served_by_colo": "SEA",
+            "served_by_primary": true,
+            "timings": {
+              "sql_duration_ms": 1.0053
+            },
+            "duration": 1.0053,
+            "changes": 0,
+            "last_row_id": 0,
+            "changed_db": false,
+            "size_after": 700416,
+            "rows_read": 0,
+            "rows_written": 0,
+            "total_attempts": 1
+          }
+        }
+      ]
+    }
+  ],
+  "workers": [
+    "hm-test-outbound",
+    "hm-test-dispatch",
+    "hm-test-plain"
+  ],
+  "deleted": [
+    "hm-test-plain",
+    "hm-test-plain",
+    "hm-test-dispatch",
+    "hm-test-outbound",
+    "hm-test-inlet",
+    "hm-test-egress-probe",
+    "hm-test-inlet_Concentrator",
+    "hm-test-inlet_Gate",
+    "hm-test-inlet_Lobby",
+    "hm-test-inlet_ArbitraryRoom",
+    "hm-test-inlet_Table",
+    "hm-test-plain_Concentrator",
+    "hm-test-plain_Gate",
+    "hm-test-plain_Lobby",
+    "hm-test-plain_Table",
+    "homie-managed-test",
+    "hm-test-inlet-db",
+    "hm-test-plain-db",
+    "hm-test-ticks",
+    "hm-test-ticks-dlq"
+  ],
+  "accountId": "d2f6f976cecad2fe130976fe36916cdb",
+  "namespaceCreated": true,
+  "queues": [
+    "hm-test-ticks-dlq",
+    "hm-test-ticks"
+  ],
+  "users": [
+    "hm-test-inlet",
+    "hm-test-egress-probe"
+  ],
+  "durableObjects": [
+    {
+      "name": "hm-test-inlet_Concentrator",
+      "id": "4bcec9d3b7cc464c8c09b25f667e1df3",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-inlet_Gate",
+      "id": "769379a4d0d04c429a1aadd847199ee6",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-inlet_Lobby",
+      "id": "95a845e49f1e40e49aad395605135e95",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-inlet_ArbitraryRoom",
+      "id": "3839a4c48a8145e583c57a58f089ecf4",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-inlet_Table",
+      "id": "e1f2a344b29546e98484f39af00b3f06",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-plain_Concentrator",
+      "id": "4cc21dc3a7bd4708bf1c445c6046ffd3",
+      "existedBeforeCleanup": false
+    },
+    {
+      "name": "hm-test-plain_Gate",
+      "id": "25d0ccebde6a473e982c9c3771d4928e",
+      "existedBeforeCleanup": false
+    },
+    {
+      "name": "hm-test-plain_Lobby",
+      "id": "cb1a0b2643014d059be96a4cd31f1b92",
+      "existedBeforeCleanup": false
+    },
+    {
+      "name": "hm-test-plain_Table",
+      "id": "0c42e50f98154515ac196229fabbaf43",
+      "existedBeforeCleanup": false
+    }
+  ],
+  "killed": [
+    "hm-test-inlet"
+  ],
+  "cleanup": [
+    {
+      "name": "hm-test-plain",
+      "path": "workers/scripts/hm-test-plain?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-ticks consumer",
+      "id": "b53b112fd6604936b42b9e8ee2a89afe",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain",
+      "path": "workers/scripts/hm-test-plain?force=true",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-dispatch",
+      "path": "workers/scripts/hm-test-dispatch?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-outbound",
+      "path": "workers/scripts/hm-test-outbound?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet",
+      "path": "workers/dispatch/namespaces/homie-managed-test/scripts/hm-test-inlet?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-egress-probe",
+      "path": "workers/dispatch/namespaces/homie-managed-test/scripts/hm-test-egress-probe?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet_Concentrator",
+      "path": "workers/durable_objects/namespaces/4bcec9d3b7cc464c8c09b25f667e1df3",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet_Gate",
+      "path": "workers/durable_objects/namespaces/769379a4d0d04c429a1aadd847199ee6",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet_Lobby",
+      "path": "workers/durable_objects/namespaces/95a845e49f1e40e49aad395605135e95",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet_ArbitraryRoom",
+      "path": "workers/durable_objects/namespaces/3839a4c48a8145e583c57a58f089ecf4",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet_Table",
+      "path": "workers/durable_objects/namespaces/e1f2a344b29546e98484f39af00b3f06",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain_Concentrator",
+      "path": "workers/durable_objects/namespaces/4cc21dc3a7bd4708bf1c445c6046ffd3",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain_Gate",
+      "path": "workers/durable_objects/namespaces/25d0ccebde6a473e982c9c3771d4928e",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain_Lobby",
+      "path": "workers/durable_objects/namespaces/cb1a0b2643014d059be96a4cd31f1b92",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain_Table",
+      "path": "workers/durable_objects/namespaces/0c42e50f98154515ac196229fabbaf43",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "homie-managed-test",
+      "path": "workers/dispatch/namespaces/homie-managed-test",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet-db",
+      "path": "d1/database/7718910b-2568-4033-a7e3-4fe58b835247",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain-db",
+      "path": "d1/database/978fe3a0-6e5d-41b4-bb6d-e0d58ac697aa",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-ticks",
+      "path": "queues/bc0421e52e624afabc92fe85c4a5c2ce",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-ticks-dlq",
+      "path": "queues/edab0a8d70e3418d9a57e58e2902d65e",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    }
+  ]
+}

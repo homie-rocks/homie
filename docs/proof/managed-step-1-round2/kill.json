@@ -1,0 +1,12 @@
+{
+  "checks": [
+    {
+      "at": "2026-10-15T19:08:53.101Z",
+      "status": 404
+    }
+  ],
+  "otherRoute": {
+    "status": 200,
+    "body": "{\"tenant\":\"hm-test-egress-probe\"}"
+  }
+}

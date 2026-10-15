@@ -1,0 +1,30 @@
+{
+  "data": {
+    "viewer": {
+      "accounts": [
+        {
+          "durableObjectsPeriodicGroups": [
+            {
+              "dimensions": {
+                "namespaceId": "95a845e49f1e40e49aad395605135e95"
+              },
+              "sum": {
+                "cpuTime": 77213
+              }
+            },
+            {
+              "dimensions": {
+                "namespaceId": "e1f2a344b29546e98484f39af00b3f06"
+              },
+              "sum": {
+                "cpuTime": 285837
+              }
+            }
+          ],
+          "workersInvocationsAdaptive": []
+        }
+      ]
+    }
+  },
+  "errors": null
+}

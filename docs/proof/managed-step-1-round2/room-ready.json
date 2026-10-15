@@ -1,0 +1,124 @@
+[
+  {
+    "kind": "managed",
+    "ms": 4657,
+    "state": {
+      "arrival": {
+        "phase": "done",
+        "step": "Loading the world…",
+        "p": 1,
+        "lookMs": 401,
+        "liftedMs": 4637,
+        "by": "auto",
+        "mode": "auto",
+        "explicitMs": null,
+        "lateMs": null
+      },
+      "seat": 0,
+      "stats": {
+        "telemetrySource": "server",
+        "role": "replica",
+        "seat": 0,
+        "host": {
+          "id": "server",
+          "seat": null
+        },
+        "connected": true,
+        "offline": false,
+        "rtt": 37,
+        "offset": 35,
+        "snapHzIn": 1,
+        "snapHzOut": 0,
+        "inputHzIn": 0,
+        "inputHzOut": 1,
+        "idleInputsSkipped": 0,
+        "lastSnapBytes": 953,
+        "maxSnapBytes": 953,
+        "bytesInPerS": 2797,
+        "bytesOutPerS": 380,
+        "interpDelay": 151,
+        "snapAgeP90": 75,
+        "starvedPct": 0,
+        "rejectedSnaps": 0,
+        "owned": true,
+        "pending": 0,
+        "stateKeys": 1,
+        "peers": 1,
+        "reconnects": 0,
+        "drops": 0,
+        "link": "online",
+        "heartbeats": 0,
+        "promotions": 0,
+        "round": 1,
+        "decides": {
+          "asked": 0,
+          "ai": 0,
+          "local": 0,
+          "floor": 0,
+          "msP50": null
+        }
+      }
+    }
+  },
+  {
+    "kind": "plain",
+    "ms": 5598,
+    "state": {
+      "arrival": {
+        "phase": "done",
+        "step": "Loading the world…",
+        "p": 1,
+        "lookMs": 3264,
+        "liftedMs": 5580,
+        "by": "auto",
+        "mode": "auto",
+        "explicitMs": null,
+        "lateMs": null
+      },
+      "seat": 0,
+      "stats": {
+        "telemetrySource": "server",
+        "role": "replica",
+        "seat": 0,
+        "host": {
+          "id": "server",
+          "seat": null
+        },
+        "connected": true,
+        "offline": false,
+        "rtt": null,
+        "offset": 11,
+        "snapHzIn": 0,
+        "snapHzOut": 0,
+        "inputHzIn": 0,
+        "inputHzOut": 0,
+        "idleInputsSkipped": 0,
+        "lastSnapBytes": 0,
+        "maxSnapBytes": 0,
+        "bytesInPerS": 1389,
+        "bytesOutPerS": 165,
+        "interpDelay": 88,
+        "snapAgeP90": 0,
+        "starvedPct": 0,
+        "rejectedSnaps": 0,
+        "owned": true,
+        "pending": 0,
+        "stateKeys": 0,
+        "peers": 1,
+        "reconnects": 0,
+        "drops": 0,
+        "link": "connecting",
+        "heartbeats": 0,
+        "promotions": 0,
+        "round": null,
+        "decides": {
+          "asked": 0,
+          "ai": 0,
+          "local": 0,
+          "floor": 0,
+          "msP50": null
+        }
+      }
+    }
+  }
+]

@@ -1,5 +1,5 @@
-import {cpSync, readdirSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
-import {resolve, dirname, join} from 'node:path';
+import {cpSync, lstatSync, realpathSync, readdirSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
+import {resolve, dirname, join, relative, isAbsolute} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {parse, printParseErrorCode} from 'jsonc-parser';
@@ -12,15 +12,20 @@ export function prepare({studio, output, name, databaseId, accountId, hostname})
   if (!/^hm-test-[a-z0-9-]+$/.test(name)) throw new Error('Step 1 only accepts hm-test- resource names');
   if (!/^[0-9a-f-]{36}$/.test(databaseId) || !/^[0-9a-f]{32}$/.test(accountId)) throw new Error('Explicit database/account IDs required');
   if (!hostname || new URL('https://' + hostname).hostname !== hostname) throw new Error('Exact hostname required');
-  studio=resolve(studio); output=resolve(output);
+  studio=realpathSync(resolve(studio)); output=resolve(output);
+  const inside=path=>{const rel=relative(studio,realpathSync(path));if(rel.startsWith('..')||isAbsolute(rel))throw new Error('Artifact path escapes studio');};
+  const rejectLinks=path=>{if(lstatSync(path).isSymbolicLink())throw new Error('Artifact symlinks are not accepted');if(lstatSync(path).isDirectory())for(const child of readdirSync(path))rejectLinks(join(path,child));};
+  for(const path of ['wrangler.jsonc','site/src/runtime/current.json','site/dist']){inside(join(studio,path));rejectLinks(join(studio,path));}
+  for(const path of ['studio.json','site/src/functions/declarations.json'])if(existsSync(join(studio,path))){inside(join(studio,path));rejectLinks(join(studio,path));}
   const source=read(join(studio,'wrangler.jsonc'));
   const current=read(join(studio,'site/src/runtime/current.json'));
+  inside(current.main);rejectLinks(dirname(current.main));
   mkdirSync(output,{recursive:true});
   const artifact=mkdtempSync(join(output,'build-'));
   const runtime=join(artifact,'runtime'); mkdirSync(runtime,{recursive:true});
   const migrationsDir=join(artifact,'migrations');mkdirSync(migrationsDir,{recursive:true});
   const sourceMigrations=join(studio,'site/migrations');
-  if(existsSync(sourceMigrations))cpSync(sourceMigrations,migrationsDir,{recursive:true});
+  if(existsSync(sourceMigrations)){inside(sourceMigrations);rejectLinks(sourceMigrations);cpSync(sourceMigrations,migrationsDir,{recursive:true});}
   const toolkitMigrations=fileURLToPath(new URL('../../template/site/migrations/',import.meta.url));
   for(const file of readdirSync(toolkitMigrations))if(file.endsWith('.sql')&&!existsSync(join(migrationsDir,file)))cpSync(join(toolkitMigrations,file),join(migrationsDir,file));
   const assets=join(artifact,'assets');
