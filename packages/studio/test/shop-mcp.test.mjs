@@ -210,9 +210,11 @@ test('missing legacy portal ID discovers the existing portal without a duplicate
 test('legacy verification without account migrates from the signed-in account after reading its links',async t=>{
  const {shopConnect}=await import('../lib/stripe-connect.mjs');
  const root=studio(t),f=fixture();await reconcile(root,f);
+ const file=join(root,'.studio','stripe-mcp.json'),saved=JSON.parse(readFileSync(file));delete saved.result.config.portalId;writeFileSync(file,JSON.stringify(saved));
  const reads=[];
  const result=await shopConnect(root,{webhookOnly:true,storage:join(root,'private'),open:()=>assert.fail('saved login'),exec:async args=>{
    const path=args.find(a=>a.startsWith('/v1/'));reads.push(path);
+   if(path==='/v1/billing_portal/configurations')return {code:0,stdout:JSON.stringify(f.call({method:'GET',path,params:{}}))};
    if(path==='/v1/account')return {code:0,stdout:'{"id":"acct_fixture"}'};
    if(path?.startsWith('/v1/payment_links/'))return {code:0,stdout:JSON.stringify(f.call({method:'GET',path,params:{}}))};
    if(path==='/v1/webhook_endpoints'&&args.includes('post'))return {code:0,stdout:'{"id":"we_fixture","secret":"whsec_fixture"}'};
@@ -221,6 +223,7 @@ test('legacy verification without account migrates from the signed-in account af
  assert.equal(result.ok,true,JSON.stringify(result));
  assert.ok(reads.some(p=>p?.startsWith('/v1/payment_links/')));
  assert.equal(JSON.parse(readFileSync(join(root,'.studio','stripe-mcp.json'))).options.account,'acct_fixture');
+ assert.equal(JSON.parse(readFileSync(file)).result.config.portalId,f.rows.configurations[0].id);
 });
 
 test('observation helper accumulates incremental official-plugin responses and reuses links by metadata',async t=>{

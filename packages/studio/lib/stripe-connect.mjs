@@ -173,6 +173,24 @@ export async function shopConnect(root, options = {}) {
     const reason = fullerReason(checked.shop);
     if (reason) return fail('fuller-checkout', reason, { mode, connected: true });
     const studio = readStudio(root);
+    if(options.webhookOnly && catalog.config.portal && !catalog.config.portalId) {
+      // 0.51.6 saved the login URL alone. Discover its identity without creating
+      // a second portal or making webhook installation depend on this new field.
+      try {
+        let after;
+        for(let page=0;page<100;page++) {
+          const found=await api('GET','/v1/billing_portal/configurations',{limit:100,...(after?{starting_after:after}:{})});
+          const portal=found.data?.find(p=>p.login_page?.url===catalog.config.portal && p.metadata?.homie==='shop-links-v1' && p.metadata?.studio===studio.slug && p.metadata?.origin===target.origin);
+          if(portal) {
+            catalog.config.portalId=portal.id;
+            const file=join(root,'.studio','stripe-mcp.json'),saved=JSON.parse(readFileSync(file,'utf8'));
+            saved.result.config.portalId=portal.id;writeFileSync(file,JSON.stringify(saved,null,2));break;
+          }
+          if(!found.has_more||!found.data?.length)break;
+          after=found.data.at(-1).id;
+        }
+      } catch { log('The existing billing portal URL is retained. The next Stripe plugin observation can fill its portal ID.'); }
+    }
     const w = wrangler ?? runner(root, studio.cloudflare?.accountId ? { CLOUDFLARE_ACCOUNT_ID: studio.cloudflare.accountId } : {});
     const receiptFile = join(dir, `${mode}.json`);
     const receipt = existsSync(receiptFile) ? json(readFileSync(receiptFile, 'utf8')) : null;
