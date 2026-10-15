@@ -56,7 +56,9 @@ The VM pins Node 24.20.0, toolkit 0.51.8 (the copied example's version), lockfil
 SHA-256 and immutable Git commit. The platform pins Worker compatibility date
 2026-10-01. Cloudflare documents `cloudflare/debian-trixie` as a managed image
 based on digest-pinned Node 24.20.0; the runner additionally checks the exact Node
-version. Each job has a ten-minute container-destruction alarm, bounded command
+version. Build VMs use one vCPU; browser-check VMs use two vCPUs for the three
+WebGL surfaces. Jobs run sequentially. Each job has a ten-minute
+container-destruction alarm, bounded command
 logs and artifact size, and a fresh filesystem. Every exit destroys the VM.
 The controller holds a documented `container.monitor()` promise to prevent
 eviction during long checks; the alarm still bounds the entire VM lifetime.
@@ -129,3 +131,17 @@ complete snapshots by atomic rename. Resources are keyed by provider path, since
 D1 and a Worker may legitimately have the same name. Known creation receipts were
 used to recover an early concurrent-save error; final cleanup inventories the
 actual bindings before any cascading deletion.
+
+The copied example initially failed its own capacity assertion in fresh isolated
+records: its scheduled shifts had never been created in that scope. The proof's
+`fixture` source commit adds a documented local `studio_schedule_fire` setup for
+the real `rolling-slots` function, followed by phone/wall reloads. It preserves
+every original assertion. This change exists only in the disposable Artifacts
+copy; the example directory and its live deployment are untouched.
+
+For this test only, `credential-window.mjs` waits for Wrangler's normal OAuth
+refresh before starting another build when less than eight minutes remain. It
+reads only the expiry for that decision and never copies refresh credentials or
+alters the shared auth file. Operator release actions refresh the trusted
+Worker's temporary deployment secret. These harness measures are not a substitute
+for production service-token provisioning and rotation.
