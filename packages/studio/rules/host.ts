@@ -169,16 +169,19 @@ export const BOT_NAMES = Object.freeze(['Pip', 'Juno', 'Moss', 'Rook', 'Fern', '
 const SPEECH = /^(?:say|chat|emote)/i;
 /**
  * The overrun check's memory: the last few ticks that started in this isolate, whichever rooms' they were, each with
- * when it started. Time inside a Worker stands still while code runs, so a tick cannot time itself; but the start of
- * the next tick, in any room, gives a scheduling interval (including other work). A late callback suspects the newest
- * tick here that took more than a period: the one just before it, or, when that one was quick and was itself held up,
- * the one before that.
+ * when it started and its synchronous duration when a clock advances. An advancing clock excludes waits between
+ * callbacks from blame. Frozen Worker clocks cannot time a tick, so they retain scheduling-interval attribution:
+ * the next tick start, in any room, supplies the interval, and a late callback suspects the newest slow interval.
  */
-const recent: { who: { blame(): void }; at: number }[] = [];
+const recent: { who: { blame(): void; measured(): boolean }; at: number; ms?: number }[] = [];
 function blameLate(now: number, period: number): void {
   for (let i = recent.length - 1; i >= 0; i -= 1) {
     const ended = i + 1 < recent.length ? recent[i + 1].at : now;
-    if (ended - recent[i].at > period) { recent[i].who.blame(); return; }
+    const entry = recent[i];
+    // An advancing local clock can distinguish synchronous execution from a wait between callbacks.
+    // Frozen Worker clocks retain scheduling-interval attribution.
+    const elapsed = entry.who.measured() && entry.ms !== undefined ? entry.ms : ended - entry.at;
+    if (elapsed > period) { entry.who.blame(); return; }
   }
 }
 
@@ -895,10 +898,16 @@ export function createHost(o: HostOptions): Host {
             overSince = null;
           }
         }
-        if (o.enforceOverrun) recent.push({ who: self, at: now });
+        const entry: (typeof recent)[number] | undefined = o.enforceOverrun ? { who: self, at: now } : undefined;
+        if (entry) recent.push(entry);
         if (recent.length > 8) recent.shift();
         lastStart = now;
+        const began = entry ? timing.now() : 0;
         tick(now);
+        if (entry) {
+          entry.ms = Math.max(0, o.clock.now() - now, timing.now() - began);
+          if (entry.ms > 0) clockAdvances = true;
+        }
         n += 1;
       }
       // Far behind (the isolate was busy, or the machine slept): the clock runs slow. It never jumps to catch up.
@@ -913,7 +922,8 @@ export function createHost(o: HostOptions): Host {
       if (now - failingSince >= FAIL_MS) end('fault', { error: stats.lastFault, faults: stats.faults });
     } finally { keepTime(); }
   }
-  const self = { blame: (): void => { blamed = true; } };
+  let clockAdvances = false;
+  const self = { blame: (): void => { blamed = true; }, measured: (): boolean => clockAdvances };
 
   function start(): void {
     if (running || ended) return;

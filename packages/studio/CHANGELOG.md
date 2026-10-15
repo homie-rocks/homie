@@ -19,6 +19,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## Unreleased
 
+- Attribute slow ticks to measured synchronous execution when local clocks advance, rather than unrelated waits between timer callbacks. Frozen Worker clocks retain the existing fallback; genuinely slow ticks and budget failures still end the room.
+
 - Prediction recognizes host-clock shifts from snapshot tick/stamp differences, so repeated small scheduling stalls do not accumulate as network jitter and leave own ships a second ahead.
 
 - Keep synchronous own-body readers and `ownTick` on one presentation when work crosses a simulation tick; changed input still catches up immediately.
