@@ -699,9 +699,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     entries = [{ t, row: [...values, ...claim, -471, ++inputSequence, controlChanges.length, ...controlChanges.flat()] }]; pending.push({ seq: inputSequence, t, input: Object.fromEntries(kind.input.map(([name, fd], i) => [name, fd.t === 'press' ? false : values[i]])) }); lastSent = JSON.stringify([values, claim]);
   }
   let pumping = false;
-  function pump(): void {
+  function pump(force = false): void {
     // A predictor's own queries read the room, and reading the room pumps: a step is never begun inside a step.
-    if (closed || pumping || predicting) return;
+    // Once drawn, synchronous HUD/scene reads keep that pose even if work crosses
+    // a tick boundary. Changed input explicitly forces its old-input catch-up.
+    if (closed || pumping || predicting || (presentedEntity && !force)) return;
     pumping = true;
     try { pumpOnce(); } finally { pumping = false; }
   }
@@ -997,6 +999,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let route: Vec3[] = [];
   let routeDirection = 0;
   let presentedEntity: Entity | null = null;
+  let presentedTick: number | null = null;
   let presentationQueued = false;
   let forecast: { mine: Mine; pos: Vec3; motion: Record<string, unknown>; tick: number; key: string; geometry: unknown; next: ReturnType<typeof runMove> } | null = null;
   let presented: { id: string; r: number; pos: Vec3; vel: Vec3; at: number } | null = null;
@@ -1009,6 +1012,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (!server) return null;
     const kind = kindOf.get(mine.kind);
     if (kind?.control && !server.motion[kind.control]) return entityOf(server, true);
+    let drawnTick = stepped;
     let pos = mine.pos;
     let safeOrigin = mine.pos;
     let heading = mine.heading;
@@ -1017,6 +1021,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     let preview: ReturnType<typeof runMove> | null = null;
     if (kind && base) {
       const a = Math.max(0, Math.min(1, tickAt(clock()) - stepped));
+      drawnTick = stepped + a;
       const now: Record<string, unknown> = {};
       // A held field previews as its mean over the part of the tick that has passed. The body is drawn that fraction of
       // the way to the preview, so it stands exactly where the control has carried it: it starts from rest at a press
@@ -1066,10 +1071,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         // Catch-up can reach the fractional current tick before its next whole step exists.
         // Use the normal drawing preview, including its 3D pose, instead of holding then jumping.
         const t = Math.floor(catchTick), a = history.get(t), b = history.get(t + 1) ?? (t === stepped ? preview : null);
-        if (a && b) { safeOrigin = a.pos; const f = catchTick - t; pos = blendPosition(a.pos, b.pos, f, map.wrap); heading = blendHeading(a.heading, b.heading, f, dims);
+        if (a && b) { drawnTick = catchTick; safeOrigin = a.pos; const f = catchTick - t; pos = blendPosition(a.pos, b.pos, f, map.wrap); heading = blendHeading(a.heading, b.heading, f, dims);
           velocity = vec3({ x: lerp(a.vel.x, b.vel.x, f), y: lerp(a.vel.y, b.vel.y, f), z: lerp(a.vel.z, b.vel.z, f) }, dims);
           grounded = a.grounded && (f === 0 || b.grounded); motion = a.motion;
-        } else if (a) { safeOrigin = a.pos; pos = a.pos; heading = a.heading; velocity = a.vel; grounded = a.grounded; motion = a.motion; }
+        } else if (a) { drawnTick = t; safeOrigin = a.pos; pos = a.pos; heading = a.heading; velocity = a.vel; grounded = a.grounded; motion = a.motion; }
       }
     }
     // Two-dimensional presentation follows collision too: interpolation and reconciliation are not
@@ -1190,10 +1195,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // reusing an old pose and then spending two callbacks' travel at once.
     // Inputs and snapshots still invalidate immediately.
     if (present && typeof window !== 'undefined') {
-      presentedEntity = result;
+      presentedEntity = result; presentedTick = drawnTick;
       if (!presentationQueued) {
         presentationQueued = true;
-        const clear = () => { presentedEntity = null; presentationQueued = false; };
+        const clear = () => { presentedEntity = null; presentedTick = null; presentationQueued = false; };
         queueMicrotask(clear);
       }
     }
@@ -1335,6 +1340,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   return {
     get ownTick() {
       if (solo) return solo.ownTick;
+      if (presentedEntity && presentedTick !== null) return presentedTick;
       pump();
       if (!mine || !latest) return null;
       const server = latest.ents.get(mine.id), kind = myKind();
@@ -1380,7 +1386,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         if (!tr) heldTrack.set(name, { from: at, changes: [[at, v]] });
         else if (tr.changes[tr.changes.length - 1][1] !== v) { tr.changes.push([at, v]); if (tr.changes.length > 256) tr.changes.splice(1, tr.changes.length - 256); }
       }
-      if (changed) pump();
+      if (changed) pump(true);
       const shown = changed ? meNow()?.pos : null;
       for (const [name, fd] of kind?.input ?? []) if ((fd.t === 'press' || fd.t === 'pulse') && coerce(fd,s[name],dims)) { const value=coerce(fd,s[name],dims) as number | boolean; if(fd.t==='pulse'){pulseCount+=1;const target=Math.max(stepped+1,(pulseQueue.at(-1)?.t??stepped)+1);pulseQueue.push({name,value:Number(value),n:pulseCount,t:target});net.send('pulse',[epoch,name,value,target,pulseCount]);} else pressed.set(name,value); }
       if (changed) presentedEntity = null;

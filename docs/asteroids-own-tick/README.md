@@ -25,3 +25,9 @@ The complete rules-view suite ran 259 passing subtests before Node's default hea
 ## Wrapped circle correction limit
 
 The browser comparison at 150 ms one-way delay, 5% retransmission and ±40 ms jitter exposed 39 frames whose displacement exceeded ordinary ship travel plus three pixels. The existing presentation limit applied only to boxes. A wrapped-circle regression injects a two-metre reconciliation offset while moving at 4 m/s: before the fix its worst 16 ms frame travelled 0.144 m, failing the 0.1 m bound. Wrapped circle presentation now limits extra correction speed to radius/blend time, in the shortest periodic direction, while allowing real movement velocity. Placements bypass it. This is presentation only; server physics and the prediction clock are unchanged.
+
+## Synchronous presentation across a tick boundary
+
+CI's real-Chrome 60 Hz browser-hosted case exposed a synchronous-reader failure. The public getter pumped before consulting its presentation cache, so a slow callback crossing a tick could invalidate the pose between two reads. A deterministic test advances only the view clock by 60 ms within one callback; both object identity and ownTick checks failed before their fixes. Pumping now preserves an already published presentation until its microtask ends; explicit changed input forces its catch-up as before. The published fractional tick is cached with the pose. The existing effect-before-step test remains intact.
+
+Validation: 53 targeted view tests pass, including the release matrix, ownTick, host-pause recovery, wrapped circle bounds, effect reads and the new callback-boundary case. All five real-Chrome smoke tests pass (127.7 seconds), including 300 ms / 10% loss / 60 Hz browser hosting. The exhaustive author API fixture also reads ownTick as number-or-null; its missing-key CI failure was fixed without relaxing exhaustiveness.

@@ -1160,6 +1160,8 @@ Use it to draw known deterministic trajectories, such as a drifting rock or a
 provisional projectile, on the player's clock. It grants no authority and does
 not rewind hits. Watchers can use `room.viewTick`. Do not estimate this clock
 from predictor callbacks: previews and replays run more than once per frame.
+Synchronous reads share the drawn pose and its tick until the microtask boundary;
+changed input and snapshots still invalidate the presentation immediately.
 
 ### Naming the bots (0.46.5)
 

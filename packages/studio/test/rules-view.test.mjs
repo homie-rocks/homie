@@ -2743,3 +2743,19 @@ test('wrapped circle reconciliation spends a bounded correction per drawn frame'
  t.diagnostic(JSON.stringify({worst}));assert.ok(changed);
  assert.ok(worst<.1,`a correction accelerated a wrapped circle by ${worst} metres in one frame`);
 });
+
+test('synchronous browser readers keep one pose when execution crosses a tick', async t => {
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'wrap2');
+ const clock=virtualTime(t),originalWindow=Object.getOwnPropertyDescriptor(globalThis,'window');
+ globalThis.window={addEventListener(){},removeEventListener(){}};
+ t.after(()=>{if(originalWindow)Object.defineProperty(globalThis,'window',originalWindow);else delete globalThis.window;});
+ let offset=0;const r=rig(L,compiled,false,0,0);
+ const a=openRoom({timers:false,now:()=>performance.now()+offset,net:{config:cfg('Tick boundary reader'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);a.input({ax:1});await clock.wait(1000);
+ const first=a.me, firstTick=a.ownTick;offset+=60;
+ assert.strictEqual(a.ownTick,firstTick,'projectile time stays with the drawn pose');
+ assert.strictEqual(a.me,first,'elapsed synchronous work must not invalidate the drawn pose');
+ let traversed;a.each('runner',e=>{if(e.mine)traversed=e;});assert.strictEqual(traversed,first,'HUD traversal shares the same pose');
+ await Promise.resolve();const next=a.me;assert.notStrictEqual(next,first,'the next callback advances');assert.notEqual(next.pos.x,first.pos.x);
+ a.input({ax:-1});assert.notStrictEqual(a.me,next,'an explicit changed input still invalidates presentation');
+});
