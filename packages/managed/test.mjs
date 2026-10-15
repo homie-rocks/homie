@@ -147,3 +147,13 @@ test('migration plan uses provider tag after local output loss; compatibility re
   source.compatibility_flags=['no_global_fetch_strictly_public'];writeFileSync(path,JSON.stringify(source));assert.throws(()=>prepare(opts),/not approved/);
  }finally{rmSync(dir,{recursive:true,force:true})}
 });
+
+import {tickRequired} from './prepare.mjs';
+test('ticks enroll explicit crons, functions and event feeds, excluding static studios',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'managed-ticks-'));try{
+  const config=join(dir,'wrangler.jsonc');writeFileSync(config,'{}');assert.equal(tickRequired(dir),false);
+  writeFileSync(config,JSON.stringify({triggers:{crons:['0 * * * *']}}));assert.equal(tickRequired(dir),true);
+  writeFileSync(config,'{}');writeFileSync(join(dir,'studio.json'),JSON.stringify({mcp:{events:{changed:{event:'record.changed'}}}}));assert.equal(tickRequired(dir),true);
+  writeFileSync(join(dir,'studio.json'),'{}');mkdirSync(join(dir,'site/src/functions'),{recursive:true});writeFileSync(join(dir,'site/src/functions/declarations.json'),'[{"name":"notify","event":"changed"}]');assert.equal(tickRequired(dir),true);
+ }finally{rmSync(dir,{recursive:true,force:true})}
+});

@@ -3,7 +3,7 @@ import {randomBytes} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {readFileSync,writeFileSync,existsSync,mkdirSync,openSync,closeSync,unlinkSync} from 'node:fs';
 import {resolve,join} from 'node:path';
-import {prepare} from './prepare.mjs';
+import {prepare,tickRequired} from './prepare.mjs';
 import {waitForDatabase,removeResource} from './lifecycle.mjs';
 import {functionDeploymentSQL} from '../studio/lib/functions-build.mjs';
 const [command,folder,studio,name,hostname,prefix="/"]=process.argv.slice(2);
@@ -126,9 +126,7 @@ if(command==='init') {
     for(const b of settings.bindings.filter(b=>b.type==='durable_object_namespace'))state.durableObjects.push({name:'hm-test-dispatch_'+b.class_name,id:b.namespace_id});
     save();
   }
-  const cfg=JSON.parse(readFileSync(join(output,'user.json')));
-  const declarations=join(resolve(studio),'site/src/functions/declarations.json');
-  const ticks=JSON.parse(cfg.vars.STUDIO_FUNCTION_CRONS).length>0||JSON.parse(cfg.vars.STUDIO_FUNCTION_MANAGED_CRONS).length>0||(existsSync(declarations)&&JSON.parse(readFileSync(declarations)).length>0);
+  const ticks=tickRequired(resolve(studio));
   await operator('route',{tenant:name,routes:[{hostname,prefix}],ticks});
   save();
 } else if(command==='kill') {

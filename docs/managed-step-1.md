@@ -207,5 +207,5 @@ alerts. Worker deletion may cascade DO namespace deletion; receipts distinguish
 that from explicit deletion. No claim about immediate physical CDN blob erasure
 is made.
 
-Local validation: **32 tests pass** across managed, arrival and request-budget
+Local validation: **33 tests pass** across managed, arrival and request-budget
 checks. CI status is reported against the final PR head, not an earlier commit.

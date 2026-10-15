@@ -8,6 +8,17 @@ export const read = path => {
   if(errors.length)throw new Error(`Invalid JSONC ${path}: ${errors.map(e=>printParseErrorCode(e.error)).join(', ')}`);
   return value;
 };
+/** Scheduling is derived from sealed declarations/config, never every route. */
+export function tickRequired(studio) {
+  const source=read(join(studio,'wrangler.jsonc'));
+  const definitions=join(studio,'site/src/functions/declarations.json');
+  const metadata=join(studio,'studio.json');
+  return Boolean(source.triggers?.crons?.length ||
+    JSON.parse(source.vars?.STUDIO_FUNCTION_CRONS??'[]').length ||
+    JSON.parse(source.vars?.STUDIO_FUNCTION_MANAGED_CRONS??'[]').length ||
+    (existsSync(definitions)&&read(definitions).length) ||
+    (existsSync(metadata)&&Object.keys(read(metadata).mcp?.events??{}).length));
+}
 export function prepare({studio, output, name, databaseId, accountId, hostname, controlHosts, deployed=null}) {
   if (!/^hm-test-[a-z0-9-]+$/.test(name)) throw new Error('Step 1 only accepts hm-test- resource names');
   if (!/^[0-9a-f-]{36}$/.test(databaseId) || !/^[0-9a-f]{32}$/.test(accountId)) throw new Error('Explicit database/account IDs required');
