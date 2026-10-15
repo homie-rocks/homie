@@ -1,0 +1,29 @@
+{
+  "tag": "f1",
+  "script": "phone.mjs",
+  "args": [
+    "--cpu",
+    "4",
+    "--seconds",
+    "180"
+  ],
+  "harness_sha256": "51a335aeb61c39295618c27b08e139baf8eb6d56ee103806532552bcb1a8e7ed",
+  "runtime": {
+    "b": {
+      "main": "/tmp/pt9/runtime-b-1792078213/worker.js",
+      "assets": {
+        "directory": "/tmp/pt9/runtime-b-1792078213-assets",
+        "binding": "ASSETS",
+        "run_worker_first": true
+      }
+    },
+    "c": {
+      "main": "/tmp/pt8/runtime-c/worker.js",
+      "assets": {
+        "directory": "/tmp/pt8/assets-c-1792066186",
+        "binding": "ASSETS",
+        "run_worker_first": true
+      }
+    }
+  }
+}

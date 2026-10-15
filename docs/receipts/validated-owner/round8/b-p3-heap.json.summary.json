@@ -1,0 +1,5786 @@
+[
+  {
+    "bytes": 10266444,
+    "functionName": "sr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 39371,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 673,
+      "column": 11,
+      "name": "flush"
+    }
+  },
+  {
+    "bytes": 9577100,
+    "functionName": "sr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 39371,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 673,
+      "column": 11,
+      "name": "flush"
+    }
+  },
+  {
+    "bytes": 7931304,
+    "functionName": "g",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26512
+  },
+  {
+    "bytes": 6295896,
+    "functionName": "info",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25385,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 142,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 5127932,
+    "functionName": "jn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 34842,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 537,
+      "column": 11,
+      "name": "runPredict"
+    }
+  },
+  {
+    "bytes": 4950876,
+    "functionName": "Ns",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 41708,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 786,
+      "column": 11,
+      "name": "applySnapshot"
+    }
+  },
+  {
+    "bytes": 4177204,
+    "functionName": "jn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 34842,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 537,
+      "column": 11,
+      "name": "runPredict"
+    }
+  },
+  {
+    "bytes": 4099484,
+    "functionName": "cs",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 3983,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/monster-view.ts",
+      "line": 19,
+      "column": 16,
+      "name": "monsterDrawn"
+    }
+  },
+  {
+    "bytes": 4098244,
+    "functionName": "ic",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 63408
+  },
+  {
+    "bytes": 3835156,
+    "functionName": "_r",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 60002,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1423,
+      "column": 11,
+      "name": "poseAt"
+    }
+  },
+  {
+    "bytes": 3251424,
+    "functionName": "Va",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 106147
+  },
+  {
+    "bytes": 2819912,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 10023,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 278,
+      "column": 23,
+      "name": "b"
+    }
+  },
+  {
+    "bytes": 2754376,
+    "functionName": "fc",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 66275
+  },
+  {
+    "bytes": 2688476,
+    "functionName": "gi",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 11226,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 318,
+      "column": 9,
+      "name": "renderMonsters"
+    }
+  },
+  {
+    "bytes": 2261412,
+    "functionName": "g",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26512
+  },
+  {
+    "bytes": 2201948,
+    "functionName": "jn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 34842,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 537,
+      "column": 11,
+      "name": "runPredict"
+    }
+  },
+  {
+    "bytes": 2164060,
+    "functionName": "pt",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 49173,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1054,
+      "column": 11,
+      "name": "meNow"
+    }
+  },
+  {
+    "bytes": 2130676,
+    "functionName": "gr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 56846,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1341,
+      "column": 11,
+      "name": "each"
+    }
+  },
+  {
+    "bytes": 2064924,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 2032336,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 1966440,
+    "functionName": "vn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 8397,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 30,
+      "column": 9,
+      "name": "stepEntity"
+    }
+  },
+  {
+    "bytes": 1871936,
+    "functionName": "jn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 34842,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 537,
+      "column": 11,
+      "name": "runPredict"
+    }
+  },
+  {
+    "bytes": 1869060,
+    "functionName": "info",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25385,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 142,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 1868576,
+    "functionName": "gr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 56846,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1341,
+      "column": 11,
+      "name": "each"
+    }
+  },
+  {
+    "bytes": 1810128,
+    "functionName": "set",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 1803712,
+    "functionName": "info",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25385,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 142,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 1802856,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 1770740,
+    "functionName": "Os",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 13594,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 417,
+      "column": 9,
+      "name": "frame"
+    }
+  },
+  {
+    "bytes": 1712396,
+    "functionName": "sort",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 1642416,
+    "functionName": "de",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 29110,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 272,
+      "column": 19,
+      "name": null
+    }
+  },
+  {
+    "bytes": 1543592,
+    "functionName": "(V8 API)",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 1541028,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 1540380,
+    "functionName": "vn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 8397,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 30,
+      "column": 9,
+      "name": "stepEntity"
+    }
+  },
+  {
+    "bytes": 1508184,
+    "functionName": "us",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 3510,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/monster-view.ts",
+      "line": 8,
+      "column": 16,
+      "name": "monsterAt"
+    }
+  },
+  {
+    "bytes": 1409720,
+    "functionName": "Te",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 60403
+  },
+  {
+    "bytes": 1346004,
+    "functionName": "slice",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 1313168,
+    "functionName": "slice",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 1311552,
+    "functionName": "decode",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 17173,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/interest.mjs",
+      "line": 183,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 1311220,
+    "functionName": "hr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 56013,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1315,
+      "column": 11,
+      "name": "drawnRemote"
+    }
+  },
+  {
+    "bytes": 1311196,
+    "functionName": "xl",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 65478
+  },
+  {
+    "bytes": 1278284,
+    "functionName": "yi",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 11522,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 335,
+      "column": 9,
+      "name": "renderTreasure"
+    }
+  },
+  {
+    "bytes": 1278192,
+    "functionName": "p",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26200
+  },
+  {
+    "bytes": 1213424,
+    "functionName": "hr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 56013,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1315,
+      "column": 11,
+      "name": "drawnRemote"
+    }
+  },
+  {
+    "bytes": 1186400,
+    "functionName": "set",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 1186244,
+    "functionName": "sort",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 1180632,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 5793,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 87,
+      "column": 21,
+      "name": "e"
+    }
+  },
+  {
+    "bytes": 1180572,
+    "functionName": "hr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 56013,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1315,
+      "column": 11,
+      "name": "drawnRemote"
+    }
+  },
+  {
+    "bytes": 1180176,
+    "functionName": "runner",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 5977,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 94,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 1116500,
+    "functionName": "de",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 29110,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 272,
+      "column": 19,
+      "name": null
+    }
+  },
+  {
+    "bytes": 1115048,
+    "functionName": "sr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 39371,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 673,
+      "column": 11,
+      "name": "flush"
+    }
+  },
+  {
+    "bytes": 1114984,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 1114588,
+    "functionName": "pt",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 49173,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1054,
+      "column": 11,
+      "name": "meNow"
+    }
+  },
+  {
+    "bytes": 1114472,
+    "functionName": "pi",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 9262,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 246,
+      "column": 9,
+      "name": "renderMap"
+    }
+  },
+  {
+    "bytes": 1085748,
+    "functionName": "sort",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 1081888,
+    "functionName": "hr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 56013,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1315,
+      "column": 11,
+      "name": "drawnRemote"
+    }
+  },
+  {
+    "bytes": 1052432,
+    "functionName": "loop",
+    "scriptId": "29",
+    "url": "",
+    "lineNumber": 9,
+    "columnNumber": 15
+  },
+  {
+    "bytes": 1049704,
+    "functionName": "Oi",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26044
+  },
+  {
+    "bytes": 1048936,
+    "functionName": "runner",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 5977,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 94,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 1048764,
+    "functionName": "p",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26200
+  },
+  {
+    "bytes": 1016760,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 983532,
+    "functionName": "hi",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 9718,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 268,
+      "column": 9,
+      "name": "renderPlayers"
+    }
+  },
+  {
+    "bytes": 950560,
+    "functionName": "rr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 37497,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 617,
+      "column": 11,
+      "name": "heldMean"
+    }
+  },
+  {
+    "bytes": 917884,
+    "functionName": "Ze",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 28526,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 248,
+      "column": 11,
+      "name": "frameOf"
+    }
+  },
+  {
+    "bytes": 888308,
+    "functionName": "jn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 34842,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 537,
+      "column": 11,
+      "name": "runPredict"
+    }
+  },
+  {
+    "bytes": 884904,
+    "functionName": "g",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26512
+  },
+  {
+    "bytes": 859244,
+    "functionName": "b",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 24656,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 112,
+      "column": 18,
+      "name": "t"
+    }
+  },
+  {
+    "bytes": 852732,
+    "functionName": "Do",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 57778
+  },
+  {
+    "bytes": 852120,
+    "functionName": "g",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26512
+  },
+  {
+    "bytes": 819364,
+    "functionName": "tu",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 4598
+  },
+  {
+    "bytes": 790500,
+    "functionName": "sort",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 787124,
+    "functionName": "info",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25385,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 142,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 787024,
+    "functionName": "de",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 29110,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 272,
+      "column": 19,
+      "name": null
+    }
+  },
+  {
+    "bytes": 786704,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 786692,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 754244,
+    "functionName": "cr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 54498,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1264,
+      "column": 11,
+      "name": "ownerRemote"
+    }
+  },
+  {
+    "bytes": 754040,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 753952,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 721060,
+    "functionName": "tu",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 4598
+  },
+  {
+    "bytes": 689924,
+    "functionName": "Us",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 114485
+  },
+  {
+    "bytes": 689616,
+    "functionName": "push",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 688504,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 13468,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/move.ts",
+      "line": 25,
+      "column": 42,
+      "name": "step"
+    }
+  },
+  {
+    "bytes": 688420,
+    "functionName": "gl",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 63155
+  },
+  {
+    "bytes": 656540,
+    "functionName": "zs",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 37885,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 634,
+      "column": 11,
+      "name": "step"
+    }
+  },
+  {
+    "bytes": 655896,
+    "functionName": "Or",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 64693
+  },
+  {
+    "bytes": 655772,
+    "functionName": "pt",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 49173,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1054,
+      "column": 11,
+      "name": "meNow"
+    }
+  },
+  {
+    "bytes": 655600,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 655476,
+    "functionName": "p",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26200
+  },
+  {
+    "bytes": 622804,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 622792,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 40460,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 726,
+      "column": 63,
+      "name": null
+    }
+  },
+  {
+    "bytes": 622704,
+    "functionName": "vn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 8397,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 30,
+      "column": 9,
+      "name": "stepEntity"
+    }
+  },
+  {
+    "bytes": 593252,
+    "functionName": "sort",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 591488,
+    "functionName": "set",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 590260,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 5682,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 86,
+      "column": 24,
+      "name": "e"
+    }
+  },
+  {
+    "bytes": 590088,
+    "functionName": "Po",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 11953,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 135,
+      "column": 9,
+      "name": "monsterTick"
+    }
+  },
+  {
+    "bytes": 590004,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 589932,
+    "functionName": "g",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26512
+  },
+  {
+    "bytes": 557328,
+    "functionName": "Or",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 64693
+  },
+  {
+    "bytes": 557312,
+    "functionName": "gl",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 63155
+  },
+  {
+    "bytes": 525264,
+    "functionName": "zs",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 37885,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 634,
+      "column": 11,
+      "name": "step"
+    }
+  },
+  {
+    "bytes": 524644,
+    "functionName": "pr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 55693,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1303,
+      "column": 11,
+      "name": "drawn"
+    }
+  },
+  {
+    "bytes": 524536,
+    "functionName": "Po",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 11953,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 135,
+      "column": 9,
+      "name": "monsterTick"
+    }
+  },
+  {
+    "bytes": 524308,
+    "functionName": "add",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 492624,
+    "functionName": "push",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 491800,
+    "functionName": "rr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 37497,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 617,
+      "column": 11,
+      "name": "heldMean"
+    }
+  },
+  {
+    "bytes": 491652,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 491616,
+    "functionName": "g",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26512
+  },
+  {
+    "bytes": 459180,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 459012,
+    "functionName": "runner",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 12894,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/move.ts",
+      "line": 5,
+      "column": 2,
+      "name": null
+    }
+  },
+  {
+    "bytes": 458948,
+    "functionName": "po",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 46957,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 972,
+      "column": 11,
+      "name": "roundNow"
+    }
+  },
+  {
+    "bytes": 458904,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 458832,
+    "functionName": "vn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 8397,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 30,
+      "column": 9,
+      "name": "stepEntity"
+    }
+  },
+  {
+    "bytes": 437360,
+    "functionName": "de",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 93825
+  },
+  {
+    "bytes": 426324,
+    "functionName": "wu",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 23022
+  },
+  {
+    "bytes": 426240,
+    "functionName": "rr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 37497,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 617,
+      "column": 11,
+      "name": "heldMean"
+    }
+  },
+  {
+    "bytes": 426176,
+    "functionName": "gl",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 63155
+  },
+  {
+    "bytes": 426164,
+    "functionName": "po",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 46957,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 972,
+      "column": 11,
+      "name": "roundNow"
+    }
+  },
+  {
+    "bytes": 426112,
+    "functionName": "Te",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 60403
+  },
+  {
+    "bytes": 398608,
+    "functionName": "steps",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 130725
+  },
+  {
+    "bytes": 395928,
+    "functionName": "set",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 393600,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 393560,
+    "functionName": "sr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 39371,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 673,
+      "column": 11,
+      "name": "flush"
+    }
+  },
+  {
+    "bytes": 393288,
+    "functionName": "g",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26512
+  },
+  {
+    "bytes": 393288,
+    "functionName": "g",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26512
+  },
+  {
+    "bytes": 393288,
+    "functionName": "vn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 8397,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 30,
+      "column": 9,
+      "name": "stepEntity"
+    }
+  },
+  {
+    "bytes": 361000,
+    "functionName": "add",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 360736,
+    "functionName": "de",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 29110,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 272,
+      "column": 19,
+      "name": null
+    }
+  },
+  {
+    "bytes": 360724,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 360632,
+    "functionName": "gl",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 63155
+  },
+  {
+    "bytes": 360600,
+    "functionName": "gl",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 63155
+  },
+  {
+    "bytes": 360544,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 328184,
+    "functionName": "Map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 327968,
+    "functionName": "info",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25385,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 142,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 327868,
+    "functionName": "Set",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 327860,
+    "functionName": "mi",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 7016,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 147,
+      "column": 9,
+      "name": "checkGuesses"
+    }
+  },
+  {
+    "bytes": 327852,
+    "functionName": "us",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 3510,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/monster-view.ts",
+      "line": 8,
+      "column": 16,
+      "name": "monsterAt"
+    }
+  },
+  {
+    "bytes": 327824,
+    "functionName": "gl",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 63155
+  },
+  {
+    "bytes": 327800,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 327800,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 327792,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 327792,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 327764,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 300356,
+    "functionName": "steps",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 130725
+  },
+  {
+    "bytes": 295224,
+    "functionName": "Map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 295188,
+    "functionName": "sample",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 131808
+  },
+  {
+    "bytes": 295172,
+    "functionName": "",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 57956
+  },
+  {
+    "bytes": 295116,
+    "functionName": "pump",
+    "scriptId": "4",
+    "url": "",
+    "lineNumber": 9,
+    "columnNumber": 17
+  },
+  {
+    "bytes": 295108,
+    "functionName": "pr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 55693,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1303,
+      "column": 11,
+      "name": "drawn"
+    }
+  },
+  {
+    "bytes": 295092,
+    "functionName": "Ut",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 26417,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 63,
+      "column": 16,
+      "name": "blendHeading"
+    }
+  },
+  {
+    "bytes": 295048,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25994,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 157,
+      "column": 32,
+      "name": "s"
+    }
+  },
+  {
+    "bytes": 295024,
+    "functionName": "rr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 37497,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 617,
+      "column": 11,
+      "name": "heldMean"
+    }
+  },
+  {
+    "bytes": 294992,
+    "functionName": "entries",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 263396,
+    "functionName": "set",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 262576,
+    "functionName": "sr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 39371,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 673,
+      "column": 11,
+      "name": "flush"
+    }
+  },
+  {
+    "bytes": 262412,
+    "functionName": "sample",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 131808
+  },
+  {
+    "bytes": 262388,
+    "functionName": "info",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25385,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 142,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 262364,
+    "functionName": "sample",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 131808
+  },
+  {
+    "bytes": 262292,
+    "functionName": "info",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25385,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 142,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 262252,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 262248,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25994,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 157,
+      "column": 32,
+      "name": "s"
+    }
+  },
+  {
+    "bytes": 262208,
+    "functionName": "entries",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 262188,
+    "functionName": "vn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 8397,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 30,
+      "column": 9,
+      "name": "stepEntity"
+    }
+  },
+  {
+    "bytes": 262188,
+    "functionName": "Gr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 7543,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 22,
+      "column": 14,
+      "name": null
+    }
+  },
+  {
+    "bytes": 262164,
+    "functionName": "add",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 239628,
+    "functionName": "m",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 24984,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 127,
+      "column": 15,
+      "name": null
+    }
+  },
+  {
+    "bytes": 234120,
+    "functionName": "de",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 93825
+  },
+  {
+    "bytes": 230348,
+    "functionName": "set",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 229988,
+    "functionName": "set",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 229588,
+    "functionName": "Map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 229560,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 229560,
+    "functionName": "sample",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 131808
+  },
+  {
+    "bytes": 229560,
+    "functionName": "Ut",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 26417,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 63,
+      "column": 16,
+      "name": "blendHeading"
+    }
+  },
+  {
+    "bytes": 229560,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 229560,
+    "functionName": "Set",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 229536,
+    "functionName": "Oi",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26044
+  },
+  {
+    "bytes": 229536,
+    "functionName": "cr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 54498,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1264,
+      "column": 11,
+      "name": "ownerRemote"
+    }
+  },
+  {
+    "bytes": 229500,
+    "functionName": "Oi",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26044
+  },
+  {
+    "bytes": 229496,
+    "functionName": "Ki",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 57833
+  },
+  {
+    "bytes": 229488,
+    "functionName": "gl",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 63155
+  },
+  {
+    "bytes": 229488,
+    "functionName": "get",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 229476,
+    "functionName": "de",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 29110,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 272,
+      "column": 19,
+      "name": null
+    }
+  },
+  {
+    "bytes": 229468,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 40460,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 726,
+      "column": 63,
+      "name": null
+    }
+  },
+  {
+    "bytes": 229464,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 229464,
+    "functionName": "Te",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 60403
+  },
+  {
+    "bytes": 229448,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 229444,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 229416,
+    "functionName": "p",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26200
+  },
+  {
+    "bytes": 229416,
+    "functionName": "p",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26200
+  },
+  {
+    "bytes": 229416,
+    "functionName": "Kn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 11597,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 113,
+      "column": 14,
+      "name": "v"
+    }
+  },
+  {
+    "bytes": 229416,
+    "functionName": "reduce",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 197456,
+    "functionName": "rn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 29685,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 321,
+      "column": 19,
+      "name": null
+    }
+  },
+  {
+    "bytes": 196800,
+    "functionName": "Ut",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 26417,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 63,
+      "column": 16,
+      "name": "blendHeading"
+    }
+  },
+  {
+    "bytes": 196800,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 196800,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 196752,
+    "functionName": "Te",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 60403
+  },
+  {
+    "bytes": 196744,
+    "functionName": "Ut",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 26417,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 63,
+      "column": 16,
+      "name": "blendHeading"
+    }
+  },
+  {
+    "bytes": 196728,
+    "functionName": "ui",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 5531,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 79,
+      "column": 9,
+      "name": "look"
+    }
+  },
+  {
+    "bytes": 196728,
+    "functionName": "wu",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 23022
+  },
+  {
+    "bytes": 196688,
+    "functionName": "ea",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 65294
+  },
+  {
+    "bytes": 196684,
+    "functionName": "gr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 56846,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1341,
+      "column": 11,
+      "name": "each"
+    }
+  },
+  {
+    "bytes": 196684,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 196660,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 196644,
+    "functionName": "p",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26200
+  },
+  {
+    "bytes": 196644,
+    "functionName": "g",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26512
+  },
+  {
+    "bytes": 196644,
+    "functionName": "Gr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 7543,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 22,
+      "column": 14,
+      "name": null
+    }
+  },
+  {
+    "bytes": 196644,
+    "functionName": "di",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 8824,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 227,
+      "column": 9,
+      "name": "updateCamera"
+    }
+  },
+  {
+    "bytes": 196644,
+    "functionName": "wi",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 11764,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 347,
+      "column": 9,
+      "name": "render"
+    }
+  },
+  {
+    "bytes": 196644,
+    "functionName": "Oe",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 93577
+  },
+  {
+    "bytes": 196644,
+    "functionName": "Gr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 7543,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 22,
+      "column": 14,
+      "name": null
+    }
+  },
+  {
+    "bytes": 164360,
+    "functionName": "sr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 39371,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 673,
+      "column": 11,
+      "name": "flush"
+    }
+  },
+  {
+    "bytes": 164304,
+    "functionName": "de",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 29110,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 272,
+      "column": 19,
+      "name": null
+    }
+  },
+  {
+    "bytes": 164224,
+    "functionName": "slice",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 164016,
+    "functionName": "assign",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 163980,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 163968,
+    "functionName": "info",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25385,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 142,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 163956,
+    "functionName": "exec",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 163944,
+    "functionName": "Ut",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 26417,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 63,
+      "column": 16,
+      "name": "blendHeading"
+    }
+  },
+  {
+    "bytes": 163928,
+    "functionName": "info",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25385,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 142,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 163920,
+    "functionName": "Ln",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 33527,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 485,
+      "column": 11,
+      "name": "runMove"
+    }
+  },
+  {
+    "bytes": 163912,
+    "functionName": "Te",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 60403
+  },
+  {
+    "bytes": 163908,
+    "functionName": "pt",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 49173,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1054,
+      "column": 11,
+      "name": "meNow"
+    }
+  },
+  {
+    "bytes": 163900,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 163900,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 163896,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 163892,
+    "functionName": "Te",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 60403
+  },
+  {
+    "bytes": 163892,
+    "functionName": "Te",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 60403
+  },
+  {
+    "bytes": 163888,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 163888,
+    "functionName": "entries",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 163880,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 163872,
+    "functionName": "(IDLE_EXTERNAL)",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 163872,
+    "functionName": "p",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26200
+  },
+  {
+    "bytes": 163872,
+    "functionName": "p",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26200
+  },
+  {
+    "bytes": 163872,
+    "functionName": "Kn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 11597,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 113,
+      "column": 14,
+      "name": "v"
+    }
+  },
+  {
+    "bytes": 163872,
+    "functionName": "yt",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59633
+  },
+  {
+    "bytes": 131976,
+    "functionName": "set",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 131856,
+    "functionName": "Zo",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 31491,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 401,
+      "column": 11,
+      "name": "ownerArrivalLead"
+    }
+  },
+  {
+    "bytes": 131308,
+    "functionName": "bo",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 118920
+  },
+  {
+    "bytes": 131220,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 131220,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 131220,
+    "functionName": "wu",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 23022
+  },
+  {
+    "bytes": 131208,
+    "functionName": "filter",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 131200,
+    "functionName": "Wo",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 65792
+  },
+  {
+    "bytes": 131164,
+    "functionName": "filter",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 131148,
+    "functionName": "us",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 3510,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/monster-view.ts",
+      "line": 8,
+      "column": 16,
+      "name": "monsterAt"
+    }
+  },
+  {
+    "bytes": 131136,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 131136,
+    "functionName": "info",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25385,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 142,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 131132,
+    "functionName": "add",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 131128,
+    "functionName": "jn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 34842,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 537,
+      "column": 11,
+      "name": "runPredict"
+    }
+  },
+  {
+    "bytes": 131128,
+    "functionName": "x",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 729,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/hud.ts",
+      "line": 60,
+      "column": 16,
+      "name": null
+    }
+  },
+  {
+    "bytes": 131128,
+    "functionName": "entries",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 131116,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 131112,
+    "functionName": "rr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 37497,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 617,
+      "column": 11,
+      "name": "heldMean"
+    }
+  },
+  {
+    "bytes": 131104,
+    "functionName": "slice",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 131100,
+    "functionName": "yt",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59633
+  },
+  {
+    "bytes": 131100,
+    "functionName": "p",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26200
+  },
+  {
+    "bytes": 131100,
+    "functionName": "p",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26200
+  },
+  {
+    "bytes": 131100,
+    "functionName": "p",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26200
+  },
+  {
+    "bytes": 131100,
+    "functionName": "g",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26512
+  },
+  {
+    "bytes": 131100,
+    "functionName": "Oo",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 7765,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 26,
+      "column": 9,
+      "name": "overlap"
+    }
+  },
+  {
+    "bytes": 131100,
+    "functionName": "Gr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 7543,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 22,
+      "column": 14,
+      "name": null
+    }
+  },
+  {
+    "bytes": 131100,
+    "functionName": "yt",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59633
+  },
+  {
+    "bytes": 131100,
+    "functionName": "g",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26512
+  },
+  {
+    "bytes": 131100,
+    "functionName": "p",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26200
+  },
+  {
+    "bytes": 131100,
+    "functionName": "p",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26200
+  },
+  {
+    "bytes": 131100,
+    "functionName": "",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 122105
+  },
+  {
+    "bytes": 131100,
+    "functionName": "tick",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 13291,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 400,
+      "column": 8,
+      "name": null
+    }
+  },
+  {
+    "bytes": 131092,
+    "functionName": "add",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 131092,
+    "functionName": "add",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 114788,
+    "functionName": "set",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 99760,
+    "functionName": "st.facts",
+    "scriptId": "8",
+    "url": "http://127.0.0.1:8791/tiny-platformer/play?room=pt5-phone-b-p3-mv9n4akx",
+    "lineNumber": 721,
+    "columnNumber": 22
+  },
+  {
+    "bytes": 98716,
+    "functionName": "rn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 29685,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 321,
+      "column": 19,
+      "name": null
+    }
+  },
+  {
+    "bytes": 98640,
+    "functionName": "sr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 39371,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 673,
+      "column": 11,
+      "name": "flush"
+    }
+  },
+  {
+    "bytes": 98496,
+    "functionName": "bo",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 118920
+  },
+  {
+    "bytes": 98476,
+    "functionName": "bo",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 118920
+  },
+  {
+    "bytes": 98432,
+    "functionName": "jn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 34842,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 537,
+      "column": 11,
+      "name": "runPredict"
+    }
+  },
+  {
+    "bytes": 98420,
+    "functionName": "Map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 98420,
+    "functionName": "Map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 98400,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 98400,
+    "functionName": "wu",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 23022
+  },
+  {
+    "bytes": 98400,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 98400,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 98400,
+    "functionName": "info",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25385,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 142,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 98396,
+    "functionName": "assign",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 98372,
+    "functionName": "Map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 98368,
+    "functionName": "Js",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 115720
+  },
+  {
+    "bytes": 98348,
+    "functionName": "$",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 87660
+  },
+  {
+    "bytes": 98348,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 98344,
+    "functionName": "ic",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 63408
+  },
+  {
+    "bytes": 98344,
+    "functionName": "runner",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 5977,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 94,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 98340,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 98340,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 98340,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 98336,
+    "functionName": "filter",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 98336,
+    "functionName": "slice",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 98336,
+    "functionName": "map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 98332,
+    "functionName": "tu",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 4598
+  },
+  {
+    "bytes": 98328,
+    "functionName": "slice",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 98328,
+    "functionName": "tn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 28355,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 242,
+      "column": 18,
+      "name": null
+    }
+  },
+  {
+    "bytes": 98328,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 29704,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 321,
+      "column": 73,
+      "name": null
+    }
+  },
+  {
+    "bytes": 98328,
+    "functionName": "hypot",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 98328,
+    "functionName": "Te",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 60403
+  },
+  {
+    "bytes": 98328,
+    "functionName": "g",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26512
+  },
+  {
+    "bytes": 98328,
+    "functionName": "Oo",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 7765,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 26,
+      "column": 9,
+      "name": "overlap"
+    }
+  },
+  {
+    "bytes": 98328,
+    "functionName": "Tr",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 60089
+  },
+  {
+    "bytes": 98328,
+    "functionName": "ri",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 119786
+  },
+  {
+    "bytes": 98328,
+    "functionName": "Kn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 11597,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 113,
+      "column": 14,
+      "name": "v"
+    }
+  },
+  {
+    "bytes": 98328,
+    "functionName": "Po",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 11953,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 135,
+      "column": 9,
+      "name": "monsterTick"
+    }
+  },
+  {
+    "bytes": 98328,
+    "functionName": "viewTick",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 13312,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 401,
+      "column": 12,
+      "name": null
+    }
+  },
+  {
+    "bytes": 65664,
+    "functionName": "keys",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65664,
+    "functionName": "slice",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65664,
+    "functionName": "keys",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65664,
+    "functionName": "push",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65664,
+    "functionName": "slice",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65652,
+    "functionName": "map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65620,
+    "functionName": "Do",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 57778
+  },
+  {
+    "bytes": 65616,
+    "functionName": "Map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65604,
+    "functionName": "Set",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65600,
+    "functionName": "jn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 34842,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 537,
+      "column": 11,
+      "name": "runPredict"
+    }
+  },
+  {
+    "bytes": 65596,
+    "functionName": "zs",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 37885,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 634,
+      "column": 11,
+      "name": "step"
+    }
+  },
+  {
+    "bytes": 65592,
+    "functionName": "wu",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 23022
+  },
+  {
+    "bytes": 65592,
+    "functionName": "xu",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 23150
+  },
+  {
+    "bytes": 65592,
+    "functionName": "Zn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 3487,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/monster-view.ts",
+      "line": 6,
+      "column": 16,
+      "name": "m"
+    }
+  },
+  {
+    "bytes": 65588,
+    "functionName": "Map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65588,
+    "functionName": "push",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65584,
+    "functionName": "ms",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 4349,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/monster-view.ts",
+      "line": 39,
+      "column": 16,
+      "name": "monsterTrail"
+    }
+  },
+  {
+    "bytes": 65580,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 65580,
+    "functionName": "us",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 3510,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/monster-view.ts",
+      "line": 8,
+      "column": 16,
+      "name": "monsterAt"
+    }
+  },
+  {
+    "bytes": 65580,
+    "functionName": "sr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 39371,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 673,
+      "column": 11,
+      "name": "flush"
+    }
+  },
+  {
+    "bytes": 65580,
+    "functionName": "map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65580,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 65580,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 65580,
+    "functionName": "Ut",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 26417,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 63,
+      "column": 16,
+      "name": "blendHeading"
+    }
+  },
+  {
+    "bytes": 65580,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 65580,
+    "functionName": "wu",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 23022
+  },
+  {
+    "bytes": 65580,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 65576,
+    "functionName": "add",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65576,
+    "functionName": "info",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25385,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 142,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 65572,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65572,
+    "functionName": "ic",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 63408
+  },
+  {
+    "bytes": 65572,
+    "functionName": "gt",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59161
+  },
+  {
+    "bytes": 65568,
+    "functionName": "lr",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 93647
+  },
+  {
+    "bytes": 65568,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65568,
+    "functionName": "",
+    "scriptId": "4",
+    "url": "",
+    "lineNumber": 14,
+    "columnNumber": 11
+  },
+  {
+    "bytes": 65568,
+    "functionName": "join",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65568,
+    "functionName": "Te",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 60403
+  },
+  {
+    "bytes": 65568,
+    "functionName": "ms",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 4349,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/monster-view.ts",
+      "line": 39,
+      "column": 16,
+      "name": "monsterTrail"
+    }
+  },
+  {
+    "bytes": 65568,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65568,
+    "functionName": "Un",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 11238,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 100,
+      "column": 9,
+      "name": "downFor"
+    }
+  },
+  {
+    "bytes": 65568,
+    "functionName": "set",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 63794
+  },
+  {
+    "bytes": 65568,
+    "functionName": "ms",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 4349,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/monster-view.ts",
+      "line": 39,
+      "column": 16,
+      "name": "monsterTrail"
+    }
+  },
+  {
+    "bytes": 65568,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25994,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 157,
+      "column": 32,
+      "name": "s"
+    }
+  },
+  {
+    "bytes": 65568,
+    "functionName": "map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65564,
+    "functionName": "Js",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 21079,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/audio.ts",
+      "line": 40,
+      "column": 9,
+      "name": "onGesture"
+    }
+  },
+  {
+    "bytes": 65560,
+    "functionName": "It.r.onmessage",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 121173
+  },
+  {
+    "bytes": 65560,
+    "functionName": "paint",
+    "scriptId": "10",
+    "url": "http://127.0.0.1:8791/tiny-platformer/play?room=pt5-phone-b-p3-mv9n4akx",
+    "lineNumber": 1320,
+    "columnNumber": 16
+  },
+  {
+    "bytes": 65560,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65560,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65560,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65560,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65560,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65560,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65556,
+    "functionName": "ws.onmessage",
+    "scriptId": "10",
+    "url": "http://127.0.0.1:8791/tiny-platformer/play?room=pt5-phone-b-p3-mv9n4akx",
+    "lineNumber": 1243,
+    "columnNumber": 28
+  },
+  {
+    "bytes": 65556,
+    "functionName": "Po",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 11953,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 135,
+      "column": 9,
+      "name": "monsterTick"
+    }
+  },
+  {
+    "bytes": 65552,
+    "functionName": "tu",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 4598
+  },
+  {
+    "bytes": 65552,
+    "functionName": "runner",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 5977,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 94,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 65552,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65552,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65552,
+    "functionName": "map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65552,
+    "functionName": "slice",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65544,
+    "functionName": "shift",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65544,
+    "functionName": "",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 116709
+  },
+  {
+    "bytes": 65544,
+    "functionName": "yt",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59633
+  },
+  {
+    "bytes": 65544,
+    "functionName": "self",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 59452,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1406,
+      "column": 12,
+      "name": null
+    }
+  },
+  {
+    "bytes": 65544,
+    "functionName": "Ut",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 26417,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 63,
+      "column": 16,
+      "name": "blendHeading"
+    }
+  },
+  {
+    "bytes": 65544,
+    "functionName": "g",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26512
+  },
+  {
+    "bytes": 65544,
+    "functionName": "vn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 8397,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 30,
+      "column": 9,
+      "name": "stepEntity"
+    }
+  },
+  {
+    "bytes": 65544,
+    "functionName": "vn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 8397,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 30,
+      "column": 9,
+      "name": "stepEntity"
+    }
+  },
+  {
+    "bytes": 65544,
+    "functionName": "ii",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 5041,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 43,
+      "column": 9,
+      "name": "noteStep"
+    }
+  },
+  {
+    "bytes": 65544,
+    "functionName": "Gr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 7543,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 22,
+      "column": 14,
+      "name": null
+    }
+  },
+  {
+    "bytes": 65544,
+    "functionName": "Bs",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 41068,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 745,
+      "column": 11,
+      "name": "pumpOnce"
+    }
+  },
+  {
+    "bytes": 65544,
+    "functionName": "De",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 30802,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 371,
+      "column": 18,
+      "name": "now"
+    }
+  },
+  {
+    "bytes": 65544,
+    "functionName": "Oe",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 93577
+  },
+  {
+    "bytes": 65544,
+    "functionName": "Oe",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 93577
+  },
+  {
+    "bytes": 65544,
+    "functionName": "De",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 30802,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 371,
+      "column": 18,
+      "name": "now"
+    }
+  },
+  {
+    "bytes": 65544,
+    "functionName": "vs",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 5168,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 49,
+      "column": 9,
+      "name": "myTick"
+    }
+  },
+  {
+    "bytes": 65544,
+    "functionName": "runner",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 5977,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 94,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 65544,
+    "functionName": "g",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26512
+  },
+  {
+    "bytes": 65544,
+    "functionName": "viewTick",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 13312,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 401,
+      "column": 12,
+      "name": null
+    }
+  },
+  {
+    "bytes": 65544,
+    "functionName": "tick",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 13291,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 400,
+      "column": 8,
+      "name": null
+    }
+  },
+  {
+    "bytes": 49160,
+    "functionName": "Pe",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 7,
+    "columnNumber": 5739,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/touch.ts",
+      "line": 329,
+      "column": 11,
+      "name": "paint"
+    }
+  },
+  {
+    "bytes": 36040,
+    "functionName": "set",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 33728,
+    "functionName": "input",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 61947,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1471,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 33600,
+    "functionName": "",
+    "scriptId": "4",
+    "url": "",
+    "lineNumber": 30,
+    "columnNumber": 40
+  },
+  {
+    "bytes": 33600,
+    "functionName": "Tt",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 41005,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 739,
+      "column": 11,
+      "name": "pump"
+    }
+  },
+  {
+    "bytes": 32936,
+    "functionName": "Ms",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 7622,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 176,
+      "column": 9,
+      "name": "taken"
+    }
+  },
+  {
+    "bytes": 32896,
+    "functionName": "",
+    "scriptId": "10",
+    "url": "http://127.0.0.1:8791/tiny-platformer/play?room=pt5-phone-b-p3-mv9n4akx",
+    "lineNumber": 1077,
+    "columnNumber": 48
+  },
+  {
+    "bytes": 32868,
+    "functionName": "set",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32832,
+    "functionName": "push",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32832,
+    "functionName": "keys",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32832,
+    "functionName": "keys",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32832,
+    "functionName": "push",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32820,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 32820,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 32820,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 32820,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 32820,
+    "functionName": "wu",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 23022
+  },
+  {
+    "bytes": 32820,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 32820,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 32820,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 32820,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 32820,
+    "functionName": "Ce",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59750
+  },
+  {
+    "bytes": 32820,
+    "functionName": "Zn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 3487,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/monster-view.ts",
+      "line": 6,
+      "column": 16,
+      "name": "m"
+    }
+  },
+  {
+    "bytes": 32820,
+    "functionName": "Zn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 3487,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/monster-view.ts",
+      "line": 6,
+      "column": 16,
+      "name": "m"
+    }
+  },
+  {
+    "bytes": 32820,
+    "functionName": "de",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 29110,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 272,
+      "column": 19,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32820,
+    "functionName": "Do",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 57778
+  },
+  {
+    "bytes": 32816,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 17456,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/interest.mjs",
+      "line": 191,
+      "column": 41,
+      "name": "e"
+    }
+  },
+  {
+    "bytes": 32816,
+    "functionName": "sort",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32816,
+    "functionName": "info",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25385,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 142,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32812,
+    "functionName": "k",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 24611,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 110,
+      "column": 15,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32812,
+    "functionName": "de",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 29110,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 272,
+      "column": 19,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32812,
+    "functionName": "exec",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32812,
+    "functionName": "exec",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32800,
+    "functionName": "",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 57956
+  },
+  {
+    "bytes": 32800,
+    "functionName": "po",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 46957,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 972,
+      "column": 11,
+      "name": "roundNow"
+    }
+  },
+  {
+    "bytes": 32800,
+    "functionName": "",
+    "scriptId": "4",
+    "url": "",
+    "lineNumber": 14,
+    "columnNumber": 11
+  },
+  {
+    "bytes": 32800,
+    "functionName": "wu",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 23022
+  },
+  {
+    "bytes": 32800,
+    "functionName": "",
+    "scriptId": "4",
+    "url": "",
+    "lineNumber": 14,
+    "columnNumber": 11
+  },
+  {
+    "bytes": 32800,
+    "functionName": "pt",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 49173,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1054,
+      "column": 11,
+      "name": "meNow"
+    }
+  },
+  {
+    "bytes": 32800,
+    "functionName": "xl",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 65478
+  },
+  {
+    "bytes": 32800,
+    "functionName": "window.__state",
+    "scriptId": "29",
+    "url": "",
+    "lineNumber": 7,
+    "columnNumber": 19
+  },
+  {
+    "bytes": 32788,
+    "functionName": "filter",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32788,
+    "functionName": "_a",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 116509
+  },
+  {
+    "bytes": 32788,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32788,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32788,
+    "functionName": "ki",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 12076,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 367,
+      "column": 14,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32788,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32788,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32788,
+    "functionName": "bo",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 118920
+  },
+  {
+    "bytes": 32788,
+    "functionName": "js",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 93727
+  },
+  {
+    "bytes": 32788,
+    "functionName": "de",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 29110,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 272,
+      "column": 19,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32788,
+    "functionName": "Ki",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 57833
+  },
+  {
+    "bytes": 32788,
+    "functionName": "de",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 29110,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 272,
+      "column": 19,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32788,
+    "functionName": "",
+    "scriptId": "33",
+    "url": "",
+    "lineNumber": 0,
+    "columnNumber": 0
+  },
+  {
+    "bytes": 32784,
+    "functionName": "join",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 17421,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/interest.mjs",
+      "line": 190,
+      "column": 52,
+      "name": "e"
+    }
+  },
+  {
+    "bytes": 32784,
+    "functionName": "entries",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "Pt",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 7,
+    "columnNumber": 7024,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/touch.ts",
+      "line": 364,
+      "column": 15,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32784,
+    "functionName": "Pe",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 7,
+    "columnNumber": 5739,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/touch.ts",
+      "line": 329,
+      "column": 11,
+      "name": "paint"
+    }
+  },
+  {
+    "bytes": 32784,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "Po",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 11953,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 135,
+      "column": 9,
+      "name": "monsterTick"
+    }
+  },
+  {
+    "bytes": 32784,
+    "functionName": "entries",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "slice",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "steps",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 130725
+  },
+  {
+    "bytes": 32784,
+    "functionName": "slice",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25994,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 157,
+      "column": 32,
+      "name": "s"
+    }
+  },
+  {
+    "bytes": 32784,
+    "functionName": "map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "window.__myScore",
+    "scriptId": "29",
+    "url": "",
+    "lineNumber": 5,
+    "columnNumber": 21
+  },
+  {
+    "bytes": 32784,
+    "functionName": "",
+    "scriptId": "29",
+    "url": "",
+    "lineNumber": 11,
+    "columnNumber": 73
+  },
+  {
+    "bytes": 32784,
+    "functionName": "map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25994,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 157,
+      "column": 32,
+      "name": "s"
+    }
+  },
+  {
+    "bytes": 32784,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25994,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 157,
+      "column": 32,
+      "name": "s"
+    }
+  },
+  {
+    "bytes": 32784,
+    "functionName": "map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 25994,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts",
+      "line": 157,
+      "column": 32,
+      "name": "s"
+    }
+  },
+  {
+    "bytes": 32784,
+    "functionName": "window.__myScore",
+    "scriptId": "29",
+    "url": "",
+    "lineNumber": 5,
+    "columnNumber": 21
+  },
+  {
+    "bytes": 32780,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "keys",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "entries",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "keys",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "serverUi",
+    "scriptId": "10",
+    "url": "http://127.0.0.1:8791/tiny-platformer/play?room=pt5-phone-b-p3-mv9n4akx",
+    "lineNumber": 1368,
+    "columnNumber": 19
+  },
+  {
+    "bytes": 32780,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "gl",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 63155
+  },
+  {
+    "bytes": 32780,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "runner",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 5977,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 94,
+      "column": 4,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32780,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "rr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 37497,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 617,
+      "column": 11,
+      "name": "heldMean"
+    }
+  },
+  {
+    "bytes": 32780,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "entries",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "keys",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "jn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 34842,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 537,
+      "column": 11,
+      "name": "runPredict"
+    }
+  },
+  {
+    "bytes": 32780,
+    "functionName": "tu",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 4598
+  },
+  {
+    "bytes": 32780,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32776,
+    "functionName": "assign",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32776,
+    "functionName": "sample",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 131808
+  },
+  {
+    "bytes": 32776,
+    "functionName": "assign",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32776,
+    "functionName": "sample",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 131808
+  },
+  {
+    "bytes": 32772,
+    "functionName": "C",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 93518
+  },
+  {
+    "bytes": 32772,
+    "functionName": "yt",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59633
+  },
+  {
+    "bytes": 32772,
+    "functionName": "at",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32772,
+    "functionName": "C",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 93518
+  },
+  {
+    "bytes": 32772,
+    "functionName": "De",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 30802,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 371,
+      "column": 18,
+      "name": "now"
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "runner",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 12894,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/move.ts",
+      "line": 5,
+      "column": 2,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "ze",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 29818,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 325,
+      "column": 19,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "De",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 30802,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 371,
+      "column": 18,
+      "name": "now"
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "runner",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 12894,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/move.ts",
+      "line": 5,
+      "column": 2,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 13468,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/move.ts",
+      "line": 25,
+      "column": 42,
+      "name": "step"
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32772,
+    "functionName": "p",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26200
+  },
+  {
+    "bytes": 32772,
+    "functionName": "yt",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59633
+  },
+  {
+    "bytes": 32772,
+    "functionName": "Bs",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 41068,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 745,
+      "column": 11,
+      "name": "pumpOnce"
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "Oo",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 7765,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 26,
+      "column": 9,
+      "name": "overlap"
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "Gr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 7543,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 22,
+      "column": 14,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "st",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 7,
+    "columnNumber": 2850,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/port/touch.ts",
+      "line": 210,
+      "column": 11,
+      "name": "syncStickKeys"
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "Te",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 60403
+  },
+  {
+    "bytes": 32772,
+    "functionName": "g",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26512
+  },
+  {
+    "bytes": 32772,
+    "functionName": "yt",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59633
+  },
+  {
+    "bytes": 32772,
+    "functionName": "po",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 46957,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 972,
+      "column": 11,
+      "name": "roundNow"
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "Oo",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 7765,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 26,
+      "column": 9,
+      "name": "overlap"
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "us",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 3510,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/monster-view.ts",
+      "line": 8,
+      "column": 16,
+      "name": "monsterAt"
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "findIndex",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32772,
+    "functionName": "De",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 30802,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 371,
+      "column": 18,
+      "name": "now"
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "hit",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 86247
+  },
+  {
+    "bytes": 32772,
+    "functionName": "",
+    "scriptId": "4",
+    "url": "",
+    "lineNumber": 14,
+    "columnNumber": 11
+  },
+  {
+    "bytes": 32772,
+    "functionName": "ze",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 29818,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 325,
+      "column": 19,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "yt",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59633
+  },
+  {
+    "bytes": 32772,
+    "functionName": "gn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 37453,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 615,
+      "column": 18,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "vs",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 5168,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 49,
+      "column": 9,
+      "name": "myTick"
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "Oo",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 7765,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 26,
+      "column": 9,
+      "name": "overlap"
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "vn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 8397,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 30,
+      "column": 9,
+      "name": "stepEntity"
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "eu",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 3762
+  },
+  {
+    "bytes": 32772,
+    "functionName": "gn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 37453,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 615,
+      "column": 18,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "hz",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 86300
+  },
+  {
+    "bytes": 32772,
+    "functionName": "random",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32772,
+    "functionName": "vr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 59895,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1416,
+      "column": 11,
+      "name": "viewTickNow"
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "C",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 93518
+  },
+  {
+    "bytes": 32772,
+    "functionName": "ri",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 119786
+  },
+  {
+    "bytes": 32772,
+    "functionName": "yt",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59633
+  },
+  {
+    "bytes": 32772,
+    "functionName": "vr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 59895,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 1416,
+      "column": 11,
+      "name": "viewTickNow"
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "C",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 93518
+  },
+  {
+    "bytes": 32772,
+    "functionName": "vn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 8397,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 30,
+      "column": 9,
+      "name": "stepEntity"
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "Gr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 7543,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 22,
+      "column": 14,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "Po",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 11953,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 135,
+      "column": 9,
+      "name": "monsterTick"
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "vn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 8397,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 30,
+      "column": 9,
+      "name": "stepEntity"
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "Gr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 7543,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 22,
+      "column": 14,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "gn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 37453,
+    "source": {
+      "source": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts",
+      "line": 615,
+      "column": 18,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "g",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26512
+  },
+  {
+    "bytes": 32772,
+    "functionName": "p",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 26200
+  },
+  {
+    "bytes": 32772,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32772,
+    "functionName": "yt",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 59633
+  },
+  {
+    "bytes": 32772,
+    "functionName": "min",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32772,
+    "functionName": "getOwnPropertyDescriptor",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32772,
+    "functionName": "max",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32772,
+    "functionName": "Oe",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 93577
+  },
+  {
+    "bytes": 32772,
+    "functionName": "Gr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 0,
+    "columnNumber": 7543,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/sim.ts",
+      "line": 22,
+      "column": 14,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "Yl",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-TR2GTE2S.js",
+    "lineNumber": 0,
+    "columnNumber": 1879
+  },
+  {
+    "bytes": 32772,
+    "functionName": "tick",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 13291,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 400,
+      "column": 8,
+      "name": null
+    }
+  },
+  {
+    "bytes": 32772,
+    "functionName": "viewTick",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-RVNOARDB.js",
+    "lineNumber": 20,
+    "columnNumber": 13312,
+    "source": {
+      "source": "../../../../../../games/tiny-platformer/src/view.ts",
+      "line": 401,
+      "column": 12,
+      "name": null
+    }
+  }
+]

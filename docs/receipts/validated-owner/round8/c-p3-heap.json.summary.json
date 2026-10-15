@@ -1,0 +1,1018 @@
+[
+  {
+    "bytes": 8662872,
+    "functionName": "L",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 24865
+  },
+  {
+    "bytes": 2331648,
+    "functionName": "push",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 2069244,
+    "functionName": "(V8 API)",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 1575088,
+    "functionName": "Map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 1550732,
+    "functionName": "sort",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 1442816,
+    "functionName": "info",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 15691
+  },
+  {
+    "bytes": 1181104,
+    "functionName": "ia",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 21094
+  },
+  {
+    "bytes": 819856,
+    "functionName": "sample",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 46500
+  },
+  {
+    "bytes": 819348,
+    "functionName": "renderTreasure",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js",
+    "lineNumber": 529,
+    "columnNumber": 25
+  },
+  {
+    "bytes": 790964,
+    "functionName": "loop",
+    "scriptId": "28",
+    "url": "",
+    "lineNumber": 9,
+    "columnNumber": 15
+  },
+  {
+    "bytes": 786616,
+    "functionName": "renderPlayers",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js",
+    "lineNumber": 474,
+    "columnNumber": 24
+  },
+  {
+    "bytes": 722648,
+    "functionName": "Wr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 29389
+  },
+  {
+    "bytes": 593836,
+    "functionName": "b",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 14936
+  },
+  {
+    "bytes": 524904,
+    "functionName": "Set",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 393288,
+    "functionName": "render",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js",
+    "lineNumber": 446,
+    "columnNumber": 17
+  },
+  {
+    "bytes": 360732,
+    "functionName": "sample",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 46500
+  },
+  {
+    "bytes": 360640,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 24926
+  },
+  {
+    "bytes": 360516,
+    "functionName": "renderMap",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js",
+    "lineNumber": 459,
+    "columnNumber": 20
+  },
+  {
+    "bytes": 327916,
+    "functionName": "Po",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 33111
+  },
+  {
+    "bytes": 327808,
+    "functionName": "frame",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js",
+    "lineNumber": 746,
+    "columnNumber": 16
+  },
+  {
+    "bytes": 327792,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 16262
+  },
+  {
+    "bytes": 327784,
+    "functionName": "map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 295180,
+    "functionName": "info",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 15691
+  },
+  {
+    "bytes": 262340,
+    "functionName": "sample",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 46500
+  },
+  {
+    "bytes": 262272,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 24968
+  },
+  {
+    "bytes": 262248,
+    "functionName": "h",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 23,
+    "columnNumber": 729
+  },
+  {
+    "bytes": 262188,
+    "functionName": "(IDLE_EXTERNAL)",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 229632,
+    "functionName": "L",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 24865
+  },
+  {
+    "bytes": 229536,
+    "functionName": "window.__mons",
+    "scriptId": "28",
+    "url": "",
+    "lineNumber": 3,
+    "columnNumber": 18
+  },
+  {
+    "bytes": 229432,
+    "functionName": "pump",
+    "scriptId": "4",
+    "url": "",
+    "lineNumber": 9,
+    "columnNumber": 17
+  },
+  {
+    "bytes": 229416,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 29833
+  },
+  {
+    "bytes": 196692,
+    "functionName": "input",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 45256
+  },
+  {
+    "bytes": 196644,
+    "functionName": "drawnMonsters",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js",
+    "lineNumber": 568,
+    "columnNumber": 24
+  },
+  {
+    "bytes": 164100,
+    "functionName": "Set",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 163992,
+    "functionName": "info",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 15691
+  },
+  {
+    "bytes": 163976,
+    "functionName": "L",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 24865
+  },
+  {
+    "bytes": 163952,
+    "functionName": "self",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js",
+    "lineNumber": 733,
+    "columnNumber": 20
+  },
+  {
+    "bytes": 163872,
+    "functionName": "updateEntity",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js",
+    "lineNumber": 249,
+    "columnNumber": 23
+  },
+  {
+    "bytes": 133400,
+    "functionName": "st.facts",
+    "scriptId": "8",
+    "url": "http://127.0.0.1:8792/tiny-platformer/play?room=pt5-phone-c-p3-mv9n4akm",
+    "lineNumber": 721,
+    "columnNumber": 22
+  },
+  {
+    "bytes": 131276,
+    "functionName": "L",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 24865
+  },
+  {
+    "bytes": 131168,
+    "functionName": "d",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 14891
+  },
+  {
+    "bytes": 131148,
+    "functionName": "ws.onmessage",
+    "scriptId": "10",
+    "url": "http://127.0.0.1:8792/tiny-platformer/play?room=pt5-phone-c-p3-mv9n4akm",
+    "lineNumber": 1243,
+    "columnNumber": 28
+  },
+  {
+    "bytes": 131132,
+    "functionName": "",
+    "scriptId": "4",
+    "url": "",
+    "lineNumber": 14,
+    "columnNumber": 11
+  },
+  {
+    "bytes": 131100,
+    "functionName": "random",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 98420,
+    "functionName": "",
+    "scriptId": "10",
+    "url": "http://127.0.0.1:8792/tiny-platformer/play?room=pt5-phone-c-p3-mv9n4akm",
+    "lineNumber": 1077,
+    "columnNumber": 48
+  },
+  {
+    "bytes": 98384,
+    "functionName": "Map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 98384,
+    "functionName": "exec",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 98352,
+    "functionName": "da",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 30323
+  },
+  {
+    "bytes": 98352,
+    "functionName": "map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 98332,
+    "functionName": "window.__state",
+    "scriptId": "28",
+    "url": "",
+    "lineNumber": 7,
+    "columnNumber": 19
+  },
+  {
+    "bytes": 98328,
+    "functionName": "drawnMonsters",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js",
+    "lineNumber": 568,
+    "columnNumber": 24
+  },
+  {
+    "bytes": 66324,
+    "functionName": "M",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 15264
+  },
+  {
+    "bytes": 65620,
+    "functionName": "sample",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 46500
+  },
+  {
+    "bytes": 65620,
+    "functionName": "window.__me",
+    "scriptId": "28",
+    "url": "",
+    "lineNumber": 2,
+    "columnNumber": 16
+  },
+  {
+    "bytes": 65588,
+    "functionName": "Pn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 8605
+  },
+  {
+    "bytes": 65576,
+    "functionName": "sample",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 46500
+  },
+  {
+    "bytes": 65572,
+    "functionName": "va",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 1,
+    "columnNumber": 2153
+  },
+  {
+    "bytes": 65572,
+    "functionName": "exec",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65568,
+    "functionName": "slice",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65568,
+    "functionName": "map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65568,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 16262
+  },
+  {
+    "bytes": 65560,
+    "functionName": "__deliver",
+    "scriptId": "4",
+    "url": "",
+    "lineNumber": 32,
+    "columnNumber": 13
+  },
+  {
+    "bytes": 65560,
+    "functionName": "e.onmessage",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 35961
+  },
+  {
+    "bytes": 65560,
+    "functionName": "Po",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 33111
+  },
+  {
+    "bytes": 65560,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65560,
+    "functionName": "window.__me",
+    "scriptId": "28",
+    "url": "",
+    "lineNumber": 2,
+    "columnNumber": 16
+  },
+  {
+    "bytes": 65552,
+    "functionName": "entries",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65552,
+    "functionName": "slice",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65544,
+    "functionName": "ye",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 8535
+  },
+  {
+    "bytes": 65544,
+    "functionName": "shift",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 65544,
+    "functionName": "Xr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 33598
+  },
+  {
+    "bytes": 65544,
+    "functionName": "checkMyStomps",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js",
+    "lineNumber": 112,
+    "columnNumber": 24
+  },
+  {
+    "bytes": 33360,
+    "functionName": "push",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 33012,
+    "functionName": "tellRects",
+    "scriptId": "10",
+    "url": "http://127.0.0.1:8792/tiny-platformer/play?room=pt5-phone-c-p3-mv9n4akm",
+    "lineNumber": 1201,
+    "columnNumber": 20
+  },
+  {
+    "bytes": 32964,
+    "functionName": "me",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 6943
+  },
+  {
+    "bytes": 32960,
+    "functionName": "onRound",
+    "scriptId": "10",
+    "url": "http://127.0.0.1:8792/tiny-platformer/play?room=pt5-phone-c-p3-mv9n4akm",
+    "lineNumber": 1213,
+    "columnNumber": 18
+  },
+  {
+    "bytes": 32832,
+    "functionName": "T",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 2180
+  },
+  {
+    "bytes": 32832,
+    "functionName": "To",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 33756
+  },
+  {
+    "bytes": 32832,
+    "functionName": "set",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32832,
+    "functionName": "push",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32832,
+    "functionName": "push",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32800,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 24926
+  },
+  {
+    "bytes": 32800,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 24968
+  },
+  {
+    "bytes": 32800,
+    "functionName": "Map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32800,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 24968
+  },
+  {
+    "bytes": 32800,
+    "functionName": "Map",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32796,
+    "functionName": "jn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 1,
+    "columnNumber": 3409
+  },
+  {
+    "bytes": 32784,
+    "functionName": "join",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "",
+    "scriptId": "10",
+    "url": "http://127.0.0.1:8792/tiny-platformer/play?room=pt5-phone-c-p3-mv9n4akm",
+    "lineNumber": 1189,
+    "columnNumber": 27
+  },
+  {
+    "bytes": 32784,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "sort",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "qa",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 1008
+  },
+  {
+    "bytes": 32784,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 24926
+  },
+  {
+    "bytes": 32784,
+    "functionName": "slice",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "values",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32784,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 16262
+  },
+  {
+    "bytes": 32784,
+    "functionName": "",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 16262
+  },
+  {
+    "bytes": 32784,
+    "functionName": "",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "Vr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 30624
+  },
+  {
+    "bytes": 32780,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "next",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32780,
+    "functionName": "",
+    "scriptId": "28",
+    "url": "",
+    "lineNumber": 11,
+    "columnNumber": 73
+  },
+  {
+    "bytes": 32772,
+    "functionName": "V",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 8476
+  },
+  {
+    "bytes": 32772,
+    "functionName": "shift",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32772,
+    "functionName": "max",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32772,
+    "functionName": "max",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32772,
+    "functionName": "",
+    "scriptId": "4",
+    "url": "",
+    "lineNumber": 14,
+    "columnNumber": 11
+  },
+  {
+    "bytes": 32772,
+    "functionName": "random",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32772,
+    "functionName": "V",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 8476
+  },
+  {
+    "bytes": 32772,
+    "functionName": "Pn",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 8605
+  },
+  {
+    "bytes": 32772,
+    "functionName": "Tr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 8685
+  },
+  {
+    "bytes": 32772,
+    "functionName": "k",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 2100
+  },
+  {
+    "bytes": 32772,
+    "functionName": "hypot",
+    "scriptId": "0",
+    "url": "",
+    "lineNumber": -1,
+    "columnNumber": -1
+  },
+  {
+    "bytes": 32772,
+    "functionName": "clock",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 10,
+    "columnNumber": 26391
+  },
+  {
+    "bytes": 32772,
+    "functionName": "Xr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 33598
+  },
+  {
+    "bytes": 32772,
+    "functionName": "",
+    "scriptId": "4",
+    "url": "",
+    "lineNumber": 14,
+    "columnNumber": 11
+  },
+  {
+    "bytes": 32772,
+    "functionName": "Yr",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 32974
+  },
+  {
+    "bytes": 32772,
+    "functionName": "",
+    "scriptId": "4",
+    "url": "",
+    "lineNumber": 14,
+    "columnNumber": 11
+  },
+  {
+    "bytes": 32772,
+    "functionName": "overlap",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js",
+    "lineNumber": 26,
+    "columnNumber": 18
+  },
+  {
+    "bytes": 32772,
+    "functionName": "updateEntity",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js",
+    "lineNumber": 249,
+    "columnNumber": 23
+  },
+  {
+    "bytes": 32772,
+    "functionName": "checkMyStomps",
+    "scriptId": "15",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js",
+    "lineNumber": 112,
+    "columnNumber": 24
+  },
+  {
+    "bytes": 32772,
+    "functionName": "sample",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 46500
+  },
+  {
+    "bytes": 32772,
+    "functionName": "sample",
+    "scriptId": "14",
+    "url": "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js",
+    "lineNumber": 3,
+    "columnNumber": 46500
+  }
+]

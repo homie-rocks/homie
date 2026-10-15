@@ -1,0 +1,151 @@
+TAP version 13
+# (node:70773) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: browser rules carry reserved guides, validated goals, asks, answers and companion pacing
+ok 1 - browser rules carry reserved guides, validated goals, asks, answers and companion pacing
+  ---
+  duration_ms: 749.782834
+  type: 'test'
+  ...
+# Subtest: a placement projects the body to its own tick without a second correction: small
+ok 2 - a placement projects the body to its own tick without a second correction: small
+  ---
+  duration_ms: 400.063958
+  type: 'test'
+  ...
+# Subtest: a placement projects the body to its own tick without a second correction: Gates
+ok 3 - a placement projects the body to its own tick without a second correction: Gates
+  ---
+  duration_ms: 953.967666
+  type: 'test'
+  ...
+# Subtest: a prior placement cannot inject held controls into the respawned body
+ok 4 - a prior placement cannot inject held controls into the respawned body
+  ---
+  duration_ms: 317.325292
+  type: 'test'
+  ...
+# Subtest: solid correction remains continuous after placement, seed 17
+ok 5 - solid correction remains continuous after placement, seed 17
+  ---
+  duration_ms: 1602.84375
+  type: 'test'
+  ...
+# Subtest: solid correction remains continuous after placement, seed 41
+ok 6 - solid correction remains continuous after placement, seed 41
+  ---
+  duration_ms: 1264.001833
+  type: 'test'
+  ...
+# Subtest: solid correction remains continuous after placement, seed 83
+ok 7 - solid correction remains continuous after placement, seed 83
+  ---
+  duration_ms: 1285.203166
+  type: 'test'
+  ...
+# Subtest: a reconnect after an outage draws a placement the game names at once
+ok 8 - a reconnect after an outage draws a placement the game names at once
+  ---
+  duration_ms: 983.022792
+  type: 'test'
+  ...
+# {"worst":0.8772457838058472,"at":{"from":{"x":-1.7567635774612427,"y":-0.5,"z":0},"to":{"x":-2.63400936126709,"y":-0.5,"z":0},"connected":true},"back":212,"end":{"x":-2.63400936126709,"y":-0.5,"z":0}}
+# Subtest: validated owner keeps its own trajectory with delayed reports: 0 ms
+ok 9 - validated owner keeps its own trajectory with delayed reports: 0 ms
+  ---
+  duration_ms: 549.001167
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 150 ms
+ok 10 - validated owner keeps its own trajectory with delayed reports: 150 ms
+  ---
+  duration_ms: 560.054042
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 300 ms
+ok 11 - validated owner keeps its own trajectory with delayed reports: 300 ms
+  ---
+  duration_ms: 637.815166
+  type: 'test'
+  ...
+# Subtest: validated owner predicts through an outage, keeps score, and resumes without a wait
+ok 12 - validated owner predicts through an outage, keeps score, and resumes without a wait
+  ---
+  duration_ms: 602.2065
+  type: 'test'
+  ...
+# Subtest: validated owner draws a local corner landing without embedding the interpolated box
+ok 13 - validated owner draws a local corner landing without embedding the interpolated box
+  ---
+  duration_ms: 302.105458
+  type: 'test'
+  ...
+# Subtest: validated owner recovers room clock after 3000 ms server stall
+ok 14 - validated owner recovers room clock after 3000 ms server stall
+  ---
+  duration_ms: 424.365333
+  type: 'test'
+  ...
+# Subtest: validated owner recovers room clock after 15000 ms server stall
+ok 15 - validated owner recovers room clock after 15000 ms server stall
+  ---
+  duration_ms: 630.198375
+  type: 'test'
+  ...
+# Subtest: a delayed owner placement starts fresh reports near arrival time without granting travel
+ok 16 - a delayed owner placement starts fresh reports near arrival time without granting travel
+  ---
+  duration_ms: 441.96125
+  type: 'test'
+  ...
+# Subtest: validated owner clock tracks room at 0.99 clock rate
+ok 17 - validated owner clock tracks room at 0.99 clock rate
+  ---
+  duration_ms: 2057.343083
+  type: 'test'
+  ...
+# Subtest: validated owner clock tracks room at 1.01 clock rate
+ok 18 - validated owner clock tracks room at 1.01 clock rate
+  ---
+  duration_ms: 2084.343084
+  type: 'test'
+  ...
+# Subtest: validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame
+ok 19 - validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame
+  ---
+  duration_ms: 370.844459
+  type: 'test'
+  ...
+# Subtest: an observer switches an owner placement at its sampled time, without interpolating across the map
+ok 20 - an observer switches an owner placement at its sampled time, without interpolating across the map
+  ---
+  duration_ms: 350.39575
+  type: 'test'
+  ...
+# Subtest: remote validated movement stays bounded while an owner catches up from an outage
+ok 21 - remote validated movement stays bounded while an owner catches up from an outage
+  ---
+  duration_ms: 503.144917
+  type: 'test'
+  ...
+# Subtest: owner confirmations ignore a sampled scene from before the current placement
+ok 22 - owner confirmations ignore a sampled scene from before the current placement
+  ---
+  duration_ms: 312.17925
+  type: 'test'
+  ...
+# Subtest: receiving a placement preserves the moving runner history before its scene boundary
+ok 23 - receiving a placement preserves the moving runner history before its scene boundary
+  ---
+  duration_ms: 315.782167
+  type: 'test'
+  ...
+1..23
+# tests 23
+# suites 0
+# pass 23
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 17824.614334

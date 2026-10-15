@@ -1,0 +1,46 @@
+[
+  {
+    "path": "netplay/netplay.ts",
+    "sha256": "6650856863d2d01e472de2be7171bd95bf349bb33b4af26204a39e66bb9732db"
+  },
+  {
+    "path": "lab/harness.js",
+    "sha256": "e28000a20bb58816d1d1e9555df1d04296ef8aee4f20102fcb81ed30c0592601"
+  },
+  {
+    "path": "rules/types.ts",
+    "sha256": "7d492df0033ac43f427da7c58bfdcb264b481fd1d711f1a97278e32b6987b5c2"
+  },
+  {
+    "path": "rules/core.ts",
+    "sha256": "5e23b3510a1e3ce17874da3b456e35833f24ba2593e355ec9d8fa42fb571f799"
+  },
+  {
+    "path": "rules/host.ts",
+    "sha256": "3aa725863d8ff8a440216cde8872703d38ef0faa968777b7357e0407d934642b"
+  },
+  {
+    "path": "rules/rules.ts",
+    "sha256": "c685009ddffda3d53e063e69b26531472c8201b18a7a31308e6021974a808522"
+  },
+  {
+    "path": "rules/pack.ts",
+    "sha256": "3be818c42720d919249daac413e484c3c7e9b631b56e5ab74dad205c09597919"
+  },
+  {
+    "path": "rules/view.ts",
+    "sha256": "6ab608f74929c0c32a069e94bc662bfbbae624692cb444564fa2b5d405b92d70"
+  },
+  {
+    "path": "lib/rules-check-worker.mjs",
+    "sha256": "87070bb75a65385d757ea8b82be96884f36a71f6c956788edb4f4b0ca969f027"
+  },
+  {
+    "path": "lib/rules-guard.mjs",
+    "sha256": "1b0795fe1bb9e2c416db7ad2146a2f4776bf190d80b960cf8bab445924a518b3"
+  },
+  {
+    "path": "port/probe.ts",
+    "sha256": "d80f640536011e004b99e6a9e43f66b28096885ce45a3647c7714c5cbe5bacd4"
+  }
+]

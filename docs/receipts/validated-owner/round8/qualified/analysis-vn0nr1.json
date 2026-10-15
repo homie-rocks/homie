@@ -1,0 +1,62 @@
+{
+  "vn0nr1": {
+    "peakLoad": 14.697265625,
+    "manifest": {
+      "tag": "vn0nr1",
+      "script": "cmp6.mjs",
+      "args": [
+        "--delay",
+        "0",
+        "--loss",
+        "0",
+        "--jitter",
+        "0",
+        "--seconds",
+        "180",
+        "--obs3"
+      ],
+      "harness_sha256": {
+        "cmp6.mjs": "98f287695048370703d065185dd5f8f69926d64db437c59c593d7772465b0093",
+        "browser.mjs": "91324a670c171fdb8b583c5d81012789096880b976921e6ac861fbd3b12de736",
+        "barrier.mjs": "f480ad78a22f5eb9f422142139968c6271fb7d4e8c0c8faa74d738d512315cad",
+        "pair.py": "df0b187efa7a76cb0d460c9fdce0627139a4e04984753b08e7410503911d22ec"
+      },
+      "runtime": {
+        "b": {
+          "main": "/tmp/pt9/runtime-b-1792082641/worker.js",
+          "assets": {
+            "directory": "/tmp/pt9/runtime-b-1792082641-assets",
+            "binding": "ASSETS",
+            "run_worker_first": true
+          }
+        },
+        "c": {
+          "main": "/tmp/pt8/runtime-c/worker.js",
+          "assets": {
+            "directory": "/tmp/pt8/assets-c-1792066186",
+            "binding": "ASSETS",
+            "run_worker_first": true
+          }
+        }
+      }
+    },
+    "sides": {
+      "b": {
+        "owner": "b-vn0nr1-lag0-loss0-jitter0 {\"s\":180.71,\"frames\":10644,\"cpu\":0,\"load\":14.1,\"late\":0,\"socks\":1,\"inSolid\":0,\"jumps\":3,\"jumpMax\":2.27,\"skips\":1,\"slides\":1,\"slidesOver1\":1,\"slideMaxNet\":1.9,\"respawns\":7,\"respawnsNotCut\":1,\"respawnLeadMax\":4.51,\"stalls\":0,\"stallMs\":0,\"over33\":8,\"over50\":3,\"dtP99\":18.5,\"dtMax\":3033,\"ev\":\"\"}\nTOTAL {\"runs\":1,\"frames\":10644,\"inSolid\":0,\"jumps\":3,\"jumpMax\":2.27,\"skips\":1,\"slides\":1,\"slidesOver1\":1,\"slidesOver3\":0,\"slideMaxNet\":1.9,\"respawns\":7,\"respawnsGlided\":1,\"over33\":8,\"over50\":3,\"stalls\":0,\"stallMs\":0}",
+        "fair": "b-vn0nr1 {\"sec\":181,\"catches\":6,\"sidePass\":1,\"sidePassDeep\":0,\"sideTouch\":2,\"goldTouch\":14,\"goldBack\":0,\"goldMiss\":0,\"stompBack\":0,\"seenFrames\":10754,\"seenResp\":6,\"seenPass\":2,\"seenPassDeep\":0,\"seenSideTouch\":3,\"seenCatchNoMonster\":4,\"seenTeleport\":1,\"seenTeleportMax\":9.389527327213635,\"seenStall\":10,\"seenStallMsMax\":6066.300048828125,\"leadMed\":4.4,\"leadMin\":1.9,\"leadEnd\":5.6}\nTOTAL {\"sec\":180.7097000000477,\"catches\":6,\"sidePass\":1,\"sidePassDeep\":0,\"sideTouch\":2,\"goldTouch\":14,\"goldBack\":0,\"goldMiss\":0,\"stompBack\":0,\"seenFrames\":10754,\"seenResp\":6,\"seenPass\":2,\"seenPassDeep\":0,\"seenSideTouch\":3,\"seenCatchNoMonster\":4,\"seenTeleport\":1,\"seenTeleportMax\":9.389527327213635,\"seenStall\":10,\"seenStallMsMax\":6066.300048828125}",
+        "observerJumps": "/tmp/pt9/runs/b-vn0nr1 1 9.4",
+        "stomps": "TOTAL {\"runs\":1,\"vanish\":2,\"reshow\":0,\"reshowFrames\":[]}",
+        "observerFreezes": "b-vn0nr1 [[53.3,6066,24.5],[60.5,1033,10.6],[61.5,833,10.7],[65.3,2450,31.6],[68.9,833,7.7],[103.6,2002,23],[124.5,2368,25.3],[141.8,2217,16.9],[180.5,867,\"end\"]]",
+        "stallRecovery": "b-vn0nr1-lag0-loss0-jitter0-frames.json.gz []"
+      },
+      "c": {
+        "owner": "c-vn0nr1-lag0-loss0-jitter0 {\"s\":180.64,\"frames\":10713,\"cpu\":0,\"load\":14.1,\"late\":0,\"socks\":1,\"inSolid\":0,\"jumps\":2,\"jumpMax\":2.24,\"skips\":1,\"slides\":1,\"slidesOver1\":1,\"slideMaxNet\":2.24,\"respawns\":7,\"respawnsNotCut\":0,\"respawnLeadMax\":0,\"stalls\":0,\"stallMs\":0,\"over33\":6,\"over50\":5,\"dtP99\":17.7,\"dtMax\":1376,\"ev\":\"\"}\nTOTAL {\"runs\":1,\"frames\":10713,\"inSolid\":0,\"jumps\":2,\"jumpMax\":2.24,\"skips\":1,\"slides\":1,\"slidesOver1\":1,\"slidesOver3\":0,\"slideMaxNet\":2.24,\"respawns\":7,\"respawnsGlided\":0,\"over33\":6,\"over50\":5,\"stalls\":0,\"stallMs\":0}",
+        "fair": "c-vn0nr1 {\"sec\":181,\"catches\":7,\"sidePass\":1,\"sidePassDeep\":1,\"sideTouch\":2,\"goldTouch\":8,\"goldBack\":0,\"goldMiss\":4,\"stompBack\":0,\"seenFrames\":10730,\"seenResp\":5,\"seenPass\":3,\"seenPassDeep\":1,\"seenSideTouch\":4,\"seenCatchNoMonster\":3,\"seenTeleport\":24,\"seenTeleportMax\":20.708641061104327,\"seenStall\":1,\"seenStallMsMax\":2883.900146484375}\nTOTAL {\"sec\":180.64289999985695,\"catches\":7,\"sidePass\":1,\"sidePassDeep\":1,\"sideTouch\":2,\"goldTouch\":8,\"goldBack\":0,\"goldMiss\":4,\"stompBack\":0,\"seenFrames\":10730,\"seenResp\":5,\"seenPass\":3,\"seenPassDeep\":1,\"seenSideTouch\":4,\"seenCatchNoMonster\":3,\"seenTeleport\":24,\"seenTeleportMax\":20.708641061104327,\"seenStall\":1,\"seenStallMsMax\":2883.900146484375}",
+        "observerJumps": "/tmp/pt9/runs/c-vn0nr1 11 20.7",
+        "stomps": "TOTAL {\"runs\":1,\"vanish\":4,\"reshow\":0,\"reshowFrames\":[]}",
+        "observerFreezes": "c-vn0nr1 [[56,2884,5.2],[180.3,866,\"end\"]]",
+        "stallRecovery": "c-vn0nr1-lag0-loss0-jitter0-frames.json.gz []"
+      }
+    }
+  }
+}

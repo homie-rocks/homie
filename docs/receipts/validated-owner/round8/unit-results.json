@@ -1,0 +1,51 @@
+[
+  {
+    "batch": "af",
+    "tests": 83.0,
+    "pass": 83.0,
+    "fail": 0.0,
+    "duration_ms": 159040.046833
+  },
+  {
+    "batch": "gm",
+    "tests": 31.0,
+    "pass": 31.0,
+    "fail": 0.0,
+    "duration_ms": 95814.138458
+  },
+  {
+    "batch": "ns",
+    "tests": 165.0,
+    "pass": 165.0,
+    "fail": 0.0,
+    "duration_ms": 269390.770834
+  },
+  {
+    "batch": "tz",
+    "tests": 31.0,
+    "pass": 31.0,
+    "fail": 0.0,
+    "duration_ms": 70957.28
+  },
+  {
+    "batch": "numeric",
+    "tests": 3.0,
+    "pass": 3.0,
+    "fail": 0.0,
+    "duration_ms": 1299.811125
+  },
+  {
+    "batch": "owner",
+    "tests": 19.0,
+    "pass": 19.0,
+    "fail": 0.0,
+    "duration_ms": 321.351542
+  },
+  {
+    "batch": "studio",
+    "tests": 44.0,
+    "pass": 44.0,
+    "fail": 0.0,
+    "duration_ms": 9931.031208
+  }
+]

@@ -1,0 +1,54 @@
+TAP version 13
+# (node:83926) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: remote validated movement stays bounded while an owner catches up from an outage
+ok 1 - remote validated movement stays bounded while an owner catches up from an outage
+  ---
+  duration_ms: 1706.62575
+  type: 'test'
+  ...
+# Subtest: remote owners stay on the shared scene timeline when newer reports arrive
+ok 2 - remote owners stay on the shared scene timeline when newer reports arrive
+  ---
+  duration_ms: 1090.167375
+  type: 'test'
+  ...
+# Subtest: owner confirmations ignore a sampled scene from before the current placement
+ok 3 - owner confirmations ignore a sampled scene from before the current placement
+  ---
+  duration_ms: 330.445167
+  type: 'test'
+  ...
+# Subtest: runner and monster interpolation use one fraction through a burst of reports
+ok 4 - runner and monster interpolation use one fraction through a burst of reports
+  ---
+  duration_ms: 335.685
+  type: 'test'
+  ...
+# Subtest: accepted runner ticks stay aligned with a patrol when uplink delay changes
+ok 5 - accepted runner ticks stay aligned with a patrol when uplink delay changes
+  ---
+  duration_ms: 560.5355
+  type: 'test'
+  ...
+# Subtest: receiving a placement preserves the moving runner history before its scene boundary
+ok 6 - receiving a placement preserves the moving runner history before its scene boundary
+  ---
+  duration_ms: 456.519125
+  type: 'test'
+  ...
+# Subtest: a stalled scene reaches fresh movement without replaying a long stationary tail
+ok 7 - a stalled scene reaches fresh movement without replaying a long stationary tail
+  ---
+  duration_ms: 458.126959
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5130.252083

@@ -1,0 +1,38 @@
+{
+  "tag": "vn150h",
+  "script": "cmp6.mjs",
+  "args": [
+    "--delay",
+    "150",
+    "--loss",
+    "0.03",
+    "--jitter",
+    "50",
+    "--seconds",
+    "180"
+  ],
+  "harness_sha256": {
+    "cmp6.mjs": "97d11ef9808a624e7abf08ab738de81d955b249ba5dde08456bee65ba472a13b",
+    "browser.mjs": "fdb3993a5a98fc6f6cd82d932a83cef634f89a6950b965f09b9ed2a16fef2fa4",
+    "barrier.mjs": "f480ad78a22f5eb9f422142139968c6271fb7d4e8c0c8faa74d738d512315cad",
+    "pair.py": "6a898b4d753db8751177e78ff0b828895eef4cfced6fc8426c5660546d275383"
+  },
+  "runtime": {
+    "b": {
+      "main": "/tmp/pt9/runtime-b-1792082641/worker.js",
+      "assets": {
+        "directory": "/tmp/pt9/runtime-b-1792082641-assets",
+        "binding": "ASSETS",
+        "run_worker_first": true
+      }
+    },
+    "c": {
+      "main": "/tmp/pt8/runtime-c/worker.js",
+      "assets": {
+        "directory": "/tmp/pt8/assets-c-1792066186",
+        "binding": "ASSETS",
+        "run_worker_first": true
+      }
+    }
+  }
+}
