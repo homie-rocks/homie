@@ -196,9 +196,12 @@ export function configureWebGL(enabled) {
   window.__homieWebGLDisabled = !enabled;
   if(window.__homieWebGLWrapped)return;
   window.__homieWebGLWrapped = true;
-  const original = HTMLCanvasElement.prototype.getContext;
-  HTMLCanvasElement.prototype.getContext = function(kind, ...args) {
-    if(window.__homieWebGLDisabled && /^(webgl2?|experimental-webgl)$/.test(kind))return null;
-    return Reflect.apply(original,this,[kind,...args]);
-  };
+  for(const proto of [globalThis.HTMLCanvasElement?.prototype,globalThis.OffscreenCanvas?.prototype]) {
+    if(!proto)continue;
+    const original = proto.getContext;
+    proto.getContext = function(kind, ...args) {
+      if(window.__homieWebGLDisabled && /^(webgl2?|experimental-webgl)$/.test(kind))return null;
+      return Reflect.apply(original,this,[kind,...args]);
+    };
+  }
 }
