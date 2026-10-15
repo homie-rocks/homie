@@ -11,12 +11,20 @@ export async function forkStudio(source,target,{name,slug,ids={}}={}) {
  const excluded=new Set(['node_modules','.git','.studio','dist','.wrangler','.DS_Store','wrangler.json','wrangler.jsonc','wrangler.toml','wrangler.custom.json','package-lock.json']);
  const files=[];
  function walk(dir){for(const entry of readdirSync(join(source,dir),{withFileTypes:true})) {
-  if(excluded.has(entry.name)||entry.name.startsWith('.')||entry.name.startsWith('.dev.vars')||entry.name.endsWith('.sqlite')||entry.name.endsWith('.db')||entry.name.endsWith('.pem')||entry.name.endsWith('.key')||entry.isSymbolicLink())continue;
+  if(excluded.has(entry.name)||entry.name.startsWith('.')&&entry.name!=='.gitignore'||entry.name.startsWith('.dev.vars')||entry.name.endsWith('.sqlite')||entry.name.endsWith('.db')||entry.name.endsWith('.pem')||entry.name.endsWith('.key')||entry.isSymbolicLink())continue;
   const path=join(dir,entry.name);if(entry.isDirectory())walk(path);else if(entry.isFile())files.push(path);
  }}walk('');
  const mapping=new Map([[studio.slug,slug],[studio.name,name]]);
  const collect=value=>{if(!value||typeof value!=='object')return;if(typeof value.id==='string'&&/^[a-z][a-z0-9-]*$/.test(value.id))mapping.set(value.id,ids[value.id]??`${slug}-${value.id}`);for(const child of Object.values(value))collect(child);};
  for(const file of files.filter(p=>p.endsWith('.json')&&!['studio.json','package.json'].includes(p)))try{collect(JSON.parse(readFileSync(join(source,file),'utf8')));}catch{}
+ const ts=(await import('typescript')).default;
+ for(const file of files.filter(p=>/\.(?:[cm]?js|tsx?)$/.test(p))) {
+  const tree=ts.createSourceFile(file,readFileSync(join(source,file),'utf8'),ts.ScriptTarget.Latest,true);
+  const visit=node=>{
+   if(ts.isPropertyAssignment(node)&&(ts.isIdentifier(node.name)||ts.isStringLiteral(node.name))&&node.name.text==='id'&&ts.isStringLiteral(node.initializer))collect({id:node.initializer.text});
+   ts.forEachChild(node,visit);
+  };visit(tree);
+ }
  for(const [old,next] of Object.entries(ids))mapping.set(old,next);
  for(const [old,next] of mapping)if(typeof next!=='string'||!next.length)throw new Error(`Invalid replacement for ${old}`);
  for(const [old,next] of mapping)if(old!==studio.name&&(!/^[a-z][a-z0-9-]{0,39}$/.test(next)))throw new Error(`Renamed id ${next} exceeds 40 characters; supply ids.${old}`);

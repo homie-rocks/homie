@@ -195,3 +195,10 @@ test('private room-backed app uses its play ticket for the frame and scoped asse
   assert.equal((await worker.fetch(new Request(new URL('assets/main.js',origin+base)),env,{waitUntil:()=>{}})).status,200);
  }finally{DB.sql.close();}
 });
+
+test('resource booking declarations reject missing collections and anonymous resource edits',()=>{
+ const meta={id:'place',name:'Place',kind:'app',roles:{customer:{signIn:false,can:['read:slots','update:resources']}},surfaces:{phone:'customer'},records:{persist:true,collections:{slots:{fields:{capacity:{type:'number'}}},resources:{fields:{capacity:{type:'number'},skills:{type:'array'},attributes:{type:'object'}}},bookings:{fields:{},booking:{slots:'slots',item:'ticket',resources:'resources'}}}}};
+ assert.ok(appProblems(meta).some(p=>/resource.*signed.in|writes.*signed.in/.test(p)));
+ meta.roles.customer.can=['read:slots'];meta.records.collections.bookings.booking.resources='missing';
+ assert.ok(appProblems(meta).some(p=>/resources collection/.test(p)));
+});

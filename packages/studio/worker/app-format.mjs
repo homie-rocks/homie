@@ -24,8 +24,10 @@ export function appProblems(meta) {
   for (const [id, c] of Object.entries(collections)) if (c.booking) {
     const spec = c.booking;
     if (!object(spec) || !key.test(spec.slots ?? '') || !collections[spec.slots] || typeof spec.item !== 'string' || !spec.item.trim()) bad.push(`collection ${id}: booking needs slots collection and shop item`);
+    if(spec.resources!==undefined&&(!key.test(spec.resources)||!collections[spec.resources]))bad.push(`collection ${id}: booking needs a declared resources collection`);
+    if(spec.holdMinutes!==undefined&&(!Number.isSafeInteger(spec.holdMinutes)||spec.holdMinutes<1||spec.holdMinutes>1440))bad.push(`collection ${id}: holdMinutes is 1–1440`);
     if (!meta.records.persist) bad.push(`collection ${id}: bookings need persistent records`);
-    for (const role of Object.values(roles)) if (!role.signIn && (role.can ?? []).some(cap => ['create','update','delete'].some(op => cap === `${op}:${id}` || cap === `${op}:${spec.slots}`))) bad.push(`collection ${id}: booking and slot writes require a signed-in staff role`);
+    for (const role of Object.values(roles)) if (!role.signIn && (role.can ?? []).some(cap => ['create','update','delete'].some(op => cap === `${op}:${id}` || cap === `${op}:${spec.slots}` || spec.resources&&cap === `${op}:${spec.resources}`))) bad.push(`collection ${id}: booking, slot and resource writes require a signed-in staff role`);
   }
   for (const r of Object.values(roles)) for (const cap of Array.isArray(r?.can) ? r.can : []) if (!Object.hasOwn(meta.records?.collections ?? {}, String(cap).split(':')[1])) bad.push(`unknown collection in ${cap}`);
   for (const [k, v] of Object.entries(meta.words ?? {})) if (!/^[a-z][a-zA-Z0-9-]*$/.test(k) || typeof v !== 'string' || v.length > 500) bad.push(`words.${k}: use a short label`);
