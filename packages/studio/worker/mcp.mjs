@@ -123,7 +123,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
           if (!toolInScope(caller,tool.name) || !await allowed(tool.audience,caller,env)) continue;
           s.registerPrompt(tool.name,{description:tool.description,argsSchema:fromJsonSchema(tool.inputSchema,validator)},async(args)=>read('prompt:'+tool.name,async fresh=>{
             if(!toolInScope(fresh,tool.name)||!await allowed(tool.audience,fresh,env))throw new Error('Permission denied');
-            const text=await tool.handler(args,services(env,cat,origin,fresh,tool.namespace??tool.name,tool));
+            const text=await tool.handler(args,services(env,cat,origin,fresh,(tool.namespace??tool.name)+(fresh.testScope?':check:'+fresh.testScope:''),tool));
             return {messages:[{role:'user',content:{type:'text',text:JSON.stringify({kind:'studio-prompt-data',prompt:tool.name,data:text})}}]};
           }));continue;
         }
@@ -135,10 +135,10 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
             const fresh=await identity();
             if(!toolInScope(fresh,tool.name)||!await allowed(tool.audience,fresh,env)){outcome='denied';throw new Error('Permission denied');}
             try{await rate(fresh);}catch(error){outcome='limited';throw error;}
-            const context=services(env,cat,origin,fresh,tool.namespace??tool.name,tool);
+            const context=services(env,cat,origin,fresh,(tool.namespace??tool.name)+(fresh.testScope?':check:'+fresh.testScope:''),tool);
             if(tool.price) {const result=await selling.paidTool(env,cat,origin,tool,args,context,extra);outcome=result.isError?'error':'ok';return result;}
             if(tool.protocol) {const result=await tool.handler(args,{...context,paymentExtra:extra});outcome=result.isError?'error':'ok';return result;}
-            const value=await tool.handler(args,{...context,request});
+            const value=await (await import('./app-tools.mjs')).invokeAppTool(tool,args,{...context,request});
             const text=JSON.stringify({kind:'untrusted-tool-data',tool:tool.name,data:value});
             outcome='ok';return {content:[{type:'text',text}]};
           }catch(error){if(error?.code===-32042)throw error;return {isError:true,content:[{type:'text',text:outcome==='denied'||outcome==='limited'||error?.name==='StudioOperationError'?error.message:(freshErrorMessage(error,env,caller))}]};}

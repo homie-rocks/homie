@@ -25,6 +25,9 @@ cover, doors and platforms, use declared entity `collider` state and movement's
 
 # Make a game
 
+For place-based builds, read [the six-build patterns](../app/PLACES.md): owner words to needs, records as objects, a local scene and ambience, one trusted operation for screens and AI, graceful graphics, and adversarial proof. Apply the same authority and honest-evidence rules to game economies and tickets.
+
+
 You are in a Homie studio when the folder (or one above it) has `studio.json`. If there
 is none, use the `studio-setup` skill first.
 
