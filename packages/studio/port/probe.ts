@@ -124,8 +124,12 @@ export function exposePort(net: Netplay<unknown, unknown, unknown> | null, opts:
     if (rows.length > RING) rows.splice(0, rows.length - RING);
   };
   // The position is sampled now; rAF may carry an earlier timestamp on a busy renderer.
-  const loop = (): void => { sample(performance.now()); requestAnimationFrame(loop); };
-  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(loop);
+  const loop = (): void => {
+    // openRoom installs a default probe; a game's richer probe replaces it.
+    // Only the exposed probe should keep sampling and retaining frame history.
+    if (typeof window !== 'undefined' && (window as unknown as { __homiePort?: PortProbe }).__homiePort !== probe) return;
+    sample(performance.now()); requestAnimationFrame(loop);
+  };
   const probe: PortProbe = {
     v: 1,
     view: opts.view,
@@ -138,7 +142,10 @@ export function exposePort(net: Netplay<unknown, unknown, unknown> | null, opts:
     info() {
       const fps = frameTimes.length > 10 ? (frameTimes.length - 1) / (((frameTimes[frameTimes.length - 1] as number) - (frameTimes[0] as number)) / 1000) : null;
       const extra: Record<string, unknown> = {};
-      for (const [k, f] of Object.entries(opts.extra ?? {})) { try { extra[k] = f(); } catch (e) { extra[k] = `error: ${String(e)}`; } }
+      if (opts.extra) for (const k in opts.extra) if (Object.hasOwn(opts.extra, k)) {
+        const f = opts.extra[k];
+        try { extra[k] = f(); } catch (e) { extra[k] = `error: ${String(e)}`; }
+      }
       let lastMove: string | null = null;
       try { lastMove = opts.lastMove ? opts.lastMove() : null; } catch { /* ignore */ }
       let score: number | null = null;
@@ -157,6 +164,7 @@ export function exposePort(net: Netplay<unknown, unknown, unknown> | null, opts:
     errors,
   };
   (window as unknown as { __homiePort: PortProbe }).__homiePort = probe;
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(loop);
   // The contract's own probes too, so the netplay e2e and any older harness can read this game.
   try { net?.expose({ self: () => { const s = opts.self?.(); return s ? { x: s.x, y: s.y } : null; }, frames: () => frames }); } catch { /* offline */ }
   return probe;

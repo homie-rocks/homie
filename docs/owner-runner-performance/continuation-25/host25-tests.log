@@ -1,0 +1,46 @@
+TAP version 13
+# Subtest: the production Worker adapter enables overrun attribution
+ok 1 - the production Worker adapter enables overrun attribution
+  ---
+  duration_ms: 256.873958
+  type: 'test'
+  ...
+# Subtest: a room whose ticks run slow or fail ends after seconds of the clock, not after a number of ticks
+ok 2 - a room whose ticks run slow or fail ends after seconds of the clock, not after a number of ticks
+  ---
+  duration_ms: 395.140167
+  type: 'test'
+  ...
+# Subtest: the overrun check: a room whose ticks keep starting late ends, and a room that only ran after a slow one does not
+ok 3 - the overrun check: a room whose ticks keep starting late ends, and a room that only ran after a slow one does not
+  ---
+  duration_ms: 250.671042
+  type: 'test'
+  ...
+# Subtest: late paired callbacks sustaining 20 Hz do not end a healthy room as an overrun
+ok 4 - late paired callbacks sustaining 20 Hz do not end a healthy room as an overrun
+  ---
+  duration_ms: 17.823208
+  type: 'test'
+  ...
+# Subtest: sustained scheduler delays retain backlog and catch up in bounded callbacks
+ok 5 - sustained scheduler delays retain backlog and catch up in bounded callbacks
+  ---
+  duration_ms: 27.460625
+  type: 'test'
+  ...
+# Subtest: one suspension inside a tick does not masquerade as sustained execution overrun
+ok 6 - one suspension inside a tick does not masquerade as sustained execution overrun
+  ---
+  duration_ms: 7.030375
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 546.924542

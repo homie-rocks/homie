@@ -1,0 +1,125 @@
+eight-player-start 2026-10-15T07:15:53.504Z
+progress 0 {
+  seat: 1,
+  link: 'online',
+  round: 1,
+  tick: 456.02999625002616,
+  runners: 8
+}
+progress 30 {
+  seat: 1,
+  link: 'online',
+  round: 1,
+  tick: 1055.6563039686187,
+  runners: 8
+}
+progress 60 {
+  seat: 1,
+  link: 'online',
+  round: 1,
+  tick: 1656.3098181068021,
+  runners: 8
+}
+progress 90 {
+  seat: 1,
+  link: 'online',
+  round: 1,
+  tick: 2256.1312756040347,
+  runners: 8
+}
+progress 120 {
+  seat: 1,
+  link: 'online',
+  round: 2,
+  tick: 2855.731808974925,
+  runners: 8
+}
+progress 150 {
+  seat: 1,
+  link: 'online',
+  round: 2,
+  tick: 3455.7667916307632,
+  runners: 8
+}
+progress 180 { seat: 1, link: 'online', round: 2, tick: 4058, runners: 8 }
+progress 210 {
+  seat: 1,
+  link: 'online',
+  round: 2,
+  tick: 4655.417496425612,
+  runners: 8
+}
+progress 240 {
+  seat: 1,
+  link: 'online',
+  round: 3,
+  tick: 5256.073577968013,
+  runners: 8
+}
+progress 270 { seat: 1, link: 'online', round: 3, tick: 5856, runners: 8 }
+progress 300 {
+  seat: 1,
+  link: 'online',
+  round: 3,
+  tick: 6455.737789543182,
+  runners: 8
+}
+progress 330 {
+  seat: 1,
+  link: 'online',
+  round: 3,
+  tick: 7056.362208783721,
+  runners: 8
+}
+progress 360 {
+  seat: 1,
+  link: 'online',
+  round: 4,
+  tick: 7655.7644767314905,
+  runners: 8
+}
+progress 390 {
+  seat: 1,
+  link: 'online',
+  round: 4,
+  tick: 8255.875393685257,
+  runners: 8
+}
+progress 420 {
+  seat: 1,
+  link: 'online',
+  round: 4,
+  tick: 8856.178432021965,
+  runners: 8
+}
+progress 450 {
+  seat: 1,
+  link: 'online',
+  round: 4,
+  tick: 9455.582642120138,
+  runners: 8
+}
+progress 480 {
+  seat: 1,
+  link: 'online',
+  round: 4,
+  tick: 10056.678010273872,
+  runners: 8
+}
+progress 510 {
+  seat: 1,
+  link: 'online',
+  round: 5,
+  tick: 10656.36513547041,
+  runners: 8
+}
+progress 540 { seat: 1, link: 'online', round: 5, tick: 11257, runners: 8 }
+progress 570 {
+  seat: 1,
+  link: 'online',
+  round: 5,
+  tick: 11857.064357945108,
+  runners: 8
+}
+cb shape: 629.5 s
+cleanup branch 0
