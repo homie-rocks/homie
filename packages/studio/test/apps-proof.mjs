@@ -141,7 +141,9 @@ export async function appProof({ wrangler, shots = null, log = () => {} }) {
     assert.equal(new URL(watchFrame.url()).searchParams.get('role'), 'wall'); await watch.close();
     if (shots) { mkdirSync(shots, { recursive: true }); for (const s of [wall, phone, phone2, staff]) await s.page.screenshot({ path: join(shots, `${s.name}.jpg`), type: 'jpeg', quality: 68 }); }
     assert.equal((await grant({ role: 'staff', player: person.id, revoke: true })).status, 200);
-    const refused = await staff.page.evaluate(async () => { const p = new URL(location.href); p.pathname = '/welcome/api/app/records/queue'; return (await fetch(p)).status; }); assert.equal(refused, 403, 'open tablet loses access immediately');
+    assert.equal(new URL(staff.page.url()).searchParams.has('access'), false, 'staff uses the cookie handoff');
+    // A revoked handoff without the private link secret is concealed as not found.
+    const refused = await staff.page.evaluate(async () => { const p = new URL(location.href); p.pathname = '/welcome/api/app/records/queue'; return (await fetch(p)).status; }); assert.equal(refused, 404, 'open tablet loses access immediately');
     await browser.close(); browser = null; await stop(); await start();
     const lasting = await (await fetch(`${origin}/welcome/api/app/records/queue?room=after-restart`)).json(); assert.equal(lasting.records.length, 2); assert.equal(lasting.records.filter((r) => r.data.status === 'called').length, 1);
     assert.deepEqual(errors, []);

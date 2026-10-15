@@ -16,6 +16,7 @@ export function inventory() {
 }
 // Runtime boundary smoke on Node 24; packaging separately checks every workspace.
 export const node24Regressions = new Set([
+  'packages/studio/test/app-role-session.test.mjs',
   'scripts/mcp-stdio.test.mjs',
   'packages/studio/test/studio-mcp-workerd.test.mjs',
   'packages/studio/test/event-delivery-workerd.test.mjs',
