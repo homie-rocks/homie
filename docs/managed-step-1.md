@@ -73,7 +73,10 @@ Customer onboarding must remain disabled. This is draft PR #139, not a release.
 8. **Scope restored.** Arrival runtime, arrival tests and generated toolkit build
    identity match the base branch. No cold-start/runtime optimization was made.
    The fixture bundles the existing runtime using code splitting and minification;
-   only the test adapter/probes change.
+   only the test adapter/probes change. The live fixture embedded a build-ID label
+   copied from newer `main` during recovery; CI caught that metadata mismatch. The
+   label is restored to this branch's base and the identity check passes. The
+   recorded live label is not asserted to be a digest of the executed fixture.
 
 ## Facet verdict
 
