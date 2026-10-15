@@ -19,6 +19,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## Unreleased
 
+- MCP responses no longer wait for tool catalogue notifications to existing streams; delivery stays in the request background work. Owner statistics explain the ingestion and hourly rollup delay for page counters.
+
 - CI records Chrome launch stderr, process exits, shared-memory availability and concurrent Chrome processes in its timing artifacts so launch failures can be diagnosed from runner evidence.
 
 - Split routing, room chat and owner controls into focused modules. Retain pending chat and agent counters after failed writes.

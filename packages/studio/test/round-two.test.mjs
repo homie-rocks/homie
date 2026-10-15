@@ -330,3 +330,17 @@ test('an alarm can restore a pending room snapshot after its final socket closes
  table.roomFor=(...args)=>{restored=args;table.room={clients:new Map()};};table.start=()=>started++;table.say=()=>{};
  await ready;assert.deepEqual(restored,['bench','idle',8]);assert.equal(started,1);
 });
+
+test('owner totals retain history while analytics ingestion waits and explain the delay',async t=>{
+ const {readStats}=await import('../worker/stats.mjs');
+ const DB=database(t),day='2026-10-15';
+ await DB.prepare("INSERT INTO stats_daily VALUES(?1,'visit','home','',10)").bind(day).run();
+ let rows=[];
+ const env={DB,STUDIO_ANALYTICS_DATASET:'studio_visits',STUDIO_ANALYTICS:{},ANALYTICS_SQL:{query:async()=>({data:rows})}};
+ const read=()=>readStats(env,{games:[]},{range:{from:day,to:day,days:1}});
+ await rollupAnalytics(env);
+ const pending=await read();assert.equal(pending.totals.visits,10);assert.match(pending.note,/last hourly rollup/);
+ rows=[{day,metric:'visit',subject:'home',source:'',n:3}];
+ await rollupAnalytics(env);await rollupAnalytics(env);
+ assert.equal((await read()).totals.visits,13);
+});
