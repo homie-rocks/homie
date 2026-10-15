@@ -259,3 +259,82 @@ view clock, never authority for capacity, payment or server deadlines. Scheduled
 needs supply their own explicit `scheduledTime`.
 
 See `guides/app/PLACES.md` for the six-build recipe and small typed examples.
+
+## One capacity budget for holds and Stripe
+
+A collection with `booking: {slots:'slots', item:'ticket'}` uses the same
+`shop_bookings` row from hold through payment. A trusted tool can call:
+
+```ts
+const held = await context.bookings.hold({
+  app: 'place', collection: 'bookings', slot: 'morning', quantity: 2,
+  id: input.request, expiresAt: input.expiresAt
+});
+```
+
+Require a signed-in caller, or pass a private, random 32–128 hex-character `token`
+for a guest. Keep request ID and expiry stable on retries. The returned `id` is
+scoped by app/collection/proof; it is public identification, never authorization.
+Only the owner (or holder of that private token) can `get`, `confirm` or `release`.
+Confirm/release take `{id, version, token?}`. Another owner's ID is not permission.
+The entire group quantity reserves atomically or fails; there is no partial group.
+Slot reads report availability including held and confirmed quantities.
+
+Use `shop.book('ticket', {collection:'bookings', slot:'morning', hold:held.id,
+token}, 2)` to pay for that same row. Session checkout claims it once, in the order
+transaction. A second checkout cannot take it; verified payment updates it.
+`confirmed` means a capacity commitment; only `paid:true` means payment was
+verified. Do not label a confirmation as a paid receipt.
+
+A scheduled owner function calls
+`context.bookings.releaseExpired({app:'place',collection:'bookings',now:event.data.scheduledTime})`.
+Only unconfirmed local holds expire this way. After checkout claims a hold,
+Stripe's verified payment/expiry/refund owns its lifecycle; a local timer cannot
+release a possibly paid seat. Keyless Payment Links cannot safely claim local
+holds: configure session checkout, or keep using their existing pending-to-paid
+path. The toolkit refuses to mix active keyless links with new local holds.
+Apply `0029_booking_holds.sql`; public projections never include actors or tokens.
+
+## Adversarial needs
+
+Actions inside `concurrent` start together on separate browser contexts:
+
+```json
+{"concurrent":[{"surface":"phone","selector":"#book","click":true},{"surface":"phone-two","selector":"#book","click":true}]}
+```
+
+Assert exactly one saved booking afterwards. `{"surface":"staff","selector":"#close","forceClick":true}`
+temporarily bypasses the disabled attribute, clicks, and restores it: assert the
+server refusal and unchanged data. It is not a permission grant.
+`{"surface":"phone","capabilities":{"webgl":false}}` installs a WebGL blocker
+before reloading that surface, leaving ordinary controls functional. Set `true`
+to restore WebGL on another reload. `{"surface":"phone","clock":1792800000000}`
+sets the supported local frame clock.
+
+`{"restart":true}` asks the authenticated local dev controller to restart its own
+Wrangler child, keeps disk state and proof sessions, and waits for readiness.
+It never kills a PID discovered by port. Start the current toolkit's dev server;
+remote URLs and old servers without this controller refuse or time out. Put
+restart/capability steps outside concurrent groups, then assert saved state.
+
+## Place time and upgrades
+
+```ts
+import {placeTime} from '@homie-rocks/studio/links';
+const startsAt = placeTime('2027-03-20', '09:30', 'America/Vancouver');
+```
+
+Store the occurrence's local date/time and IANA zone in place config; derive epoch
+milliseconds with the runtime's zone database. Never append `-07:00`. Invalid dates
+and spring gaps are refused; repeated autumn times require explicit
+`{disambiguation:'earlier'}` or `'later'`. Generate future occurrence dates from the
+calendar rule, not a constant “next Saturday”. Update runtime zone data with the
+runtime itself.
+
+`upgrade --diff` includes recognized obsolete capability notes and standalone
+2–3-second named refresh timers over `createAppRecords` clients. `upgrade --apply`
+replaces those timers with subscriptions and corrects exact stale notes without
+marking old needs passed. Review the diff and rerun the affected needs. Custom
+combined timer/jobs, hand-written routes and business-event mirrors need a semantic
+migration to the APIs above; they are not automatically deleted. The owner's
+words, historical evidence and unresolved integration work remain intact.

@@ -1,3 +1,4 @@
+import {takeDevRestart,acknowledgeDevRestart} from './dev-restart.mjs';
 import {createLocalCredential} from './local-test.mjs';
 import {workerEntry} from './worker-build.mjs';
 import { networkInterfaces } from 'node:os';
@@ -371,7 +372,7 @@ export async function dev(root, { lan = false, port: askedPort = 8787, remoteAi 
 
   let child = null;
   let ending = false;
-  let restart = null;
+  let restart = null, proofRestart = null;
   let failed = null;
   const lineState = {};
   // Stopping this process stops Wrangler with it, so no dev server is left running on its own.
@@ -395,6 +396,9 @@ export async function dev(root, { lan = false, port: askedPort = 8787, remoteAi 
     if (busy || ending || restart || !up) return;
     busy = true;
     try {
+      const requested=takeDevRestart(root,localSecret);
+      if(requested){proofRestart=requested;restart='proof';child?.kill('SIGTERM');return;}
+
       const built = builtIds(root);
       if (!built) return; // mid-build: site/dist is being written
       for (const g of listGames(root)) {
@@ -490,6 +494,7 @@ export async function dev(root, { lan = false, port: askedPort = 8787, remoteAi 
       await new Promise((r) => setTimeout(r, 500));
     }
     if (!up) return;
+    if(proofRestart){acknowledgeDevRestart(root,proofRestart);proofRestart=null;}
     const game = (builtIds(root) ?? [])[0];
     if (!game) return;
     const bad = await socketOriginProblem(origin, game);

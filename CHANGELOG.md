@@ -20,6 +20,13 @@ file) and what the upgrade would change, and changes nothing until you agree.
 ## Unreleased
 
 ### Added
+- Record changes include their previous value; trusted functions can publish
+  schema-checked business feed events with durable idempotency receipts.
+- App holds and Stripe session checkout share a capacity row, group quantities,
+  ownership, version checks, payment projection and scheduled local release.
+- Needs can force disabled clicks, race browsers, restart local dev and disable
+  WebGL. Place time uses IANA zones and rejects ambiguous/nonexistent wall times.
+- Upgrades retire recognized refresh timers and obsolete capability notes.
 - App screens call studio-defined tools through `createAppTools`, sharing strict
   schemas, server role checks and versioned writes with MCP.
 - Live record subscriptions and screen presence through the existing Lobby,
@@ -29,7 +36,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
   skills and packaged guides, with compilable toolkit examples.
 
 ### Upgrade notes
-- Apply `0027_app_live.sql`. Replace refresh timers with record subscriptions and
+- Apply migrations `0027_app_live.sql` through `0029_booking_holds.sql`. Replace refresh timers with record subscriptions and
   internal origin/peer/clock reads with `createAppContext`. No version bump.
 
 ## [0.51.8] - 2026-10-15

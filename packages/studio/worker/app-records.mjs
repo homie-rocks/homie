@@ -103,11 +103,15 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
       for(const r of rows) {
         const record={id:r.id,data:JSON.parse(r.value),version:r.version,updatedAt:r.updated_at};
         const link=linkConfig(env)?.slots?.find(l=>l.app===meta.id&&l.slots===collection&&l.slot===r.id);
+        if(Object.values(meta.records.collections).some(c=>c.booking?.slots===collection)) {
+          const count=await env.DB.prepare("SELECT COALESCE(SUM(quantity),0) n FROM shop_bookings WHERE app=?1 AND slots=?2 AND slot=?3 AND state IN ('held','confirmed')").bind(recordApp,collection,r.id).first();
+          record.booking={full:count.n>=record.data.capacity,available:Math.max(0,record.data.capacity-count.n),synced:true};
+        }
         if(link) {
           const saved=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-slot-link:${link.id}`).first();
           const observed=saved?JSON.parse(saved.value):null;
           const status=observed && observed.capacity===(link.limit??link.capacity) ? observed : link;
-          const count=await env.DB.prepare("SELECT COALESCE(SUM(quantity),0) n FROM shop_bookings WHERE app=?1 AND slots=?2 AND slot=?3 AND state='confirmed'").bind(recordApp,collection,r.id).first();
+          const count=await env.DB.prepare("SELECT COALESCE(SUM(quantity),0) n FROM shop_bookings WHERE app=?1 AND slots=?2 AND slot=?3 AND state IN ('held','confirmed')").bind(recordApp,collection,r.id).first();
           record.booking={full:!status.active||status.count>=(link.limit??link.capacity)||count.n>=link.capacity,available:status.active?Math.max(0,Math.min(link.capacity-count.n,(link.limit??link.capacity)-status.count)):0,synced:link.capacity===record.data.capacity};
         }
         records.push(record);
