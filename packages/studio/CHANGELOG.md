@@ -1,11 +1,5 @@
 # Changelog
 
-## Unreleased
-
-- Records-only apps now persist `net.prefs` through their owning shell, so device settings and saved references survive reload without weakening the iframe sandbox.
-
-- App screens share simultaneous record reads across tabs, queue bursts, and back off after connection failures. Writes remain separate and invalidate cached reads. App reconnect notices use plain wording.
-
 What changed in each release of Homie's open parts, newest first:
 
 - **`@homie-rocks/studio`**: the `homie-studio` command, your studio's site Worker, its multiplayer rooms (the
@@ -22,6 +16,14 @@ things and a patch (0.19.1) fixes or polishes them.
 To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homie." It runs
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
+
+## Unreleased
+
+### Fixed
+
+- Records-only apps now persist `net.prefs` through their owning shell, so device settings and saved references survive reload without weakening the iframe sandbox.
+
+- App screens share simultaneous record reads across tabs, queue bursts, and back off after connection failures. Writes remain separate and invalidate cached reads. App reconnect notices use plain wording.
 
 ## [0.51.7] - 2026-10-14
 
