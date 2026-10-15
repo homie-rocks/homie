@@ -173,15 +173,22 @@ const SPEECH = /^(?:say|chat|emote)/i;
  * callbacks from blame. Frozen Worker clocks cannot time a tick, so they retain scheduling-interval attribution:
  * the next tick start, in any room, supplies the interval, and a late callback suspects the newest slow interval.
  */
-const recent: { who: { blame(): void; measured(): boolean }; at: number; ms?: number }[] = [];
+const recent: { who: { blame(): void; measured(): boolean }; at: number; ms?: number; blamed?: boolean }[] = [];
 function blameLate(now: number, period: number): void {
   for (let i = recent.length - 1; i >= 0; i -= 1) {
     const ended = i + 1 < recent.length ? recent[i + 1].at : now;
     const entry = recent[i];
     // An advancing local clock can distinguish synchronous execution from a wait between callbacks.
     // Frozen Worker clocks retain scheduling-interval attribution.
-    const elapsed = entry.who.measured() && entry.ms !== undefined ? entry.ms : ended - entry.at;
-    if (elapsed > period) { entry.who.blame(); return; }
+    const measured = entry.who.measured() && entry.ms !== undefined;
+    if (measured && entry.blamed) continue;
+    const elapsed = measured ? entry.ms! : ended - entry.at;
+    if (elapsed > period) {
+      // A delayed timer can inspect the same history several times while catching up.
+      // Count an observed slow execution once, not once for every callback it delayed.
+      if (measured) entry.blamed = true;
+      entry.who.blame(); return;
+    }
   }
 }
 
