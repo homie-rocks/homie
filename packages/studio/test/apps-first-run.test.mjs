@@ -66,28 +66,7 @@ test('L: Grok Bot feedback retains its client identity', async () => {
  assert.equal(cleanNote({ kind: 'bug', text: 'App setup failed', app: 'grok' }).note.app, 'grok');
 });
 
-test('H: monthly CAD gifts create recurring Stripe prices and subscription links', async () => {
- const { syncPaymentLinks } = await import('../lib/shop-links.mjs');
- const { checkShop } = await import('../worker/shop-rules.mjs');
- const calls = [];
- const api = async (method, path, params) => {
-  calls.push({ method, path, params });
-  if (method === 'GET') return { data: [], has_more: false };
-  if (path === '/v1/products') return { id: params.id, ...params };
-  if (path === '/v1/prices') return { id: 'price_gift', active: true };
-  if (path === '/v1/payment_links') return { id: 'plink_gift', url: 'https://buy.stripe.com/test_gift', active: true };
-  if (path === '/v1/webhook_endpoints') return { id: 'we_gift', secret: 'whsec_' + 'x'.repeat(32) };
-  return {};
- };
- const shop = checkShop({ currency: 'cad', giving: { receiptText: 'Our own receipt wording' }, items: [{ id: 'monthly', kind: 'donation', name: 'Monthly gift', price: 2500, interval: 'month' }] }).shop;
- const result = await syncPaymentLinks({ api, shop, slug: 'pantry', site: 'https://pantry.example', mode: 'test', w: async args => ({ code: 0, stdout: args[1] === 'list' ? '[]' : '' }), saveReceipt: () => {} });
- assert.equal(result.ok, true);
- const price = calls.find(c => c.method === 'POST' && c.path === '/v1/prices').params;
- assert.equal(price.currency, 'cad'); assert.deepEqual(price.recurring, { interval: 'month' });
- const link = calls.find(c => c.method === 'POST' && c.path === '/v1/payment_links').params;
- assert.ok(link.subscription_data); assert.equal(link.payment_intent_data, undefined);
- assert.match(link.after_completion.redirect.url, /^https:\/\/pantry.example\//);
-});
+
 
 test('H: receipt pages include the authored receipt instructions', async () => {
  const { thanksPage, refundsPage } = await import('../worker/shop-page.mjs');
@@ -96,14 +75,4 @@ test('H: receipt pages include the authored receipt instructions', async () => {
   const html = await page({ studio: { name: 'Pantry' } }, shop).text();
   assert.ok(html.includes(shop.giving.receiptText));
  }
-});
-
-test('local Stripe links return to the Wi-Fi origin without a public webhook or Cloudflare',async()=>{
- const {syncPaymentLinks}=await import('../lib/shop-links.mjs');const {checkShop}=await import('../worker/shop-rules.mjs');const calls=[];
- const api=async(method,path,params)=>{calls.push({method,path,params});if(method==='GET')return {data:[],has_more:false};if(path==='/v1/products')return {id:params.id,...params};if(path==='/v1/prices')return {id:'price_local',active:true};if(path==='/v1/payment_links')return {id:'plink_local',url:'https://buy.stripe.com/test_local',active:true};return {};};
- const shop=checkShop({currency:'cad',items:[{id:'gift',kind:'donation',name:'Gift',price:2000}]}).shop;
- const r=await syncPaymentLinks({api,shop,slug:'local-pantry',site:'http://192.168.1.8:8787',mode:'test',local:true});
- assert.equal(r.ok,true);assert.equal(r.config.mode,'test');
- assert.equal(calls.find(c=>c.path==='/v1/payment_links'&&c.method==='POST').params.after_completion.redirect.url,'http://192.168.1.8:8787/shop/thanks?session_id={CHECKOUT_SESSION_ID}');
- assert.equal(calls.some(c=>c.path==='/v1/webhook_endpoints'),false);
 });

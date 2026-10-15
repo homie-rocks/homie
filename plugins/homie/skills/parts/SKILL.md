@@ -155,4 +155,4 @@ payer after the purchase, then record its hash with `shop refund <order> --manua
 
 For app, music and video parts, use `part_new` without `from`, choose any suitable kind label, put the licensed files in its folder, and supply the source as `{kind, id, studio}` in `from`. Preserve existing game manifests and imports. Hash and share through the usual tools. No new app build framework is implied.
 
-Selling defaults to Stripe’s official plugin for shop catalog and links, with Homie’s private webhook installation. Read the shop skill. `shop connect` remains the CLI alternative for priced tool links. Never ask an owner for an API key. Machine payment paths that require runtime credentials are developer integrations, not an owner setup fallback.
+Selling uses studio-created Checkout Sessions and signed webhooks. Read the shop skill; `shop connect` installs credentials through Homie App install and Copy. Never ask an owner for an API key. Machine payment paths that require runtime credentials are developer integrations, not an owner setup fallback.

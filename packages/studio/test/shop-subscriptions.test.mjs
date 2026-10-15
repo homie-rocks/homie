@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { bindSubscription, subscriptionEvent, subscriptionPortal, reconcileMembership, SUBSCRIPTIONS_MIGRATION } from '../worker/shop-subscriptions.mjs';
 import { sessionParams } from '../worker/shop.mjs';
-import { fullerReason } from '../worker/shop-links.mjs';
 import { checkShop } from '../worker/shop-rules.mjs';
 function fixture(t) {
  const sql=new DatabaseSync(':memory:');t.after(()=>sql.close());
@@ -46,7 +45,7 @@ test('subscription lifecycle is durable and renewal is deduplicated by invoice',
 test('portal uses the owning customer only, and rejects foreign provider URLs',async t=>{
  const {env}=fixture(t);await bindSubscription(env,{id:'order',amount:2000,currency:'usd',paid_at:1},{subscription:'sub_test',customer:'cus_test'});
  const prior=globalThis.fetch;t.after(()=>{globalThis.fetch=prior;});env.STRIPE_CHECKOUT_MODE='sessions';env.STRIPE_KEY='rk_test_fixture';
- globalThis.fetch=async (url,options)=>{assert.equal(url,'https://api.stripe.com/v1/billing_portal/sessions');const form=new URLSearchParams(options.body);assert.equal(form.get('customer'),'cus_test');assert.equal(form.get('return_url'),'https://studio.example/shop/');return Response.json({url:'https://billing.stripe.com/p/session/test'});};
+ globalThis.fetch=async (url,options)=>{if(url==='https://api.stripe.com/v1/billing_portal/configurations')return Response.json({id:'bpc_fixture'});assert.equal(url,'https://api.stripe.com/v1/billing_portal/sessions');const form=new URLSearchParams(options.body);assert.equal(form.get('customer'),'cus_test');assert.equal(form.get('return_url'),'https://studio.example/shop/');return Response.json({url:'https://billing.stripe.com/p/session/test'});};
  assert.equal(await subscriptionPortal(env,'giver','sub_test','https://studio.example'),'https://billing.stripe.com/p/session/test');
  globalThis.fetch=async()=>Response.json({url:'https://example.org/steal'});await assert.rejects(subscriptionPortal(env,'giver','sub_test','https://studio.example'),/Invalid/);
 });
@@ -91,8 +90,6 @@ test('membership periods follow paid invoices, current status and portal plans w
  assert.equal(ends('member:plus'),0);assert.equal(sql.prepare('SELECT state FROM shop_subscriptions').get().state,'canceled');
 });
 
-test('keyless setup accepts fixed-price memberships',()=>{
+test('Checkout accepts fixed-price memberships',()=>{
  const {shop}=checkShop({till:'stripe',currency:'usd',items:[{id:'member',name:'Member',price:2000,interval:'month',gives:['member:basic']}]});
- assert.equal(fullerReason(shop),null);
- assert.equal(fullerReason({...shop,items:[{...shop.items[0],gives:[]}]}),null);
 });

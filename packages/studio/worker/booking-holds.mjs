@@ -2,7 +2,6 @@ import {calendarSlots} from './booking-calendar.mjs';
 import {allocateResources} from './booking-resources.mjs';
 import {normalizeBookingArgs} from './booking-options.mjs';
 import {BOOKINGS_MIGRATION} from './booking-store.mjs';
-import {linkConfig,hasStripeKey} from './shop-links.mjs';
 export const BOOKING_HOLDS_MIGRATION_FILE='0029_booking_holds.sql';
 export const BOOKING_HOLDS_MIGRATION=`
 ALTER TABLE shop_bookings ADD COLUMN paid_at INTEGER;
@@ -65,7 +64,6 @@ export function bookingHolds(env,caller,cat){
    if(!Number.isSafeInteger(expiresAt)||expiresAt<=Date.now())throw refusal('Hold needs a future expiry');
    if(token!==undefined&&!(typeof token==='string'&&/^[a-f0-9]{32,128}$/.test(token)))throw refusal('Invalid private booking token');
    if(!caller.id&&!token)throw refusal('Booking owner or private token required');
-   if(!hasStripeKey(env)&&linkConfig(env)?.slots?.some(l=>l.app===app&&l.slots===spec.slots&&l.slot===slot))throw refusal('Keyless Stripe inventory cannot share local holds; configure session checkout first');
    const scope=caller.testScope?`${app}:check:${caller.testScope}`:app;
    id=await hash(JSON.stringify([scope,collection,id]));
    const choices={option:args.option??null,resource:args.resource??null,addons:args.addons??{}};

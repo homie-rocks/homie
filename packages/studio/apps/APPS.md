@@ -113,10 +113,7 @@ records with integer `capacity`. Bookings are server-managed records created by
 information in a separate private collection. Public roles must not have write
 capabilities for slots or bookings. Staff movement is a versioned record update
 containing only `slot`; confirmation and release follow verified Checkout state.
-The default keyless connection uses one Payment Link per published slot. Call
-`stripe_shop_plan` with the complete slot manifest after publishing/changing slots. Pending checkout does not
-block others; payment secures the seat. Use record.booking.full/available/synced
-for slot display. Read SHOP.md for the complete manifest and limitations.
+The Worker claims capacity before creating the Checkout Session. The signed webhook confirms payment or releases expired reservations. Use record.booking.full/available/synced for slot display.
 
 The giving starter now reads the actual shop donation options with `shop.catalog()`.
 `shop init --giving --currency CAD` includes $20 monthly; `app new giving --from giving`
@@ -137,26 +134,7 @@ part's contract: a pledge-only example is not payment fulfilment. The giving sta
 uses the shop bridge; `shop.catalog()` is available in this version. Field names
 start with a lowercase letter and continue with lowercase letters, digits or `_`.
 
-No public HTTPS address or Cloudflare account is needed for local Stripe test
-payments. Use the owner's existing Stripe CLI sandbox profile; log in only when
-that profile is unavailable or expired. Never create an imitation checkout.
-
-1. Create the app and `shop init --giving --currency CAD` (choose the actual currency).
-2. Choose the computer's Wi-Fi address and a fixed dev port. Run
-   `homie-studio shop connect --local --profile <sandbox-profile> --url http://192.168.1.8:8787`.
-   This syncs real test Products, Prices and Payment Links through Stripe CLI and
-   saves local bindings in the project's `.dev.vars`; it does not deploy or create
-   a public webhook. Local products use a separate identity from deployed products.
-3. Run `stripe --project-name <sandbox-profile> listen --all-snapshot --forward-to http://localhost:8787/api/shop/hook`.
-   Put its signing secret in root `.dev.vars` as `STRIPE_WEBHOOK_SECRET=whsec_…`.
-   Keep that listener running. Never commit the secrets file or print its contents.
-4. Run `homie-studio dev --lan --port 8787`. Dev loads root `.dev.vars` beside its
-   generated Wrangler configuration. Restart after changing bindings. If dev reports
-   another port, update the listener and repeat local shop connection with that port.
-5. Open **the same Wi-Fi address** on desktop and phones. Checkout returns there,
-   so its guest cookie and thank-you page work on both. Localhost is only suitable
-   when every browser is on this computer. Use Stripe's test card; verify the signed
-   webhook, paid order and app record before reporting success.
+For owner setup, deploy to the studio's HTTPS address and use `stripe_login` for one Homie Stripe App approval. Local development can exercise provider fakes without credentials. Maintainer sandbox acceptance uses `test/checkout-sandbox-acceptance.mjs`, a privately injected test-only restricted key and the explicitly named `Homie sandbox` CLI profile. It forwards real signed events and uses Stripe's published test helpers. Never ask a business owner to copy a key or webhook secret.
 
 The first Checkout emits `order.paid`. Later paid subscription-cycle invoices each
 create a distinct paid order and emit `order.paid` with the original app and reference.
@@ -200,11 +178,8 @@ up. The needs guide has a short complete example and explains outcome assertions
 
 ## Selling and operational checks over MCP
 
-Use Stripe's official plugin and the shop skill's batched `stripe_shop_plan` flow.
-Retain write responses, verify, then deploy the compact public links. Until the
-private `stripe_webhook` step completes, checkout names that one remaining step.
-The AI starts the tool; the owner approves Stripe CLI once if needed. No secrets
-or API keys pass through chat. Deploy distinguishes **claimed, not listed** from
+Use the shop skill and the existing `stripe_login` tool for one approval of the official Homie Stripe App.
+The AI starts the tool; the owner approves Homie once in Stripe. The tool installs the encrypted credentials privately. No secrets or API keys pass through chat. Deploy distinguishes **claimed, not listed** from
 an actual directory listing; publishing is a separate action.
 
 On the existing signed-in studio connector (`<site>/mcp/auth`), call
@@ -290,9 +265,7 @@ A scheduled owner function calls
 `context.bookings.releaseExpired({app:'place',collection:'bookings',now:event.data.scheduledTime})`.
 Only unconfirmed local holds expire this way. After checkout claims a hold,
 Stripe's verified payment/expiry/refund owns its lifecycle; a local timer cannot
-release a possibly paid seat. Keyless Payment Links cannot safely claim local
-holds: configure session checkout, or keep using their existing pending-to-paid
-path. The toolkit refuses to mix active keyless links with new local holds.
+release a possibly paid seat. All checkout uses Sessions and the same capacity ledger.
 Apply `0029_booking_holds.sql`; public projections never include actors or tokens.
 
 ## Adversarial needs

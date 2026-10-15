@@ -1,26 +1,7 @@
-/** Shared setup/runtime contract. Payment Links are public; credentials never enter this value. */
+/** Checkout credentials stay in the studio Worker. */
 import { KEY_SHAPE, modeOf } from './stripe.mjs';
-// Current documented Payment Link fields, isolated from the existing keyed transport version.
-export const LINKS_STRIPE_VERSION = '2026-09-30.endive';
-export const hasStripeKey = (env) => env?.STRIPE_CHECKOUT_MODE === 'sessions' && KEY_SHAPE.test(String(env?.STRIPE_KEY ?? ''));
-export function linkConfig(env) {
-  try { const raw=env?.STRIPE_SHOP_LINKS??'null'; const c = JSON.parse(raw.startsWith('base64:') ? new TextDecoder().decode(Uint8Array.from(atob(raw.slice(7)),c=>c.charCodeAt(0))) : raw); return c?.v === 1 && ['test', 'live'].includes(c.mode) && Array.isArray(c.items) ? c : null; } catch { return null; }
-}
-export const shopMode = (env) => hasStripeKey(env) ? modeOf(env.STRIPE_KEY) : linkConfig(env)?.mode ?? 'test';
-export function linkSettings(shop) {
-  return JSON.stringify({ currency: shop.currency, till: shop.till, automaticTax: shop.automaticTax, policy: shop.policy,
-    cap: shop.capPerPlayerMonth, checkoutMinutes: shop.checkoutMinutes, items: shop.items, ...(shop.basket ? {basket:shop.basket} : {}) });
-}
-export function fullerReason(shop) {
-  if (shop.items.some(item => item.interval && item.price === 'choose')) return 'A giver-chosen monthly amount needs a Stripe Checkout connection.';
-  if (shop.capPerPlayerMonth !== null) return 'Reserving a spending allowance before payment needs the fuller checkout connection.';
-  if (shop.checkoutMinutes !== 1440) return 'Choosing when abandoned checkouts expire needs the fuller checkout connection.';
-  return null;
-}
-export function paymentLinkURL(value) {
-  try { const u = new URL(value); return u.protocol === 'https:' && u.hostname === 'buy.stripe.com' && !u.username && !u.password && !u.port; } catch { return false; }
-}
-
+export const hasStripeKey = env => KEY_SHAPE.test(String(env?.STRIPE_KEY ?? ''));
+export const shopMode = env => modeOf(env?.STRIPE_KEY);
 /** Only signed snapshot events call this. Store financial fields, never customer/card data.
  * Existing meta is a durable KV table. One row per provider object avoids read/modify/write races.
  * Terminal failed/canceled refunds beat stale succeeded snapshots (including same-second events).
@@ -44,16 +25,4 @@ export async function rememberedMoney(env, payment, mode) {
   const prefix = `shop-money:${mode}:${payment}:`;
   const rows = (await env.DB.prepare('SELECT value FROM meta WHERE key >= ?1 AND key < ?2').bind(prefix, prefix + '\uffff').all()).results ?? [];
   return rows.map((r) => JSON.parse(r.value));
-}
-
-/** Asset configuration overrides legacy secrets, including an explicitly closed setup.
- * Return a request-local env: never mutate shared bindings or cache across deployments. */
-export async function loadShopLinks(env, origin='https://studio.invalid') {
-  if(!env.STRIPE_SHOP_LINKS_ASSET)return env;
-  let value;
-  try {
-    const response=await env.ASSETS.fetch(new Request(new URL(env.STRIPE_SHOP_LINKS_ASSET,origin)));
-    if(response.ok)value=await response.json();
-  } catch {}
-  return {...env,STRIPE_SHOP_LINKS:JSON.stringify(value?.config??null),STRIPE_SHOP_SETUP:value?.next??'Ask your AI to finish stripe_shop_plan with verify:true.'};
 }

@@ -1,9 +1,15 @@
-# Keyless shop setup and migration
+# Checkout migration — unreleased
 
-Use `stripe_shop_plan` with Stripe's official plugin to perform the returned operations. Supply each new response as `{method,path,params,body}` in `observations`; earlier responses are saved automatically. Product and price discovery uses metadata searches. Payment Links use Stripe's paginated list API with expanded line items, then match studio, origin and revision metadata locally (Stripe has no Payment Link search endpoint). No creation is planned before discovery completes.
+The owner installs Homie, generates (sandbox: reveals) the restricted key and
+copies it. The local tool installs it via Wrangler stdin and clears the clipboard.
 
-For CLI workflows, pipe an array of these responses, or `{observations:[...]}`, into `homie-studio shop observe`. It saves the responses and returns the next dependency batch. `shop plan` resumes without `--have`. Never include credentials or webhook creation responses.
+Checkout deployment and Worker-owned webhook bootstrap precede link retirement.
+The owner's existing local Stripe CLI login, checked against the RAK account,
+deactivates links; the Worker has no Payment Links permission. Open sessions are
+expired, all receipt pages are checked, then a second pass runs after at least
+30 seconds. Pending asynchronous payments retain old webhook configuration.
+Only after drain succeeds are old hooks and link configuration removed.
+`shop connect --finish` retries without another Copy. All financial rows remain.
 
-Old verifications without a billing portal ID discover and reuse the existing portal before planning creation. Old verifications without an account ID adopt the official CLI's signed-in account only after reading and matching their saved Payment Links. A known different account is still refused. Verification freshness and configuration checks still apply.
-
-`stripe_webhook` returns a job. Read `studio_job`: while browser approval is pending, `events` contains `{type:"stripe.pairing",code,url}`. Show that code and URL to the owner. A saved valid Stripe login emits no pairing event and needs no new approval. Secrets never enter the event.
+Full real 0.53 migration and App-generated RAK acceptance remain required. See
+[the RAK guide](../../../docs/stripe-rak-owner-guide.md) for exact steps and gates.

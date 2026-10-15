@@ -1,4 +1,4 @@
-import { purchaseLink } from './purchase-links.mjs';
+import { portalConfiguration } from './stripe.mjs';
 import { hasStripeKey, shopMode } from './shop-links.mjs';
 import { hostedReadiness } from './purchase-hosted-readiness.mjs';
 import { orderFact, orderState, recordOrderState, offerVersion } from './purchase-core.mjs';
@@ -386,15 +386,7 @@ async function hostedPurchasePage(request, env, url, cat, review, verifyHuman) {
     }
     if (!(await byId(env, o.id))) await createPurchase(env, o);
     o = await byId(env, o.id);
-    if (!hasStripeKey(env)) {
-      const link = purchaseLink(env, o);
-      if (!link) return fail(503, 'Run shop connect to sync this offer to Stripe Payment Links');
-      if (!(await resourceAvailable(env, o.resource_kind, p))) return fail(503, 'Paid files unavailable; no payment requested');
-      const checkout = new URL(link.url);
-      checkout.searchParams.set('client_reference_id', o.id);
-      await env.DB.prepare("INSERT OR IGNORE INTO meta (key,value) VALUES (?1,?2)").bind(`purchase-link:${o.id}`, JSON.stringify(link)).run();
-      return Response.redirect(checkout, 303);
-    }
+    if (!hasStripeKey(env)) return fail(503, 'Reconnect Stripe with the Homie app');
     let checkout = o.checkout_url;
     if (!checkout) {
       if (!(await resourceAvailable(env, o.resource_kind, p)))
@@ -557,28 +549,18 @@ async function claimedPurchase(request, env, url, path, cat) {
       return fail(409, "No Stripe customer in the current payment mode");
     if (o.till === "stripe-managed")
       return json({ ok: true, url: "https://link.com" });
-    if (!hasStripeKey(env)) return json({ok:false, message:'Use the seller’s Stripe customer portal login link or ask the seller to manage this subscription in Stripe.'});
+    if (!hasStripeKey(env)) return json({ok:false, message:'The seller needs to reconnect the Homie Stripe App.'});
     const portal = await stripeCall(
       env,
       "POST",
       "/v1/billing_portal/sessions",
       {
+        configuration: await portalConfiguration(env, url.origin),
         customer: o.customer,
         return_url: `${url.origin}/purchases/${o.id}`,
       },
     );
     return json({ ok: true, url: portal.url });
-  }
-  if (
-    hasStripeKey(env) && o.session &&
-    o.status === "started" &&
-    o.mode === shopMode(env)
-  ) {
-    await reconcilePurchaseSession(
-      env,
-      await retrieveCheckoutSession(env, o.session),
-    );
-    o = await byId(env, o.id);
   }
   if (o.mode === shopMode(env)) {
     await reconcileOrder(env, o);

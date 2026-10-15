@@ -1,0 +1,8 @@
+{
+  "name": "homie-stripe-settings",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": { "build": "tsc --noEmit", "test": "node --test ../../packages/studio/test/stripe-permissions.test.mjs" },
+  "dependencies": { "@stripe/ui-extension-sdk": "9.3.0" },
+  "devDependencies": { "@types/react": "17.0.93", "typescript": "5.9.3" }
+}

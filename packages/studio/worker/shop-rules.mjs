@@ -159,6 +159,9 @@ export function checkShop(raw, { games = null, audience = 'general', studioName 
       else price = numeric(it.price);
     }
     if (it.interval !== undefined && it.interval !== 'month') err(`${at}.interval`, 'interval must be month');
+    const maxQuantity = it.maxQuantity ?? (kind === 'deposit' ? 1 : null);
+    if (maxQuantity !== null && (!Number.isSafeInteger(maxQuantity) || maxQuantity < 1)) err(`${at}.maxQuantity`, 'maxQuantity is a positive safe integer');
+    if (kind === 'deposit' && maxQuantity !== 1) err(`${at}.maxQuantity`, 'Deposits have quantity one');
     const charge = chosen ? min : price;
     if (currencyScale(currency) === 1000 && charge % 10) warnings.push({ at: `${at}.price`, message: 'This three-decimal amount uses the smallest minor unit. Confirm support with your Stripe payment method; Stripe decides acceptance (https://docs.stripe.com/currencies).' });
     if (charge > 0 && charge < minimumCharge(currency)) warnings.push({ at: `${at}.price`, message: `Stripe's minimum for settlement in ${currency.toUpperCase()} is ${money(minimumCharge(currency), currency)}. Your settlement currency and payment method determine the actual minimum at checkout.` });
@@ -186,10 +189,10 @@ export function checkShop(raw, { games = null, audience = 'general', studioName 
     const advantage = it.advantage === true;
     const badge = gives.find((g) => g.startsWith('badge:'));
     for (const key of Object.keys(it)) {
-      if (!['id', 'kind', 'name', 'blurb', 'description', 'interval', 'price', 'min', 'max', 'gives', 'badge', 'days', 'starts', 'ends', 'game', 'taxCode', 'advantage'].includes(key)) warnings.push({ at: `${at}.${key}`, message: 'This field is not published by the shop. Describe any buyer-facing meaning in blurb so buyers can read it.' });
+      if (!['id', 'kind', 'name', 'blurb', 'description', 'interval', 'price', 'min', 'max', 'maxQuantity', 'gives', 'badge', 'days', 'starts', 'ends', 'game', 'taxCode', 'advantage'].includes(key)) warnings.push({ at: `${at}.${key}`, message: 'This field is not published by the shop. Describe any buyer-facing meaning in blurb so buyers can read it.' });
     }
     items.push({
-      id, kind, name, ...(it.interval === 'month' ? { interval: 'month' } : {}), ...(blurb ? { blurb } : {}),
+      id, kind, name, ...(maxQuantity !== null ? { maxQuantity } : {}), ...(it.interval === 'month' ? { interval: 'month' } : {}), ...(blurb ? { blurb } : {}),
       ...(chosen ? { price: 'choose', min, max } : { price }),
       gives, ...(badge ? { badge: badgeWord(badge, it) } : {}),
       ...(days !== null ? { days } : {}), ...(Number.isFinite(starts) ? { starts: new Date(starts).toISOString() } : {}), ...(Number.isFinite(ends) ? { ends: new Date(ends).toISOString() } : {}),
@@ -209,10 +212,7 @@ export function checkShop(raw, { games = null, audience = 'general', studioName 
   const kids = audience === 'kids' && !policy.kidsStudio;
   const finalTill = kids ? 'off' : TILLS.includes(till) ? till : 'off';
   if (kids && till !== 'off') warnings.push({ at: 'till', message: 'studio.json says "audience": "kids": the studio sells nothing in its games (the till is off under policy.kidsStudio).' });
-  if (raw.basket !== undefined && (!isObj(raw.basket) || typeof raw.basket.name !== "string" || !raw.basket.name.trim() || raw.basket.name.length > 120 || typeof raw.basket.description !== "string" || raw.basket.description.length > 500)) errors.push({at:"basket",message:"A basket needs a name (1–120 characters) and description (up to 500 characters)."});
-  if (raw.basket && (raw.automaticTax || till !== "stripe")) errors.push({at:"basket",message:"Saved baskets use Stripe with tax already included in the menu prices."});
   const shop = {
-    ...(isObj(raw.basket) ? {basket:{name:raw.basket.name,description:raw.basket.description}} : {}),
     v: 1, ...(isObj(raw.giving) ? { giving: { receiptText: String(raw.giving.receiptText ?? '') } } : {}), policy, purchasesTill: TILLS.includes(raw.purchasesTill ?? till) ? (raw.purchasesTill ?? till) : 'off', ...(/^https:\/\/billing\.stripe\.com\/p\/login\/[A-Za-z0-9_]+$/.test(raw.purchasesPortalLogin ?? '') ? { purchasesPortalLogin: raw.purchasesPortalLogin } : {}), checkoutMinutes, requestBytes, automaticTax: raw.automaticTax === true, guestBuyersPerAddressPerHour, purchaseAttemptsPerMinute, purchaseAttemptsPerAddressPerMinute, till: finalTill, currency: CURRENCY.test(currency) ? currency : 'usd', refundDays, capPerPlayerMonth: cap, items,
     open: finalTill !== 'off' && items.length > 0, ...(kids ? { audience: 'kids' } : {}), ...(catalog.length ? { catalog } : {}),
   };

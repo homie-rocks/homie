@@ -75,6 +75,7 @@ test('missing and released payments grant once and refund in workerd', { timeout
       } };`,
   } });
   let missing = true, refundSucceeded = false;
+  const providerSessions = new Map();
   const expired = [];
   const mf = new Miniflare({ telemetry: { enabled: false }, workers: [{ config: { name: 'late-payment', compatibilityDate: '2025-01-01',
     manifest: { mainModule: 'worker.mjs', modules: { 'worker.mjs': { type: 'esm', contents: bundled.outputFiles[0].text } } },
@@ -88,6 +89,7 @@ test('missing and released payments grant once and refund in workerd', { timeout
       return Response.json(request.method === 'GET' ? { data: refundSucceeded ? [{ id: 're_test', status: 'succeeded', amount: 500 }] : [], has_more: false } : { id: 're_test', status: 'succeeded' });
     }
     if (url.pathname.startsWith('/v1/payment_intents/')) return Response.json({ id: url.pathname.split('/').pop(), latest_charge: { disputed: false } });
+    if (providerSessions.has(url.pathname)) return Response.json(providerSessions.get(url.pathname));
     if (missing) return Response.json({ error: { code: 'resource_missing' } }, { status: 404 });
     return Response.json({ id: url.pathname.split('/').pop(), status: 'open' });
   } } } }] });
@@ -114,6 +116,7 @@ test('missing and released payments grant once and refund in workerd', { timeout
         const t = Math.floor(Date.now() / 1000);
         const body = JSON.stringify({ id, type: state === 'missing' ? 'checkout.session.async_payment_succeeded' : 'checkout.session.completed', livemode: false,
           data: { object: { id: session, metadata: { order }, client_reference_id: 'pl_bbbbbbbbbbbbbbbbbbbbbb', currency: 'usd', amount_subtotal: 500, payment_status: 'paid', payment_intent: `pi_${state}` } } });
+        providerSessions.set('/v1/checkout/sessions/' + session, { ...JSON.parse(body).data.object, status: 'complete', livemode: false });
         const signature = createHmac('sha256', secret).update(`${t}.${body}`).digest('hex');
         const response = await mf.dispatchFetch('https://studio.example/api/shop/hook', { method: 'POST', headers: { 'stripe-signature': `t=${t},v1=${signature}` }, body });
         assert.equal(response.status, 200);

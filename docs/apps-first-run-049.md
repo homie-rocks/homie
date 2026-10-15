@@ -1,3 +1,5 @@
+> Historical release evidence. Current Stripe setup and payment behavior are documented in [Studio Checkout](../packages/studio/shop/SHOP.md); the former Payment Link mode is removed.
+
 # Apps first run, 0.49.0
 
 Business and cause scaffolds proceed from the owner's request through build and checks. Use `studio_scaffold` with `kind: "business"` or `kind: "cause"`, then `app new live --from quiz|gathering|giving|jobs`. The queue remains `--from welcome`. These are opt-in starters; existing authored studios and games are unchanged.

@@ -1,19 +1,7 @@
-/**
- * THE STUDIO'S OWN STRIPE, from its Worker (@homie-rocks/studio 0.24.0). No SDK: a few form-encoded calls with the
- * studio's key (a Worker secret), and Stripe's documented webhook signature check with WebCrypto.
- *
- *   createCheckoutSession(env, params)   POST /v1/checkout/sessions (Stripe's hosted page)
- *   createRefund(env, params)            POST /v1/refunds (only ever from the owner's tap, or a confirmed ask)
- *   webhook endpoints                    list, create and turn off: the manual `homie-studio shop connect --manual` fallback calls these, on the
- *                                        owner's computer with the key the owner pasted there (0.24.3), so a new
- *                                        endpoint's signing secret goes straight to the Worker secret
- *   productIdOf(slug, item)              the catalog Product a shop item is (`homie-studio shop catalog`, 0.24.3)
- *   verifyWebhook(payload, header, secret)   the `Stripe-Signature` header: t=<seconds>,v1=<hex HMAC-SHA256 of
- *                                        "<t>.<payload>"> with the endpoint's whsec_ secret, within 5 minutes
- *
- * The key is never logged, never put in a page, never returned. STRIPE_API_BASE points the Worker at a stand-in
- * (stripe-mock in the kit's own tests; a loopback address only) and never at anything else.
- */
+import Stripe from 'stripe';
+/** The studio's own Stripe account, through Stripe's official SDK.
+ * Credentials stay in Worker secrets; App setup owns endpoint creation.
+ * STRIPE_API_BASE permits only loopback fakes in tests. */
 
 /** The API version the kit is written against: the first one Managed Payments takes ("2025-03-31.basil or later"). */
 export const STRIPE_VERSION = '2025-03-31.basil';
@@ -97,52 +85,30 @@ export async function productIdOf(slug, item) {
 export async function stripeCall(env, method, path, params = null, { idempotencyKey = null, fetcher = fetch, version = STRIPE_VERSION, timeout = 15_000 } = {}) {
   const key = String(env?.STRIPE_KEY ?? '');
   if (!KEY_SHAPE.test(key)) throw new StripeError(0, { error: { message: 'no Stripe key on this Worker', code: 'no-key' } });
-  const body = params && method !== 'GET' ? formEncode(params).toString() : null;
-  const query = params && method === 'GET' ? `?${formEncode(params).toString()}` : '';
-  let res;
-  try { res = await fetcher(`${apiBase(env)}${path}${query}`, {
-    method,
-    headers: {
-      authorization: `Bearer ${key}`,
-      'stripe-version': version,
-      ...(body !== null ? { 'content-type': 'application/x-www-form-urlencoded' } : {}),
-      ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}),
-    },
-    ...(body !== null ? { body } : {}),
-    signal: AbortSignal.timeout(timeout),
-  });
-  } catch (error) { throw new StripeError(502, { error: { message: redactStripe(error?.message ?? 'Stripe did not answer', env), code: 'network' } }); }
-  let json = null;
-  try { json = await res.json(); } catch { json = null; }
-  if (!res.ok) {
-    const error = new StripeError(res.status, JSON.parse(redactStripe(JSON.stringify(json), env)));
-    error.idempotentReplayed = res.headers.get('idempotent-replayed') === 'true';
-    throw error;
+  const base = new URL(apiBase(env));
+  const sdk = new Stripe(key, { apiVersion: version, host: base.hostname, port: base.port || undefined,
+    protocol: base.protocol.slice(0, -1), httpClient: Stripe.createFetchHttpClient(fetcher),
+    timeout, maxNetworkRetries: 0, telemetry: false });
+  const query = params && method !== 'POST' ? `?${formEncode(params)}` : '';
+  try { return await sdk.rawRequest(method, path + query, method === 'POST' ? params : null,
+    { ...(idempotencyKey ? { idempotencyKey } : {}) }); }
+  catch (error) {
+    if ((error.statusCode === 401) && env.DB) {
+      const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key))), b => b.toString(16).padStart(2, '0')).join('');
+      await env.DB.prepare('INSERT INTO meta(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind('stripe-reconnect', digest).run();
+    }
+    throw new StripeError(error.statusCode ?? 502, { error: { message: (error.statusCode === 401) ? 'Reconnect Stripe with Homie App settings: Roll key, then Copy.' : redactStripe(error.message, env), code: error.code, type: error.type, param: error.param } });
   }
-  return json;
 }
 
 export const createCheckoutSession = (env, params, opts) => stripeCall(env, 'POST', '/v1/checkout/sessions', params, opts);
 export const retrieveCheckoutSession = (env, id, opts) => stripeCall(env, 'GET', `/v1/checkout/sessions/${encodeURIComponent(id)}`, null, opts);
 export const createRefund = (env, params, opts) => stripeCall(env, 'POST', '/v1/refunds', params, opts);
 export const expireCheckoutSession = (env, id, opts) => stripeCall(env, 'POST', `/v1/checkout/sessions/${encodeURIComponent(id)}/expire`, {}, opts);
-export const listWebhookEndpoints = (env, opts) => stripeCall(env, 'GET', '/v1/webhook_endpoints', { limit: 100 }, opts);
-/** The answer carries the endpoint's signing secret (`secret`), once: the caller puts it in the Worker and drops it. */
-export const createWebhookEndpoint = (env, params, opts) => stripeCall(env, 'POST', '/v1/webhook_endpoints', params, opts);
-export const updateWebhookEndpoint = (env, id, params, opts) => stripeCall(env, 'POST', `/v1/webhook_endpoints/${encodeURIComponent(id)}`, params, opts);
-
 /* ------------------------------------------------------------------ webhooks */
 
 const enc = new TextEncoder();
 const toHex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
-
-/** Constant time for equal-length strings: a wrong signature takes as long as a nearly-right one. */
-function sameText(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
-  let d = 0;
-  for (let i = 0; i < a.length; i += 1) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return d === 0;
-}
 
 /** The v1 signature Stripe sends for `payload` at `t` (also what the tests sign with a test secret). */
 export async function signPayload(payload, secret, t) {
@@ -166,10 +132,11 @@ export async function verifyWebhook(payload, header, secret, { now = Date.now(),
   }
   if (t === null || !sigs.length) return { ok: false, why: 'no-signature' };
   if (Math.abs(now / 1000 - t) > tolerance) return { ok: false, why: 'too-old' };
-  const want = await signPayload(payload, secret, t);
-  if (!sigs.some((s) => sameText(s, want))) return { ok: false, why: 'bad-signature' };
-  let event = null;
-  try { event = JSON.parse(payload); } catch { return { ok: false, why: 'json' }; }
+  let event;
+  try {
+    const sdk = new Stripe('webhook-verification-only');
+    event = await sdk.webhooks.constructEventAsync(payload, header, secret, tolerance, Stripe.createSubtleCryptoProvider(), now);
+  } catch (error) { return { ok: false, why: error instanceof SyntaxError ? 'json' : 'bad-signature' }; }
   if (!event || typeof event !== 'object' || typeof event.id !== 'string' || typeof event.type !== 'string') return { ok: false, why: 'not-an-event' };
   return { ok: true, event };
 }
@@ -221,4 +188,34 @@ export async function refundPayment(env, payment, params = {}) {
   if (pi.latest_charge?.refunded) return { id: null, status: 'succeeded', already: true };
   try { return await createRefund(env, { payment_intent: payment }, { idempotencyKey: `purchase-refund-${payment}` }); }
   catch (error) { if (error.code === 'charge_already_refunded') return { id: null, status: 'succeeded', already: true }; throw error; }
+}
+
+/** Explicit configuration avoids a second owner visit to enable the customer portal. */
+export async function portalConfiguration(env, origin) {
+  const key = `stripe-portal:${modeOf(env.STRIPE_KEY)}`;
+  const saved = await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(key).first();
+  if (saved?.value) return saved.value;
+  const config = await stripeCall(env, 'POST', '/v1/billing_portal/configurations', {
+    business_profile: { headline: 'Manage your studio subscription' },
+    features: { subscription_cancel: { enabled: true, mode: 'at_period_end' }, payment_method_update: { enabled: true }, invoice_history: { enabled: true } },
+    metadata: { homie: 'studio-checkout', origin },
+  }, { idempotencyKey: `homie-portal-${origin}-${modeOf(env.STRIPE_KEY)}` });
+  if (!/^bpc_[A-Za-z0-9]+$/.test(config.id ?? '')) throw new Error('Stripe portal configuration unavailable');
+  await env.DB.prepare('INSERT INTO meta(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(key, config.id).run();
+  return config.id;
+}
+
+/** Webhook signatures identify a notification; the studio key establishes money truth. */
+export async function retrieveEventObject(env, event, call = stripeCall) {
+  const type = event.type;
+  const resource = type.startsWith('checkout.session.') ? 'checkout/sessions' :
+    type.startsWith('payment_intent.') ? 'payment_intents' :
+    type.startsWith('invoice.') ? 'invoices' :
+    type.startsWith('customer.subscription.') ? 'subscriptions' : null;
+  if (!resource) return event.data?.object;
+  const id = event.data?.object?.id;
+  if (typeof id !== 'string' || !/^[A-Za-z0-9_]+$/.test(id)) throw new Error('Invalid Stripe object');
+  const object = await call(env, 'GET', `/v1/${resource}/${encodeURIComponent(id)}`);
+  if (object.id !== id) throw new Error('Stripe identity mismatch');
+  return object;
 }

@@ -21,6 +21,8 @@ import {
   active,
 } from "./purchase-store.mjs";
 export async function reconcilePurchaseSession(env, session) {
+  session = await retrieveCheckoutSession(env, session.id);
+  if(session.payment_link && session.metadata?.homie === 'purchase-links-v1')return reconcileLinkSession(env,session);
   if (
     !session.metadata?.order ||
     !(await env.DB.prepare(
@@ -70,7 +72,7 @@ export async function reconcilePurchaseSession(env, session) {
   }
   await env.DB.batch(writes);
   if (recurring) {
-    await reconcileSubscription(env, { ...o, subscription });
+    await reconcileSubscription(env, { ...o, subscription }, { signed: true });
     if (
       await env.DB.prepare("SELECT 1 FROM resource_retirements WHERE resource = ?1")
         .bind(`${o.mode}:${o.resource_kind}:${JSON.parse(o.manifest).id}`)
@@ -81,7 +83,8 @@ export async function reconcilePurchaseSession(env, session) {
   return true;
 }
 
-export async function reconcileSubscription(env, o) {
+export async function reconcileSubscription(env, o, { signed = false } = {}) {
+  if (!signed && !o.paid_at) return; // Reads never create a paid period.
   const sub = await stripeCall(
     env,
     "GET",
@@ -89,7 +92,7 @@ export async function reconcileSubscription(env, o) {
     { expand: ["latest_invoice"] },
   );
   if (
-    sub.metadata?.order !== o.id ||
+    (sub.metadata?.order !== o.id && !await legacyPurchaseBinding(env,o,sub,'subscription')) ||
     Boolean(sub.livemode) !== (o.mode === "live")
   )
     throw new Error("Subscription mismatch");
@@ -172,7 +175,7 @@ export async function reconcileSubscription(env, o) {
 
     return;
   }
-  const until = line.period.end * 1000;
+  const until = signed ? line.period.end * 1000 : Math.min(line.period.end * 1000, Number(o.paid_until ?? 0));
   const payments = { data: [] };
   let cursor;
   for (;;) {
@@ -243,34 +246,24 @@ export async function reconcileSubscription(env, o) {
     if (["refunded", "lost"].includes(state?.state)) revoked = state.state;
   }
   usable = usable && !revoked;
+  if (!signed && usable && !['paid','fulfilled','disputed'].includes(o.status)) return;
+  const effectiveGrace = signed ? grace : 0;
   await env.DB.batch([
-    orderFact(env, o.id, 'details', {paid_until: usable ? until + grace : 0, quantity: quantity}),
-    orderFact(env, o.id, usable && until + grace > Date.now() ? (disputed ? "disputed" : "paid") : (revoked ?? "lapsed"), {total: invoice.total, paid_at: Date.now()}, {renewal:true}),
+    orderFact(env, o.id, 'details', {paid_until: usable ? until + effectiveGrace : 0, quantity: signed ? quantity : Math.min(quantity, o.quantity)}),
+    orderFact(env, o.id, usable && until + effectiveGrace > Date.now() ? (disputed ? "disputed" : "paid") : (revoked ?? "lapsed"), {total: invoice.total, paid_at: signed ? Date.now() : o.paid_at}, {renewal:true}),
   ]);
 
 }
 /** Re-read the provider so delayed or missing webhooks cannot preserve refunded access. */
 export async function reconcileOneTime(env, o) {
-  if (!o.payment || o.mode !== shopMode(env)) return;
-  if (!hasStripeKey(env)) {
-    const refunds = await paymentRefunds(env, o.payment, o);
-    const refunded = [...refunds.values()].filter(r=>r.status === 'succeeded').reduce((n,r)=>n+r.amount,0);
-    if (!Number.isSafeInteger(refunded) || refunded < 0 || refunded > Number(o.total ?? o.amount)) throw new Error('Invalid Stripe refund total');
-    const dispute = (await rememberedMoney(env,o.payment,o.mode)).find(r=>r.id.startsWith('dp_'));
-    const state = refunded === Number(o.total ?? o.amount) && refunded > 0 ? 'refunded' : dispute?.status === 'lost' ? 'lost' : dispute && !['won','warning_closed'].includes(dispute.status) ? 'disputed' : 'paid';
-    const completed = [...refunds.values()].find(r=>r.status === 'succeeded');
-    const reversed = [...refunds.values()].some(r=>['failed','canceled'].includes(r.status));
-    await orderFact(env,o.id,state,state === 'refunded' ? {refund:completed?.id} : {},{refundReversal:Boolean(reversed)}).run();
-    return;
-  }
+  if (!o.paid_at || !o.payment || o.mode !== shopMode(env)) return;
   const pi = await stripeCall(
     env,
     "GET",
     `/v1/payment_intents/${encodeURIComponent(o.payment)}`,
     { expand: ["latest_charge"] },
   );
-  const link = await linkOf(env,o.id);
-  if (link ? pi.metadata?.homie !== 'purchase-links-v1' || pi.metadata?.revision !== link.revision : pi.metadata?.order !== o.id || pi.metadata?.homie !== "purchase-v1")
+  if ((pi.metadata?.order !== o.id || pi.metadata?.homie !== "purchase-v1") && !await legacyPurchaseBinding(env,o,pi,'payment'))
     throw new Error("Payment order mismatch");
   const charge = pi.latest_charge;
   if (!charge || typeof charge !== "object") return;
@@ -293,11 +286,12 @@ export async function reconcileOneTime(env, o) {
   }
   const completed = [...refunds.values()].find(r=>r.status === 'succeeded');
   const reversed = [...refunds.values()].some(r=>['failed','canceled'].includes(r.status));
+  if (state === 'paid' && o.status !== 'paid') return;
   await orderFact(env, o.id, state, state === 'refunded' ? {refund:completed?.id} : {}, {refundReversal:Boolean(reversed)}).run();
 
 }
 export async function reconcileOrder(env, o) {
-  if (o.subscription && hasStripeKey(env) && !await linkOf(env,o.id)) await reconcileSubscription(env, o);
+  if (o.subscription && hasStripeKey(env)) await reconcileSubscription(env, o);
   else await reconcileOneTime(env, o);
   if(o.resource_kind==='cart' && o.payment) await (await import('./shop.mjs')).syncRefunds(env,o.payment);
 }
@@ -323,33 +317,13 @@ export async function purchasePaymentEvent(env, event) {
   try { await env.DB.prepare("SELECT 1 FROM purchase_orders LIMIT 0").first(); }
   catch (error) { if (/no such table/.test(error.message)) return null; throw error; }
 
+  if (event.type.startsWith('checkout.session.') && obj.payment_link && obj.metadata?.homie === 'purchase-links-v1') return reconcilePurchaseSession(env,obj);
   if (!event.type.startsWith('checkout.session.')) await rememberMoneyEvent(env,event);
-  if (obj.payment_link && obj.metadata?.homie === 'purchase-links-v1') return reconcileLinkSession(env,obj);
-  if (!hasStripeKey(env) && event.type.startsWith('customer.subscription.')) {
-    await env.DB.prepare("INSERT INTO meta (key,value) VALUES (?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE json_extract(meta.value,'$.status') != 'canceled'").bind(`purchase-subscription:${obj.id}`,JSON.stringify({status:obj.status})).run();
-    return 'purchase-subscription-status';
-  }
-  if (!hasStripeKey(env) || event.type === 'invoice_payment.paid' || event.type === 'invoice.paid' && (obj.parent?.subscription_details?.metadata?.homie === 'purchase-links-v1' || await linkSubscription(env,obj))) {
-    if (event.type === 'invoice_payment.paid') {
-      const payment = idOf(obj.payment?.payment_intent), invoice = idOf(obj.invoice);
-      if (!payment || !invoice || obj.status !== 'paid') return null;
-      await env.DB.prepare('INSERT OR REPLACE INTO meta (key,value) VALUES (?1,?2)').bind(`purchase-invoice-payment:${invoice}`,JSON.stringify({payment,currency:obj.currency,livemode:obj.livemode})).run();
-      const saved = await env.DB.prepare('SELECT value FROM meta WHERE key = ?1').bind(`purchase-invoice-id:${invoice}`).first();
-      return saved ? reconcileLinkInvoice(env,JSON.parse(saved.value)) : 'purchase-invoice-payment-waiting';
-    }
-    if (event.type === 'invoice.paid') return reconcileLinkInvoice(env,obj);
-    const payment = idOf(obj.payment_intent);
-    if (!payment) return null;
-    const row = await env.DB.prepare('SELECT order_id FROM purchase_payments WHERE payment = ?1').bind(payment).first();
-    if (!row) return null;
-    const order = await byId(env,row.order_id);
-    await reconcileOneTime(env,order);
-    return 'purchase-reconciled';
-  }
   if (
     event.type === "payment_intent.succeeded" &&
     obj.metadata?.homie === "purchase-v1"
   ) {
+    if (obj.status !== "succeeded") return null;
     const o = await byId(env, obj.metadata.order);
     if (
       !o ||
@@ -444,7 +418,7 @@ export async function purchasePaymentEvent(env, event) {
     if (!o) return null;
     await orderFact(env, o.id, 'details', {subscription: subscription})
       .run();
-    await reconcileSubscription(env, { ...o, subscription });
+    await reconcileSubscription(env, { ...o, subscription }, { signed: true });
     return "purchase-subscription";
   }
   const payment = idOf(obj.payment_intent);
@@ -522,7 +496,7 @@ export async function purchasePaymentEvent(env, event) {
     if (!o.payment) o.payment = payment;
     await reconcileOneTime(env, o);
   } else {
-    await reconcileSubscription(env, o);
+    await reconcileSubscription(env, o, { signed: true });
     const current = await byId(env, o.id);
     if (current.status === "refunded" && termsOf(o).refundEndsSubscription)
       await cancelSubscription(env, o.subscription);
@@ -530,7 +504,16 @@ export async function purchasePaymentEvent(env, event) {
   return "purchase-reconciled";
 }
 
-/** Signed snapshots only; correlation is checked against the frozen link before granting. */
+/** Link-era identifiers differ from metadata.order; only the persisted 0.53 binding authorizes them. */
+export async function legacyPurchaseBinding(env, order, object, kind) {
+ if(object.metadata?.homie !== 'purchase-links-v1' || object.id !== order[kind])return false;
+ const row=kind==='subscription'
+  ? await env.DB.prepare('SELECT id FROM purchase_orders WHERE id=?1 AND subscription=?2').bind(order.id,object.id).first()
+  : await env.DB.prepare('SELECT order_id FROM purchase_payments WHERE order_id=?1 AND payment=?2').bind(order.id,object.id).first();
+ return Boolean(row);
+}
+
+// Compatibility for asynchronous link payments opened before Checkout cutover.
 async function reconcileLinkSession(env, session) {
   let o = await byId(env, session.client_reference_id);
   if (!o) return 'purchase-unknown';
@@ -559,40 +542,6 @@ async function reconcileLinkSession(env, session) {
     ...(payment ? [env.DB.prepare('INSERT OR IGNORE INTO purchase_payments (payment,order_id) VALUES (?1,?2)').bind(payment,o.id)] : [])
   ]);
   if (payment) await reconcileOneTime(env,await byId(env,o.id));
-  if (subscription) {
-    const invoice = await env.DB.prepare('SELECT value FROM meta WHERE key = ?1').bind(`purchase-invoice:${subscription}`).first();
-    if (invoice) await reconcileLinkInvoice(env,JSON.parse(invoice.value));
-  }
+  if (subscription) await reconcileSubscription(env,await byId(env,o.id),{signed:true});
   return 'purchase-checkout';
-}
-async function reconcileLinkInvoice(env, invoice) {
-  const subscription = idOf(invoice.parent?.subscription_details?.subscription ?? invoice.subscription);
-  if (!subscription) return null;
-  const line = invoice.lines?.data?.find(l=>!l.proration && !l.parent?.subscription_item_details?.proration);
-  if (invoice.status !== 'paid' || !line?.period?.end) return null;
-  await env.DB.prepare("INSERT INTO meta (key,value) VALUES (?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE json_extract(excluded.value,'$.period_end') >= json_extract(meta.value,'$.period_end')").bind(`purchase-invoice:${subscription}`,JSON.stringify({id:invoice.id,subscription,status:invoice.status,currency:invoice.currency,livemode:invoice.livemode,amount_remaining:invoice.amount_remaining,total:invoice.total,period_end:line.period.end,lines:{data:[{period:line.period}]}})).run();
-  await env.DB.prepare('INSERT OR REPLACE INTO meta (key,value) VALUES (?1,?2)').bind(`purchase-invoice-id:${invoice.id}`,JSON.stringify({id:invoice.id,subscription,status:invoice.status,currency:invoice.currency,livemode:invoice.livemode,amount_remaining:invoice.amount_remaining,total:invoice.total,lines:{data:[{period:line.period}]}})).run();
-  const row = await env.DB.prepare('SELECT id FROM purchase_orders WHERE subscription = ?1').bind(subscription).first();
-  if (!row) return 'purchase-invoice-waiting';
-  const o = await byId(env,row.id);
-  if (invoice.currency !== o.currency || invoice.livemode !== (o.mode === 'live') || Number(invoice.amount_remaining ?? 0) !== 0) throw new Error('Purchase invoice mismatch');
-  if (line.period.end * 1000 < Number(o.paid_until ?? 0)) return 'purchase-old-invoice';
-  const recorded = await env.DB.prepare('SELECT value FROM meta WHERE key = ?1').bind(`purchase-invoice-payment:${invoice.id}`).first();
-  const paymentFact = recorded && JSON.parse(recorded.value);
-  if (paymentFact && (paymentFact.currency !== o.currency || paymentFact.livemode !== (o.mode === 'live'))) throw new Error('Invoice payment mismatch');
-  const payment = paymentFact?.payment ?? idOf(invoice.payment_intent ?? invoice.payments?.data?.[0]?.payment?.payment_intent);
-  await env.DB.batch([orderFact(env,o.id,'paid',{paid_until:line.period.end*1000,total:invoice.total,paid_at:Date.now(),...(payment?{payment}:{})},{renewal:line.period.end*1000 > Number(o.paid_until ?? 0)}),...(payment?[env.DB.prepare('INSERT OR IGNORE INTO purchase_payments (payment,order_id,invoice) VALUES (?1,?2,?3)').bind(payment,o.id,invoice.id)]:[])]);
-  if (payment) await reconcileOneTime(env,await byId(env,o.id));
-  return 'purchase-subscription';
-}
-
-async function linkOf(env,id) {
-  const saved = await env.DB.prepare('SELECT value FROM meta WHERE key = ?1').bind(`purchase-link:${id}`).first();
-  return saved ? JSON.parse(saved.value) : null;
-}
-async function linkSubscription(env,invoice) {
-  const subscription = idOf(invoice.parent?.subscription_details?.subscription ?? invoice.subscription);
-  if (!subscription) return false;
-  const row = await env.DB.prepare('SELECT id FROM purchase_orders WHERE subscription = ?1').bind(subscription).first();
-  return row ? Boolean(await linkOf(env,row.id)) : false;
 }

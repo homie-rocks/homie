@@ -31,7 +31,7 @@ use rules plus view with the server as host; read the game skill and RULES.md be
 unless parallel work was requested. Keep provider approvals, paid budgets and required host holds.
 An existing request to go live or list is authorization; do not ask again outside those holds.
 
-**An app first:** For an app request, run `app new <id>` in the empty studio, build the requested roles and shared action, and run its app check. Give the `/<id>/open` link as soon as it passes; continue to the requested publish flow without a game demo or interview. The same keyless shop is optional, with its visible Shop control when something is for sale.
+**An app first:** For an app request, run `app new <id>` in the empty studio, build the requested roles and shared action, and run its app check. Give the `/<id>/open` link as soon as it passes; continue to the requested publish flow without a game demo or interview. The same studio Checkout shop is optional, with its visible Shop control when something is for sale.
 
 **A Play link first.** Build the game to the point where it plays, run the two-browser `check`, and the moment
 it passes tell the person, with the link they can open now (`http://127.0.0.1:8787/<id>/play`, two tabs for two

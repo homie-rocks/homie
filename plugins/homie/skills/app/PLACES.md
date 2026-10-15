@@ -135,10 +135,7 @@ multi-day seasons. Public holds need a stable ID, bounded expiry and a private
 management token for anonymous customers.
 
 Pass the app's booking reference to `shop.book` or MCP `studio_checkout`. For
-variable deposits use an amount-based link and validate the paid amount against
-the saved booking. Declare `booking.slots_need_payment_links` so the owner's AI
-can prepare links for newly rolled dates through Stripe's official plugin.
-Use `shop observe` to record plugin responses, then verify and build.
+variable deposits use an exact amount Checkout Session and validate the signed paid amount against the saved booking. The Worker claims dated capacity before opening Checkout; no per-slot Stripe setup is needed.
 
 The toolkit's `docs/toolkit-batch.md` documents resource declarations, install
 surfaces, private frames, concept previews, example forks and isolated live-site

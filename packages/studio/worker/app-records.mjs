@@ -1,4 +1,3 @@
-import { linkConfig } from './shop-links.mjs';
 import {localSession} from './local-test.mjs';
 import { moveBooking } from './booking-store.mjs';
 import { toolIdentity } from './tool-identity.mjs';
@@ -102,17 +101,9 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
       const records=[];
       for(const r of rows) {
         const record={id:r.id,data:JSON.parse(r.value),version:r.version,updatedAt:r.updated_at};
-        const link=linkConfig(env)?.slots?.find(l=>l.app===meta.id&&l.slots===collection&&l.slot===r.id);
         if(Object.values(meta.records.collections).some(c=>c.booking?.slots===collection)) {
           const count=await env.DB.prepare("SELECT COALESCE(SUM(quantity),0) n FROM shop_bookings WHERE app=?1 AND slots=?2 AND slot=?3 AND state IN ('held','confirmed')").bind(recordApp,collection,r.id).first();
           record.booking={full:count.n>=record.data.capacity,available:Math.max(0,record.data.capacity-count.n),synced:true};
-        }
-        if(link) {
-          const saved=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-slot-link:${link.id}`).first();
-          const observed=saved?JSON.parse(saved.value):null;
-          const status=observed && observed.capacity===(link.limit??link.capacity) ? observed : link;
-          const count=await env.DB.prepare("SELECT COALESCE(SUM(quantity),0) n FROM shop_bookings WHERE app=?1 AND slots=?2 AND slot=?3 AND state IN ('held','confirmed')").bind(recordApp,collection,r.id).first();
-          record.booking={full:!status.active||status.count>=(link.limit??link.capacity)||count.n>=link.capacity,available:status.active?Math.max(0,Math.min(link.capacity-count.n,(link.limit??link.capacity)-status.count)):0,synced:link.capacity===record.data.capacity};
         }
         records.push(record);
       }
@@ -132,19 +123,7 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
       ? env.DB.prepare('INSERT OR IGNORE INTO app_records (app, collection, id, value, version, updated_at) VALUES (?1, ?2, ?3, ?4, 1, ?5)').bind(recordApp, collection, id, JSON.stringify(body.data), Date.now())
       : op === 'update' ? env.DB.prepare('UPDATE app_records SET value = ?4, version = version + 1, updated_at = ?5 WHERE app = ?1 AND collection = ?2 AND id = ?3 AND version = ?6').bind(recordApp, collection, id, JSON.stringify(body.data), Date.now(), body.version)
       : env.DB.prepare('DELETE FROM app_records WHERE app = ?1 AND collection = ?2 AND id = ?3 AND version = ?4').bind(recordApp, collection, id, body.version);
-    const bookingCollections=Object.entries(meta.records.collections).filter(([,c])=>c.booking?.slots===collection);
-    const writes=[stmt];
-    if(!testScope&&op!=='delete')for(const [bookings,c] of bookingCollections) {
-      const link=linkConfig(env)?.slots?.find(l=>l.app===meta.id&&l.slots===collection&&l.slot===id);
-      if(link&&link.capacity===body.data?.capacity)continue;
-      const expected=op==='create'?1:body.version+1;
-      writes.push(env.DB.prepare(`INSERT OR IGNORE INTO studio_events(id,type,data,at)
-        SELECT ?1,'booking.slots_need_payment_links',json_object('app',?2,'slots',json_array(json_object('app',?2,'collection',?3,'slots',?4,'slot',?5,'item',?6,'capacity',json_extract(value,'$.capacity')))),?7
-        FROM app_records WHERE app=?8 AND collection=?4 AND id=?5 AND version=?9
-        AND EXISTS(SELECT 1 FROM function_subscriptions WHERE type='booking.slots_need_payment_links')`)
-        .bind(`slot-links:${recordApp}:${collection}:${id}:${expected}`,meta.id,bookings,collection,id,c.booking.item,Date.now(),recordApp,expected));
-    }
-    const result=writes.length>1?(await env.DB.batch(writes))[0]:await stmt.run();
+    const result=await stmt.run();
     return result.meta.changes ? json({ ok: true, id, version: op === 'create' ? 1 : body.version + 1 }) : fail(409, 'record changed or already exists; reload');
   } catch (error) {
     if (/booking capacity|capacity below|slot has active/.test(error.message)) return fail(409, error.message);

@@ -22,6 +22,14 @@ file) and what the upgrade would change, and changes nothing until you agree.
 ### Changed
 
 - Reduce pull-request CI work through shared studio fixtures, focused compatibility coverage, and nightly release checks.
+- Self-hosted studios create a Stripe Checkout Session per purchase, with exact basket lines, item quantity limits, deposits and booking references. Signed webhooks trigger authenticated provider retrieval before granting orders, including zero-price Checkout; return pages cannot grant.
+- The public Homie Stripe App uses restricted API key authentication. Install → Generate (sandbox: Reveal) → Copy lets the local tool validate and install the key through Wrangler stdin, then clear the clipboard. No homie.rocks mint service participates. Renew uses Roll key; disconnect removes the endpoint and Worker key. The Worker encrypts its signing secret in its database with a separate Worker secret.
+- Capacity is held before Session creation and released on verified expiry or refund. Giving supports chosen and monthly amounts; subscription customers get an ownership-checked Stripe portal.
+
+### Upgrade notes
+
+- Run `homie-studio upgrade`, then approve Homie through `homie-studio shop connect`. Install Checkout before deactivating old links, then verify D1 receipts for the bounded drain. Existing database rows are retained; full link-era migration acceptance remains unproven.
+- External testing follows owner-approved App upload; marketplace distribution follows Stripe review. App-generated RAK scope, uninstall behavior, customer permission dependencies and developer-key isolation still require sandbox installation. No upload, version bump or deployment accompanies this change.
 
 ## [0.53.0] - 2026-10-15
 

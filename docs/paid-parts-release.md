@@ -1,3 +1,5 @@
+> Historical release evidence. Current Stripe setup and payment behavior are documented in [Studio Checkout](../packages/studio/shop/SHOP.md); the former Payment Link mode is removed.
+
 # Paid parts release check — 2026-10-09
 
 Studio 0.37.2 / plugin 0.38.2, [PR #70](https://github.com/homie-rocks/homie/pull/70).

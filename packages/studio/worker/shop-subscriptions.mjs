@@ -1,5 +1,6 @@
+import { portalConfiguration } from './stripe.mjs';
 import { stripeEventOwner } from './stripe-ownership.mjs';
-import { linkConfig, hasStripeKey } from './shop-links.mjs';
+import { hasStripeKey } from './shop-links.mjs';
 import { KEY_SHAPE, stripeCall } from './stripe.mjs';
 /** Only verified shop Checkout sessions establish ownership. Provider customer IDs
  * stay private, and are never accepted from a browser. */
@@ -35,13 +36,7 @@ export async function bindSubscription(env, order, session, shop) {
   const firstInvoice=idOf(session.invoice);
   if(firstInvoice)await env.DB.prepare('INSERT INTO meta(key,value) VALUES(?1,?2) ON CONFLICT(key) DO NOTHING').bind(`subscription-first-invoice:${subscription}`,firstInvoice).run();
   await reconcileMembership(env, subscription, shop);
-  if(!hasStripeKey(env)) {
-    const invoice=typeof session.invoice==='string'?session.invoice:session.invoice?.id;
-    if(invoice) {
-      const saved=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-invoice:${invoice}`).first();
-      if(saved)await invoiceMembership(env,subscription,JSON.parse(saved.value));
-    }
-  }
+
 }
 
 /** Stripe retries unknown subscriptions until their Checkout has established ownership.
@@ -67,7 +62,6 @@ export async function subscriptionEvent(env, event, shop) {
   }
   if (event.livemode !== (row.mode === 'live')) return 'ignored';
   await reconcileMembership(env, subscription, shop);
-  if(event.type==='invoice.paid' && !hasStripeKey(env))await invoiceMembership(env,subscription,obj);
   const at=(event.created ?? 0)*1000;
   let type, state;
   if (event.type === 'customer.subscription.deleted') { type='subscription.cancelled'; state='cancelled'; }
@@ -89,11 +83,7 @@ export async function subscriptionEvent(env, event, shop) {
 export async function subscriptionPortal(env, player, subscription, origin) {
   const row=await env.DB.prepare(`SELECT s.customer FROM shop_subscriptions s JOIN shop_orders o ON o.id=s.order_id WHERE s.id=?1 AND o.player=?2`).bind(subscription,player).first();
   if (!row) return null;
-  if(!hasStripeKey(env)) {
-    const url=linkConfig(env)?.portal;
-    return typeof url==='string' && /^https:\/\/billing\.stripe\.com\/p\/login\//.test(url)?url:null;
-  }
-  const portal=await stripeCall(env,'POST','/v1/billing_portal/sessions',{customer:row.customer,return_url:`${origin}/shop/`});
+  const portal=await stripeCall(env,'POST','/v1/billing_portal/sessions',{configuration:await portalConfiguration(env,origin),customer:row.customer,return_url:`${origin}/shop/`});
   if (typeof portal?.url !== 'string' || new URL(portal.url).origin !== 'https://billing.stripe.com') throw new Error('Invalid Stripe portal response');
   return portal.url;
 }

@@ -117,7 +117,7 @@ await shop.buy('full-tune', 1, undefined, { reference: booking.id });
 await shop.checkout({ reference: booking.id });
 ```
 
-On the default keyless connection, `shop.checkout({ reference: 'table-7' })` opens the studio's synced Stripe menu: the guest sets quantities on Stripe's page and `order.paid.data.lines` carries what was actually paid. A slot with capacity uses `shop.book` (see below), not `shop.buy`. Monthly gifts and memberships are recurring items on their own links. None of these needs a key.
+`shop.checkout({ reference: 'table-7' })` creates a Checkout Session with the exact selected lines and quantities. `order.paid.data.lines` contains the signed paid lines. Use `shop.book` for capacity reservations. Monthly gifts and memberships use subscription Checkout.
 
 These retain their existing boolean result: true means checkout opened, not payment received. The durable `order.paid` function event includes `data.order` (the order ID), `data.reference` (your reference or null), and `data.app` (the app ID). A verified provider payment emits it. Validate the referenced record, expected amount/currency and app, deduplicate by event/order ID, then fulfil that booking or add that gift to the confirmed meal table. A buyer supplies the reference: it is correlation, never proof they own a private record or paid the expected price. Do not put personal data in it.
 
@@ -186,7 +186,7 @@ Scaffold businesses with `new <folder> --kind business`; causes with `--kind cau
 
 For giving, set the studio currency and run `shop init --giving --currency CAD` (use the organisation’s currency). It creates one-time/monthly suggested gifts. The owner supplies `giving.receiptText` in shop.json; Homie supplies no legal or tax text. Before Stripe is connected, local /shop/ previews items and prices with checkout disabled. Run the connection step yourself; the owner approves their Stripe account in the browser.
 
-Use `shop.book` and the booking collection declaration in SHOP.md. Default keyless booking links show pending while paying; an unpaid guest does not block others. Stripe limits completed sessions to capacity. The owner’s AI syncs published/changed slots with `stripe_shop_plan` and the complete slot manifest. Say “Pay to secure your seat.” Exclusive unpaid holds require the explicitly selected optional keyed connection.
+Use `shop.book` and the booking collection declaration in SHOP.md. Checkout claims an atomic hold before creating the Session. Signed payment confirms the booking; expiry releases it. Say “Pay to secure your seat.” No slot synchronization is needed.
 
 
 ## Tell my AI when a booking comes in
@@ -335,11 +335,8 @@ press. Assert the resulting navigation as well as the button's presence.
 
 ## Selling and operational checks over MCP
 
-Use Stripe's official plugin and the shop skill's batched `stripe_shop_plan` flow.
-Retain write responses, verify, then deploy the compact public links. Until the
-private `stripe_webhook` step completes, checkout names that one remaining step.
-The AI starts the tool; the owner approves Stripe CLI once if needed. No secrets
-or API keys pass through chat. Deploy distinguishes **claimed, not listed** from
+Use the shop skill and the existing `stripe_login` tool for one approval of the official Homie Stripe App.
+The AI starts the tool; the owner approves Homie once in Stripe. The tool installs the encrypted credentials privately. No secrets or API keys pass through chat. Deploy distinguishes **claimed, not listed** from
 an actual directory listing; publishing is a separate action.
 
 On the existing signed-in studio connector (`<site>/mcp/auth`), call

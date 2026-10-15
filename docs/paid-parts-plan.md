@@ -1,3 +1,5 @@
+> Historical release evidence. Current Stripe setup and payment behavior are documented in [Studio Checkout](../packages/studio/shop/SHOP.md); the former Payment Link mode is removed.
+
 # Paid purchases on the studio's own service
 
 A buyer's agent asks the selling studio for a resource, pays with the buyer's own wallet,
