@@ -2782,3 +2782,17 @@ test('validated owner shares presentation across microtasks within one browser f
  const second=a.me;a.input({ax:0});assert.notEqual(a.me,second,'new controls invalidate within the same browser frame');
  const third=a.me;await clock.wait(100);assert.notEqual(a.me,third,'stepping and snapshots invalidate even if the animation timeline pauses');
 });
+
+test('remote presentation is shared within a frame and refreshed by snapshots',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),r=rig(L,compiled),a=openRoom({net:{config:cfg('Viewer'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const b=openRoom({net:{config:cfg('Mover'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();b.close();r.stop();});await clock.wait(1000);b.input({ax:1});await clock.wait(300);
+ const id=b.me.id,old=Object.getOwnPropertyDescriptor(globalThis,'document');
+ globalThis.document={timeline:{currentTime:1},hidden:false,addEventListener(){},removeEventListener(){}};
+ t.after(()=>{if(old)Object.defineProperty(globalThis,'document',old);else delete globalThis.document;});
+ const first=a.get(id);await Promise.resolve();assert.equal(a.get(id),first);
+ document.timeline.currentTime=2;assert.notEqual(a.get(id),first);
+ const second=a.get(id);await clock.wait(200);assert.notEqual(a.get(id),second);
+ assert.ok(a.get(id).pos.x>second.pos.x);
+});

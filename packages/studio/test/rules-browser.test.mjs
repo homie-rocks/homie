@@ -151,7 +151,7 @@ test('the production Worker adapter enables overrun attribution', async () => {
   const gameFile = join(scratch, 'worker-game.mjs'); writeFileSync(gameFile, L.code);
   const compiled = await (await esbuildOf()).build({ stdin: { contents: `import def from ${JSON.stringify(gameFile)}; import { hostRules, startHost } from ${JSON.stringify(join(PKG, 'worker/hosted.mjs'))}; hostRules({ game: { rules: def, settings: ${JSON.stringify(L.R.roomSettings({}).settings)}, map: ${readFileSync(join(COIN_DASH, 'map/main.json'), 'utf8')}, tune: ${readFileSync(join(COIN_DASH, 'tunables.json'), 'utf8')}, seats: 4 } }); export { startHost };`, resolveDir: scratch }, bundle: true, format: 'iife', globalName: 'worker', write: false, plugins: [(await import('../lib/rules-build.mjs')).rulesModulesPlugin()] });
   runInNewContext(compiled.outputFiles[0].text, ctx);
-  const host = ctx.worker.startHost('game', { send: m => { if (m.t === 'snap') clock.t += 120; }, onEnd: why => ended.push(why) });
+  const host = ctx.worker.startHost('game', { send: () => {}, onTick: () => { clock.t += 120; }, onEnd: why => ended.push(why) });
   host.frame({ t: 'join', peer: { id: 'one', seat: 0, occ: 1 } });
   clock.advance(15000); host.stop();
   assert.deepEqual(ended, ['overrun']);

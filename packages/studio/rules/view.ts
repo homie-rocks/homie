@@ -290,10 +290,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let pressed = new Map<string, number | boolean>();
   let lastSent = '';
   let lastSendAt = 0;
-  let entries: { t: number; row: number[] }[] = [];
+  interface OutgoingEntry { t: number; row: number[]; compactBytes?: number; extraBytes?: number }
+  let entries: OutgoingEntry[] = [];
   let inputSequence = 0;
   let controlChanges: number[][] = [];
-  let sentHistory: { t: number; row: number[] }[] = [];
+  let sentHistory: OutgoingEntry[] = [];
   let hiddenSent = false;
   const history = new Map<number, Mine>();
   let pending: { seq?: number; applied?: number; t: number; input: Readonly<Record<string, unknown>>; pulses?: Record<string, number>; pulseTicks?: Record<string, number> }[] = [];
@@ -475,7 +476,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // Reconciliation often replays the exact same deterministic movement. Cache
     // its full arguments, including tick, self, motion and collision revision.
     // Stateful physics worlds must execute their operations and are excluded.
-    const key = map.physics ? '' : JSON.stringify([mine?.id,kindName,t,body.pos,body.vel,body.heading,body.grounded,body.motion,input]);
+    const key = map.physics || kindOf.get(kindName)?.validatedOwner ? '' : JSON.stringify([mine?.id,kindName,t,body.pos,body.vel,body.heading,body.grounded,body.motion,input]);
     const cached = key ? movementCache.get(key) : undefined;
     if (cached?.scene === scene) return {...cached.value,motion:motionOf(kindName,cached.value.motion)};
     let failed = false;
@@ -634,12 +635,14 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       previewKey = '';
     }
     const claim = kind.owner ? [mine.pos.x, mine.pos.y, mine.pos.z, mine.vel.x, mine.vel.y, mine.vel.z, mine.heading.x, mine.heading.y, mine.heading.z, ...(kind.validatedOwner ? [ownerBaseTick] : [])] : [];
-    const sig = JSON.stringify([values, claim]);
+    const sig = kind.validatedOwner ? '' : JSON.stringify([values, claim]);
     if (kind.validatedOwner || sig !== lastSent || press || controlChanges.length) { entries.push({ t, row: [...values, ...claim, -471, ++inputSequence, controlChanges.length, ...controlChanges.flat()] }); pending.push({ seq: inputSequence, t, input: held, ...(numbered ? { pulses: numbered } : {}) }); lastSent = sig; }
     if (kind.validatedOwner && pending.length>256) pending.splice(0,pending.length-256);
     controlChanges = [];
-    history.set(t, copyMine(mine));
-    for (const k of history.keys()) if (k < t - tickHz && (catchTick === null || k < Math.floor(catchTick))) history.delete(k);
+    if (!kind.validatedOwner) {
+      history.set(t, copyMine(mine));
+      for (const k of history.keys()) if (k < t - tickHz && (catchTick === null || k < Math.floor(catchTick))) history.delete(k);
+    }
   }
   /**
    * The end of a send period (`sendEvery` ticks, counted from tick 0): one frame with the entries made in it, `k` the
@@ -680,7 +683,14 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       ...sentHistory.filter(e => e !== newest && applications.has(e.row[marker + 1])).reverse()];
     for (const e of candidates) {
       const row = [e.t - first, ...e.row.slice(0, marker + 2), 0];
-      const size = JSON.stringify(row).length + (selected.size ? 1 : 0);
+      // A report is immutable after queuing; redundancy changes only its tick
+      // offset. Measure its payload once, not on every retransmission.
+      if (e.compactBytes === undefined) {
+        const prefixBytes = JSON.stringify(e.row.slice(0, marker + 2)).length;
+        e.compactBytes = prefixBytes + 3;
+        e.extraBytes = JSON.stringify(e.row).length - prefixBytes - 2;
+      }
+      const size = e.compactBytes + String(e.t - first).length + (selected.size ? 1 : 0);
       if (bytes + size > budget) continue;
       selected.set(e.t, row); bytes += size;
     }
@@ -689,7 +699,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       const compact = selected.get(e.t);
       if (!compact) continue;
       const row = [e.t - first, ...e.row];
-      const extra = JSON.stringify(row).length - JSON.stringify(compact).length;
+      const extra = e.extraBytes!;
       if (bytes + extra <= budget) { selected.set(e.t, row); bytes += extra; }
     }
     const rows = [...selected].sort((a, b) => a[0] - b[0]).map(([, row]) => row);
@@ -1051,20 +1061,22 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       const forecastKey = JSON.stringify(now), scene = geometryAt();
       const reuse = !map.physics && substepKinds.has(kind.name) && forecast && forecast.mine === mine && forecast.pos === mine.pos && forecast.motion === mine.motion && forecast.tick === stepped && forecast.key === forecastKey && forecast.geometry === scene;
       const next = reuse ? forecast!.next : runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: motionOf(mine.kind, mine.motion) }, Object.freeze(now), stepped + 1);
-      forecast = {mine, pos:mine.pos, motion:mine.motion, tick:stepped, key:forecastKey, geometry:scene, next};
-      // A landing does not take the whole tick (0.46.5): the body met the ground part way through it. How far through is
-      // read from the fall it would have made at the speed it entered the tick with; it is drawn down to the ground by
-      // then and standing from then, not sinking until the tick's end.
-      let av = a, landed = false;
-      if (dims === 3 && !mine.grounded && next.grounded && mine.vel.z < 0) {
-        const free = -mine.vel.z / tickHz, contact = free > 1e-6 ? Math.max(0.05, Math.min(1, (mine.pos.z - next.pos.z) / free)) : 1;
-        av = Math.min(1, a / contact); landed = a >= contact;
+      if (!reuse) forecast = {mine, pos:mine.pos, motion:mine.motion, tick:stepped, key:forecastKey, geometry:scene, next};
+      if (!next.steps?.length) {
+        // A landing does not take the whole tick (0.46.5): the body met the ground part way through it. How far through is
+        // read from the fall it would have made at the speed it entered the tick with; it is drawn down to the ground by
+        // then and standing from then, not sinking until the tick's end.
+        let av = a, landed = false;
+        if (dims === 3 && !mine.grounded && next.grounded && mine.vel.z < 0) {
+          const free = -mine.vel.z / tickHz, contact = free > 1e-6 ? Math.max(0.05, Math.min(1, (mine.pos.z - next.pos.z) / free)) : 1;
+          av = Math.min(1, a / contact); landed = a >= contact;
+        }
+        pos = vec3({...blendPosition(mine.pos,next.pos,a,map.wrap), z:wrapPoint({x:0,y:0,z:mine.pos.z+periodicDelta(mine.pos.z,next.pos.z,map.wrap?.z)*av},map.wrap).z}, dims);
+        heading = blendHeading(mine.heading, next.heading, a, dims);
+        velocity = vec3({ x: lerp(mine.vel.x, next.vel.x, a), y: lerp(mine.vel.y, next.vel.y, a), z: lerp(mine.vel.z, next.vel.z, a) }, dims);
+        // A takeoff is airborne as soon as it rises; a landing waits for its contact.
+        grounded = landed || mine.grounded && (a === 0 || next.grounded);
       }
-      pos = vec3({...blendPosition(mine.pos,next.pos,a,map.wrap), z:wrapPoint({x:0,y:0,z:mine.pos.z+periodicDelta(mine.pos.z,next.pos.z,map.wrap?.z)*av},map.wrap).z}, dims);
-      heading = blendHeading(mine.heading, next.heading, a, dims);
-      velocity = vec3({ x: lerp(mine.vel.x, next.vel.x, a), y: lerp(mine.vel.y, next.vel.y, a), z: lerp(mine.vel.z, next.vel.z, a) }, dims);
-      // A takeoff is airborne as soon as it rises; a landing waits for its contact.
-      grounded = landed || mine.grounded && (a === 0 || next.grounded);
       if (next.steps?.length) {
         const n = next.steps.length - 1, at = a * n, index = Math.min(n - 1, Math.floor(at)), f = at - index;
         const before = next.steps[index], after = next.steps[index + 1];
@@ -1084,7 +1096,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       preview = next;
       if (predictors[kind.name]) {
         // The own actions between ticks: the predictor on a copy of the fields, for the tick about to be stepped.
-        const key = stepped + JSON.stringify(now);
+        const key = stepped + forecastKey;
         if (key !== previewKey) { previewKey = key; previewFields = thawFields(kind.fields, mine.fields); runPredict(kind.name, next, previewFields, Object.freeze(now), stepped + 1, true, true); }
       }
       settled = distance(next.pos, mine.pos) < 0.00001;
@@ -1118,9 +1130,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // and does not add safety. New placements and other body types keep it.
     const hasCursor = present && dims === 2 && kind?.shape === 'box' && !kind.owner && presented?.id === mine.id && presented.r === mine.r;
     if (!hasCursor) pos = constrain(safeOrigin, pos);
-    const offset = kind?.validatedOwner ? {x:0,y:0,z:0} : visualOffset(clock(), pos, settled);
-    const offsetTarget = wrapPoint({ x: pos.x + offset.x, y: pos.y + offset.y, z: pos.z + offset.z },map.wrap);
-    pos = hasCursor ? offsetTarget : constrain(pos, offsetTarget);
+    if (!kind?.validatedOwner) {
+      const offset = visualOffset(clock(), pos, settled);
+      const offsetTarget = wrapPoint({ x: pos.x + offset.x, y: pos.y + offset.y, z: pos.z + offset.z },map.wrap);
+      pos = hasCursor ? offsetTarget : constrain(pos, offsetTarget);
+    }
     if (present && dims === 2 && kind?.shape === 'box' && !kind.owner) {
       const now = clock();
       if (presented && presented.id === mine.id && presented.r === mine.r) {
@@ -1213,9 +1227,22 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     }
     return result;
   }
+  const drawnFrame = new Map<string, Entity | null>();
+  let drawnAt: number | null = null;
+  let drawnA: unknown = null, drawnB: unknown = null;
   function drawn(id: string, s = net.sample()): Entity | null {
     if (solo) return solo.get(id);
     if (mine && id === mine.id) return meNow(true);
+    const at = typeof document === 'undefined' ? null : document.timeline?.currentTime;
+    if (typeof at !== 'number') return drawnRemote(id, s);
+    const a = s?.a ?? latest, b = s?.b ?? latest;
+    if (at !== drawnAt || a !== drawnA || b !== drawnB) {
+      drawnFrame.clear(); drawnAt = at; drawnA = a; drawnB = b;
+    }
+    if (drawnFrame.has(id)) return drawnFrame.get(id)!;
+    const result = drawnRemote(id, s); drawnFrame.set(id, result); return result;
+  }
+  function drawnRemote(id: string, s: ReturnType<typeof net.sample>): Entity | null {
     const a = s ? frameOf(s.a) : latest;
     const b = s ? frameOf(s.b) : latest;
     const ea = a?.ents.get(id); const eb = b?.ents.get(id);
@@ -1389,7 +1416,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         else if (tr.changes[tr.changes.length - 1][1] !== v) { tr.changes.push([at, v]); if (tr.changes.length > 256) tr.changes.splice(1, tr.changes.length - 256); }
       }
       if (changed) pump();
-      const shown = changed ? meNow()?.pos : null;
+      const shown = changed && !kind?.validatedOwner ? meNow()?.pos : null;
       for (const [name, fd] of kind?.input ?? []) if ((fd.t === 'press' || fd.t === 'pulse') && coerce(fd,s[name],dims)) { const value=coerce(fd,s[name],dims) as number | boolean; if(fd.t==='pulse'){pulseCount+=1;const target=Math.max(stepped+1,(pulseQueue.at(-1)?.t??stepped)+1);pulseQueue.push({name,value:Number(value),n:pulseCount,t:target});net.send('pulse',[epoch,name,value,target,pulseCount]);} else pressed.set(name,value); }
       if (changed) presentedEntity = null;
       sample = next;

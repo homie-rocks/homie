@@ -41,7 +41,7 @@ import { stageTimings } from './timing.mjs';
  * (rooms-milestone-1-design.md, section 10), and the log says why.
  *
  * SECONDS ARE SECONDS. Both rules that end a failing room are measured on the clock, not in ticks: every tick failing
- * for `FAIL_MS`, and every tick blamed for running slow for `OVERRUN_MS`. A room whose ticks take a second each ends
+ * for `FAIL_MS`, and sustained slow tick execution for `OVERRUN_MS`. A room whose ticks take a second each ends
  * after five of them, not after five seconds' worth of ticks at its rate.
  * =============================================================================
  */
@@ -89,7 +89,8 @@ export interface HostOptions {
   onTick?(): void;
   /** Suspend settled round breaks; the owner persists and wakes this deadline. */
   onRoundIdle?(until: number): void;
-  /** Only the shared server isolate can attribute timer lateness to another tick. */
+  /** Server catch-up and execution-time enforcement. Callback lateness is never blamed on game work. */
+
   enforceOverrun?: boolean;
   log?(line: Record<string, unknown>): void;
   /** A number in [0, 1) for a fresh epoch and seed. */
@@ -157,7 +158,7 @@ interface SeatIn {
 
 /** Every tick failing (cut short by the budget, or faulted) for this long ends the room. */
 export const FAIL_MS = 2000;
-/** Every tick blamed for running longer than a period for this long ends the room. */
+/** Sustained tick execution above its period for this long ends the room. */
 export const OVERRUN_MS = 5000;
 
 /** Something thrown, as a line for the log, with nothing of the thrown value run to make it. */
@@ -171,21 +172,6 @@ function thrown(error: unknown): string {
 /** What a bot is called on the scoreboard, by its seat. */
 export const BOT_NAMES = Object.freeze(['Pip', 'Juno', 'Moss', 'Rook', 'Fern', 'Dash', 'Echo', 'Wren', 'Zed', 'Nova', 'Bix', 'Tam', 'Lark', 'Odo', 'Kit', 'Sol']);
 const SPEECH = /^(?:say|chat|emote)/i;
-/**
- * The overrun check's memory: the last few ticks that started in this isolate, whichever rooms' they were, each with
- * when it started. Time inside a Worker stands still while code runs, so a tick cannot time itself; but the start of
- * the next tick, in any room, gives a scheduling interval (including other work). A late callback suspects the newest
- * tick here that took more than a period: the one just before it, or, when that one was quick and was itself held up,
- * the one before that.
- */
-const recent: { who: { blame(): void }; at: number }[] = [];
-function blameLate(now: number, period: number): void {
-  for (let i = recent.length - 1; i >= 0; i -= 1) {
-    const ended = i + 1 < recent.length ? recent[i + 1].at : now;
-    if (ended - recent[i].at > period) { recent[i].who.blame(); return; }
-  }
-}
-
 export function createHost(o: HostOptions): Host {
   const c = o.compiled;
   const persistent = c.settings.lifetime === 'persistent';
@@ -411,13 +397,9 @@ export function createHost(o: HostOptions): Host {
   let base = { ms: 0, tick: 0 };
   let lastSt = 0;
   let rosterText = '';
-  let blamed = false;
-  /**
-   * The run of slow ticks this room is in: when it began (the start of the first tick blamed), and how many of the
-   * ticks since were blamed. A tick that takes a little longer than a period is not blamed every time: lateness has
-   * to pile up past a period first, and the clock's own slips take it away again. So a run goes on for as long as at
-   * least half the ticks in it were blamed, and is dropped as a passing hitch when fewer were.
-   */
+  // Count time spent executing this room, never the gap before a callback.
+  // Workers freeze time within a turn; there the metered budget/fault guards
+  // enforce runaway work, rather than inferring CPU from scheduling delays.
   let overSince: number | null = null;
   let overTicks = 0;
   let overBlamed = 0;
@@ -735,6 +717,7 @@ export function createHost(o: HostOptions): Host {
 
   /* ---------------------------------------------------------------- the tick */
 
+  let deferSnapshot = false;
   function tickOnce(): void {
     if (firstTick) firstTick = false;
     o.onTick?.();
@@ -786,6 +769,11 @@ export function createHost(o: HostOptions): Host {
     handle(out, now);
     timing.record('frames', framesAt);
     if (ended) return;
+    stats.ticks += 1;
+    stats.since += 1;
+    // Events have already been delivered; only redundant intermediate snapshots
+    // are shed. Durable rooms still checkpoint every committed tick.
+    if (deferSnapshot && !persistent) return;
     phase = 'snapshot';
     const snapshotAt = timing.now();
     const data = core.snapshot();
@@ -823,8 +811,6 @@ export function createHost(o: HostOptions): Host {
     const sendAt = timing.now();
     o.send(snap, encoded);
     timing.record('send', sendAt);
-    stats.ticks += 1;
-    stats.since += 1;
     if (now - stats.loggedAt >= 10_000) {
       // Tick figures, one line every ten seconds, never a line a tick.
       const s = core.stats;
@@ -897,43 +883,43 @@ export function createHost(o: HostOptions): Host {
     if (!running) return;
     try {
       let n = 0;
-      while (running && n < 4) {
+      const sliceAt = o.clock.now();
+      while (running && n < 4 && (n === 0 || o.clock.now() - sliceAt < 8)) {
         const now = o.clock.now();
         const due = dueOf(core.tick + 1);
         if (now + 0.5 < due) break;
-        // The overrun check: a tick that starts more than a period late blames the tick that held it up.
         if (now - due > period) {
           stats.late += 1;
-          if (o.enforceOverrun) blameLate(now, period);
-          // A browser cannot say whose fault a late timer is. Up to a tenth of a second late (two periods, if that
-          // is longer) it catches up as the server does: a 20-tick room on a timer every 70 ms, or a 60-tick room on
-          // one every 37 ms, runs at its rate. Later than that its clock runs slow, and a slow host yields.
-          else if (now - due > Math.max(2 * period, 100)) { base = { ms: now - period, tick: core.tick }; publishRebase(now); }
-        }
-        // Start observing sustained slow throughput at this callback. A single
-        // scheduler suspension is not five seconds of repeated slow ticks.
-        if (blamed) { if (overSince === null) { overSince = now; overTicks = 0; overBlamed = 0; } overBlamed += 1; }
-        blamed = false;
-        if (overSince !== null) {
-          overTicks += 1;
-          if (2 * overBlamed < overTicks) overSince = null;
-          // Late callbacks can catch up at the requested rate. End only a
-          // blamed room that also loses sustained throughput, not a healthy
-          // 20 Hz room whose callbacks arrive in pairs during admission/I/O.
-          else if (now - overSince >= OVERRUN_MS) {
-            if (overTicks * period < (now - overSince) * 0.9) { end('overrun', { worst: core.stats.worst, maxUnits: core.stats.maxUnits, seconds: Math.round((now - overSince) / 100) / 10 }); return; }
-            overSince = null;
+          if (!o.enforceOverrun && now - due > Math.max(2 * period, 100)) {
+            base = { ms: now - period, tick: core.tick }; publishRebase(now);
           }
         }
-        if (o.enforceOverrun) recent.push({ who: self, at: now });
-        if (recent.length > 8) recent.shift();
         lastStart = now;
+        deferSnapshot = Boolean(o.enforceOverrun && n < 3 && now - due >= period && now - sliceAt < 4);
         tick(now);
+        deferSnapshot = false;
+        const finished = o.clock.now();
+        if (o.enforceOverrun) {
+          // One suspended callback cannot establish sustained runaway work.
+          const slow = finished - now > period;
+          if (slow && overSince === null) { overSince = now; overTicks = 0; overBlamed = 0; }
+          if (overSince !== null) {
+            overTicks += 1;
+            if (slow) overBlamed += 1;
+            if (2 * overBlamed < overTicks) overSince = null;
+            else if (slow && overBlamed >= 3 && finished - overSince >= OVERRUN_MS) {
+              end('overrun', { worst: core.stats.worst, maxUnits: core.stats.maxUnits, seconds: Math.round((finished - overSince) / 100) / 10 });
+              return;
+            }
+          }
+        }
         n += 1;
       }
-      // Far behind (the isolate was busy, or the machine slept): the clock runs slow. It never jumps to catch up.
-      // The tick after a slip starts on time by the new clock, so the tick that ran last is judged here, before the slip hides it.
-      if (running && o.clock.now() - dueOf(core.tick + 1) > 4 * period) { const now = o.clock.now(); if (o.enforceOverrun) blameLate(now, period); base = { ms: now, tick: core.tick }; stats.slips += 1; publishRebase(now); }
+      // Servers retain the backlog and yield between bounded slices. Browser hosts
+      // retain their existing slow-clock policy so the relay can replace them.
+      if (running && !o.enforceOverrun && o.clock.now() - dueOf(core.tick + 1) > 4 * period) {
+        const now = o.clock.now(); base = { ms: now, tick: core.tick }; stats.slips += 1; publishRebase(now);
+      }
     } catch (error) {
       // Thrown outside any tick (the clock, the blame): a failed turn of the loop, counted like a failed tick.
       fault('wake', error);
@@ -941,16 +927,15 @@ export function createHost(o: HostOptions): Host {
       let now = lastStart + FAIL_MS;
       try { now = o.clock.now(); } catch { /* a clock that cannot be read: the room has failed for as long as the rule needs */ }
       if (now - failingSince >= FAIL_MS) end('fault', { error: stats.lastFault, faults: stats.faults });
-    } finally { keepTime(); }
+    } finally { deferSnapshot = false; keepTime(); }
   }
-  const self = { blame: (): void => { blamed = true; } };
 
   function start(): void {
     if (running || ended || roundIdleUntil !== null) return;
     running = true; paused = false;
     try {
       base = { ms: o.clock.now() + (firstTick ? o.startDelayMs ?? 0 : 0), tick: core.tick };
-      overSince = null; blamed = false; failingSince = null; lastStart = base.ms;
+      overSince = null; failingSince = null; lastStart = base.ms;
       const caps = c.kinds.some((k) => k.think) ? ['skill'] : [];
       if (c.kinds.some((k) => k.guide && k.think)) caps.push('agents');
       if (caps.length) o.send({ t: 'caps', caps });
@@ -975,8 +960,9 @@ export function createHost(o: HostOptions): Host {
     try {
       // The room resumes at the tick it paused on: no tick is skipped and no timer fires for the gap.
       base = { ms: o.clock.now() + (firstTick ? o.startDelayMs ?? 0 : 0), tick: core.tick };
-      overSince = null; blamed = false; failingSince = null; lastStart = base.ms;
+      overSince = null; failingSince = null; lastStart = base.ms;
       if (announceRound) handle([core.round()], base.ms);
+
       for (const q of queues.values()) q.lastFrameTick = core.tick;
       log({ ev: 'host-resume', game: o.game, tick: core.tick });
       o.onResume?.();
@@ -1007,7 +993,6 @@ export function createHost(o: HostOptions): Host {
     core.dispose();
     disarm();
     agents?.stop();
-    for (let i = recent.length - 1; i >= 0; i -= 1) if (recent[i].who === self) recent.splice(i, 1);
   }
   function end(why: string, facts: Record<string, unknown>): void {
     if (ended) return;

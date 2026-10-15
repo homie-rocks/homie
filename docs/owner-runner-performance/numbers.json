@@ -1,0 +1,61 @@
+{
+  "status": "blocked-quiet-window",
+  "baseToolkit": "28a561ac",
+  "baseStudio": "1d62525",
+  "liveStudio": "75b280c",
+  "cpuBurst": {
+    "oldContact": {
+      "medianCpuMs": 0.816,
+      "p95CpuMs": 5.516,
+      "medianMs": 0.7892500000000382,
+      "p95Ms": 3.009166999999934,
+      "maxMs": 7.058125000000018,
+      "peakTickUnits": 39317,
+      "held": 0,
+      "errors": 0
+    },
+    "allPaths": {
+      "medianCpuMs": 0.706,
+      "p95CpuMs": 4.603,
+      "medianMs": 0.6925840000001244,
+      "p95Ms": 2.930166999999983,
+      "maxMs": 7.392500000000155,
+      "peakTickUnits": 46872,
+      "held": 0,
+      "errors": 0
+    }
+  },
+  "baselineProfile": {
+    "seconds": 45,
+    "cpuThrottle": 4,
+    "branch": {
+      "frames": 2729,
+      "over33": 6,
+      "gcMs": 183.56
+    },
+    "live": {
+      "frames": 2734,
+      "over33": 0,
+      "gcMs": 60.523
+    }
+  },
+  "checks": {
+    "hostAndAdapter": 52,
+    "studio": 40,
+    "finalOwnerPresentation": 14
+  },
+  "invalidMeasurements": [
+    "host-cost-spatial: overlapped a build"
+  ],
+  "finalOverrunChecks": 6,
+  "quietGate": {
+    "minutes": 20,
+    "lastLoad": 60.04,
+    "result": "blocked"
+  },
+  "postChangeBrowserMeasurements": null,
+  "cloudflareLoadTest": null,
+  "temporaryWorkersDeleted": true,
+  "prHead": "28a561ac",
+  "committed": false
+}
