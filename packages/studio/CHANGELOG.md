@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- App screens share simultaneous record reads across tabs, queue bursts, and back off after connection failures. Writes remain separate and invalidate cached reads. App reconnect notices use plain wording.
+
 What changed in each release of Homie's open parts, newest first:
 
 - **`@homie-rocks/studio`**: the `homie-studio` command, your studio's site Worker, its multiplayer rooms (the

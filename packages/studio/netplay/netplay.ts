@@ -1939,6 +1939,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   }
   /** What is true of a page that plays by itself: it never says "reconnecting" to somebody who was never connected. */
   function aloneText(): string {
+    if (inApp) return 'Reconnecting. Your saved updates will appear shortly.';
     if (!canOffline) return 'This game needs a connection.';
     if (rulesGame && !rulesHost) return 'Loading offline play…';
     if (aloneWhy === 'reconnect-timeout') return 'Playing on your own · the room dropped, still trying…';
