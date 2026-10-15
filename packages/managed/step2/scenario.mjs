@@ -13,7 +13,7 @@ async function wait(commit,want){let last;for(let i=0;i<60;i++){
 const first=process.argv[2]??state().pushes.find(p=>p.variant==='three').commit;
 await wait(first,'verified');
 run('control-release.mjs',['promote',first]);run('continuity.mjs',['seed']);
-run('push.mjs',['four']);const second=state().pushes.at(-1).commit;await wait(second,'verified');
+run('credential-window.mjs');run('push.mjs',['four']);const second=state().pushes.at(-1).commit;await wait(second,'verified');
 run('control-release.mjs',['promote',second,first]);
 const failures=[];
 for(const variant of ['bad-build','bad-check']){

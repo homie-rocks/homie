@@ -2,3 +2,4 @@
 import '../step2/test/policy.test.mjs';
 import '../step2/test/provider.test.mjs';
 import '../step2/test/state-lock.test.mjs';
+import '../step2/test/probes.test.mjs';

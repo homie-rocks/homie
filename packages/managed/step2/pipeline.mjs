@@ -104,8 +104,8 @@ export default {
   try{
    if(path==='/status'&&request.method==='GET')return Response.json(await ledger.status());
    if(path==='/evidence'&&request.method==='GET'){
-    const status=await ledger.status(),checks={};
-    for(const release of Object.values(status))if(release?.artifactDigest&&!checks[release.commit]){const o=await env.ARTIFACTS.get(release.artifactDigest+'.checks');if(o){if(o.size>256*1024)throw new Error('Oversized check receipt');checks[release.commit]=await o.json();}}
+    const checks={};let cursor;
+    do {const page=await env.ARTIFACTS.list({cursor});for(const item of page.objects)if(item.key.endsWith('.checks')){const o=await env.ARTIFACTS.get(item.key);if(o.size>256*1024)throw new Error('Oversized check receipt');const check=await o.json();checks[check.commit]=check;}cursor=page.truncated?page.cursor:undefined;}while(cursor);
     return Response.json(checks);
    }
    if(request.method!=='POST')return new Response('Not found',{status:404});
