@@ -149,6 +149,8 @@ export interface PredictContext extends RayQueries {
 }
 export type Predictor = (me: any, input: any, ctx: PredictContext) => void;
 export interface Room<R = unknown> extends RayQueries {
+  /** Fractional simulation tick sampled for the own drawn pose, including historical catch-up; null without an own body. Visual correction offsets do not change simulation time. */
+  readonly myTick: number | null;
   readonly viewTick: number;
   /** Where a body was at a tick, from the snapshots this browser holds (0.46.5); `known: false` past the newest one. */
   poseAt(id: string, tick: number): { pos: Vec3; vel: Vec3; known: boolean } | null;
@@ -992,6 +994,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let route: Vec3[] = [];
   let routeDirection = 0;
   let presentedEntity: Entity | null = null;
+  let ownDrawTick = 0;
   let presentationQueued = false;
   let forecast: { mine: Mine; pos: Vec3; motion: Record<string, unknown>; tick: number; key: string; geometry: unknown; next: ReturnType<typeof runMove> } | null = null;
   let presented: { id: string; r: number; pos: Vec3; vel: Vec3; at: number } | null = null;
@@ -1003,7 +1006,8 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const server = latest.ents.get(mine.id);
     if (!server) return null;
     const kind = kindOf.get(mine.kind);
-    if (kind?.control && !server.motion[kind.control]) return entityOf(server, true);
+    if (kind?.control && !server.motion[kind.control]) { ownDrawTick = latest.k; return entityOf(server, true); }
+    let sampledTick = stepped;
     let pos = mine.pos;
     let safeOrigin = mine.pos;
     let heading = mine.heading;
@@ -1012,6 +1016,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     let preview: ReturnType<typeof runMove> | null = null;
     if (kind && base) {
       const a = Math.max(0, Math.min(1, tickAt(clock()) - stepped));
+      sampledTick = stepped + a;
       const now: Record<string, unknown> = {};
       // A held field previews as its mean over the part of the tick that has passed. The body is drawn that fraction of
       // the way to the preview, so it stands exactly where the control has carried it: it starts from rest at a press
@@ -1061,15 +1066,16 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         // Catch-up can reach the fractional current tick before its next whole step exists.
         // Use the normal drawing preview, including its 3D pose, instead of holding then jumping.
         const t = Math.floor(catchTick), a = history.get(t), b = history.get(t + 1) ?? (t === stepped ? preview : null);
-        if (a && b) { safeOrigin = a.pos; const f = catchTick - t; pos = blendPosition(a.pos, b.pos, f, map.wrap); heading = blendHeading(a.heading, b.heading, f, dims);
+        if (a && b) { sampledTick = catchTick; safeOrigin = a.pos; const f = catchTick - t; pos = blendPosition(a.pos, b.pos, f, map.wrap); heading = blendHeading(a.heading, b.heading, f, dims);
           velocity = vec3({ x: lerp(a.vel.x, b.vel.x, f), y: lerp(a.vel.y, b.vel.y, f), z: lerp(a.vel.z, b.vel.z, f) }, dims);
           grounded = a.grounded && (f === 0 || b.grounded); motion = a.motion;
-        } else if (a) { safeOrigin = a.pos; pos = a.pos; heading = a.heading; velocity = a.vel; grounded = a.grounded; motion = a.motion; }
+        } else if (a) { sampledTick = t; safeOrigin = a.pos; pos = a.pos; heading = a.heading; velocity = a.vel; grounded = a.grounded; motion = a.motion; }
       }
     }
     // Two-dimensional presentation follows collision too: interpolation and reconciliation are not
     // permission to cross a floor. Sweep from a valid movement pose, never feed
     // the clipped drawing back into prediction or authority.
+    ownDrawTick = sampledTick;
     const constrain = (from: Vec3, to: Vec3): Vec3 => {
       if (dims !== 2 || !kind || kind.owner || distance(from, to) < 1e-7) return to;
       const body = {pos: from};
@@ -1311,6 +1317,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   };
   const viewRay = (from: unknown, direction: unknown, max: number, options?: RayOptions, all=false) => rayQuery(mapAt(latest?.k??0),viewTargets(atTickOf(options)),dims,from,direction,max,options,mine?.id,all);
   return {
+    get myTick() { if (solo) return solo.myTick; pump(); return meNow(true) ? ownDrawTick : null; },
     get viewTick() { return solo ? solo.viewTick : viewTickNow(); },
     get status() { return solo ? 'offline' : status; },
     get seat() { return solo ? solo.seat : net.seat; },

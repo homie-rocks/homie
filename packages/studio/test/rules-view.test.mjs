@@ -2685,3 +2685,41 @@ for(const respawn of [false,true])test(`a reconnect after an outage ${respawn?'d
  // A return is not a placement: the body glides by about a frame's travel plus blend, never cut by its full error.
  assert.ok(worst<.5,`the reconnect cut the runner ${worst} metres in one frame`);
 });
+
+for (const delay of [0,80,150,300]) test(`own draw clock is fractional and read-only at ${delay} ms with loss`, async t => {
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'placement-clock');
+ const clock=virtualTime(t),shape=predictionShaper({delay,loss:.05,seed:1837,jitter:true});
+ const r=rig(L,compiled,false,shape,shape),a=openRoom({net:{config:cfg('Own clock'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);
+ let fractional=0,ahead=0;const ticks=[];
+ for(let i=0;i<150;i++) {
+  await clock.wait(16);
+  const body=a.me,tick=a.myTick;
+  assert.ok(Number.isFinite(tick),'a seated predicted body exposes its draw tick');ticks.push(tick);
+  assert.equal(a.myTick,tick,'reading twice does not step the clock');
+  assert.deepEqual(a.me.pos,body.pos,'reading the clock cannot change the cached drawn pose');
+  if(Math.abs(tick-Math.round(tick))>.001)fractional++;
+  if(tick>a.viewTick)ahead++;
+ }
+ assert.ok(ticks.at(-1)-ticks[0]>40&&ticks.at(-1)-ticks[0]<60,'own time advances with the 2.4-second trace');
+ assert.ok(new Set(ticks.map(t=>t.toFixed(3))).size>100,'successive frames sample different simulation times');
+ assert.ok(fractional>100,'the API must include between-tick time, not only the motion tick');
+ assert.ok(ahead>100,'own prediction and remote interpolation have different clocks');
+});
+
+test('own draw clock follows historical catch-up and returns to live time on a fresh pulse',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'counter-knock',{catchM:.44,catchUp:1});
+ const clock=virtualTime(t),r=rig(L,compiled,false,300,300);
+ const a=openRoom({net:{config:cfg('Clock catch-up'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(12000);a.command('launch');
+ let caught=false;
+ for(let i=0;i<120;i++){
+  await clock.wait(16);const own=a.myTick,drawn=a.me;
+  const p=globalThis.__homieNet.probe.prediction();
+  if(p.catchTick!==null){assert.ok(Math.abs(own-p.catchTick)<1e-6);assert.ok(drawn);caught=true;break;}
+ }
+ assert.ok(caught,'the clock was observed on the real historical path');
+ const before=a.myTick;a.input({dash:1});await clock.wait(16);
+ assert.ok(a.myTick>=before,'a fresh pulse returns to the live prediction clock');
+ assert.equal(globalThis.__homieNet.probe.prediction().catchTick,null);
+});

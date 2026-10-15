@@ -1469,3 +1469,14 @@ same body and draws on from where it was shown, gliding and routing around solid
 was really placed while the player was away (a respawn, a new round) should still be drawn at once: say so with
 `openRoom({ respawned: (before, after) => after.diedAt !== before.diedAt })`, where `before` and `after` are the own
 body as the server last had it before and after the outage.
+
+## Drawing at the own player's time
+
+`room.myTick` is the fractional simulation tick sampled for `room.me`'s drawn
+pose. It follows historical catch-up when that is being displayed, and is `null`
+without an own body. Use it to project a deterministic hunter or hazard from its
+authoritative snapshot to the player's time. `room.viewTick` remains the remote
+interpolation clock. Read `room.me` and `room.myTick` together in one frame; the
+clock uses the same cached presentation and does not advance a second simulation.
+Visual correction offsets are spatial adjustments, not another simulation tick.
+Unknown remote input and unseen rule decisions still cannot be predicted exactly.
