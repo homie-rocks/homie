@@ -110,7 +110,7 @@ export class Table {
                 if (this.hostRt === host) { try { this.saveRoom(host.save()); } catch (error) { this.storageProblem(error); } }
               });
             }
-          } else if (!hostedGame(game)) storage.put('net', o).catch(() => {});
+          } else if (!hostedGame(game)) storage.put('net', o).catch(error => this.storageProblem(error));
         },
         clear: () => { this.clearRoom(); },
       },
@@ -504,7 +504,7 @@ export class Table {
           this.finishRoom('nobody-returned');
         }
       }
-      if (this.saved?.hosted === 'server') { const was = this.saved.room ?? null; this.saved = null; await this.ctx.storage.delete('net').catch(() => {}); this.say({ ev: 'host-over', why: 'nobody-returned', room: was }); }
+      if (this.saved?.hosted === 'server') { const was = this.saved.room ?? null; this.saved = null; await this.ctx.storage.delete('net'); this.say({ ev: 'host-over', why: 'nobody-returned', room: was }); }
       return;
     }
     if (!this.hostRt) return;
@@ -631,7 +631,7 @@ export class Table {
     const local = this.env.AI ? null : localAiOf(this.env);
     if (!this.env.AI && !local) return { ok: false, why: 'no-ai' };
     if (this.env.AI) {
-      if (!this.brainDay || Date.now() - this.brainReadAt > 60_000) await this.readBrainDay().catch(() => {});
+      if (!this.brainDay || Date.now() - this.brainReadAt > 60_000) await this.readBrainDay().catch(error => this.say({ev:'background-failed',error:errorLine(error)}));
       if (this.brainCap.neurons - this.brainUsed.neurons <= 0) return { ok: false, why: 'budget' };
     }
     const model = CLEF.models[this.env.HOMIE_DECIDE_MODEL] ? this.env.HOMIE_DECIDE_MODEL : '@cf/cloudflare/clef-flash';
@@ -652,7 +652,7 @@ export class Table {
 
   /** The day's counters go to D1 on an alarm: set one a minute out when none is set (a house guide's alarm also flushes). */
   flushSoon() {
-    this.ctx.waitUntil((async () => { if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + 60_000); })().catch(() => {}));
+    this.ctx.waitUntil((async () => { if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + 60_000); })().catch(error => this.say({ev:'background-failed',error:errorLine(error)})));
   }
 
   /**
@@ -666,7 +666,7 @@ export class Table {
       if (!localAiOf(this.env)) return { ok: true, by: 'none' };
       try { const v = await reviewChat(this.env, text, { links }); return { ok: v.ok, by: 'local', why: v.why, ms: v.ms, p: v.p }; } catch { return { ok: true, by: 'error' }; }
     }
-    if (this.chatCap === null || Date.now() - this.chatReadAt > 60_000) await this.readChatDay().catch(() => {});
+    if (this.chatCap === null || Date.now() - this.chatReadAt > 60_000) await this.readChatDay().catch(error => this.say({ev:'background-failed',error:errorLine(error)}));
     if (this.chatUsed >= (this.chatCap ?? 0)) return { ok: true, by: 'budget' };
     try {
       const v = await reviewChat(this.env, text, { links });
@@ -748,11 +748,11 @@ export class Table {
       this.house = new HouseAgents({
         room, env: this.env,
         // The room's own alarm (a paused server-hosted room ends on it) is never pushed back by a guide's.
-        setAlarm: (at) => { this.ctx.storage.setAlarm(this.roomAlarmAt > Date.now() ? Math.min(at, this.roomAlarmAt) : at).catch(() => {}); },
+        setAlarm: (at) => { this.ctx.storage.setAlarm(this.roomAlarmAt > Date.now() ? Math.min(at, this.roomAlarmAt) : at).catch(error => this.say({ev:'background-failed',error:errorLine(error)})); },
         budget: { left: (kind) => this.brainCap[kind] - this.brainUsed[kind], spend: (c) => this.brainSpend(c) },
         log: (line) => { try { console.log(JSON.stringify(line)); } catch { /* no console */ } },
       });
-      this.ctx.waitUntil(this.readBrainDay().catch(() => {}));
+      this.ctx.waitUntil(this.readBrainDay().catch(error => this.say({ev:'background-failed',error:errorLine(error)})));
     }
     this.house.sync();
   }
@@ -854,7 +854,7 @@ export class Table {
   async withCharacter(account, operation) {
     this.characterOperations ??= new Map();
     const previous = this.characterOperations.get(account) ?? Promise.resolve();
-    const current = previous.catch(() => {}).then(operation);
+    const current = previous.catch(() => { /* The previous caller observed its failure; the next operation must still run. */ }).then(operation);
     this.characterOperations.set(account, current);
     try { return await current; }
     finally { if (this.characterOperations.get(account) === current) this.characterOperations.delete(account); }
@@ -979,7 +979,7 @@ export class Table {
       const res = await room.control(ctl.op, ctl.args && typeof ctl.args === 'object' ? ctl.args : {});
       // AI talk turned off (a policy) or a guide kicked: the house guides follow at once.
       if (this.house) this.house.sync();
-      await this.ctx.storage.put('office', room.officeSaved()).catch(() => {});
+      await this.ctx.storage.put('office', room.officeSaved());
       if (ctl.op === 'close' && res.ok) this.tellLobby({ closed: ctl.args?.reopen ? 0 : res.until });
       this.report();
       return json(res);
@@ -1093,7 +1093,7 @@ export class Table {
         const c = room.clients.get(h.id);
         if (c?.agent && c.helloed && c.seat !== null && !conn.qa) {
           const minutes = Math.round((Date.now() - c.joinedAt) / 60_000);
-          if (minutes > 0) this.ctx.waitUntil(count(this.env, null, { metric: 'agent-minutes', subject: this.game ?? '', source: c.agent.role, n: minutes }).catch(() => {}));
+          if (minutes > 0) this.ctx.waitUntil(count(this.env, null, { metric: 'agent-minutes', subject: this.game ?? '', source: c.agent.role, n: minutes }).catch(error => this.say({ev:'background-failed',error:errorLine(error)})));
         }
         // The room says the departure itself (its `leave` line: who, which seat, host or not, how many are left).
         h.onClose(via);
@@ -1127,17 +1127,17 @@ export class Table {
       try { room.tick(); } catch (error) { this.say({ ev: 'tick-failed', clients: room.clients.size, error: errorLine(error) }); }
       // A room that just opened reads its game's launch state once: a change made in the moment it opened (before the
       // Lobby knew of it) still reaches it, after the current round as always.
-      if (room.openedAt && this.launchReadFor !== room.openedAt) { this.launchReadFor = room.openedAt; this.ctx.waitUntil(this.rereadLaunch().catch(() => {})); }
+      if (room.openedAt && this.launchReadFor !== room.openedAt) { this.launchReadFor = room.openedAt; this.ctx.waitUntil(this.rereadLaunch().catch(error => { this.launchReadFor = null; this.say({ev:'launch-read-retry',error:errorLine(error)}); })); }
       // A launch change the room applied by itself (after its round): its stored state says so too.
-      if (room.officeDirty) { room.officeDirty = false; this.ctx.storage.put('office', room.officeSaved()).catch(() => {}); }
+      if (room.officeDirty) { room.officeDirty = false; this.ctx.storage.put('office', room.officeSaved()).catch(error => { room.officeDirty = true; this.storageProblem(error); }); }
       n += 1;
       if (n % 4 === 0) { this.publishDiagnostics(); room.tellWatchers(); this.report(); this.recordRound(); this.syncHouse(); }
       // Room chat's counts, once a minute (section 19).
-      if (n % 240 === 0) this.ctx.waitUntil(this.flushChat().catch(() => {}));
+      if (n % 240 === 0) this.ctx.waitUntil(this.flushChat().catch(() => { /* The flush logged the failure and retained pending counters. */ }));
       // A server-hosted room in play keeps its alarm ahead of it (re-armed every five minutes of play).
       if (n % 1200 === 0 && this.hostRt?.running) this.armRoom(Date.now() + ROOM_ALARM_MS);
       if (room.seats.size === 0 && room.clients.size === 0) this.openCounted = false;
-      if (room.clients.size === 0 && !this.hostRt?.running) { this.armRoom(Date.now() + 120_000); clearInterval(this.timer); this.timer = null; this.report(); this.ctx.waitUntil(this.flushChat().catch(() => {})); if (this.house) { this.ctx.waitUntil(this.flushBrain(true).catch(() => {})); this.house = null; } }
+      if (room.clients.size === 0 && !this.hostRt?.running) { this.armRoom(Date.now() + 120_000); clearInterval(this.timer); this.timer = null; this.report(); this.ctx.waitUntil(this.flushChat().catch(() => { /* The flush logged the failure and retained pending counters. */ })); if (this.house) { this.ctx.waitUntil(this.flushBrain(true).catch(() => { /* The flush logged the failure and retained pending counters. */ })); this.house = null; } }
     }, 250);
   }
 
@@ -1153,7 +1153,7 @@ export class Table {
     const args = regateArgs(launch);
     if (!args.allow) return null;
     const res = room.control('regate', args);
-    if (res.ok && res.leaving) await this.ctx.storage.put('office', room.officeSaved()).catch(() => {});
+    if (res.ok && res.leaving) await this.ctx.storage.put('office', room.officeSaved());
     return res;
   }
 
@@ -1163,7 +1163,7 @@ export class Table {
     if (!this.game || !this.code) return;
     const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName(this.game));
     this.lastReport = -1;
-    this.ctx.waitUntil(lobby.fetch(`https://lobby/report?game=${encodeURIComponent(this.game)}`, { method: 'POST', body: JSON.stringify({ room: this.code, players: 0, people: 0, ...extra }) }).catch(() => {}));
+    this.ctx.waitUntil(lobby.fetch(`https://lobby/report?game=${encodeURIComponent(this.game)}`, { method: 'POST', body: JSON.stringify({ room: this.code, players: 0, people: 0, ...extra }) }).catch(error => this.say({ev:'background-failed',error:errorLine(error)})));
   }
 
   /**
@@ -1226,7 +1226,7 @@ export class Table {
     const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName(this.game));
     // The build this room runs (section 23): the Lobby sends a visitor only to a room of the live build.
     const ver = room.gameVer === undefined ? undefined : room.gameVer ?? '';
-    this.ctx.waitUntil(lobby.fetch(`https://lobby/report?game=${encodeURIComponent(this.game)}`, { method: 'POST', body: JSON.stringify({ room: this.code, players, people, agents, ai, host: room.server ? 'server' : 'browser', ...(ver !== undefined ? { ver } : {}) }) }).catch(() => {}));
+    this.ctx.waitUntil(lobby.fetch(`https://lobby/report?game=${encodeURIComponent(this.game)}`, { method: 'POST', body: JSON.stringify({ room: this.code, players, people, agents, ai, host: room.server ? 'server' : 'browser', ...(ver !== undefined ? { ver } : {}) }) }).catch(error => this.say({ev:'background-failed',error:errorLine(error)})));
   }
 
   /** A round the host called over becomes one D1 row (once per round number). */
@@ -1234,7 +1234,7 @@ export class Table {
     const r = this.room?.lastRound;
     if (!r || r.phase !== 'over' || !Number.isFinite(r.n) || r.n <= this.recorded || !this.env.DB) return;
     this.recorded = r.n;
-    this.ctx.storage.put('recorded', r.n).catch(() => {});
+    this.ctx.storage.put('recorded', r.n).catch(error => this.say({ev:'background-failed',error:errorLine(error)}));
     const results = Array.isArray(r.results) ? r.results : [];
     // An AI's row is never a person's (the relay labelled it `agent`): rounds count agents as AI.
     const humans = results.filter((row) => row && !row.bot && !row.agent).length;
@@ -1245,6 +1245,6 @@ export class Table {
       .bind(this.game, this.code, r.n, humans, results.length - humans, JSON.stringify(results), new Date().toISOString());
     // The round and the people in it, on the studio's daily counters (worker/stats.mjs). One batch, per round.
     const counters = qaOnly ? [] : [counter(this.env, { metric: 'round', subject: this.game ?? '', source: humans ? 'people' : 'bots' }), humans ? counter(this.env, { metric: 'humans', subject: this.game ?? '', n: humans }) : null].filter(Boolean);
-    this.ctx.waitUntil(db.batch([insert, ...counters]).catch(() => insert.run().catch(() => {})));
+    this.ctx.waitUntil(db.batch([insert, ...counters]).catch(() => insert.run().catch(error => this.say({ev:'background-failed',error:errorLine(error)}))));
   }
 }

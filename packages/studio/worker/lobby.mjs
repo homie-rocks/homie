@@ -54,7 +54,7 @@ export class Lobby {
     if (players > this.peak.room) { this.peak.room = players; writes.push(counter(this.env, { metric: 'peak-room', subject: game ?? this.game ?? '', n: players, day })); }
     if (game) this.game = game;
     const list = writes.filter(Boolean);
-    if (list.length) this.ctx.waitUntil(this.env.DB.batch(list).catch(() => {}));
+    if (list.length) this.ctx.waitUntil(this.env.DB.batch(list).catch(error => { this.peak = {day, players:0, room:0}; console.warn('Lobby peak write will retry on report:',error.message); }));
   }
 
   save() { const pending=this.store.save( { current: this.current ?? null, next: this.next, rooms: [...this.rooms.values()].map(({ name, players, agents, ai, server, at, ver, host }) => ({ name, players, agents, ai, server, at, ...(host ? { host } : {}), ...(ver ? { ver } : {}) })), closed: [...this.closed] }); if(pending)this.ctx.waitUntil(pending); }

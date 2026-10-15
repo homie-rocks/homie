@@ -70,7 +70,7 @@ export async function pushEvents(env,cat,origin) {
 const streamCaller=(env,connection)=>connection.startsWith('public:')?Promise.resolve({id:null,owner:false,client:null,connection}):currentCaller(env,{connection});
 export class EventStreams {
   constructor(env,ctx){this.env=env;this.ctx=ctx;this.stream=null;this.tail=Promise.resolve();this.extensions=new McpEventStreams(env,ctx);}
-  close(stream){stream.cancelled=true;clearTimeout(stream.reconnect);stream.resume?.();try{stream.controller.close();}catch{/* The reader already cancelled or the stream already closed. */}if(this.stream===stream){this.stream=null;this.ctx.waitUntil(this.env.DB.prepare('DELETE FROM mcp_kv WHERE key=?1').bind('tools-stream:'+stream.connection).run().catch(()=>{}));}}
+  close(stream){stream.cancelled=true;clearTimeout(stream.reconnect);stream.resume?.();try{stream.controller.close();}catch{/* The reader already cancelled or the stream already closed. */}if(this.stream===stream){this.stream=null;this.ctx.waitUntil(this.env.DB.prepare('DELETE FROM mcp_kv WHERE key=?1').bind('tools-stream:'+stream.connection).run().catch(error=>console.warn("MCP stream task failed:",error.message)));}}
   background(input){this.ctx.waitUntil(this.wake(input).catch(error=>{if(this.stream)this.close(this.stream);console.error('Event stream delivery failed',error);}));}
   async fetch(request) {
     const input=await request.json();
@@ -102,7 +102,7 @@ export class EventStreams {
     }
     this.background(input);return new Response(null,{status:204});
   }
-  wake(input){const work=this.tail.then(()=>this.deliver(input));this.tail=work.catch(()=>{});return work;}
+  wake(input){const work=this.tail.then(()=>this.deliver(input));this.tail=work.catch(error=>console.warn("MCP stream task failed:",error.message));return work;}
   async toolSignature(tools,caller) {const visible=[];for(const tool of tools)if(await allowed(tool.audience,caller,this.env))visible.push(tool);return JSON.stringify(visible);}
   async deliver(input) {
     const stream=this.stream;if(!stream)return;

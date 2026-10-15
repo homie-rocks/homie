@@ -545,7 +545,7 @@ export class Gate {
     this.metricsPending = true;
     const work = diagnosticsOf(this.env, url.searchParams.get('game'), url.searchParams.get('room')).fetch('https://diagnostics/__diagnostics', {
       method: 'POST', body: JSON.stringify({ kind: 'gate', id: `gate/${url.searchParams.get('gate')}`, at: now, ...facts }),
-    }).then(r => r.body?.cancel?.()).catch(() => {}).finally(() => { this.metricsPending = false; });
+    }).then(r => r.body?.cancel?.()).catch(error => console.warn("Gate diagnostic publication failed:",error.message)).finally(() => { this.metricsPending = false; });
     this.ctx.waitUntil?.(work);
   }
   /** The room's diagnostics, kept by an object that is neither the room nor a

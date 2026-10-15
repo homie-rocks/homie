@@ -382,7 +382,7 @@ function shareDaily(cat, url, ctx) {
   if (!cat.studio?.stats?.share || url.protocol !== 'https:' || sharedDay === today()) return;
   sharedDay = today();
   const directory = String(cat.studio.directory ?? 'https://homie.rocks').replace(/\/+$/, '');
-  const ping = fetch(`${directory}/api/studio/played`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ site: url.origin }) }).catch(() => {});
+  const ping = fetch(`${directory}/api/studio/played`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ site: url.origin }) }).catch(error => console.warn("Directory play notification failed:",error.message));
   if (ctx?.waitUntil) ctx.waitUntil(ping);
 }
 

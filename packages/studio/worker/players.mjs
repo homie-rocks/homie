@@ -736,7 +736,7 @@ async function apiRoute(request, env, ctx, url, parts, { catalogueOf, read, f })
     const answer = json({ ok: true, message: 'If that address belongs to an account here, a link is on its way. It works once, for 30 minutes.' });
     if (!owner) return answer;
     const k = await issueChallenge(env, 'recover-link', owner.player, null, PLAYER_LIMITS.linkMinutes);
-    await sendMail(env, email, `Sign in to ${await studioName()}`, `Someone (hopefully you) asked to get back into your player account on ${await studioName()}.\n\nOpen this link on the device you want to use, and make a new passkey there:\n${url.origin}/account/?do=recover&k=${k}\n\nIt works once, for 30 minutes. If you did not ask, ignore this email: nothing changes.\n`).catch(() => {});
+    await sendMail(env, email, `Sign in to ${await studioName()}`, `Someone (hopefully you) asked to get back into your player account on ${await studioName()}.\n\nOpen this link on the device you want to use, and make a new passkey there:\n${url.origin}/account/?do=recover&k=${k}\n\nIt works once, for 30 minutes. If you did not ask, ignore this email: nothing changes.\n`).catch(error => console.warn("Recovery mail delivery failed:",error.message));
     return answer;
   }
 

@@ -554,7 +554,7 @@ export async function agentsTry(env, cat, body) {
     const n = Math.round(t.cost.neurons);
     if (n > 0) rows.push(counter(env, { metric: 'brain-neurons', subject: meta.id, n }));
     if (t.cost.micros >= 1) rows.push(counter(env, { metric: 'brain-microdollars', subject: meta.id, n: Math.round(t.cost.micros) }));
-    await env.DB.batch(rows.filter(Boolean)).catch(() => {});
+    await env.DB.batch(rows.filter(Boolean));
   }
   return {
     ok: true, game: meta.id, mode, model: t.model ?? (mode === 'workers-ai' ? e.HOMIE_BRAIN_MODEL || DEFAULT_MODEL : null), engine: t.engine, provider: t.provider,

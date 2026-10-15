@@ -100,7 +100,7 @@ export async function count(env, ctx, row) {
   if (writePageMetric(env, row)) return;
   const stmt = counter(env, row);
   if (!stmt) return;
-  const p = stmt.run().catch(() => {}); // before migration 0002, or past the free plan's daily writes: not counted
+  const p = stmt.run().catch(error => console.warn("Studio counter dropped:",error.message)); // before migration 0002, or past the free plan's daily writes: not counted
   if (ctx?.waitUntil) ctx.waitUntil(p); else await p;
 }
 
