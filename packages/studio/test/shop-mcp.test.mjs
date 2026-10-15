@@ -121,7 +121,7 @@ test('planner batches independent product writes and retains write observations'
      assert.ok(operations.every(op=>op.params.default_price_data));
      return;
    }
-   observations.push(...operations.map(op=>({...op,body:{data:[],has_more:false}})));
+   observations.push(...operations.map(op=>({...op,body:op.path.startsWith('/v1/products/')&&!op.path.endsWith('/search')?{error:{code:'resource_missing'}}:{data:[],has_more:false}})));
  }
  assert.fail('No product batch');
 });
@@ -155,6 +155,8 @@ test('partial batches resume from responses without account-wide reads or separa
  writeFileSync(join(root,'shop.json'),JSON.stringify({till:'stripe',currency:'usd',automaticTax:false,items:[{id:'one',name:'One',price:300},{id:'tip',name:'Tip',price:'choose',min:200,max:2000},{id:'month',name:'Monthly',price:500,interval:'month'}]}));
  const first=await shopMcpPlan(root);assert.deepEqual(first.operations.map(o=>o.path),['/v1/products/search','/v1/prices/search','/v1/payment_links']);
  for(const op of first.operations){if(op.params.query)assert.match(op.params.query,/metadata\['studio'\]:'proof'/);observations.push({...op,body:f.call(op)});}
+ const lookups=await shopMcpPlan(root,{observations});
+ for(const op of lookups.operations)observations.push({...op,body:f.call(op)});
  const products=await shopMcpPlan(root,{observations});assert.equal(products.operations.length,3);
  const op=products.operations[0];observations.push({...op,body:f.call(op)});
  const resumed=await shopMcpPlan(root,{observations});assert.equal(resumed.operations.filter(o=>o.path==='/v1/products').length,2);assert.equal(resumed.operations.some(o=>o.method==='GET'),false);
@@ -244,4 +246,35 @@ test('supporter and deposit Payment Links lock quantity while ordinary items rem
  const f=fixture();const {p}=await reconcile(root,f);
  for(const id of ['support','deposit']) {const link=f.rows.payment_links.find(l=>l.id===p.config.items.find(i=>i.item===id).id);assert.equal(link.line_items[0].quantity,1);assert.equal(link.line_items[0].adjustable_quantity?.enabled??false,false);}
  assert.equal(f.rows.payment_links.find(l=>l.id===p.config.items.find(i=>i.item==='item').id).line_items[0].adjustable_quantity.enabled,true);
+});
+
+test('a stale product search observes the deterministic product ID before creating it',async t=>{
+ const root=studio(t),f=fixture();const {observations}=await reconcile(root,f);
+ const reads=observations.filter(o=>o.method==='GET'&&!/^\/v1\/products\/(?!search$)/.test(o.path)).map(o=>o.path==='/v1/products/search'?{...o,body:{data:[],has_more:false}}:o);
+ const plan=await shopMcpPlan(root,{refresh:true,observations:reads,verify:true});
+ assert.ok(plan.operations.every(o=>o.method==='GET'&&o.path.startsWith('/v1/products/')),JSON.stringify(plan.operations));
+ const resumed=await shopMcpPlan(root,{refresh:true,observations:[...reads,...plan.operations.map(op=>({...op,body:f.call(op)}))],verify:true});
+ assert.equal(resumed.operations?.some(o=>o.method==='POST'&&o.path==='/v1/products')??false,false);
+});
+
+test('webhook installation keeps public checkout mode out of secrets and surfaces Wrangler errors',async()=>{
+ const calls=[];
+ const result=await syncPaymentLinks({catalog:{config:{v:1,mode:'test',items:[]},retire:[]},api:async(method,path)=>method==='GET'?{data:[],has_more:false}:{id:'we_fixture',secret:'whsec_fixture'},shop:{},slug:'proof',site:'https://proof.example',mode:'test',saveReceipt(){},w:async(args,options)=>{if(args[1]==='list')return {code:0,stdout:'[]'};calls.push(JSON.parse(options.input));return {code:1,stderr:'Binding name already in use: STRIPE_CHECKOUT_MODE'};}});
+ assert.equal(calls[0].STRIPE_CHECKOUT_MODE,undefined);
+ assert.match(result.why,/Binding name already in use: STRIPE_CHECKOUT_MODE/);
+});
+
+test('full connect saves public JSON configuration, never link secrets',async t=>{
+ const {readShop}=await import('../lib/shop.mjs');const root=studio(t),f=fixture(),saved=[];
+ const result=await syncPaymentLinks({root,shop:readShop(root).shop,slug:'proof',site:'https://proof.example',mode:'test',api:async(method,path,params)=>path==='/v1/webhook_endpoints'?method==='GET'?{data:[],has_more:false}:{id:'we_fixture',secret:'whsec_fixture'}:f.call({method,path,params}),saveReceipt(){},w:async(args,options)=>{if(args[1]==='list')return {code:0,stdout:'[]'};saved.push(JSON.parse(options.input));return {code:0};}});
+ assert.equal(result.ok,true);assert.equal(saved[0].STRIPE_SHOP_LINKS,undefined);assert.equal(saved[0].PURCHASE_LINKS,undefined);
+ assert.equal(JSON.parse(readFileSync(join(root,'.studio','stripe-mcp.json'))).result.config.items.length,3);
+});
+
+test('menu quantities honor the studio item maximum and slots allow remaining group capacity',async t=>{
+ const root=studio(t);const raw=JSON.parse(readFileSync(join(root,'shop.json')));raw.items[0].maxQuantity=8;writeFileSync(join(root,'shop.json'),JSON.stringify(raw));
+ const f=fixture();const {p}=await reconcile(root,f,{slots:[{app:'classes',collection:'bookings',slots:'sessions',slot:'one',item:'coffee',capacity:7,confirmed:2}]});
+ const menu=f.rows.payment_links.find(l=>l.id===p.config.menus[0].id);
+ assert.equal(menu.line_items[0].adjustable_quantity.maximum,8);assert.equal(menu.line_items[1].adjustable_quantity.maximum,99);
+ const slot=f.rows.payment_links.find(l=>l.id===p.config.slots[0].id);assert.equal(slot.line_items[0].adjustable_quantity.maximum,5);
 });

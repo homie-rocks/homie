@@ -154,3 +154,25 @@ test('saved single-item basket keeps quantity; unpaid events do not fulfil; full
  assert.equal(f.sql.prepare('SELECT status FROM shop_orders WHERE id=?').get(a.order).status,'refunded');
  await f.hook('checkout.session.completed',s);assert.equal(f.sql.prepare('SELECT status FROM shop_orders WHERE id=?').get(a.order).status,'refunded');
 });
+
+test('paid deposit amount mismatch is retained for staff and the customer, idempotently',async t=>{
+ const f=fixture(t),a=await f.buy({item:'tune'});
+ const line=f.sql.prepare('SELECT snapshot FROM shop_order_lines WHERE order_id=?').get(a.order);const snapshot=JSON.parse(line.snapshot);snapshot.kind='deposit';f.sql.prepare('UPDATE shop_order_lines SET snapshot=? WHERE order_id=?').run(JSON.stringify(snapshot),a.order);
+ const payment=f.session(a,'tune',{amount_subtotal:7000,amount_total:7000});
+ await f.hook('checkout.session.completed',payment);await f.hook('checkout.session.completed',payment);
+ const order=f.sql.prepare('SELECT * FROM shop_orders WHERE session=?').get(payment.id);
+ assert.ok(order);assert.equal(order.status,'review');assert.equal(order.total,7000);assert.equal(order.payment,payment.payment_intent);assert.equal(order.attention,1);assert.match(order.note,/payment.*received/i);
+ assert.equal(f.sql.prepare("SELECT count(*) n FROM studio_events WHERE type='payment.review'").get().n,1);
+ assert.equal(f.sql.prepare('SELECT count(*) n FROM entitlements').get().n,0);
+});
+
+test('a slot payment books the paid group quantity and retains an over-capacity payment for review',async t=>{
+ const f=fixture(t);f.sql.prepare("UPDATE app_records SET value=? WHERE app='tune' AND collection='slots'").run(JSON.stringify({capacity:3}));f.config.slots[0].capacity=3;f.env.STRIPE_SHOP_LINKS=JSON.stringify(f.config);
+ const a=await f.buy({item:'tune',game:'tune',booking:{collection:'bookings',slot:'morning'}});
+ await f.hook('checkout.session.completed',f.session(a,'slot',{amount_subtotal:15000,amount_total:15000}));
+ assert.equal(f.sql.prepare('SELECT quantity FROM shop_bookings WHERE order_id=?').get(a.order).quantity,3);
+ const replay=f.session(a,'slot',{id:'cs_group_reopened',payment_intent:'pi_group_reopened',amount_subtotal:10000,amount_total:10000});
+ await f.hook('checkout.session.completed',replay);
+ assert.equal(f.sql.prepare('SELECT status FROM shop_orders WHERE session=?').get(replay.id).status,'review');
+ assert.equal(f.sql.prepare("SELECT SUM(quantity) n FROM shop_bookings WHERE state='confirmed'").get().n,3);
+});

@@ -2549,7 +2549,7 @@ test('browser pairing: first connect, existing endpoint, repeat, expiry, renewal
   const first = await shopConnect(h.dir, h.opts);
   assert.equal(first.ok, true, JSON.stringify(first)); assert.equal(first.verifiedPurchase, false);
   assert.equal(h.state.approvals.length, 1); assert.equal(h.state.writes, 1);
-  assert.deepEqual(Object.keys(h.state.saved).sort(), ['STRIPE_CHECKOUT_MODE', 'STRIPE_SHOP_LINKS', 'STRIPE_WEBHOOK_SECRET']);
+  assert.deepEqual(Object.keys(h.state.saved).sort(), ['STRIPE_WEBHOOK_SECRET']);
   assert.deepEqual(h.stripe.behave.updated.map((e) => e.id), ['we_old']);
   assert.doesNotMatch(JSON.stringify([first, h.state.logs]), /rk_test_|whsec_/);
   const second = await shopConnect(h.dir, h.opts);
@@ -2559,7 +2559,7 @@ test('browser pairing: first connect, existing endpoint, repeat, expiry, renewal
   assert.equal(renewed.ok, true); assert.equal(h.state.approvals.length, 2);
   const live = await shopConnect(h.dir, { ...h.opts, live: true });
   assert.equal(live.ok, true, JSON.stringify(live));
-  assert.equal(JSON.parse(h.state.saved.STRIPE_SHOP_LINKS).mode, 'live');
+  assert.equal(JSON.parse(readFileSync(join(h.dir,'.studio','stripe-mcp.json'))).result.config.mode, 'live');
   assert.equal(h.state.saved.STRIPE_KEY, undefined);
 });
 
@@ -2679,10 +2679,10 @@ test('keyless: setup, changed catalog, purchase, tips, reordered refund/dispute,
   writeFileSync(file, JSON.stringify(raw));
   assert.equal((await shopConnect(h.dir, h.opts)).ok, true);
   assert.equal(h.stripe.catalog.products.length, 3);
-  assert.equal(h.stripe.catalog.prices.filter((p) => p.active).length, 3);
-  assert.equal(h.stripe.catalog.payment_links.filter((p) => p.active).length, 2);
+  assert.equal(h.stripe.catalog.prices.filter((p) => p.active).length, 4, 'old price stays active until the public asset deployment');
+  assert.equal(h.stripe.catalog.payment_links.filter((p) => p.active).length, 3, 'old link stays active until the public asset deployment');
   const settings = readShop(h.dir).shop;
-  const s = await site({ key: false, settings }); Object.assign(s.env, h.state.saved);
+  const s = await site({ key: false, settings }); Object.assign(s.env, h.state.saved, {STRIPE_CHECKOUT_MODE:'links',STRIPE_SHOP_LINKS:JSON.stringify(JSON.parse(readFileSync(join(h.dir,'.studio','stripe-mcp.json'))).result.config)});
   const p = s.player(30, { band: 'adult' });
   const config = JSON.parse(s.env.STRIPE_SHOP_LINKS), secret = s.env.STRIPE_WEBHOOK_SECRET;
   subscribeAppPayments(s);
@@ -2766,8 +2766,8 @@ test('keyless: setup, changed catalog, purchase, tips, reordered refund/dispute,
   writeFileSync(file, JSON.stringify(raw));
   assert.equal((await shopConnect(h.dir, h.opts)).ok, true);
   assert.equal(h.state.saved.STRIPE_KEY, undefined);
-  assert.equal(h.stripe.catalog.products.filter((p) => p.active).length, 2);
-  assert.equal(h.stripe.catalog.payment_links.filter((p) => p.active).length, 1);
+  assert.equal(h.stripe.catalog.products.filter((p) => p.active).length, 3, 'retirement waits for deployment');
+  assert.equal(h.stripe.catalog.payment_links.filter((p) => p.active).length, 3, 'retirement waits for deployment');
   assert.equal(h.stripe.catalog.products.length, 3);
   raw.till = 'stripe-managed'; writeFileSync(file, JSON.stringify(raw));
   assert.equal((await shopConnect(h.dir, h.opts)).ok, true);
@@ -2813,7 +2813,7 @@ test('real Chrome: keyless buyer sees one-item checkout, chooses a tip on Stripe
   raw.items.push({ id: 'tip', kind: 'tip', name: 'A tip', price: 'choose', min: 200, max: 1000 });
   writeFileSync(file, JSON.stringify(raw));
   assert.equal((await shopConnect(h.dir, h.opts)).ok, true);
-  const s = await site({ key: false, settings: readShop(h.dir).shop }); Object.assign(s.env, h.state.saved);
+  const s = await site({ key: false, settings: readShop(h.dir).shop }); Object.assign(s.env, h.state.saved, {STRIPE_CHECKOUT_MODE:'links',STRIPE_SHOP_LINKS:JSON.stringify(JSON.parse(readFileSync(join(h.dir,'.studio','stripe-mcp.json'))).result.config)});
   const p = s.player();
   const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, headless: true });
   try {
@@ -2968,7 +2968,7 @@ for (const keyless of [false, true]) test(`real Chrome: visible Shop and app/gam
   if (keyless) {
     const h = await pairingHarness('visible-shop');
     assert.equal((await shopConnect(h.dir, h.opts)).ok, true);
-    s = await site({ key: false, settings: readShop(h.dir).shop }); Object.assign(s.env, h.state.saved);
+    s = await site({ key: false, settings: readShop(h.dir).shop }); Object.assign(s.env, h.state.saved, {STRIPE_CHECKOUT_MODE:'links',STRIPE_SHOP_LINKS:JSON.stringify(JSON.parse(readFileSync(join(h.dir,'.studio','stripe-mcp.json'))).result.config)});
   } else s = await site();
   const originalAssets = s.env.ASSETS;
   const cat = await (await originalAssets.fetch(new Request('https://owls.example/games.json'))).json();
@@ -3096,7 +3096,7 @@ test('removal migration preserves paid and pending orders, grants and refund fac
       for (const file of readdirSync(migrations).sort().filter(f => f > '0022_remove_referrals.sql')) db.exec(readFileSync(join(migrations, file), 'utf8'));
       for (const [table, rows] of Object.entries(snapshots)) assert.deepEqual(db.prepare('SELECT * FROM ' + table).all().map((row) => ({ ...row })), rows);
       for (const table of ['referral_lines', 'referral_statements', 'referral_editions', 'referral_edition_lines']) assert.equal(db.prepare('SELECT name FROM sqlite_master WHERE name = ?').get(table), undefined);
-      assert.deepEqual(db.prepare('SELECT key FROM meta').all().map((r) => r.key), ['shop-reference:paid']);
+      assert.deepEqual(db.prepare('SELECT key FROM meta').all().map((r) => r.key).filter(k=>k!=='tool-data-revision'), ['shop-reference:paid']);
       assert.deepEqual(JSON.parse(db.prepare('SELECT cart FROM shop_parent_links').get().cart), [{ item: 'hat' }]);
       db.exec("INSERT INTO function_subscriptions(name,type,started) VALUES ('paid','order.paid',0),('refunded','order.refunded',0); UPDATE shop_orders SET paid_at = 4, status = 'paid' WHERE id = 'pending'; UPDATE shop_orders SET status = 'refunded' WHERE id = 'paid';");
       assert.deepEqual(db.prepare('SELECT type FROM studio_events ORDER BY seq').all().map(r => r.type), ['order.paid', 'order.refunded']);
@@ -3108,14 +3108,17 @@ test('removal migration preserves paid and pending orders, grants and refund fac
   }
 });
 
-test('an old worker recreating referral secrets during deploy is cleaned on requests and schedules', async () => {
+test('referral cleanup runs once in the upgrade migration, never on requests', async () => {
  const s=await site();
  try {
-  const oldWorker=()=>{for(const key of ['referral_signing_key','referral_cookie_key','referral-send:old'])s.DB.sql.prepare('INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)').run(key,'old-worker-value');};
-  const clean=()=>assert.equal(s.DB.sql.prepare("SELECT count(*) n FROM meta WHERE key GLOB 'referral*'").get().n,0);
-  oldWorker();await s.fetchSite('/');clean();
-  oldWorker();await s.worker.scheduled({scheduledTime:Date.now()},s.env,{waitUntil:()=>{}});clean();
-  oldWorker();await s.fetchSite('/');clean();await s.fetchSite('/');clean();
+  const {OPERATIONAL_MIGRATION}=await import('../worker/operational-schema.mjs');
+  for(const key of ['referral_signing_key','referral_cookie_key','referral-send:old'])s.DB.sql.prepare('INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)').run(key,'old-worker-value');
+  // Apply the cleanup statement, since this fixture already applied the triggers.
+  s.DB.sql.exec(OPERATIONAL_MIGRATION.split(';')[0]+';');
+  assert.equal(s.DB.sql.prepare("SELECT count(*) n FROM meta WHERE key GLOB 'referral*'").get().n,0);
+  s.DB.sql.prepare("INSERT INTO meta(key,value) VALUES('referral-new','retired-writer')").run();
+  await s.fetchSite('/');
+  assert.equal(s.DB.sql.prepare("SELECT value FROM meta WHERE key='referral-new'").get().value,'retired-writer');
  } finally {s.stripe.close();}
 });
 
@@ -3134,7 +3137,7 @@ test('keyless variable deposit retains the app reference and only fulfills the s
  const {shopConnect}=await import('../lib/stripe-connect.mjs');const {readShop}=await import('../lib/shop.mjs');const h=await pairingHarness('variable-deposit');
  const file=join(h.dir,'shop.json'),raw=JSON.parse(readFileSync(file));raw.items=[{id:'deposit',kind:'deposit',name:'Deposit',price:'choose',min:50,gives:['reserved']}];writeFileSync(file,JSON.stringify(raw));
  assert.equal((await shopConnect(h.dir,h.opts)).ok,true);
- const s=await site({key:false,settings:readShop(h.dir).shop});Object.assign(s.env,h.state.saved);
+ const s=await site({key:false,settings:readShop(h.dir).shop});Object.assign(s.env,h.state.saved,{STRIPE_CHECKOUT_MODE:'links',STRIPE_SHOP_LINKS:JSON.stringify(JSON.parse(readFileSync(join(h.dir,'.studio','stripe-mcp.json'))).result.config)});
  try {
   const person=s.player(30,{band:'adult'});subscribeAppPayments(s);
   const response=await s.post('/api/shop/buy',{item:'deposit',amount:1250,reference:'reservation-42'},s.as(person));const order=await response.json();assert.equal(response.status,200,JSON.stringify(order));
@@ -3144,7 +3147,8 @@ test('keyless variable deposit retains the app reference and only fulfills the s
   for(const amount of [500,1500])await s.hook('checkout.session.completed',event(amount),{secret:s.env.STRIPE_WEBHOOK_SECRET});
   assert.equal(s.DB.sql.prepare("SELECT count(*) n FROM shop_orders WHERE status='paid'").get().n,0);
   await s.hook('checkout.session.completed',event(1250),{secret:s.env.STRIPE_WEBHOOK_SECRET});
-  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id=?').get(order.order).status,'paid');
+  assert.equal(s.DB.sql.prepare("SELECT count(*) n FROM shop_orders WHERE status='paid'").get().n,1);
+  assert.equal(s.DB.sql.prepare("SELECT count(*) n FROM shop_orders WHERE status='review'").get().n,2);
   assert.equal(JSON.parse(s.DB.sql.prepare("SELECT data FROM studio_events WHERE type='order.paid'").get().data).reference,'reservation-42');
  }finally{s.stripe.close();h.stripe.close();}
 });

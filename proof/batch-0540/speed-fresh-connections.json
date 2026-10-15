@@ -1,0 +1,1052 @@
+[
+  {
+    "run": 0,
+    "variant": "after",
+    "route": "page",
+    "ttfbMs": 308.017,
+    "status": 200
+  },
+  {
+    "run": 0,
+    "variant": "before",
+    "route": "page",
+    "ttfbMs": 174.657,
+    "status": 200
+  },
+  {
+    "run": 0,
+    "variant": "after",
+    "route": "asset",
+    "ttfbMs": 590.58,
+    "status": 200
+  },
+  {
+    "run": 0,
+    "variant": "before",
+    "route": "asset",
+    "ttfbMs": 237.68800000000002,
+    "status": 200
+  },
+  {
+    "run": 0,
+    "variant": "after",
+    "route": "records",
+    "ttfbMs": 245.59,
+    "status": 200
+  },
+  {
+    "run": 0,
+    "variant": "before",
+    "route": "records",
+    "ttfbMs": 243.32799999999997,
+    "status": 200
+  },
+  {
+    "run": 0,
+    "variant": "after",
+    "route": "mcp",
+    "ttfbMs": 162.507,
+    "status": 200
+  },
+  {
+    "run": 0,
+    "variant": "before",
+    "route": "mcp",
+    "ttfbMs": 918.0840000000001,
+    "status": 200
+  },
+  {
+    "run": 0,
+    "variant": "after",
+    "route": "seat",
+    "ttfbMs": 194.298,
+    "status": 200
+  },
+  {
+    "run": 0,
+    "variant": "before",
+    "route": "seat",
+    "ttfbMs": 368.981,
+    "status": 200
+  },
+  {
+    "run": 1,
+    "variant": "before",
+    "route": "page",
+    "ttfbMs": 1409.127,
+    "status": 200
+  },
+  {
+    "run": 1,
+    "variant": "after",
+    "route": "page",
+    "ttfbMs": 575.455,
+    "status": 200
+  },
+  {
+    "run": 1,
+    "variant": "before",
+    "route": "asset",
+    "ttfbMs": 146.324,
+    "status": 200
+  },
+  {
+    "run": 1,
+    "variant": "after",
+    "route": "asset",
+    "ttfbMs": 802.548,
+    "status": 200
+  },
+  {
+    "run": 1,
+    "variant": "before",
+    "route": "records",
+    "ttfbMs": 750.4920000000001,
+    "status": 200
+  },
+  {
+    "run": 1,
+    "variant": "after",
+    "route": "records",
+    "ttfbMs": 730.4929999999999,
+    "status": 200
+  },
+  {
+    "run": 1,
+    "variant": "before",
+    "route": "mcp",
+    "ttfbMs": 1028.6109999999999,
+    "status": 200
+  },
+  {
+    "run": 1,
+    "variant": "after",
+    "route": "mcp",
+    "ttfbMs": 130.759,
+    "status": 200
+  },
+  {
+    "run": 1,
+    "variant": "before",
+    "route": "seat",
+    "ttfbMs": 387.41700000000003,
+    "status": 200
+  },
+  {
+    "run": 1,
+    "variant": "after",
+    "route": "seat",
+    "ttfbMs": 192.344,
+    "status": 200
+  },
+  {
+    "run": 2,
+    "variant": "after",
+    "route": "page",
+    "ttfbMs": 249.404,
+    "status": 200
+  },
+  {
+    "run": 2,
+    "variant": "before",
+    "route": "page",
+    "ttfbMs": 500.702,
+    "status": 200
+  },
+  {
+    "run": 2,
+    "variant": "after",
+    "route": "asset",
+    "ttfbMs": 1138.5320000000002,
+    "status": 200
+  },
+  {
+    "run": 2,
+    "variant": "before",
+    "route": "asset",
+    "ttfbMs": 210.19299999999998,
+    "status": 200
+  },
+  {
+    "run": 2,
+    "variant": "after",
+    "route": "records",
+    "ttfbMs": 913.793,
+    "status": 200
+  },
+  {
+    "run": 2,
+    "variant": "before",
+    "route": "records",
+    "ttfbMs": 2520.697,
+    "status": 200
+  },
+  {
+    "run": 2,
+    "variant": "after",
+    "route": "mcp",
+    "ttfbMs": 1149.626,
+    "status": 200
+  },
+  {
+    "run": 2,
+    "variant": "before",
+    "route": "mcp",
+    "ttfbMs": 1429.132,
+    "status": 200
+  },
+  {
+    "run": 2,
+    "variant": "after",
+    "route": "seat",
+    "ttfbMs": 1806.379,
+    "status": 200
+  },
+  {
+    "run": 2,
+    "variant": "before",
+    "route": "seat",
+    "ttfbMs": 652.083,
+    "status": 200
+  },
+  {
+    "run": 3,
+    "variant": "before",
+    "route": "page",
+    "ttfbMs": 201.62099999999998,
+    "status": 200
+  },
+  {
+    "run": 3,
+    "variant": "after",
+    "route": "page",
+    "ttfbMs": 338.3,
+    "status": 200
+  },
+  {
+    "run": 3,
+    "variant": "before",
+    "route": "asset",
+    "ttfbMs": 990.9200000000001,
+    "status": 200
+  },
+  {
+    "run": 3,
+    "variant": "after",
+    "route": "asset",
+    "ttfbMs": 141.029,
+    "status": 200
+  },
+  {
+    "run": 3,
+    "variant": "before",
+    "route": "records",
+    "ttfbMs": 287.853,
+    "status": 200
+  },
+  {
+    "run": 3,
+    "variant": "after",
+    "route": "records",
+    "ttfbMs": 151.072,
+    "status": 200
+  },
+  {
+    "run": 3,
+    "variant": "before",
+    "route": "mcp",
+    "ttfbMs": 284.62100000000004,
+    "status": 200
+  },
+  {
+    "run": 3,
+    "variant": "after",
+    "route": "mcp",
+    "ttfbMs": 1255.984,
+    "status": 200
+  },
+  {
+    "run": 3,
+    "variant": "before",
+    "route": "seat",
+    "ttfbMs": 425.11,
+    "status": 200
+  },
+  {
+    "run": 3,
+    "variant": "after",
+    "route": "seat",
+    "ttfbMs": 254.91200000000003,
+    "status": 200
+  },
+  {
+    "run": 4,
+    "variant": "after",
+    "route": "page",
+    "ttfbMs": 929.626,
+    "status": 200
+  },
+  {
+    "run": 4,
+    "variant": "before",
+    "route": "page",
+    "ttfbMs": 510.91299999999995,
+    "status": 200
+  },
+  {
+    "run": 4,
+    "variant": "after",
+    "route": "asset",
+    "ttfbMs": 734.658,
+    "status": 200
+  },
+  {
+    "run": 4,
+    "variant": "before",
+    "route": "asset",
+    "ttfbMs": 294.644,
+    "status": 200
+  },
+  {
+    "run": 4,
+    "variant": "after",
+    "route": "records",
+    "ttfbMs": 328.901,
+    "status": 200
+  },
+  {
+    "run": 4,
+    "variant": "before",
+    "route": "records",
+    "ttfbMs": 359.269,
+    "status": 200
+  },
+  {
+    "run": 4,
+    "variant": "after",
+    "route": "mcp",
+    "ttfbMs": 309.51,
+    "status": 200
+  },
+  {
+    "run": 4,
+    "variant": "before",
+    "route": "mcp",
+    "ttfbMs": 1220.7079999999999,
+    "status": 200
+  },
+  {
+    "run": 4,
+    "variant": "after",
+    "route": "seat",
+    "ttfbMs": 315.876,
+    "status": 200
+  },
+  {
+    "run": 4,
+    "variant": "before",
+    "route": "seat",
+    "ttfbMs": 514.524,
+    "status": 200
+  },
+  {
+    "run": 5,
+    "variant": "before",
+    "route": "page",
+    "ttfbMs": 1232.065,
+    "status": 200
+  },
+  {
+    "run": 5,
+    "variant": "after",
+    "route": "page",
+    "ttfbMs": 479.005,
+    "status": 200
+  },
+  {
+    "run": 5,
+    "variant": "before",
+    "route": "asset",
+    "ttfbMs": 2268.062,
+    "status": 200
+  },
+  {
+    "run": 5,
+    "variant": "after",
+    "route": "asset",
+    "ttfbMs": 902.728,
+    "status": 200
+  },
+  {
+    "run": 5,
+    "variant": "before",
+    "route": "records",
+    "ttfbMs": 1453.388,
+    "status": 200
+  },
+  {
+    "run": 5,
+    "variant": "after",
+    "route": "records",
+    "ttfbMs": 374.036,
+    "status": 200
+  },
+  {
+    "run": 5,
+    "variant": "before",
+    "route": "mcp",
+    "ttfbMs": 1284.716,
+    "status": 200
+  },
+  {
+    "run": 5,
+    "variant": "after",
+    "route": "mcp",
+    "ttfbMs": 255.2,
+    "status": 200
+  },
+  {
+    "run": 5,
+    "variant": "before",
+    "route": "seat",
+    "ttfbMs": 1033.171,
+    "status": 200
+  },
+  {
+    "run": 5,
+    "variant": "after",
+    "route": "seat",
+    "ttfbMs": 1314.5919999999999,
+    "status": 200
+  },
+  {
+    "run": 6,
+    "variant": "after",
+    "route": "page",
+    "ttfbMs": 733.6089999999999,
+    "status": 200
+  },
+  {
+    "run": 6,
+    "variant": "before",
+    "route": "page",
+    "ttfbMs": 203.291,
+    "status": 200
+  },
+  {
+    "run": 6,
+    "variant": "after",
+    "route": "asset",
+    "ttfbMs": 285.803,
+    "status": 200
+  },
+  {
+    "run": 6,
+    "variant": "before",
+    "route": "asset",
+    "ttfbMs": 456.63599999999997,
+    "status": 200
+  },
+  {
+    "run": 6,
+    "variant": "after",
+    "route": "records",
+    "ttfbMs": 1060.469,
+    "status": 200
+  },
+  {
+    "run": 6,
+    "variant": "before",
+    "route": "records",
+    "ttfbMs": 1405.733,
+    "status": 200
+  },
+  {
+    "run": 6,
+    "variant": "after",
+    "route": "mcp",
+    "ttfbMs": 754.282,
+    "status": 200
+  },
+  {
+    "run": 6,
+    "variant": "before",
+    "route": "mcp",
+    "ttfbMs": 352.332,
+    "status": 200
+  },
+  {
+    "run": 6,
+    "variant": "after",
+    "route": "seat",
+    "ttfbMs": 450.161,
+    "status": 200
+  },
+  {
+    "run": 6,
+    "variant": "before",
+    "route": "seat",
+    "ttfbMs": 394.038,
+    "status": 200
+  },
+  {
+    "run": 7,
+    "variant": "before",
+    "route": "page",
+    "ttfbMs": 1184.105,
+    "status": 200
+  },
+  {
+    "run": 7,
+    "variant": "after",
+    "route": "page",
+    "ttfbMs": 3375.6949999999997,
+    "status": 200
+  },
+  {
+    "run": 7,
+    "variant": "before",
+    "route": "asset",
+    "ttfbMs": 183.704,
+    "status": 200
+  },
+  {
+    "run": 7,
+    "variant": "after",
+    "route": "asset",
+    "ttfbMs": 804.4670000000001,
+    "status": 200
+  },
+  {
+    "run": 7,
+    "variant": "before",
+    "route": "records",
+    "ttfbMs": 243.043,
+    "status": 200
+  },
+  {
+    "run": 7,
+    "variant": "after",
+    "route": "records",
+    "ttfbMs": 263.563,
+    "status": 200
+  },
+  {
+    "run": 7,
+    "variant": "before",
+    "route": "mcp",
+    "ttfbMs": 194.69,
+    "status": 200
+  },
+  {
+    "run": 7,
+    "variant": "after",
+    "route": "mcp",
+    "ttfbMs": 1341.188,
+    "status": 200
+  },
+  {
+    "run": 7,
+    "variant": "before",
+    "route": "seat",
+    "ttfbMs": 2255.556,
+    "status": 200
+  },
+  {
+    "run": 7,
+    "variant": "after",
+    "route": "seat",
+    "ttfbMs": 300.117,
+    "status": 200
+  },
+  {
+    "run": 8,
+    "variant": "after",
+    "route": "page",
+    "ttfbMs": 169.943,
+    "status": 200
+  },
+  {
+    "run": 8,
+    "variant": "before",
+    "route": "page",
+    "ttfbMs": 860.987,
+    "status": 200
+  },
+  {
+    "run": 8,
+    "variant": "after",
+    "route": "asset",
+    "ttfbMs": 667.3829999999999,
+    "status": 200
+  },
+  {
+    "run": 8,
+    "variant": "before",
+    "route": "asset",
+    "ttfbMs": 358.45700000000005,
+    "status": 200
+  },
+  {
+    "run": 8,
+    "variant": "after",
+    "route": "records",
+    "ttfbMs": 659.066,
+    "status": 200
+  },
+  {
+    "run": 8,
+    "variant": "before",
+    "route": "records",
+    "ttfbMs": 365.516,
+    "status": 200
+  },
+  {
+    "run": 8,
+    "variant": "after",
+    "route": "mcp",
+    "ttfbMs": 119.20100000000001,
+    "status": 200
+  },
+  {
+    "run": 8,
+    "variant": "before",
+    "route": "mcp",
+    "ttfbMs": 1059.359,
+    "status": 200
+  },
+  {
+    "run": 8,
+    "variant": "after",
+    "route": "seat",
+    "ttfbMs": 366.684,
+    "status": 200
+  },
+  {
+    "run": 8,
+    "variant": "before",
+    "route": "seat",
+    "ttfbMs": 389.737,
+    "status": 200
+  },
+  {
+    "run": 9,
+    "variant": "before",
+    "route": "page",
+    "ttfbMs": 2055.056,
+    "status": 200
+  },
+  {
+    "run": 9,
+    "variant": "after",
+    "route": "page",
+    "ttfbMs": 866.1370000000001,
+    "status": 200
+  },
+  {
+    "run": 9,
+    "variant": "before",
+    "route": "asset",
+    "ttfbMs": 152.45600000000002,
+    "status": 200
+  },
+  {
+    "run": 9,
+    "variant": "after",
+    "route": "asset",
+    "ttfbMs": 250.55500000000004,
+    "status": 200
+  },
+  {
+    "run": 9,
+    "variant": "before",
+    "route": "records",
+    "ttfbMs": 192.227,
+    "status": 200
+  },
+  {
+    "run": 9,
+    "variant": "after",
+    "route": "records",
+    "ttfbMs": 296.38599999999997,
+    "status": 200
+  },
+  {
+    "run": 9,
+    "variant": "before",
+    "route": "mcp",
+    "ttfbMs": 824.791,
+    "status": 200
+  },
+  {
+    "run": 9,
+    "variant": "after",
+    "route": "mcp",
+    "ttfbMs": 1194.785,
+    "status": 200
+  },
+  {
+    "run": 9,
+    "variant": "before",
+    "route": "seat",
+    "ttfbMs": 497.707,
+    "status": 200
+  },
+  {
+    "run": 9,
+    "variant": "after",
+    "route": "seat",
+    "ttfbMs": 221.361,
+    "status": 200
+  },
+  {
+    "run": 10,
+    "variant": "after",
+    "route": "page",
+    "ttfbMs": 300.699,
+    "status": 200
+  },
+  {
+    "run": 10,
+    "variant": "before",
+    "route": "page",
+    "ttfbMs": 204.88500000000002,
+    "status": 200
+  },
+  {
+    "run": 10,
+    "variant": "after",
+    "route": "asset",
+    "ttfbMs": 383.26700000000005,
+    "status": 200
+  },
+  {
+    "run": 10,
+    "variant": "before",
+    "route": "asset",
+    "ttfbMs": 613.462,
+    "status": 200
+  },
+  {
+    "run": 10,
+    "variant": "after",
+    "route": "records",
+    "ttfbMs": 411.43600000000004,
+    "status": 200
+  },
+  {
+    "run": 10,
+    "variant": "before",
+    "route": "records",
+    "ttfbMs": 397.579,
+    "status": 200
+  },
+  {
+    "run": 10,
+    "variant": "after",
+    "route": "mcp",
+    "ttfbMs": 1334.946,
+    "status": 200
+  },
+  {
+    "run": 10,
+    "variant": "before",
+    "route": "mcp",
+    "ttfbMs": 817.429,
+    "status": 200
+  },
+  {
+    "run": 10,
+    "variant": "after",
+    "route": "seat",
+    "ttfbMs": 1343.3129999999999,
+    "status": 200
+  },
+  {
+    "run": 10,
+    "variant": "before",
+    "route": "seat",
+    "ttfbMs": 931.173,
+    "status": 200
+  },
+  {
+    "run": 11,
+    "variant": "before",
+    "route": "page",
+    "ttfbMs": 1534.136,
+    "status": 200
+  },
+  {
+    "run": 11,
+    "variant": "after",
+    "route": "page",
+    "ttfbMs": 550.9300000000001,
+    "status": 200
+  },
+  {
+    "run": 11,
+    "variant": "before",
+    "route": "asset",
+    "ttfbMs": 951.133,
+    "status": 200
+  },
+  {
+    "run": 11,
+    "variant": "after",
+    "route": "asset",
+    "ttfbMs": 770.7479999999999,
+    "status": 200
+  },
+  {
+    "run": 11,
+    "variant": "before",
+    "route": "records",
+    "ttfbMs": 400.507,
+    "status": 200
+  },
+  {
+    "run": 11,
+    "variant": "after",
+    "route": "records",
+    "ttfbMs": 186.622,
+    "status": 200
+  },
+  {
+    "run": 11,
+    "variant": "before",
+    "route": "mcp",
+    "ttfbMs": 1208.2740000000001,
+    "status": 200
+  },
+  {
+    "run": 11,
+    "variant": "after",
+    "route": "mcp",
+    "ttfbMs": 251.35000000000002,
+    "status": 200
+  },
+  {
+    "run": 11,
+    "variant": "before",
+    "route": "seat",
+    "ttfbMs": 482.252,
+    "status": 200
+  },
+  {
+    "run": 11,
+    "variant": "after",
+    "route": "seat",
+    "ttfbMs": 281.512,
+    "status": 200
+  },
+  {
+    "run": 12,
+    "variant": "after",
+    "route": "page",
+    "ttfbMs": 1030.24,
+    "status": 200
+  },
+  {
+    "run": 12,
+    "variant": "before",
+    "route": "page",
+    "ttfbMs": 1239.632,
+    "status": 200
+  },
+  {
+    "run": 12,
+    "variant": "after",
+    "route": "asset",
+    "ttfbMs": 294.468,
+    "status": 200
+  },
+  {
+    "run": 12,
+    "variant": "before",
+    "route": "asset",
+    "ttfbMs": 168.389,
+    "status": 200
+  },
+  {
+    "run": 12,
+    "variant": "after",
+    "route": "records",
+    "ttfbMs": 297.115,
+    "status": 200
+  },
+  {
+    "run": 12,
+    "variant": "before",
+    "route": "records",
+    "ttfbMs": 271.243,
+    "status": 200
+  },
+  {
+    "run": 12,
+    "variant": "after",
+    "route": "mcp",
+    "ttfbMs": 896.3290000000001,
+    "status": 200
+  },
+  {
+    "run": 12,
+    "variant": "before",
+    "route": "mcp",
+    "ttfbMs": 3041.553,
+    "status": 200
+  },
+  {
+    "run": 12,
+    "variant": "after",
+    "route": "seat",
+    "ttfbMs": 349.977,
+    "status": 200
+  },
+  {
+    "run": 12,
+    "variant": "before",
+    "route": "seat",
+    "ttfbMs": 1188.44,
+    "status": 200
+  },
+  {
+    "run": 13,
+    "variant": "before",
+    "route": "page",
+    "ttfbMs": 1374.8210000000001,
+    "status": 200
+  },
+  {
+    "run": 13,
+    "variant": "after",
+    "route": "page",
+    "ttfbMs": 238.49,
+    "status": 200
+  },
+  {
+    "run": 13,
+    "variant": "before",
+    "route": "asset",
+    "ttfbMs": 513.754,
+    "status": 200
+  },
+  {
+    "run": 13,
+    "variant": "after",
+    "route": "asset",
+    "ttfbMs": 732.834,
+    "status": 200
+  },
+  {
+    "run": 13,
+    "variant": "before",
+    "route": "records",
+    "ttfbMs": 212.346,
+    "status": 200
+  },
+  {
+    "run": 13,
+    "variant": "after",
+    "route": "records",
+    "ttfbMs": 296.991,
+    "status": 200
+  },
+  {
+    "run": 13,
+    "variant": "before",
+    "route": "mcp",
+    "ttfbMs": 696.346,
+    "status": 200
+  },
+  {
+    "run": 13,
+    "variant": "after",
+    "route": "mcp",
+    "ttfbMs": 309.28,
+    "status": 200
+  },
+  {
+    "run": 13,
+    "variant": "before",
+    "route": "seat",
+    "ttfbMs": 508.513,
+    "status": 200
+  },
+  {
+    "run": 13,
+    "variant": "after",
+    "route": "seat",
+    "ttfbMs": 509.37600000000003,
+    "status": 200
+  },
+  {
+    "run": 14,
+    "variant": "after",
+    "route": "page",
+    "ttfbMs": 507.99399999999997,
+    "status": 200
+  },
+  {
+    "run": 14,
+    "variant": "before",
+    "route": "page",
+    "ttfbMs": 168.15099999999998,
+    "status": 200
+  },
+  {
+    "run": 14,
+    "variant": "after",
+    "route": "asset",
+    "ttfbMs": 393.635,
+    "status": 200
+  },
+  {
+    "run": 14,
+    "variant": "before",
+    "route": "asset",
+    "ttfbMs": 158.198,
+    "status": 200
+  },
+  {
+    "run": 14,
+    "variant": "after",
+    "route": "records",
+    "ttfbMs": 272.492,
+    "status": 200
+  },
+  {
+    "run": 14,
+    "variant": "before",
+    "route": "records",
+    "ttfbMs": 212.704,
+    "status": 200
+  },
+  {
+    "run": 14,
+    "variant": "after",
+    "route": "mcp",
+    "ttfbMs": 122.738,
+    "status": 200
+  },
+  {
+    "run": 14,
+    "variant": "before",
+    "route": "mcp",
+    "ttfbMs": 1000.985,
+    "status": 200
+  },
+  {
+    "run": 14,
+    "variant": "after",
+    "route": "seat",
+    "ttfbMs": 412.16999999999996,
+    "status": 200
+  },
+  {
+    "run": 14,
+    "variant": "before",
+    "route": "seat",
+    "ttfbMs": 1369.5980000000002,
+    "status": 200
+  }
+]

@@ -23,6 +23,20 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 - Reduce pull-request CI work through shared studio fixtures, focused compatibility coverage, and nightly release checks.
 
+### Fixed
+
+- **Request path:** remove referral cleanup and function registration from startup; clean retired referral keys in migration 0031. Reuse the deployment catalogue, batch current settings, servers, chat and record reads, avoid repeat tool-catalogue notifications, and dispatch background work after actual writes. Public static assets require no D1 reads; private app assets retain live authorization.
+- **Payment Links:** menu items support `maxQuantity` (default 99), slot links accept groups within published remaining capacity, and confirmation uses the paid seat quantity atomically. Payments that cannot be fulfilled remain visible as review orders with a durable staff event and customer notice. Full connect saves public JSON link assets, retaining replaced links until deployment.
+- **Stripe setup:** observe deterministic product IDs before creating missing search results; keep public checkout mode out of secret uploads and report Wrangler's redacted error text.
+- **App checks:** needs without assertions are pending placeholders, rather than failed checks. They remain unproven.
+- **App navigation:** Big screen keeps same-origin role/access context; app context URLs include only a validated public room ID.
+- **App subscriptions and privacy:** custom tool-data mutations invalidate record subscriptions. Private asset capabilities are bound to live sessions and role declarations, and revoked by logout or role changes.
+- **Prediction:** synchronous `room.me` readers share a presentation even when CPU work crosses a simulation tick; the next microtask refreshes it. Fixes the 60 Hz browser prediction smoke flake without relaxing thresholds.
+
+### Upgrade notes
+
+- Apply migration 0031 with the normal studio deploy. Rebuild/deploy after full `shop connect` to publish its public link configuration. Review group availability and resync slot manifests after confirmations, moves or refunds; a Payment Link is not an exclusive unpaid hold.
+
 ## [0.53.0] - 2026-10-15
 
 **Plugin 0.53.0**

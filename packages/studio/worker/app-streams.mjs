@@ -28,7 +28,7 @@ export class AppRecordStreams {
   const launch=launchOf(s.meta,await settingsOf(this.env,{fresh:true}),this.env);
   return launch==='public'||(await accessOf(s.request,this.env,s.meta.id,launch)).ok;
  }
- async revisions(s){return (await this.env.DB.prepare('SELECT collection,revision FROM app_record_revisions WHERE app=?1').bind(s.app).all()).results;}
+ async revisions(s){return (await this.env.DB.prepare("SELECT collection,revision FROM app_record_revisions WHERE app=?1 UNION ALL SELECT '*',CAST(value AS INTEGER) FROM meta WHERE key='tool-data-revision'").bind(s.app).all()).results;}
  async open({meta,url,headers,collections=[]}){
   if(!Array.isArray(collections)||collections.some(c=>typeof c!=='string'||!Object.hasOwn(meta.records?.collections??{},c)))return new Response('unknown collection',{status:400});
   const s={meta,url:new URL(url),request:new Request(url,{headers}),collections,seen:new Map()};
@@ -48,9 +48,9 @@ export class AppRecordStreams {
   if(!this.streams.has(s))return;if(s.busy){s.dirty=true;return;}s.busy=true;
   try{
    if(!await this.authorized(s)){this.close(s);return;}
-   const changed=[];
-   for(const row of await this.revisions(s)){if(s.collections.includes(row.collection)&&s.seen.get(row.collection)!==row.revision)changed.push(row.collection);s.seen.set(row.collection,row.revision);}
-   this.send(s,{collections:changed,presence:this.count(s)});
+   const changed=new Set();
+   for(const row of await this.revisions(s)){if(s.seen.get(row.collection)!==row.revision){if(row.collection==='*')for(const c of s.collections)changed.add(c);else if(s.collections.includes(row.collection))changed.add(row.collection);}s.seen.set(row.collection,row.revision);}
+   this.send(s,{collections:[...changed],presence:this.count(s)});
   }catch{this.close(s);}finally{s.busy=false;if(s.dirty){s.dirty=false;await this.pump(s);}}
  }
  async wake(meta){for(const s of this.streams)if(meta)s.meta=meta;await Promise.all([...this.streams].map(s=>this.pump(s)));return new Response('ok');}

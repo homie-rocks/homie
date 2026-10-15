@@ -347,7 +347,7 @@ async function orderRoute(request, env, url, shop) {
     } catch (error) { logOrderError(env, o.id, error); }
   }
   const reference = await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-reference:${o.id}`).first();
-  return json({ ok: true, order: o.id, simulated: apiBase(env) !== STRIPE_API, status: playerOrderStatus(o), item: o.item, game: o.game ?? null, reference: reference?.value ?? null });
+  return json({ ok: true, order: o.id, simulated: apiBase(env) !== STRIPE_API, status: playerOrderStatus(o), note:o.note??null, item: o.item, game: o.game ?? null, reference: reference?.value ?? null });
 }
 
 /** The neutral age question: a year of birth, once. Nothing hints which answer opens anything; no default. */
@@ -524,14 +524,13 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
   if(keyless && lines.length>1 && !menu)return {error:fail(409,'menu','These items need separate Stripe menus. Custom amounts and monthly gifts use their own links.')};
   if(keyless && (!link || !paymentLinkURL(link.url)))return {error:fail(503,'payment-links','Ask the owner’s AI to sync the shop and published booking slots.')};
   if(keyless && booking) {
-    if(booking.quantity!==1)return {error:fail(400,'quantity','Book one seat per checkout; Stripe counts completed sessions.')};
     const slot=await env.DB.prepare('SELECT value FROM app_records WHERE app=?1 AND collection=?2 AND id=?3').bind(booking.app,booking.slots,booking.slot).first();
     if(!slot || JSON.parse(slot.value).capacity!==link.capacity)return {error:fail(409,'slot-sync','This slot changed; ask the owner’s AI to sync its Stripe link.')};
     const confirmed=await env.DB.prepare("SELECT COALESCE(SUM(quantity),0) n FROM shop_bookings WHERE app=?1 AND slots=?2 AND slot=?3 AND state='confirmed'").bind(booking.app,booking.slots,booking.slot).first();
     const update=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-slot-link:${link.id}`).first();
     const observed=update?JSON.parse(update.value):null;
     const status=observed && observed.capacity===(link.limit??link.capacity) ? observed : link;
-    if(!status.active || status.count>=(link.limit??link.capacity) || confirmed.n>=link.capacity)return {error:fail(409,'capacity','That slot is full. Choose another slot.')};
+    if(!status.active || status.count>=(link.limit??link.capacity) || confirmed.n+booking.quantity>link.capacity)return {error:fail(409,'capacity','That slot is full. Choose another slot.')};
   }
   if(keyless && item.price==='choose' && lines[0].quantity!==1)return {error:fail(400,'quantity','A tip is one chosen amount; choose it on Stripe.')};
   if(menu && menu.items.some(e=>{const i=shop.items.find(i=>i.id===e.item);return !i || i.game && i.game!==game;}))return {error:fail(409,'menu','This menu includes items from another app; sync separate menus for each app.')};
@@ -649,6 +648,7 @@ async function buyRoute(request, env, url, cat, shop, ready, ctx, requestAt) {
     const item = shop.items.find((i) => i.id === entry?.item);
     if (!item) return fail(404, 'item', 'no such item here');
     const quantity = entry.quantity ?? 1;
+    if (item.maxQuantity!==undefined&&quantity>item.maxQuantity)return fail(400,'quantity','This quantity exceeds the studio item maximum.');
     if (!Number.isSafeInteger(quantity) || quantity < 1) return fail(400, 'arithmetic', 'Quantity is a positive safe integer.');
     if(!hasStripeKey(env) && ['supporter','deposit'].includes(item.kind) && quantity!==1)return fail(400,'quantity','This payment link has quantity fixed at one.');
     if(item.kind==='deposit' && (!reference || !Number.isSafeInteger(entry.amount??item.price) || (entry.amount??item.price)<=0))return fail(400,'deposit','A deposit requires the app reference and its saved positive amount.');
@@ -716,6 +716,7 @@ async function parentLinkRoute(request, env, url, cat, shop, ready) {
     const item = shop.items.find((i) => i.id === entry?.item);
     if (!item) return fail(404, 'item', 'no such item here');
     const quantity = entry.quantity ?? 1;
+    if (item.maxQuantity!==undefined&&quantity>item.maxQuantity)return fail(400,'quantity','This quantity exceeds the studio item maximum.');
     if (!Number.isSafeInteger(quantity) || quantity < 1) return fail(400, 'arithmetic', 'Quantity is a positive safe integer.');
     if (!shop.policy.repeatPurchases && (quantity > 1 || seen.has(item.id))) return fail(403, 'owned', 'The studio has disabled repeat purchases.');
     seen.add(item.id);
@@ -877,7 +878,7 @@ async function hook(request, env, cat, shop, ready) {
     if (subscriptionResult !== null) return json({ ok: true, did: subscriptionResult });
     const sessionEvent = ev.type.startsWith('checkout.session.');
     if (!sessionEvent) await rememberMoneyEvent(env, ev);
-    if (sessionEvent && obj.payment_link && !(await bindLinkSession(env, obj, ev.livemode ? 'live' : 'test'))) return json({ ok: true, did: 'mismatch' });
+    if (sessionEvent && obj.payment_link && !(await bindLinkSession(env, obj, ev.livemode ? 'live' : 'test'))) return json({ok:true,did:await reviewLinkPayment(env,obj,ev.livemode?'live':'test')?'review':'mismatch'});
     if (sessionEvent && obj.metadata?.order && !obj.payment_link) {
       await env.DB.prepare(`UPDATE shop_orders SET session=?2 WHERE id=?1 AND session IS NULL AND mode=?3
         AND EXISTS(SELECT 1 FROM meta WHERE key='booking-checkout:' || shop_orders.id)`)
@@ -950,15 +951,43 @@ async function hook(request, env, cat, shop, ready) {
       default:
         break;
     }
+    if(did==='mismatch'&&obj.payment_link&&await reviewLinkPayment(env,obj,ev.livemode?'live':'test'))did='review';
     if (did === 'needs-keyed-recovery') return fail(503, did, 'This earlier multi-item checkout needs its original connection to recover tax per line. Reconnect it, then resend this event.');
     if (did === 'missing-item' || did === 'unknown-order') return fail(503, did, did === 'missing-item' ? 'Restore this order item in shop.json to grant it; the office can refund its payment.' : 'Payment order is not recorded yet; retry this event.');
     await env.DB.prepare('INSERT INTO shop_events (id, type, at) VALUES (?1, ?2, ?3) ON CONFLICT(id) DO NOTHING').bind(ev.id, ev.type, Date.now()).run();
     if (Math.random() < 0.02) await env.DB.prepare('DELETE FROM shop_events WHERE at < ?1').bind(Date.now() - 60 * DAY).run();
     return json({ ok: true, did });
   } catch (error) {
+    if(/(?:booking|resource) capacity unavailable/.test(error.message)&&obj.payment_link&&await reviewLinkPayment(env,obj,ev.livemode?'live':'test','The paid group exceeds remaining capacity. Staff will arrange a replacement or refund.'))return json({ok:true,did:'review'});
     logOrderError(env, null, error);
     return fail(503, 'stripe-retry', 'Payment reconciliation is temporarily unavailable; retry this event.');
   }
+}
+
+/** Retain a verified payment even when its frozen order cannot be fulfilled. No grants. */
+async function reviewLinkPayment(env,session,mode,reason='The paid amount differs from the order. Staff will reconcile the payment or refund it.') {
+ if(session.payment_status!=='paid'||!/^cs_[A-Za-z0-9_]+$/.test(session.id??'')||!Number.isSafeInteger(session.amount_total)||session.amount_total<0)return false;
+ const source=await orderById(env,session.client_reference_id);if(!source||source.mode!==mode||session.currency!==source.currency)return false;
+ const lines=await orderLines(env,source.id),link=lines[0]?.snapshot&&JSON.parse(lines[0].snapshot).paymentLink;
+ if(!link||(session.payment_link?.id??session.payment_link)!==link.id||session.metadata?.revision!==link.revision)return false;
+ await env.DB.prepare('UPDATE shop_orders SET session=?2 WHERE id=?1 AND session IS NULL').bind(source.id,session.id).run();
+ let order=await orderBySession(env,session.id);
+ if(!order) {
+  const id=`ord_${(await sha256Hex(session.id)).slice(0,20)}`;
+  await env.DB.batch([
+   env.DB.prepare("INSERT OR IGNORE INTO shop_orders(id,player,checkout_player,item,game,amount,currency,till,mode,status,parent,created_at,updated_at,session) SELECT ?2,player,checkout_player,item,game,amount,currency,till,mode,'started',parent,?4,?4,?3 FROM shop_orders WHERE id=?1").bind(source.id,id,session.id,Date.now()),
+   ...lines.map((l,i)=>env.DB.prepare('INSERT OR IGNORE INTO shop_order_lines(id,order_id,position,item,quantity,unit_amount,amount,snapshot) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)').bind(`${id}_${i}`,id,i,l.item,l.quantity,l.unit_amount,l.amount,l.snapshot)),
+  ]);order=await orderBySession(env,session.id);
+ }
+ if(order.paid_at!==null)return order.status==='review';
+ const payment=typeof session.payment_intent==='string'?session.payment_intent:session.payment_intent?.id;
+ const note='Payment received. '+reason,now=Date.now();
+ await env.DB.batch([
+  env.DB.prepare("UPDATE shop_orders SET status='review',payment=?2,total=?3,paid_at=?4,updated_at=?4,attention=1,note=?5 WHERE id=?1 AND paid_at IS NULL").bind(order.id,payment??null,session.amount_total,now,note),
+  env.DB.prepare("INSERT OR IGNORE INTO meta(key,value) VALUES(?1,?2)").bind('payment-review:'+session.id,JSON.stringify({session:session.id,payment,amount:session.amount_total,currency:session.currency,expected:source.amount,reason})),
+  env.DB.prepare("INSERT OR IGNORE INTO studio_events(id,type,data,at) VALUES(?1,'payment.review',?2,?3)").bind('payment-review:'+session.id,JSON.stringify({order:order.id,payment,amount:session.amount_total,currency:session.currency,note}),now),
+ ]);
+ return true;
 }
 
 /** Payment Links can be reopened. Each signed Session becomes its own order; the URL reference
@@ -994,13 +1023,14 @@ async function bindLinkSession(env, session, mode) {
       env.DB.prepare("INSERT INTO shop_orders (id, player, checkout_player, item, game, amount, currency, till, mode, status, parent, created_at, updated_at, session) SELECT ?2, player, checkout_player, item, game, ?4, currency, till, mode, 'started', parent, ?5, ?5, ?3 FROM shop_orders WHERE id = ?1 ON CONFLICT DO NOTHING").bind(source.id, id, session.id, amount, Date.now()),
       env.DB.prepare("INSERT OR IGNORE INTO meta(key,value) SELECT ?1,CASE WHEN value=?3 THEN ?4 ELSE value END FROM meta WHERE key=?2").bind(`shop-reference:${id}`, `shop-reference:${source.id}`,source.id,id),
       env.DB.prepare('INSERT INTO shop_order_lines (id, order_id, position, item, quantity, unit_amount, amount, snapshot) VALUES (?1, ?2, 0, ?3, ?4, ?5, ?6, ?7) ON CONFLICT DO NOTHING').bind(`${id}_0`, id, item.id, quantity, amount / quantity, amount, lines[0].snapshot),
-      ...(booking ? [bookingStatement(env,{...booking,slot:link.slot,slots:link.slots,id,order:id,pending:true})] : []),
+      ...(booking ? [bookingStatement(env,{...booking,quantity,slot:link.slot,slots:link.slots,id,order:id,pending:true})] : []),
     ]);
     order = await orderBySession(env, session.id);
 
   }
   if (!order) return false;
   if (order.paid_at === null) await env.DB.batch([
+    ...(link.slot?[env.DB.prepare("UPDATE shop_bookings SET quantity=?2 WHERE order_id=?1 AND state='pending'").bind(order.id,quantity)]:[]),
     env.DB.prepare('UPDATE shop_orders SET amount = ?2 WHERE id = ?1 AND paid_at IS NULL').bind(order.id, amount),
     env.DB.prepare('UPDATE shop_order_lines SET quantity = ?2, unit_amount = ?3, amount = ?4 WHERE order_id = ?1 AND EXISTS (SELECT 1 FROM shop_orders WHERE id = ?1 AND paid_at IS NULL)').bind(order.id, quantity, amount / quantity, amount),
   ]);
@@ -1065,6 +1095,7 @@ async function bindMenuSession(env,session,source,lines) {
   for(const l of invoice.lines?.data??[]) {
     const line=lines.find(x=>JSON.parse(x.snapshot).stripePrice===(l.price?.id??l.pricing?.price_details?.price));
     if(!line || !Number.isSafeInteger(l.quantity) || l.quantity<1 || l.amount!==JSON.parse(line.snapshot).price*l.quantity)throw new Error('Unknown invoice line');
+    if(l.quantity>(JSON.parse(line.snapshot).maxQuantity??99))return false;
     paidLines.push({...line,quantity:l.quantity,amount:l.amount});
   }
   if(!paidLines.length || paidLines.reduce((n,l)=>n+l.amount,0)!==session.amount_subtotal)throw new Error('Invoice subtotal mismatch');

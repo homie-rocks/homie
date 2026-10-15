@@ -1,3 +1,4 @@
+import {databaseBinding} from './request-db.mjs';
 import { selling } from './extensions.mjs';
 import { purchaseOrderIfPresent } from './shop.mjs';
 import { toolIdentity } from './tool-identity.mjs';
@@ -221,7 +222,7 @@ function hexBytes(hex) { const out = new Uint8Array(hex.length / 2); for (let i 
 /** The studio's office secret (a random 32 bytes in D1 meta, made on first use), as an HMAC key; null without D1. */
 async function officeKey(env) {
   if (!env?.DB) return null;
-  if (keys.has(env.DB)) return keys.get(env.DB);
+  if (keys.has(databaseBinding(env.DB))) return keys.get(databaseBinding(env.DB));
   let hex = null;
   try {
     hex = (await env.DB.prepare("SELECT value FROM meta WHERE key = 'office_key'").first())?.value ?? null;
@@ -232,7 +233,7 @@ async function officeKey(env) {
   } catch { hex = null; }
   if (!/^[a-f0-9]{64}$/.test(String(hex))) return null;
   const key = await crypto.subtle.importKey('raw', hexBytes(hex), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  keys.set(env.DB, key);
+  keys.set(databaseBinding(env.DB), key);
   return key;
 }
 async function mac(key, text) { return b64url(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(text)))); }
@@ -1378,15 +1379,46 @@ export async function officeRoutes(request, env, url, { catalogueOf }) {
   return null;
 }
 
-/** Asset-only capability: cannot authenticate records, tools or room sockets. */
-export async function appAssetTicket(env, app, ticket) {
-  const key=await officeKey(env);if(!key)return null;
+/** Asset-only capability bound to a revocable session and the exact role declaration.
+ * Sandboxed module requests do not reliably carry cookies. The signed capability
+ * carries a session hash, never a credential; every use checks that session in D1.
+ */
+export async function appAssetTicket(env, app, ticket, {request,meta,launch=meta?.launch??'public'}={}) {
+  const key=await officeKey(env);if(!key||!meta)return ticket===undefined?null:false;
+  let data;
   if(ticket===undefined) {
-    const exp=(Date.now()+5*60_000).toString(36);
-    return `${exp}.${(await mac(key,`app-assets|${app}|${exp}`)).slice(0,32)}`;
+    if(!request)return null;
+    const url=new URL(request.url),{appRole}=await import('./app-format.mjs');
+    const role=appRole(meta,url),rights=meta.roles?.[role];if(!rights)return null;
+    const owner=cookieValues(request,OWNER_COOKIE)[0],player=cookieValues(request,'studio_player')[0];
+    const token=owner??player;if(!token)return null;
+    data={exp:Date.now()+5*60_000,kind:owner?'owner':'player',hash:await sha256(token),role,rights:await sha256(JSON.stringify(rights))};
+    const link=await env.DB.prepare('SELECT token FROM app_role_links WHERE app=?1 AND role=?2').bind(app,role).first();
+    data.link=link?await sha256(link.token):null;
+    const pass=cookieValues(request,passCookie(app))[0];if(pass)data.pass=await sha256(pass);
+  } else {
+    try {
+      const [payload,signature,...extra]=ticket.split('.');
+      if(extra.length||!signature||!same((await mac(key,`app-assets|${app}|${payload}`)).slice(0,32),signature))return false;
+      data=JSON.parse(atob(payload.replaceAll('-','+').replaceAll('_','/')));
+    }catch{return false;}
   }
-  const m=/^([a-z0-9]+)\.([A-Za-z0-9_-]{32})$/.exec(ticket);
-  return Boolean(m && parseInt(m[1],36)>Date.now() && same((await mac(key,`app-assets|${app}|${m[1]}`)).slice(0,32),m[2]));
+  if(!Number.isSafeInteger(data.exp)||data.exp<=Date.now()||data.exp>Date.now()+5*60_000||!meta.roles?.[data.role]||data.rights!==await sha256(JSON.stringify(meta.roles[data.role])))return false;
+  let authorized=false;
+  if(data.kind==='owner')authorized=Boolean(await env.DB.prepare("SELECT 1 FROM stats_keys WHERE hash=?1 AND kind='session' AND expires_at>?2").bind(data.hash,Date.now()).first());
+  else if(data.kind==='player') {
+    const person=await env.DB.prepare("SELECT p.id,p.owner FROM player_sessions s JOIN players p ON p.id=s.player WHERE s.hash=?1 AND s.kind='session' AND s.expires_at>?2").bind(data.hash,Date.now()).first();
+    const gate=person?.owner || launch==='public' || launch==='invite'&&data.pass&&await env.DB.prepare('SELECT 1 FROM office_passes p JOIN office_invites i ON i.id=p.invite WHERE p.hash=?1 AND p.game=?2 AND p.expires_at>?3 AND i.revoked=0').bind(data.pass,app,Date.now()).first();
+    authorized=Boolean(gate && person && (person.owner || !meta.roles[data.role].signIn || await env.DB.prepare("SELECT 1 FROM app_roles WHERE app IN (?1,'*') AND role=?2 AND player=?3").bind(app,data.role,person.id).first()));
+  }
+  if(!authorized)return ticket===undefined?null:false;
+  if(data.link) {
+    const link=await env.DB.prepare('SELECT token FROM app_role_links WHERE app=?1 AND role=?2').bind(app,data.role).first();
+    if(!link||data.link!==await sha256(link.token))return false;
+  }
+  if(ticket!==undefined)return true;
+  const payload=b64url(new TextEncoder().encode(JSON.stringify(data)));
+  return `${payload}.${(await mac(key,`app-assets|${app}|${payload}`)).slice(0,32)}`;
 }
 
 /** Owner-issued test role, scoped to one app/record namespace; never an owner credential. */

@@ -13,6 +13,7 @@ export function stripeFixture() {
        return {data:page,has_more:start+page.length<data.length};
      }
      const object=structuredClone(data.find(o=>o.id===id));
+     if(!object)return {error:{code:'resource_missing',message:'No such product'}};
      if(kind==='payment_links')object.line_items={data:object.line_items.map(line=>({...line,price:{id:line.price}}))};
      return object;
    }
@@ -20,7 +21,9 @@ export function stripeFixture() {
    if(!object){object={id:op.params.id??`${kind==='payment_links'?'plink':kind==='prices'?'price':kind==='products'?'prod':'bpc'}_${++sequence}`,active:true,livemode:false};data.push(object);}
    const metadata={...object.metadata,...op.params.metadata};
    const count=object.restrictions?.completed_sessions?.count;
+   const previousLines=object.line_items;
    Object.assign(object,structuredClone(op.params));
+   if(kind==='payment_links'&&op.params.line_items)object.line_items=object.line_items.map((l,i)=>({...previousLines?.find(p=>p.id===l.id),...l,id:l.id??`li_${object.id}_${i}`}));
    object.metadata=metadata;
    if(count!==undefined && object.restrictions)object.restrictions.completed_sessions.count=count;
    if(kind==='payment_links'){object.url=`https://buy.stripe.com/test_${object.id}`;if(object.restrictions)object.restrictions.completed_sessions.count??=0;}

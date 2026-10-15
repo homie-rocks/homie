@@ -1,3 +1,6 @@
+import {mkdirSync,writeFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {redactText} from './redact.mjs';
 /** Reconcile through the owner's official Stripe CLI session; never export its credentials. */
 import { createHash, randomUUID } from 'node:crypto';
 import { productIdOf, WEBHOOK_SECRET_SHAPE } from '../worker/stripe.mjs';
@@ -111,7 +114,7 @@ export async function reconcilePaymentLinks({ api, shop, slug, site, mode, booki
     const groupOffset=offset;tasks.push(async()=>{
     const items = group.slice(groupOffset, groupOffset + 10);
     if (items.length < 2) return;
-    const params = { ...customText, line_items: items.map(i => ({price:catalogPrices.get(i.id),quantity:1,adjustable_quantity:{enabled:true,minimum:0,maximum:shop.policy.repeatPurchases?999999:1}})),
+    const params = { ...customText, line_items: items.map(i => ({price:catalogPrices.get(i.id),quantity:1,adjustable_quantity:{enabled:true,minimum:0,maximum:shop.policy.repeatPurchases?(i.maxQuantity??99):1}})),
       invoice_creation:{enabled:true,invoice_data:{metadata}},
       after_completion:{type:'redirect',redirect:{url:`${site}/shop/thanks?session_id={CHECKOUT_SESSION_ID}`}},
       automatic_tax:{enabled:shop.automaticTax}, payment_intent_data:{metadata} };
@@ -174,6 +177,7 @@ export async function reconcilePaymentLinks({ api, shop, slug, site, mode, booki
     const identity=hash({slug,site,app:slot.app,collection:slot.collection,slots:slot.slots,slot:slot.slot});
     let link=links.find(p=>own(p)&&p.metadata?.slot===identity);
     if(!link && (!slot.capacity||slot.active===false))return;
+    if(link && !link.line_items)link=await api('GET',`/v1/payment_links/${link.id}`,{expand:['line_items']});
     if(link?.metadata?.price && link.metadata.price!==catalogPrices.get(item.id))throw new Error('Slot service price changed. Deactivate the old slot and publish a new slot ID after reviewing existing bookings.');
     const seatsRevision=hash({slot,capacity:slot.capacity,confirmed:slot.confirmed});
     const counted=slot.confirmed!==undefined && link?.metadata?.seats_revision===seatsRevision;
@@ -183,14 +187,15 @@ export async function reconcilePaymentLinks({ api, shop, slug, site, mode, booki
     // AI supplies current confirmed seats; keep the existing Stripe lifetime count.
     const limit=counted ? Number(link.metadata.seats_limit) : slot.confirmed===undefined ? slot.capacity : count+slot.capacity-slot.confirmed;
     const active=slot.active!==false && limit>count;
-    const params={...customText,line_items:[{price:catalogPrices.get(item.id),quantity:1}],payment_method_types:['card'],
+    const params={...customText,line_items:[{price:catalogPrices.get(item.id),quantity:1,adjustable_quantity:{enabled:true,minimum:1,maximum:Math.max(1,Math.min(999999,slot.capacity-(slot.confirmed??count)))}}],payment_method_types:['card'],
       restrictions:{completed_sessions:{limit:Math.max(1,limit)}},after_completion:{type:'redirect',redirect:{url:`${site}/shop/thanks?session_id={CHECKOUT_SESSION_ID}`}}};
-    if(!link)link=await api('POST','/v1/payment_links',{...params,...(scoped?{expand:['line_items']}:{}),metadata:{...metadata,slot:identity,revision:identity,price:catalogPrices.get(item.id)}},`slot-${identity}`);
+    if(!link)link=await api('POST','/v1/payment_links',{...params,...(scoped?{expand:['line_items']}:{}),metadata:{...metadata,slot:identity,revision:identity,price:catalogPrices.get(item.id),...(slot.confirmed!==undefined?{seats_revision:seatsRevision,seats_limit:String(limit)}:{})}},`slot-${identity}`);
     else {
       // Pause first whenever publishing a changed budget, so old sessions cannot
       // spend a previous capacity after staff moves or removes a slot.
-      if(!active || link.restrictions?.completed_sessions?.limit!==Math.max(1,limit))await pause(link);
-      if (link.active !== active || link.restrictions?.completed_sessions?.limit !== Math.max(1,limit) || slot.confirmed!==undefined && !counted) link=await api('POST',`/v1/payment_links/${link.id}`,{restrictions:params.restrictions,active,...(slot.confirmed!==undefined?{metadata:{seats_revision:seatsRevision,seats_limit:String(limit)}}:{})});
+      const groupChanged=!matchesFields((link.line_items?.data??link.line_items)?.[0]?.adjustable_quantity,params.line_items[0].adjustable_quantity);
+      if(!active || groupChanged || link.restrictions?.completed_sessions?.limit!==Math.max(1,limit))await pause(link);
+      if (groupChanged || link.active !== active || link.restrictions?.completed_sessions?.limit !== Math.max(1,limit) || slot.confirmed!==undefined && !counted) link=await api('POST',`/v1/payment_links/${link.id}`,{restrictions:params.restrictions,...(groupChanged?{line_items:[{id:(link.line_items?.data??link.line_items)?.[0]?.id,quantity:1,adjustable_quantity:params.line_items[0].adjustable_quantity}]}:{}),active,...(slot.confirmed!==undefined?{metadata:{seats_revision:seatsRevision,seats_limit:String(limit)}}:{})});
     }
     await verifyLink(link,params);
     keepLinks.add(link.id);
@@ -234,7 +239,7 @@ export async function syncPaymentLinks(options) {
     return all;
   };
   const secrets=await w(['secret','list']);
-  if(secrets.code!==0)return {ok:false,needs:'cloudflare',why:'Connect Cloudflare before installing the shop.'};
+  if(secrets.code!==0)return {ok:false,needs:'cloudflare',why:wranglerError(secrets)};
   const names=JSON.parse(secrets.stdout??secrets.out);
   const has=name=>names.some(s=>s.name===name);
 
@@ -258,19 +263,32 @@ export async function syncPaymentLinks(options) {
     secret = endpoint.secret;
   }
   const fingerprint = hash({config, purchases:purchases?.config});
-  const unchanged = current && !secret && receipt?.fingerprint === fingerprint && (options.catalog || has('STRIPE_SHOP_LINKS')) && !has('STRIPE_KEY');
+  const unchanged = current && !secret && receipt?.fingerprint === fingerprint && Boolean(root || options.catalog) && !has('STRIPE_KEY');
   if (!unchanged) {
-    const saved = await w(['secret', 'bulk'], { input: JSON.stringify({ STRIPE_CHECKOUT_MODE: 'links', ...(options.catalog ? {} : {STRIPE_SHOP_LINKS: JSON.stringify(config)}), ...purchaseSecrets, ...(purchases && (purchases.config.offers.length || has('PURCHASE_LINKS')) ? { PURCHASE_LINKS: JSON.stringify(purchases.config) } : {}), ...(secret ? { STRIPE_WEBHOOK_SECRET: secret } : {}) }) });
-    if (saved.code !== 0) return { ok: false, needs: 'cloudflare', why: 'Cloudflare could not save the shop connection. Run shop connect again; existing webhooks remain active.' };
+    const secrets={...purchaseSecrets,...(secret?{STRIPE_WEBHOOK_SECRET:secret}:{})};
+    const saved=Object.keys(secrets).length?await w(['secret','bulk'],{input:JSON.stringify(secrets)}):{code:0};
+    if(saved.code!==0)return {ok:false,needs:'cloudflare',why:wranglerError(saved)};
     // Explicitly running connect selects keyless; manual selects the existing keyed checkout.
     if (has('STRIPE_KEY') && (await w(['secret', 'delete', 'STRIPE_KEY'], { input: 'y\n' })).code !== 0) return { ok: false, needs: 'cloudflare', why: 'The links are ready; run shop connect again to finish removing the old checkout credential.' };
     saveReceipt({ mode, endpoint: endpoint.id, url, fingerprint, keyless: true });
   }
-  await purchases?.retire();
-  // Retire only after the replacement configuration and signing secret are installed.
-  if (!options.catalog) for (const op of retire) await api(op.method, op.path, op.params);
+  if(root && !options.catalog) {
+    const bookingSlots=options.bookingSlots??[];
+    mkdirSync(join(root,'.studio'),{recursive:true});
+    writeFileSync(join(root,'.studio','stripe-mcp.json'),JSON.stringify({options:{mode,slots:bookingSlots,url:site},source:hash({shop,slots:bookingSlots}),sourceConfig:{shop,slots:bookingSlots},result:{verified:true,verifiedAt:new Date().toISOString(),local:false,site,mode,config}},null,2));
+    writeFileSync(join(root,'.studio','stripe-purchase-links.json'),JSON.stringify(purchases?.config??{offers:[]}));
+    const {refreshWorkerConfig}=await import('./worker-config.mjs');refreshWorkerConfig(root);
+  }
+  if(has('STRIPE_CHECKOUT_MODE')) {
+    const removed=await w(['secret','delete','STRIPE_CHECKOUT_MODE'],{input:'y\n'});
+    if(removed.code!==0)return {ok:false,needs:'cloudflare',why:wranglerError(removed)};
+  }
+  // Public assets take effect on deploy. Keep old links live until that deployment;
+  // the planner returns retirement operations for the subsequent reconciliation.
   for (const e of endpoints.filter((e) => e.id !== endpoint.id && e.url === url && e.metadata?.homie === 'shop-v1' && e.status !== 'disabled')) await api('POST', `/v1/webhook_endpoints/${e.id}`, { disabled: true });
-  return { ok: true, command: 'shop connect', mode, keyless: true, saved: !unchanged, alreadyConnected: Boolean(unchanged), webhook: { id: endpoint.id, url }, verifiedPurchase: false,
-    message: 'Your shop uses Stripe Payment Links. No Stripe API key is stored in the Worker.',
-    next: ['Verify a purchase, its signed webhook and item grant; refund in Stripe or ask your connected AI, then verify removal.'] };
+  return { ok: true, command: 'shop connect', mode, keyless: true, saved: !unchanged, alreadyConnected: Boolean(unchanged), webhook: { id: endpoint.id, url }, verifiedPurchase: false, retireAfterDeploy:retire,
+    message: 'Your shop uses Stripe Payment Links. Public configuration is saved for the next deploy; no Stripe API key is stored in the Worker.',
+    next: ['Deploy the public link configuration before retiring replaced Payment Links.', 'Verify a purchase, its signed webhook and item grant; refund in Stripe or ask your connected AI, then verify removal.'] };
 }
+
+function wranglerError(result) {return 'Cloudflare: '+redactText([result.stderr,result.out,result.stdout].filter(Boolean).join('\n')||'Wrangler failed').text.slice(-4000);}

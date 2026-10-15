@@ -183,10 +183,11 @@ export function checkShop(raw, { games = null, audience = 'general', studioName 
       else if (Array.isArray(games) && !games.includes(String(it.game))) err(`${at}.game`, `there is no game "${it.game}" in games/`);
     }
     if (it.taxCode !== undefined && !TAX_CODE.test(String(it.taxCode))) err(`${at}.taxCode`, 'taxCode is a Stripe product tax code such as "txcd_10000000"');
+    if(it.maxQuantity!==undefined && (!Number.isSafeInteger(it.maxQuantity)||it.maxQuantity<1||it.maxQuantity>999999))err(`${at}.maxQuantity`,'use a whole number from 1 to 999999');
     const advantage = it.advantage === true;
     const badge = gives.find((g) => g.startsWith('badge:'));
     for (const key of Object.keys(it)) {
-      if (!['id', 'kind', 'name', 'blurb', 'description', 'interval', 'price', 'min', 'max', 'gives', 'badge', 'days', 'starts', 'ends', 'game', 'taxCode', 'advantage'].includes(key)) warnings.push({ at: `${at}.${key}`, message: 'This field is not published by the shop. Describe any buyer-facing meaning in blurb so buyers can read it.' });
+      if (!['id', 'kind', 'name', 'blurb', 'description', 'interval', 'price', 'min', 'max', 'gives', 'badge', 'days', 'starts', 'ends', 'game', 'taxCode', 'advantage', 'maxQuantity'].includes(key)) warnings.push({ at: `${at}.${key}`, message: 'This field is not published by the shop. Describe any buyer-facing meaning in blurb so buyers can read it.' });
     }
     items.push({
       id, kind, name, ...(it.interval === 'month' ? { interval: 'month' } : {}), ...(blurb ? { blurb } : {}),
@@ -194,7 +195,7 @@ export function checkShop(raw, { games = null, audience = 'general', studioName 
       gives, ...(badge ? { badge: badgeWord(badge, it) } : {}),
       ...(days !== null ? { days } : {}), ...(Number.isFinite(starts) ? { starts: new Date(starts).toISOString() } : {}), ...(Number.isFinite(ends) ? { ends: new Date(ends).toISOString() } : {}),
       ...(it.game ? { game: String(it.game) } : {}), ...(it.taxCode ? { taxCode: String(it.taxCode) } : {}),
-      advantage,
+      advantage, ...(it.maxQuantity!==undefined?{maxQuantity:it.maxQuantity}:{}),
     });
   });
 

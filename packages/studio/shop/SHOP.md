@@ -305,7 +305,7 @@ await shop.checkout({ reference: 'table-7' });
 The default opens the synced Stripe menu containing those items. The guest chooses
 final quantities **on Stripe**, starting at one for each menu line; the local cart's
 quantities are not prefilled. Adjustable quantity minimum is zero (Stripe prevents
-removing the last item). Payment Links support at most 20 lines. Keyless sync splits catalogues into menus of ten to fit signed invoice snapshots without authenticated pagination. Split larger menus;
+removing the last item); maximum is the item’s `maxQuantity` from shop.json, default 99 (a positive integer up to 999999). Payment Links support at most 20 lines. Keyless sync splits catalogues into menus of ten to fit signed invoice snapshots without authenticated pagination. Split larger menus;
 if selected items span menus, the app receives `menu` and should offer separate
 checkouts. Custom amounts cannot be mixed into this menu; offer a separate tip link.
 Stripe invoice creation is enabled for menus (Stripe's invoice pricing applies).
@@ -329,8 +329,7 @@ the owner's AI write the complete manifest to `.studio/booking-slots.json` and r
 
 Sync after publishing or changing slots. Removed or inactive slots deactivate their
 links. Each link has `restrictions.completed_sessions.limit = capacity`, with one
-fixed service and one seat per checkout. Re-sync preserves Stripe's lifetime completed
-count. Free slots stay local and use separate slot records from paid links. Never increment capacity just to hide a full-link error.
+fixed service and an adjustable group quantity up to the published remaining seats. Stripe counts completed sessions, not seats: supply the reviewed `confirmed` seat total when resyncing. The database confirms the paid quantity atomically; a capacity race becomes a visible review order rather than an overbooking. Re-sync preserves Stripe's lifetime completed count. Free slots stay local and use separate slot records from paid links. Never increment capacity just to hide a full-link error.
 Refunds do not decrement Stripe's completed-session counter; the owner's AI must
 review availability and resync explicitly. A changed price should use a new slot;
 do not replace a sold link and accidentally reset its capacity counter.
@@ -453,3 +452,9 @@ repeated delivery of the same session never creates another round.
 The Stripe heading is the connected Stripe account's business name. A sandbox
 account named “Homie sandbox” shows that name; a real pub's account shows the pub's
 name. The basket's product name and description use the pub's own wording.
+
+### Payments requiring review
+
+A signed paid deposit or basket that cannot match its saved order is retained as a `review` order, with the payment ID and actual total, a customer notice and a durable `payment.review` event. Staff reconcile fulfillment or refund in Stripe. Group payments that exceed remaining capacity follow the same path without granting seats. Repeated events do not duplicate the review order.
+
+Full connect saves `.studio/stripe-mcp.json` and public purchase configuration for the build’s JSON asset, just like plugin verification. Rebuild/deploy before retiring old links. `STRIPE_CHECKOUT_MODE` stays in public Wrangler vars; only the webhook signing secret and private purchase signing keys use secrets.

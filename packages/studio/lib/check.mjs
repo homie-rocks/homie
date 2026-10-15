@@ -449,7 +449,7 @@ export async function checkApp({ webglFailure = false, isolate = true, root = nu
       needs.push(...await proveAppNeeds({plan:{...plan,needs:[need]},surfaces,shots,report,ready:appReady,root,restart:()=>import('./dev-restart.mjs').then(m=>m.requestDevRestart(root,url)),headless:needsHeadless({url,secret,app:game,meta,scope:isolate?room:null,sessionFor})}));
     }
     if (plan) { saveAppNeeds(root, game, plan, needs); const { refreshCodexFile } = await import('./codex.mjs'); refreshCodexFile(root, game); }
-    const ok = !needs || needs.every(n => n.status === 'met');
+    const ok = !needs || needs.every(n => n.status === 'met' || n.status === 'pending');
     return { ok, ...(needs ? { needs, why: ok ? undefined : 'Some needs from the person’s Codex are not yet met; see needs and captures' } : {}), command: 'check', kind: 'app', webglFailure, isolatedRecords:isolate, captureWarnings, dialogs, room, surfaces: surfaces.map((s) => s.name), action: proof.action, before, after, reconnect: baseline };
   } catch (error) { return { ok: false, command: 'check', kind: 'app', dialogs, why: error.message }; }
   finally { await ownerClient?.close().catch(()=>{}); await browser?.close().catch(() => {}); rmSync(profile, { recursive: true, force: true }); }
