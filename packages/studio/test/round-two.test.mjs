@@ -242,3 +242,13 @@ test('lobby snapshots reject queue reordering and share the initial metadata bat
  await storeLobbySummary({DB},{game:'cafe',at:at+1,rooms:[]});
  assert.deepEqual((await liveRoomSummaries({BACKGROUND:{},DB})).get('cafe'),[]);
 });
+
+import {idleChatSnapshot,restoreIdleChat} from '../worker/idle-chat.mjs';
+test('hibernation retains the chat window, moderation buckets and acknowledged usage',()=>{
+ const original={room:{chatLog:[{id:'one',text:'hello'}],chatBuckets:new Map([['sender',{lastSayAt:-Infinity,tokens:0}]]),chatAddress:new Map([['address',{tokens:1}]]),chatReacts:[1],stats:{chatLines:1,chatHeld:{slow:2},bytesOut:50}},chatSent:{chatLines:1,held:{slow:2}},chatPend:{neurons:0.5,ok:0,held:0,error:0}};
+ const saved=idleChatSnapshot(original),restored={room:{stats:{bytesOut:0}},chatSent:{},chatPend:{}};
+ original.room.chatLog.length=0;restoreIdleChat(restored,saved);
+ assert.equal(restored.room.chatLog[0].text,'hello');assert.equal(restored.room.chatBuckets.get('sender').lastSayAt,-Infinity);
+ assert.equal(restored.room.chatAddress.get('address').tokens,1);assert.equal(restored.chatSent.chatLines,1);
+ assert.equal(restored.chatPend.neurons,0.5);assert.equal(restored.room.stats.bytesOut,0);
+});

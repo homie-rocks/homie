@@ -1,3 +1,4 @@
+import {idleChatSnapshot,restoreIdleChat} from './idle-chat.mjs';
 import {WatchSockets} from './watch-sockets.mjs';
 import { catalogue } from './catalogue.mjs';
 import { RULES_WIRING_MESSAGE } from './rules-wiring.mjs';
@@ -80,6 +81,7 @@ export class Table {
       if (this.saved?.retired === true) this.cleanupPending = true;
       this.recorded = (await ctx.storage.get('recorded')) ?? 0;
       this.officeSaved = (await ctx.storage.get('office')) ?? null;
+      this.idleChat = (await ctx.storage.get('watch-chat')) ?? null;
       // A big match room's last unconfirmed checkpoint (worker/room-store.mjs), read once as the object wakes.
       try { this.looseSave = (await ctx.storage.list?.({ prefix: LOOSE_SAVE })) ?? null; }
       catch (error) { this.looseSave = null; this.storageProblem(error); }
@@ -119,6 +121,9 @@ export class Table {
       // are told apart by these. HOMIE_ROOM_LOG=0 keeps only the failures.
       log: (line) => this.say(line),
     });
+    restoreIdleChat(this,this.idleChat);
+    this.idleChat=null;
+    this.room.waitUntil=work=>this.ctx.waitUntil(Promise.resolve(work).finally(()=>this.keepIdleChat()));
     this.room.gateFacts = () => [...(this.gateMetrics?.values() ?? [])];
     if (this.saved && !hostedGame(game)) this.room.restore(this.saved);
     if (this.officeSaved) this.room.restoreOffice(this.officeSaved);
@@ -1112,7 +1117,15 @@ export class Table {
     return transport ? null : new Response(null, { status: 101, webSocket: client });
   }
 
-  webSocketMessage(socket, message) { this.watchSockets.message(socket, message); }
+  async keepIdleChat() {
+    if(!this.room)return;
+    try { await this.flushChat(); }
+    finally { await this.ctx.storage.put('watch-chat',idleChatSnapshot(this)); }
+  }
+  async webSocketMessage(socket, message) {
+    this.watchSockets.message(socket, message);
+    await this.keepIdleChat();
+  }
   // Compatibility date >= 2026-04-07 replies to Close frames automatically.
   async webSocketClose(socket) { await this.watchSockets.close(socket); }
   async webSocketError(socket, error) { await this.watchSockets.close(socket, error); }
