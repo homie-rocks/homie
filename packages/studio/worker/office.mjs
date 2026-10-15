@@ -1412,10 +1412,8 @@ export async function appAssetTicket(env, app, ticket, {request,meta,launch=meta
     authorized=Boolean(gate && person && (person.owner || !meta.roles[data.role].signIn || await env.DB.prepare("SELECT 1 FROM app_roles WHERE app IN (?1,'*') AND role=?2 AND player=?3").bind(app,data.role,person.id).first()));
   }
   if(!authorized)return ticket===undefined?null:false;
-  if(data.link) {
-    const link=await env.DB.prepare('SELECT token FROM app_role_links WHERE app=?1 AND role=?2').bind(app,data.role).first();
-    if(!link||data.link!==await sha256(link.token))return false;
-  }
+  const currentLink=await env.DB.prepare('SELECT token FROM app_role_links WHERE app=?1 AND role=?2').bind(app,data.role).first();
+  if(data.link!==(currentLink?await sha256(currentLink.token):null))return ticket===undefined?null:false;
   if(ticket!==undefined)return true;
   const payload=b64url(new TextEncoder().encode(JSON.stringify(data)));
   return `${payload}.${(await mac(key,`app-assets|${app}|${payload}`)).slice(0,32)}`;

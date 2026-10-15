@@ -69,6 +69,9 @@ test('player asset capability rechecks role grants, role-link rotation and sessi
  DB.sql.prepare("INSERT INTO app_roles VALUES('cafe','staff','p')").run();assert.equal(await appAssetTicket(env,'cafe',ticket,{meta}),true);
  DB.sql.prepare("UPDATE app_role_links SET token='rotated'").run();assert.equal(await appAssetTicket(env,'cafe',ticket,{meta}),false);
  const next=await appAssetTicket(env,'cafe',undefined,{request,meta});assert.ok(next);
+ DB.sql.prepare('DELETE FROM app_role_links').run();
+ const unlinked=await appAssetTicket(env,'cafe',undefined,{request,meta});assert.ok(unlinked);
+ DB.sql.prepare("INSERT INTO app_role_links VALUES('cafe','staff','new-restriction')").run();assert.equal(await appAssetTicket(env,'cafe',unlinked,{meta}),false,'adding a role link invalidates the former context too');
  DB.sql.prepare('UPDATE player_sessions SET expires_at=0').run();assert.equal(await appAssetTicket(env,'cafe',next,{meta}),false);
  DB.sql.prepare('DELETE FROM player_sessions').run();assert.equal(await appAssetTicket(env,'cafe',next,{meta}),false);
 });
