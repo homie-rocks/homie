@@ -1,0 +1,396 @@
+{
+  "controls": {
+    "keys": [
+      {
+        "code": "ArrowLeft",
+        "kind": "left",
+        "feedbackMs": 32.8,
+        "distanceTiles": 0.8
+      },
+      {
+        "code": "ArrowRight",
+        "kind": "right",
+        "feedbackMs": 17.6,
+        "distanceTiles": 0.942
+      },
+      {
+        "code": "KeyA",
+        "kind": "left",
+        "feedbackMs": 18.7,
+        "distanceTiles": 0.942
+      },
+      {
+        "code": "KeyD",
+        "kind": "right",
+        "feedbackMs": 23.4,
+        "distanceTiles": 0.8
+      },
+      {
+        "code": "Space",
+        "kind": "jump",
+        "feedbackMs": 30.1,
+        "heightTiles": 5.108,
+        "airSeconds": 0.82
+      },
+      {
+        "code": "ArrowUp",
+        "kind": "jump",
+        "feedbackMs": 22.3,
+        "heightTiles": 5.108,
+        "airSeconds": 0.82
+      },
+      {
+        "code": "KeyW",
+        "kind": "jump",
+        "feedbackMs": 28.2,
+        "heightTiles": 5.108,
+        "airSeconds": 0.82
+      }
+    ],
+    "touch": [
+      {
+        "what": "stick right",
+        "topSpeedTilesPerSecond": 14
+      },
+      {
+        "what": "stick left",
+        "topSpeedTilesPerSecond": -15.4
+      },
+      {
+        "what": "stick right",
+        "topSpeedTilesPerSecond": 11.8
+      },
+      {
+        "what": "stick left",
+        "topSpeedTilesPerSecond": -15.4
+      },
+      {
+        "what": "stick right",
+        "topSpeedTilesPerSecond": 15.4
+      },
+      {
+        "what": "stick left",
+        "topSpeedTilesPerSecond": -15.6
+      },
+      {
+        "what": "JUMP button",
+        "roseTiles": {
+          "rose": 5.11,
+          "caught": false
+        }
+      },
+      {
+        "what": "tap on the right side",
+        "roseTiles": {
+          "rose": 5.11,
+          "caught": false
+        }
+      },
+      {
+        "what": "JUMP button",
+        "roseTiles": {
+          "rose": 5.11,
+          "caught": false
+        }
+      },
+      {
+        "what": "tap on the right side",
+        "roseTiles": {
+          "rose": 5.11,
+          "caught": false
+        }
+      },
+      {
+        "what": "JUMP button",
+        "roseTiles": {
+          "rose": 5.11,
+          "caught": false
+        }
+      },
+      {
+        "what": "tap on the right side",
+        "roseTiles": {
+          "rose": 5.11,
+          "caught": false
+        }
+      }
+    ],
+    "tv": {
+      "seat": null,
+      "role": "screen",
+      "runners": 4,
+      "errors": []
+    },
+    "taps": [
+      {
+        "code": "ArrowLeft",
+        "kind": "left",
+        "feedbackMs": 22.6,
+        "distanceTiles": 0.025
+      },
+      {
+        "code": "ArrowRight",
+        "kind": "right",
+        "feedbackMs": 32.7,
+        "distanceTiles": 0.025
+      },
+      {
+        "code": "ArrowRight",
+        "kind": "right",
+        "feedbackMs": 23.3,
+        "distanceTiles": 0.05
+      },
+      {
+        "code": "ArrowLeft",
+        "kind": "left",
+        "feedbackMs": 23.8,
+        "distanceTiles": 0.025
+      }
+    ],
+    "errors": [],
+    "jumpButton": {
+      "x": 338,
+      "y": 786
+    }
+  },
+  "reload": {
+    "first": {
+      "roleBefore": "host",
+      "roleAfter": "replica",
+      "otherRoleAfter": "host",
+      "backInMs": 506,
+      "scoreBefore": 4,
+      "scoreAfter": 0,
+      "scoreKept": false,
+      "scoreOnOtherScreenBefore": 4,
+      "runnersBefore": 4,
+      "runnersAfter": 4,
+      "movedTilesWhileAway": 0.37,
+      "playsAgain": true,
+      "errors": []
+    },
+    "second": {
+      "roleBefore": "replica",
+      "roleAfter": "replica",
+      "otherRoleAfter": "host",
+      "backInMs": 227,
+      "scoreBefore": 4,
+      "scoreAfter": 0,
+      "scoreKept": false,
+      "scoreOnOtherScreenBefore": 4,
+      "runnersBefore": 4,
+      "runnersAfter": 4,
+      "movedTilesWhileAway": 0,
+      "playsAgain": true,
+      "errors": []
+    }
+  },
+  "forge": {
+    "windows": [
+      {
+        "mode": "teleport",
+        "at": 4160.700000047684,
+        "end": 8167.299999952316,
+        "scoreBefore": 1,
+        "scoreAfter": 2
+      },
+      {
+        "mode": "wall",
+        "at": 13177.599999904633,
+        "end": 17193.5,
+        "scoreBefore": 2,
+        "scoreAfter": 3
+      },
+      {
+        "mode": "speed",
+        "at": 22228.599999904633,
+        "end": 26269.599999904633,
+        "scoreBefore": 3,
+        "scoreAfter": 5
+      },
+      {
+        "mode": "tol",
+        "at": 31287.700000047684,
+        "end": 35309,
+        "scoreBefore": 5,
+        "scoreAfter": 6
+      },
+      {
+        "mode": "velonly",
+        "at": 40341.299999952316,
+        "end": 44347.39999985695,
+        "scoreBefore": 6,
+        "scoreAfter": 8
+      },
+      {
+        "mode": "future",
+        "at": 49352.59999990463,
+        "end": 53364.89999985695,
+        "scoreBefore": 8,
+        "scoreAfter": 8
+      },
+      {
+        "mode": "past",
+        "at": 58407.799999952316,
+        "end": 62456.299999952316,
+        "scoreBefore": 8,
+        "scoreAfter": 9
+      }
+    ],
+    "samples": [
+      {
+        "n": 0,
+        "sample": null
+      },
+      {
+        "n": 0,
+        "sample": null
+      }
+    ],
+    "reconnects": 0,
+    "link": "online",
+    "errors": []
+  },
+  "feel": {
+    "delayMs": 0,
+    "runKeyFeedbackMs": {
+      "n": 24,
+      "min": 16.6,
+      "median": 23,
+      "p90": 31.3,
+      "max": 31.6
+    },
+    "jumpKeyFeedbackMs": {
+      "n": 9,
+      "min": 19.4,
+      "median": 23.1,
+      "p90": 24.8,
+      "max": 24.8
+    },
+    "run150msTiles": {
+      "n": 24,
+      "min": 0,
+      "median": 450,
+      "p90": 558,
+      "max": 1425
+    },
+    "jumpHeightTiles": {
+      "n": 9,
+      "min": 5108,
+      "median": 5108,
+      "p90": 5108,
+      "max": 5108
+    },
+    "jumpAirSeconds": {
+      "n": 9,
+      "min": 820,
+      "median": 820,
+      "p90": 820,
+      "max": 820
+    },
+    "tap30msTiles": [
+      0.025,
+      0.025,
+      0.025,
+      0.025,
+      0.025,
+      0.025,
+      0.025,
+      0.025
+    ],
+    "tap80msTiles": [
+      0.142,
+      0.142,
+      0.142,
+      0.2,
+      0.142,
+      0.142,
+      0.092,
+      0.142
+    ],
+    "tap120msTiles": [
+      0.275,
+      0.275,
+      0.358,
+      0.275,
+      0.358,
+      0.275,
+      0.358,
+      0.358
+    ],
+    "trialsThatFoundNoGround": 3,
+    "errors": []
+  },
+  "feel150": {
+    "delayMs": 150,
+    "runKeyFeedbackMs": {
+      "n": 24,
+      "min": 19.5,
+      "median": 28.7,
+      "p90": 32.1,
+      "max": 33
+    },
+    "jumpKeyFeedbackMs": {
+      "n": 12,
+      "min": 19.8,
+      "median": 27.4,
+      "p90": 31.9,
+      "max": 32.4
+    },
+    "run150msTiles": {
+      "n": 24,
+      "min": 450,
+      "median": 450,
+      "p90": 558,
+      "max": 558
+    },
+    "jumpHeightTiles": {
+      "n": 12,
+      "min": 5108,
+      "median": 5108,
+      "p90": 5108,
+      "max": 5108
+    },
+    "jumpAirSeconds": {
+      "n": 12,
+      "min": 820,
+      "median": 820,
+      "p90": 820,
+      "max": 820
+    },
+    "tap30msTiles": [
+      0.025,
+      0.025,
+      0.025,
+      0.025,
+      0.025,
+      0.025,
+      0.025,
+      0.025
+    ],
+    "tap80msTiles": [
+      0.142,
+      0.142,
+      0.142,
+      2.688,
+      0.142,
+      0.142,
+      0.142,
+      0.142
+    ],
+    "tap120msTiles": [
+      0.275,
+      0.275,
+      0.275,
+      0.275,
+      0.275,
+      0.275,
+      0.358
+    ],
+    "trialsThatFoundNoGround": 1,
+    "errors": []
+  },
+  "tag": "c-preserve",
+  "base": "http://127.0.0.1:8792",
+  "at": "2026-10-15T03:09:54.841Z"
+}

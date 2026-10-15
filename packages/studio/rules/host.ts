@@ -504,8 +504,9 @@ export function createHost(o: HostOptions): Host {
       const action = kind.input.some(([, fd], index) => fd.t === 'press' && raw[index + 1] === 1);
       if (seq && r !== body.r && !action) continue;
       if (seq ? q.received?.includes(seq) : j <= q.newest) continue;
-      // Too early: more than a second ahead. This entry and the rest of the frame are dropped.
-      if (j > K + tickHz) { stats.dropped += 1; break; }
+      // Legacy inputs more than a second ahead are dropped. Validated owners
+      // must reach validation: its revision reply explicitly resynchronizes them.
+      if (!kind.body?.validatedOwner && j > K + tickHz) { stats.dropped += 1; break; }
       if(j >= q.newest && lead < q.lead)q.lead=lead;
       q.newest = Math.max(q.newest,j);
       if(seq){q.received??=[];q.received.push(seq);if(q.received.length>256)q.received.shift();}
@@ -521,7 +522,8 @@ export function createHost(o: HostOptions): Host {
       if (kind.body?.validatedOwner) {
         if (!claim || !raw.slice(i,i+10).every(v=>typeof v==='number' && Number.isFinite(v))) continue;
         const reports = ownerReports.get(seat as number) ?? [];
-        if (reports.length < 128) reports.push({...claim,tick:j,base:raw[i+9],values:{...values,...Object.fromEntries(presses.filter(p=>typeof p==='string').map(p=>[p,true]))}});
+        if (reports.length >= 128) { core.resyncOwner(seat as number); ownerReports.delete(seat as number); queues.delete(seat as number); return; }
+        reports.push({...claim,tick:j,base:raw[i+9],values:{...values,...Object.fromEntries(presses.filter(p=>typeof p==='string').map(p=>[p,true]))}});
         ownerReports.set(seat as number,reports);
         q.receipts??=[]; if(seq)q.receipts.push([seq,j]); if(q.receipts.length>64)q.receipts.splice(0,q.receipts.length-64);
         q.ack=Math.max(q.ack,j);
@@ -908,8 +910,9 @@ export function createHost(o: HostOptions): Host {
           // one every 37 ms, runs at its rate. Later than that its clock runs slow, and a slow host yields.
           else if (now - due > Math.max(2 * period, 100)) { base = { ms: now - period, tick: core.tick }; publishRebase(now); }
         }
-        // Blamed since its last tick began: a run of slow ticks begins (when the tick blamed did), or goes on.
-        if (blamed) { if (overSince === null) { overSince = lastStart; overTicks = 0; overBlamed = 0; } overBlamed += 1; }
+        // Start observing sustained slow throughput at this callback. A single
+        // scheduler suspension is not five seconds of repeated slow ticks.
+        if (blamed) { if (overSince === null) { overSince = now; overTicks = 0; overBlamed = 0; } overBlamed += 1; }
         blamed = false;
         if (overSince !== null) {
           overTicks += 1;

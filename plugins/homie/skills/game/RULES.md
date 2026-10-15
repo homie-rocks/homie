@@ -77,6 +77,22 @@ on owner bodies and live colliders still apply. The direct, trusted `core.step`
 input API remains available to offline rule tests; network hosts always require
 validated reports for opted-in human bodies. No report grants score or events.
 
+Each snapshot acknowledgement includes the server tick. Validated owners slew
+small clock errors by at most 2%; out-of-window reports reach validation and
+receive a new placement revision instead of being silently dropped. A stalled
+room therefore explicitly resets the owner to its accepted pose and clock.
+
+`world.movement(id, kind)` returns the immutable ordered movement states accepted
+for that entity in this server tick (up to eight): `tick`, `pos`, `vel`, `heading`,
+`grounded` and declared `motion`. It returns an empty list when no reports were
+accepted or a placement invalidated them. Contact rules must check every state,
+including their game's recorded substeps, rather than only the last state in a
+packet burst. It does not replay game handlers or award points automatically.
+Bound any past-time contact allowance in the game's rules; Tiny Platformer uses
+150 ms and judges older reports against current monsters. Scores displayed as
+confirmed must come from server fields, not a prediction callback.
+
+
 A non-player entity may use `world.sweep(self, delta)` instead of a move function.
 Bodies require radius and maxSpeed. In 2D use circle or box (radius is its half-width); in 3D use sphere, capsule or
 axis-aligned box, with full height for capsule/box. `sweep: true` adds automatic map

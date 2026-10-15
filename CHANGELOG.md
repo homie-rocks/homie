@@ -19,6 +19,18 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [Unreleased]
 
+### Fixed
+
+- A single long scheduler suspension starts the overrun observation window on
+  return; it no longer counts as a sustained run of slow ticks by itself.
+- Validated owners track the room clock through drift and receive an explicit
+  reset for reports beyond the clock window after a stall.
+- `world.movement(id, kind)` exposes every accepted report in a server tick for
+  contact checks. Remote burst travel cuts instead of fast-forwarding, and local
+  box landing checks use the map index instead of scanning every box per frame.
+- Validated-owner HUD, scene and diagnostic readers share the same presentation
+  within a browser animation frame; input and simulation changes invalidate it.
+
 ### Added
 
 - Opt-in `body.move: 'validated-owner'`: the owning browser keeps its local

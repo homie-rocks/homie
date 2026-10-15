@@ -1,0 +1,9 @@
+file:///Users/ryan/Studios/homie-arcade-rules/node_modules/puppeteer-core/lib/puppeteer/util/decorators.js:99
+                throw new Error(message(this));
+                      ^
+
+Error: Attempted to use detached Frame '4C62B3127EF3414B44B26860684E7ACA'.
+    at CdpFrame.<anonymous> (file:///Users/ryan/Studios/homie-arcade-rules/node_modules/puppeteer-core/lib/puppeteer/util/decorators.js:99:23)
+    at file:///private/tmp/claude-501/-Users-ryan--homie-workspace-homie--claude-worktrees-dev-feedback-toolkit-3293de/28857d96-0d6d-42cb-ac18-64d8c7896e73/scratchpad/pt6/tp/phone.mjs:52:31
+
+Node.js v22.23.3

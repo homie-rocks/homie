@@ -1,0 +1,1 @@
+{"tag":"c-phone3","base":"http://127.0.0.1:8792","cpu":4,"seconds":180,"lag":{"delay":60,"loss":0.01,"jitter":20},"jumpButton":{"x":338,"y":786},"frameOffset":{"x":0,"y":0},"steps":1724,"jumps":360,"touches":724,"score":0,"link":"online","reconnects":0,"errors":[],"load":[30.8,39.9,31.6]}

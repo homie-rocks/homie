@@ -159,6 +159,7 @@ export interface Core {
   readonly tick: number;
   readonly epoch: number;
   step(inputs?: ReadonlyMap<number, StepInput>, guides?: () => void): void;
+  resyncOwner(seat: number): void;
   reviseMovement(seat: number, at: number, values: Record<string, unknown>): boolean;
   guide(seat: number, floor?: unknown): Record<string, unknown> | null;
   vocabulary(value: Vocabulary | null): void;
@@ -709,6 +710,15 @@ export function createCore(c: Compiled, opts: { validateOwners?: boolean; charac
       found.sort((a, b) => a.d - b.d || a.e.n - b.e.n);
       return Object.freeze(found.map((x) => viewOf(x.e)));
     },
+    movement: (id: unknown, kind?: unknown): readonly unknown[] => {
+      charge(16);
+      const e = typeof id === 'string' ? ents.get(id) : undefined;
+      if (!e || e.dead || typeof kind === 'string' && e.kind.name !== kind) return Object.freeze([]);
+      const path = acceptedMovement.get(e.id);
+      if (!path || path.r !== e.r) return Object.freeze([]);
+      charge(path.steps.length * (32 + e.kind.motion.length));
+      return path.steps;
+    },
     inBox: (box: unknown, kind?: unknown): readonly unknown[] => {
       charge(20 + 2 * ents.size);
       const min = V(own(box, 'min')); const max = V(own(box, 'max')); const k = kindFilter(kind);
@@ -1109,6 +1119,7 @@ export function createCore(c: Compiled, opts: { validateOwners?: boolean; charac
   // Validation state is transient. A restored epoch establishes a new baseline;
   // durable entity rows keep their existing format.
   const owners = new Map<string, {r:number; last:number|null; since:number; used:number; pending:Map<number,OwnerReport>}>();
+  const acceptedMovement = new Map<string, {r:number; steps:readonly Readonly<MovementState & {tick:number}>[]}>();
   function validateOwner(e: Ent, reports: OwnerReport[]): void {
     const body = e.kind.body!;
     let state = owners.get(e.id);
@@ -1154,6 +1165,10 @@ export function createCore(c: Compiled, opts: { validateOwners?: boolean; charac
       }
       e.pos=expectedPos; e.vel=expectedVel; e.heading=dir(b.heading,dims); e.grounded=b.grounded; e.input=input;
       state.pending.delete(report.tick); state.last=report.tick; state.used++;
+      const path = acceptedMovement.get(e.id);
+      left -= 32 + COPY * e.kind.motion.reduce((sum,[,fd])=>sum+cellsOf(fd),0);
+      const pose = deepFreeze({...movementState(e),motion:coerceFields(e.kind.motion,e.m,dims),tick:report.tick});
+      acceptedMovement.set(e.id,{r:e.r,steps:Object.freeze([...(path?.steps ?? []),pose])});
     }
     if (state.pending.size && Math.max(...state.pending.keys())-(state.last ?? 0)>256) reject();
   }
@@ -1186,6 +1201,7 @@ export function createCore(c: Compiled, opts: { validateOwners?: boolean; charac
     finally {tick=savedTick;moveGeometry=geometry;currentMap=map;}
   }
   function step(inputs: ReadonlyMap<number, StepInput> = new Map(), guides?: () => void): void {
+    acceptedMovement.clear();
     for(const id of owners.keys())if(!ents.has(id))owners.delete(id);
     for(const id of movementHistory.keys())if(!ents.has(id))movementHistory.delete(id);
     tick = (tick + 1) >>> 0;
@@ -1666,6 +1682,12 @@ export function createCore(c: Compiled, opts: { validateOwners?: boolean; charac
       return value;
     },
     seatJoin: (info) => { ops.push({ op: 'join', info: { seat: info.seat, driver: info.driver, owner: String(info.owner ?? '').slice(0, 128), ...(info.character !== undefined ? { character: info.character } : {}) } }); },
+    resyncOwner: (seat) => {
+      const id = seats.get(seat)?.id, e = id ? ents.get(id) : undefined;
+      if (!e?.kind.body?.validatedOwner) return;
+      e.r = (e.r + 1) & 0xffff;
+      owners.delete(e.id); acceptedMovement.delete(e.id);
+    },
     seatAway: (seat, away) => { ops.push({ op: 'away', seat, away }); },
     seatLeave: (seat) => { ops.push({ op: 'leave', seat }); },
     setPolicy: (p) => { policy = normalizeCorePolicy(p); },

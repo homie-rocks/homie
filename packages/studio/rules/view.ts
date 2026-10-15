@@ -1,3 +1,4 @@
+import { nearbyMap } from './map-index.ts';
 import { correctionPath } from './correction-path.ts';
 import { disposeMoveContext, sweepMap } from './math.ts';
 import { boundPosition, periodicDelta, blendPosition, relativePoint, wrapPoint } from './topology.mjs';
@@ -492,6 +493,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   /* ---------------------------------------------------------------- the own actions, predicted (0.46.3) */
 
   const predictors = opts.predict ?? {};
+  const predictionFieldNames = new Map(schema.kinds.map(k => [k.name, new Set(k.fields.map(([name]) => name))]));
   let predicting = false;
   let predictionFrame: Frame | null = null;
   function predictionEach(kind: string, fn: (e: Entity) => void): void {
@@ -561,7 +563,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     finally { predicting = wasPredicting; predictionFrame = previousFrame; }
     // What it wrote is held to the declared types, as the server holds its own writes.
     for (const [name, fd] of kind.fields) fields[name] = coerce(fd, fields[name], dims);
-    for (const key of Object.keys(fields)) if (!kind.fields.some(([name]) => name === key)) delete fields[key];
+    for (const key of Object.keys(fields)) if (!predictionFieldNames.get(kindName)!.has(key)) delete fields[key];
   }
   /** After a snapshot: a ghost or a provisional effect whose tick the server has run without confirming it is taken back. */
   function settlePredictions(f: Frame, before: Frame | null, ack: number): void {
@@ -792,7 +794,17 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         adopt(me); rebase(f.k, changedEpoch ? 'epoch' : 'placement');
         if (placed) emit('placed', entityOf(me, true));
       } else if (kindOf.get(me.kind)?.owner) {
-        if (kindOf.get(me.kind)?.validatedOwner) pending = pending.filter(e=>!applications.has(e.seq!));
+        if (kindOf.get(me.kind)?.validatedOwner) {
+          pending = pending.filter(e=>!applications.has(e.seq!));
+          const now = clock();
+          const error = tickAt(now) - (f.k + authorityRtt() / (2 * period));
+          // Snapshots acknowledge the room clock even when no input was accepted.
+          // Small drift changes cadence, never the pose. Ahead-of-room reports
+          // outside the validation window cause an explicit placement revision.
+          base = {tick:tickAt(now),at:now};
+          speed = 1 - Math.max(-.02,Math.min(.02,error * .01));
+          if (tickAt(now) < f.k - tickHz && pending.length === 0) rebase(f.k, 'clock');
+        }
         if (!kindOf.get(me.kind)?.validatedOwner) mine!.motion = motionOf(me.kind, me.motion);
         if (predictors[me.kind]) mine!.fields = thawFields(kindOf.get(me.kind)?.fields ?? [], me.fields);
       } else if (!pending.some(entry => entry.seq !== undefined && entry.t <= f.k && f.k - entry.t < tickHz && (applications.get(entry.seq) ?? Infinity) > f.k)) {
@@ -1004,10 +1016,16 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let routeDirection = 0;
   let presentedEntity: Entity | null = null;
   let presentationQueued = false;
+  let presentationFrame: number | null = null;
   let forecast: { mine: Mine; pos: Vec3; motion: Record<string, unknown>; tick: number; key: string; geometry: unknown; next: ReturnType<typeof runMove> } | null = null;
   let presented: { id: string; r: number; pos: Vec3; vel: Vec3; at: number } | null = null;
   function meNow(present = false): Entity | null {
-    if (present && presentedEntity) return presentedEntity;
+    // The document timeline is shared by all rAF callbacks in this browser
+    // frame, including callbacks separated by microtasks. Inputs, snapshots and
+    // actual simulation steps still invalidate the cached presentation at once.
+    const timeline = typeof document === 'undefined' ? null : document.timeline?.currentTime;
+    const frame = myKind()?.validatedOwner && typeof timeline === 'number' ? timeline : null;
+    if (present && presentedEntity && (frame === null || frame === presentationFrame)) return presentedEntity;
     if (predicting) { const u = mine && predictionFrame?.ents.get(mine.id); return u ? entityOf(u, true) : null; }
     if (solo) return solo.me;
     if (!mine || !latest) return null;
@@ -1057,7 +1075,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         // actual local physics step at that contact, never an embedded blend.
         if (kind.validatedOwner && dims === 2 && kind.shape === 'box') {
           const r = kind.radius;
-          if (map.boxes.some(b => pos.x+r>b.min.x+1e-7 && pos.x-r<b.max.x-1e-7 && pos.y+r>b.min.y+1e-7 && pos.y-r<b.max.y-1e-7)) pos = after.pos;
+          if (nearbyMap(mapAt(stepped),pos,{x:0,y:0,z:0},r,2*r,2).boxes.some(b => pos.x+r>b.min.x+1e-7 && pos.x-r<b.max.x-1e-7 && pos.y+r>b.min.y+1e-7 && pos.y-r<b.max.y-1e-7)) pos = after.pos;
         }
         heading = blendHeading(before.heading, after.heading, f, dims);
         velocity = vec3({x:lerp(before.vel.x,after.vel.x,f),y:lerp(before.vel.y,after.vel.y,f),z:lerp(before.vel.z,after.vel.z,f)},dims);
@@ -1181,13 +1199,13 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       if (t >= 1) headingBlend = null;
     }
     const result = entityOf({ ...server, ...(kind && predictors[kind.name] ? { fields: (base ? previewFields : null) ?? mine.fields } : {}), pos, vel: velocity, heading, grounded, motion }, true);
-    // Synchronous readers (HUD, scene, probes) share one presentation. Clear at
-    // the microtask boundary: an rAF clear can run after the next drawing callback,
-    // reusing an old pose and then spending two callbacks' travel at once.
-    // Inputs and snapshots still invalidate immediately.
+    // Readers share one presentation in a browser frame. Without a document
+    // timeline, retain the synchronous cache and clear at the microtask boundary.
+    // Inputs, snapshots and simulation steps still invalidate immediately.
     if (present && typeof window !== 'undefined') {
       presentedEntity = result;
-      if (!presentationQueued) {
+      presentationFrame = frame;
+      if (frame === null && !presentationQueued) {
         presentationQueued = true;
         const clear = () => { presentedEntity = null; presentationQueued = false; };
         queueMicrotask(clear);
@@ -1204,6 +1222,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (!ea || !eb) return ea ? entityOf(ea) : eb && s && s.alpha >= 1 ? entityOf(eb) : eb && !a?.ents.size ? entityOf(eb) : null;
     // A placed body jumps: nobody's view glides across a placement.
     if (ea.r !== eb.r || a?.e !== b?.e || !s) return entityOf(eb);
+    const kind = kindOf.get(eb.kind);
+    // A recovered owner can deliver seconds of validated travel in one batch.
+    // Cut that discontinuity instead of playing it at packet delivery speed.
+    if (kind?.validatedOwner && a && b && distance(ea.pos,eb.pos) > Math.max(kind.radius * 4, Math.max(Math.hypot(ea.vel.x,ea.vel.y,ea.vel.z),Math.hypot(eb.vel.x,eb.vel.y,eb.vel.z)) * (b.k-a.k) / tickHz * 1.5)) return entityOf(eb);
     const t = s.alpha;
     // Static pickups and scenery need no new vectors or wrappers for every HUD,
     // scene and probe traversal. Fields still follow the sampled snapshot.

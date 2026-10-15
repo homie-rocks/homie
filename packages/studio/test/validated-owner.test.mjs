@@ -26,3 +26,29 @@ test('report tolerance cannot accumulate into extra speed',()=>{const{core}=setu
 test('wall crossing is rejected even at legal speed and legal one-tick distance',()=>{const{core}=setup(),a=report(core),base=a.base;apply(core,[a]);apply(core,[{...a,tick:a.tick+1,pos:{x:.4,y:.075,z:0},vel:{x:4,y:1,z:0}}]);const before=state(core);apply(core,[{...a,base,tick:a.tick+2,pos:{x:.6,y:.15,z:0},vel:{x:4,y:1.5,z:0}}]);assert.equal(state(core).r,(before.r+1)&65535);assert.equal(state(core).pos.x,before.pos.x);});
 
 test('a fresh baseline after a pause grants one physics step, never skipped travel',()=>{const{core}=setup();const a=report(core);apply(core,[a]);for(let i=0;i<4;i++)apply(core,[]);const b={...a,tick:core.tick+1,base:core.tick,pos:{x:.4,y:.075,z:0},vel:{x:4,y:1,z:0}};apply(core,[b]);assert.equal(state(core).r,a.r);assert.ok(Math.abs(state(core).pos.x-.4)<1e-6);for(let i=0;i<4;i++)apply(core,[]);apply(core,[{...b,tick:core.tick+1,base:core.tick,pos:{x:1.4,y:.15,z:0},vel:{x:4,y:1.5,z:0}}]);assert.equal(state(core).r,(a.r+1)&65535);assert.ok(Math.abs(state(core).pos.x-.4)<1e-6);});
+
+test('host replies to an excessive owner clock lead with a new placement instead of dropping forever',()=>{
+ const r=hostRig(L,compile());r.join(0);r.ticks();const k=r.host.tick,start=state(r.host.core);
+ r.host.frame({t:'in',from:0,e:r.host.epoch,k:k+61,r:start.r,s:[[0,1,.2,.025,0,4,.5,0,1,0,0,k,-471,1,0]]});r.ticks();
+ assert.equal(state(r.host.core).r,(start.r+1)&65535);
+ const fresh=state(r.host.core),at=r.host.tick;
+ r.host.frame({t:'in',from:0,e:r.host.epoch,k:at+1,r:fresh.r,s:[[0,1,.2,.025,0,4,.5,0,1,0,0,at,-471,2,0]]});r.ticks();
+ assert.ok(Math.abs(state(r.host.core).pos.x-.2)<1e-6);r.host.stop();
+});
+test('every accepted report is available for contact checks and duplicate reports add no paths',()=>{
+ const {core}=setup(),a=report(core),b={...a,tick:a.tick+1,pos:{x:.4,y:.075,z:0},vel:{x:4,y:1,z:0}};
+ apply(core,[]);apply(core,[a,b]);const id=core.bodies()[0].id;
+ const path=core.world.movement(id);assert.equal(path.length,2);assert.deepEqual(path.map(p=>p.tick),[a.tick,b.tick]);
+ assert.ok(Math.abs(path[0].pos.x-.2)<1e-6);assert.ok(Math.abs(path[1].pos.x-.4)<1e-6);
+ assert.throws(()=>{path[0].pos.x=99;},TypeError);
+ apply(core,[a,b]);assert.equal(core.world.movement(id).length,0);
+});
+
+test('owner receive queue overflow explicitly resynchronizes without acknowledging a lost path',()=>{
+ const r=hostRig(L,compile());r.join(0);r.ticks();const k=r.host.tick,start=state(r.host.core);
+ for(let batch=0;batch<3;batch++)r.host.frame({t:'in',from:0,e:r.host.epoch,k:k+1,r:start.r,s:Array.from({length:64},(_,i)=>[i,1,.2,.025,0,4,.5,0,1,0,0,k,-471,1+batch*64+i,0])});
+ assert.equal(state(r.host.core).r,(start.r+1)&65535);r.ticks();
+ const fresh=state(r.host.core),at=r.host.tick;
+ r.host.frame({t:'in',from:0,e:r.host.epoch,k:at+1,r:fresh.r,s:[[0,1,.2,.025,0,4,.5,0,1,0,0,at,-471,500,0]]});r.ticks();
+ assert.ok(Math.abs(state(r.host.core).pos.x-.2)<1e-6);r.host.stop();
+});

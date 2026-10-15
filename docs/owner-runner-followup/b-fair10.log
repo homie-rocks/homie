@@ -1,0 +1,12 @@
+file:///Users/ryan/Studios/homie-arcade-rules/node_modules/puppeteer-core/lib/puppeteer/util/decorators.js:99
+                throw new Error(message(this));
+                      ^
+
+Error: Attempted to use detached Frame 'BF44FE91028ACC6F26D4805A79057840'.
+    at CdpFrame.<anonymous> (file:///Users/ryan/Studios/homie-arcade-rules/node_modules/puppeteer-core/lib/puppeteer/util/decorators.js:99:23)
+    at fr (file:///private/tmp/claude-501/-Users-ryan--homie-workspace-homie--claude-worktrees-dev-feedback-toolkit-3293de/28857d96-0d6d-42cb-ac18-64d8c7896e73/scratchpad/pt6/tp/cmp6.mjs:85:34)
+    at Object.step (file:///private/tmp/claude-501/-Users-ryan--homie-workspace-homie--claude-worktrees-dev-feedback-toolkit-3293de/28857d96-0d6d-42cb-ac18-64d8c7896e73/scratchpad/pt6/tp/cmp6.mjs:105:24)
+    at lag (file:///private/tmp/claude-501/-Users-ryan--homie-workspace-homie--claude-worktrees-dev-feedback-toolkit-3293de/28857d96-0d6d-42cb-ac18-64d8c7896e73/scratchpad/pt6/tp/cmp6.mjs:373:14)
+    at async file:///private/tmp/claude-501/-Users-ryan--homie-workspace-homie--claude-worktrees-dev-feedback-toolkit-3293de/28857d96-0d6d-42cb-ac18-64d8c7896e73/scratchpad/pt6/tp/cmp6.mjs:652:48
+
+Node.js v22.23.3
