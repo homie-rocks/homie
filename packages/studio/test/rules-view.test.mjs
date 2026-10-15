@@ -50,12 +50,12 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
 function level(w){const data=[];for(let y=0;y<25;y++){for(let x=0;x<25;x++){data.push(y===12?0:x===0||x===24||y===0||y===24||x===w.shared.wall?1:0);}}w.map.replace({bounds:{min:[0,0],max:[25,25]},wrap:{x:true},tiles:{width:25,height:25,size:1,data,flows:{home:[301]}}});}
 export default defineRules({contract:2,space:{dims:2},move,map:'./map',shared:{wall:f.u8({init:5})},shapes:{commands:{regenerate:{}},events:{regenerate:{}}},entities:{runner:{player:true,input:{ax:f.i8()},motion:{tile:f.u16(),distance:f.i16()},body:{shape:'circle',radius:.2,maxSpeed:4},commands:{regenerate(w){w.sendRoom('regenerate');}}}},room:{bots:{keep:0},start(w){level(w);},on:{regenerate(w){w.shared.wall=8;level(w);}},join(c,p){return{kind:'runner',at:{x:2,y:10+p.seat,z:0}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.motion.tile=c.map.tile(5,10);b.motion.distance=c.map.distance('home',Math.floor(b.pos.x),Math.floor(b.pos.y));c.world.sweep(b,{x:i.ax*4*c.dt,y:0,z:0});}});`);
-    } else if (runaway === 'wrap2' || runaway === 'wrap3') {
-      const dims=runaway==='wrap2'?2:3;
+    } else if (runaway === 'wrap2' || runaway === 'wrap3' || runaway === 'wrap2-place') {
+      const dims=runaway==='wrap3'?3:2;
       writeFileSync(join(dir,'src/view.ts'),`import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.input({ax:1});`);
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[0,0,0],max:[20,20,20]},wrap:{x:true,y:true,...(dims===3?{z:true}:{})}}));
       writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
-export default defineRules({contract:2,space:{dims:${dims}},move,map:'./map',entities:{runner:{player:true,input:{ax:f.i8()},body:{shape:'${dims===2?'circle':'sphere'}',radius:.2,maxSpeed:4},fields:{neighbours:f.u8()},tick(w,s){s.neighbours=w.near(s.pos,3,'runner').length;}}},room:{bots:{keep:0},join(c,p){return {kind:'runner',at:{x:p.seat===0?19:1,y:10,z:${dims===2?0:10}}};}}});`);
+export default defineRules({contract:2,space:{dims:${dims}},move,map:'./map',shapes:{commands:{respawn:{}}},entities:{runner:{player:true,input:{ax:f.i8()},commands:{respawn(w,s){w.place(s,{x:10,y:10,z:0});}},body:{shape:'${dims===2?'circle':'sphere'}',radius:.2,maxSpeed:4},fields:{neighbours:f.u8()},tick(w,s){s.neighbours=w.near(s.pos,3,'runner').length;}}},room:{bots:{keep:0},join(c,p){return {kind:'runner',at:{x:p.seat===0?19:1,y:10,z:${dims===2?0:10}}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax*4,y:0,z:0};c.world.sweep(b,c.math.scale(b.vel,c.dt));}});`);
     } else if ((runaway === 'solid-ground' || runaway === 'solid-ground-box')) {
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-20,-20],max:[20,20]},boxes:[{min:[-8,0],max:[0,5]},{min:[-20,12],max:[20,15]}]}));
@@ -147,6 +147,10 @@ export default defineRules({contract:2,space:{dims:3},move,shapes:{commands:{lau
         if(b.motion.launch){const age=c.tick-b.motion.launch;b.motion.phase=Math.min(20,age);if(age===1)b.pos={x:b.pos.x+4,y:0,z:0};b.grounded=age>=10;b.vel={x:0,y:0,z:age<10?1:0};b.pos={x:b.pos.x,y:0,z:age<10?age*.1:0};}
         else b.pos={x:0,y:0,z:b.pos.z+i.az/127};
       }});`);
+    } else if (runaway === 'steer-knock') {
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[0,0],max:[20,20]},wrap:{x:true,y:true}}));
+      writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{launch:{}}},entities:{runner:{player:true,input:{ay:f.held()},motion:{launch:f.tick()},body:{shape:'circle',radius:.2,maxSpeed:36},commands:{launch(w,s){s.motion.launch=w.tick;}}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:19,y:10,z:0}};}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){const k=b.motion.launch;b.vel={x:k&&c.tick-k<=8?9:0,y:i.ay*9,z:0};if(i.ay)b.heading={x:0,y:i.ay,z:0};c.world.sweep(b,c.math.scale(b.vel,c.dt));}});`);
     } else if (runaway === 'counter-knock') {
       writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-100,-100], max: [100,100] } }));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
@@ -2686,6 +2690,144 @@ for(const respawn of [false,true])test(`a reconnect after an outage ${respawn?'d
  assert.ok(worst<.5,`the reconnect cut the runner ${worst} metres in one frame`);
 });
 
+for (const delay of [0, 300]) test(`ownTick exposes fractional prediction time for wrapped projectiles at ${delay} ms`, async t => {
+  const {L, compiled, openRoom} = await coinDashKit('server', false, 20, 'wrap2');
+  const clock = virtualTime(t), shape = predictionShaper({delay, loss: .05, seed: 5310});
+  const r = rig(L, compiled, false, shape, shape);
+  const a = openRoom({net: {config: cfg('Pilot'), WebSocketImpl: r.socket(), post: null}});
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(2500);
+  assert.equal(typeof a.ownTick, 'number', 'the view needs its predicted clock, not the delayed remote interpolation clock');
+  a.input({ax: 1});
+  await clock.wait(1600);
+  let previous = a.ownTick, previousX = a.me.pos.x, fractional = false;
+  for (let i = 0; i < 80; i++) {
+    await clock.wait(16);
+    const now = a.ownTick;
+    assert.ok(Number.isFinite(now));
+    assert.ok(now >= previous - 1e-6, `clock reversed: ${previous} -> ${now}`);
+    assert.ok(now - previous < 1, 'one frame must not advance a whole 50 ms tick');
+    if (Math.abs(now - Math.round(now)) > .01) fractional = true;
+    const x = a.me.pos.x, dx = ((x - previousX + 30) % 20) - 10;
+    assert.ok(Math.abs(dx - (now - previous) * 4 / 20) < .005, `clock and drawn path disagree: ${dx} at ${now - previous} ticks`);
+    previousX = x; previous = now;
+  }
+  assert.ok(fractional, 'projectiles must move between room ticks');
+  assert.ok(a.ownTick > a.viewTick, 'predicted and remote interpolation clocks are distinct');
+  assert.equal(r.host.core.stats.errors, 0);
+});
+
+for (const delay of [0, 300]) test(`future input recovers after host clock pauses at ${delay} ms`, async t => {
+  const {L, compiled, openRoom} = await coinDashKit('server', false, 20, 'wrap2');
+  const clock = virtualTime(t), r = rig(L, compiled, false, delay, delay);
+  const a = openRoom({net:{config:cfg('Pilot'),WebSocketImpl:r.socket(),post:null}});
+  t.after(()=>{a.close();r.stop();}); await clock.wait(2500);
+  a.input({ax:1}); await clock.wait(2000);
+  r.host.pause(); await clock.wait(1600); r.host.resume();
+  a.input({ax:-1}); await clock.wait(6000);
+  const b = r.host.core.bodies().find(b=>b.seat===a.seat);
+  assert.ok(b, 'server body remains present');
+  assert.ok(a.ownTick-r.host.core.tick < 20, 'prediction must return inside the unchanged one-second admission bound');
+  // An accepted reversal reaches authority, rather than flying only on the local screen.
+  const saved = r.host.core.save().ents.find(e=>e[11]===a.seat);
+  assert.ok(saved[8][0] < 0, `server ignored reversal: velocity ${saved[8][0]}`);
+  assert.equal(r.host.core.stats.errors,0);
+});
+
+test('wrapped circle reconciliation spends a bounded correction per drawn frame', async t => {
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'wrap2');
+ const clock=virtualTime(t),r=rig(L,compiled,false,150,150);
+ const a=openRoom({net:{config:cfg('Circle correction'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(2500);a.input({ax:1});await clock.wait(1200);
+ const socket=r.sockets[0],receive=socket.onmessage;
+ let changed=false;
+ socket.onmessage=event=>{const f=JSON.parse(event.data);if(f.t==='snap') {const own=f.d[1].find(e=>e[9]===a.seat);if(own){own[3][0]=((own[3][0]+12)%20)-10;changed=true;}}receive.call(socket,{data:JSON.stringify(f)});};
+ let previous=a.me.pos,worst=0;
+ for(let i=0;i<240;i++){await clock.wait(16);const p=a.me.pos;worst=Math.max(worst,Math.hypot(((p.x-previous.x+30)%20)-10,p.y-previous.y));previous=p;}
+ t.diagnostic(JSON.stringify({worst}));assert.ok(changed);
+ assert.ok(worst<.1,`a correction accelerated a wrapped circle by ${worst} metres in one frame`);
+});
+
+test('synchronous browser readers keep one pose when execution crosses a tick', async t => {
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'wrap2');
+ const clock=virtualTime(t),originalWindow=Object.getOwnPropertyDescriptor(globalThis,'window');
+ globalThis.window={addEventListener(){},removeEventListener(){}};
+ t.after(()=>{if(originalWindow)Object.defineProperty(globalThis,'window',originalWindow);else delete globalThis.window;});
+ let offset=0;const r=rig(L,compiled,false,0,0);
+ const a=openRoom({timers:false,now:()=>performance.now()+offset,net:{config:cfg('Tick boundary reader'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);a.input({ax:1});await clock.wait(1000);
+ const first=a.me, firstTick=a.ownTick;offset+=60;
+ assert.strictEqual(a.ownTick,firstTick,'projectile time stays with the drawn pose');
+ assert.strictEqual(a.me,first,'elapsed synchronous work must not invalidate the drawn pose');
+ let traversed;a.each('runner',e=>{if(e.mine)traversed=e;});assert.strictEqual(traversed,first,'HUD traversal shares the same pose');
+ await Promise.resolve();const next=a.me;assert.notStrictEqual(next,first,'the next callback advances');assert.notEqual(next.pos.x,first.pos.x);
+ a.input({ax:-1});assert.notStrictEqual(a.me,next,'an explicit changed input still invalidates presentation');
+});
+
+for(const delay of [0,300])test(`small repeated host clock slips do not accumulate as input jitter at ${delay} ms`, async t => {
+  const {L, compiled, openRoom} = await coinDashKit('server', false, 20, 'wrap2');
+  const clock = virtualTime(t), r = rig(L, compiled, false, delay, delay);
+  const a = openRoom({net:{config:cfg('Clock slips'),WebSocketImpl:r.socket(),post:null}});
+  t.after(()=>{a.close();r.stop();}); await clock.wait(2500);
+  a.input({ax:1}); await clock.wait(1500);
+  const gaps=[];
+  for(let i=0;i<15;i++){
+    r.host.pause();await clock.wait(150);r.host.resume();
+    await clock.wait(850);
+    gaps.push(a.ownTick-r.host.core.tick);
+  }
+  t.diagnostic(JSON.stringify({gaps}));
+  assert.ok(Math.max(...gaps)<6+2*delay/50, `low-latency host slips accumulated ${Math.max(...gaps)} ticks of prediction lead`);
+  assert.equal(r.host.core.stats.errors,0);
+});
+
+for(const delay of [80,150,300])test(`held steering leaves wrapped catch-up without delaying the next frame: ${delay} ms`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'steer-knock',{catchM:.2,catchUp:1});
+ const clock=virtualTime(t),r=rig(L,compiled,false,delay,delay);
+ const a=openRoom({net:{config:cfg('Steering'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();r.stop();});
+ await clock.wait(12000);a.command('launch');let caught=false;
+ for(let i=0;i<120;i++){await clock.wait(16);void a.me;if(globalThis.__homieNet.probe.prediction().catchTick!==null){caught=true;break;}}
+ assert.ok(caught,'a real authoritative impulse entered catch-up');
+ for(let i=0;i<6;i++){await clock.wait(16);void a.me;}
+ const before=a.me.pos;a.input({ay:-1});const immediate=a.me.pos;
+ const wd=v=>((v+30)%20)-10;
+ assert.ok(Math.hypot(wd(immediate.x-before.x),wd(immediate.y-before.y))<.001,'input preserves the painted origin');
+ await clock.wait(16);const next=a.me;
+ assert.ok(next.heading.y<-.1,`held steering must turn on the next frame, not after history catch-up: ${next.heading.y}`);
+ assert.ok(wd(next.pos.y-before.y)<-.02,'held thrust moves on the next frame');
+ let previous=next.pos,worst=0;
+ for(let i=0;i<240;i++){await clock.wait(16);const p=a.me.pos;worst=Math.max(worst,Math.hypot(wd(p.x-previous.x),wd(p.y-previous.y)));previous=p;}
+ assert.ok(worst<.7,`no wrapped correction jump: ${worst}`);
+ assert.equal(r.host.core.stats.errors,0);
+});
+
+for(const delay of [0,300])test(`long frame clock reset preserves the painted wrapped ship at ${delay} ms`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'wrap2');
+ const clock=virtualTime(t),r=rig(L,compiled,false,delay,delay);let offset=0;
+ const a=openRoom({timers:false,now:()=>performance.now()+offset,net:{config:cfg('Frame reset'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);a.input({ax:1});
+ for(let i=0;i<100;i++){await clock.wait(16);void a.me;}
+ r.host.pause();for(let i=0;i<40;i++){await clock.wait(16);void a.me;}
+ const before=a.me.pos;await Promise.resolve();offset+=700;
+ const after=a.me.pos,wd=v=>((v+30)%20)-10;
+ const cut=Math.hypot(wd(after.x-before.x),wd(after.y-before.y));
+ // Rebase completes one 50 ms movement tick; it must not spend the stale snapshot gap.
+ assert.ok(cut<.201,`clock recalibration cut the painted ship ${cut} metres`);
+ r.host.resume();let previous=after,worst=0;
+ for(let i=0;i<300;i++){await clock.wait(16);const p=a.me.pos;worst=Math.max(worst,Math.hypot(wd(p.x-previous.x),wd(p.y-previous.y)));previous=p;}
+ assert.ok(worst<.12,`post-reset correction jumped ${worst} metres`);
+ assert.equal(r.host.core.stats.errors,0);
+});
+
+ test('long frame after a wrapped placement does not restore the old life position',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'wrap2-place');
+ const clock=virtualTime(t),r=rig(L,compiled,false,0,0);let offset=0;
+ const a=openRoom({timers:false,now:()=>performance.now()+offset,net:{config:cfg('Placed frame'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);const before=a.me.pos;
+ a.command('respawn');await clock.wait(100);r.host.pause();offset+=700;await Promise.resolve();
+ const after=a.me.pos;
+ assert.ok(Math.abs(after.x-10)<.01,`a real placement was hidden by frame reset: ${before.x} -> ${after.x}`);
+ });
 test('a slow synchronous reader crossing a tick boundary shares the current presentation', async t => {
  const {L,compiled,openRoom}=await coinDashKit('server',false,60,'push-effects');
  const clock=virtualTime(t);

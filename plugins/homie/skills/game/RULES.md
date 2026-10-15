@@ -1153,6 +1153,16 @@ before using it in a `match` closure: `me` is reused. A valued pulse
 (`f.pulse()`) carries the tick it was predicted on, and the server acts on it in
 that tick, so a predicted swap is in the snapshot of the tick it was drawn for.
 
+`room.ownTick` is the fractional simulation tick underlying the own predicted
+pose (including a historical catch-up path), before residual visual corrections.
+It is null without an own body; a control-gated body reports its snapshot tick.
+Use it to draw known deterministic trajectories, such as a drifting rock or a
+provisional projectile, on the player's clock. It grants no authority and does
+not rewind hits. Watchers can use `room.viewTick`. Do not estimate this clock
+from predictor callbacks: previews and replays run more than once per frame.
+Synchronous reads share the drawn pose and its tick until the microtask boundary;
+changed input and snapshots still invalidate the presentation immediately.
+
 ### Naming the bots (0.46.5)
 
 `room.bots: { keep: 4, names: ['Vex', 'Moth', 'Kilo'] }` gives the game's bots its own names, by seat (the list

@@ -636,3 +636,47 @@ test('late paired callbacks sustaining 20 Hz do not end a healthy room as an ove
   }
   assert.equal(rig.host.tick,400);assert.deepEqual(rig.ended,[]);rig.host.stop();
 });
+
+test('an advancing clock attributes overrun to execution, not external callback waits', async t => {
+  const {L,compile}=await coinDash(),clock=fakeClock();
+  // Each tick consumes 1 ms; unrelated work delays timer delivery by 300 ms.
+  // This is deliberately below target throughput, so throughput alone cannot identify the culprit.
+  t.mock.method(performance,'now',()=>clock.t);
+  const rig=hostRig(L,compile({}),{clock,host:{send:m=>{if(m.t==='snap')clock.t+=1;}}});
+  rig.join(0);
+  for(let n=0;n<60;n++){
+    clock.t+=300;
+    const due=clock.timers.filter(x=>x.at<=clock.t);
+    for(const timer of due){clock.timers=clock.timers.filter(x=>x!==timer);timer.fn();}
+  }
+  assert.deepEqual(rig.ended,[],'a measured 1 ms tick did not hold the isolate for the 300 ms callback wait');
+  assert.ok(rig.host.tick>100);rig.host.stop();
+});
+
+test('frozen Worker clocks retain overrun attribution when execution cannot be timed', async t => {
+  const {L,compile}=await coinDash(),clock=fakeClock();
+  t.mock.method(performance,'now',()=>clock.t);
+  const rig=hostRig(L,compile({}),{clock});rig.join(0);
+  for(let n=0;n<60&&rig.host.running;n++){
+    clock.t+=300;
+    const due=clock.timers.filter(x=>x.at<=clock.t);
+    for(const timer of due){clock.timers=clock.timers.filter(x=>x!==timer);timer.fn();}
+  }
+  assert.deepEqual(rig.ended.map(e=>e.why),['overrun']);
+  assert.equal(clock.timers.length,0);
+});
+
+test('one measured slow execution is blamed once across later delayed callbacks', async t => {
+  const {L,compile}=await coinDash(),clock=fakeClock();
+  t.mock.method(performance,'now',()=>clock.t);
+  let ticks=0;
+  const rig=hostRig(L,compile({}),{clock,host:{send:m=>{if(m.t==='snap')clock.t+=(++ticks%8===0?200:1);}}});
+  rig.join(0);
+  for(let n=0;n<60;n++){
+    clock.t+=300;
+    const due=clock.timers.filter(x=>x.at<=clock.t);
+    for(const timer of due){clock.timers=clock.timers.filter(x=>x!==timer);timer.fn();}
+  }
+  assert.deepEqual(rig.ended,[],'one slow execution in eight must not be repeatedly charged as a run of slow ticks');
+  assert.ok(rig.host.tick>100);rig.host.stop();
+});

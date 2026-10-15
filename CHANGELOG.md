@@ -17,6 +17,30 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [Unreleased]
+
+- Long-frame prediction clock resets preserve the last painted wrapped position instead of cutting back to a stale snapshot; authoritative placements remain immediate, including a delayed first frame after respawn.
+
+### Fixed
+
+- Fresh held steering and releases resume live prediction during correction catch-up, carrying the painted origin without a position cut instead of delaying input behind historical motion.
+
+- Attribute slow ticks to measured synchronous execution when local clocks advance, rather than unrelated waits between timer callbacks. Count each measured slow execution once during catch-up. Frozen Worker clocks retain the existing fallback; genuinely slow ticks and budget failures still end the room.
+
+- Prediction recognizes host-clock shifts from snapshot tick/stamp differences, so repeated small scheduling stalls do not accumulate as network jitter and leave own ships a second ahead.
+
+- Keep synchronous own-body readers and `ownTick` on one presentation when work crosses a simulation tick; changed input still catches up immediately.
+
+- Bound wrapped-circle reconciliation travel per rendered frame, using periodic distance, so residual corrections cannot double a moving ship’s visible speed.
+
+### Added
+
+- `room.ownTick` exposes the fractional own prediction/catch-up clock for deterministic projectile and obstacle presentation in wrapped games. No authority or hit-policy change.
+
+### Fixed
+
+- Recover the rules input clock after a host scheduling pause: report excess lead for rejected future inputs and recalibrate gross clock drift without widening the one-second admission bound.
+
 ## [0.54.0] - 2026-10-15
 
 **Plugin 0.54.0**
