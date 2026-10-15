@@ -19,6 +19,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## Unreleased
 
+- Batch cold metadata, use causally consistent D1 sessions, bake catalogues, route public assets first, isolate subscription objects and load rendering modules at their entry points. Index MCP expiry and deliver catalogue notifications in background work.
+
 - Split request routing, runtime helpers, Table, Lobby, room chat, controls and wire validation into modules without changing behavior.
 
 ## [0.54.0] - 2026-10-15

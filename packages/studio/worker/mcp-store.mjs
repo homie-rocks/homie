@@ -6,6 +6,15 @@ CREATE TABLE IF NOT EXISTS mcp_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, pers
 CREATE TABLE IF NOT EXISTS mcp_limits (caller TEXT NOT NULL, minute INTEGER NOT NULL, n INTEGER NOT NULL, PRIMARY KEY(caller, minute));
 CREATE TABLE IF NOT EXISTS tool_data (namespace TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(namespace,key));
 `;
+/** Exclusive bound in SQLite's binary text order; null means no upper bound. */
+export function prefixEnd(prefix) {
+  const points=Array.from(prefix, c=>c.codePointAt(0));
+  while(points.length) {
+    const last=points.pop();
+    if(last<0x10ffff)return String.fromCodePoint(...points,last===0xd7ff?0xe000:last+1);
+  }
+  return null;
+}
 export function oauthStorage(DB) {
   return {
     async get(key, options) {
@@ -19,7 +28,8 @@ export function oauthStorage(DB) {
     async delete(key) { await DB.prepare('DELETE FROM mcp_kv WHERE key=?1').bind(key).run(); },
     async list({prefix = '', cursor = '', limit = 1000} = {}) {
       const n = Math.max(1,Math.min(1000,limit));
-      const rows = (await DB.prepare('SELECT key,expires FROM mcp_kv WHERE substr(key,1,?1)=?2 AND key>?3 AND (expires IS NULL OR expires>?4) ORDER BY key LIMIT ?5').bind(prefix.length,prefix,cursor,Math.floor(Date.now()/1000),n+1).all()).results;
+      const end=prefixEnd(prefix);
+      const rows = (await DB.prepare(`SELECT key,expires FROM mcp_kv WHERE key>=?1 ${end===null?'':'AND key<?2'} AND key>?3 AND (expires IS NULL OR expires>?4) ORDER BY key LIMIT ?5`).bind(prefix,end,cursor,Math.floor(Date.now()/1000),n+1).all()).results;
       return { keys: rows.slice(0,n).map(r=>({name:r.key,...(r.expires ? {expiration:r.expires}: {})})), list_complete: rows.length<=n, cursor: rows.length>n ? rows[n-1].key : '' };
     },
   };

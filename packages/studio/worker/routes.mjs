@@ -1,39 +1,36 @@
-/** Extracted from the studio runtime; behavior is unchanged. */
-import {recordsPage} from './records-page.mjs';
-import {RULES_WIRING_MESSAGE} from './rules-wiring.mjs';
-import {appAccess,appRecordsRoute} from './app-records.mjs';
-import {openPath} from './app-format.mjs';
-import {playerEnabled} from './embed.mjs';
-import {departure,errorLine,versionOf} from './room.mjs';
-import {hostedGame} from './hosted.mjs';
-import {isAppOrigin} from './standalone.mjs';
-import {ROOM_ID,badRoomPage,embedPreview,noWatchPage,playPage,shellKey,shellStandIn,watchPage} from './pages.mjs';
-import {PUBLIC_SERVER,SERVER_ID,homeOf,memberOf,noteMember,policyOf,pooledRoom,roomServer,serverAccess,serverPassOf,serverView,serversOf,setMembership} from './servers.mjs';
-import {agentFacts,aiName,encodeFacts,passById,passRefusal,sitRoute} from './agents.mjs';
-import {REACTIONS} from './chat.mjs';
-import {REPORT_REASONS,chatOf,chatRowsOf,fileReport} from './chat-store.mjs';
-import {isLoungePath,loungeRoutes} from './lounge.mjs';
-import {doorPage,serverPage,serversPage} from './site.mjs';
-import {isLocalOrigin,qrSvg} from './qr.mjs';
-import {gateFor} from './gate.mjs';
-import {SITE_JS,atomFeed,creditsPage,customPage,gameCover,gameLanding,gamesPage,homeLd,homePage,jsonFeed,landingLd,mediaIndexPage,notFoundPage,postPage,postsPage,roomsPage,sectionsOf,songPage,videoPage,watchOf} from './site.mjs';
-import {cookieValues,countVisit,onlyOf,ownerAllowed,playedByGame,playedThisWeek,rangeOf,readStats} from './stats.mjs';
-import {ownerRoutes} from './stats-page.mjs';
-import {playerRoutes,players as playerAccounts} from './players.mjs';
-import {appRoleSession,appAssetTicket,accessOf,accountSub,gatePage,holders,isOwner,joinHolders,launchOf,officeRoutes,publicCatalogue,redeemInvite,sameOrigin,seatsFor,settingsOf,ticketAllows,ticketFor,ticketSub} from './office.mjs';
-import {STUDIO_BUILD} from './build-id.mjs';
-import {STUDIO_VERSION_TAG} from './version.mjs';
-import {roomBadge,shopOf,shopRoutes} from './shop.mjs';
-import {DISCOVERY_FILES,discoveryResponse,llmsTxt,robotsTxt,sitemapXml} from './discover.mjs';
-import {ldScript,studioNode} from './schema.mjs';
-import {licenseOf} from './license.mjs';
-import {isPartsPath,partsRoutes,withPartsBand} from './parts.mjs';
-import {GAME_ID,POST_SLUG,BROWSER_KEY,sellingShop,availableShellShop,postsOf,claimOf,named,roomsOf,liveCounts,MEDIA_SLUG,assetWithRange,mediaObject,ASSET_CACHE,heldInR2,mediaRow,chatWho,reportAllowed,notAHomie,gameDocument,gameAsset,shareDaily,mediaBeat,serverLive,weekOf,fallback} from './runtime-support.mjs';
-import {json} from './responses.mjs';
-import {catalogue} from './catalogue.mjs';
-import {directoryOf,studioTools} from './tool-registry.mjs';
+/** Route dispatch; large interfaces and tool runtimes load at their own entry points. */
+import { catalogue } from './catalogue.mjs';
 
-async function route(request, env, ctx) {
+import { RULES_WIRING_MESSAGE } from './rules-wiring.mjs';
+import { appAccess, appRecordsRoute } from './app-records.mjs';
+import { openPath } from './app-format.mjs';
+import { playerEnabled } from './embed.mjs';
+import { departure, errorLine, versionOf } from './room-protocol.mjs';
+import { hostedGame } from './hosted-registry.mjs';
+import { isAppOrigin } from './standalone.mjs';
+import { ROOM_ID, shellKey, shellStandIn } from './page-policy.mjs';
+import { PUBLIC_SERVER, SERVER_ID, homeOf, memberOf, noteMember, policyOf, pooledRoom, roomServer, serverAccess, serverPassOf, serverView, serversOf, setMembership } from './servers.mjs';
+import { agentFacts, aiName, encodeFacts, passById, passRefusal, sitRoute } from './agents.mjs';
+import { REACTIONS } from './chat.mjs';
+import { REPORT_REASONS, chatOf, chatRowsOf, fileReport } from './chat-store.mjs';
+import { isLoungePath, loungeRoutes } from './lounge.mjs';
+import { doorPage, serverPage, serversPage } from './site.mjs';
+import { isLocalOrigin, qrSvg } from './qr.mjs';
+import { gateFor } from './gate-routing.mjs';
+
+import { SITE_JS, atomFeed, creditsPage, customPage, gameCover, gameLanding, gamesPage, homeLd, homePage, jsonFeed, landingLd, mediaIndexPage, notFoundPage, postPage, postsPage, roomsPage, sectionsOf, songPage, videoPage, watchOf } from './site.mjs';
+import { cookieValues, countVisit, onlyOf, ownerAllowed, playedByGame, playedThisWeek, rangeOf, readStats } from './stats.mjs';
+import { playerRoutes, players as playerAccounts } from './players.mjs';
+import { appRoleSession, appAssetTicket, accessOf, accountSub, gatePage, holders, isOwner, joinHolders, launchOf, officeRoutes, publicCatalogue, redeemInvite, sameOrigin, seatsFor, settingsOf, ticketAllows, ticketFor, ticketSub } from './office.mjs';
+import { STUDIO_BUILD } from './build-id.mjs';
+import { STUDIO_VERSION_TAG } from './version.mjs';
+import { roomBadge, shopOf, shopRoutes } from './shop.mjs';
+import { DISCOVERY_FILES, discoveryResponse, llmsTxt, robotsTxt, sitemapXml } from './discover.mjs';
+import { ldScript, studioNode } from './schema.mjs';
+import { licenseOf } from './license.mjs';
+import { isPartsPath, partsRoutes, withPartsBand } from './parts.mjs';
+import { GAME_ID, POST_SLUG, BROWSER_KEY, json, sellingShop, availableShellShop, postsOf, directoryOf, claimOf, named, roomsOf, MEDIA_SLUG, assetWithRange, mediaObject, ASSET_CACHE, heldInR2, mediaRow, chatWho, reportAllowed, notAHomie, gameDocument, gameAsset, shareDaily, mediaBeat, studioTools, serverLive, weekOf, fallback } from './runtime-support.mjs';
+export default async function route(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname;
   const parts = path.split('/').filter(Boolean);
@@ -66,7 +63,7 @@ async function route(request, env, ctx) {
     if (!directory || env.HOMIE_PREVIEW === '1') return json({ ok: false, error: 'no-directory', message: 'This studio is not connected to a directory.' }, 404);
     return Response.redirect(`${directory}/studio/setup/connect?site=${encodeURIComponent(url.origin)}`, 302);
   }
-  if (path.startsWith('/_studio/')) return (await officeRoutes(request, env, url, { catalogueOf: getAll })) ?? ownerRoutes(request, env, url, { catalogueOf: getAll });
+  if (path.startsWith('/_studio/')) return (await officeRoutes(request, env, url, { catalogueOf: getAll })) ?? (await import('./stats-page.mjs')).ownerRoutes(request, env, url, { catalogueOf: getAll });
   if (path === '/__homie' || path.startsWith('/__homie/')) return notAHomie(request);
   // The shop (0.24.0) before player accounts: /api/player/owns is the shop's.
   {
@@ -157,14 +154,15 @@ async function route(request, env, ctx) {
   }
   if (path === '/api/games') {
     const cat = await getCat();
-    return json({ studio: cat.studio, games: (cat.games ?? []).map(g => g.room?.host === 'server' && !hostedGame(g.id) ? { ...g, rulesError: RULES_WIRING_MESSAGE } : g), live: await liveCounts(env, cat.games ?? []) });
+    return json({ studio: cat.studio, games: (cat.games ?? []).map(g => g.room?.host === 'server' && !hostedGame(g.id) ? { ...g, rulesError: RULES_WIRING_MESSAGE } : g), live: (await roomsOf(env, cat.games ?? [])).live });
   }
   if (path === '/api/rooms') {
+    if(request.method!=='GET')return json({ok:false,error:'method'},405);
     const cat = await getCat();
-    const { rooms } = await roomsOf(env, cat.games ?? []);
-    // Short-lived and cacheable: the hub reads every studio's rooms at most every 45 s, and a room's count is a
-    // few seconds stale at worst. (The site's own pages ask with cache: 'no-store'.)
-    return json({ ok: true, playing: rooms.reduce((n, r) => n + r.players, 0), rooms }, 200, { 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=15' });
+    return (await import('./rooms-cache.mjs')).cachedRooms(request,env,ctx,cat,async()=>{
+      const {rooms}=await roomsOf(env,cat.games??[]);
+      return json({ok:true,playing:rooms.reduce((n,r)=>n+r.players,0),rooms},200,{'access-control-allow-origin':'*','cache-control':'public, max-age=15'});
+    });
   }
   if (path.startsWith('/media/')) {
     if (!env.MEDIA) return new Response('this studio keeps no media in R2 yet', { status: 404 });
@@ -179,13 +177,6 @@ async function route(request, env, ctx) {
     const posts = await postsOf(env, url.origin);
     return path.endsWith('.xml') ? atomFeed(cat, posts, url.origin) : jsonFeed(cat, posts, url.origin);
   }
-
-  // REMIX WAS RETIRED: no game's source is served whole. An older toolkit's `game remix`, the directory's copy of a
-  // studio, or a link somebody kept may still ask for one, so the address answers 410 (gone, on purpose, for good)
-  // with where to go instead: /parts/, the pieces of games this studio chose to share. The same answer for every
-  // id, whether or not such a game exists, and before the site's files are looked at: a source.json an older build
-  // left in the deployed folder is never reachable.
-  if (/^\/games\/[a-z0-9][a-z0-9-]{0,39}\/source\.json$/.test(path)) return json({ retired: 'remix', see: '/parts/' }, 410, { 'access-control-allow-origin': '*' });
 
   // Search engines and AI agents (0.27.0, worker/discover.mjs): robots.txt, sitemap.xml, llms.txt and llms-full.txt,
   // made from the public catalogue (a private or invite-only game is in none of them); a file of the studio's own in
@@ -342,7 +333,7 @@ async function route(request, env, ctx) {
           if (a.status === 401) return Response.redirect(`${url.origin}/account/?next=${encodeURIComponent(url.pathname + url.search)}`, 302);
           return json({ ok: false, error: a.error }, a.status);
         }
-        if(!meta.room)return appRoleSession(recordsPage(meta,url,cat,await availableShellShop(env,cat,game),Boolean(await (await import('./local-test.mjs')).localSession(request,env)),launch!=='public'?await appAssetTicket(env,game,undefined,{request,meta,launch}):null),request,env,meta,launch);
+        if(!meta.room)return appRoleSession((await import('./records-page.mjs')).recordsPage(meta,url,cat,await availableShellShop(env,cat,game),Boolean(await (await import('./local-test.mjs')).localSession(request,env)),launch!=='public'?await appAssetTicket(env,game,undefined,{request,meta,launch}):null),request,env,meta,launch);
       }
     }
     const lobby = () => env.LOBBY.get(env.LOBBY.idFromName(game));
@@ -436,13 +427,13 @@ async function route(request, env, ctx) {
       if (body.join !== false && !d.ok) return json({ ok: false, error: d.why, message: 'This server\'s door does not let you in.' }, 403);
       try { return json(await setMembership(env, game, srv.id, acct.slice(2), { join: body.join !== false, home: body.home === true })); } catch { return json({ ok: false, error: 'not-migrated', message: 'This studio\'s database has no servers yet (migration 0006).' }, 503); }
     }
-    if (sub === 'play/preview' && env.HOMIE_EMBED_PREVIEW === '1' && isLocalOrigin(url.origin)) return embedPreview(cat, meta, url.origin);
+    if (sub === 'play/preview' && env.HOMIE_EMBED_PREVIEW === '1' && isLocalOrigin(url.origin)) return (await import('./pages.mjs')).embedPreview(cat, meta, url.origin);
     if (sub === 'tv' || sub === 'play' || sub === 'play/embed') {
       const embed = sub === 'play/embed';
       if (embed && (!playerEnabled(cat, meta) || launch !== 'public')) return notFoundPage(meta.kind === 'app' ? 'This app does not open inside a post. Open its studio page.' : 'This game does not play inside a post. Open its studio page to play.', cat);
       const screen = !embed && (sub === 'tv' || url.searchParams.get('screen') === '1');
       const asked = embed ? null : askedRoom;
-      if (asked !== null && !ROOM_ID.test(asked)) return badRoomPage(cat, meta, asked, { screen });
+      if (asked !== null && !ROOM_ID.test(asked)) return (await import('./pages.mjs')).badRoomPage(cat, meta, asked, { screen });
       if (!door.ok) return shut();
       // Which server: the path's, the room's, else (Play) the player's home server, else public.
       let srv = pathServer ? serverById(pathServer[1]) : asked !== null ? serverById(roomServer(asked)) : null;
@@ -487,20 +478,20 @@ async function route(request, env, ctx) {
         const sh = await availableShellShop(env, cat, game, { kids: pol.kids });
         let shopQr = null;
         if (sh && !local) try { shopQr = qrSvg(`${url.origin}/shop/?game=${encodeURIComponent(game)}`, { title: `Shop: ${meta.name ?? game}` }); } catch { shopQr = null; }
-        return appRoleSession(playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, screen: true, joinUrl, qr, local, room, ticket, owner: d.owner, launch, server, shop: sh ? { ...sh, qr: shopQr, url: `${url.origin}/shop/?game=${game}` } : null }),request,env,meta,launch);
+        return appRoleSession((await import('./pages.mjs')).playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, screen: true, joinUrl, qr, local, room, ticket, owner: d.owner, launch, server, shop: sh ? { ...sh, qr: shopQr, url: `${url.origin}/shop/?game=${game}` } : null }),request,env,meta,launch);
       }
       await countVisit(request, env, ctx, game, 'play');
       shareDaily(cat, url, ctx);
-      const page=await appRoleSession(playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, embed, preview: env.HOMIE_EMBED_PREVIEW === '1', ticket: embed ? null : ticket, owner: !embed && d.owner, launch, server, ...(embed ? {} : await chatWho(env, game, srv, d.acct)), shop: await availableShellShop(env, cat, game, { kids: pol.kids }) }),request,env,meta,launch);
+      const page=await appRoleSession((await import('./pages.mjs')).playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, embed, preview: env.HOMIE_EMBED_PREVIEW === '1', ticket: embed ? null : ticket, owner: !embed && d.owner, launch, server, ...(embed ? {} : await chatWho(env, game, srv, d.acct)), shop: await availableShellShop(env, cat, game, { kids: pol.kids }) }),request,env,meta,launch);
       for(const cookie of recordsGuest?.cookies??[])page.headers.append('set-cookie',cookie);return page;
     }
     if (sub === 'watch') {
       // The same door as Play: a game that is private or an invite-only beta is watched only by whoever may play it.
       const asked = askedRoom;
-      if (asked !== null && !ROOM_ID.test(asked)) return badRoomPage(cat, meta, asked, { watch: true });
+      if (asked !== null && !ROOM_ID.test(asked)) return (await import('./pages.mjs')).badRoomPage(cat, meta, asked, { watch: true });
       if (!door.ok) return shut();
       const policy = watchOf(meta);
-      if (policy === 'off') return noWatchPage(cat, meta);
+      if (policy === 'off') return (await import('./pages.mjs')).noWatchPage(cat, meta);
       // A server's door is its watch door too (an invite or an account); a beginner server is watched by anyone.
       const srv = asked !== null ? serverById(roomServer(asked)) : serverById('public') ?? PUBLIC_SERVER;
       if (!srv) return notFoundPage(`${meta.name} has no server for the room "${asked}".`, cat);
@@ -509,7 +500,7 @@ async function route(request, env, ctx) {
       const ticket = d.holder ? await ticketFor(env, game, d.holder) : null;
       await countVisit(request, env, ctx, game, 'watch');
       shareDaily(cat, url, ctx);
-      return watchPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, room: asked, ticket, policy, owner: d.owner, ...(await chatWho(env, game, srv, d.acct)) });
+      return (await import('./pages.mjs')).watchPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, room: asked, ticket, policy, owner: d.owner, ...(await chatWho(env, game, srv, d.acct)) });
     }
     if (sub === 'api/watch') {
       if (!door.ok || watchOf(meta) === 'off') return json({ ok: false, error: 'not-found' }, 404);
@@ -672,6 +663,3 @@ async function route(request, env, ctx) {
   }
   return fallback(request, env, url, getCat);
 }
-
-export {route};
-

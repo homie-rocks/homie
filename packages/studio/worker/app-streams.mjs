@@ -10,11 +10,11 @@ ${['INSERT','UPDATE','DELETE'].map(op=>{const row=op==='DELETE'?'OLD':'NEW';retu
 END;`;}).join('\n')}
 `;
 const frame=value=>new TextEncoder().encode('data: '+JSON.stringify(value)+'\n\n');
-export const appHub=(env,app)=>env.LOBBY.get(env.LOBBY.idFromName('@app-records/'+app));
+export const appHub=(env,app)=>{const ns=env.APP_RECORDS??env.LOBBY;return ns.get(ns.idFromName('@app-records/'+app));};
 const pushedRevisions=new WeakMap();
 export async function pushAppRecords(env,cat){
  const apps=(cat.games??[]).filter(g=>g.kind==='app');
- if(!env.LOBBY||!env.DB||!apps.length)return;
+ if(!(env.APP_RECORDS??env.LOBBY)||!env.DB||!apps.length)return;
  const rows=(await env.DB.prepare(`SELECT app,collection,revision FROM app_record_revisions
  UNION ALL SELECT a.app,'*',SUM(COALESCE(r.revision,0)) FROM app_tool_namespaces a LEFT JOIN tool_data_revisions r ON r.namespace=a.namespace GROUP BY a.app`).all()).results;
  const signatures=new Map();for(const row of rows){const app=row.app.split(':check:')[0];signatures.set(app,(signatures.get(app)??'')+JSON.stringify(row));}
@@ -32,7 +32,7 @@ export async function pushAppRecords(env,cat){
 export class AppRecordStreams {
  constructor(env,ctx){this.env=env;this.ctx=ctx;this.streams=new Set();}
  dispose(){for(const s of [...this.streams])this.close(s);}
- close(s){if(!this.streams.delete(s))return;clearInterval(s.timer);clearTimeout(s.reconnect);try{s.controller.close();}catch{}this.presence();}
+ close(s){if(!this.streams.delete(s))return;clearInterval(s.timer);clearTimeout(s.reconnect);try{s.controller.close();}catch{/* The reader already cancelled or the stream already closed. */}this.presence();}
  count(s){return [...this.streams].filter(x=>x.app===s.app&&x.room===s.room).length;}
  send(s,data){if(s.controller.desiredSize<=0){this.close(s);return;}try{s.controller.enqueue(frame(data));}catch{this.close(s);}}
  presence(){for(const s of this.streams)this.send(s,{presence:this.count(s)});}

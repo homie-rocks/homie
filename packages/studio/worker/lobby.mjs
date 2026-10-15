@@ -1,13 +1,18 @@
-/** Extracted from the studio runtime; behavior is unchanged. */
-import {errorLine,versionOf} from './room.mjs';
-import {ROOM_ID} from './pages.mjs';
-import {SERVER_ID,pooledRoom,roomCode,roomServer} from './servers.mjs';
-import {seatCount} from './seats.mjs';
-import {counter,today} from './stats.mjs';
-import {json} from './responses.mjs';
-import {LOBBY_APP_VERSIONS,LOBBY_ROOMS_MAX} from './lobby-limits.mjs';
+import { errorLine, versionOf } from './room-protocol.mjs';
+import { ROOM_ID } from './page-policy.mjs';
+import { SERVER_ID, pooledRoom, roomCode, roomServer } from './servers.mjs';
+import { seatCount } from './seats.mjs';
+import { counter, today } from './stats.mjs';
 
-class Lobby {
+const json = (body, status = 200, extra = {}) => new Response(`${JSON.stringify(body)}\n`, {
+  status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...extra },
+});
+
+export const LOBBY_APP_VERSIONS = 8;
+
+export const LOBBY_ROOMS_MAX = 512;
+
+export class Lobby {
   constructor(ctx, env) {
     this.ctx = ctx;
     this.env = env;
@@ -244,6 +249,3 @@ class Lobby {
     return json({ error: 'not found' }, 404);
   }
 }
-
-export {Lobby};
-

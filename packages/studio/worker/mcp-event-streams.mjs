@@ -4,7 +4,7 @@ import {EVENT_ERRORS,terminalEventError,EventsError,eventError,notification,sseF
 /** Connection-scoped push subscriptions hosted by the existing per-connection Lobby. */
 export class McpEventStreams {
   constructor(env,ctx){this.env=env;this.ctx=ctx;this.streams=new Set();}
-  close(stream){if(stream.closed)return;stream.closed=true;clearInterval(stream.timer);stream.resume?.();try{stream.controller.close();}catch{}this.streams.delete(stream);if(stream.registryKey)this.ctx.waitUntil(this.env.DB.prepare('DELETE FROM mcp_kv WHERE key=?1').bind(stream.registryKey).run().catch(()=>{}));}
+  close(stream){if(stream.closed)return;stream.closed=true;clearInterval(stream.timer);stream.resume?.();try{stream.controller.close();}catch{/* The reader already cancelled or the stream already closed. */}this.streams.delete(stream);if(stream.registryKey)this.ctx.waitUntil(this.env.DB.prepare('DELETE FROM mcp_kv WHERE key=?1').bind(stream.registryKey).run().catch(error=>console.warn("MCP stream cleanup deferred to expiry:",error.message)));}
   async write(stream,value,authorize){
     if(stream.closed)return false;
     if(stream.controller.desiredSize<=0)await new Promise(resolve=>{stream.resume=resolve;});

@@ -25,12 +25,12 @@ import { toolIdentity } from './tool-identity.mjs';
  * THE OWNER sees counts and names (`players.count`, `players.list`), never a passkey, a session or an email.
  * A player sees, downloads (/api/player/export) and deletes (/api/player/delete) everything of theirs.
  */
-import { handleFor } from './room.mjs';
+import { handleFor } from './room-protocol.mjs';
 import { isAiName } from './agents.mjs';
 import { cookieValue } from './stats.mjs';
 import { adoptGuest, bumpPlayerStats, dropPlayerData, fall, fallenList, getSave, listSaves, playerData, readPlayerStats, SAVE_LIMITS, savesSummary, wipeSaves, writeSaves } from './saves.mjs';
 import { bytesToB64url, randomToken, sha256Hex, verifyAssertion, verifyRegistration } from './webauthn.mjs';
-import { ACCOUNT_JS, accountPage } from './account-page.mjs';
+
 import { adoptShopStatements, migrated as shopMigrated, forgetPlayerShop, livePurchases, shopDataOf } from './shop-store.mjs';
 import { forgetPlayerHistory, playerHistory } from './lounge-store.mjs';
 
@@ -230,7 +230,7 @@ async function sessionOf(request, env, url = new URL(request.url)) {
     writes.push(env.DB.prepare('UPDATE player_sessions SET expires_at = ?2 WHERE hash = ?1').bind(hash, now + days * DAY));
     session.cookies.push(sessionCookie(url, token, days));
   }
-  if (writes.length) await env.DB.batch(writes).catch(() => {});
+  if (writes.length) await env.DB.batch(writes);
   return session;
 }
 
@@ -248,7 +248,6 @@ async function newGuest(request, env, url, addressLimit = PLAYER_LIMITS.newPlaye
     env.DB.prepare('INSERT INTO players (id, name, named, guest, owner, created_at, seen_at) VALUES (?1, ?2, 0, 1, 0, ?3, ?3)').bind(id, name, now),
     s.statement,
   ]);
-  if (Math.random() < 0.02) pruneGuests(env).catch(() => {});
   return { session: { player: { id, name, named: false, guest: true, owner: false, since: now }, cookies: [s.cookie], fresh: true } };
 }
 
@@ -472,12 +471,12 @@ async function gameOf(catalogueOf, id) {
 export async function playerRoutes(request, env, ctx, url, { catalogueOf }) {
   const path = url.pathname;
   const read = request.method === 'GET' || request.method === 'HEAD';
-  if (path === '/_homie/account.js') return new Response(ACCOUNT_JS, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=300', 'x-content-type-options': 'nosniff' } });
+  if (path === '/_homie/account.js') return new Response((await import('./account-page.mjs')).ACCOUNT_JS, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=300', 'x-content-type-options': 'nosniff' } });
   if (path === '/account') return Response.redirect(`${url.origin}/account/${url.search}`, 301);
   if (path === '/account/') {
     if (!read) return fail(405, 'method', 'GET only');
     const cat = await catalogueOf();
-    return accountPage(cat, { origin: url.origin, next: nextOf(url.searchParams.get('next')), owner: OWNER_KEY.test(url.searchParams.get('owner') ?? '') ? url.searchParams.get('owner') : null, link: LINK.test(url.searchParams.get('k') ?? '') ? url.searchParams.get('k') : null, mode: ['verify', 'recover'].includes(url.searchParams.get('do')) ? url.searchParams.get('do') : null, features: features(env) });
+    return (await import('./account-page.mjs')).accountPage(cat, { origin: url.origin, next: nextOf(url.searchParams.get('next')), owner: OWNER_KEY.test(url.searchParams.get('owner') ?? '') ? url.searchParams.get('owner') : null, link: LINK.test(url.searchParams.get('k') ?? '') ? url.searchParams.get('k') : null, mode: ['verify', 'recover'].includes(url.searchParams.get('do')) ? url.searchParams.get('do') : null, features: features(env) });
   }
   if (!path.startsWith('/api/player/')) return null;
   const f = features(env);
@@ -737,7 +736,7 @@ async function apiRoute(request, env, ctx, url, parts, { catalogueOf, read, f })
     const answer = json({ ok: true, message: 'If that address belongs to an account here, a link is on its way. It works once, for 30 minutes.' });
     if (!owner) return answer;
     const k = await issueChallenge(env, 'recover-link', owner.player, null, PLAYER_LIMITS.linkMinutes);
-    await sendMail(env, email, `Sign in to ${await studioName()}`, `Someone (hopefully you) asked to get back into your player account on ${await studioName()}.\n\nOpen this link on the device you want to use, and make a new passkey there:\n${url.origin}/account/?do=recover&k=${k}\n\nIt works once, for 30 minutes. If you did not ask, ignore this email: nothing changes.\n`).catch(() => {});
+    await sendMail(env, email, `Sign in to ${await studioName()}`, `Someone (hopefully you) asked to get back into your player account on ${await studioName()}.\n\nOpen this link on the device you want to use, and make a new passkey there:\n${url.origin}/account/?do=recover&k=${k}\n\nIt works once, for 30 minutes. If you did not ask, ignore this email: nothing changes.\n`).catch(error => console.warn("Recovery mail delivery failed:",error.message));
     return answer;
   }
 

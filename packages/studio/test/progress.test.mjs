@@ -57,6 +57,7 @@ function account(dir) {
   writeFileSync(join(bin, 'wrangler'), `#!/bin/sh
 S=${state}
 case "$1" in
+  queues) if [ "$2" = info ]; then echo "Queue does not exist" >&2; exit 1; fi; echo created;;
   whoami) echo '{"loggedIn":true,"authType":"OAuth Token","accounts":[{"id":"acc1","name":"Test"}]}';;
   versions) echo 'This Worker does not exist on your account. [code: 10007]' >&2; exit 1;;
   d1) case "$2" in

@@ -16,23 +16,9 @@
 import { createHost } from '../rules/host.ts';
 import { compileMap, compileRules } from '../rules/rules.ts';
 
-/** game id → { rules, tune, map, settings, seats, build } as the build wrote it, and what compiling each gave. */
-const games = new Map();
-const compiled = new Map();
-const readiness = new WeakMap();
-
-/** The table of this studio's server-hosted games (the build's site/src/rules/index.mjs). Called once, at load. */
-export function hostRules(table) {
-  games.clear();
-  compiled.clear();
-  if (!table || typeof table !== 'object') return 0;
-  for (const [id, entry] of Object.entries(table)) if (entry && typeof entry === 'object' && entry.rules) games.set(id, entry);
-  return games.size;
-}
-
-/** Whether this Worker holds rules for a game. */
-export const hostedGame = (id) => games.has(id);
-export const hostedBuild = (id) => games.get(id);
+import {games,compiled} from './hosted-registry.mjs';
+export {hostRules,hostedGame,hostedBuild} from './hosted-registry.mjs';
+const readiness=new WeakMap();
 
 /** Optional engines load at room start. Ordinary games keep their synchronous startup path. */
 export function prepareHost(id) {

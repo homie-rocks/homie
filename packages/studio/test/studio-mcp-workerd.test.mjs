@@ -95,3 +95,21 @@ test('official SDK client discovers and calls a public studio in workerd',{timeo
 
   }finally{try{await Promise.all(clients.map(client=>client.close()));}finally{await mf.dispose();}}
 });
+
+test('initialize answers while existing-stream catalogue publication is pending',{timeout:10000},async()=>{
+ const bundled=await build({stdin:{contents:`import {remoteMcp} from './worker/mcp.mjs';
+ let waiting=false,published=false;
+ const DB={prepare:q=>({bind(){return this;},async first(){if(q.includes("key='tools-catalogue'")){waiting=true;await new Promise(r=>setTimeout(r,100));}return null;},async run(){published=true;return {};},async all(){return {results:[]};}})};
+ export default {async fetch(request,env,ctx){const p=new URL(request.url).pathname;
+ if(p==='/state')return Response.json({waiting,published});
+ const response=await remoteMcp(request,{DB,LOBBY:{}},ctx,{catalogueOf:async()=>({studio:{name:'Test'},games:[]})});
+ response.headers.set('x-published',String(published));return response;}};`,resolveDir:root},write:false,bundle:true,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*']});
+ const mf=new Miniflare({telemetry:{enabled:false},workers:[{config:{name:'mcp-pending',compatibilityDate:'2026-10-07',compatibilityFlags:['nodejs_compat'],manifest:{mainModule:'worker.mjs',modules:{'worker.mjs':{type:'esm',contents:bundled.outputFiles[0].text}}}}}]});
+ try{
+  const response=await mf.dispatchFetch('http://localhost/mcp',{method:'POST',headers:{'content-type':'application/json',accept:'application/json, text/event-stream'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-03-26',capabilities:{},clientInfo:{name:'test',version:'1'}}})});
+  assert.equal(response.status,200);assert.match(await response.text(),/serverInfo/);
+  assert.equal(response.headers.get('x-published'),'false');
+  for(let n=0;n<50;n++){if((await (await mf.dispatchFetch('http://localhost/state')).json()).published)break;await new Promise(r=>setTimeout(r,20));}
+  assert.deepEqual(await (await mf.dispatchFetch('http://localhost/state')).json(),{waiting:true,published:true});
+ }finally{await mf.dispose();}
+});

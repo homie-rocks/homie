@@ -6,8 +6,8 @@ import {feedSubscriptions,pushEvents} from './event-resources.mjs';
 import { services } from './mcp-tools.mjs';
 import { isOwner, sameOrigin } from './office.mjs';
 import { esc } from './site.mjs';
-let load = async () => [];
-export function useFunctions(loader) { load = loader; }
+import {loadFunctions as load} from './function-registry.mjs';
+export {useFunctions} from './function-registry.mjs';
 export async function hasFunctionType(type,env={}) { return [...await load(),...feedSubscriptions(env)].some(fn=>fn.event===type); }
 export async function syncFunctions(env, definitions = null, now = Date.now()) {
   definitions ??= await load();
@@ -52,8 +52,10 @@ export async function runFunctions(env, cat, origin, {definitions, now = Date.no
   if(typeof cat==='function')cat=await cat();
   definitions=definitions.filter(fn=>!fn.webhook).concat(webhookSubscriptions(env,cat,webhookOptions),env.STUDIO_EVENT_FEEDS?await eventHookSubscriptions(env,cat,{...webhookOptions,now}):[]);
   // An AI notification must not wait behind a slow function handler.
-  const notify=()=>pushEvents(env,cat,origin).catch(error=>console.error('Event notification wake failed',error));
-  const notifications=notify();
+  const notify=()=>pushEvents(env,cat,origin);
+  // A final pass retries an early failed wake. If that also fails the queue
+  // consumer retries the batch; it must never acknowledge a lost notification.
+  const notifications=notify().catch(error=>console.warn('Early event wake failed; retrying after functions',error));
   let more;
   do {
     more=false;
@@ -151,7 +153,7 @@ export async function functionRuns(env,{name,errors=false,before}={}) {
     WHERE (?1 IS NULL OR function=?1) AND (?2=0 OR outcome IN ('failed','interrupted')) AND (?3 IS NULL OR seq<?3)
     ORDER BY seq DESC LIMIT 101`).bind(name??null,errors?1:0,before??null).all()).results;
   const page=rows.slice(0,100),definitions=await load();
-  let crons=[];try {crons=JSON.parse(env.STUDIO_FUNCTION_CRONS??'[]');if(!Array.isArray(crons))crons=[];}catch {}
+  let crons=[];try {crons=JSON.parse(env.STUDIO_FUNCTION_CRONS??'[]');if(!Array.isArray(crons))crons=[];}catch(error) {console.warn('Invalid STUDIO_FUNCTION_CRONS:',error.message);}
   const schedules=scheduleStatus(definitions.filter(f=>!name||f.name===name),crons);
   const tick=await env.DB.prepare("SELECT value FROM meta WHERE key='function-last-scheduled'").first();
   return {runs:page.map(r=>({...r,started:new Date(r.started).toISOString(),finished:r.finished===null?null:new Date(r.finished).toISOString()})),next:rows.length>100?page.at(-1).seq:null,schedules,crons,lastScheduled:tick?JSON.parse(tick.value):null,triggerEvidence:'Generated deployment configuration; lastScheduled proves an observed tick. Provider dashboard changes are not queried.'};

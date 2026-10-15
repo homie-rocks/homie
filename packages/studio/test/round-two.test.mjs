@@ -5,7 +5,7 @@ import {pushEvents} from '../worker/event-resources.mjs';
 
 test('pushEvents with configured feeds completes its subscription wake',async t=>{
  const DB=database(t),wakes=[];
- await DB.prepare('INSERT INTO mcp_kv(key,value) VALUES(?1,?2)').bind('event-sub:c:feed',JSON.stringify({connection:'c'})).run();
+ await DB.prepare('INSERT INTO mcp_kv(key,value) VALUES(?1,?2)').bind('tools-stream:c',JSON.stringify({connection:'c'})).run();
  await pushEvents({DB,STUDIO_EVENT_FEEDS:JSON.stringify({feed:{event:'record.changed'}}),LOBBY:{idFromName:x=>x,get:id=>({fetch:async()=>{wakes.push(id);return new Response(null,{status:204});}})}},{games:[]},'https://test.example');
  assert.deepEqual(wakes,['@studio-events/c']);
 });
@@ -55,13 +55,16 @@ test('request database preserves sessions and observes raw writes',async()=>{
  const next=wrapped.withSession('first-primary');assert.equal(databaseBinding(next),DB);
  await next.prepare('UPDATE tool_data SET value=1').raw();assert.equal(wrapped[MUTATIONS],true);
 });
-test('metadata cache reuses completed rows across requests, invalidating on a revision change',async()=>{
- let revision=1,reads=0,revisions=0;
- const query='SELECT game, launch, max_players, updated_at FROM office_games LIMIT 500';
- const DB={prepare:q=>({first:async()=>{revisions++;return {value:String(revision)};},all:async()=>{reads++;return {results:[{game:'cafe',launch:revision===1?'public':'private'}]};}})};
+test('cold metadata is batched, warm metadata reads one revision, and revisions invalidate rows',async t=>{
+ const DB=database(t),query='SELECT game, launch, max_players, updated_at FROM office_games LIMIT 500';
+ DB.sql.exec("INSERT INTO office_games(game,launch,updated_at) VALUES('cafe','public',1)");
+ const batch=DB.batch;let calls=0;
+ DB.batch=async statements=>{calls++;return batch(statements);};
  const read=()=>requestDatabase(DB,new Request('https://place.test/cafe/open')).prepare(query).all();
- assert.equal((await read()).results[0].launch,'public');await read();assert.equal(reads,1);assert.equal(revisions,2);
- revision++;assert.equal((await read()).results[0].launch,'private');assert.equal(reads,2);
+ assert.equal((await read()).results[0].launch,'public');assert.equal(calls,1);
+ await read();assert.equal(calls,2);
+ DB.sql.exec("UPDATE office_games SET launch='private'");
+ assert.equal((await read()).results[0].launch,'private');assert.equal(calls,4);
 });
 
 test('pending needs are explicitly incomplete without a failing exit code',async()=>{
@@ -116,14 +119,14 @@ test('cookie-free owner-office and remote-test identities can load private app p
  }
 });
 
-test('metadata triggers invalidate warmed settings without reading other tables',async t=>{
+test('metadata triggers invalidate warmed settings in one refresh batch',async t=>{
  const {settingsOf}=await import('../worker/office.mjs');const DB=database(t),queries=[],prepare=DB.prepare;
  DB.prepare=q=>{queries.push(q);return prepare(q);};
  const request=new Request('https://place.test/cafe/open'),env=()=>({DB:requestDatabase(DB,request)});
  await settingsOf(env());queries.length=0;await settingsOf(env());
  assert.deepEqual(queries,["SELECT value FROM meta WHERE key='metadata-revision'"]);
  DB.sql.exec("INSERT INTO office_games(game,launch,updated_at) VALUES('cafe','invite',1)");queries.length=0;
- assert.equal((await settingsOf(env())).get('cafe').launch,'invite');assert.equal(queries.length,2);assert.ok(queries.every(q=>!q.includes('servers')&&!q.includes('chat_rules')));
+ assert.equal((await settingsOf(env())).get('cafe').launch,'invite');assert.equal(queries.length,4);
 });
 test('an asset-only test ticket cannot become a production role session',async t=>{
  const {appAccess}=await import('../worker/app-records.mjs'),DB=database(t),env={DB};
@@ -150,3 +153,21 @@ test('an expired player cookie does not hide a live invite pass',async t=>{
 test('game-only catalogues never query app notification tables',async()=>{
  await pushAppRecords({DB:{prepare(){assert.fail('no app tables are needed');}},LOBBY:{}},{games:[{id:'race'}]});
 });
+
+test('runtime index upgrade preserves 0.54.0 rows and uses indexed expiry and prefix scans',async t=>{
+ const {DatabaseSync}=await import('node:sqlite');
+ const {readFileSync,readdirSync}=await import('node:fs');
+ const {RUNTIME_INDEX_MIGRATION}=await import('../worker/operational-schema.mjs');
+ const sql=new DatabaseSync(':memory:');t.after(()=>sql.close());
+ const dir=new URL('../../../template/site/migrations/',import.meta.url);
+ for(const file of readdirSync(dir).filter(f=>f<'0034').sort())sql.exec(readFileSync(new URL(file,dir),'utf8'));
+ sql.exec("INSERT INTO mcp_kv VALUES('client:kept','old connection',NULL),('event-sub:c:feed','{}',123)");
+ const before=sql.prepare('SELECT * FROM mcp_kv ORDER BY key').all();
+ sql.exec(RUNTIME_INDEX_MIGRATION);
+ assert.deepEqual(sql.prepare('SELECT * FROM mcp_kv ORDER BY key').all(),before);
+ for(const query of ["SELECT * FROM mcp_kv WHERE expires IS NOT NULL AND expires<123", "SELECT * FROM mcp_kv WHERE key>='event-sub:' AND key<'event-sub;' ORDER BY key"]){
+  const plan=sql.prepare('EXPLAIN QUERY PLAN '+query).all().map(r=>r.detail).join(' ');
+  assert.match(plan,/SEARCH.*USING INDEX/);assert.doesNotMatch(plan,/SCAN mcp_kv/);
+ }
+});
+

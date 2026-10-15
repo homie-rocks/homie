@@ -209,8 +209,8 @@ test('NO CREDIT CARD: a free account without R2 deploys the whole studio, and de
   const plan = out(run(['deploy', '--plan'], dir));
   assert.equal(plan.ok, true, JSON.stringify(plan));
   assert.deepEqual(account.calls(), [], 'the plan calls nothing');
-  assert.deepEqual(plan.cloudflare.map((r) => r.kind), ['Cron triggers', 'Worker', 'D1 database', 'Durable Object', 'Durable Object', 'R2 bucket']);
-  assert.equal(plan.cloudflare.find(r=>r.kind==='Cron triggers').name,'none','no cron without a declared need');
+  assert.deepEqual(plan.cloudflare.map((r) => r.kind), ['Cron triggers', 'Worker', 'D1 database', ...Array(6).fill('Durable Object'), 'R2 bucket']);
+  assert.equal(plan.cloudflare.find(r=>r.kind==='Cron triggers').name,'17 * * * *','hourly expiry cleanup is installed');
   assert.equal(plan.cloudflare.at(-1).name, null, 'no R2 bucket in the plan');
   assert.equal(plan.cost, null, 'no billing claim without a measured account plan');
   assert.match(plan.directory.stores, /Never code, media, keys or accounts/);

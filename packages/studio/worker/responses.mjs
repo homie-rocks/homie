@@ -1,12 +1,8 @@
-/** Extracted from the studio runtime; behavior is unchanged. */
-import {PART_FILES} from './parts.mjs';
-import {GAME_FILES} from './runtime-support.mjs';
-
-const json = (body, status = 200, extra = {}) => new Response(`${JSON.stringify(body)}\n`, {
+import {GAME_FILES,PART_FILES} from './asset-paths.mjs';
+export const json = (body, status = 200, extra = {}) => new Response(`${JSON.stringify(body)}\n`, {
   status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...extra },
 });
-
-function finish(res, path) {
+export function finish(res, path) {
   if (!res || res.status === 101 || res.webSocket) return res;
   if (!/text\/html/i.test(res.headers.get('content-type') ?? '')) return res;
   const cache = res.headers.get('cache-control') ?? '';
@@ -20,6 +16,3 @@ function finish(res, path) {
   if (addXfo) headers.set('x-frame-options', 'DENY');
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
-
-export {json,finish};
-

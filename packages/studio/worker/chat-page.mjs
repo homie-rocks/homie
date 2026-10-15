@@ -21,7 +21,7 @@
  */
 import { REACTIONS } from './chat.mjs';
 import { REPORT_REASONS, REPORT_WORDS } from './chat-store.mjs';
-import { NET_PALETTE } from './room.mjs';
+import { NET_PALETTE } from './room-protocol.mjs';
 
 /** Where room chat's strip of new lines may sit: a corner, or the middle of the top or bottom edge. */
 export const CHAT_PLACES = ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'];

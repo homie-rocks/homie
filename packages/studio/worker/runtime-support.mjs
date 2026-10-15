@@ -1,34 +1,50 @@
-/** Extracted from the studio runtime; behavior is unchanged. */
+import {studioTools,directoryOf} from './tool-registry.mjs';
+export {useTools,getStudioTools} from './tool-registry.mjs';
+import {json,finish} from './responses.mjs';
+/** Shared catalogue, assets, and room presentation helpers. */
+import {catalogue,builtPosts} from './catalogue.mjs';
+
 import {appGraphicsFallback} from './app-graphics.mjs';
 import {JOIN_AREA_FRAME_JS} from './join-area.mjs';
+
+import { directoryUrl } from './directory-choice.mjs';
 import {APP_STORAGE_JS} from './app-frame.mjs';
-import {appRole} from './app-format.mjs';
-import {playerEnabled,EMBED_GAME_JS} from './embed.mjs';
-import {versionOf} from './room.mjs';
-import {ROOM_ID,embedAncestors,frameAncestors} from './pages.mjs';
-import {PUBLIC_SERVER,memberCounts,memberOf,roomServer,serverView,serversOf} from './servers.mjs';
-import {chatOf,chatRowsOf} from './chat-store.mjs';
-import {paramsFrom,seatsOf} from './seats.mjs';
-import {mediaArt,notFoundPage,roomView,watchOf} from './site.mjs';
-import {count,isQa,playedThisWeek,today} from './stats.mjs';
-import {appAssetTicket,holders,launchOf,settingsOf} from './office.mjs';
-import {STUDIO_VERSION_TAG} from './version.mjs';
-import {readiness,shellShop,shopOf} from './shop.mjs';
-import {json} from './responses.mjs';
-import {catalogue} from './catalogue.mjs';
-import {directoryOf,studioTools} from './tool-registry.mjs';
+
+import { appRole } from './app-format.mjs';
+import { playerEnabled, EMBED_GAME_JS } from './embed.mjs';
+import { versionOf } from './room-protocol.mjs';
+
+import { ROOM_ID, frameAncestors, embedAncestors } from './page-policy.mjs';
+import { PUBLIC_SERVER, memberCounts, memberOf, roomServer, serverView, serversOf } from './servers.mjs';
+
+import { chatOf, chatRowsOf } from './chat-store.mjs';
+
+import { paramsFrom, seatsOf } from './seats.mjs';
+import { mediaArt, notFoundPage, roomView, watchOf } from './site.mjs';
+import { count, isQa, playedThisWeek, today } from './stats.mjs';
+import { players as playerAccounts } from './players.mjs';
+import { appAssetTicket, holders, launchOf, settingsOf } from './office.mjs';
+
+import { STUDIO_VERSION_TAG } from './version.mjs';
+import { readiness, shellShop, shopOf } from './shop.mjs';
+
+import {PART_FILES} from './asset-paths.mjs';
+import {defaultPlayers} from './player-registry.mjs';
+defaultPlayers(playerAccounts);
 
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
 const POST_SLUG = /^[a-z0-9][a-z0-9-]{0,79}$/;
 
-const GAME_FILES = /^\/[a-z0-9][a-z0-9-]{0,39}\/(?:__game|__assets)(?:\/|$)/;
+import {GAME_FILES} from './asset-paths.mjs';
 
 const MEDIA_FILE = /\.(mp4|webm|m4v|mov|mp3|m4a|aac|ogg|opus|wav|flac)$/i;
 
 const BROWSER_KEY = /^[A-Za-z0-9_-]{16,43}$/;
 
 const TICKET_TEXT = /^[a-z0-9]{6,12}\.[A-Za-z0-9_~-]{1,140}\.[A-Za-z0-9_-]{32}$/;
+
+
 
 async function sellingShop(env, cat) {
   const shop = shopOf(cat);
@@ -48,6 +64,8 @@ async function availableShellShop(env, cat, game, options) {
 }
 
 async function postsOf(env, origin) {
+  const baked = await builtPosts();
+  if (baked) return baked;
   try {
     const res = await env.ASSETS.fetch(new Request(`${origin}/_site/posts.json`));
     return res.ok ? ((await res.json()).posts ?? []) : [];
@@ -74,6 +92,8 @@ const REPO = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/;
 const repoOf = (env) => { const r = String(env.HOMIE_REPO ?? '').trim(); return REPO.test(r) && r.toLowerCase() !== 'homie-rocks/homie' ? r : null; };
 
 const repoSaid = new Map();
+
+export {directoryOf} from './tool-registry.mjs';
 
 async function claimOf(env, cat, url) {
   const origin = url.origin;
@@ -118,9 +138,11 @@ async function roomsOf(env, games, { servers = null } = {}) {
   const live = {};
   // Room chat (section 19): whether each room's chat is on and may show on homie.rocks's page for it.
   const chatRows = await chatRowsOf(env);
+  const summaries=null;
   await Promise.all(games.map(async (g) => {
     let list = [];
-    try { list = (await (await env.LOBBY.get(env.LOBBY.idFromName(g.id)).fetch('https://lobby/rooms')).json()).rooms ?? []; } catch { list = []; }
+    if(summaries)list=summaries.get(g.id)??[];
+    else try { list = (await (await env.LOBBY.get(env.LOBBY.idFromName(g.id)).fetch('https://lobby/rooms')).json()).rooms ?? []; } catch { list = []; }
     const busy = list.filter((r) => (r.players || 0) > 0);
     live[g.id] = busy.reduce((n, r) => n + (r.players || 0), 0);
     const known = busy.some((r) => r.server && r.server !== 'public') ? (servers?.[g.id] ?? await serversOf(env, g).catch(() => [])) : [];
@@ -135,8 +157,6 @@ async function roomsOf(env, games, { servers = null } = {}) {
   rooms.sort((a, b) => b.players - a.players || a.game.localeCompare(b.game) || String(a.room).localeCompare(String(b.room)));
   return { rooms, live };
 }
-
-async function liveCounts(env, games) { return (await roomsOf(env, games)).live; }
 
 const MEDIA_SLUG = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
@@ -361,7 +381,7 @@ function shareDaily(cat, url, ctx) {
   if (!cat.studio?.stats?.share || url.protocol !== 'https:' || sharedDay === today()) return;
   sharedDay = today();
   const directory = String(cat.studio.directory ?? 'https://homie.rocks').replace(/\/+$/, '');
-  const ping = fetch(`${directory}/api/studio/played`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ site: url.origin }) }).catch(() => {});
+  const ping = fetch(`${directory}/api/studio/played`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ site: url.origin }) }).catch(error => console.warn("Directory play notification failed:",error.message));
   if (ctx?.waitUntil) ctx.waitUntil(ping);
 }
 
@@ -382,13 +402,13 @@ async function mediaBeat(request, env, ctx, url) {
   return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
 }
 
-const toolCatalogues=new WeakSet();
 
 async function notifyTools(env,cat,origin) {
   if(!env.DB||!env.LOBBY)return;
   const [{pushToolList},{builtins}]=await Promise.all([import('./event-resources.mjs'),import('./mcp-tools.mjs')]);
   await pushToolList(env,cat,[...builtins(env,cat,origin),...await studioTools()],origin);
 }
+
 
 async function serverLive(env, meta, servers, origin, lobby) {
   let list = [];
@@ -422,6 +442,4 @@ async function fallback(request, env, url, getCat) {
   }
   return asset;
 }
-
-export {GAME_ID,POST_SLUG,GAME_FILES,MEDIA_FILE,BROWSER_KEY,TICKET_TEXT,sellingShop,availableShellShop,postsOf,CLAIM,claimed,claimMissed,storedClaim,REPO,repoOf,repoSaid,claimOf,named,roomsOf,liveCounts,MEDIA_SLUG,parseRange,assetWithRange,etagMatches,mediaObject,ASSET_CACHE,heldInR2,mediaRow,KNOCK_CORS,chatWho,reportsMade,reportAllowed,notAHomie,gameDocument,gameAsset,sharedDay,shareDaily,mediaBeat,toolCatalogues,notifyTools,serverLive,weekOf,fallback};
-
+export {GAME_ID,POST_SLUG,GAME_FILES,MEDIA_FILE,BROWSER_KEY,TICKET_TEXT,json,sellingShop,availableShellShop,postsOf,CLAIM,claimed,claimMissed,storedClaim,REPO,repoOf,repoSaid,claimOf,named,roomsOf,MEDIA_SLUG,parseRange,assetWithRange,etagMatches,mediaObject,ASSET_CACHE,heldInR2,mediaRow,KNOCK_CORS,chatWho,reportsMade,reportAllowed,notAHomie,gameDocument,gameAsset,sharedDay,shareDaily,mediaBeat,finish,notifyTools,studioTools,serverLive,weekOf,fallback};

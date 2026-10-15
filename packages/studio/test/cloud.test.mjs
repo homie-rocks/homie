@@ -101,7 +101,7 @@ test('the template: Deploy to Cloudflare and Workers Builds ready, and the repos
   assert.equal(config.d1_databases[0].migrations_dir, 'site/migrations');
   assert.equal(config.d1_databases[0].database_id, undefined, 'no account-specific id: Wrangler and the Deploy flow create the database');
   assert.equal(config.preview_urls, true, 'every branch gets a Preview URL');
-  assert.deepEqual(config.previews.durable_objects.bindings.map((b) => b.name), ['TABLE', 'LOBBY', 'GATE', 'CONCENTRATOR'], 'a Preview binds its own room namespaces');
+  assert.deepEqual(config.previews.durable_objects.bindings.map((b) => b.name), ['TABLE', 'LOBBY', 'GATE', 'CONCENTRATOR', 'APP_RECORDS', 'EVENTS'], 'a Preview binds its own room namespaces');
   assert.equal(config.previews.vars.HOMIE_PREVIEW, '1');
   assert.equal(config.previews.d1_databases, undefined, 'a Preview counts nothing into the studio\'s stats and never claims');
   const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
