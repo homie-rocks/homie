@@ -1,3 +1,4 @@
+import {canonicalJson} from '../worker/canonical-json.mjs';
 /** Pure, batched Stripe plan. The owner's AI supplies public API reads; no Stripe transport here. */
 import {createHash} from 'node:crypto';
 import {existsSync, readFileSync, mkdirSync, writeFileSync} from 'node:fs';
@@ -7,7 +8,8 @@ import {readStudio, siteUrl} from './studio.mjs';
 import {reconcilePaymentLinks} from './shop-links.mjs';
 import {fullerReason, LINKS_STRIPE_VERSION} from '../worker/shop-links.mjs';
 const hash = x => createHash('sha256').update(JSON.stringify(x)).digest('hex');
-export const readKey = (path, params) => JSON.stringify([path,Object.fromEntries(Object.entries(params).sort(([a],[b])=>a.localeCompare(b)))]);
+export const readKey = (path, params) => canonicalJson([path,params]);
+const slotsOf=(root,slots)=>slots??(existsSync(join(root,'.studio','booking-slots.json'))?JSON.parse(readFileSync(join(root,'.studio','booking-slots.json'),'utf8')):[]);
 export async function shopMcpPlan(root, {observations = [], mode = 'test', url, slots, verify = false} = {}) {
   const checked=readShop(root);
   if(!checked.ok || checked.absent) return {ok:false,why:'Create and check shop.json first.'};
@@ -20,7 +22,7 @@ export async function shopMcpPlan(root, {observations = [], mode = 'test', url, 
   const local=new URL(site).protocol==='http:';
   if(local && (mode!=='test' || !/^(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/.test(new URL(site).hostname)))throw new Error('Local checkout requires a private HTTP address and test mode');
   if(!local && new URL(site).protocol!=='https:')throw new Error('Use the studio HTTPS address');
-  const bookingSlots=slots??(existsSync(join(root,'.studio','booking-slots.json'))?JSON.parse(readFileSync(join(root,'.studio','booking-slots.json'),'utf8')):[]);
+  const bookingSlots=slotsOf(root,slots);
   const slug=local?'local-'+createHash('sha256').update(root).digest('hex').slice(0,16):studio.slug;
   // Reject secrets before persisting observations. Webhook creation is never part of this plan.
   if(/(?:whsec_|[rs]k_(?:test|live)_)/.test(JSON.stringify(observations)))throw new Error('Supply only public catalog reads, never credentials or webhook creation responses');
@@ -65,7 +67,9 @@ export async function saveMcpVerification(root, options) {
       saveLocalStripe(root,{STRIPE_CHECKOUT_MODE:'links',STRIPE_SHOP_LINKS:'base64:'+Buffer.from(JSON.stringify(result.config)).toString('base64')});
     }
     mkdirSync(join(root,'.studio'),{recursive:true});
-    writeFileSync(join(root,'.studio','stripe-mcp.json'),JSON.stringify({options:{account:options.account,mode:result.mode,slots:options.slots??[],url:result.site},source:hash({shop:readShop(root).shop,slots:options.slots??[]}),result:{verified:true,verifiedAt:result.verifiedAt,local:result.local,site:result.site,mode:result.mode,config:result.config}},null,2));
+    const slots=slotsOf(root,options.slots);
+    if(options.slots!==undefined)writeFileSync(join(root,'.studio','booking-slots.json'),JSON.stringify(slots));
+    writeFileSync(join(root,'.studio','stripe-mcp.json'),JSON.stringify({options:{account:options.account,mode:result.mode,slots,url:result.site},source:hash({shop:readShop(root).shop,slots}),result:{verified:true,verifiedAt:result.verifiedAt,local:result.local,site:result.site,mode:result.mode,config:result.config}},null,2));
   }
   return result;
 }

@@ -180,3 +180,13 @@ test('verified MCP baskets retain the released aggregate link and verify its fie
  f.rows.payment_links.find(l=>l.id===p.config.menus[0].id).automatic_tax.enabled=true;
  await assert.rejects(()=>reconcile(root,f),/differs from its planned fields/);
 });
+
+test('verification fingerprints the effective file-backed slot manifest for deployment',async t=>{
+ const {verifiedMcpConfig}=await import('../lib/shop-mcp.mjs');const root=studio(t),f=fixture();mkdirSync(join(root,'.studio'),{recursive:true});
+ const slots=[{app:'classes',collection:'bookings',slots:'sessions',slot:'monday',item:'coffee',capacity:2}];writeFileSync(join(root,'.studio/booking-slots.json'),JSON.stringify(slots));
+ await reconcile(root,f);assert.equal(verifiedMcpConfig(root).result.config.slots.length,1);
+});
+
+test('write observations match nested API parameter ordering',()=>{
+ assert.equal(readKey('/v1/products',{default_price_data:{currency:'usd',unit_amount:300},metadata:{studio:'proof',origin:'https://proof.example'}}),readKey('/v1/products',{metadata:{origin:'https://proof.example',studio:'proof'},default_price_data:{unit_amount:300,currency:'usd'}}));
+});
