@@ -21,7 +21,7 @@ test('Stripe\'s MCP: a write that would hand back a webhook secret is refused; e
   for (const tool of names) {
     const why = stripeSecretWriteOf(tool, { method: 'POST', path: '/v1/webhook_endpoints', params: { url: 'https://owls.example/api/shop/hook', enabled_events: ['checkout.session.completed'] } });
     assert.match(why, /signing secret/);
-    assert.match(why, /homie-studio shop webhook/, 'it says what to do instead');
+    assert.match(why, /homie-studio shop connect/, 'it says what to do instead');
   }
   const tool = names[0];
   assert.ok(stripeSecretWriteOf(tool, { operation: 'PostWebhookEndpoints', body: {} }), 'an operation name, not a path');

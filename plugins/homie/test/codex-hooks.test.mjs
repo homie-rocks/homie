@@ -175,7 +175,7 @@ test('refused outright, nobody asked: a locked decision, an unlicensed asset in 
     assert.match(big.hookSpecificOutput.permissionDecisionReason, /games\/owl-rush\/big\.glb \(6\.0 MB\) is over 5 MB under games\//);
 
     const hook = await pre(payload(s, 'mcp__plugin_stripe_stripe__stripe_api_write', { method: 'POST', path: '/v1/webhook_endpoints', params: { url: 'https://night-owls.example.invalid/api/shop/hook' } }), { dir: s.data });
-    assert.match(hook.hookSpecificOutput.permissionDecisionReason, /homie-studio shop webhook/);
+    assert.match(hook.hookSpecificOutput.permissionDecisionReason, /homie-studio shop connect/);
   } finally { s.done(); }
 });
 

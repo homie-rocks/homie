@@ -795,9 +795,10 @@ async function hook(request, env, cat, shop, ready) {
   const payload = await boundedText(request, maxBytes);
   if (payload === null) return fail(413, 'too-large', 'The studio webhook byte limit was reached.');
   let v = await verifyWebhook(payload, request.headers.get('stripe-signature'), await webhookSecret(env));
-  if(!v.ok && env.STRIPE_WEBHOOK_SECRET)v=await verifyWebhook(payload,request.headers.get('stripe-signature'),env.STRIPE_WEBHOOK_SECRET);
   if (!v.ok) return fail(v.why === 'no-secret' ? 503 : 400, v.why, 'not a webhook from this studio\'s Stripe');
   const ev = v.event;
+  // A completed delivery must not repeat provider reads or downstream side effects.
+  if (await env.DB.prepare('SELECT 1 AS x FROM shop_events WHERE id = ?1').bind(ev.id).first()) return json({ok:true,duplicate:true});
   const notified = ev.data?.object ?? {};
   // Old player-only studios may receive App-wide lifecycle events before the
   // corresponding schema exists. Ignoring them grants nothing and avoids an
@@ -878,7 +879,6 @@ async function hook(request, env, cat, shop, ready) {
     }
     if (!(await migrated(env))) return fail(503, 'not-migrated', MISSING_WORDS.migration);
     if (await env.DB.prepare('SELECT 1 AS x FROM shop_events WHERE id = ?1').bind(ev.id).first()) {
-      if (['checkout.session.completed', 'checkout.session.async_payment_succeeded'].includes(ev.type) && ['paid', 'no_payment_required'].includes(ev.data?.object?.payment_status)) await paid(env, shop, ev.data.object);
       return json({ ok: true, duplicate: true });
     }
     let did = 'ignored';

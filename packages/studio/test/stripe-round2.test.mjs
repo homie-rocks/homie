@@ -21,14 +21,9 @@ test('free-only shop is ready without any Stripe connection',async()=>{
  const {readiness}=await import('../worker/shop.mjs');
  assert.equal((await readiness({DB:{prepare:()=>({first:async()=>null})}}, {till:'stripe',items:[{price:0}]})).ready,true);
 });
-test('Worker creates webhook using its own key and returns no signing secret',async()=>{
- const {setupStripeWebhook}=await import('../worker/stripe-bootstrap.mjs');
- const values=new Map();const DB={prepare:()=>({bind:(k,v)=>({first:async()=>values.has(k)?{value:values.get(k)}:null,run:async()=>values.set(k,v)})})};
- const env={DB,STRIPE_KEY:'rk_test_fixture',STRIPE_SETUP_CHALLENGE:'proof',STRIPE_WEBHOOK_WRAP_KEY:'a'.repeat(64)};
- const response=await setupStripeWebhook(env,'https://studio.example',{call:async(e,m,p)=>{assert.equal(e.STRIPE_KEY,'rk_test_fixture');assert.equal(p,'/v1/webhook_endpoints');return{id:'we_fixture',secret:'whsec_fixture'};}});
- assert.equal(response.webhookId,'we_fixture');assert.doesNotMatch(JSON.stringify(response),/whsec/);
- assert.doesNotMatch(values.get('stripe-webhook-encrypted'),/whsec_fixture/);
- assert.equal(await (await import('../worker/stripe-bootstrap.mjs')).webhookSecret(env),'whsec_fixture');
+test('signing secret is exclusively a Worker binding',async()=>{
+ const {webhookSecret}=await import('../worker/stripe-bootstrap.mjs');
+ assert.equal(await webhookSecret({STRIPE_WEBHOOK_SECRET:'whsec_fixture',DB:{prepare:()=>assert.fail('no D1 secret reads')}}),'whsec_fixture');
 });
 test('all webhook purchase objects are independently retrieved before processing',async()=>{
  const {retrieveEventObject}=await import('../worker/stripe.mjs');

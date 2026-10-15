@@ -48,10 +48,6 @@
     {
       "permission": "plan_read",
       "purpose": "Read Prices used by studio checkout."
-    },
-    {
-      "permission": "event_read",
-      "purpose": "Read this account's payment, subscription, refund and dispute events so the studio confirms each order with Stripe without a webhook."
     }
   ],
   "distribution_type": "public",

@@ -2,7 +2,7 @@
 
 Each purchase, including a zero-price order, is a Stripe Checkout Session created by the studio's own
 Worker. The restricted key and signing secret stay in that Worker. Stripe sends
-payment events straight to `/api/shop/hook`; homie.rocks performs setup only.
+payment events straight to `/api/shop/hook`; setup runs on the owner’s computer.
 There is no Homie fee, payment proxy or runtime dependency on homie.rocks.
 
 ## Setup
@@ -13,8 +13,10 @@ Create and check `shop.json`, deploy the studio, then run:
 homie-studio shop connect
 ```
 
-The existing `stripe_login` tool runs this command and opens the official Homie
-Stripe App. Install Homie, choose View API keys → Generate new key (sandbox:
+The existing `stripe_login` tool runs this command. First approve the Stripe CLI
+link for your studio account (skipped for an existing approved login). The tool
+creates the webhook and installs its signing secret privately through Wrangler
+stdin. Then it opens the official Homie Stripe App. Install Homie, choose View API keys → Generate new key (sandbox:
 Reveal key) → Copy. The local tool captures only a new restricted key in the
 expected mode, validates read access and installs it through Wrangler stdin.
 It clears the clipboard afterward; never paste keys into chat. `--renew` uses
@@ -22,8 +24,9 @@ Roll key and Copy. If capture fails, use the hidden Wrangler prompt in your own
 terminal and resume with `shop connect --finish`.
 
 The App has public distribution; use its External test link until Stripe review
-passes. No Homie service handles setup or payments. The Worker creates its own
-webhook and encrypts the signing secret in D1 with a separate Worker secret.
+passes. No Homie service handles setup or payments. Both steps resume; renewal
+reuses the webhook and CLI login. `STRIPE_WEBHOOK_SECRET` is a normal Worker
+secret. The app key cannot create webhooks, and no Events API polling is used.
 See the repository's `docs/stripe-rak-owner-guide.md` for release gates.
 
 ## Catalogue and checkout
@@ -96,13 +99,13 @@ Owner approval for refunds remains the existing office behavior.
 
 ## Upgrade
 
-`homie-studio upgrade` identifies existing link setup and gives the owner one
-payment action: approve Homie through `shop connect`. Do not deploy over the old
-payment handler before the connection job completes the drain. The App stops new
-link sessions; the tool waits for open sessions and checks the old database for
-receipts already committed by signed events. It then deploys the new Worker,
-installs its credentials, disables old webhook endpoints and removes retired
-configuration. No orders or bookings are deleted or granted by the drain check.
+`homie-studio upgrade` identifies existing link setup. Run `shop connect`: approve
+the Stripe link if needed, then install Homie → Generate → Copy. The tool reuses
+the old signing secret, installs the app key and Checkout handler, then deactivates
+old links and expires open Sessions. It checks all completed-session pages against
+committed paid receipts twice, 30 seconds apart. Pending asynchronous payments
+retain old configuration. Only after draining do old hooks and link bindings
+retire. Resume with `--finish`. No financial rows are deleted.
 
 Revoked or expired credentials cause checkout to ask for reconnection. Uninstall behavior is tested separately; do not assume uninstall revokes a key. Buying and delivery do not call
 Homie to check authorization.

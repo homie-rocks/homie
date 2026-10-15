@@ -134,7 +134,7 @@ part's contract: a pledge-only example is not payment fulfilment. The giving sta
 uses the shop bridge; `shop.catalog()` is available in this version. Field names
 start with a lowercase letter and continue with lowercase letters, digits or `_`.
 
-For owner setup, deploy to the studio's HTTPS address and use `stripe_login` for one Homie Stripe App approval. Local development can exercise provider fakes without credentials. Maintainer sandbox acceptance uses `test/checkout-sandbox-acceptance.mjs`, a privately injected test-only restricted key and the explicitly named `Homie sandbox` CLI profile. It forwards real signed events and uses Stripe's published test helpers. Never ask a business owner to copy a key or webhook secret.
+For owner setup, deploy to the studio's HTTPS address and use `stripe_login`: approve the Stripe CLI link if needed, then install Homie → Generate → Copy. The CLI installs the webhook secret and the app key separately over private Wrangler stdin. Local development can exercise provider fakes without credentials. Maintainer sandbox acceptance uses `test/checkout-sandbox-acceptance.mjs`, a privately injected test-only restricted key and the explicitly named `Homie sandbox` CLI profile. It forwards real signed events and uses Stripe's published test helpers. Never ask an owner to paste a key into chat or handle a webhook secret.
 
 The first Checkout emits `order.paid`. Later paid subscription-cycle invoices each
 create a distinct paid order and emit `order.paid` with the original app and reference.

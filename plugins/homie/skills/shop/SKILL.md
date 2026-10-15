@@ -19,7 +19,7 @@ delivery, the customer portal and refunds work with homie.rocks unreachable.
 1. Check `shop.json` with `homie-studio shop check` and ensure the studio has its own
    deployed HTTPS Worker and Cloudflare authorization.
 2. Call the existing `stripe_login` tool (`homie-studio shop connect`). Follow
-   `studio_job`. The tool opens the official **Homie** Stripe App approval page.
+   `studio_job`. First **approve the Stripe CLI link** for the studio account, if this computer is not already connected. The tool creates the endpoint and installs its signing secret privately via Wrangler stdin. It then opens the official **Homie** Stripe App page.
 3. The owner installs Homie, then chooses **View API keys → Generate new key**
    (**Reveal key** in a sandbox) **→ Copy**. The local tool watches for a new
    restricted key in the expected mode, checks it against Stripe, installs it via
@@ -32,7 +32,9 @@ Until review passes, configure the uploaded App's External test link in
 production distribution. No Homie service participates in setup or payments.
 If clipboard capture fails, the tool offers `npx wrangler secret put STRIPE_KEY`
 in the owner's own terminal, followed by `homie-studio shop connect --finish`.
-`--renew` opens the same App page; the owner chooses **Roll key → Copy**.
+Both steps resume; a working webhook and approved CLI login are reused.
+The signing secret is a normal Worker secret, never encrypted D1 storage. There
+is no Events API polling. `--renew` opens the same App page; the owner chooses **Roll key → Copy**.
 
 `stripe_shop_plan`, `stripe_webhook`, slot-link synchronization, Payment Links,
 basket links and their public JSON configuration have been removed. There is no
@@ -65,8 +67,8 @@ local fakes must be identified as simulations.
 ## Existing studios
 
 Run `homie-studio upgrade`, then `stripe_login`. The owner installs and copies
-once. The tool installs the RAK, deploys Checkout and bootstraps the new webhook
-before retiring links. Deactivating old links needs the owner's existing local
+once after approving the Stripe link if needed. The tool reuses the existing
+webhook secret, installs the RAK and deploys Checkout before retiring links. Deactivating old links needs the owner's existing local
 Stripe CLI authorization, matched to the RAK account: the Worker deliberately
 has no Payment Links permission. Missing CLI authorization stops retirement.
 Open link sessions expire; cursor-based receipt checks run at least 30 seconds
@@ -77,7 +79,7 @@ Never delete financial rows to make an upgrade pass.
 Only an authentication failure (401) requires reconnect; 403 is a permission
 failure. Disconnect removes the webhook before the Worker key. Tell the owner
 to roll/expire the key on Stripe's App settings page; do not assume uninstall
-revokes it. If it already revoked the key, remove the endpoint in Workbench.
+revokes it. Endpoint deletion uses the CLI login even if the app key is revoked.
 
 ## Verification
 

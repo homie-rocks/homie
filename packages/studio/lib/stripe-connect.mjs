@@ -1,3 +1,4 @@
+import { ownerStripeApi, installStripeWebhook } from './stripe-webhook.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
@@ -94,7 +95,7 @@ export async function validateRestrictedKey(key, mode, fetcher = fetch) {
   };
   const account = await call('/v1/account');
   if (!/^acct_[A-Za-z0-9]+$/.test(account.id)) throw new Error('Account unavailable');
-  for (const resource of ['checkout/sessions','payment_intents','charges','subscriptions','billing_portal/configurations','webhook_endpoints','disputes','invoices','products','prices']) {
+  for (const resource of ['checkout/sessions','payment_intents','charges','subscriptions','billing_portal/configurations','disputes','invoices','products','prices']) {
     const page = await call('/v1/' + resource + '?limit=1');
     if (!Array.isArray(page.data) || page.data.some(item => typeof item.livemode === 'boolean' && item.livemode !== (mode === 'live'))) throw new Error('Stripe validation failed');
   }
@@ -115,7 +116,7 @@ export async function shopConnect(root, options = {}) {
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const lock = lockDeploy(dir);
   if (!lock.ok) return failure('busy', 'Stripe setup is already running for this studio.');
-  let clipboard, captured;
+  let clipboard, captured, stage = 'webhook';
   try {
     for(const mode of ['test','live'])for(const suffix of ['-pending.json','-pending.json.tmp'])rmSync(join(dir,mode+suffix),{force:true});
     const studio = readStudio(root);
@@ -127,17 +128,28 @@ export async function shopConnect(root, options = {}) {
     let pending = existsSync(pendingFile) ? json(readFileSync(pendingFile, 'utf8')) : null;
     if (pending?.origin !== site.origin) pending = null;
     const save = () => { writeFileSync(pendingFile + '.tmp', JSON.stringify(pending), { mode: 0o600 }); renameSync(pendingFile + '.tmp', pendingFile); };
-    if (!options.finish) {
+    const hookFile = join(dir, mode + '-webhook.json');
+    const legacyFile = join(root,'.studio','stripe-mcp.json');
+    const legacyAccount = existsSync(legacyFile) ? json(readFileSync(legacyFile,'utf8'))?.options?.account : null;
+    const hookReceipt = existsSync(hookFile) ? json(readFileSync(hookFile,'utf8')) : prior;
+    const profile = options.profile ?? pending?.profile ?? hookReceipt?.profile ?? prior?.profile ?? 'homie-' + hash(realpathSync(root)).slice(0,24);
+    const owner = await ownerStripeApi({root, profile, mode, account:pending?.account ?? prior?.account ?? hookReceipt?.account ?? legacyAccount,
+      process:options.stripeProcess ?? stripeProcess, open, log, onEvent:options.onEvent, installExec:options.installExec});
+    const hook = await installStripeWebhook({ ...owner, origin:site.origin, mode, w, receipt:hookReceipt ?? {}, save:value=>{
+      writeFileSync(hookFile+'.tmp',JSON.stringify({...value,profile}),{mode:0o600});renameSync(hookFile+'.tmp',hookFile);
+    }});
+    stage = 'key';
+    if (!options.finish && !pending && (!prior || prior.keyless || options.renew)) {
       const url = options.installUrl ?? process.env.HOMIE_STRIPE_INSTALL_URL;
-      if (!stripeURL(url)) return failure('app-install-link', 'The Homie App must be uploaded and an External test link configured as HOMIE_STRIPE_INSTALL_URL before connecting.');
+      if (!stripeURL(url)) return failure('app-install-link', 'Configure the uploaded Homie App’s External test link as HOMIE_STRIPE_INSTALL_URL, then resume shop connect.');
       clipboard = options.clipboard ?? clipboardAccess();
       log(options.renew ? 'On the Homie App settings page, choose View API keys → Roll key → Copy.' : 'Install Homie in your chosen Stripe account. Choose View API keys → Generate new key (sandbox: Reveal key) → Copy.');
       options.onEvent?.({ type: 'stripe.approval', message: 'Install Homie, generate the restricted key, then Copy. Do not paste it into chat.' });
       try { captured = await captureRestrictedKey({ clipboard, mode, open, url, wait, timeout, now: options.now }); }
       catch { return fallback(mode); }
       const account = await validateRestrictedKey(captured, mode, fetcher);
-      if (prior?.account && account.id !== prior.account) return failure('account-mismatch', 'Select the previously connected Stripe account.');
-      pending = { origin: site.origin, account: account.id, name: account.name, nonce: randomBytes(32).toString('hex'), mode };
+      if (account.id !== owner.account) return failure('account-mismatch', 'Select the previously connected Stripe account.');
+      pending = { profile, origin: site.origin, account: account.id, name: account.name, nonce: randomBytes(32).toString('hex'), mode };
       // Never include subprocess output in tool output, including errors.
       if ((await w(['secret', 'put', 'STRIPE_KEY'], { input: captured })).code !== 0) return failure('cloudflare', 'Cloudflare could not install the connection. Retry shop connect.');
       save();
@@ -145,7 +157,7 @@ export async function shopConnect(root, options = {}) {
       captured = null;
     } else {
       // A private-terminal fallback does not expose the installed key to the tool.
-      pending ??= { origin: site.origin, account: prior?.account, nonce: randomBytes(32).toString('hex'), mode };
+      pending ??= { profile, origin: site.origin, account: owner.account, nonce: randomBytes(32).toString('hex'), mode };
       save();
     }
     if ((await w(['secret', 'put', 'STRIPE_SETUP_CHALLENGE'], { input: hash(pending.nonce) })).code !== 0) throw new Error('Setup challenge failed');
@@ -154,23 +166,18 @@ export async function shopConnect(root, options = {}) {
       if (!(await deployStudio(root)).ok) return failure('migration', 'Checkout deployment failed; run shop connect --finish to resume.');
       pending.deployed = true; save();
     }
-    const secrets = await w(['secret','list']);
-    const installedSecrets = json(secrets.stdout ?? secrets.out);
-    if (secrets.code !== 0 || !Array.isArray(installedSecrets)) throw new Error('Cannot inspect secret names');
-    if (!installedSecrets.some(s => s.name === 'STRIPE_WEBHOOK_WRAP_KEY')) {
-      if ((await w(['secret','put','STRIPE_WEBHOOK_WRAP_KEY'],{input:randomBytes(32).toString('hex')})).code !== 0) throw new Error('Cannot protect webhook secret');
-    }
     const response = await fetcher(site.origin + '/api/shop/stripe-setup', {
       method: 'POST', headers: { authorization: 'Bearer ' + pending.nonce, 'content-type': 'application/json' },
       body: JSON.stringify({ mode, account: pending.account }), redirect: 'error', signal: AbortSignal.timeout(30000),
     });
-    if (!response.ok) throw new Error('Webhook setup failed');
+    if (response.status === 401) { rmSync(pendingFile,{force:true}); return failure('reconnect','The app key has expired or been revoked. Run shop connect --renew; the webhook approval will be reused.'); }
+    if (!response.ok) throw new Error('Stripe setup failed');
     const installed = await response.json();
-    if (!installed.ok || !/^we_[A-Za-z0-9]+$/.test(installed.webhookId) || !/^acct_[A-Za-z0-9]+$/.test(installed.account)) throw new Error('Invalid setup');
+    if (!installed.ok || !/^acct_[A-Za-z0-9]+$/.test(installed.account)) throw new Error('Invalid setup');
     if (pending.account && pending.account !== installed.account) throw new Error('Wrong account');
     if (migration) {
       await drainStripeLinks({ root, origin: site.origin, account: installed.account, mode, w, database: studio.cloudflare.d1,
-        keepHook: installed.webhookId, process: options.stripeProcess ?? stripeProcess, wait, profile: options.profile });
+        keepHook: hook.webhookId, process: options.stripeProcess ?? stripeProcess, wait, profile });
       const listed = await w(['secret', 'list']);
       const names = json(listed.stdout ?? listed.out);
       if (listed.code !== 0 || !Array.isArray(names)) throw new Error('Secret list failed');
@@ -179,11 +186,11 @@ export async function shopConnect(root, options = {}) {
       finishStripeMigration(root);
     }
     const name = pending.name || String(installed.name ?? installed.account).replace(/(?:sk|rk)_(?:live|test)_[A-Za-z0-9]+/g,'[redacted]').replace(/[\r\n\x00-\x1f]/g,' ').slice(0,120);
-    writeFileSync(receiptFile + '.tmp', JSON.stringify({ mode, account: installed.account, webhookId: installed.webhookId, url: hookUrlOf(site.origin), connectedAt: new Date().toISOString() }), { mode: 0o600 });
+    writeFileSync(receiptFile + '.tmp', JSON.stringify({ mode, profile, account: installed.account, webhookId: hook.webhookId, url: hookUrlOf(site.origin), connectedAt: new Date().toISOString() }), { mode: 0o600 });
     renameSync(receiptFile + '.tmp', receiptFile); rmSync(pendingFile, { force: true });
     await w(['secret','delete','STRIPE_SETUP_CHALLENGE'], { input:'y\n' });
     return { ok: true, command: 'shop connect', message: 'connected to ' + name };
-  } catch { return failure('stripe-setup', 'Connection could not finish. Run shop connect --finish to resume after private key installation, or shop connect to copy a new key. Migration retains old webhook configuration until draining succeeds.'); }
+  } catch { if(stage==='webhook')return failure('webhook-setup','Stripe webhook approval or private secret installation could not finish. Run shop connect again to resume with the same account and CLI profile.'); return failure('stripe-setup', 'Connection could not finish. Run shop connect --finish to resume after private key installation, or shop connect to copy a new key. Migration retains old webhook configuration until draining succeeds.'); }
   finally {
     if (captured && clipboard) { try { if (await clipboard.read() === captured) await clipboard.clear(); } catch {} }
     lock.release();
@@ -191,20 +198,18 @@ export async function shopConnect(root, options = {}) {
 }
 
 export async function disconnectStripe(root, options = {}) {
-  const studio = readStudio(root), fetcher = options.fetcher ?? fetch;
+  const studio = readStudio(root);
   const w = options.wrangler ?? runner(root, studio.cloudflare?.accountId ? { CLOUDFLARE_ACCOUNT_ID: studio.cloudflare.accountId } : {});
-  const nonce = randomBytes(32).toString('hex');
-  let endpointRemoved = false;
   try {
-    if ((await w(['secret','put','STRIPE_SETUP_CHALLENGE'], {input:hash(nonce)})).code !== 0) throw new Error();
-    const r = await fetcher(new URL('/api/shop/stripe-setup',siteUrl(root)), {method:'POST',headers:{authorization:'Bearer '+nonce,'content-type':'application/json'},body:JSON.stringify({action:'disconnect'}),redirect:'error',signal:AbortSignal.timeout(30000)});
-    const result = await r.json();
-    if (!r.ok || (!result.ok && result.needs !== 'remove-endpoint-in-stripe')) throw new Error();
-    endpointRemoved = result.ok;
+    const dir=receiptDir(root,options.storage??receiptHome()), mode=options.live?'live':'test';
+    const file=existsSync(join(dir,mode+'.json'))?join(dir,mode+'.json'):join(dir,mode+'-webhook.json');
+    const receipt=json(readFileSync(file,'utf8'));
+    const owner=await ownerStripeApi({root,profile:options.profile??receipt.profile??'homie-'+hash(realpathSync(root)).slice(0,24),mode,account:receipt.account,
+      process:options.stripeProcess??stripeProcess,open:options.open??openBrowser,log:options.log});
+    try { await owner.api('DELETE','/v1/webhook_endpoints/'+receipt.webhookId); } catch(error) { if(error.status!==404)throw error; }
     if ((await w(['secret','delete','STRIPE_KEY'],{input:'y\n'})).code !== 0) throw new Error();
-    for (const name of ['STRIPE_WEBHOOK_SECRET','STRIPE_WEBHOOK_WRAP_KEY','STRIPE_SETUP_CHALLENGE']) await w(['secret','delete',name],{input:'y\n'});
-    const dir=receiptDir(root,options.storage??receiptHome());
-    for(const mode of ['test','live'])for(const suffix of ['.json','-rak.json'])rmSync(join(dir,mode+suffix),{force:true});
-    return {ok:true,command:'shop disconnect',message:'Worker key removed. '+(endpointRemoved?'Webhook endpoint deleted. ':'The key was already revoked; delete this studio’s webhook endpoint in Stripe Workbench. ')+'In Stripe Settings → Installed apps → Homie → View API keys, roll/expire the old key. Uninstall alone is not assumed to revoke it.'};
-  } catch { return {ok:false,command:'shop disconnect',why:'Disconnect could not finish. Retry before expiring the key; endpoint cleanup must precede removal of the Worker key.'}; }
+    for (const name of ['STRIPE_WEBHOOK_SECRET','STRIPE_SETUP_CHALLENGE']) await w(['secret','delete',name],{input:'y\n'});
+    for(const suffix of ['.json','-rak.json','-webhook.json'])rmSync(join(dir,mode+suffix),{force:true});
+    return {ok:true,command:'shop disconnect',message:'Webhook endpoint and Worker key removed. In Stripe Settings → Installed apps → Homie → View API keys, roll/expire the old key. Uninstall alone is not assumed to revoke it.'};
+  } catch { return {ok:false,command:'shop disconnect',why:'Disconnect could not finish. Retry with the approved owner CLI profile; endpoint cleanup must precede removal of Worker secrets.'}; }
 }

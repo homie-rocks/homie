@@ -11,10 +11,11 @@ function studio(t) {
  t.after(()=>rmSync(root,{recursive:true,force:true}));return root;
 }
 function setup(t, changes={}) {
- const root=studio(t), writes=[], logs=[];let value='prior clipboard';
+ const root=studio(t), writes=[], logs=[], names=new Set();let value='prior clipboard',hook=null;
  const options={storage:join(root,'private'),installUrl:'https://marketplace.stripe.com/apps/test/example',
+  stripeProcess:async args=>{let body={};if(args.includes('/v1/account'))body={id:'acct_fixture'};else if(args.includes('/v1/webhook_endpoints')){if(args.includes('post')){hook={id:'we_fixture',url:args.find(a=>a.startsWith('url='))?.slice(4),status:'enabled',enabled_events:[]};body={...hook,secret:'whsec_fixture'};}else body={data:hook?[hook]:[]};}return{code:0,stdout:JSON.stringify(body)};},
   open:()=>{value='rk_test_fixture';},clipboard:{read:()=>value,clear:()=>{value='';}},log:s=>logs.push(s),
-  wrangler:async(args,opts={})=>{writes.push({args,input:opts.input});return {code:0,stdout:args[0]==='secret'&&args[1]==='list'?'[]':'private output rk_test_neverprint'};},
+  wrangler:async(args,opts={})=>{writes.push({args,input:opts.input});if(args[1]==='put')names.add(args[2]);return {code:0,stdout:args[0]==='secret'&&args[1]==='list'?JSON.stringify([...names].map(name=>({name}))):'private output rk_test_neverprint'};},
   fetcher:async url=>url.endsWith('/api/shop/stripe-setup')?Response.json({ok:true,webhookId:'we_fixture',account:'acct_fixture',name:'Fixture'}):url.endsWith('/v1/account')?Response.json({id:'acct_fixture',business_profile:{name:'Fixture'}}):Response.json({data:[]}),...changes};
  return {root,options,writes,logs,clipboard:()=>value};
 }
@@ -30,26 +31,24 @@ test('wrong mode and timeout install nothing; stale clipboard key is never consu
  for(const value of ['rk_live_fixture','rk_test_fixture']) {
   let now=0,reads=0;
   const f=setup(t,{clipboard:{read:()=>++reads===1?'rk_test_fixture':value,clear:()=>{}},open:()=>{},now:()=>now,timeout:1000,wait:async ms=>{now+=ms;}});
-  assert.equal((await shopConnect(f.root,f.options)).needs,'private-terminal');assert.equal(f.writes.length,0);
+  assert.equal((await shopConnect(f.root,f.options)).needs,'private-terminal');assert.equal(f.writes.some(w=>w.args.at(-1)==='STRIPE_KEY'),false);
  }
 });
 test('validation denial does not install, and captures no provider error text',async t=>{
  const f=setup(t,{fetcher:async()=>Response.json({error:{message:'rk_test_sensitive'}},{status:403})});
- const result=await shopConnect(f.root,f.options);assert.equal(result.ok,false);assert.equal(f.writes.length,0);
+ const result=await shopConnect(f.root,f.options);assert.equal(result.ok,false);assert.equal(f.writes.some(w=>w.args.at(-1)==='STRIPE_KEY'),false);
  assert.equal(f.clipboard(),'');assert.doesNotMatch(JSON.stringify(result),/sensitive/);
 });
 test('clipboard changed by user is not overwritten during cleanup',async t=>{
  let value='old';const f=setup(t,{clipboard:{read:()=>value,clear:()=>assert.fail('must preserve newer content')},open:()=>{value='rk_test_fixture';},fetcher:async()=>{value='new clipboard';return Response.json({error:{}},{status:403});}});
  assert.equal((await shopConnect(f.root,f.options)).ok,false);
 });
-test('disconnect deletes endpoint before Worker key and explains independent key expiry',async t=>{
- const f=setup(t),order=[];
- const result=await disconnectStripe(f.root,{...f.options,fetcher:async(url,opts)=>{assert.equal(JSON.parse(opts.body).action,'disconnect');order.push('endpoint');return Response.json({ok:true});},wrangler:async args=>{if(args[1]==='delete'&&args[2]==='STRIPE_KEY')order.push('key');return{code:0};}});
+test('disconnect uses owner CLI before deleting the Worker key',async t=>{
+ const f=setup(t);assert.equal((await shopConnect(f.root,f.options)).ok,true);const order=[];
+ const result=await disconnectStripe(f.root,{...f.options,stripeProcess:async args=>{
+  if(args.includes('delete'))order.push('endpoint');return{code:0,stdout:JSON.stringify({id:'acct_fixture'})};
+ },wrangler:async args=>{if(args[1]==='delete'&&args[2]==='STRIPE_KEY')order.push('key');return{code:0};}});
  assert.equal(result.ok,true);assert.deepEqual(order,['endpoint','key']);assert.match(result.message,/roll\/expire/);
-});
-test('uninstall revocation still removes local credential and names endpoint cleanup',async t=>{
- const f=setup(t);const result=await disconnectStripe(f.root,{...f.options,fetcher:async()=>Response.json({ok:false,needs:'remove-endpoint-in-stripe'})});
- assert.equal(result.ok,true);assert.match(result.message,/already revoked/);
 });
 test('migration drains every cursor twice with 30 seconds between passes before retiring hooks',async()=>{
  const {drainStripeLinks}=await import('../lib/stripe-migration.mjs');const actions=[];
@@ -72,4 +71,23 @@ test('migration mismatched owner CLI account cannot deactivate anything',async()
  const {drainStripeLinks}=await import('../lib/stripe-migration.mjs');let n=0;
  await assert.rejects(drainStripeLinks({account:'acct_owner',mode:'test',process:async()=>{n++;return{code:0,stdout:'{"id":"acct_other"}'};}}));
  assert.equal(n,1);
+});
+
+test('resume after verification failure and reconnect reuse installed key and webhook',async t=>{
+ const f=setup(t);let fail=true,opens=0;const fetcher=f.options.fetcher,open=f.options.open;
+ f.options.open=url=>{opens++;open(url);};
+ f.options.fetcher=(url,opts)=>url.endsWith('/api/shop/stripe-setup')&&fail?Response.json({ok:false},{status:503}):fetcher(url,opts);
+ assert.equal((await shopConnect(f.root,f.options)).ok,false);
+ fail=false;assert.equal((await shopConnect(f.root,f.options)).ok,true);
+ assert.equal((await shopConnect(f.root,f.options)).ok,true);
+ assert.equal(opens,1);
+ assert.equal(f.writes.filter(x=>x.args[1]==='put'&&x.args[2]==='STRIPE_KEY').length,1);
+ assert.equal(f.writes.filter(x=>x.args[1]==='put'&&x.args[2]==='STRIPE_WEBHOOK_SECRET').length,1);
+ assert.ok(f.writes.findIndex(x=>x.args[2]==='STRIPE_WEBHOOK_SECRET')<f.writes.findIndex(x=>x.args[2]==='STRIPE_KEY'));
+});
+test('renew copies only the new key and keeps webhook secret',async t=>{
+ const f=setup(t);assert.equal((await shopConnect(f.root,f.options)).ok,true);
+ assert.equal((await shopConnect(f.root,{...f.options,renew:true})).ok,true);
+ assert.equal(f.writes.filter(x=>x.args[1]==='put'&&x.args[2]==='STRIPE_KEY').length,2);
+ assert.equal(f.writes.filter(x=>x.args[1]==='put'&&x.args[2]==='STRIPE_WEBHOOK_SECRET').length,1);
 });

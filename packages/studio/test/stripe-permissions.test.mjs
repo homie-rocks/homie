@@ -26,8 +26,8 @@ test('every Worker Stripe call is classified; optional capability probes do not 
   };visit(ast);
  }
  assert.ok(checked>40);
- for(const path of [...OPTIONAL_STRIPE_RESOURCES,'/v1/api_keys','/v1/transfers'])assert.equal(workerPermission('GET',path),null);
- assert.equal(WORKER_PERMISSIONS.includes('api_key_write'),false);
+ for(const path of [...OPTIONAL_STRIPE_RESOURCES,'/v1/api_keys','/v1/transfers','/v1/events','/v1/webhook_endpoints'])assert.equal(workerPermission('GET',path),null);
+ for(const permission of ['api_key_write','webhook_write','event_read'])assert.equal(WORKER_PERMISSIONS.includes(permission),false);
 });
 
 test('RAK App manifest exactly matches Worker permissions',()=>{

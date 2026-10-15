@@ -1,3 +1,4 @@
+import {SHOP_EVENTS} from '../worker/stripe-events.mjs';
 /** Local acceptance adapter. Stripe's CLI retains its credentials and forwards
  * genuine sandbox events. Never deploy this adapter: the desktop is test-only. */
 import { spawn } from 'node:child_process';
@@ -21,7 +22,7 @@ export async function startStripeSandbox({ origin, profile, restrictedKey }) {
   const probe=await call('GET','/v1/prices',new URLSearchParams({limit:'1'}));
   if(probe.data?.some(p=>p.livemode))throw new Error('Sandbox adapter refuses live data');
   const childEnv={...process.env};for(const k of Object.keys(childEnv))if(k.startsWith('STRIPE_'))delete childEnv[k];
-  const listener=spawn('stripe',['--project-name',profile,'listen','--events','checkout.session.completed,checkout.session.expired,invoice.paid,invoice.payment_failed,customer.subscription.updated,customer.subscription.deleted,charge.refunded,refund.created,refund.updated','--forward-to',`${target.origin}/api/shop/hook`],{env:childEnv,stdio:['ignore','pipe','pipe']});
+  const listener=spawn('stripe',['--project-name',profile,'listen','--events',SHOP_EVENTS.join(','),'--forward-to',`${target.origin}/api/shop/hook`],{env:childEnv,stdio:['ignore','pipe','pipe']});
   const close=async()=>{listener.kill();};
   try {
     const secret=await new Promise((resolve,reject)=>{
