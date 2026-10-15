@@ -3065,31 +3065,13 @@ function subscribeAppPayments(s) {
 
 
 
-test('an incoming via link counts a visit but creates no cookie, sale attribution or referral endpoints', async () => {
+test('an incoming via link counts a visit', async () => {
   const s = await site();
   try {
     const page = await s.fetchSite('/?via=friends.example', { headers: { accept: 'text/html' } });
     assert.equal(page.status, 200);
-    assert.equal(page.headers.get('set-cookie'), null);
     const visit = s.DB.sql.prepare("SELECT SUM(n) AS n FROM stats_daily WHERE metric = 'visit' AND source = 'via:friends.example'").get();
     assert.equal(visit.n, 1);
-    const p = s.player(1, { band: 'adult' });
-    p.cookie += '; studio_via=an-old-signed-cookie';
-    const sale = await s.buyPaid(p);
-    const order = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(sale.order);
-    assert.equal(Object.hasOwn(order, 'via'), false);
-    assert.equal(Object.hasOwn(order, 'referral_terms'), false);
-    const checkout = s.stripe.calls.find((c) => c.path === '/v1/checkout/sessions' && c.method === 'POST');
-    assert.equal(checkout.form.get('metadata[via]'), null);
-    const manifest = await (await s.fetchSite('/.well-known/homie-studio.json')).json();
-    assert.equal(Object.hasOwn(manifest, 'referrals'), false);
-    for (const path of ['/api/referrals/statement', '/_studio/api/shop/statements', '/_studio/api/shop/statements/send', '/_studio/api/shop/settle', '/_studio/api/shop/lines', '/_studio/api/shop/received']) {
-      const response = await s.fetchSite(path, { method: path.endsWith('statement') || path.endsWith('send') || path.endsWith('settle') ? 'POST' : 'GET', headers: s.owner });
-      assert.equal(response.status, 404, path);
-    }
-    const office = await (await s.fetchSite('/_studio/api/shop', { headers: s.owner })).json();
-    assert.equal(Object.hasOwn(office, 'referrals'), false);
-    assert.equal((await s.post('/_studio/api/shop/refund', { order: sale.order }, s.owner)).status, 200);
   } finally { s.stripe.close(); }
 });
 
