@@ -1,14 +1,9 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {DatabaseSync} from 'node:sqlite';
-import {readFileSync,readdirSync} from 'node:fs';
+import {readFileSync} from 'node:fs';
 import {appToolsRoute} from '../worker/app-tools.mjs';
-export function database(t){
- const sql=new DatabaseSync(':memory:');t.after(()=>sql.close());
- for(const file of readdirSync(new URL('../../../template/site/migrations/',import.meta.url)).sort())sql.exec(readFileSync(new URL('../../../template/site/migrations/'+file,import.meta.url),'utf8'));
- const stmt=(q,a=[])=>({bind:(...x)=>stmt(q,x),first:async()=>sql.prepare(q).get(...a)??null,all:async()=>({results:sql.prepare(q).all(...a)}),run:()=>({meta:{changes:sql.prepare(q).run(...a).changes}})});
- return {sql,prepare:stmt,batch:async xs=>{sql.exec('BEGIN');try{const r=[];for(const x of xs)r.push(x.run());sql.exec('COMMIT');return r;}catch(e){sql.exec('ROLLBACK');throw e;}}};
-}
+import {database} from './place-database.mjs';
+
 const meta={id:'place',kind:'app',roles:{customer:{can:[],signIn:false},staff:{can:[],signIn:true}},surfaces:{phone:'customer'}};
 const schema={type:'object',properties:{id:{type:'string',pattern:'^[a-z]+$'}},required:['id'],additionalProperties:false};
 const tool={name:'reserve',audience:'public',inputSchema:schema,async handler({id},ctx){const old=await ctx.database.getVersioned('last');if(old?.value===id)return {ok:true};return ctx.database.put('last',id,{version:0});}};

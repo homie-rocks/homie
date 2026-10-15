@@ -1,5 +1,11 @@
 # Building places: layout, authority and recovery
 
+Start with [the six-build place recipe](../guides/app/PLACES.md) and
+[the app contracts](../apps/APPS.md) for screen-to-tool calls, live records,
+shared booking holds, named events, IANA time and adversarial needs. The small
+CAS example below teaches authority; paid inventory uses `context.bookings` so
+checkout and app capacity remain one system.
+
 ## TV join safe area
 
 On `/<id>/tv`, the shell sets `body.homie-join-visible` while the join card is present. It publishes CSS pixel values on the document root in both the shell and the sandboxed app: `--homie-join-x`, `--homie-join-y`, `--homie-join-width`, `--homie-join-height`, and `--homie-join-inset-top/right/bottom/left`. The insets include the card's distance from its configured screen edge. Inactive edges are zero; no card means all values are zero and the body class is absent. Measurements update on resize and iframe navigation. The card is at most 480 × 280 CSS pixels; its address wraps within that box.

@@ -1,3 +1,4 @@
+import {CfWorkerJsonSchemaValidator} from '@modelcontextprotocol/server/validators/cf-worker';
 import {callbackUrl} from '../worker/mcp-events-wire.mjs';
 import {validateWebhook,webhookName} from '../worker/event-webhook-config.mjs';
 import {parseSchedule,nextDue,scheduleStatus} from '../worker/function-schedule.mjs';
@@ -12,6 +13,7 @@ export async function buildFunctions(root,esbuild,{log=()=>{}}={}) {
   const feeds=readStudio(root).mcp?.events??{};
   if(!feeds||typeof feeds!=='object'||Array.isArray(feeds))throw new Error('mcp.events must be a map of named event feeds');
   for(const [name,feed] of Object.entries(feeds)) {
+    if(feed?.schema)new CfWorkerJsonSchemaValidator().getValidator(feed.schema);
     if(feed?.webhook)validateWebhook(name,feed.webhook);
     if(feed?.maxSubscriptions!==undefined&&(!Number.isSafeInteger(feed.maxSubscriptions)||feed.maxSubscriptions<1))throw new Error('maxSubscriptions must be a positive integer');
     if(feed?.receivers!==undefined){if(!Array.isArray(feed.receivers))throw new Error('Event receivers must be an array of exact HTTPS callback URLs');for(const url of feed.receivers)callbackUrl(url);}
@@ -37,6 +39,7 @@ export async function buildFunctions(root,esbuild,{log=()=>{}}={}) {
       try {if(nextDue(parseSchedule(fn.schedule))===null)throw new Error('no matching date');}
       catch(error) {throw new Error(`Function ${fn.name} cannot run: invalid schedule ${JSON.stringify(fn.schedule)} (${error.message})`);}
     }
+    for(const name of fn.publish??[])if(!feeds[name]?.schema)throw new Error(`Function ${fn.name}: publish feed ${name} needs a declared schema`);
     names.add(fn.name);
   }
   const worker=join(root,'site/src/worker.mjs');

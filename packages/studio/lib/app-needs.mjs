@@ -23,7 +23,7 @@ export function readAppNeeds(root, id) {
 }
 
 /** Run real UI actions. A failed or absent flow stays visible; continue collecting other needs. */
-export async function proveAppNeeds({ plan, surfaces, shots, report, ready = async () => {}, root, headless }) {
+export async function proveAppNeeds({ plan, surfaces, shots, report, ready = async () => {}, root, headless, restart }) {
   const results = [];
   const appBarrier=ready;
   ready=async (s,options)=>{await s.page.bringToFront?.();if(s.external){s.frame=s.page.mainFrame();return;}await appBarrier(s,options);};
@@ -31,7 +31,7 @@ export async function proveAppNeeds({ plan, surfaces, shots, report, ready = asy
   const surface = name => { const s = surfaces.find(s => s.name === name && (!activeRole || s.role === activeRole)) ?? surfaces.find(s => s.name === name); if (!s) throw new Error(`unknown surface ${name}`); return s; };
   for (const need of plan.needs) {
     activeRole = need.role;
-    const names = [...new Set([...(need.steps ?? []), ...(need.assertions ?? [])].map(s => s.surface).filter(Boolean))];
+    const names = [...new Set([...needSteps(need.steps), ...(need.assertions ?? [])].map(s => s.surface).filter(Boolean))];
     const saved = new Map();
     const run = async item => { if (!headless) throw new Error('headless MCP proof requires local dev and its test credential'); return headless(item,item.role ?? need.role); };
     let waiting = 'validating assertions';
@@ -41,19 +41,34 @@ export async function proveAppNeeds({ plan, surfaces, shots, report, ready = asy
       const popupNames=new Set((need.steps??[]).map(s=>s.popup).filter(Boolean));
       for (const name of names) { if(popupNames.has(name))continue; const s = surface(name); if (need.role && s.role !== need.role) throw new Error(`${name} requires role ${need.role}, got ${s.role ?? 'unspecified'}`); }
       for (const name of new Set(need.assertions.filter(a => a.effect).map(a => a.surface))) await surface(name).frame.evaluate(() => { window.__homieNeedsEffects = []; });
-      for (const rawStep of need.steps ?? []) {
+      const perform = async rawStep => {
         const step=resolveNeedResults(rawStep,saved);
+        if(step.concurrent){
+          if(!Array.isArray(step.concurrent)||step.concurrent.length<2)throw new Error('concurrent needs at least two steps');
+          if(needSteps(step.concurrent).some(s=>s.restart||s.capabilities))throw new Error('Restart and capabilities changes must be outside a race');
+          const results=await Promise.allSettled(step.concurrent.map(perform));
+          const failed=results.find(r=>r.status==='rejected');if(failed)throw failed.reason;return;
+        }
+        if(step.restart){if(!restart)throw new Error('Restart requires the local dev controller');await restart();for(const s of surfaces)await ready(s);return;}
+
         if (step.mcp || step.schedule) {
           waiting = step.mcp ? `MCP ${step.mcp.tool ?? step.mcp.method} as ${step.role ?? need.role ?? 'unspecified'}` : `schedule ${step.schedule.name}`;
           const value = await run(step);
           if (step.save) { if(saved.has(step.save))throw new Error(`duplicate saved result ${step.save}`); saved.set(step.save,value); }
-          continue;
+          return;
         }
         const target=surface(step.surface);
         if(!step.reload)await ready(target);
         const { page } = target;
+        if(step.capabilities){
+          if(typeof step.capabilities.webgl!=='boolean')throw new Error('capabilities.webgl must be boolean');
+          await page.evaluateOnNewDocument(configureWebGL,step.capabilities.webgl);
+          await page.reload({waitUntil:'domcontentloaded'});await ready(target);return;
+        }
+        if(Object.hasOwn(step,'clock')){await page.evaluate(value=>window.homieApp.setTestClock(value),step.clock);return;}
+
         waiting = `${step.surface}: ${step.reload ? 'reload and arrival readiness' : step.selector}`;
-        if (step.reload) { await page.reload({ waitUntil: 'domcontentloaded' }); await ready(surface(step.surface)); continue; }
+        if (step.reload) { await page.reload({ waitUntil: 'domcontentloaded' }); await ready(surface(step.surface)); return; }
         const act = fn => actInApp(target,step.selector,fn,{ready});
         if (step.click && step.popup) {
           let listener,timer;
@@ -67,11 +82,15 @@ export async function proveAppNeeds({ plan, surfaces, shots, report, ready = asy
             await page.bringToFront();
           } finally {clearTimeout(timer);page.off('popup',listener);}
         }
+        else if(step.forceClick){await act(frame=>frame.$eval(step.selector,el=>{
+          const disabled=el.disabled;try{el.disabled=false;el.click();}finally{el.disabled=disabled;}
+        }));}
         else if (step.click) {await act(frame=>frame.click(step.selector));await page.bringToFront?.();}
         else if (step.fill !== undefined) { await act(async frame=>{ await frame.$eval(step.selector, el => { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); }); await frame.type(step.selector, String(step.fill)); }); }
         else if (step.select !== undefined) await act(frame=>frame.select(step.selector, String(step.select)));
         else throw new Error('step needs click, fill, select or reload');
-      }
+      };
+      for(const step of need.steps??[])await perform(step);
       for (const rawAssertion of need.assertions) {
         const assertion=resolveNeedResults(rawAssertion,saved);
         if (assertion.result || assertion.records || assertion.file || assertion.mcp) {
@@ -169,4 +188,20 @@ export function resolveNeedResults(value,saved) {
     return Object.fromEntries(Object.entries(value).map(([key,v])=>[key,resolveNeedResults(v,saved)]));
   }
   return value;
+}
+
+/** Flatten only action groups; used for browser/role discovery before a race starts. */
+export function needSteps(steps = []) { return steps.flatMap(s => s.concurrent ? needSteps(s.concurrent) : [s]); }
+export function configureWebGL(enabled) {
+  window.__homieWebGLDisabled = !enabled;
+  if(window.__homieWebGLWrapped)return;
+  window.__homieWebGLWrapped = true;
+  for(const proto of [globalThis.HTMLCanvasElement?.prototype,globalThis.OffscreenCanvas?.prototype]) {
+    if(!proto)continue;
+    const original = proto.getContext;
+    proto.getContext = function(kind, ...args) {
+      if(window.__homieWebGLDisabled && /^(webgl2?|experimental-webgl)$/.test(kind))return null;
+      return Reflect.apply(original,this,[kind,...args]);
+    };
+  }
 }

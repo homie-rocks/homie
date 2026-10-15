@@ -383,3 +383,30 @@ A booking payment can be tested with:
 Create any records the handler reads first. First fire registers subscriptions
 before writing the event, so the first event is delivered too. No Stripe checkout
 or browser approval is needed for this explicitly synthetic local event.
+
+## Previous records and named business events
+
+`record.changed` data includes `previous`: `null` for insert, the old data for
+update/delete. `data` remains the new value for update and the deleted value for
+delete. Both are captured by the same database transaction as the write. Import
+`RecordChanged<T>` and `ScheduledEvent` from `@homie-rocks/studio/functions`;
+scheduled time is `event.data.scheduledTime` (epoch milliseconds), not `event.at`.
+
+Declare a feed in `studio.json` and its allowed payload:
+
+```json
+{"mcp":{"events":{"arrivals":{"event":"place.arrived","audience":"owner","schema":{"type":"object","properties":{"booking":{"type":"string"}},"required":["booking"],"additionalProperties":false}}}}}
+```
+
+A function declares `publish: ['arrivals']`, then calls
+`await context.events.publish({feed:'arrivals', id:event.id, data:{booking:'...'}})`.
+Use the source event ID, or a stable business request ID; repeats with the same
+payload are no-ops, and changed payloads under the same ID are refused. Publication
+and its deduplication receipt commit atomically. Receipts survive feed pruning.
+Do not mirror every record or build a sleep-and-retry log. Keep contact details
+out of operational events. Owner AIs use the existing feed cursor, MCP subscription
+or declared webhook; functions never send email/SMS themselves.
+
+Apply `0028_business_events.sql` on upgrade. Local proof publications carry their
+scope and do not appear in production feed reads. Event feeds retain their declared
+type; give different business feeds distinct types when their content differs.

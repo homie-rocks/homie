@@ -1,3 +1,4 @@
+import {bookingHolds} from './booking-holds.mjs';
 import {toolDatabase} from './tool-database.mjs';
 import { selling } from './extensions.mjs';
 import { withToolIdentity } from './tool-identity.mjs';
@@ -66,6 +67,8 @@ export function services(env, cat, origin, caller, namespace, definition = {}) {
   const key = v=>{if(typeof v!=='string'||v.length>128||!v.length)throw new Error('invalid key');return v;};
   return Object.freeze({
     caller:Object.freeze({...caller,roles:Object.freeze(Object.fromEntries(Object.entries(caller.roles??{}).map(([app,roles])=>[app,Object.freeze([...roles])])) )}), records, office,
+    bookings:bookingHolds(env,caller,cat),
+    events:Object.freeze({publish:args=>import('./business-events.mjs').then(m=>m.publishBusinessEvent(env,caller,definition,namespace,args))}),
     rooms:Object.freeze({send:args=>import('./tool-events.mjs').then(m=>m.sendToolEvent(env,caller,definition,args))}),
     shop:()=>office('/_studio/api/shop'),
     database:toolDatabase(env.DB,namespace),
