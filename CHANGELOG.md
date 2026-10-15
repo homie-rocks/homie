@@ -17,7 +17,11 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
-## [Unreleased]
+## [0.54.0] - 2026-10-15
+
+**Plugin 0.54.0**
+
+Studios answer faster, private apps stay private and usable, shops catch every payment, and the toolkit's CI costs a quarter of what it did.
 
 ### Changed
 
