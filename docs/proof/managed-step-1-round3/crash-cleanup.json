@@ -1,0 +1,27 @@
+[
+  {
+    "name": "hm-test-ticks",
+    "absent": true,
+    "at": "2026-10-15T20:50:11.792Z"
+  },
+  {
+    "name": "hm-test-ticks-dlq",
+    "absent": true,
+    "at": "2026-10-15T20:50:12.121Z"
+  },
+  {
+    "name": "hm-test-facets-r3",
+    "absent": true,
+    "at": "2026-10-15T20:50:12.779Z"
+  },
+  {
+    "name": "hm-test-facets-r3_Supervisor",
+    "absent": true,
+    "cascade": true
+  },
+  {
+    "name": "homie-managed-test",
+    "absent": true,
+    "at": "2026-10-15T20:50:17.891Z"
+  }
+]

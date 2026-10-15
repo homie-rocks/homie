@@ -1,0 +1,61 @@
+{
+  "at": "2026-10-15T20:49:43.586Z",
+  "account": "d2f6f976cecad2fe130976fe36916cdb",
+  "namespaces": [
+    {
+      "namespace_id": "580b8962-5b53-4d49-8210-68ea4f4d556a",
+      "namespace_name": "homie-managed-test",
+      "script_count": 0,
+      "created_on": "2026-10-15T20:03:58.872155Z",
+      "created_by": "d2f6f976cecad2fe130976fe36916cdb",
+      "modified_on": "2026-10-15T20:04:32.447474Z",
+      "modified_by": "d2f6f976cecad2fe130976fe36916cdb"
+    }
+  ],
+  "workers": [
+    {
+      "id": "hm-test-facets-r3"
+    }
+  ],
+  "databases": [],
+  "queues": [
+    {
+      "queue_id": "91223ea49d4f4ff191eac5df7940b72b",
+      "queue_name": "hm-test-ticks",
+      "settings": {
+        "delivery_delay": 0,
+        "message_retention_period": 345600
+      },
+      "created_on": "2026-10-15T20:04:15.544753Z",
+      "modified_on": "2026-10-15T20:04:15.544753Z",
+      "producers_total_count": 0,
+      "producers": [],
+      "consumers_total_count": 0,
+      "consumers": []
+    },
+    {
+      "queue_id": "d7bc19710cb947e5bd0ed1ebeddfe2d1",
+      "queue_name": "hm-test-ticks-dlq",
+      "settings": {
+        "delivery_delay": 0,
+        "message_retention_period": 345600
+      },
+      "created_on": "2026-10-15T20:04:03.348044Z",
+      "modified_on": "2026-10-15T20:04:03.348044Z",
+      "producers_total_count": 0,
+      "producers": [],
+      "consumers_total_count": 0,
+      "consumers": []
+    }
+  ],
+  "durableObjects": [
+    {
+      "id": "771a829afa9f4a539725dead6503cbc0",
+      "name": "hm-test-facets-r3_Supervisor",
+      "script": "hm-test-facets-r3",
+      "class": "Supervisor",
+      "use_sqlite": true
+    }
+  ],
+  "scripts": []
+}

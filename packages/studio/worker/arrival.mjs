@@ -163,26 +163,32 @@ export const ARRIVAL_JS = String.raw`(function () {
   }
   bar.style.width = Math.round(a.p * 100) + '%';
   var timers = [];
-  // Elapsed time is not readiness. Keep the cover and expose a diagnostic.
-  timers.push(setTimeout(function () { if (!api.done) { a.stalled = true; stepEl.textContent = 'Still connecting… Reload to try again.'; } }, 30000));
+  function later(ms, why) { timers.push(setTimeout(function () { api.lift(why); }, ms)); }
+  // Whatever happens, the game gets the screen within 30 s of the page opening.
+  later(30000, 'timeout');
   var app=el.getAttribute('data-app') !== null;
   var roomLabel = '';
   // A full server's wait ("you're next for a seat") stays said while its room loads.
   api.room = function (label) { roomLabel = label || ''; if (a.phase === 'wait') set('wait', a.step, 0.22); else set('game', app ? 'Opening the app…' : 'Loading the game…', 0.22); if (!roomEl.textContent) roomEl.textContent = roomLabel; };
   api.facts = function (text) { if (!api.done && text) roomEl.textContent = text; };
   api.full = function (text) { set('wait', text, 0.3); };
+  var attachedAt = 0;
+  var seatedTimer = null;
   api.frameLoaded = function () {
-    // A loaded document is not a playable game; wait for its helper signal.
+    // A frame with no netplay helper never says anything: 8 s after it loaded, it has the screen.
+    if (!attachedAt) later(8000, 'no-helper');
   };
   api.message = function (m) {
     if (api.done || !m) return;
     if (m.what === 'attached') {
+      attachedAt = Date.now();
       a.mode = m.arrival === 'game' || m.arrival === 'auto' ? m.arrival : 'seat';
       set('join', 'Joining ' + (roomLabel || 'the room') + '…', 0.36);
-      // Only a playable signal releases the cover.
+      later(15000, 'cap');
     } else if (m.what === 'role' || m.what === 'token') {
       set('world', app ? 'Opening the app…' : 'Loading the world…', 0.5);
-      // A seat alone does not establish that the game rendered.
+      // A game built with a helper older than the arrival says nothing more: it has the screen once it has a seat.
+      if (a.mode === 'seat' && !seatedTimer) seatedTimer = setTimeout(function () { api.lift('seated'); }, 600);
     } else if (m.what === 'loading') {
       var p = Math.max(0, Math.min(1, Number(m.p) || 0));
       var what = typeof m.label === 'string' && m.label ? m.label : 'the world';
@@ -196,7 +202,7 @@ export const ARRIVAL_JS = String.raw`(function () {
     api.done = true;
     a.phase = 'done'; a.by = by || 'shell'; a.p = 1; a.liftedMs = Math.round(now());
     mark('homie:playable');
-    timers.forEach(clearTimeout); stopCreep();
+    timers.forEach(clearTimeout); clearTimeout(seatedTimer); stopCreep();
     bar.style.width = '100%';
     stepEl.textContent = 'Ready';
     el.classList.add('lift');
