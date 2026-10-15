@@ -4,7 +4,12 @@ export const APP_SHELL_JS = String.raw`(function () {
   if (!boot || boot.kind !== 'app') return;
   var frame = boot.direct ? {contentWindow:window} : document.querySelector('iframe.game') || document.querySelector('iframe');
   var params = new URLSearchParams(location.search);
-  // Share short-lived reads across same-origin screens with the exact same role/access.
+  // Authorized shell responses have already set the HttpOnly role handoff.
+  if(params.has('access')) {
+    params.delete('access');
+    history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+(location.hash||''));
+  }
+  // Share short-lived reads across same-origin screens with the same role and browser cookies.
   // No records are persisted. Writes always reach the Worker and invalidate all views.
   var recent = new Map(), failures = new Map(), pending = new Map();
   var channel; try { channel = new BroadcastChannel('homie-app-records-v1'); } catch (_) {}
@@ -38,7 +43,7 @@ export const APP_SHELL_JS = String.raw`(function () {
   var live, collections=new Set(), presence=0, clock=null;
   function query() {
     var q=new URLSearchParams();
-    ['role','surface','access','room'].forEach(function(k){var v=params.get(k);if(v)q.set(k,v);});
+    ['role','surface','room'].forEach(function(k){var v=params.get(k);if(v)q.set(k,v);});
     if(boot.screen&&!q.has('role'))q.set('surface','wall');
     return q;
   }
@@ -63,7 +68,7 @@ export const APP_SHELL_JS = String.raw`(function () {
     if (!frame || e.source !== frame.contentWindow || !m || !['homie-app','homie-app-tool'].includes(m.type) || !/^[a-f0-9]{32}$/.test(m.id || '')) return;
     if (m.type==='homie-app' && (!/^[a-z][a-z0-9-]{0,39}$/.test(m.collection || '') || !['GET','POST','PUT','DELETE'].includes(m.method) || (m.record !== undefined && !/^[A-Za-z0-9_-]{1,64}$/.test(m.record)))) return;
     var q = new URLSearchParams();
-    ['role','surface','access'].forEach(function (k) { var v = params.get(k); if (v) q.set(k, v); });
+    ['role','surface'].forEach(function (k) { var v = params.get(k); if (v) q.set(k, v); });
     if (boot.screen && !q.has('role')) q.set('surface', 'wall');
     var path = (boot.site || '') + '/' + boot.game + '/api/app/records/' + m.collection + (m.record ? '/' + m.record : '') + '?' + q;
     if(m.type==='homie-app-tool')path=(boot.site||'')+'/'+boot.game+'/api/app/tools?'+q;

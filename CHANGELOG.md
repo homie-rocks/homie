@@ -25,6 +25,10 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ### Fixed
 
+- **Long-running app screens:** renew role handoffs on records, live and tools responses, reconnect idle live streams before expiry, and set handoffs on records-only pages. Revoked sessions, grants and rotated links still stop access. Remove the shared role secret from the phone address bar and subsequent API URLs.
+- **Tool catalogue:** load and notify once per Worker isolate and database binding, then refresh after studio mutations; static requests no longer repeatedly load tool modules and serialize schemas.
+- **Test assets:** require a valid test session for the same app, role and scope whenever a test-kind asset ticket is used.
+
 - **Request path:** remove referral cleanup and function registration from startup; clean retired referral keys in migration 0031. Reuse the deployment catalogue, reuse stable-binding metadata caches guarded by a trigger-maintained revision, avoid repeat tool-catalogue notifications, and dispatch background work after actual writes. Public static assets require no D1 reads; private app assets retain live authorization.
 - **Payment Links:** menu items support `maxQuantity` (default 99), slot links accept groups within published remaining capacity, and confirmation uses the paid seat quantity atomically. Payments that cannot be fulfilled remain visible as review orders with a durable staff event and customer notice. Full connect saves public JSON link assets, retaining replaced links until deployment.
 - **Stripe setup:** observe deterministic product IDs before creating missing search results; keep public checkout mode out of secret uploads and report Wrangler's redacted error text.

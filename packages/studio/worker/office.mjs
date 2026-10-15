@@ -1385,7 +1385,7 @@ export async function officeRoutes(request, env, url, { catalogueOf }) {
 /** Encrypted, HMAC-authenticated asset capability. Session hashes never enter URLs in plaintext.
  * Every use checks revocation, grants and role-link rotation in one D1 statement.
  */
-export async function appAssetTicket(env, app, ticket, {request,meta,launch=meta?.launch??'public',expectedRole,purpose='asset'}={}) {
+export async function appAssetTicket(env, app, ticket, {request,meta,launch=meta?.launch??'public',expectedRole,purpose='asset',renew=false}={}) {
   const key=await officeKey(env),issuing=ticket===undefined,denied=issuing?null:false;
   if(!key||!meta)return denied;
   const decode=text=>Uint8Array.from(atob(text.replaceAll('-','+').replaceAll('_','/')),c=>c.charCodeAt(0));
@@ -1414,6 +1414,11 @@ export async function appAssetTicket(env, app, ticket, {request,meta,launch=meta
       data=JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:decode(iv)},cipher,decode(payload))));
     }catch{return false;}
   }
+  if(data.kind==='test') {
+    const session=request&&await (await import('./local-test.mjs')).localSession(request,env);
+    if(!issuing&&(!session||session.app!==app||session.role!==data.role||(session.scope??null)!==data.testScope))return denied;
+    if(issuing)data.testScope=session?.scope??toolIdentity(request)?.testScope??null;
+  }
   if(data.purpose!==purpose||(purpose==='handoff'&&!['owner','player'].includes(data.kind)))return denied;
   if(expectedRole&&data.role!==expectedRole)return denied;
   if(!Number.isSafeInteger(data.exp)||data.exp<=Date.now()||data.exp>Date.now()+5*60_000||!meta.roles?.[data.role]||data.rights!==await sha256(JSON.stringify(meta.roles[data.role])))return denied;
@@ -1432,7 +1437,11 @@ export async function appAssetTicket(env, app, ticket, {request,meta,launch=meta
   const authorized=data.kind==='owner'?state.owner:data.kind==='pass'?launch==='invite'&&!meta.roles[data.role].signIn&&state.pass:data.kind==='player'?state.player&&gate&&roleAllowed:data.kind==='tool'?state.connected&&gate&&roleAllowed:data.kind==='test'?data.testApp===app:false;
   if(!authorized)return denied;
   const link=state.link?await sha256(state.link):null;
-  if(!issuing)return data.link===link;
+  if(!issuing) {
+    if(data.link!==link)return denied;
+    if(!renew||purpose!=='handoff')return true;
+    data.exp=Date.now()+5*60_000;
+  }
   data.link=link;
   const iv=crypto.getRandomValues(new Uint8Array(12)),ivText=b64url(iv);
   const payload=b64url(new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},cipher,new TextEncoder().encode(JSON.stringify(data)))));
@@ -1460,7 +1469,11 @@ export async function appRoleSession(response,request,env,meta,launch) {
  if(meta.kind!=='app')return response;
  const {appRole}=await import('./app-format.mjs'),role=appRole(meta,new URL(request.url));
  if(!meta.roles?.[role]?.signIn)return response;
- const ticket=await appAssetTicket(env,meta.id,undefined,{request,meta,launch,purpose:'handoff'});
- if(ticket)response.headers.append('set-cookie',`studio_app_${meta.id}_${role}=${ticket}; Path=/${meta.id}/; Max-Age=300; HttpOnly; Secure; SameSite=Strict`);
+ const handoff=cookieValues(request,`studio_app_${meta.id}_${role}`)[0];
+ const ticket=(handoff&&await appAssetTicket(env,meta.id,handoff,{request,meta,launch,purpose:'handoff',expectedRole:role,renew:true}))||await appAssetTicket(env,meta.id,undefined,{request,meta,launch,purpose:'handoff'});
+ if(ticket) {
+  response=new Response(response.body,{status:response.status,statusText:response.statusText,headers:response.headers});
+  response.headers.append('set-cookie',`studio_app_${meta.id}_${role}=${ticket}; Path=/${meta.id}/; Max-Age=300; HttpOnly; Secure; SameSite=Strict`);
+ }
  return response;
 }

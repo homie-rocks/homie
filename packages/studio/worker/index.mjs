@@ -1,4 +1,4 @@
-import {trackBackground,requestDatabase,MUTATIONS} from './request-db.mjs';
+import {trackBackground,requestDatabase,databaseBinding,MUTATIONS} from './request-db.mjs';
 import {appGraphicsFallback} from './app-graphics.mjs';
 import {JOIN_AREA_FRAME_JS} from './join-area.mjs';
 import {loadShopLinks} from './shop-links.mjs';
@@ -663,7 +663,13 @@ export default {
       res = json({ ok: false, error: 'failed' }, 500);
     } finally {
       // Refresh after the route has populated the catalogue cache.
-      if(env.DB&&env.LOBBY&&ctx?.waitUntil)ctx.waitUntil(catalogue(env,url.origin).then(cat=>notifyTools(env,cat,url.origin)).catch(()=>{}));
+      if(env.DB&&env.LOBBY&&ctx?.waitUntil) {
+        const binding=databaseBinding(env.DB),mutation=url.pathname.startsWith('/_studio/')&&env.DB[MUTATIONS];
+        if(!toolCatalogues.has(binding)||mutation) {
+          toolCatalogues.add(binding);
+          ctx.waitUntil(catalogue(env,url.origin).then(cat=>notifyTools(env,cat,url.origin)).catch(()=>toolCatalogues.delete(binding)));
+        }
+      }
       // A route can commit a write and then fail. Its outbox still needs delivery.
       if(env.DB) {
         const delivery=background.finish();
@@ -685,6 +691,8 @@ export default {
   },
 };
 
+// Refresh once per isolate/binding, and again after studio mutations. No shared pending I/O.
+const toolCatalogues=new WeakSet();
 async function notifyTools(env,cat,origin) {
   if(!env.DB||!env.LOBBY)return;
   const [{pushToolList},{builtins}]=await Promise.all([import('./event-resources.mjs'),import('./mcp-tools.mjs')]);
@@ -973,7 +981,7 @@ async function route(request, env, ctx) {
     if (meta.kind === 'app') {
       const asset=/^__assets\/([^/]+)\/(.+)$/.exec(sub);
       if(asset) {
-        if(!(await appAssetTicket(env,game,asset[1],{meta,launch})))return json({ok:false,error:'not-found'},404);
+        if(!(await appAssetTicket(env,game,asset[1],{request,meta,launch})))return json({ok:false,error:'not-found'},404);
         const response=asset[2]==='index.html'?await gameDocument(request,env,url,game,meta,cat):await gameAsset(request,env,url,game,asset[2]);
         response.headers.set('cache-control','private, no-store');
         response.headers.set('referrer-policy','no-referrer');
@@ -985,14 +993,18 @@ async function route(request, env, ctx) {
         const web=await (await import('./app-web.mjs')).appWeb(request,env,meta,url,sub,()=>gameDocument(request,env,url,game,meta,cat));
         if(web)return web;
       }
+      const apiSession=async response=>{
+        const access=await appAccess(request,env,meta,url);
+        return access.ok?appRoleSession(response,request,env,meta,launch):response;
+      };
       if(sub==='api/app/live') {
         if(request.method!=='GET')return new Response('GET required',{status:405});
         const {appHub}=await import('./app-streams.mjs');
-        return appHub(env,meta.id).fetch('https://app/__app_records',{method:'POST',body:JSON.stringify({op:'open',meta,url:request.url,headers:Object.fromEntries(request.headers),collections:url.searchParams.getAll('collection')})});
+        return apiSession(await appHub(env,meta.id).fetch('https://app/__app_records',{method:'POST',body:JSON.stringify({op:'open',meta,url:request.url,headers:Object.fromEntries(request.headers),collections:url.searchParams.getAll('collection')})}));
       }
-      if(sub==='api/app/tools')return (await import('./app-tools.mjs')).appToolsRoute(request,env,meta,url,cat,await studioTools());
+      if(sub==='api/app/tools')return apiSession(await (await import('./app-tools.mjs')).appToolsRoute(request,env,meta,url,cat,await studioTools()));
       const api = await appRecordsRoute(request, env, meta, url, sub);
-      if (api) return api;
+      if (api) return sub.startsWith('api/app/records/')?apiSession(api):api;
       if (['play', 'tv', 'watch'].includes(sub)) {
         let a;
         try { a = await appAccess(request, env, meta, url); } catch { return json({ ok: false, error: 'app roles unavailable; apply studio migrations' }, 503); }
@@ -1000,7 +1012,7 @@ async function route(request, env, ctx) {
           if (a.status === 401) return Response.redirect(`${url.origin}/account/?next=${encodeURIComponent(url.pathname + url.search)}`, 302);
           return json({ ok: false, error: a.error }, a.status);
         }
-        if(!meta.room)return recordsPage(meta,url,cat,await availableShellShop(env,cat,game),Boolean(await (await import('./local-test.mjs')).localSession(request,env)),launch!=='public'?await appAssetTicket(env,game,undefined,{request,meta,launch}):null);
+        if(!meta.room)return appRoleSession(recordsPage(meta,url,cat,await availableShellShop(env,cat,game),Boolean(await (await import('./local-test.mjs')).localSession(request,env)),launch!=='public'?await appAssetTicket(env,game,undefined,{request,meta,launch}):null),request,env,meta,launch);
       }
     }
     const lobby = () => env.LOBBY.get(env.LOBBY.idFromName(game));

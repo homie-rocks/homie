@@ -32,7 +32,7 @@ export async function pushAppRecords(env,cat){
 export class AppRecordStreams {
  constructor(env,ctx){this.env=env;this.ctx=ctx;this.streams=new Set();}
  dispose(){for(const s of [...this.streams])this.close(s);}
- close(s){if(!this.streams.delete(s))return;clearInterval(s.timer);try{s.controller.close();}catch{}this.presence();}
+ close(s){if(!this.streams.delete(s))return;clearInterval(s.timer);clearTimeout(s.reconnect);try{s.controller.close();}catch{}this.presence();}
  count(s){return [...this.streams].filter(x=>x.app===s.app&&x.room===s.room).length;}
  send(s,data){if(s.controller.desiredSize<=0){this.close(s);return;}try{s.controller.enqueue(frame(data));}catch{this.close(s);}}
  presence(){for(const s of this.streams)this.send(s,{presence:this.count(s)});}
@@ -54,6 +54,8 @@ export class AppRecordStreams {
   const body=new ReadableStream({start:controller=>{s.controller=controller;},cancel:()=>this.close(s)});
   this.streams.add(s);this.send(s,{collections:s.collections,presence:this.count(s),reset:true});
   for(const other of this.streams)if(other!==s)this.send(other,{presence:this.count(other)});
+  // A fresh HTTP response renews the role cookie; SSE frames cannot set cookies.
+  s.reconnect=setTimeout(()=>this.close(s),240000);
   // Recovery after a missed wake; this is not the screen's refresh clock.
   s.timer=setInterval(()=>this.ctx.waitUntil(this.pump(s,true)),15000);
   return new Response(body,{headers:{'content-type':'text/event-stream','cache-control':'no-store'}});

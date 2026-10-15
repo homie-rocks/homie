@@ -12,7 +12,7 @@ test('a need without assertions is a pending placeholder, with no actions run',a
 test('app context shares a validated room, without role or credentials',()=>{
  for(const [search,suffix] of [['?room=pub-7&role=staff&access=secret','?room=pub-7'],['?room=%3Cbad%3E&ticket=secret','']]) {
   const window={__HOMIE_APP:{game:'cafe',kind:'app',direct:true}};
-  vm.runInNewContext(APP_SHELL_JS,{window,document:{},location:{origin:'https://cafe.example',search},URLSearchParams,addEventListener(){},BroadcastChannel:class{},setTimeout,clearTimeout});
+  vm.runInNewContext(APP_SHELL_JS,{window,document:{},location:{origin:'https://cafe.example',pathname:'/cafe/open',search},history:{replaceState(){}},URLSearchParams,addEventListener(){},BroadcastChannel:class{},setTimeout,clearTimeout});
   assert.equal(window.homieApp.context.url,'https://cafe.example/cafe/open'+suffix);
  }
 });
