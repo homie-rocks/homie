@@ -294,7 +294,9 @@ export class Gate {
     this.loopTimer = setInterval(() => {
       const now = Date.now(), late = Math.max(0, now - due); due = now + 20;
       this.window.late = Math.max(this.window.late, late); if (late > 20) this.window.busy += 1;
-      if (!this.link || !this.clients.size) { clearInterval(this.loopTimer); this.loopTimer = null; }
+      // Diagnostics need a clock only while worlds are being delivered. An
+      // idle audience must not keep fifty diagnostic callbacks a second alive.
+      if (!this.link || !this.clients.size || now - (this.worldAt ?? 0) > 1000) { clearInterval(this.loopTimer); this.loopTimer = null; }
     }, 20);
     this.loopTimer?.unref?.();
   }
@@ -369,6 +371,7 @@ export class Gate {
     if (w.tickFrom === null) { w.tickFrom = this.worldTick ?? snap.k; w.tickFromAt = this.worldAt ?? now; }
     if (this.worldAt) { const gap = now - this.worldAt; w.gapMax = Math.max(w.gapMax, gap); if (gap > 75) w.gaps[0] += 1; if (gap > 150) w.gaps[1] += 1; if (gap > 300) w.gaps[2] += 1; }
     this.worldTick = snap.k; this.worldAt = now; w.tickAt = now;
+    this.watchLoop();
     // By this Gate's clock, corrected for what the room's clock is measured to differ by.
     if (Number.isFinite(snap.st)) w.worldAge.push(Math.max(0, now - snap.st + (this.clock?.offsetMs ?? 0)));
     for (const [id, client] of this.clients) if (client.subscribed) this.deliverOne(id, client, snap, client.seat, settings, hz, drop);
@@ -410,7 +413,7 @@ export class Gate {
   async connect(request, server) {
     const link = await this.upstream(new URL(request.url));
     const id = String(++this.sequence);
-    this.clients.set(id, server); clearTimeout(this.idle); this.idle = null; this.watchLoop();
+    this.clients.set(id, server); clearTimeout(this.idle); this.idle = null;
     let opened = false;
     const deadline = setTimeout(() => {
       this.admissions.delete(id);

@@ -1,27 +1,34 @@
-/** Extracted from the studio runtime; behavior is unchanged. */
-import {RULES_WIRING_MESSAGE} from './rules-wiring.mjs';
-import {characterStore,characterRequest} from './characters.mjs';
-import {NetRoom,WATCH_POLICIES,departure,errorLine} from './room.mjs';
-import {hostedGame,hostedBuild,compiledFor,prepareHost,startHost} from './hosted.mjs';
-import {roomStore,restoreDelay,LOOSE_SAVE} from './room-store.mjs';
-import {pooledRoom} from './servers.mjs';
-import {BRAIN_BUDGET,HouseAgents,decodeFacts} from './agents.mjs';
-import {CLEF,DECIDE,clefRun,costOf,localAiOf,picksOf,talks} from './brain.mjs';
-import {reviewChat} from './chat.mjs';
-import {chatDay} from './chat-store.mjs';
-import {forgetLines,historyOf,keepLines,keptLine} from './lounge-store.mjs';
-import {acceptMultiplex,diagnosticsOf,gatePlayers,nextGate} from './gate.mjs';
-import {worldSource} from './world-wire.mjs';
-import {seatCount,perAddress} from './seats.mjs';
-import {count,counter,isQa,today} from './stats.mjs';
-import {holders,regateArgs,verifyControl} from './office.mjs';
-import {json} from './responses.mjs';
-import {catalogue} from './catalogue.mjs';
+import {roomSessions,restoreRoomFields} from './room-sessions.mjs';
+import {idleChatSnapshot,restoreIdleChat,readIdleChat,writeIdleChat,expireIdleChat} from './idle-chat.mjs';
+import {WatchSockets} from './watch-sockets.mjs';
+import { catalogue } from './catalogue.mjs';
+import { RULES_WIRING_MESSAGE } from './rules-wiring.mjs';
+import { characterStore, characterRequest } from './characters.mjs';
+import { NetRoom, WATCH_POLICIES, departure, errorLine } from './room.mjs';
+import { hostedGame, hostedBuild, compiledFor, prepareHost, startHost } from './hosted.mjs';
+import { roomStore, restoreDelay, LOOSE_SAVE } from './room-store.mjs';
+import { pooledRoom } from './servers.mjs';
+import { BRAIN_BUDGET, HouseAgents, decodeFacts } from './agents.mjs';
+import { CLEF, DECIDE, clefRun, costOf, localAiOf, picksOf, talks } from './brain.mjs';
+import { reviewChat } from './chat.mjs';
+import { chatDay } from './chat-store.mjs';
+import { forgetLines, historyOf, keepLines, keptLine } from './lounge-store.mjs';
+import { acceptMultiplex, diagnosticsOf, gatePlayers, nextGate } from './gate.mjs';
+import { worldSource } from './world-wire.mjs';
+import { seatCount, perAddress } from './seats.mjs';
+import { count, counter, isQa, today } from './stats.mjs';
+import { holders, regateArgs, verifyControl } from './office.mjs';
+
+const json = (body, status = 200, extra = {}) => new Response(`${JSON.stringify(body)}\n`, {
+  status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...extra },
+});
+
 import {ROOM_ALARM_MS,ROOM_PAUSE_MS,roomEndAt} from './room-lifecycle.mjs';
 
-class Table {
+export class Table {
   constructor(ctx, env) {
     this.ctx = ctx;
+    this.watchSockets = new WatchSockets(ctx);
     this.env = env;
     this.room = null;
     this.timer = null;
@@ -71,6 +78,18 @@ class Table {
       this.recoveredAlarmAt = Infinity;
       try { this.recoveredAlarmAt = (await ctx.storage.getAlarm?.()) ?? null; }
       catch (error) { this.storageProblem(error); }
+      this.hibernationReady=true;
+      try {
+        this.sessionStore=roomSessions(ctx.storage);
+        this.sessionSnapshot=this.sessionStore.read();
+        this.idleChat=(await readIdleChat(ctx.storage))??null;
+        if(this.sessionSnapshot)Object.assign(this,this.sessionSnapshot.table);
+      } catch(error) {
+        // Optional session state must not bypass the existing host-storage
+        // failure response and strand a player before its socket is handled.
+        this.hibernationReady=false;this.sessionStore=null;this.sessionSnapshot=null;this.idleChat=null;
+        this.storageProblem(error);
+      }
       this.saved = (await ctx.storage.get('net')) ?? null;
       if (this.saved?.retired === true) this.cleanupPending = true;
       this.recorded = (await ctx.storage.get('recorded')) ?? 0;
@@ -78,6 +97,22 @@ class Table {
       // A big match room's last unconfirmed checkpoint (worker/room-store.mjs), read once as the object wakes.
       try { this.looseSave = (await ctx.storage.list?.({ prefix: LOOSE_SAVE })) ?? null; }
       catch (error) { this.looseSave = null; this.storageProblem(error); }
+      this.restoringSockets=true;
+      await this.watchSockets.restore((request, transport, attachment) => {
+        if(!this.hibernationReady){transport.close(1011,"room storage unavailable");return;}
+        if(attachment.clientId) {
+          transport.resume=this.sessionSnapshot?.clients.get(attachment.clientId);
+          if(!transport.resume){transport.close(1012,'room session restarted');return;}
+        }
+        return this.connect(request, transport);
+      });
+      // The last socket can close while an office write is being retried. An
+      // alarm must restore that room even when there is no transport to attach.
+      if(!this.room&&this.sessionSnapshot&&this.game&&this.code)this.roomFor(this.game,this.code,this.sessionSnapshot.fields.get('seatCap')??8);
+      this.restoringSockets=false;
+      if(this.sessionSnapshot)this.say({ev:"sessions-restored",clients:this.room?.clients.size??0});
+      this.sessionSnapshot=null;
+      if(this.room)this.start();
     });
   }
 
@@ -104,7 +139,7 @@ class Table {
                 if (this.hostRt === host) { try { this.saveRoom(host.save()); } catch (error) { this.storageProblem(error); } }
               });
             }
-          } else if (!hostedGame(game)) storage.put('net', o).catch(() => {});
+          } else if (!hostedGame(game)) storage.put('net', o).catch(error => this.storageProblem(error));
         },
         clear: () => { this.clearRoom(); },
       },
@@ -113,9 +148,16 @@ class Table {
       // are told apart by these. HOMIE_ROOM_LOG=0 keeps only the failures.
       log: (line) => this.say(line),
     });
+
+    this.room.waitUntil=work=>this.ctx.waitUntil(Promise.resolve(work).finally(()=>this.keepIdleChat()));
     this.room.gateFacts = () => [...(this.gateMetrics?.values() ?? [])];
     if (this.saved && !hostedGame(game)) this.room.restore(this.saved);
-    if (this.officeSaved) this.room.restoreOffice(this.officeSaved);
+    restoreRoomFields(this.room,this.sessionSnapshot);
+    // A failed office write remains in the session snapshot for retry. Otherwise
+    // the separate office record also covers changes made while no socket exists.
+    if (this.officeSaved && !this.room.officeDirty) this.room.restoreOffice(this.officeSaved);
+    restoreIdleChat(this,this.idleChat);
+    this.idleChat=null;
     this.vocabRead = this.readVocab(game).catch(() => false);
     // Room chat (section 19): typed text the floor let through waits for the studio's own Workers AI.
     this.room.review = (text, opts) => this.reviewChat(text, opts);
@@ -340,7 +382,7 @@ class Table {
     if (this.isPersistent()) throw new Error('A lasting world cannot be cleared by match cleanup');
     this.cleanupGeneration = (this.cleanupGeneration ?? 0) + 1;
     this.roomSave = null; this.saved = null; this.pendingBoot = null;
-    try { this.durable?.retire(); this.durable?.clear(); this.cleanupPending = false; clearTimeout(this.cleanupRetry); this.cleanupRetry = null; }
+    try { this.sessionStore?.clear(); this.durable?.retire(); this.durable?.clear(); this.cleanupPending = false; clearTimeout(this.cleanupRetry); this.cleanupRetry = null; }
     catch (error) { this.retryCleanup(error); }
     this.queueNetCleanup(this.cleanupPending);
   }
@@ -498,7 +540,7 @@ class Table {
           this.finishRoom('nobody-returned');
         }
       }
-      if (this.saved?.hosted === 'server') { const was = this.saved.room ?? null; this.saved = null; await this.ctx.storage.delete('net').catch(() => {}); this.say({ ev: 'host-over', why: 'nobody-returned', room: was }); }
+      if (this.saved?.hosted === 'server') { const was = this.saved.room ?? null; this.saved = null; await this.ctx.storage.delete('net'); this.say({ ev: 'host-over', why: 'nobody-returned', room: was }); }
       return;
     }
     if (!this.hostRt) return;
@@ -532,7 +574,7 @@ class Table {
     const player=client?.player??sql.exec('SELECT player FROM round_players WHERE owner=?',owner).toArray()[0]?.player;
     if(!player){
       // Never dropped in silence (0.46.5): the log says so, and the person is told on their own screen.
-      try{console.error(JSON.stringify({at:new Date().toISOString(),ev:'record-unsaved',why:'no-player',game:this.game??null,room:this.code??null,key,id:value?.id??null}));}catch{}
+      try{console.error(JSON.stringify({at:new Date().toISOString(),ev:'record-unsaved',why:'no-player',game:this.game??null,room:this.code??null,key,id:value?.id??null}));}catch{/* Logging must not mask the missing-player recovery path. */}
       if(client)this.room.error(client,'unsaved','This round was not saved to your history. Reload the page to keep the next one.');
       return;
     }
@@ -625,7 +667,7 @@ class Table {
     const local = this.env.AI ? null : localAiOf(this.env);
     if (!this.env.AI && !local) return { ok: false, why: 'no-ai' };
     if (this.env.AI) {
-      if (!this.brainDay || Date.now() - this.brainReadAt > 60_000) await this.readBrainDay().catch(() => {});
+      if (!this.brainDay || Date.now() - this.brainReadAt > 60_000) await this.readBrainDay().catch(error => this.say({ev:'background-failed',error:errorLine(error)}));
       if (this.brainCap.neurons - this.brainUsed.neurons <= 0) return { ok: false, why: 'budget' };
     }
     const model = CLEF.models[this.env.HOMIE_DECIDE_MODEL] ? this.env.HOMIE_DECIDE_MODEL : '@cf/cloudflare/clef-flash';
@@ -646,7 +688,7 @@ class Table {
 
   /** The day's counters go to D1 on an alarm: set one a minute out when none is set (a house guide's alarm also flushes). */
   flushSoon() {
-    this.ctx.waitUntil((async () => { if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + 60_000); })().catch(() => {}));
+    this.ctx.waitUntil((async () => { if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + 60_000); })().catch(error => this.say({ev:'background-failed',error:errorLine(error)})));
   }
 
   /**
@@ -660,7 +702,7 @@ class Table {
       if (!localAiOf(this.env)) return { ok: true, by: 'none' };
       try { const v = await reviewChat(this.env, text, { links }); return { ok: v.ok, by: 'local', why: v.why, ms: v.ms, p: v.p }; } catch { return { ok: true, by: 'error' }; }
     }
-    if (this.chatCap === null || Date.now() - this.chatReadAt > 60_000) await this.readChatDay().catch(() => {});
+    if (this.chatCap === null || Date.now() - this.chatReadAt > 60_000) await this.readChatDay().catch(error => this.say({ev:'background-failed',error:errorLine(error)}));
     if (this.chatUsed >= (this.chatCap ?? 0)) return { ok: true, by: 'budget' };
     try {
       const v = await reviewChat(this.env, text, { links });
@@ -683,10 +725,17 @@ class Table {
   }
 
   /** Chat's counts into D1 (stats_daily): lines, reactions, held by why, reviews and neurons. Never a message or a sender. */
-  async flushChat() {
+  flushChat() {
+    if (this.chatFlush) return this.chatFlush;
+    this.chatFlush = this.flushChatPending().finally(() => { this.chatFlush = null; });
+    return this.chatFlush;
+  }
+
+  async flushChatPending() {
     const s = this.room?.stats;
     if (!s || !this.env.DB) return;
     const game = this.game ?? '';
+    const sent = structuredClone(this.chatSent);
     const rows = [];
     for (const [k, metric] of [['chatLines', 'chat-lines'], ['chatReacts', 'chat-reacts']]) {
       const d = (s[k] ?? 0) - (this.chatSent[k] ?? 0);
@@ -702,7 +751,14 @@ class Table {
     if (neurons) rows.push(counter(this.env, { metric: 'chat-neurons', subject: game, n: neurons }));
     this.chatPend = { neurons: p.neurons - neurons, ok: 0, held: 0, error: 0 };
     const list = rows.filter(Boolean);
-    if (list.length) await this.env.DB.batch(list).catch(() => {});
+    try { if (list.length) await this.env.DB.batch(list); }
+    catch (error) {
+      this.chatSent = sent;
+      this.chatPend.neurons += neurons;
+      for (const k of ['ok', 'held', 'error']) this.chatPend[k] += p[k];
+      this.say({ev: 'chat-counter-retry', error: errorLine(error)});
+      throw error;
+    }
   }
 
   /** The game's agents.json from the build (the only words an AI in this room may say), once. */
@@ -728,11 +784,11 @@ class Table {
       this.house = new HouseAgents({
         room, env: this.env,
         // The room's own alarm (a paused server-hosted room ends on it) is never pushed back by a guide's.
-        setAlarm: (at) => { this.ctx.storage.setAlarm(this.roomAlarmAt > Date.now() ? Math.min(at, this.roomAlarmAt) : at).catch(() => {}); },
+        setAlarm: (at) => { this.ctx.storage.setAlarm(this.roomAlarmAt > Date.now() ? Math.min(at, this.roomAlarmAt) : at).catch(error => this.say({ev:'background-failed',error:errorLine(error)})); },
         budget: { left: (kind) => this.brainCap[kind] - this.brainUsed[kind], spend: (c) => this.brainSpend(c) },
         log: (line) => { try { console.log(JSON.stringify(line)); } catch { /* no console */ } },
       });
-      this.ctx.waitUntil(this.readBrainDay().catch(() => {}));
+      this.ctx.waitUntil(this.readBrainDay().catch(error => this.say({ev:'background-failed',error:errorLine(error)})));
     }
     this.house.sync();
   }
@@ -772,7 +828,13 @@ class Table {
    * The day's brain counters into D1 (stats_daily: brain-calls by provider, brain-neurons, brain-microdollars), and the
    * day's budget and usage read again (an owner's new budget, other rooms' use): at most once a minute, on the alarm.
    */
-  async flushBrain(force = false) {
+  flushBrain(force = false) {
+    if (this.brainFlush) return this.brainFlush;
+    this.brainFlush = this.flushBrainPending(force).finally(() => { this.brainFlush = null; });
+    return this.brainFlush;
+  }
+
+  async flushBrainPending(force = false) {
     const p = this.brainPending;
     if (!this.env.DB || (!force && Date.now() - this.brainReadAt < 60_000)) return;
     if (!Object.keys(p.calls).length && p.neurons < 1 && p.micros < 1) { await this.readBrainDay(); return; }
@@ -784,18 +846,28 @@ class Table {
       micros ? counter(this.env, { metric: 'brain-microdollars', subject: this.game ?? '', n: micros }) : null,
     ].filter(Boolean);
     this.brainPending = { calls: {}, neurons: p.neurons - neurons, micros: p.micros - micros };
-    if (rows.length) await this.env.DB.batch(rows).catch(() => {});
+    try { if (rows.length) await this.env.DB.batch(rows); }
+    catch (error) {
+      this.brainPending.neurons += neurons;
+      this.brainPending.micros += micros;
+      for (const [source, n] of Object.entries(p.calls)) this.brainPending.calls[source] = (this.brainPending.calls[source] ?? 0) + n;
+      this.say({ev: 'brain-counter-retry', error: errorLine(error)});
+      throw error;
+    }
     await this.readBrainDay();
   }
 
   /** The alarm: the house guides' brains decide (worker/agents.mjs), then the day's usage is written. */
   async alarm() {
+    if (this.room && (!this.room.clients.size || this.canSleep())) { this.room.tick(Boolean(this.canSleep())); this.room.tellWatchers(); this.report(); }
     await this.flushRoundRecords();
     await this.flushFunctionEvents();
     // A brain that throws never takes the room with it: the alarm is not retried, the guides answer from the floor.
     try { if (this.house) await this.house.onAlarm(); } catch (error) { try { console.log(JSON.stringify({ ev: 'brain-alarm-failed', room: this.code, error: String(error?.stack ?? error).slice(0, 400) })); } catch { /* no console */ } }
     try { await this.flushBrain(); } catch { /* counted next time */ }
     try { await this.roomAlarm(); } catch (error) { this.say({ ev: 'failed', op: 'room-alarm', error: errorLine(error) }); }
+    if(this.hibernationReady)await expireIdleChat(this.ctx.storage);
+    if(this.canSleep())await this.sleepRoom();
   }
 
   async flushCharacters() {
@@ -820,7 +892,7 @@ class Table {
   async withCharacter(account, operation) {
     this.characterOperations ??= new Map();
     const previous = this.characterOperations.get(account) ?? Promise.resolve();
-    const current = previous.catch(() => {}).then(operation);
+    const current = previous.catch(() => { /* The previous caller observed its failure; the next operation must still run. */ }).then(operation);
     this.characterOperations.set(account, current);
     try { return await current; }
     finally { if (this.characterOperations.get(account) === current) this.characterOperations.delete(account); }
@@ -848,6 +920,10 @@ class Table {
   }
 
   async fetch(request) {
+    try { return await this.fetchRequest(request); }
+    finally { if(this.canSleep())await this.sleepRoom(); }
+  }
+  async fetchRequest(request) {
     if (new URL(request.url).pathname === '/__character') {
       const body = await request.json();
       this.characters ??= characterStore(this.ctx.storage);
@@ -945,7 +1021,7 @@ class Table {
       const res = await room.control(ctl.op, ctl.args && typeof ctl.args === 'object' ? ctl.args : {});
       // AI talk turned off (a policy) or a guide kicked: the house guides follow at once.
       if (this.house) this.house.sync();
-      await this.ctx.storage.put('office', room.officeSaved()).catch(() => {});
+      await this.ctx.storage.put('office', room.officeSaved());
       if (ctl.op === 'close' && res.ok) this.tellLobby({ closed: ctl.args?.reopen ? 0 : res.until });
       this.report();
       return json(res);
@@ -980,8 +1056,10 @@ class Table {
       try { await this.acquireCharacter(account); }
       catch (error) { return new Response(String(error.message), { status: 409 }); }
     }
-    const [client, server] = transport ? [null, transport] : Object.values(new WebSocketPair());
-    server.accept();
+    const [client, accepted] = transport ? [null, transport] : Object.values(new WebSocketPair());
+    const hibernating = !transport && this.hibernationReady && this.ctx.acceptWebSocket && (url.pathname === '/__watch' || Boolean(this.ctx.storage.sql));
+    const server = hibernating ? await this.watchSockets.accept(accepted, request) : accepted;
+    if (!hibernating) server.accept();
     const via = url.searchParams.get('via');
     const conn = {
       ip: request.headers.get('cf-connecting-ip'),
@@ -1012,6 +1090,8 @@ class Table {
       send: (text) => { try { server.send(text); } catch { /* closed */ } },
       close: (c, r) => { try { server.close(c, r); } catch { /* closed */ } },
       buffered: () => server.buffered?.() ?? 0,
+      lastPing: () => server.lastPing?.() ?? 0,
+      idlePing: Boolean(server.remember && this.ctx.setWebSocketAutoResponse),
       ...(server.snapshotGroup ? { snapshotGroup: server.snapshotGroup, subscribe: seat => server.subscribe(seat) } : {}),
       ...(server.snapshot ? { snapshot: (...args) => server.snapshot(...args), transportFacts: server.transportFacts } : {}),
     };
@@ -1029,7 +1109,8 @@ class Table {
       server.addEventListener('close', () => w.onClose());
       server.addEventListener('error', (e) => { this.socketError('watch', e); w.onClose(); });
     } else {
-      const h = room.attach(conn);
+      const h = room.attach(conn,server.resume);
+      server.remember?.(h.id);
       // A room is OPENED when the first seat is taken in an empty one (a room restored after a deploy keeps its
       // seats, so it is not counted twice). One counter write per room.
       const fresh = room.seats.size === 0;
@@ -1057,7 +1138,7 @@ class Table {
         const c = room.clients.get(h.id);
         if (c?.agent && c.helloed && c.seat !== null && !conn.qa) {
           const minutes = Math.round((Date.now() - c.joinedAt) / 60_000);
-          if (minutes > 0) this.ctx.waitUntil(count(this.env, null, { metric: 'agent-minutes', subject: this.game ?? '', source: c.agent.role, n: minutes }).catch(() => {}));
+          if (minutes > 0) this.ctx.waitUntil(count(this.env, null, { metric: 'agent-minutes', subject: this.game ?? '', source: c.agent.role, n: minutes }).catch(error => this.say({ev:'background-failed',error:errorLine(error)})));
         }
         // The room says the departure itself (its `leave` line: who, which seat, host or not, how many are left).
         h.onClose(via);
@@ -1076,7 +1157,56 @@ class Table {
     return transport ? null : new Response(null, { status: 101, webSocket: client });
   }
 
+  async keepIdleChat() {
+    if(!this.room||!this.hibernationReady)return;
+    try { await this.flushChat(); }
+    finally { await writeIdleChat(this.ctx.storage,idleChatSnapshot(this)); }
+  }
+  async webSocketMessage(socket, message) {
+    this.watchSockets.message(socket, message);
+    if(this.canSleep()) { await this.keepIdleChat(); await this.sleepRoom(); }
+    else { this.start(); if(!socket.deserializeAttachment()?.clientId)await this.keepIdleChat(); }
+  }
+  // Compatibility date >= 2026-04-07 replies to Close frames automatically.
+  async webSocketClose(socket) { await this.watchSockets.close(socket); if(this.canSleep())await this.sleepRoom(); }
+  async webSocketError(socket, error) { await this.watchSockets.close(socket, error); if(this.canSleep())await this.sleepRoom(); }
+
+  canSleep() {
+    // Older ports publish snapshots without a round protocol. Once play starts,
+    // treat them as active until empty: persisting every frame would turn their
+    // ordinary network traffic into a stream of SQLite writes.
+    const active = this.room?.lastRound?.phase === 'live' || (!this.room?.lastRound && this.room?.lastSnap != null && this.room?.clients.size > 0);
+    return this.room && this.hibernationReady && this.sessionStore && this.ctx.storage.sql && this.ctx.acceptWebSocket && !this.relayed && !this.hostRt && !active && !this.restoringSockets;
+  }
+  async sleepRoom() {
+    if(!this.canSleep())return;
+    clearInterval(this.timer);this.timer=null;
+    const now=Date.now(),room=this.room;
+    if(room.officeDirty) {
+      room.officeDirty=false;
+      try {this.officeSaved=room.officeSaved();await this.ctx.storage.put('office',this.officeSaved);}
+      catch(error) {room.officeDirty=true;this.storageProblem(error);}
+    }
+    if(!room.clients.size&&!room.watchers.size&&!room.officeDirty) {
+      this.sessionStore.clear();
+      // Empty rooms get one final expiry pass, never a permanent minute alarm.
+      const until=room.emptySince+room.forgetMs;
+      if(Number.isFinite(until)&&until>now){const alarm=await this.ctx.storage.getAlarm();if(alarm==null||alarm>until)await this.ctx.storage.setAlarm(until);}
+      return;
+    }
+    const keys=['game','code','lastReport','lastPeople','lastAgents','lastAi','lastReportAt','openCounted','launchReadFor'];
+    this.sessionStore.write(this.room,Object.fromEntries(keys.map(key=>[key,this[key]])));
+    // Edge-answered heartbeats need only a minute's liveness sweep. A legacy
+    // client still keeps its original hello/heartbeat deadline.
+    const due=[now+(room.officeDirty?1000:60000),...[...room.clients.values()].map(c=>{const ping=c.conn.lastPing?.()??0;return c.helloed?Math.max(c.lastSeen,ping)+(ping?Math.max(room.idleMs,60000):room.idleMs):c.joinedAt+5000;})];
+    for(const control of [room.vote?.open?room.vote:null,room.regate,room.agentsOut])if(control?.until)due.push(control.until);
+    const at=Math.max(now+1,Math.min(...due)),alarm=await this.ctx.storage.getAlarm();
+    if(alarm==null||alarm>at)await this.ctx.storage.setAlarm(at);
+  }
   start() {
+    if(this.restoringSockets)return;
+    if(this.canSleep()){this.ctx.waitUntil(this.sleepRoom());return;}
+    if(this.sessionStore&&this.room?.lastRound?.phase==='live')this.sessionStore.clear();
     if (this.timer) return;
     let n = 0;
     this.timer = setInterval(() => {
@@ -1086,17 +1216,18 @@ class Table {
       try { room.tick(); } catch (error) { this.say({ ev: 'tick-failed', clients: room.clients.size, error: errorLine(error) }); }
       // A room that just opened reads its game's launch state once: a change made in the moment it opened (before the
       // Lobby knew of it) still reaches it, after the current round as always.
-      if (room.openedAt && this.launchReadFor !== room.openedAt) { this.launchReadFor = room.openedAt; this.ctx.waitUntil(this.rereadLaunch().catch(() => {})); }
+      if (room.openedAt && this.launchReadFor !== room.openedAt) { this.launchReadFor = room.openedAt; this.ctx.waitUntil(this.rereadLaunch().catch(error => { this.launchReadFor = null; this.say({ev:'launch-read-retry',error:errorLine(error)}); })); }
       // A launch change the room applied by itself (after its round): its stored state says so too.
-      if (room.officeDirty) { room.officeDirty = false; this.ctx.storage.put('office', room.officeSaved()).catch(() => {}); }
+      if (room.officeDirty) { room.officeDirty = false; this.ctx.storage.put('office', room.officeSaved()).catch(error => { room.officeDirty = true; this.storageProblem(error); }); }
       n += 1;
       if (n % 4 === 0) { this.publishDiagnostics(); room.tellWatchers(); this.report(); this.recordRound(); this.syncHouse(); }
       // Room chat's counts, once a minute (section 19).
-      if (n % 240 === 0) this.ctx.waitUntil(this.flushChat().catch(() => {}));
+      if (n % 240 === 0) this.ctx.waitUntil(this.flushChat().catch(() => { /* The flush logged the failure and retained pending counters. */ }));
       // A server-hosted room in play keeps its alarm ahead of it (re-armed every five minutes of play).
       if (n % 1200 === 0 && this.hostRt?.running) this.armRoom(Date.now() + ROOM_ALARM_MS);
       if (room.seats.size === 0 && room.clients.size === 0) this.openCounted = false;
-      if (room.clients.size === 0 && room.watchers.size === 0) { clearInterval(this.timer); this.timer = null; this.report(); this.ctx.waitUntil(this.flushChat().catch(() => {})); if (this.house) { this.ctx.waitUntil(this.flushBrain(true).catch(() => {})); this.house = null; } }
+      if(this.canSleep()){this.ctx.waitUntil(this.sleepRoom());return;}
+      if (room.clients.size === 0 && !this.hostRt?.running) { this.armRoom(Date.now() + 120_000); clearInterval(this.timer); this.timer = null; this.report(); this.ctx.waitUntil(this.flushChat().catch(() => { /* The flush logged the failure and retained pending counters. */ })); if (this.house) { this.ctx.waitUntil(this.flushBrain(true).catch(() => { /* The flush logged the failure and retained pending counters. */ })); this.house = null; } }
     }, 250);
   }
 
@@ -1112,7 +1243,7 @@ class Table {
     const args = regateArgs(launch);
     if (!args.allow) return null;
     const res = room.control('regate', args);
-    if (res.ok && res.leaving) await this.ctx.storage.put('office', room.officeSaved()).catch(() => {});
+    if (res.ok && res.leaving) await this.ctx.storage.put('office', room.officeSaved());
     return res;
   }
 
@@ -1122,7 +1253,7 @@ class Table {
     if (!this.game || !this.code) return;
     const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName(this.game));
     this.lastReport = -1;
-    this.ctx.waitUntil(lobby.fetch(`https://lobby/report?game=${encodeURIComponent(this.game)}`, { method: 'POST', body: JSON.stringify({ room: this.code, players: 0, people: 0, ...extra }) }).catch(() => {}));
+    this.ctx.waitUntil(lobby.fetch(`https://lobby/report?game=${encodeURIComponent(this.game)}`, { method: 'POST', body: JSON.stringify({ room: this.code, players: 0, people: 0, ...extra }) }).catch(error => this.say({ev:'background-failed',error:errorLine(error)})));
   }
 
   /**
@@ -1185,7 +1316,7 @@ class Table {
     const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName(this.game));
     // The build this room runs (section 23): the Lobby sends a visitor only to a room of the live build.
     const ver = room.gameVer === undefined ? undefined : room.gameVer ?? '';
-    this.ctx.waitUntil(lobby.fetch(`https://lobby/report?game=${encodeURIComponent(this.game)}`, { method: 'POST', body: JSON.stringify({ room: this.code, players, people, agents, ai, host: room.server ? 'server' : 'browser', ...(ver !== undefined ? { ver } : {}) }) }).catch(() => {}));
+    this.ctx.waitUntil(lobby.fetch(`https://lobby/report?game=${encodeURIComponent(this.game)}`, { method: 'POST', body: JSON.stringify({ room: this.code, players, people, agents, ai, host: room.server ? 'server' : 'browser', ...(ver !== undefined ? { ver } : {}) }) }).catch(error => this.say({ev:'background-failed',error:errorLine(error)})));
   }
 
   /** A round the host called over becomes one D1 row (once per round number). */
@@ -1193,7 +1324,7 @@ class Table {
     const r = this.room?.lastRound;
     if (!r || r.phase !== 'over' || !Number.isFinite(r.n) || r.n <= this.recorded || !this.env.DB) return;
     this.recorded = r.n;
-    this.ctx.storage.put('recorded', r.n).catch(() => {});
+    this.ctx.storage.put('recorded', r.n).catch(error => this.say({ev:'background-failed',error:errorLine(error)}));
     const results = Array.isArray(r.results) ? r.results : [];
     // An AI's row is never a person's (the relay labelled it `agent`): rounds count agents as AI.
     const humans = results.filter((row) => row && !row.bot && !row.agent).length;
@@ -1204,9 +1335,6 @@ class Table {
       .bind(this.game, this.code, r.n, humans, results.length - humans, JSON.stringify(results), new Date().toISOString());
     // The round and the people in it, on the studio's daily counters (worker/stats.mjs). One batch, per round.
     const counters = qaOnly ? [] : [counter(this.env, { metric: 'round', subject: this.game ?? '', source: humans ? 'people' : 'bots' }), humans ? counter(this.env, { metric: 'humans', subject: this.game ?? '', n: humans }) : null].filter(Boolean);
-    this.ctx.waitUntil(db.batch([insert, ...counters]).catch(() => insert.run().catch(() => {})));
+    this.ctx.waitUntil(db.batch([insert, ...counters]).catch(() => insert.run().catch(error => this.say({ev:'background-failed',error:errorLine(error)}))));
   }
 }
-
-export {Table};
-

@@ -171,6 +171,18 @@ test('runtime index upgrade preserves 0.54.0 rows and uses indexed expiry and pr
  }
 });
 
+test('Lobby imports the 0.54.0 snapshot once and writes only changed room rows',async t=>{
+ const {DatabaseSync}=await import('node:sqlite');const sql=new DatabaseSync(':memory:');t.after(()=>sql.close());
+ const {lobbyStore}=await import('../worker/lobby-store.mjs');
+ const old={current:{host:'server',ver:'v1'},next:{public:3},closed:[['pub-9',999]],rooms:[{name:'pub-1',players:2},{name:'pub-2',players:3}]};
+ let legacy=structuredClone(old),writes=[];
+ const storage={sql:{exec(q,...args){if(q.startsWith('INSERT'))writes.push(args);const s=sql.prepare(q);return {toArray:()=>s.all(...args),...(/^SELECT/.test(q)?{}:s.run(...args))};}},transactionSync(fn){sql.exec('BEGIN');try{const r=fn();sql.exec('COMMIT');return r;}catch(e){sql.exec('ROLLBACK');throw e;}},get:async()=>legacy,delete:async()=>{legacy=undefined;}};
+ const store=lobbyStore(storage);assert.deepEqual(await store.load(),old);assert.equal(legacy,undefined);
+ writes=[];store.save({...old,rooms:[old.rooms[0],{name:'pub-2',players:4}]});
+ assert.equal(writes.length,1);assert.equal(writes[0][0],'pub-2');
+ legacy={rooms:[]};const reopened=await lobbyStore(storage).load();
+ assert.equal(reopened.rooms.length,2);assert.equal(reopened.rooms[1].players,4);assert.deepEqual(reopened.next,old.next);
+});
 
 test('Stripe queue intake deduplicates durable events, and consumers acknowledge only reconciliation',async t=>{
  t.mock.timers.enable({apis:['Date'],now:1700000000000});
@@ -191,5 +203,116 @@ test('Stripe queue intake deduplicates durable events, and consumers acknowledge
  await consumeBackground({messages:[message]},env);assert.deepEqual(delays,[301]);assert.equal(ack,1);
  t.mock.timers.tick(301000);
  await consumeBackground({messages:[message]},env);assert.equal(ack,2);assert.equal(delays.length,1);
+});
+
+import {WatchSockets} from '../worker/watch-sockets.mjs';
+test('an idle watch resumes its authenticated context after eviction and removes it on close', async () => {
+ const values=new Map(),accepted=[],messages=[];let attachment;
+ const socket={serializeAttachment:value=>attachment=value,deserializeAttachment:()=>attachment,send:value=>messages.push(value),close:()=>{}};
+ const ctx={storage:{put:async(k,v)=>values.set(k,v),list:async()=>values,delete:async k=>values.delete(k)},acceptWebSocket:s=>accepted.push(s),getWebSockets:()=>accepted};
+ const request=new Request('https://room/__watch?game=cafe&room=public&chat='+ 'a'.repeat(4000),{headers:{'cf-connecting-ip':'192.0.2.1',cookie:'never-persist-this'}});
+ const original=new WatchSockets(ctx);await original.accept(socket,request);
+ assert.ok(JSON.stringify(attachment).length<100,'large policy stays outside the attachment limit');
+ assert.equal([...values.values()][0].headers.some(([k])=>k==='cookie'),false);
+ const restored=new WatchSockets(ctx);let restoredURL,closed=0;
+ await restored.restore(async(req,transport)=>{restoredURL=req.url;transport.addEventListener('message',e=>transport.send(e.data));transport.addEventListener('close',()=>closed++);});
+ assert.equal(restoredURL,request.url);assert.equal(accepted.length,1,'restoring does not accept an existing socket again');
+ restored.message(socket,'hello');assert.deepEqual(messages,['hello']);
+ await restored.close(socket);assert.equal(closed,1);assert.equal(values.size,0);
+});
+
+import {storeLobbySummary,liveRoomSummaries,LIVE_ROOMS_QUERY} from '../worker/lobby-summary.mjs';
+test('lobby snapshots reject queue reordering and share the initial metadata batch', async t => {
+ const DB=database(t),at=Date.now(),room={name:'pub-1',players:4,at};
+ await storeLobbySummary({DB},{game:'cafe',at,rooms:[room]});
+ await storeLobbySummary({DB},{game:'cafe',at:at-1000,rooms:[]});
+ let calls=0;const batch=DB.batch;DB.batch=async rows=>{calls++;return batch(rows);};
+ const env={BACKGROUND:{},DB:requestDatabase(DB,new Request('https://place.test/'),{mutated:false,summaries:true})};
+ await env.DB.prepare('SELECT game, launch, max_players, updated_at FROM office_games LIMIT 500').all();
+ assert.deepEqual((await liveRoomSummaries(env)).get('cafe'),[room]);assert.equal(calls,1);
+ await storeLobbySummary({DB},{game:'cafe',at:at+1,rooms:[]});
+ assert.deepEqual((await liveRoomSummaries({BACKGROUND:{},DB})).get('cafe'),[]);
+});
+
+import {idleChatSnapshot,restoreIdleChat,readIdleChat,writeIdleChat,expireIdleChat} from '../worker/idle-chat.mjs';
+test('hibernation retains the chat window, moderation buckets and acknowledged usage',()=>{
+ const original={room:{chatLog:[{id:'one',text:'hello'}],chatBuckets:new Map([['sender',{lastSayAt:-Infinity,tokens:0}]]),chatAddress:new Map([['address',{tokens:1}]]),chatReacts:[1],stats:{chatLines:1,chatHeld:{slow:2},bytesOut:50}},chatSent:{chatLines:1,held:{slow:2}},chatPend:{neurons:0.5,ok:0,held:0,error:0}};
+ const saved=idleChatSnapshot(original),restored={room:{stats:{bytesOut:0}},chatSent:{},chatPend:{}};
+ original.room.chatLog.length=0;restoreIdleChat(restored,saved);
+ assert.equal(restored.room.chatLog[0].text,'hello');assert.equal(restored.room.chatBuckets.get('sender').lastSayAt,-Infinity);
+ assert.equal(restored.room.chatAddress.get('address').tokens,1);assert.equal(restored.chatSent.chatLines,1);
+ assert.equal(restored.chatPend.neurons,0.5);assert.equal(restored.room.stats.bytesOut,0);
+});
+
+test('SQLite idle chat survives wake, keeps large moderation buckets and expires without readers',async t=>{
+ const {DatabaseSync}=await import('node:sqlite'),db=new DatabaseSync(':memory:');t.after(()=>db.close());
+ let alarm=null;const storage={sql:{exec:(query,...args)=>{const stmt=db.prepare(query);return {toArray:()=>stmt.all(...args),...(!/^SELECT/.test(query)?{done:stmt.run(...args)}:{})};}},getAlarm:async()=>alarm,setAlarm:async at=>{alarm=at;}};
+ const at=Date.now(),snapshot={at,buckets:new Map(Array.from({length:512},(_,i)=>[String(i),{lastText:'界'.repeat(280),lastSayAt:-Infinity}]))};
+ await writeIdleChat(storage,snapshot);const restored=await readIdleChat(storage);
+ assert.equal(restored.buckets.size,512);assert.equal(restored.buckets.get('1').lastSayAt,-Infinity);assert.equal(alarm,at+900000);
+ t.mock.timers.enable({apis:['Date'],now:at+900001});await expireIdleChat(storage);assert.equal(await readIdleChat(storage),null);
+});
+
+import {roomSessions,restoreRoomFields} from '../worker/room-sessions.mjs';
+test('room session snapshots retain identity and rates without serializing callbacks or sockets',async t=>{
+ const {DatabaseSync}=await import('node:sqlite'),db=new DatabaseSync(':memory:');t.after(()=>db.close());
+ const storage={sql:{exec:(query,...args)=>{const stmt=db.prepare(query);return {toArray:()=>stmt.all(...args),...(!/^SELECT/.test(query)?{done:stmt.run(...args)}:{})};}},transactionSync:fn=>{db.exec('BEGIN');try{fn();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}}};
+ const original={hostId:'client',seats:new Map([[0,{token:'resume'}]]),clients:new Map([['client',{id:'client',seat:0,caps:new Set(['chat']),rates:new Map([['say',{at:1}]]),conn:{send(){throw new Error('never serialize transport');}}}]]),watchers:new Set([{send(){}}]),now:Date.now,holdMs:Infinity};
+ const store=roomSessions(storage);assert.equal(store.read(),null);store.write(original);
+ const saved=roomSessions(storage).read(),restored={hostId:null,seats:new Map(),now:Date.now,holdMs:0};restoreRoomFields(restored,saved);
+ assert.equal(restored.hostId,'client');assert.equal(restored.seats.get(0).token,'resume');assert.equal(restored.holdMs,Infinity);
+ assert.equal(saved.clients.get('client').caps.has('chat'),true);assert.equal(saved.clients.get('client').rates.get('say').at,1);assert.equal(saved.clients.get('client').conn,undefined);
+ assert.equal(saved.fields.has('watchers'),false);assert.equal(typeof restored.now,'function');
+});
+
+import {encodeSession,decodeSession} from '../worker/session-codec.mjs';
+test('session encoding preserves arbitrary checkpoint keys without mistaking them for type markers',()=>{
+ const value={__roomMap:[['not','a map']],array:['m',[]],nested:new Map([[{__roomNumber:1},new Set([undefined,Infinity,-Infinity,NaN])]])};
+ assert.deepEqual(decodeSession(encodeSession(value)),value);
+});
+
+test('an expired empty room does not keep a recurring hibernation alarm',async()=>{
+ const {Table}=await import('../worker/table.mjs');let alarms=0,clears=0;
+ const table=Object.create(Table.prototype);table.canSleep=()=>true;
+ table.room={clients:new Map(),watchers:new Set(),emptySince:Date.now()-2000,forgetMs:1000};
+ table.sessionStore={clear:()=>clears++};table.ctx={storage:{getAlarm:async()=>null,setAlarm:async()=>alarms++}};
+ await table.sleepRoom();assert.equal(clears,1);assert.equal(alarms,0);
+});
+
+test('legacy snapshot traffic stays active without writing a hibernation snapshot per frame',async()=>{
+ const {Table}=await import('../worker/table.mjs');const table=Object.create(Table.prototype);
+ Object.assign(table,{hibernationReady:true,sessionStore:{},ctx:{storage:{sql:{}},acceptWebSocket(){}},room:{clients:new Map([['player',{}]]),lastSnap:null,lastRound:null}});
+ assert.ok(table.canSleep());
+ table.room.lastSnap={x:1};assert.equal(Boolean(table.canSleep()),false);
+ table.room.lastRound={phase:'waiting'};assert.ok(table.canSleep());
+ table.room.lastRound={phase:'live'};assert.equal(Boolean(table.canSleep()),false);
+ table.room.lastRound=null;table.room.clients.clear();assert.ok(table.canSleep());
+});
+
+test('idle controls checkpoint changes and retain failed office writes for restoration and retry',async()=>{
+ const [{Table},{NetRoom}]=await Promise.all([import('../worker/table.mjs'),import('../worker/room.mjs')]);
+ const table=Object.create(Table.prototype),room=new NetRoom({code:'idle'}),snapshots=[];let writes=0,failures=0;
+ room.clients.set('player',{helloed:true,lastSeen:Date.now(),conn:{}});
+ Object.assign(table,{room,canSleep:()=>true,storageProblem:()=>failures++,sessionStore:{write:r=>snapshots.push({dirty:r.officeDirty,agentsOut:r.agentsOut})},ctx:{storage:{put:async()=>{if(++writes===1)throw new Error('retry');},getAlarm:async()=>null,setAlarm:async()=>{}}}});
+ table.fetchRequest=async()=>{room.agentsOut={until:Date.now()+30000};room.officeDirty=true;return new Response(null,{status:204});};
+ assert.equal((await table.fetch(new Request('https://room/__office'))).status,204);
+ assert.equal(failures,1);assert.equal(snapshots[0].dirty,true);
+ const restored=new NetRoom({code:'idle'});
+ restoreRoomFields(restored,{fields:new Map([['officeDirty',true],['rawVocab',{words:['yes']}],['endedMatch',{tokens:new Set(['token'])}],['snapAt',new Map([[1,20]])]])});
+ assert.equal(restored.officeDirty,true);assert.deepEqual(restored.rawVocab,{words:['yes']});assert.ok(restored.endedMatch.tokens.has('token'));assert.equal(restored.snapAt.get(1),20);
+ await table.sleepRoom();assert.equal(writes,2);assert.equal(snapshots[1].dirty,false);
+ let cleared=0;table.sessionStore.clear=()=>cleared++;room.clients.clear();room.officeDirty=true;writes=0;
+ await table.sleepRoom();assert.equal(cleared,0);assert.equal(snapshots.at(-1).dirty,true);
+ await table.sleepRoom();assert.equal(cleared,1);
+});
+
+test('an alarm can restore a pending room snapshot after its final socket closes',async()=>{
+ const {Table}=await import('../worker/table.mjs');let ready,restored,started=0;
+ const rows=[{key:'version',value:'2'},{key:'table',value:encodeSession({game:'bench',code:'idle'})},{key:'room:seatCap',value:encodeSession(8)}];
+ const storage={getAlarm:async()=>null,get:async()=>null,list:async()=>new Map(),sql:{exec:query=>({toArray:()=>query==='SELECT key,value FROM room_sessions'?rows:[]})}};
+ const ctx={storage,getWebSockets:()=>[],blockConcurrencyWhile:fn=>ready=fn()};
+ const table=new Table(ctx,{});
+ table.roomFor=(...args)=>{restored=args;table.room={clients:new Map()};};table.start=()=>started++;table.say=()=>{};
+ await ready;assert.deepEqual(restored,['bench','idle',8]);assert.equal(started,1);
 });
 

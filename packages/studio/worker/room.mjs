@@ -53,6 +53,10 @@ export class NetRoom {
     this.agentsOut = null;
     /** Revision 7: the game's agents.json (the Table reads it once), the only words an AI here may say. */
     this.vocab = null;
+    this.rawVocab = null;
+    this.officeDirty = false;
+    this.endedMatch = null;
+    this.snapAt = new Map();
     this.code = code;
     this.rules = rules === true;
     this.tickHz = tickHz;
@@ -401,7 +405,7 @@ export class NetRoom {
   /* ------------------------------------------------------------ sockets */
 
   /** A new relay socket. Returns the two callbacks the transport must call. */
-  attach(conn) {
+  attach(conn, resume = null) {
     const now = this.now();
     const c = {
       id: randomId(6), conn, ip: conn.ip ?? null, browser: conn.browser ?? null, player: conn.player ?? null, via: conn.via ?? null, helloed: false, seat: null, token: null, name: '', typed: '', colour: 0,
@@ -422,6 +426,7 @@ export class NetRoom {
       // address, so a helper from before revisions carries it too) when the transport gives one, else the hello's.
       verWord: 'ver' in conn ? versionOf(conn.ver) : undefined, ver: null, feat: [], staleTold: false,
     };
+    if(resume)Object.assign(c,resume,{conn});
     this.clients.set(c.id, c);
     return {
       id: c.id,
@@ -974,7 +979,7 @@ export class NetRoom {
     const behind = !lite && this.currentVer !== undefined && c.ver !== this.currentVer;
     if (behind) c.staleTold = true;
     this.send(c, {
-      t: 'welcome', v: NET_VERSION, rev: NET_REVISION, id: c.id, room: this.code, seat: c.seat, token: c.token, name: c.name, colour: c.colour,
+      t: 'welcome', v: NET_VERSION, rev: NET_REVISION, ...(c.conn.idlePing ? {idlePing:true} : {}), id: c.id, room: this.code, seat: c.seat, token: c.token, name: c.name, colour: c.colour,
       ...(this.gameVer ? { ver: this.gameVer } : {}), ...(behind ? { stale: { ver: this.currentVer } } : {}), stall: this.stallMs,
       role, why, host: this.hostRef(), peers: this.peers(), ...(this.rules ? { held: this.heldPeers() } : {}), st: now, max: this.maxPlayers,
       round: this.lastRound, roster: this.lastRoster, snap: lite ? null : this.playerSnapshot(c, this.lastSnap, true), state: lite ? {} : this.stateObject(),
@@ -1345,18 +1350,19 @@ export class NetRoom {
   }
 
   /** Call every ~250 ms (setInterval locally, an alarm or the socket traffic on a Durable Object). */
-  tick() {
+  tick(idle = false) {
     const now = this.now();
     // Sockets that never said hello, or went silent (a slept phone, a half-open link): close them, and a seat
     // becomes a bot instead of a frozen body.
     for (const c of [...this.clients.values()]) {
+      c.lastSeen=Math.max(c.lastSeen,c.conn.lastPing?.()??0);
       if (!c.helloed) { if (now - c.joinedAt > 5000) { this.clients.delete(c.id); try { c.conn.close(4000, 'no-hello'); } catch { /* gone */ } } continue; }
       // A loopback (the Table's own house agent) cannot be half-open: it is never closed for silence.
       if (now - c.lastSeen > this.idleMs && !c.conn.loopback) this.kick(c, 'silent', 4000);
     }
     // A host that stopped sending snapshots while others are present.
     const h = this.host();
-    if (h && this.live().length > 1) {
+    if (!idle && h && this.live().length > 1) {
       const since = Math.max(h.lastSnapAt, this.hostSince, this.lastJoinAt);
       if (now - since > this.stallMs) {
         const next = this.elect(h.id, 'host-stalled');
