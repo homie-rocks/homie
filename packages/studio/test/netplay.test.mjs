@@ -1914,3 +1914,15 @@ test('deploy retires persisted rooms the current server build cannot run before 
   assert.notEqual(publicFresh.room, publicOld.room, 'public quick play also selects the current build');
 
 });
+
+test('negotiated idle heartbeats stay at the edge and live rounds retain clock pings',async t=>{
+ const {createNetplay}=await netplayKit(),clock=virtualTime(t),r=rig();t.after(r.stop);
+ let lastPing=0;const Base=r.socket({conn:{idlePing:true,lastPing:()=>lastPing}});
+ class EdgeSocket extends Base {send(text){if(text==='homie-ping'){this.sent.push(text);lastPing=Date.now();this.onmessage?.({data:'homie-pong'});}else super.send(text);}}
+ const net=createNetplay({config:cfg('idle'),WebSocketImpl:EdgeSocket,post:null,game:'x'});t.after(()=>net.close());
+ await clock.wait(25000);const socket=r.sockets[0];assert.equal(net.link,'online');
+ assert.ok(socket.sent.filter(x=>x==='homie-ping').length>=8);
+ assert.ok(socket.sent.filter(x=>x.startsWith('{"t":"ping"')).length<=2,'idle clock samples are infrequent');
+ net.round({n:1,phase:'live',start:Date.now(),end:Date.now()+60000});const from=socket.sent.length;
+ await clock.wait(6500);const live=socket.sent.slice(from);assert.ok(live.filter(x=>x.startsWith('{"t":"ping"')).length>=2);assert.equal(live.includes('homie-ping'),false);
+});
