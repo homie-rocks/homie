@@ -1,7 +1,7 @@
 import {authorized} from './auth.mjs';
 import {WorkflowEntrypoint,DurableObject} from 'cloudflare:workers';
 import {gunzipSync} from 'node:zlib';
-import {cloudflare,digest,upload,migrationManifest,migrateFresh} from './provider.mjs';
+import {cloudflare,digest,upload,health,migrationManifest,migrateFresh} from './provider.mjs';
 import {canonical,resolvePush,assertArtifact,assertPromotion,assertRollback} from './policy.mjs';
 import {synthetic} from './synthetic.mjs';
 const decode=archive=>JSON.parse(gunzipSync(Buffer.from(archive,'base64'),{maxOutputLength:60*1024*1024}));
@@ -24,7 +24,7 @@ export class Pipeline extends WorkflowEntrypoint {
  async run(event,step){
   const {tenant,commit}=resolvePush(event.payload,this.env.REGISTRY);
   const ledger=this.env.RELEASES.getByName(tenant.id);
-  await step.do('claim tenant preview',()=>ledger.begin(commit));
+  await step.do('claim tenant preview',{retries:{limit:60,delay:'30 seconds',backoff:'constant'},timeout:'1 minute'},()=>ledger.begin(commit));
   try{
    const sealed=await step.do('immutable remote build',{retries:{limit:0,delay:'1 second'},timeout:'12 minutes'},async()=>{
     const {artifact,archive}=await remote(this.env,tenant,commit,'build');
@@ -71,7 +71,12 @@ export class Releases extends DurableObject {
    // releases must have the exact operator-approved migration manifest.
    if(!current&&!await this.ctx.storage.get('productionMigrated')){await migrateFresh(api,tenant,'production',artifact);await this.ctx.storage.put('productionMigrated',true);}
    const receipt=await upload(api,tenant,'production',artifact);
-   const manifest={...release,stage:'live',bindings:receipt.bindings,bindingManifest:receipt.manifest,workerVersionId:null,providerDeploymentId:receipt.uploaded.deployment_id,at:Date.now(),previous:current?.commit??null};
+   let healthResult;
+   try{healthResult=await health(tenant.production.url,commit);}catch(error){
+    if(current){const restored=await upload(api,tenant,'production',await this.artifact(current.artifactDigest));await health(tenant.production.url,current.commit);await this.ctx.storage.put('production',{...current,providerDeploymentId:restored.uploaded.deployment_id,recoveredFrom:commit});await this.ctx.storage.delete('mutation');}
+    throw error;
+   }
+   const manifest={...release,stage:'live',health:healthResult,bindings:receipt.bindings,bindingManifest:receipt.manifest,workerVersionId:null,providerDeploymentId:receipt.uploaded.deployment_id,at:Date.now(),previous:current?.commit??null};
    await this.ctx.storage.put('release:'+commit,manifest);await this.ctx.storage.put('production',manifest);await this.ctx.storage.delete('mutation');return manifest;
   }catch(error){await this.ctx.storage.put('incident',{action:'promotion',error:error.message,at:Date.now()});throw error;}
  }
@@ -82,6 +87,7 @@ export class Releases extends DurableObject {
   try{
    const receipt=await upload(provider(this.env),tenant,'production',await this.artifact(target.artifactDigest));
    if(canonical(receipt.bindings)!==canonical(target.bindings))throw new Error('Rollback identity changed');
+   await health(tenant.production.url,targetCommit);
    const result={...target,workerVersionId:null,providerDeploymentId:receipt.uploaded.deployment_id,rollbackOf:current.commit,restoredFromDeploymentId:target.providerDeploymentId,rollbackMode:'reupload-sealed-bundle',...policy,at:Date.now()};
    await this.ctx.storage.put('production',result);await this.ctx.storage.put('rollback:'+Date.now(),result);await this.ctx.storage.delete('mutation');return result;
   }catch(error){await this.ctx.storage.put('incident',{action:'rollback',error:error.message,at:Date.now()});throw error;}

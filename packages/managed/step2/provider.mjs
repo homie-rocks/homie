@@ -31,3 +31,12 @@ export async function upload(api,tenant,environment,artifact){
  const bindings=await api(path+'/bindings');
  return {uploaded,bindings,manifest,migrations:migrationManifest(artifact)};
 }
+export async function health(url,commit){
+ if(!/^https:\/\/hm-s2-(dispatch|live)\.ryan-d2f\.workers\.dev$/.test(url))throw new Error('Test origin required');
+ for(let attempt=0;attempt<6;attempt++){
+  const r=await fetch(url+'/api/games?hm-s2='+Date.now(),{headers:{'cache-control':'no-cache'},redirect:'error',signal:AbortSignal.timeout(10000)});
+  if(r.ok){const j=await r.json();if(j.studio?.build?.commit===commit)return {ok:true,commit,at:Date.now()};}
+  if(attempt<5)await new Promise(resolve=>setTimeout(resolve,2000));
+ }
+ throw new Error('Deployed commit health check failed');
+}
