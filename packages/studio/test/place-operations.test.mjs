@@ -20,6 +20,9 @@ test('functions publish schema-checked named feed events once per idempotency ke
  await assert.rejects(()=>ctx.events.publish({feed:'bookings',id:'one',data:{slot:'afternoon'}}),/different/);
  await assert.rejects(()=>ctx.events.publish({feed:'bookings',id:'two',data:{secret:'x'}}),/schema/);
  await assert.rejects(()=>ctx.events.publish({feed:'other',id:'two',data:{slot:'morning'}}),/declared/);
+ DB.sql.exec('DELETE FROM studio_events');
+ await ctx.events.publish({feed:'bookings',id:'one',data:{slot:'morning'}});
+ assert.equal(DB.sql.prepare('SELECT count(*) n FROM studio_events').get().n,0,'deduplication survives feed pruning');
 });
 
 test('app holds and paid bookings consume one atomic capacity budget and enforce ownership',async t=>{
