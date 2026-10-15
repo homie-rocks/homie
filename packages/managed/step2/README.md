@@ -12,6 +12,7 @@ Provider references checked 2026-10-15:
 - https://developers.cloudflare.com/workers/ci-cd/builds/git-integration/artifacts-integration/
 - https://developers.cloudflare.com/containers/api/durable-object-container/
 - https://developers.cloudflare.com/containers/guides/image-management/
+- https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/reference/platform-examples/
 - https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/
 - https://developers.cloudflare.com/workers/versions-and-deployments/gradual-deployments/
 
@@ -57,6 +58,8 @@ SHA-256 and immutable Git commit. The platform pins Worker compatibility date
 based on digest-pinned Node 24.20.0; the runner additionally checks the exact Node
 version. Each job has a ten-minute container-destruction alarm, bounded command
 logs and artifact size, and a fresh filesystem. Every exit destroys the VM.
+The controller holds a documented `container.monitor()` promise to prevent
+eviction during long checks; the alarm still bounds the entire VM lifetime.
 There is no local-build fallback. Network access is needed for Git/npm; no
 credential-bearing proxy is exposed to repository processes.
 
