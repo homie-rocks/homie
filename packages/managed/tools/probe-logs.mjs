@@ -1,0 +1,3 @@
+import {api} from './cloud.mjs';import {writeFileSync} from 'node:fs';
+const [out]=process.argv.slice(2),query={queryId:'hm-test-round4',timeframe:{from:Date.now()-60*60*1000,to:Date.now()},view:'events',limit:100,parameters:{filters:[{key:'$metadata.service',type:'string',operation:'eq',value:'hm-test-inlet'}],limit:100}};
+try{const result=await api('workers/observability/telemetry/query','POST',query);writeFileSync(out,JSON.stringify({query,result},null,2));console.log(Object.keys(result));}catch(error){writeFileSync(out,JSON.stringify({query,error:String(error)},null,2));console.log(String(error));}

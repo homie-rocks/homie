@@ -172,3 +172,19 @@ test('disabled longest route never falls through to another tenant',async()=>{
  const r=memoryRegistry();await r.put('one',[{hostname:'test',prefix:'/'}]);await r.put('two',[{hostname:'test',prefix:'/nested'}]);await r.kill('two');
  assert.equal(resolveRoute(await r.snapshot(),'test','/nested/a'),null);
 });
+
+import {supervise} from './supervisor.mjs';
+test('supervisor refuses stopped owner construction and flushes alarm deletion before abort',async()=>{
+ const events=[];
+ class Owner {constructor(){assert.fail('stopped owner constructor ran');}}
+ const Room=supervise(Owner,{tenant:'hm-test-unit',binding:'ROOM',className:'Owner'});
+ const room=new Room({id:{toString:()=> 'a'.repeat(64)},getWebSockets:()=>[{close:()=>events.push('close')}],storage:{deleteAlarm:async()=>events.push('delete-alarm'),sync:async()=>events.push('sync')},abort(message,options){events.push('abort');assert.equal(options.retryAlarm,false);throw Error('reset');}}, {HOMIE_STOP:{status:async()=>({stopped:true})}});
+ await assert.rejects(room.fetch(new Request('https://test/')),/reset/);
+ assert.deepEqual(events,['close','delete-alarm','sync','abort']);
+});
+test('supervisor preserves native state identity and does not inherit owner RPC methods',async()=>{
+ const ctx={id:{toString:()=> 'b'.repeat(64)},getWebSockets:()=>[],storage:{setAlarm:async()=>{}},waitUntil:()=>{}};
+ class Owner {constructor(state){assert.equal(state,ctx)}fetch(){return new Response('ok')}unguarded(){assert.fail();}}
+ const Room=supervise(Owner,{tenant:'hm-test-unit',binding:'ROOM',className:'Owner'});const room=new Room(ctx,{HOMIE_STOP:{status:async()=>({stopped:false})}});
+ assert.equal(await (await room.fetch(new Request('https://test/'))).text(),'ok');assert.equal(room.unguarded,undefined);
+});

@@ -26,8 +26,11 @@ export default {
   }
   if(u.pathname==='/probe/bindings')return Response.json({bindings:Object.keys(env),props:ctx.props,cf:!!r.cf});
   if(u.pathname.startsWith('/probe/owner/')){u.pathname=u.pathname.replace('/probe/owner','');try{return await env.OWNER.getByName(u.searchParams.get('object')??'custom').fetch(new Request(u,r))}catch(error){return Response.json({ownerError:String(error)},{status:500})}}
-  if(u.pathname.startsWith('/probe/gate/')){u.pathname='/__diagnostics';return env.GATE.getByName('gate').fetch(new Request(u,r))}
-  if(u.pathname.startsWith('/probe/concentrator/')){u.pathname='/__diagnostics';return env.CONCENTRATOR.getByName('concentrator').fetch(new Request(u,r))}
+  for(const [path,binding] of [['gate','GATE'],['concentrator','CONCENTRATOR']])if(u.pathname.startsWith('/probe/'+path+'/')){
+   if(u.pathname.endsWith('/ws')){u.pathname='/__net';u.searchParams.set('game','race');u.searchParams.set('room','kill-'+path);u.searchParams.set('gate','0');u.searchParams.set('gates','2');u.searchParams.set('max','4');}
+   else u.pathname='/__diagnostics';
+   return env[binding].getByName('probe-'+path).fetch(new Request(u,r));
+  }
   return measured.fetch(r,env,ctx);
  },
  async scheduled(e,env,ctx){return measured.scheduled(e,env,ctx)}
