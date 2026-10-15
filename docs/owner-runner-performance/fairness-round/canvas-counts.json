@@ -1,0 +1,52 @@
+[
+  {
+    "file": "bmargin2fair1-lag300-loss0.05-jitter0-frames.json.gz",
+    "heuristicCatches": 2,
+    "canvasNoOverlapBeforeCatch": 1
+  },
+  {
+    "file": "bmargin2fair2-lag300-loss0.05-jitter0-frames.json.gz",
+    "heuristicCatches": 7,
+    "canvasNoOverlapBeforeCatch": 4
+  },
+  {
+    "file": "bmargin2fair3-lag300-loss0.05-jitter0-frames.json.gz",
+    "heuristicCatches": 5,
+    "canvasNoOverlapBeforeCatch": 3
+  },
+  {
+    "file": "bmargin2fair4-lag300-loss0.05-jitter0-frames.json.gz",
+    "heuristicCatches": 2,
+    "canvasNoOverlapBeforeCatch": 1
+  },
+  {
+    "file": "bmargin2fair5-lag300-loss0.05-jitter0-frames.json.gz",
+    "heuristicCatches": 3,
+    "canvasNoOverlapBeforeCatch": 1
+  },
+  {
+    "file": "cmargin2fair1-lag300-loss0.05-jitter0-frames.json.gz",
+    "heuristicCatches": 8,
+    "canvasNoOverlapBeforeCatch": 5
+  },
+  {
+    "file": "cmargin2fair2-lag300-loss0.05-jitter0-frames.json.gz",
+    "heuristicCatches": 8,
+    "canvasNoOverlapBeforeCatch": 6
+  },
+  {
+    "file": "cmargin2fair3-lag300-loss0.05-jitter0-frames.json.gz",
+    "heuristicCatches": 4,
+    "canvasNoOverlapBeforeCatch": 4
+  },
+  {
+    "file": "cmargin2fair4-lag300-loss0.05-jitter0-frames.json.gz",
+    "heuristicCatches": 5,
+    "canvasNoOverlapBeforeCatch": 3
+  },
+  {
+    "file": "cmargin2fair5-lag300-loss0.05-jitter0-frames.json.gz",
+    "heuristicCatches": 2,
+    "canvasNoOverlapBeforeCatch": 2
+  }
+]

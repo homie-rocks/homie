@@ -1,0 +1,288 @@
+
+> test
+> node --test tests/*.test.mjs
+
+TAP version 13
+# Subtest: the seeded draw is the original race draw, bit for bit
+ok 1 - the seeded draw is the original race draw, bit for bit
+  ---
+  duration_ms: 17.059083
+  type: 'test'
+  ...
+# Subtest: the server board and the original GameManager agree after every move of 400 seeded boards
+ok 2 - the server board and the original GameManager agree after every move of 400 seeded boards
+  ---
+  duration_ms: 1753.123084
+  type: 'test'
+  ...
+# Subtest: the bots policy picks the move the original port picked
+ok 3 - the bots policy picks the move the original port picked
+  ---
+  duration_ms: 745.111
+  type: 'test'
+  ...
+# \# 120 s at 300 ms each way with 5% of slides lost: 940 slides, 91 lost, 63 resends, 0 boards put right during the round; final score 6776
+# \# bots over a 120 s round: browser-host policy mean 683 (n=60); server rules mean 710 (n=60); ratio 1.038
+# \# eight people, 16 slides a tick each, 60 s: busiest tick 19240 of 500000 units (3.8%), busiest handler 650 (board.commands.slide)
+# Subtest: three rounds, on the same computer: every slide counts once, no board is ever put right, and round N+1 starts clean
+ok 4 - three rounds, on the same computer: every slide counts once, no board is ever put right, and round N+1 starts clean
+  ---
+  duration_ms: 1035.609583
+  type: 'test'
+  ...
+# Subtest: three rounds, 150 ms each way: every slide counts once, no board is ever put right, and round N+1 starts clean
+ok 5 - three rounds, 150 ms each way: every slide counts once, no board is ever put right, and round N+1 starts clean
+  ---
+  duration_ms: 605.973292
+  type: 'test'
+  ...
+# Subtest: three rounds, 300 ms each way with late frames: every slide counts once, no board is ever put right, and round N+1 starts clean
+ok 6 - three rounds, 300 ms each way with late frames: every slide counts once, no board is ever put right, and round N+1 starts clean
+  ---
+  duration_ms: 485.890542
+  type: 'test'
+  ...
+# Subtest: one slide in twenty never arrives, 300 ms each way: the waiting slides are sent again and nothing the player did is lost
+ok 7 - one slide in twenty never arrives, 300 ms each way: the waiting slides are sent again and nothing the player did is lost
+  ---
+  duration_ms: 109.179208
+  type: 'test'
+  ...
+# Subtest: slides apply in order, sixteen in one tick; a stale, repeated or out-of-turn slide changes nothing
+ok 8 - slides apply in order, sixteen in one tick; a stale, repeated or out-of-turn slide changes nothing
+  ---
+  duration_ms: 1.613625
+  type: 'test'
+  ...
+# Subtest: a full board: the next is dealt after 1.2 s by the server; a slide for it up to 0.5 s early deals it then, earlier is refused
+ok 9 - a full board: the next is dealt after 1.2 s by the server; a slide for it up to 0.5 s early deals it then, earlier is refused
+  ---
+  duration_ms: 12.362334
+  type: 'test'
+  ...
+# Subtest: nothing counts after the bell, and what the player sees settles on the server board within 0.6 s
+ok 10 - nothing counts after the bell, and what the player sees settles on the server board within 0.6 s
+  ---
+  duration_ms: 124.617708
+  type: 'test'
+  ...
+# Subtest: a person who takes a bot seat carries on its board and score; a person who leaves is played on by a bot
+ok 11 - a person who takes a bot seat carries on its board and score; a person who leaves is played on by a bot
+  ---
+  duration_ms: 10.117125
+  type: 'test'
+  ...
+# Subtest: a fifth player gets a fresh first board mid-round; a room restored from its save plays on the same
+ok 12 - a fifth player gets a fresh first board mid-round; a room restored from its save plays on the same
+  ---
+  duration_ms: 44.799666
+  type: 'test'
+  ...
+# Subtest: bots play at a person's pace and to the browser-host port's strength
+ok 13 - bots play at a person's pace and to the browser-host port's strength
+  ---
+  duration_ms: 475.807125
+  type: 'test'
+  ...
+# Subtest: a full room of eight, every person sending sixteen slides a tick: a tenth of the step budget, nothing cut
+ok 14 - a full room of eight, every person sending sixteen slides a tick: a tenth of the step budget, nothing cut
+  ---
+  duration_ms: 581.44725
+  type: 'test'
+  ...
+# Subtest: a future endpoint gets only bounded presentation time (3 ticks); silence remains vulnerable
+ok 15 - a future endpoint gets only bounded presentation time (3 ticks); silence remains vulnerable
+  ---
+  duration_ms: 9.8405
+  type: 'test'
+  ...
+# Subtest: a future endpoint gets only bounded presentation time (20 ticks); silence remains vulnerable
+ok 16 - a future endpoint gets only bounded presentation time (20 ticks); silence remains vulnerable
+  ---
+  duration_ms: 2.768459
+  type: 'test'
+  ...
+# Subtest: the live remote-human margin keeps shallow network contacts safe, deep contacts lethal, and trusted timing unchanged
+ok 17 - the live remote-human margin keeps shallow network contacts safe, deep contacts lethal, and trusted timing unchanged
+  ---
+  duration_ms: 6.093583
+  type: 'test'
+  ...
+# Subtest: cached monster drawing preserves every substep, older reads and rebirths
+ok 18 - cached monster drawing preserves every substep, older reads and rebirths
+  ---
+  duration_ms: 105.5585
+  type: 'test'
+  ...
+# Subtest: contact trail cache matches physics across repeated previews, old ticks and rebirths
+ok 19 - contact trail cache matches physics across repeated previews, old ticks and rebirths
+  ---
+  duration_ms: 5.862583
+  type: 'test'
+  ...
+# Subtest: a delayed dead snapshot draws the scheduled rebirth and its exact patrol without a confirmation snap
+ok 20 - a delayed dead snapshot draws the scheduled rebirth and its exact patrol without a confirmation snap
+  ---
+  duration_ms: 5.649125
+  type: 'test'
+  ...
+# Subtest: a gold crossed by an intermediate lag-switch report counts once even when the final report is beyond it
+ok 21 - a gold crossed by an intermediate lag-switch report counts once even when the final report is beyond it
+  ---
+  duration_ms: 22.626042
+  type: 'test'
+  ...
+# Subtest: an old intermediate side touch uses the current monster and catches before the last report can skip it
+ok 22 - an old intermediate side touch uses the current monster and catches before the last report can skip it
+  ---
+  duration_ms: 15.142166
+  type: 'test'
+  ...
+# Subtest: a silent owner does not repeat old substeps behind its stationary endpoint
+ok 23 - a silent owner does not repeat old substeps behind its stationary endpoint
+  ---
+  duration_ms: 1.389958
+  type: 'test'
+  ...
+# Subtest: historical monster trails exactly reproduce the original physics for two rounds
+ok 24 - historical monster trails exactly reproduce the original physics for two rounds
+  ---
+  duration_ms: 82.713708
+  type: 'test'
+  ...
+# \# 936 steps of seeded play from all eight spawn points, 263 key changes on any step: the server's runner is at most 0.0003 px from the original's
+# \# under the ceiling at spawn 3: jump 5.0000 tiles high, 0.783 s in the air (original 5.0000, 0.783); top speed 0.517 s after the key (original 0.517); stops in 1.3750 tiles (original 1.3750); a one-step tap moves 0.00833 tiles (original 0.00833), a whole tick 0.05000 (original 0.05000)
+# \# eight scripted runners for 14 s: server ["7:stomp:2","13:gold:0","28:gold:7","37:gold:5","47:caught:7"]; browser host ["7:stomp:2","13:gold:0","28:gold:7","37:gold:5","47:caught:7"]
+# \# four bots, one round: 29 gold, 19 stomps, 41 catches; scores 10,16,12,10
+# \# four bots over a 120 s round, 20 rooms each: browser host mean 10.19 points a bot; server rules mean 10.40; ratio 1.021
+# \# eight people for a whole round: busiest tick 9609 of 500000 units (1.9%), busiest handler 961 (room.start)
+# Subtest: the room runs at 20 ticks a second: one tick is three of the original 1/60 s steps
+ok 25 - the room runs at 20 ticks a second: one tick is three of the original 1/60 s steps
+  ---
+  duration_ms: 0.453458
+  type: 'test'
+  ...
+# Subtest: running, stopping, jumping and bumping walls: keys pressed and released on any 1/60 s step, the server within a thousandth of a tile of the original at every step
+ok 26 - running, stopping, jumping and bumping walls: keys pressed and released on any 1/60 s step, the server within a thousandth of a tile of the original at every step
+  ---
+  duration_ms: 204.442042
+  type: 'test'
+  ...
+# Subtest: the feel, in numbers: jump height and air time, time to top speed, stopping distance, a one-step tap
+ok 27 - the feel, in numbers: jump height and air time, time to top speed, stopping distance, a one-step tap
+  ---
+  duration_ms: 61.248791
+  type: 'test'
+  ...
+# Subtest: a tap of jump for a third of a tick still jumps, on its own step; a held jump hops again on landing, as the original does
+ok 28 - a tap of jump for a third of a tick still jumps, on its own step; a held jump hops again on landing, as the original does
+  ---
+  duration_ms: 42.145875
+  type: 'test'
+  ...
+# Subtest: a monster is where the tick it set off says, on the server and in a browser: every monster, every tick, through stomps and three round starts
+ok 29 - a monster is where the tick it set off says, on the server and in a browser: every monster, every tick, through stomps and three round starts
+  ---
+  duration_ms: 1639.40225
+  type: 'test'
+  ...
+# Subtest: stomps, gold and catches fall on the same tick as on the browser host, for eight scripted runners up to each one's first catch
+ok 30 - stomps, gold and catches fall on the same tick as on the browser host, for eight scripted runners up to each one's first catch
+  ---
+  duration_ms: 94.815125
+  type: 'test'
+  ...
+# Subtest: every point is one piece of gold or one stomp; a caught runner comes back on a spawn point, blinking for 1.5 s; nobody is ever inside a wall
+ok 31 - every point is one piece of gold or one stomp; a caught runner comes back on a spawn point, blinking for 1.5 s; nobody is ever inside a wall
+  ---
+  duration_ms: 546.465458
+  type: 'test'
+  ...
+# Subtest: three rounds: round N+1 starts with every runner on its spawn point at 0, every monster setting off, all the gold back
+ok 32 - three rounds: round N+1 starts with every runner on its spawn point at 0, every monster setting off, all the gold back
+  ---
+  duration_ms: 848.517875
+  type: 'test'
+  ...
+# Subtest: a person who takes a bot's runner starts from 0 where it stands, safe for 2 s; one who leaves is run on by a bot
+ok 33 - a person who takes a bot's runner starts from 0 where it stands, safe for 2 s; one who leaves is run on by a bot
+  ---
+  duration_ms: 15.922833
+  type: 'test'
+  ...
+# Subtest: a room restored from its save in the middle of a round plays on exactly the same
+ok 34 - a room restored from its save in the middle of a round plays on exactly the same
+  ---
+  duration_ms: 333.316667
+  type: 'test'
+  ...
+# Subtest: bots are as strong as they were on the browser host
+ok 35 - bots are as strong as they were on the browser host
+  ---
+  duration_ms: 7115.623584
+  type: 'test'
+  ...
+# Subtest: a full room of eight people running and jumping, with eight monsters and eight gold: a twentieth of the step budget, nothing cut
+ok 36 - a full room of eight people running and jumping, with eight monsters and eight gold: a twentieth of the step budget, nothing cut
+  ---
+  duration_ms: 404.871916
+  type: 'test'
+  ...
+# Subtest: a release that reaches the server late is replayed on its original tick without opposite input
+ok 37 - a release that reaches the server late is replayed on its original tick without opposite input
+  ---
+  duration_ms: 123.498083
+  type: 'test'
+  ...
+# Subtest: the view's predictor never reads the room: a read there makes the room step its clock in the middle of a replay
+ok 38 - the view's predictor never reads the room: a read there makes the room step its clock in the middle of a replay
+  ---
+  duration_ms: 0.879291
+  type: 'test'
+  ...
+# \# monsters over 120 s: 457 turns; the server's patrol (held to 1/4096 tile each tick) is at most 0.00872 tiles (0.279 px) from the original's
+# Subtest: src/level.ts is the original level.json: the tiles, eight monsters, eight pieces of gold
+ok 39 - src/level.ts is the original level.json: the tiles, eight monsters, eight pieces of gold
+  ---
+  duration_ms: 1.864458
+  type: 'test'
+  ...
+# Subtest: a runner: 600 seeded runs of 10 s each, every step the same as the original to the last bit
+ok 40 - a runner: 600 seeded runs of 10 s each, every step the same as the original to the last bit
+  ---
+  duration_ms: 169.673458
+  type: 'test'
+  ...
+# Subtest: the eight monsters: two minutes of patrol, every step the same as the original; held to 1/4096 tile a tick they stay within a hundredth of a tile
+ok 41 - the eight monsters: two minutes of patrol, every step the same as the original; held to 1/4096 tile a tick they stay within a hundredth of a tile
+  ---
+  duration_ms: 40.428375
+  type: 'test'
+  ...
+# Subtest: the box overlap and the stomp test are the original's, in tiles
+ok 42 - the box overlap and the stomp test are the original's, in tiles
+  ---
+  duration_ms: 20.125083
+  type: 'test'
+  ...
+# Subtest: the renderer, original movement and toolkit correction collide with the same tiles
+ok 43 - the renderer, original movement and toolkit correction collide with the same tiles
+  ---
+  duration_ms: 0.888833
+  type: 'test'
+  ...
+# Subtest: late movement replay cannot carry a stationary runner through the left ledge
+ok 44 - late movement replay cannot carry a stationary runner through the left ledge
+  ---
+  duration_ms: 1504.015459
+  type: 'test'
+  ...
+1..44
+# tests 44
+# suites 0
+# pass 44
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 12864.502458

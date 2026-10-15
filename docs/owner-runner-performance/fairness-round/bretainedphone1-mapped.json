@@ -1,0 +1,162 @@
+[
+  {
+    "name": " (idle)",
+    "ms": 153082.657
+  },
+  {
+    "name": " (program)",
+    "ms": 12764.891
+  },
+  {
+    "name": "../../../../../../games/tiny-platformer/src/view.ts:256 renderPlayers",
+    "ms": 758.449
+  },
+  {
+    "name": " (garbage collector)",
+    "ms": 666.816
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:270 fe",
+    "ms": 542.08
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:1045 meNow",
+    "ms": 522.594
+  },
+  {
+    "name": " ",
+    "ms": 491.491
+  },
+  {
+    "name": " fillText",
+    "ms": 466.146
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:666 flush",
+    "ms": 404.874
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:535 runPredict",
+    "ms": 388.016
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts:142 info",
+    "ms": 344.638
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/pack.ts:84 gt",
+    "ms": 317.191
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts:112 t",
+    "ms": 316.431
+  },
+  {
+    "name": " fillRect",
+    "ms": 307.199
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/map-index.ts:62 touches",
+    "ms": 297.052
+  },
+  {
+    "name": " requestAnimationFrame",
+    "ms": 255.195
+  },
+  {
+    "name": " send",
+    "ms": 232.554
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/guard.ts:48 own",
+    "ms": 226.34
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:1246 drawn",
+    "ms": 213.887
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/pack.ts:266 stepMove",
+    "ms": 211.482
+  },
+  {
+    "name": "../../../../../../games/tiny-platformer/src/sim.ts:30 stepEntity",
+    "ms": 207.113
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/netplay/netplay.ts:2351 onMessage",
+    "ms": 194.21
+  },
+  {
+    "name": "../../../../../../games/tiny-platformer/src/view.ts:322 render",
+    "ms": 186.893
+  },
+  {
+    "name": " querySelector",
+    "ms": 185.576
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:1282 each",
+    "ms": 177.657
+  },
+  {
+    "name": "../../../../../../games/tiny-platformer/src/view.ts:266 b",
+    "ms": 173.097
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:738 pumpOnce",
+    "ms": 160.79
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:198 ",
+    "ms": 150.726
+  },
+  {
+    "name": "../../../../../../games/tiny-platformer/src/view.ts:94 runner",
+    "ms": 150.449
+  },
+  {
+    "name": "../../../../../../games/tiny-platformer/src/view.ts:236 renderMap",
+    "ms": 149.176
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:1258 drawnRemote",
+    "ms": 148.555
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:779 applySnapshot",
+    "ms": 146.19
+  },
+  {
+    "name": "pptr:;CdpFrame.%3Canonymous%3E%20(file%3A%2F%2F%2FUsers%2Fryan%2FStudios%2Fhomie-arcade-rules%2Fnode_modules%2Fpuppeteer-core%2Flib%2Fpuppeteer%2Futil%2Fdecorators.js%3A101%3A27) window.__myScore",
+    "ms": 142.602
+  },
+  {
+    "name": "../../../../../../games/tiny-platformer/src/view.ts:392 frame",
+    "ms": 140.564
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts:127 d",
+    "ms": 139.368
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/map-index.ts:70 visit",
+    "ms": 136.589
+  },
+  {
+    "name": "../../../../../../games/tiny-platformer/src/move.ts:5 runner",
+    "ms": 131.981
+  },
+  {
+    "name": " setTransform",
+    "ms": 130.428
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/pack.ts:141 coerce",
+    "ms": 123.722
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/port/hud.ts:60 w",
+    "ms": 122.351
+  }
+]

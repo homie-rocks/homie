@@ -1,0 +1,162 @@
+[
+  {
+    "name": " (idle)",
+    "ms": 152118.72
+  },
+  {
+    "name": " (program)",
+    "ms": 12758.701
+  },
+  {
+    "name": "../../../../../../games/tiny-platformer/src/view.ts:257 renderPlayers",
+    "ms": 794.435
+  },
+  {
+    "name": " (garbage collector)",
+    "ms": 748.337
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:270 fe",
+    "ms": 607.457
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:1045 meNow",
+    "ms": 601.58
+  },
+  {
+    "name": " ",
+    "ms": 503.977
+  },
+  {
+    "name": " fillText",
+    "ms": 443.886
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:535 runPredict",
+    "ms": 435.393
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts:142 info",
+    "ms": 382.534
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:666 flush",
+    "ms": 380.202
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/map-index.ts:62 touches",
+    "ms": 350.384
+  },
+  {
+    "name": " fillRect",
+    "ms": 346.049
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/pack.ts:84 gt",
+    "ms": 328.707
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/guard.ts:48 own",
+    "ms": 316.298
+  },
+  {
+    "name": " requestAnimationFrame",
+    "ms": 283.947
+  },
+  {
+    "name": " send",
+    "ms": 254.889
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/pack.ts:266 stepMove",
+    "ms": 246.405
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:1246 drawn",
+    "ms": 239.151
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:1258 drawnRemote",
+    "ms": 234.727
+  },
+  {
+    "name": "../../../../../../games/tiny-platformer/src/view.ts:324 render",
+    "ms": 195.708
+  },
+  {
+    "name": "../../../../../../games/tiny-platformer/src/sim.ts:30 stepEntity",
+    "ms": 194.294
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts:112 t",
+    "ms": 185.461
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/netplay/netplay.ts:2351 onMessage",
+    "ms": 181.612
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:779 applySnapshot",
+    "ms": 179.126
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:1282 each",
+    "ms": 173.537
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:198 ",
+    "ms": 165.65
+  },
+  {
+    "name": "pptr:;CdpFrame.%3Canonymous%3E%20(file%3A%2F%2F%2FUsers%2Fryan%2FStudios%2Fhomie-arcade-rules%2Fnode_modules%2Fpuppeteer-core%2Flib%2Fpuppeteer%2Futil%2Fdecorators.js%3A101%3A27) window.__myScore",
+    "ms": 164.101
+  },
+  {
+    "name": "../../../../../../games/tiny-platformer/src/move.ts:5 runner",
+    "ms": 157.364
+  },
+  {
+    "name": " querySelector",
+    "ms": 152.91
+  },
+  {
+    "name": "../../../../../../games/tiny-platformer/src/view.ts:237 renderMap",
+    "ms": 151.769
+  },
+  {
+    "name": "../../../../../../games/tiny-platformer/src/view.ts:94 runner",
+    "ms": 150.593
+  },
+  {
+    "name": "../../../../../../games/tiny-platformer/src/view.ts:267 b",
+    "ms": 150.378
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:246 frameOf",
+    "ms": 142.097
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/pack.ts:141 coerce",
+    "ms": 141.242
+  },
+  {
+    "name": " setTransform",
+    "ms": 140.891
+  },
+  {
+    "name": "../../../../../../games/tiny-platformer/src/view.ts:394 frame",
+    "ms": 134.206
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/map-index.ts:70 visit",
+    "ms": 129.653
+  },
+  {
+    "name": "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:738 pumpOnce",
+    "ms": 129.439
+  },
+  {
+    "name": " setTimeout",
+    "ms": 128.396
+  }
+]

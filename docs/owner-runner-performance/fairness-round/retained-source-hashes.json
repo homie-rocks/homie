@@ -1,0 +1,8 @@
+{
+  "toolkit/rules/core.ts": "b0ee9693c239d74c11b83373ff0a923d466fa40fa0da58f698f19d4a25d2f5c0",
+  "toolkit/rules/view.ts": "f43145077a8c7928295a71c84f4c4955518dbd51865f17af988ffe17746c8b91",
+  "studio/src/rules.ts": "4d2f91e269b1cc945e80c3fcbf9afbf1da11021c3984deb20b04cb83d675f2f1",
+  "studio/src/view.ts": "edb9f30e6782cadd18664cfc8205dc111639055b802a0894a51a34c887c9a579",
+  "studio/src/move.ts": "8655af4e24bee16003a892697da6afe18ecf90e88e2ac5b292daad1db8fcecfc",
+  "studio/src/monster-view.ts": "552cb58204900f1174b0fc7f6c0b671c82632c5adca57b47835eb7d9dc2f767e"
+}

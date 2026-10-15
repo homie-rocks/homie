@@ -2758,6 +2758,31 @@ for (const stall of [3000,15000]) test(`validated owner recovers room clock afte
  a.command('point');await clock.wait(300);assert.equal(a.me.score,1,'score still confirms');
  assert.ok(Math.abs(globalThis.__homieNet.probe.prediction().tick-r.host.tick)<20,'clock is bounded');
 });
+test('a delayed owner placement starts fresh reports near arrival time without granting travel', async t => {
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),r=rig(L,compiled,false,300,300);
+ const a=openRoom({net:{config:cfg('Contact clock'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(4000);
+ a.input({ax:1});await clock.wait(500);a.input({ax:0});
+ a.command('respawn');await clock.wait(1500);
+ assert.equal(a.me.pos.x,0,'clock lead does not project away from the spawn');
+ a.input({ax:1});const ages=[];
+ for(let i=0;i<40;i++){
+   await clock.wait(50);
+   const id=r.host.core.listeners()[0].id;
+   for(const pose of r.host.core.world.movement(id)) ages.push(r.host.tick-pose.tick);
+ }
+ assert.ok(ages.length>20,'observed accepted movement, not just local predictions');
+ assert.ok(Math.max(...ages)<=3,`honest reports exceed the 150 ms contact window: ${ages}`);
+ assert.ok(Math.min(...ages)>=-3,`reports lead authority excessively: ${ages}`);
+ assert.ok(a.me.pos.x>7.8 && a.me.pos.x<8.2,'clock calibration keeps two seconds of physical travel');
+ assert.equal(r.host.core.stats.held,0);
+ const before=a.me, x=before.pos.x;
+ assert.ok(Object.isFrozen(before) && Object.isFrozen(before.motion));
+ await clock.wait(100);assert.notEqual(a.me.pos.x,before.pos.x);
+ assert.equal(before.pos.x,x,'a retained entity is a snapshot, not a mutable frame slot');
+});
+
 for(const drift of [.99,1.01])test(`validated owner clock tracks room at ${drift} clock rate`,async t=>{
  const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
  const clock=virtualTime(t),r=rig(L,compiled),start=clock.now();
@@ -2795,4 +2820,16 @@ test('remote presentation is shared within a frame and refreshed by snapshots',a
  document.timeline.currentTime=2;assert.notEqual(a.get(id),first);
  const second=a.get(id);await clock.wait(200);assert.notEqual(a.get(id),second);
  assert.ok(a.get(id).pos.x>second.pos.x);
+});
+
+test('an observer switches an owner placement at its sampled time, without interpolating across the map',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),r=rig(L,compiled),a=openRoom({net:{config:cfg('Placement viewer'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const b=openRoom({net:{config:cfg('Placed owner'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();b.close();r.stop();});await clock.wait(1000);b.input({ax:1});await clock.wait(1000);b.input({ax:0});await clock.wait(300);
+ const id=b.me.id,before=a.net.latest(),x=a.get(id).pos.x;
+ b.command('respawn');await clock.wait(300);const after=a.net.latest(),sample=a.net.sample;
+ t.after(()=>{a.net.sample=sample;});
+ a.net.sample=()=>({a:before,b:after,alpha:.5});assert.equal(a.get(id).pos.x,x,'before the placement tick the old revision remains');
+ a.net.sample=()=>({a:before,b:after,alpha:1});assert.equal(a.get(id).pos.x,0,'at the placement tick jump directly to spawn');
 });

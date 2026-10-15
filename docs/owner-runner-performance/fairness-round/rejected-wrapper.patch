@@ -1,0 +1,21 @@
+--- a/packages/studio/rules/view.ts
++++ b/packages/studio/rules/view.ts
+@@ -269,7 +269,17 @@
+   const entities = new WeakMap<Unpacked, Entity>();
+   const entityOf = (u: Unpacked, mine = false, cache = !mine): Entity => {
+     if (cache && entities.has(u)) return entities.get(u)!;
+-    const entity = Object.freeze({ id: u.id, kind: u.kind, pos: u.pos, vel: u.vel, heading: u.heading, grounded: u.grounded, ...(u.seat !== undefined ? { seat: u.seat, owner: u.owner, driver: u.driver, away: u.away, goal: u.goal } : {}), ...(mine ? { mine: true } : {}), ...u.fields, motion: Object.freeze({ ...u.motion }) }) as Entity;
++    // Build the public wrapper once. Conditional spreads created intermediate
++    // objects for every interpolated body and every own presentation.
++    const value: Record<string, unknown> = { id: u.id, kind: u.kind, pos: u.pos, vel: u.vel, heading: u.heading, grounded: u.grounded };
++    if (u.seat !== undefined) {
++      value.seat = u.seat; value.owner = u.owner; value.driver = u.driver;
++      value.away = u.away; value.goal = u.goal;
++    }
++    if (mine) value.mine = true;
++    Object.assign(value, u.fields);
++    value.motion = Object.freeze({ ...u.motion });
++    const entity = Object.freeze(value) as Entity;
+     if (cache) entities.set(u, entity);
+     return entity;
+   };

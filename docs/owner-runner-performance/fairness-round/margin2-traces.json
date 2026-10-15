@@ -1,0 +1,1849 @@
+[
+  {
+    "file": "bmargin2fair1-lag300-loss0.05-jitter0-frames.json.gz",
+    "events": [
+      {
+        "report": 131,
+        "judged": 142,
+        "monster": 3,
+        "born": 1,
+        "sub": 0,
+        "stationary": false,
+        "remote": true,
+        "runnerPos": {
+          "x": 31.983335494995117,
+          "y": 41,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 31.248876571655273,
+          "y": 41,
+          "z": 0
+        },
+        "at": {
+          "x": 60.5,
+          "y": 41.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 142,
+        "received": 1792051885411.5,
+        "ageTicks": 11,
+        "historyChoice": "current",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            12.70217461797374,
+            6
+          ],
+          [
+            23.921620387185506,
+            13
+          ],
+          [
+            34.543961020784245,
+            41
+          ],
+          [
+            30.916249293435506,
+            31
+          ],
+          [
+            40.03542657109874,
+            23
+          ],
+          [
+            7.168955784689496,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.7344589233398438
+        },
+        "ownReceiptS": 6.283,
+        "ownBeforeReceipt": [
+          26,
+          36.614017486572266
+        ],
+        "ownerAtReport": {
+          "tick": 130.35151013905252,
+          "viewTick": 126.9,
+          "runner": [
+            31.83413314819336,
+            41
+          ],
+          "monster": [
+            3,
+            34.543961020784245,
+            41
+          ],
+          "tickError": 0.018
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          2.33306884765625,
+          6199,
+          2,
+          35.549560546875,
+          41,
+          33.21649169921875,
+          41
+        ],
+        "ownNoOverlapWithin1150ms": true
+      },
+      {
+        "report": 1008,
+        "judged": 1008,
+        "monster": 3,
+        "born": 966,
+        "sub": 2,
+        "stationary": false,
+        "remote": true,
+        "runnerPos": {
+          "x": 32.88749694824219,
+          "y": 40.599666595458984,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 33.54931640625,
+          "y": 41,
+          "z": 0
+        },
+        "at": {
+          "x": 20.5,
+          "y": 31.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 1010,
+        "received": 1792051928812.9001,
+        "ageTicks": 2,
+        "historyChoice": "report",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            36.7771959406774,
+            6
+          ],
+          [
+            23.966693918959617,
+            13
+          ],
+          [
+            48.885952704183815,
+            26
+          ],
+          [
+            33.545499862814424,
+            41
+          ],
+          [
+            28.961811106459617,
+            31
+          ],
+          [
+            37.538560969274045,
+            23
+          ],
+          [
+            23.297222096665383,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.6618194580078125
+        },
+        "ownReceiptS": 49.681,
+        "ownBeforeReceipt": [
+          42.63261413574219,
+          37.78373718261719
+        ],
+        "ownerAtReport": {
+          "tick": 1008.0127218114519,
+          "viewTick": 984,
+          "runner": [
+            32.95649337768555,
+            40.493690490722656
+          ],
+          "monster": [
+            3,
+            33.545499862814424,
+            41
+          ],
+          "tickError": 0.013
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          0.589006485128877,
+          49780.59999990463,
+          3,
+          33.545499862814424,
+          41,
+          32.95649337768555,
+          40.493690490722656
+        ],
+        "ownNoOverlapWithin1150ms": false
+      }
+    ]
+  },
+  {
+    "file": "bmargin2fair2-lag300-loss0.05-jitter0-frames.json.gz",
+    "events": [
+      {
+        "report": 260,
+        "judged": 269,
+        "monster": 3,
+        "born": 1,
+        "sub": 2,
+        "stationary": false,
+        "remote": true,
+        "runnerPos": {
+          "x": 30.999996185302734,
+          "y": 41,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 30.250732421875,
+          "y": 41,
+          "z": 0
+        },
+        "at": {
+          "x": 60.5,
+          "y": 41.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 269,
+        "received": 1792051966070.7,
+        "ageTicks": 9,
+        "historyChoice": "current",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            25.3779296875,
+            6
+          ],
+          [
+            22.102783203125,
+            13
+          ],
+          [
+            53.232421875,
+            26
+          ],
+          [
+            27.55029296875,
+            41
+          ],
+          [
+            14.983154296875,
+            31
+          ],
+          [
+            36.58349609375,
+            23
+          ],
+          [
+            61.800048828125,
+            42
+          ],
+          [
+            19.695556640625,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.7492637634277344
+        },
+        "ownReceiptS": 12.733,
+        "ownBeforeReceipt": [
+          25.29489517211914,
+          36
+        ],
+        "ownerAtReport": {
+          "tick": 260,
+          "viewTick": 246,
+          "runner": [
+            30.799541473388672,
+            41
+          ],
+          "monster": [
+            3,
+            27.55029296875,
+            41
+          ],
+          "tickError": 0.0
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          1.1222095489501953,
+          12915.899999856949,
+          3,
+          28.150390625,
+          41,
+          29.272600173950195,
+          39.88124465942383
+        ],
+        "ownNoOverlapWithin1150ms": true
+      },
+      {
+        "report": 306,
+        "judged": 306,
+        "monster": 6,
+        "born": 1,
+        "sub": 1,
+        "stationary": false,
+        "remote": true,
+        "runnerPos": {
+          "x": 56.92917251586914,
+          "y": 42,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 57.58317184448242,
+          "y": 42,
+          "z": 0
+        },
+        "at": {
+          "x": 10.5,
+          "y": 6.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 308,
+        "received": 1792051968027.2,
+        "ageTicks": 2,
+        "historyChoice": "report",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            2.4781731172390384,
+            6
+          ],
+          [
+            21.145254190604383,
+            13
+          ],
+          [
+            51.54173856560439,
+            26
+          ],
+          [
+            36.30995074534342,
+            41
+          ],
+          [
+            24.140859659354383,
+            31
+          ],
+          [
+            34.15863488835091,
+            23
+          ],
+          [
+            57.516747335989045,
+            42
+          ],
+          [
+            28.853262003104383,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.6539993286132812
+        },
+        "ownReceiptS": 14.681,
+        "ownBeforeReceipt": [
+          61.60732650756836,
+          42
+        ],
+        "ownerAtReport": {
+          "tick": 305.7995131405219,
+          "viewTick": 282,
+          "runner": [
+            56.981689453125,
+            42
+          ],
+          "monster": [
+            6,
+            57.516747335989045,
+            42
+          ],
+          "tickError": 0.133
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          0.2551348303628913,
+          14780.599999904633,
+          6,
+          57.34750009525547,
+          42,
+          57.09236526489258,
+          41.81175994873047
+        ],
+        "ownNoOverlapWithin1150ms": false
+      },
+      {
+        "report": 426,
+        "judged": 426,
+        "monster": 0,
+        "born": 1,
+        "sub": 0,
+        "stationary": false,
+        "remote": true,
+        "runnerPos": {
+          "x": 19.508337020874023,
+          "y": 6,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 20.21126365661621,
+          "y": 6,
+          "z": 0
+        },
+        "at": {
+          "x": 10.5,
+          "y": 6.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 428,
+        "received": 1792051974177.7,
+        "ageTicks": 2,
+        "historyChoice": "report",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            20.286714335442184,
+            6
+          ],
+          [
+            26.932019718551874,
+            13
+          ],
+          [
+            51.68492364082313,
+            26
+          ],
+          [
+            27.69356180439031,
+            41
+          ],
+          [
+            19.930066593551874,
+            31
+          ],
+          [
+            42.174711445807816,
+            23
+          ],
+          [
+            59.507719258307816,
+            42
+          ],
+          [
+            21.176404484176874,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.7029266357421875
+        },
+        "ownReceiptS": 20.832,
+        "ownBeforeReceipt": [
+          11.052913665771484,
+          3.730776786804199
+        ],
+        "ownerAtReport": {
+          "tick": 425.18243070411563,
+          "viewTick": 412,
+          "runner": [
+            19.511198043823242,
+            6
+          ],
+          "monster": [
+            0,
+            20.286714335442184,
+            6
+          ],
+          "tickError": -0.151
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          0.02057958038520269,
+          20847,
+          0,
+          19.13752103241157,
+          6,
+          19.116941452026367,
+          6
+        ],
+        "ownNoOverlapWithin1150ms": false
+      },
+      {
+        "report": 478,
+        "judged": 478,
+        "monster": 0,
+        "born": 1,
+        "sub": 1,
+        "stationary": false,
+        "remote": true,
+        "runnerPos": {
+          "x": 5.983333587646484,
+          "y": 6,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 5.249837398529053,
+          "y": 6,
+          "z": 0
+        },
+        "at": {
+          "x": 50.5,
+          "y": 26.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 480,
+        "received": 1792051976628.4001,
+        "ageTicks": 2,
+        "historyChoice": "report",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            5.322927438207615,
+            6
+          ],
+          [
+            17.934219981437373,
+            13
+          ],
+          [
+            50.34469831903306,
+            26
+          ],
+          [
+            37.974072117673195,
+            41
+          ],
+          [
+            16.678926834658046,
+            31
+          ],
+          [
+            42.65061478347205,
+            23
+          ],
+          [
+            58.17707256179239,
+            42
+          ],
+          [
+            10.652860274716955,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.7334961891174316
+        },
+        "ownReceiptS": 23.282,
+        "ownBeforeReceipt": [
+          5.983333587646484,
+          2.0354886054992676
+        ],
+        "ownerAtReport": {
+          "tick": 477.8128470639152,
+          "viewTick": 464,
+          "runner": [
+            5.983333587646484,
+            6
+          ],
+          "monster": [
+            0,
+            5.322927438207615,
+            6
+          ],
+          "tickError": 0.146
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          0.01567988241103535,
+          23431.199999809265,
+          0,
+          5.99901347005752,
+          6,
+          5.983333587646484,
+          6
+        ],
+        "ownNoOverlapWithin1150ms": false
+      },
+      {
+        "report": 615,
+        "judged": 629,
+        "monster": 3,
+        "born": 1,
+        "sub": 1,
+        "stationary": false,
+        "remote": true,
+        "runnerPos": {
+          "x": 29.900001525878906,
+          "y": 41,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 29.350391387939453,
+          "y": 41,
+          "z": 0
+        },
+        "at": {
+          "x": 40.5,
+          "y": 38.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 629,
+        "received": 1792051984177.6,
+        "ageTicks": 14,
+        "historyChoice": "current",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            3.0402875931424096,
+            6
+          ],
+          [
+            26.900099412256964,
+            13
+          ],
+          [
+            53.2987514923745,
+            26
+          ],
+          [
+            26.070717158835063,
+            41
+          ],
+          [
+            23.897169724756964,
+            31
+          ],
+          [
+            34.45310825235063,
+            23
+          ],
+          [
+            59.078861811892416,
+            42
+          ],
+          [
+            17.631150587743036,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.5496101379394531
+        },
+        "ownReceiptS": 30.832,
+        "ownBeforeReceipt": [
+          19,
+          35.23924255371094
+        ],
+        "ownerAtReport": {
+          "tick": 614.6752841887152,
+          "viewTick": 601.7,
+          "runner": [
+            29.876977920532227,
+            41
+          ],
+          "monster": [
+            3,
+            26.070717158835063,
+            41
+          ],
+          "tickError": 0.009
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          3.0339889526367188,
+          30447,
+          3,
+          26.768707346462648,
+          41,
+          26.522932052612305,
+          37.96601104736328
+        ],
+        "ownNoOverlapWithin1150ms": true
+      },
+      {
+        "report": 805,
+        "judged": 818,
+        "monster": 3,
+        "born": 1,
+        "sub": 1,
+        "stationary": false,
+        "remote": true,
+        "runnerPos": {
+          "x": 32.30833435058594,
+          "y": 41,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 31.650928497314453,
+          "y": 41,
+          "z": 0
+        },
+        "at": {
+          "x": 40.5,
+          "y": 38.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 818,
+        "received": 1792051993526.2,
+        "ageTicks": 13,
+        "historyChoice": "current",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            13.828362113782303,
+            6
+          ],
+          [
+            26.73686804511208,
+            13
+          ],
+          [
+            51.53471960761207,
+            26
+          ],
+          [
+            27.797407893269387,
+            41
+          ],
+          [
+            27.73296179511208,
+            31
+          ],
+          [
+            36.4660714799677,
+            23
+          ],
+          [
+            58.66191924268855,
+            42
+          ],
+          [
+            18.24883093573708,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.6574058532714844
+        },
+        "ownReceiptS": 40.18,
+        "ownBeforeReceipt": [
+          19.567651748657227,
+          36
+        ],
+        "ownerAtReport": {
+          "tick": 804.8237164150646,
+          "viewTick": 791.93,
+          "runner": [
+            32.19385528564453,
+            41
+          ],
+          "monster": [
+            3,
+            27.797407893269387,
+            41
+          ],
+          "tickError": 0.157
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          1.4014633185804435,
+          39879.59999990463,
+          3,
+          28.790631484276002,
+          41,
+          30.192094802856445,
+          39.971221923828125
+        ],
+        "ownNoOverlapWithin1150ms": true
+      },
+      {
+        "report": 989,
+        "judged": 994,
+        "monster": 3,
+        "born": 1,
+        "sub": 2,
+        "stationary": false,
+        "remote": true,
+        "runnerPos": {
+          "x": 30.85000228881836,
+          "y": 41,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 30.150634765625,
+          "y": 41,
+          "z": 0
+        },
+        "at": {
+          "x": 30.5,
+          "y": 41.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 994,
+        "received": 1792052002577.3,
+        "ageTicks": 5,
+        "historyChoice": "current",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            28.41650390625,
+            6
+          ],
+          [
+            27.768310546875,
+            13
+          ],
+          [
+            50.2998046875,
+            26
+          ],
+          [
+            28.650390625,
+            41
+          ],
+          [
+            32.716796875,
+            31
+          ],
+          [
+            41.750244140625,
+            23
+          ],
+          [
+            19.49560546875,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.6993675231933594
+        },
+        "ownReceiptS": 49.231,
+        "ownBeforeReceipt": [
+          19.916179656982422,
+          36
+        ],
+        "ownerAtReport": {
+          "tick": 989,
+          "viewTick": 975.94,
+          "runner": [
+            30.748550415039062,
+            40.83754348754883
+          ],
+          "monster": [
+            3,
+            28.650390625,
+            41
+          ],
+          "tickError": 0.0
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          1.30450439453125,
+          48964.09999990463,
+          3,
+          28.950439453125,
+          41,
+          29.991485595703125,
+          39.69549560546875
+        ],
+        "ownNoOverlapWithin1150ms": true
+      }
+    ]
+  },
+  {
+    "file": "bmargin2fair3-lag300-loss0.05-jitter0-frames.json.gz",
+    "events": [
+      {
+        "report": 64,
+        "judged": 82,
+        "monster": 6,
+        "born": 1,
+        "sub": 2,
+        "stationary": true,
+        "remote": true,
+        "runnerPos": {
+          "x": 62,
+          "y": 42,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 61.25,
+          "y": 42,
+          "z": 0
+        },
+        "at": {
+          "x": 55.5,
+          "y": 6.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 82,
+        "received": 1792052032137.9,
+        "ageTicks": 18,
+        "historyChoice": "current",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            30.91650390625,
+            6
+          ],
+          [
+            23.43603515625,
+            13
+          ],
+          [
+            51.299560546875,
+            26
+          ],
+          [
+            27.248291015625,
+            41
+          ],
+          [
+            17.649169921875,
+            31
+          ],
+          [
+            41.250244140625,
+            23
+          ],
+          [
+            57.08349609375,
+            42
+          ],
+          [
+            20.43603515625,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.75
+        },
+        "ownReceiptS": 2.733,
+        "ownBeforeReceipt": [
+          51.86240005493164,
+          41
+        ],
+        "ownerAtReport": {
+          "tick": 64,
+          "viewTick": 53,
+          "runner": [
+            62,
+            42
+          ],
+          "monster": [
+            6,
+            57.08349609375,
+            42
+          ],
+          "tickError": 0.0
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          1.3960685729980469,
+          3626.4000000953674,
+          6,
+          57.27312079289084,
+          42,
+          58.458740234375,
+          40.60393142700195
+        ],
+        "ownNoOverlapWithin1150ms": true
+      },
+      {
+        "report": 200,
+        "judged": 200,
+        "monster": 0,
+        "born": 1,
+        "sub": 0,
+        "stationary": false,
+        "remote": true,
+        "runnerPos": {
+          "x": 21.741666793823242,
+          "y": 5.599666595458984,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 21.08316993713379,
+          "y": 6,
+          "z": 0
+        },
+        "at": {
+          "x": 40.5,
+          "y": 38.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 202,
+        "received": 1792052038114.2,
+        "ageTicks": 2,
+        "historyChoice": "report",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            21.036870312779968,
+            6
+          ],
+          [
+            34.25165812488801,
+            13
+          ],
+          [
+            36.523880000167985,
+            41
+          ],
+          [
+            23.250681562388014,
+            31
+          ],
+          [
+            33.31153178093767,
+            23
+          ],
+          [
+            58.79613749972003,
+            42
+          ],
+          [
+            7.546681718861987,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.6584968566894531
+        },
+        "ownReceiptS": 8.715,
+        "ownBeforeReceipt": [
+          17.609886169433594,
+          4.1587018966674805
+        ],
+        "ownerAtReport": {
+          "tick": 199.24073281305994,
+          "viewTick": 186.4,
+          "runner": [
+            21.741018295288086,
+            5.584743022918701
+          ],
+          "monster": [
+            0,
+            21.036870312779968,
+            6
+          ],
+          "tickError": -0.093
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          0.7041479825081183,
+          9359.299999952316,
+          0,
+          21.036870312779968,
+          6,
+          21.741018295288086,
+          5.584743022918701
+        ],
+        "ownNoOverlapWithin1150ms": false
+      },
+      {
+        "report": 681,
+        "judged": 681,
+        "monster": 3,
+        "born": 670,
+        "sub": 0,
+        "stationary": false,
+        "remote": true,
+        "runnerPos": {
+          "x": 35.116668701171875,
+          "y": 41,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 34.550193786621094,
+          "y": 41,
+          "z": 0
+        },
+        "at": {
+          "x": 10.5,
+          "y": 6.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 684,
+        "received": 1792052062220.2,
+        "ageTicks": 3,
+        "historyChoice": "report",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            29.085471991862676,
+            6
+          ],
+          [
+            20.31978449987007,
+            13
+          ],
+          [
+            52.115927077995075,
+            26
+          ],
+          [
+            15.31734309362007,
+            31
+          ],
+          [
+            41.419212226237676,
+            23
+          ],
+          [
+            60.71514171985626,
+            42
+          ],
+          [
+            30.76045832799507,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.5664749145507812
+        },
+        "ownReceiptS": 32.815,
+        "ownBeforeReceipt": [
+          34.369972229003906,
+          36.41801452636719
+        ],
+        "ownerAtReport": {
+          "tick": 680.3379361712254,
+          "viewTick": 664,
+          "runner": [
+            35.1113395690918,
+            41
+          ],
+          "monster": null,
+          "tickError": 0.005
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          0.09469985961914062,
+          33841.5,
+          3,
+          37.150634765625,
+          41,
+          37.24533462524414,
+          41
+        ],
+        "ownNoOverlapWithin1150ms": false
+      },
+      {
+        "report": 756,
+        "judged": 763,
+        "monster": 0,
+        "born": 1,
+        "sub": 1,
+        "stationary": true,
+        "remote": true,
+        "runnerPos": {
+          "x": 5.850001335144043,
+          "y": 6,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 6.544596195220947,
+          "y": 6,
+          "z": 0
+        },
+        "at": {
+          "x": 30.5,
+          "y": 41.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 763,
+        "received": 1792052066168,
+        "ageTicks": 7,
+        "historyChoice": "current",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            9.979817967616386,
+            6
+          ],
+          [
+            35.301668169633054,
+            13
+          ],
+          [
+            52.588168128126796,
+            26
+          ],
+          [
+            29.989355313180173,
+            41
+          ],
+          [
+            30.405338437953446,
+            31
+          ],
+          [
+            35.31306992074139,
+            23
+          ],
+          [
+            57.85188828011639,
+            42
+          ],
+          [
+            28.051936952671554,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.6945948600769043
+        },
+        "ownReceiptS": 36.763,
+        "ownBeforeReceipt": [
+          5.850001335144043,
+          5.010705471038818
+        ],
+        "ownerAtReport": {
+          "tick": 755.7962234397672,
+          "viewTick": 743.12,
+          "runner": [
+            5.850001335144043,
+            6
+          ],
+          "monster": [
+            0,
+            9.979817967616386,
+            6
+          ],
+          "tickError": 0.13
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          1.8013210882392627,
+          37424.10000014305,
+          0,
+          7.651322423383306,
+          6,
+          5.850001335144043,
+          4.294086456298828
+        ],
+        "ownNoOverlapWithin1150ms": true
+      },
+      {
+        "report": 1099,
+        "judged": 1112,
+        "monster": 3,
+        "born": 670,
+        "sub": 1,
+        "stationary": false,
+        "remote": true,
+        "runnerPos": {
+          "x": 28.675003051757812,
+          "y": 40.599666595458984,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 27.950244903564453,
+          "y": 41,
+          "z": 0
+        },
+        "at": {
+          "x": 3.5,
+          "y": 15.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 1112,
+        "received": 1792052083618,
+        "ageTicks": 13,
+        "historyChoice": "current",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            5.708173903594344,
+            6
+          ],
+          [
+            28.233855498937736,
+            13
+          ],
+          [
+            52.69821096768774,
+            26
+          ],
+          [
+            26.373093704718393,
+            41
+          ],
+          [
+            15.233367217687737,
+            31
+          ],
+          [
+            42.50281464498244,
+            23
+          ],
+          [
+            59.783379052825836,
+            42
+          ],
+          [
+            32.49343942293726,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.7247581481933594
+        },
+        "ownReceiptS": 54.213,
+        "ownBeforeReceipt": [
+          19,
+          35.013343811035156
+        ],
+        "ownerAtReport": {
+          "tick": 1098.5833399946887,
+          "viewTick": 1085.68,
+          "runner": [
+            28.723495483398438,
+            40.67732238769531
+          ],
+          "monster": [
+            3,
+            26.373093704718393,
+            41
+          ],
+          "tickError": -0.083
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          2.1131629943847656,
+          54407.5,
+          3,
+          26,
+          41,
+          27.459394454956055,
+          38.886837005615234
+        ],
+        "ownNoOverlapWithin1150ms": true
+      }
+    ]
+  },
+  {
+    "file": "bmargin2fair4-lag300-loss0.05-jitter0-frames.json.gz",
+    "events": [
+      {
+        "report": 72,
+        "judged": 84,
+        "monster": 6,
+        "born": 1,
+        "sub": 2,
+        "stationary": false,
+        "remote": true,
+        "runnerPos": {
+          "x": 62,
+          "y": 41.58666229248047,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 62,
+          "y": 42,
+          "z": 0
+        },
+        "at": {
+          "x": 40.5,
+          "y": 38.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 84,
+        "received": 1792052108378.5,
+        "ageTicks": 12,
+        "historyChoice": "current",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            34.91650390625,
+            6
+          ],
+          [
+            21.83642578125,
+            13
+          ],
+          [
+            49.699951171875,
+            26
+          ],
+          [
+            26.18359375,
+            41
+          ],
+          [
+            19.248779296875,
+            31
+          ],
+          [
+            42.4892578125,
+            23
+          ],
+          [
+            56.755615234375,
+            42
+          ],
+          [
+            18.83642578125,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.41333770751953125
+        },
+        "ownReceiptS": 2.984,
+        "ownBeforeReceipt": [
+          55.90662384033203,
+          40.027584075927734
+        ],
+        "ownerAtReport": {
+          "tick": 72,
+          "viewTick": 66,
+          "runner": [
+            62,
+            41.74654006958008
+          ],
+          "monster": [
+            6,
+            56.755615234375,
+            42
+          ],
+          "tickError": 0.0
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          1.3855628967285156,
+          3840.2999999523163,
+          6,
+          59.37987194469678,
+          42,
+          60.55721664428711,
+          40.614437103271484
+        ],
+        "ownNoOverlapWithin1150ms": true
+      },
+      {
+        "report": 236,
+        "judged": 246,
+        "monster": 3,
+        "born": 1,
+        "sub": 2,
+        "stationary": false,
+        "remote": true,
+        "runnerPos": {
+          "x": 27.829166412353516,
+          "y": 41,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 27.04833984375,
+          "y": 41,
+          "z": 0
+        },
+        "at": {
+          "x": 50.5,
+          "y": 26.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 246,
+        "received": 1792052116881.9001,
+        "ageTicks": 10,
+        "historyChoice": "current",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            36.451448691763765,
+            6
+          ],
+          [
+            26.927343885333197,
+            13
+          ],
+          [
+            52.51592098333444,
+            26
+          ],
+          [
+            30.087549031124794,
+            41
+          ],
+          [
+            15.9263673228332,
+            31
+          ],
+          [
+            38.609375338333,
+            23
+          ],
+          [
+            57.814453463333,
+            42
+          ],
+          [
+            14.8709959584168,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.7808265686035156
+        },
+        "ownReceiptS": 11.484,
+        "ownBeforeReceipt": [
+          19,
+          35.160003662109375
+        ],
+        "ownerAtReport": {
+          "tick": 235.871093073334,
+          "viewTick": 223.1,
+          "runner": [
+            27.862422943115234,
+            41
+          ],
+          "monster": [
+            3,
+            30.087549031124794,
+            41
+          ],
+          "tickError": -0.129
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          4,
+          12507.699999809265,
+          4,
+          15.436907229592224,
+          31,
+          19,
+          35
+        ],
+        "ownNoOverlapWithin1150ms": true
+      }
+    ]
+  },
+  {
+    "file": "bmargin2fair5-lag300-loss0.05-jitter0-frames.json.gz",
+    "events": [
+      {
+        "report": 137,
+        "judged": 154,
+        "monster": 3,
+        "born": 1,
+        "sub": 2,
+        "stationary": false,
+        "remote": true,
+        "runnerPos": {
+          "x": 28.108333587646484,
+          "y": 41,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 27.4482421875,
+          "y": 41,
+          "z": 0
+        },
+        "at": {
+          "x": 60.5,
+          "y": 41.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 154,
+        "received": 1792052186708.8,
+        "ageTicks": 17,
+        "historyChoice": "current",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            9.3779296875,
+            6
+          ],
+          [
+            25.2509765625,
+            13
+          ],
+          [
+            32.549072265625,
+            41
+          ],
+          [
+            32.24560546875,
+            31
+          ],
+          [
+            36.711181640625,
+            23
+          ],
+          [
+            56.033447265625,
+            42
+          ],
+          [
+            5.839599609375,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.6600914001464844
+        },
+        "ownReceiptS": 7.117,
+        "ownBeforeReceipt": [
+          19.591047286987305,
+          36
+        ],
+        "ownerAtReport": {
+          "tick": 137,
+          "viewTick": 133.12,
+          "runner": [
+            28.03285026550293,
+            41
+          ],
+          "monster": [
+            3,
+            32.549072265625,
+            41
+          ],
+          "tickError": 0.0
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          4.2609378675386935,
+          7081.599999904633,
+          2,
+          30.260937867538694,
+          41,
+          26,
+          36.751216888427734
+        ],
+        "ownNoOverlapWithin1150ms": true
+      },
+      {
+        "report": 824,
+        "judged": 833,
+        "monster": 3,
+        "born": 704,
+        "sub": 2,
+        "stationary": false,
+        "remote": true,
+        "runnerPos": {
+          "x": 34.1875,
+          "y": 41,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 34.6494140625,
+          "y": 41,
+          "z": 0
+        },
+        "at": {
+          "x": 20.5,
+          "y": 31.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 833,
+        "received": 1792052220408.2,
+        "ageTicks": 9,
+        "historyChoice": "current",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            23.422676909842096,
+            6
+          ],
+          [
+            22.90011868918816,
+            13
+          ],
+          [
+            49.10638206052797,
+            26
+          ],
+          [
+            37.22701981470343,
+            41
+          ],
+          [
+            23.89621243918816,
+            31
+          ],
+          [
+            36.256417144217096,
+            23
+          ],
+          [
+            56.20180307295263,
+            42
+          ],
+          [
+            14.412081579813162,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.4619140625
+        },
+        "ownReceiptS": 40.815,
+        "ownBeforeReceipt": [
+          45.96330261230469,
+          39
+        ],
+        "ownerAtReport": {
+          "tick": 824.0123460071842,
+          "viewTick": 805,
+          "runner": [
+            34.20669937133789,
+            41
+          ],
+          "monster": [
+            3,
+            37.22701981470343,
+            41
+          ],
+          "tickError": 0.012
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          1.037655586800355,
+          40696.59999990463,
+          3,
+          36.73838495691754,
+          41,
+          35.70072937011719,
+          40.19621276855469
+        ],
+        "ownNoOverlapWithin1150ms": true
+      },
+      {
+        "report": 1240,
+        "judged": 1240,
+        "monster": 4,
+        "born": 1234,
+        "sub": 2,
+        "stationary": false,
+        "remote": true,
+        "runnerPos": {
+          "x": 18.891666412353516,
+          "y": 31,
+          "z": 0
+        },
+        "monsterPos": {
+          "x": 19.66015625,
+          "y": 31,
+          "z": 0
+        },
+        "at": {
+          "x": 3.5,
+          "y": 15.5,
+          "z": 0
+        },
+        "id": "ei",
+        "tick": 1242,
+        "received": 1792052241258,
+        "ageTicks": 2,
+        "historyChoice": "report",
+        "spriteSizeTiles": 1,
+        "collisionSizeTiles": 0.96875,
+        "sideInsetTiles": 0.1875,
+        "ownerPaintedMonstersAtReport": [
+          [
+            1.0185042653686878,
+            6
+          ],
+          [
+            18.660196843991482,
+            13
+          ],
+          [
+            49.20138068038542,
+            26
+          ],
+          [
+            29.061953326587126,
+            41
+          ],
+          [
+            38.93553093493688,
+            23
+          ],
+          [
+            56.205659280481065,
+            42
+          ],
+          [
+            4.209430204150249,
+            6
+          ]
+        ],
+        "contactSeparation": {
+          "max": 0.7684898376464844
+        },
+        "ownReceiptS": 61.663,
+        "ownBeforeReceipt": [
+          18.891666412353516,
+          31
+        ],
+        "ownerAtReport": {
+          "tick": 1240.0380540573738,
+          "viewTick": 1227.12,
+          "runner": [
+            18.891666412353516,
+            31
+          ],
+          "monster": null,
+          "tickError": 0.038
+        },
+        "nearestVisibleMonsterBeforeReceipt": [
+          0.4640614504725349,
+          61746.39999985695,
+          4,
+          18.42760496188098,
+          31,
+          18.891666412353516,
+          31
+        ],
+        "ownNoOverlapWithin1150ms": false
+      }
+    ]
+  }
+]

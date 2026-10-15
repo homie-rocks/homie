@@ -396,6 +396,14 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const relayRtt = net.stats().rtt ?? 100;
     return net.offline ? 0 : Math.max(relayRtt, 2 * hostMedian);
   }
+  function ownerArrivalLead(): number {
+    // A queued snapshot's age is not the next packet's transit time. Use its
+    // actual downstream age plus the low end of recent transit observations
+    // for the upstream leg; TCP recovery must not inflate every future stamp.
+    const age = hostAges.at(-1) ?? 0;
+    const transit = hostAges.length ? quantile(hostAges, .05) : authorityRtt() / 2;
+    return Math.max(0, Math.min(tickHz - 2, (age + transit) / period - 1));
+  }
   function phaseAt(at: number): number {
     let p = phases[0];
     for (let i = phases.length - 1; i >= 0; i--) if (phases[i].at <= at) { p = phases[i]; break; }
@@ -420,15 +428,21 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if(reason==='placement' || reason==='epoch')pulseQueue.length=0;
     correction.rebaseReason = reason; correction.rebaseError = medianLead() - targetLead();
     const validated = myKind()?.validatedOwner;
-    if (validated) ownerBaseTick = k;
     const rtt = authorityRtt(); calibratedRtt = rtt;
     // Lead samples refer to the clock which stamped them. Do not mix its offset with this clock's jitter.
     const target = targetLead();
     leads.length = 0; leadTarget = .5; leadMedian = 0;
     leadAfter = clock() + 2 * rtt + period;
     base = { tick: continuousTick ?? k + Math.min(tickHz, Math.ceil(rtt / period + target) + sendEvery - 1), at: clock() };
-    if (validated) base = {tick:k,at:clock()};
-    stepped = validated ? k : Math.max(k, Math.floor(base.tick) - (continuousTick === null ? 1 : 0));
+    if (validated) {
+      // A placement arrives one downstream trip after k; its next report takes
+      // another upstream trip. Start the report clock at that arrival time,
+      // without simulating any travel from the placement. The validator checks
+      // one physical step from this fresh baseline, not the skipped clock gap.
+      ownerBaseTick = k + Math.floor(ownerArrivalLead());
+      base = {tick:ownerBaseTick,at:clock()};
+    }
+    stepped = validated ? ownerBaseTick : Math.max(k, Math.floor(base.tick) - (continuousTick === null ? 1 : 0));
     entries = []; sentHistory = []; controlChanges = []; pending = []; history.clear(); replayHeld = {}; serverHeld = {}; held = {}; lastSent = ''; leads.length = 0; leadTarget = .5; leadMedian = 0; pressed = new Map(); pulseNumber = new Map(); heldTrack.clear(); if (reason !== 'lead') dropPredictions();
     speed = 1; phases.length = 0; phases.push({ ...base, rate: 1 }); catchTick = null; offsets = []; headingBlend = null; correction.rebases += 1;
     const u = mine && latest?.ents.get(mine.id); if (u) adopt(u);
@@ -807,7 +821,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         if (kindOf.get(me.kind)?.validatedOwner) {
           pending = pending.filter(e=>!applications.has(e.seq!));
           const now = clock();
-          const error = tickAt(now) - (f.k + authorityRtt() / (2 * period));
+          const error = tickAt(now) - (f.k + ownerArrivalLead());
           // Snapshots acknowledge the room clock even when no input was accepted.
           // Small drift changes cadence, never the pose. Ahead-of-room reports
           // outside the validation window cause an explicit placement revision.
@@ -1247,9 +1261,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const b = s ? frameOf(s.b) : latest;
     const ea = a?.ents.get(id); const eb = b?.ents.get(id);
     if (!ea || !eb) return ea ? entityOf(ea) : eb && s && s.alpha >= 1 ? entityOf(eb) : eb && !a?.ents.size ? entityOf(eb) : null;
-    // A placed body jumps: nobody's view glides across a placement.
-    if (ea.r !== eb.r || a?.e !== b?.e || !s) return entityOf(eb);
     const kind = kindOf.get(eb.kind);
+    // A placed body jumps, never glides across the map. An observer's owner
+    // body must reach that snapshot's time before showing its new revision;
+    // otherwise the respawn precedes the encounter in the interpolated scene.
+    if (ea.r !== eb.r || a?.e !== b?.e || !s) return entityOf(kind?.validatedOwner && s && s.alpha < 1 && a?.e === b?.e ? ea : eb);
     // A recovered owner can deliver seconds of validated travel in one batch.
     // Cut that discontinuity instead of playing it at packet delivery speed.
     if (kind?.validatedOwner && a && b && distance(ea.pos,eb.pos) > Math.max(kind.radius * 4, Math.max(Math.hypot(ea.vel.x,ea.vel.y,ea.vel.z),Math.hypot(eb.vel.x,eb.vel.y,eb.vel.z)) * (b.k-a.k) / tickHz * 1.5)) return entityOf(eb);

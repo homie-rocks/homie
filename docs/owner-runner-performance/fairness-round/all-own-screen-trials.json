@@ -1,0 +1,1038 @@
+[
+  {
+    "tag": "balignedfair1",
+    "seconds": 61.497,
+    "frames": 3691,
+    "catches": 4,
+    "catchesWithNoMonsterOnScreen": 4,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      8.6,
+      8.4,
+      9.9
+    ]
+  },
+  {
+    "tag": "balignedfair2",
+    "seconds": 61.53070000004768,
+    "frames": 3693,
+    "catches": 2,
+    "catchesWithNoMonsterOnScreen": 2,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      11.3,
+      9.3,
+      10.1
+    ]
+  },
+  {
+    "tag": "balignedfair3",
+    "seconds": 61.56440000009537,
+    "frames": 3693,
+    "catches": 1,
+    "catchesWithNoMonsterOnScreen": 1,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      11.3,
+      9.7,
+      10.2
+    ]
+  },
+  {
+    "tag": "balignedfair4",
+    "seconds": 61.578299999952314,
+    "frames": 3696,
+    "catches": 4,
+    "catchesWithNoMonsterOnScreen": 2,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      9.9,
+      9.7,
+      10.1
+    ]
+  },
+  {
+    "tag": "balignedfair5",
+    "seconds": 61.51519999980926,
+    "frames": 3692,
+    "catches": 3,
+    "catchesWithNoMonsterOnScreen": 2,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      17.2,
+      11.5,
+      10.7
+    ]
+  },
+  {
+    "tag": "bbaselinefair1",
+    "seconds": 61.796700000047686,
+    "frames": 3709,
+    "catches": 6,
+    "catchesWithNoMonsterOnScreen": 6,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      6.8,
+      7.6,
+      10.6
+    ]
+  },
+  {
+    "tag": "bbaselinefair2",
+    "seconds": 61.463799999952315,
+    "frames": 3689,
+    "catches": 2,
+    "catchesWithNoMonsterOnScreen": 0,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      11.5,
+      8.8,
+      10.8
+    ]
+  },
+  {
+    "tag": "bboundedfair1",
+    "seconds": 61.54839999985695,
+    "frames": 3694,
+    "catches": 4,
+    "catchesWithNoMonsterOnScreen": 4,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      7.6,
+      8.4,
+      9.4
+    ]
+  },
+  {
+    "tag": "bboundedfair2",
+    "seconds": 61.6295,
+    "frames": 3699,
+    "catches": 4,
+    "catchesWithNoMonsterOnScreen": 3,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      10.1,
+      8.7,
+      9.4
+    ]
+  },
+  {
+    "tag": "bboundedfair3",
+    "seconds": 61.511299999952314,
+    "frames": 3692,
+    "catches": 3,
+    "catchesWithNoMonsterOnScreen": 2,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      10.3,
+      9.1,
+      9.5
+    ]
+  },
+  {
+    "tag": "bboundedfair4",
+    "seconds": 61.52969999980927,
+    "frames": 3693,
+    "catches": 3,
+    "catchesWithNoMonsterOnScreen": 3,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      9.6,
+      9.2,
+      9.5
+    ]
+  },
+  {
+    "tag": "bboundedfair5",
+    "seconds": 61.480100000143054,
+    "frames": 3690,
+    "catches": 6,
+    "catchesWithNoMonsterOnScreen": 4,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      10.2,
+      9.3,
+      9.5
+    ]
+  },
+  {
+    "tag": "bboundedswitch",
+    "seconds": 61.39689999985695,
+    "frames": 3685,
+    "catches": 8,
+    "catchesWithNoMonsterOnScreen": 0,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      9.8,
+      9.3,
+      9.5
+    ]
+  },
+  {
+    "tag": "bclockfair1",
+    "seconds": 61.646,
+    "frames": 3700,
+    "catches": 9,
+    "catchesWithNoMonsterOnScreen": 5,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      9.1,
+      8.6,
+      10.4
+    ]
+  },
+  {
+    "tag": "bclockfair2",
+    "seconds": 61.64729999995232,
+    "frames": 3700,
+    "catches": 6,
+    "catchesWithNoMonsterOnScreen": 4,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      9.3,
+      8.7,
+      10.3
+    ]
+  },
+  {
+    "tag": "blifecyclefair1",
+    "seconds": 61.89579999995232,
+    "frames": 3715,
+    "catches": 5,
+    "catchesWithNoMonsterOnScreen": 5,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      16.8,
+      17.6,
+      14
+    ]
+  },
+  {
+    "tag": "bmargin2fair1",
+    "seconds": 61.73069999980927,
+    "frames": 3705,
+    "catches": 2,
+    "catchesWithNoMonsterOnScreen": 1,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      10.3,
+      9.8,
+      9.5
+    ]
+  },
+  {
+    "tag": "bmargin2fair2",
+    "seconds": 61.6965,
+    "frames": 3703,
+    "catches": 7,
+    "catchesWithNoMonsterOnScreen": 4,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      13.8,
+      10.8,
+      9.9
+    ]
+  },
+  {
+    "tag": "bmargin2fair3",
+    "seconds": 61.614100000143054,
+    "frames": 3698,
+    "catches": 5,
+    "catchesWithNoMonsterOnScreen": 3,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      10,
+      10.2,
+      9.7
+    ]
+  },
+  {
+    "tag": "bmargin2fair4",
+    "seconds": 61.5145,
+    "frames": 3691,
+    "catches": 2,
+    "catchesWithNoMonsterOnScreen": 1,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      11.8,
+      10.8,
+      10
+    ]
+  },
+  {
+    "tag": "bmargin2fair5",
+    "seconds": 61.69819999980926,
+    "frames": 3703,
+    "catches": 3,
+    "catchesWithNoMonsterOnScreen": 1,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      11.4,
+      10.7,
+      10
+    ]
+  },
+  {
+    "tag": "bmarginswitch",
+    "seconds": 61.24710000014305,
+    "frames": 3676,
+    "catches": 23,
+    "catchesWithNoMonsterOnScreen": 0,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      12,
+      9.5,
+      9.4
+    ]
+  },
+  {
+    "tag": "bretainedfair1",
+    "seconds": 62.5785,
+    "frames": 3756,
+    "catches": 2,
+    "catchesWithNoMonsterOnScreen": 2,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      8.5,
+      9.4,
+      9.6
+    ]
+  },
+  {
+    "tag": "bretainedfair2",
+    "seconds": 61.56309999990463,
+    "frames": 3695,
+    "catches": 5,
+    "catchesWithNoMonsterOnScreen": 5,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      8.2,
+      9.2,
+      9.5
+    ]
+  },
+  {
+    "tag": "bretainedfair3",
+    "seconds": 61.764,
+    "frames": 3707,
+    "catches": 5,
+    "catchesWithNoMonsterOnScreen": 3,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      8.8,
+      9.5,
+      9.6
+    ]
+  },
+  {
+    "tag": "bretainedfair4",
+    "seconds": 61.58019999980927,
+    "frames": 3696,
+    "catches": 3,
+    "catchesWithNoMonsterOnScreen": 1,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      9.2,
+      9.5,
+      9.6
+    ]
+  },
+  {
+    "tag": "bretainedfair5",
+    "seconds": 61.69669999980926,
+    "frames": 3700,
+    "catches": 3,
+    "catchesWithNoMonsterOnScreen": 2,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      10.2,
+      9.9,
+      9.8
+    ]
+  },
+  {
+    "tag": "bretainedswitch",
+    "seconds": 61.078,
+    "frames": 3666,
+    "catches": 7,
+    "catchesWithNoMonsterOnScreen": 0,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      14,
+      11.1,
+      10.2
+    ]
+  },
+  {
+    "tag": "bverifiedfair1",
+    "seconds": 61.530099999904635,
+    "frames": 3693,
+    "catches": 3,
+    "catchesWithNoMonsterOnScreen": 2,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      12.2,
+      14.3,
+      13.8
+    ]
+  },
+  {
+    "tag": "bverifiedfair2",
+    "seconds": 61.614299999952316,
+    "frames": 3698,
+    "catches": 0,
+    "catchesWithNoMonsterOnScreen": 0,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      13.2,
+      14.2,
+      13.8
+    ]
+  },
+  {
+    "tag": "bverifiedfair3",
+    "seconds": 61.58069999980926,
+    "frames": 3696,
+    "catches": 8,
+    "catchesWithNoMonsterOnScreen": 4,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      13.2,
+      14.1,
+      13.7
+    ]
+  },
+  {
+    "tag": "bverifiedfair4",
+    "seconds": 61.84710000014305,
+    "frames": 3712,
+    "catches": 0,
+    "catchesWithNoMonsterOnScreen": 0,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      14.4,
+      14.3,
+      13.8
+    ]
+  },
+  {
+    "tag": "bverifiedfair5",
+    "seconds": 61.5465,
+    "frames": 3694,
+    "catches": 6,
+    "catchesWithNoMonsterOnScreen": 3,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      14.2,
+      14.2,
+      13.9
+    ]
+  },
+  {
+    "tag": "bverifiedswitch",
+    "seconds": 61.129199999809266,
+    "frames": 3669,
+    "catches": 8,
+    "catchesWithNoMonsterOnScreen": 1,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      15,
+      14.6,
+      14
+    ]
+  },
+  {
+    "tag": "bwindowfair1",
+    "seconds": 61.83179999995232,
+    "frames": 3708,
+    "catches": 2,
+    "catchesWithNoMonsterOnScreen": 2,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      11.7,
+      10.4,
+      10.3
+    ]
+  },
+  {
+    "tag": "bwindowfair2",
+    "seconds": 61.74609999990463,
+    "frames": 3706,
+    "catches": 2,
+    "catchesWithNoMonsterOnScreen": 1,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      10.3,
+      10.3,
+      10.3
+    ]
+  },
+  {
+    "tag": "calignedfair1",
+    "seconds": 61.58029999995232,
+    "frames": 3696,
+    "catches": 11,
+    "catchesWithNoMonsterOnScreen": 10,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      8.6,
+      8.4,
+      9.9
+    ]
+  },
+  {
+    "tag": "calignedfair2",
+    "seconds": 61.56520000004768,
+    "frames": 3695,
+    "catches": 9,
+    "catchesWithNoMonsterOnScreen": 5,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      11.3,
+      9.3,
+      10.1
+    ]
+  },
+  {
+    "tag": "calignedfair3",
+    "seconds": 61.49609999990463,
+    "frames": 3688,
+    "catches": 7,
+    "catchesWithNoMonsterOnScreen": 6,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      11.3,
+      9.7,
+      10.2
+    ]
+  },
+  {
+    "tag": "calignedfair4",
+    "seconds": 61.547299999952315,
+    "frames": 3694,
+    "catches": 10,
+    "catchesWithNoMonsterOnScreen": 6,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      9.9,
+      9.7,
+      10.1
+    ]
+  },
+  {
+    "tag": "calignedfair5",
+    "seconds": 61.54779999995232,
+    "frames": 3694,
+    "catches": 5,
+    "catchesWithNoMonsterOnScreen": 3,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      17,
+      11.5,
+      10.7
+    ]
+  },
+  {
+    "tag": "cbaselinefair1",
+    "seconds": 61.7795,
+    "frames": 3708,
+    "catches": 3,
+    "catchesWithNoMonsterOnScreen": 2,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      6.8,
+      7.6,
+      10.6
+    ]
+  },
+  {
+    "tag": "cbaselinefair2",
+    "seconds": 61.51409999990463,
+    "frames": 3692,
+    "catches": 2,
+    "catchesWithNoMonsterOnScreen": 1,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      11.5,
+      8.8,
+      10.8
+    ]
+  },
+  {
+    "tag": "cboundedfair1",
+    "seconds": 61.53010000014305,
+    "frames": 3693,
+    "catches": 4,
+    "catchesWithNoMonsterOnScreen": 4,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      7.6,
+      8.4,
+      9.4
+    ]
+  },
+  {
+    "tag": "cboundedfair2",
+    "seconds": 61.58009999990463,
+    "frames": 3696,
+    "catches": 6,
+    "catchesWithNoMonsterOnScreen": 5,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      8.2,
+      8.4,
+      9.3
+    ]
+  },
+  {
+    "tag": "cboundedfair3",
+    "seconds": 61.547100000143054,
+    "frames": 3694,
+    "catches": 4,
+    "catchesWithNoMonsterOnScreen": 4,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      10.7,
+      9.2,
+      9.5
+    ]
+  },
+  {
+    "tag": "cboundedfair4",
+    "seconds": 61.597200000047685,
+    "frames": 3697,
+    "catches": 9,
+    "catchesWithNoMonsterOnScreen": 6,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      9.4,
+      9.1,
+      9.5
+    ]
+  },
+  {
+    "tag": "cboundedfair5",
+    "seconds": 61.59719999980926,
+    "frames": 3697,
+    "catches": 11,
+    "catchesWithNoMonsterOnScreen": 9,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      9.8,
+      9.3,
+      9.5
+    ]
+  },
+  {
+    "tag": "cboundedswitch",
+    "seconds": 61.396099999904635,
+    "frames": 3685,
+    "catches": 10,
+    "catchesWithNoMonsterOnScreen": 0,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      9.8,
+      9.3,
+      9.5
+    ]
+  },
+  {
+    "tag": "cclockfair1",
+    "seconds": 61.696400000095366,
+    "frames": 3703,
+    "catches": 7,
+    "catchesWithNoMonsterOnScreen": 6,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      9.1,
+      8.6,
+      10.4
+    ]
+  },
+  {
+    "tag": "cclockfair2",
+    "seconds": 61.54770000004768,
+    "frames": 3694,
+    "catches": 3,
+    "catchesWithNoMonsterOnScreen": 3,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      9.3,
+      8.7,
+      10.3
+    ]
+  },
+  {
+    "tag": "clifecyclefair1",
+    "seconds": 61.879100000143055,
+    "frames": 3714,
+    "catches": 4,
+    "catchesWithNoMonsterOnScreen": 4,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      16.8,
+      17.6,
+      14
+    ]
+  },
+  {
+    "tag": "clifecyclefair2",
+    "seconds": 62.09579999995232,
+    "frames": 3727,
+    "catches": 6,
+    "catchesWithNoMonsterOnScreen": 4,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      17,
+      17.3,
+      14.2
+    ]
+  },
+  {
+    "tag": "cmargin2fair1",
+    "seconds": 61.764,
+    "frames": 3707,
+    "catches": 8,
+    "catchesWithNoMonsterOnScreen": 5,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      10.3,
+      9.8,
+      9.5
+    ]
+  },
+  {
+    "tag": "cmargin2fair2",
+    "seconds": 61.58020000004768,
+    "frames": 3696,
+    "catches": 8,
+    "catchesWithNoMonsterOnScreen": 6,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      13.8,
+      10.8,
+      9.9
+    ]
+  },
+  {
+    "tag": "cmargin2fair3",
+    "seconds": 61.46329999995232,
+    "frames": 3689,
+    "catches": 4,
+    "catchesWithNoMonsterOnScreen": 4,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      10,
+      10.2,
+      9.7
+    ]
+  },
+  {
+    "tag": "cmargin2fair4",
+    "seconds": 61.530799999952315,
+    "frames": 3693,
+    "catches": 5,
+    "catchesWithNoMonsterOnScreen": 3,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      11.8,
+      10.8,
+      10
+    ]
+  },
+  {
+    "tag": "cmargin2fair5",
+    "seconds": 61.76410000014305,
+    "frames": 3707,
+    "catches": 2,
+    "catchesWithNoMonsterOnScreen": 2,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      11.4,
+      10.7,
+      10
+    ]
+  },
+  {
+    "tag": "cmarginfair1",
+    "seconds": 61.67929999995231,
+    "frames": 3702,
+    "catches": 7,
+    "catchesWithNoMonsterOnScreen": 4,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      7.8,
+      8.2,
+      8.9
+    ]
+  },
+  {
+    "tag": "cmarginswitch",
+    "seconds": 61.27980000019073,
+    "frames": 3678,
+    "catches": 7,
+    "catchesWithNoMonsterOnScreen": 0,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      12,
+      9.5,
+      9.4
+    ]
+  },
+  {
+    "tag": "cretainedfair1",
+    "seconds": 62.39709999990463,
+    "frames": 3745,
+    "catches": 8,
+    "catchesWithNoMonsterOnScreen": 7,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      8.5,
+      9.4,
+      9.6
+    ]
+  },
+  {
+    "tag": "cretainedfair2",
+    "seconds": 61.563199999809264,
+    "frames": 3695,
+    "catches": 12,
+    "catchesWithNoMonsterOnScreen": 10,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      8.2,
+      9.2,
+      9.5
+    ]
+  },
+  {
+    "tag": "cretainedfair3",
+    "seconds": 61.77970000004768,
+    "frames": 3708,
+    "catches": 2,
+    "catchesWithNoMonsterOnScreen": 2,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      8.8,
+      9.5,
+      9.6
+    ]
+  },
+  {
+    "tag": "cretainedfair4",
+    "seconds": 61.663400000095365,
+    "frames": 3701,
+    "catches": 5,
+    "catchesWithNoMonsterOnScreen": 2,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      9.2,
+      9.5,
+      9.6
+    ]
+  },
+  {
+    "tag": "cretainedfair5",
+    "seconds": 61.61379999995231,
+    "frames": 3696,
+    "catches": 8,
+    "catchesWithNoMonsterOnScreen": 5,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      10.2,
+      9.9,
+      9.8
+    ]
+  },
+  {
+    "tag": "cretainedswitch",
+    "seconds": 61.181100000143054,
+    "frames": 3672,
+    "catches": 8,
+    "catchesWithNoMonsterOnScreen": 0,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      14,
+      11.1,
+      10.2
+    ]
+  },
+  {
+    "tag": "cverifiedfair1",
+    "seconds": 61.59509999990463,
+    "frames": 3697,
+    "catches": 8,
+    "catchesWithNoMonsterOnScreen": 8,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      12.2,
+      14.3,
+      13.8
+    ]
+  },
+  {
+    "tag": "cverifiedfair2",
+    "seconds": 61.71359999990463,
+    "frames": 3704,
+    "catches": 7,
+    "catchesWithNoMonsterOnScreen": 5,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      13.2,
+      14.2,
+      13.8
+    ]
+  },
+  {
+    "tag": "cverifiedfair3",
+    "seconds": 61.6135,
+    "frames": 3698,
+    "catches": 5,
+    "catchesWithNoMonsterOnScreen": 2,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      13.2,
+      14.1,
+      13.7
+    ]
+  },
+  {
+    "tag": "cverifiedfair4",
+    "seconds": 61.98070000004768,
+    "frames": 3720,
+    "catches": 8,
+    "catchesWithNoMonsterOnScreen": 6,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      14.4,
+      14.3,
+      13.8
+    ]
+  },
+  {
+    "tag": "cverifiedfair5",
+    "seconds": 61.51329999995232,
+    "frames": 3692,
+    "catches": 7,
+    "catchesWithNoMonsterOnScreen": 4,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      14.2,
+      14.2,
+      13.9
+    ]
+  },
+  {
+    "tag": "cverifiedswitch",
+    "seconds": 61.213099999904635,
+    "frames": 3674,
+    "catches": 4,
+    "catchesWithNoMonsterOnScreen": 0,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      15,
+      14.6,
+      14
+    ]
+  },
+  {
+    "tag": "cwindowfair1",
+    "seconds": 61.712400000095364,
+    "frames": 3701,
+    "catches": 4,
+    "catchesWithNoMonsterOnScreen": 3,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      11.7,
+      10.4,
+      10.3
+    ]
+  },
+  {
+    "tag": "cwindowfair2",
+    "seconds": 61.78080000019074,
+    "frames": 3708,
+    "catches": 3,
+    "catchesWithNoMonsterOnScreen": 2,
+    "unexplainedJumpsOfMyRunner": 0,
+    "errors": [],
+    "load": [
+      10.3,
+      10.3,
+      10.3
+    ]
+  }
+]

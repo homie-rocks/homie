@@ -1,0 +1,30 @@
+[
+  {
+    "tag": "blifecyclephone1",
+    "frames": 10791,
+    "over33": 36,
+    "over50": 18,
+    "gcMs": 1451.321,
+    "gcMsPerFrame": 0.13449,
+    "p99Ms": 25.5,
+    "loadEnd": [
+      30.4,
+      18.3,
+      13.4
+    ]
+  },
+  {
+    "tag": "clifecyclephone1",
+    "frames": 10787,
+    "over33": 22,
+    "over50": 14,
+    "gcMs": 593.838,
+    "gcMsPerFrame": 0.05505,
+    "p99Ms": 23.0,
+    "loadEnd": [
+      30.4,
+      18.3,
+      13.4
+    ]
+  }
+]

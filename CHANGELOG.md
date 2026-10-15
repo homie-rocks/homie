@@ -21,6 +21,9 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ### Fixed
 
+- Fresh validated-owner clocks account for transit without granting skipped travel;
+  observer placements wait for the sampled scene to reach their revision.
+
 - A single long scheduler suspension starts the overrun observation window on
   return; it no longer counts as a sustained run of slow ticks by itself.
 - Validated owners track the room clock through drift and receive an explicit

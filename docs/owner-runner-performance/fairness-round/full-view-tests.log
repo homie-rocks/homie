@@ -1,0 +1,1782 @@
+TAP version 13
+# (node:75506) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: two views in one server-hosted room: own bodies, the roster and the round, input that the server follows, and a full round nobody can forge
+ok 1 - two views in one server-hosted room: own bodies, the roster and the round, input that the server follows, and a full round nobody can forge
+  ---
+  duration_ms: 2012.957208
+  type: 'test'
+  ...
+# Subtest: a watcher follows server bodies, returns to Auto on leave and follows the same seat on reconnect
+ok 2 - a watcher follows server bodies, returns to Auto on leave and follows the same seat on reconnect
+  ---
+  duration_ms: 36.338208
+  type: 'test'
+  ...
+# Subtest: a restored epoch past 32 bits reaches the view and its input reaches the host unchanged
+ok 3 - a restored epoch past 32 bits reaches the view and its input reaches the host unchanged
+  ---
+  duration_ms: 21.428209
+  type: 'test'
+  ...
+# Subtest: browser hosts run the same rules, hand the round to the other browser, and finish it with bots
+ok 4 - browser hosts run the same rules, hand the round to the other browser, and finish it with bots
+  ---
+  duration_ms: 1708.325084
+  type: 'test'
+  ...
+# Subtest: server rules play offline with a local body, input and bots
+ok 5 - server rules play offline with a local body, input and bots
+  ---
+  duration_ms: 1486.053375
+  type: 'test'
+  ...
+# Subtest: browser rules play offline with a local body, input and bots
+ok 6 - browser rules play offline with a local body, input and bots
+  ---
+  duration_ms: 1390.243708
+  type: 'test'
+  ...
+# Subtest: private server rules do not offer offline play
+ok 7 - private server rules do not offer offline play
+  ---
+  duration_ms: 34.933208
+  type: 'test'
+  ...
+# Subtest: a lost server room falls back locally, reports no offline progress, then rejoins the server
+ok 8 - a lost server room falls back locally, reports no offline progress, then rejoins the server
+  ---
+  duration_ms: 1002.968417
+  type: 'test'
+  ...
+# Subtest: a sixty-tick browser host sends a snapshot a tick inside the relay allowance
+ok 9 - a sixty-tick browser host sends a snapshot a tick inside the relay allowance
+  ---
+  duration_ms: 344.977709
+  type: 'test'
+  ...
+# Subtest: offline rules prefetch waits for playable and a closed view cannot start a late loader
+ok 10 - offline rules prefetch waits for playable and a closed view cannot start a late loader
+  ---
+  duration_ms: 16.532083
+  type: 'test'
+  ...
+# Subtest: promotion replaces a poisoned checkpoint and publishes the fresh round
+ok 11 - promotion replaces a poisoned checkpoint and publishes the fresh round
+  ---
+  duration_ms: 392.88375
+  type: 'test'
+  ...
+# [netplay] relay refused: room-over This game's rules stopped: budget. Join again for a fresh room.
+# [netplay] relay refused: room-over This game's rules stopped: budget. Join again for a fresh room.
+# Subtest: a failed browser runtime ends the room without electing its checkpoint again
+ok 12 - a failed browser runtime ends the room without electing its checkpoint again
+  ---
+  duration_ms: 544.09725
+  type: 'test'
+  ...
+# Subtest: a hidden solo host pauses and resumes, offline=true
+ok 13 - a hidden solo host pauses and resumes, offline=true
+  ---
+  duration_ms: 462.230375
+  type: 'test'
+  ...
+# Subtest: a hidden solo host pauses and resumes, offline=false
+ok 14 - a hidden solo host pauses and resumes, offline=false
+  ---
+  duration_ms: 408.240084
+  type: 'test'
+  ...
+# [netplay] rules module failed to load Error: module unavailable
+#     at Object.load (file:///Users/ryan/.homie/worktrees/runner-error-smoothing/packages/studio/test/rules-view.test.mjs:652:70)
+#     at file:///private/var/folders/63/1sbmhrlj05g9gvcghc49h8q80000gn/T/homie-studio-rules-view-xKyfI3/view-browser-true-20-false-11.mjs:3423:69
+#     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+# Subtest: a module that cannot load leaves no host without a runtime
+ok 15 - a module that cannot load leaves no host without a runtime
+  ---
+  duration_ms: 256.580416
+  type: 'test'
+  ...
+# [netplay] rules module failed to load Error: offline chunk unavailable
+#     at Object.load (file:///Users/ryan/.homie/worktrees/runner-error-smoothing/packages/studio/test/rules-view.test.mjs:664:76)
+#     at file:///private/var/folders/63/1sbmhrlj05g9gvcghc49h8q80000gn/T/homie-studio-rules-view-xKyfI3/view-server-true-20-false-12.mjs:3173:69
+# Subtest: server reconnect survives an unavailable offline module
+ok 16 - server reconnect survives an unavailable offline module
+  ---
+  duration_ms: 870.083958
+  type: 'test'
+  ...
+# Subtest: a present seat ignores a delayed free and snap size failure is visible and terminal
+ok 17 - a present seat ignores a delayed free and snap size failure is visible and terminal
+  ---
+  duration_ms: 261.064959
+  type: 'test'
+  ...
+# Subtest: a present seat ignores a delayed free and ckpt size failure is visible and terminal
+ok 18 - a present seat ignores a delayed free and ckpt size failure is visible and terminal
+  ---
+  duration_ms: 296.938166
+  type: 'test'
+  ...
+# Subtest: a present seat ignores a delayed free and state size failure is visible and terminal
+ok 19 - a present seat ignores a delayed free and state size failure is visible and terminal
+  ---
+  duration_ms: 282.199292
+  type: 'test'
+  ...
+# Subtest: a present seat ignores a delayed free and ev size failure is visible and terminal
+ok 20 - a present seat ignores a delayed free and ev size failure is visible and terminal
+  ---
+  duration_ms: 263.145
+  type: 'test'
+  ...
+# Subtest: a present seat ignores a delayed free and round size failure is visible and terminal
+ok 21 - a present seat ignores a delayed free and round size failure is visible and terminal
+  ---
+  duration_ms: 273.084292
+  type: 'test'
+  ...
+# Subtest: a present seat ignores a delayed free and roster size failure is visible and terminal
+ok 22 - a present seat ignores a delayed free and roster size failure is visible and terminal
+  ---
+  duration_ms: 261.799916
+  type: 'test'
+  ...
+# Subtest: local snapshots keep rising when the wall clock moves -10000 ms
+ok 23 - local snapshots keep rising when the wall clock moves -10000 ms
+  ---
+  duration_ms: 288.620542
+  type: 'test'
+  ...
+# Subtest: local snapshots keep rising when the wall clock moves 30000 ms
+ok 24 - local snapshots keep rising when the wall clock moves 30000 ms
+  ---
+  duration_ms: 281.904333
+  type: 'test'
+  ...
+# Subtest: a solo online save survives a forgotten relay without uploading later offline progress
+ok 25 - a solo online save survives a forgotten relay without uploading later offline progress
+  ---
+  duration_ms: 2270.350417
+  type: 'test'
+  ...
+# Subtest: browser rules carry reserved guides, validated goals, asks, answers and companion pacing
+ok 26 - browser rules carry reserved guides, validated goals, asks, answers and companion pacing
+  ---
+  duration_ms: 319.512
+  type: 'test'
+  ...
+# Subtest: a persistently slow visible browser yields to another ready player
+ok 27 - a persistently slow visible browser yields to another ready player
+  ---
+  duration_ms: 384.007583
+  type: 'test'
+  ...
+# Subtest: a failed offline runtime still reconnects to its healthy server room
+ok 28 - a failed offline runtime still reconnects to its healthy server room
+  ---
+  duration_ms: 954.321917
+  type: 'test'
+  ...
+# Subtest: two equally slow browsers keep one host after measuring both
+ok 29 - two equally slow browsers keep one host after measuring both
+  ---
+  duration_ms: 969.016958
+  type: 'test'
+  ...
+# Subtest: a held person retains identity and body across browser promotion
+ok 30 - a held person retains identity and body across browser promotion
+  ---
+  duration_ms: 311.829167
+  type: 'test'
+  ...
+# Subtest: movement probes derive stationary controls from the declared player speed 0
+ok 31 - movement probes derive stationary controls from the declared player speed 0
+  ---
+  duration_ms: 276.351625
+  type: 'test'
+  ...
+# Subtest: movement probes derive stationary controls from the declared player speed 100
+ok 32 - movement probes derive stationary controls from the declared player speed 100
+  ---
+  duration_ms: 283.301916
+  type: 'test'
+  ...
+# Subtest: public view session has the same results through server
+ok 33 - public view session has the same results through server
+  ---
+  duration_ms: 342.746958
+  type: 'test'
+  ...
+# Subtest: public view session has the same results through replica
+ok 34 - public view session has the same results through replica
+  ---
+  duration_ms: 352.98425
+  type: 'test'
+  ...
+# Subtest: public view session has the same results through hosting
+ok 35 - public view session has the same results through hosting
+  ---
+  duration_ms: 359.314625
+  type: 'test'
+  ...
+# Subtest: sixty ticks of effects per second reach both views without drops or elections
+ok 36 - sixty ticks of effects per second reach both views without drops or elections
+  ---
+  duration_ms: 761.1475
+  type: 'test'
+  ...
+# [netplay] This game's rules exceeded the browser room size cap: state is 22581 B; the cap is 8192 B. Join again for a fresh room.
+# [netplay] relay refused: room-over This game's rules exceeded the browser room size cap: state is 22581 B; the cap is 8192 B. Join again for a fresh room.
+# [netplay] relay refused: room-over This game's rules exceeded the browser room size cap: state is 22581 B; the cap is 8192 B. Join again for a fresh room.
+# Subtest: shared state that grows after build stops every page with the measured cap
+ok 37 - shared state that grows after build stops every page with the measured cap
+  ---
+  duration_ms: 337.408084
+  type: 'test'
+  ...
+# Subtest: runtime bursts drain without dropping output or ending the room
+ok 38 - runtime bursts drain without dropping output or ending the room
+  ---
+  duration_ms: 293.47825
+  type: 'test'
+  ...
+# Subtest: public browser views preserve the whole round through handover
+ok 39 - public browser views preserve the whole round through handover
+  ---
+  duration_ms: 483.294334
+  type: 'test'
+  ...
+# Subtest: public browser handover rejects a damaged field checkpoint and starts fresh
+ok 40 - public browser handover rejects a damaged field checkpoint and starts fresh
+  ---
+  duration_ms: 324.953084
+  type: 'test'
+  ...
+# Subtest: public browser handover rejects a damaged queue checkpoint and starts fresh
+ok 41 - public browser handover rejects a damaged queue checkpoint and starts fresh
+  ---
+  duration_ms: 343.139
+  type: 'test'
+  ...
+# Subtest: public browser handover rejects a damaged name checkpoint and starts fresh
+ok 42 - public browser handover rejects a damaged name checkpoint and starts fresh
+  ---
+  duration_ms: 343.609833
+  type: 'test'
+  ...
+# Subtest: public browser handover rejects a damaged answer checkpoint and starts fresh
+ok 43 - public browser handover rejects a damaged answer checkpoint and starts fresh
+  ---
+  duration_ms: 311.744792
+  type: 'test'
+  ...
+# [netplay] react over 10/s was dropped
+# [netplay] react over 10/s was dropped
+# Subtest: hosting player's react allowance and refusal match a replica
+ok 44 - hosting player's react allowance and refusal match a replica
+  ---
+  duration_ms: 315.92675
+  type: 'test'
+  ...
+# [netplay] say over 4/s was dropped
+# [netplay] say over 4/s was dropped
+# Subtest: hosting player's say allowance and refusal match a replica
+ok 45 - hosting player's say allowance and refusal match a replica
+  ---
+  duration_ms: 308.527
+  type: 'test'
+  ...
+# [netplay] no vote is open
+# [netplay] vote over 8/s was dropped
+# [netplay] no vote is open
+# [netplay] vote over 8/s was dropped
+# Subtest: hosting player's vote allowance and refusal match a replica
+ok 46 - hosting player's vote allowance and refusal match a replica
+  ---
+  duration_ms: 330.093917
+  type: 'test'
+  ...
+# [netplay] ping over 8/s was dropped
+# [netplay] ping over 8/s was dropped
+# Subtest: hosting player's ping allowance and refusal match a replica
+ok 47 - hosting player's ping allowance and refusal match a replica
+  ---
+  duration_ms: 313.765709
+  type: 'test'
+  ...
+# [netplay] in over 60/s was dropped
+# [netplay] in over 60/s was dropped
+# Subtest: hosting player's in allowance and refusal match a replica
+ok 48 - hosting player's in allowance and refusal match a replica
+  ---
+  duration_ms: 316.041625
+  type: 'test'
+  ...
+# [netplay] ev over 10/s was dropped
+# [netplay] ev over 10/s was dropped
+# Subtest: hosting player's ev allowance and refusal match a replica
+ok 49 - hosting player's ev allowance and refusal match a replica
+  ---
+  duration_ms: 312.250917
+  type: 'test'
+  ...
+# [netplay] unknown over 8/s was dropped
+# [netplay] unknown over 8/s was dropped
+# Subtest: hosting player's unknown allowance and refusal match a replica
+ok 50 - hosting player's unknown allowance and refusal match a replica
+  ---
+  duration_ms: 312.517791
+  type: 'test'
+  ...
+# [netplay] round over 4/s was dropped
+# Subtest: faulty reliable output hands over, excess snapshots only drop
+ok 51 - faulty reliable output hands over, excess snapshots only drop
+  ---
+  duration_ms: 316.402333
+  type: 'test'
+  ...
+# [never (the floor at its deadline)] before {"tick":41,"score":41,"bscore":41,"goal":"follow","asked":true,"roster":[[0,"First","person"],[1,"Second","person"],[3,"Rook · AI","ai"]],"round":[1,"live"],"answers":0,"answered":0,"endsAt":1200}
+#    after {"tick":240,"score":240,"bscore":240,"goal":"follow","asked":true,"roster":[[0,"First","person"],[1,"Second","person"],[3,"Rook · AI","ai"]],"round":[1,"live"],"answers":0,"answered":1,"endsAt":1200}; decides the relay was asked 1; decide frames from B 0; yes false
+#    the answer the asking body got: advance true by floor/local
+# Subtest: a decision pending at a handover is answered exactly once: never (the floor at its deadline)
+ok 52 - a decision pending at a handover is answered exactly once: never (the floor at its deadline)
+  ---
+  duration_ms: 483.337417
+  type: 'test'
+  ...
+# [the relay answers 2 s after the handover] before {"tick":41,"score":41,"bscore":41,"goal":"follow","asked":true,"roster":[[0,"First","person"],[1,"Second","person"],[3,"Rook · AI","ai"]],"round":[1,"live"],"answers":0,"answered":0,"endsAt":1200}
+#    after {"tick":260,"score":260,"bscore":260,"goal":"follow","asked":true,"roster":[[0,"First","person"],[1,"Second","person"],[3,"Rook · AI","ai"]],"round":[1,"live"],"answers":0,"answered":1,"endsAt":1200}; decides the relay was asked 1; decide frames from B 0; yes false
+#    the answer the asking body got: advance false by ai
+# Subtest: a decision pending at a handover is answered exactly once: the relay answers 2 s after the handover
+ok 53 - a decision pending at a handover is answered exactly once: the relay answers 2 s after the handover
+  ---
+  duration_ms: 520.827333
+  type: 'test'
+  ...
+# [the relay refuses 1 s after the handover] before {"tick":41,"score":41,"bscore":41,"goal":"follow","asked":true,"roster":[[0,"First","person"],[1,"Second","person"],[3,"Rook · AI","ai"]],"round":[1,"live"],"answers":0,"answered":0,"endsAt":1200}
+#    after {"tick":240,"score":240,"bscore":240,"goal":"follow","asked":true,"roster":[[0,"First","person"],[1,"Second","person"],[3,"Rook · AI","ai"]],"round":[1,"live"],"answers":0,"answered":1,"endsAt":1200}; decides the relay was asked 1; decide frames from B 0; yes false
+#    the answer the asking body got: advance true by floor/local
+# Subtest: a decision pending at a handover is answered exactly once: the relay refuses 1 s after the handover
+ok 54 - a decision pending at a handover is answered exactly once: the relay refuses 1 s after the handover
+  ---
+  duration_ms: 450.581583
+  type: 'test'
+  ...
+# Subtest: a sixty-second drop retries promptly while playing offline
+ok 55 - a sixty-second drop retries promptly while playing offline
+  ---
+  duration_ms: 1339.496125
+  type: 'test'
+  ...
+# Subtest: the browser online event retries a pending offline connection immediately
+ok 56 - the browser online event retries a pending offline connection immediately
+  ---
+  duration_ms: 1224.237125
+  type: 'test'
+  ...
+# Subtest: a 20-tick host that yields hands on its last tick: no page goes back and no effect plays twice
+ok 57 - a 20-tick host that yields hands on its last tick: no page goes back and no effect plays twice
+  ---
+  duration_ms: 1130.523
+  type: 'test'
+  ...
+# Subtest: a 20-tick host that closes hands on its last tick: no page goes back and no effect plays twice
+ok 58 - a 20-tick host that closes hands on its last tick: no page goes back and no effect plays twice
+  ---
+  duration_ms: 1106.030125
+  type: 'test'
+  ...
+# Subtest: a 30-tick host that yields hands on its last tick: no page goes back and no effect plays twice
+ok 59 - a 30-tick host that yields hands on its last tick: no page goes back and no effect plays twice
+  ---
+  duration_ms: 1262.023792
+  type: 'test'
+  ...
+# Subtest: a 30-tick host that closes hands on its last tick: no page goes back and no effect plays twice
+ok 60 - a 30-tick host that closes hands on its last tick: no page goes back and no effect plays twice
+  ---
+  duration_ms: 1307.633875
+  type: 'test'
+  ...
+# Subtest: a 60-tick host that yields hands on its last tick: no page goes back and no effect plays twice
+ok 61 - a 60-tick host that yields hands on its last tick: no page goes back and no effect plays twice
+  ---
+  duration_ms: 1398.57425
+  type: 'test'
+  ...
+# Subtest: a 60-tick host that closes hands on its last tick: no page goes back and no effect plays twice
+ok 62 - a 60-tick host that closes hands on its last tick: no page goes back and no effect plays twice
+  ---
+  duration_ms: 1370.18475
+  type: 'test'
+  ...
+# Subtest: a yield the relay refuses costs nothing: the host carries on with every tick and effect in order
+ok 63 - a yield the relay refuses costs nothing: the host carries on with every tick and effect in order
+  ---
+  duration_ms: 463.379083
+  type: 'test'
+  ...
+# Subtest: a host that reconnects to a restarted relay says the round, roster and shared state again as rules output
+ok 64 - a host that reconnects to a restarted relay says the round, roster and shared state again as rules output
+  ---
+  duration_ms: 456.819125
+  type: 'test'
+  ...
+# Subtest: legacy speech keeps its published envelope even with arbitrary extra data
+ok 65 - legacy speech keeps its published envelope even with arbitrary extra data
+  ---
+  duration_ms: 14.364792
+  type: 'test'
+  ...
+# Subtest: prediction: 20 ticks, 50 ms round trip, fresh input answers within a frame
+ok 66 - prediction: 20 ticks, 50 ms round trip, fresh input answers within a frame
+  ---
+  duration_ms: 144.574292
+  type: 'test'
+  ...
+# Subtest: prediction: 20 ticks, 150 ms round trip, fresh input answers within a frame
+ok 67 - prediction: 20 ticks, 150 ms round trip, fresh input answers within a frame
+  ---
+  duration_ms: 143.534834
+  type: 'test'
+  ...
+# Subtest: prediction: 20 ticks, 300 ms round trip, fresh input answers within a frame
+ok 68 - prediction: 20 ticks, 300 ms round trip, fresh input answers within a frame
+  ---
+  duration_ms: 146.590042
+  type: 'test'
+  ...
+# Subtest: prediction: 30 ticks, 50 ms round trip, fresh input answers within a frame
+ok 69 - prediction: 30 ticks, 50 ms round trip, fresh input answers within a frame
+  ---
+  duration_ms: 391.510333
+  type: 'test'
+  ...
+# Subtest: prediction: 30 ticks, 150 ms round trip, fresh input answers within a frame
+ok 70 - prediction: 30 ticks, 150 ms round trip, fresh input answers within a frame
+  ---
+  duration_ms: 408.928542
+  type: 'test'
+  ...
+# Subtest: prediction: 30 ticks, 300 ms round trip, fresh input answers within a frame
+ok 71 - prediction: 30 ticks, 300 ms round trip, fresh input answers within a frame
+  ---
+  duration_ms: 386.528417
+  type: 'test'
+  ...
+# Subtest: prediction: 60 ticks, 50 ms round trip, fresh input answers within a frame
+ok 72 - prediction: 60 ticks, 50 ms round trip, fresh input answers within a frame
+  ---
+  duration_ms: 415.724708
+  type: 'test'
+  ...
+# Subtest: prediction: 60 ticks, 150 ms round trip, fresh input answers within a frame
+ok 73 - prediction: 60 ticks, 150 ms round trip, fresh input answers within a frame
+  ---
+  duration_ms: 438.624125
+  type: 'test'
+  ...
+# Subtest: prediction: 60 ticks, 300 ms round trip, fresh input answers within a frame
+ok 74 - prediction: 60 ticks, 300 ms round trip, fresh input answers within a frame
+  ---
+  duration_ms: 467.568833
+  type: 'test'
+  ...
+# Subtest: prediction: a late press stays predicted once until the authoritative press catches up
+ok 75 - prediction: a late press stays predicted once until the authoritative press catches up
+  ---
+  duration_ms: 369.967417
+  type: 'test'
+  ...
+# Subtest: prediction clock: steering is not jitter at 20 Hz and 150 ms
+ok 76 - prediction clock: steering is not jitter at 20 Hz and 150 ms
+  ---
+  duration_ms: 442.213167
+  type: 'test'
+  ...
+# Subtest: prediction clock: steering is not jitter at 20 Hz and 300 ms
+ok 77 - prediction clock: steering is not jitter at 20 Hz and 300 ms
+  ---
+  duration_ms: 474.635416
+  type: 'test'
+  ...
+# Subtest: prediction clock: steering is not jitter at 60 Hz and 150 ms
+ok 78 - prediction clock: steering is not jitter at 60 Hz and 150 ms
+  ---
+  duration_ms: 951.439916
+  type: 'test'
+  ...
+# Subtest: prediction clock: steering is not jitter at 60 Hz and 300 ms
+ok 79 - prediction clock: steering is not jitter at 60 Hz and 300 ms
+  ---
+  duration_ms: 988.067417
+  type: 'test'
+  ...
+# Subtest: prediction: overlapping corrections under dropped input at 20 Hz slow forward movement without reversing it
+ok 80 - prediction: overlapping corrections under dropped input at 20 Hz slow forward movement without reversing it
+  ---
+  duration_ms: 642.729667
+  type: 'test'
+  ...
+# Subtest: prediction: overlapping corrections under dropped input at 60 Hz slow forward movement without reversing it
+ok 81 - prediction: overlapping corrections under dropped input at 60 Hz slow forward movement without reversing it
+  ---
+  duration_ms: 734.363666
+  type: 'test'
+  ...
+# Subtest: prediction: 20 Hz jitter and loss remain steady, seed 417
+ok 82 - prediction: 20 Hz jitter and loss remain steady, seed 417
+  ---
+  duration_ms: 785.567708
+  type: 'test'
+  ...
+# Subtest: prediction: 20 Hz jitter and loss remain steady, seed 1
+ok 83 - prediction: 20 Hz jitter and loss remain steady, seed 1
+  ---
+  duration_ms: 750.745542
+  type: 'test'
+  ...
+# Subtest: prediction: 20 Hz jitter and loss remain steady, seed 42
+ok 84 - prediction: 20 Hz jitter and loss remain steady, seed 42
+  ---
+  duration_ms: 813.476917
+  type: 'test'
+  ...
+# Subtest: prediction: 20 Hz jitter and loss remain steady, seed 43
+ok 85 - prediction: 20 Hz jitter and loss remain steady, seed 43
+  ---
+  duration_ms: 857.442709
+  type: 'test'
+  ...
+# Subtest: prediction: 20 Hz jitter and loss remain steady, seed 60
+ok 86 - prediction: 20 Hz jitter and loss remain steady, seed 60
+  ---
+  duration_ms: 780.696375
+  type: 'test'
+  ...
+# Subtest: prediction: 20 Hz jitter and loss remain steady, seed 2026
+ok 87 - prediction: 20 Hz jitter and loss remain steady, seed 2026
+  ---
+  duration_ms: 758.507834
+  type: 'test'
+  ...
+# Subtest: prediction: 60 Hz jitter and loss remain steady, seed 417
+ok 88 - prediction: 60 Hz jitter and loss remain steady, seed 417
+  ---
+  duration_ms: 931.726333
+  type: 'test'
+  ...
+# Subtest: prediction: 60 Hz jitter and loss remain steady, seed 1
+ok 89 - prediction: 60 Hz jitter and loss remain steady, seed 1
+  ---
+  duration_ms: 949.029541
+  type: 'test'
+  ...
+# Subtest: prediction: 60 Hz jitter and loss remain steady, seed 42
+ok 90 - prediction: 60 Hz jitter and loss remain steady, seed 42
+  ---
+  duration_ms: 897.820084
+  type: 'test'
+  ...
+# Subtest: prediction: 60 Hz jitter and loss remain steady, seed 43
+ok 91 - prediction: 60 Hz jitter and loss remain steady, seed 43
+  ---
+  duration_ms: 853.744334
+  type: 'test'
+  ...
+# Subtest: prediction: 60 Hz jitter and loss remain steady, seed 60
+ok 92 - prediction: 60 Hz jitter and loss remain steady, seed 60
+  ---
+  duration_ms: 820.340625
+  type: 'test'
+  ...
+# Subtest: prediction: 60 Hz jitter and loss remain steady, seed 2026
+ok 93 - prediction: 60 Hz jitter and loss remain steady, seed 2026
+  ---
+  duration_ms: 829.781833
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 50 ms, input 0, phase 0
+ok 94 - prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 50 ms, input 0, phase 0
+  ---
+  duration_ms: 823.82625
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 50 ms, input 0, phase 19
+ok 95 - prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 50 ms, input 0, phase 19
+  ---
+  duration_ms: 833.872833
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 50 ms, input 127, phase 0
+ok 96 - prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 50 ms, input 127, phase 0
+  ---
+  duration_ms: 849.966125
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 50 ms, input 127, phase 19
+ok 97 - prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 50 ms, input 127, phase 19
+  ---
+  duration_ms: 777.667875
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 150 ms, input 0, phase 0
+ok 98 - prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 150 ms, input 0, phase 0
+  ---
+  duration_ms: 785.001166
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 150 ms, input 0, phase 19
+ok 99 - prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 150 ms, input 0, phase 19
+  ---
+  duration_ms: 937.891334
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 150 ms, input 127, phase 0
+ok 100 - prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 150 ms, input 127, phase 0
+  ---
+  duration_ms: 994.41375
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 150 ms, input 127, phase 19
+ok 101 - prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 150 ms, input 127, phase 19
+  ---
+  duration_ms: 1066.394166
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 300 ms, input 0, phase 0
+ok 102 - prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 300 ms, input 0, phase 0
+  ---
+  duration_ms: 955.076833
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 300 ms, input 0, phase 19
+ok 103 - prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 300 ms, input 0, phase 19
+  ---
+  duration_ms: 1155.313041
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 300 ms, input 127, phase 0
+ok 104 - prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 300 ms, input 127, phase 0
+  ---
+  duration_ms: 898.932875
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 300 ms, input 127, phase 19
+ok 105 - prediction: unseen pushes stay continuous on uneven frames at 20 Hz, 300 ms, input 127, phase 19
+  ---
+  duration_ms: 830.311584
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 50 ms, input 0, phase 0
+ok 106 - prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 50 ms, input 0, phase 0
+  ---
+  duration_ms: 862.173
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 50 ms, input 0, phase 19
+ok 107 - prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 50 ms, input 0, phase 19
+  ---
+  duration_ms: 829.132375
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 50 ms, input 127, phase 0
+ok 108 - prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 50 ms, input 127, phase 0
+  ---
+  duration_ms: 893.389125
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 50 ms, input 127, phase 19
+ok 109 - prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 50 ms, input 127, phase 19
+  ---
+  duration_ms: 863.767042
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 150 ms, input 0, phase 0
+ok 110 - prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 150 ms, input 0, phase 0
+  ---
+  duration_ms: 866.874167
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 150 ms, input 0, phase 19
+ok 111 - prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 150 ms, input 0, phase 19
+  ---
+  duration_ms: 996.232959
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 150 ms, input 127, phase 0
+ok 112 - prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 150 ms, input 127, phase 0
+  ---
+  duration_ms: 947.866625
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 150 ms, input 127, phase 19
+ok 113 - prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 150 ms, input 127, phase 19
+  ---
+  duration_ms: 945.851084
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 300 ms, input 0, phase 0
+ok 114 - prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 300 ms, input 0, phase 0
+  ---
+  duration_ms: 911.787834
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 300 ms, input 0, phase 19
+ok 115 - prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 300 ms, input 0, phase 19
+  ---
+  duration_ms: 870.253917
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 300 ms, input 127, phase 0
+ok 116 - prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 300 ms, input 127, phase 0
+  ---
+  duration_ms: 855.139417
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 300 ms, input 127, phase 19
+ok 117 - prediction: unseen pushes stay continuous on uneven frames at 30 Hz, 300 ms, input 127, phase 19
+  ---
+  duration_ms: 957.7
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 50 ms, input 0, phase 0
+ok 118 - prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 50 ms, input 0, phase 0
+  ---
+  duration_ms: 1098.269458
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 50 ms, input 0, phase 19
+ok 119 - prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 50 ms, input 0, phase 19
+  ---
+  duration_ms: 1036.609125
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 50 ms, input 127, phase 0
+ok 120 - prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 50 ms, input 127, phase 0
+  ---
+  duration_ms: 1108.413333
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 50 ms, input 127, phase 19
+ok 121 - prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 50 ms, input 127, phase 19
+  ---
+  duration_ms: 1035.314833
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 150 ms, input 0, phase 0
+ok 122 - prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 150 ms, input 0, phase 0
+  ---
+  duration_ms: 996.637625
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 150 ms, input 0, phase 19
+ok 123 - prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 150 ms, input 0, phase 19
+  ---
+  duration_ms: 983.856416
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 150 ms, input 127, phase 0
+ok 124 - prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 150 ms, input 127, phase 0
+  ---
+  duration_ms: 1006.334125
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 150 ms, input 127, phase 19
+ok 125 - prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 150 ms, input 127, phase 19
+  ---
+  duration_ms: 1058.93375
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 300 ms, input 0, phase 0
+ok 126 - prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 300 ms, input 0, phase 0
+  ---
+  duration_ms: 1078.913584
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 300 ms, input 0, phase 19
+ok 127 - prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 300 ms, input 0, phase 19
+  ---
+  duration_ms: 1215.111042
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 300 ms, input 127, phase 0
+ok 128 - prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 300 ms, input 127, phase 0
+  ---
+  duration_ms: 1095.655792
+  type: 'test'
+  ...
+# Subtest: prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 300 ms, input 127, phase 19
+ok 129 - prediction: unseen pushes stay continuous on uneven frames at 60 Hz, 300 ms, input 127, phase 19
+  ---
+  duration_ms: 1091.192583
+  type: 'test'
+  ...
+# Subtest: an effect read before a simulation step cannot leave a stale browser presentation
+ok 130 - an effect read before a simulation step cannot leave a stale browser presentation
+  ---
+  duration_ms: 462.664417
+  type: 'test'
+  ...
+# Subtest: prediction release matrix: 20 Hz server, 50 ms, 0.02 loss, seed 417
+ok 131 - prediction release matrix: 20 Hz server, 50 ms, 0.02 loss, seed 417
+  ---
+  duration_ms: 895.443167
+  type: 'test'
+  ...
+# {"hz":20,"mode":"server","delay":50,"loss":0.02,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 20 Hz server, 50 ms, 0.1 loss, seed 417
+ok 132 - prediction release matrix: 20 Hz server, 50 ms, 0.1 loss, seed 417
+  ---
+  duration_ms: 628.871167
+  type: 'test'
+  ...
+# {"hz":20,"mode":"server","delay":50,"loss":0.1,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 20 Hz server, 90 ms, 0 loss, seed 417
+ok 133 - prediction release matrix: 20 Hz server, 90 ms, 0 loss, seed 417
+  ---
+  duration_ms: 602.024958
+  type: 'test'
+  ...
+# {"hz":20,"mode":"server","delay":90,"loss":0,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 20 Hz server, 150 ms, 0.02 loss, seed 417
+ok 134 - prediction release matrix: 20 Hz server, 150 ms, 0.02 loss, seed 417
+  ---
+  duration_ms: 611.652458
+  type: 'test'
+  ...
+# {"hz":20,"mode":"server","delay":150,"loss":0.02,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 20 Hz server, 150 ms, 0.1 loss, seed 417
+ok 135 - prediction release matrix: 20 Hz server, 150 ms, 0.1 loss, seed 417
+  ---
+  duration_ms: 665.398042
+  type: 'test'
+  ...
+# {"hz":20,"mode":"server","delay":150,"loss":0.1,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 20 Hz server, 300 ms, 0.02 loss, seed 417
+ok 136 - prediction release matrix: 20 Hz server, 300 ms, 0.02 loss, seed 417
+  ---
+  duration_ms: 667.504458
+  type: 'test'
+  ...
+# {"hz":20,"mode":"server","delay":300,"loss":0.02,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 20 Hz server, 300 ms, 0.1 loss, seed 417
+ok 137 - prediction release matrix: 20 Hz server, 300 ms, 0.1 loss, seed 417
+  ---
+  duration_ms: 631.598458
+  type: 'test'
+  ...
+# {"hz":20,"mode":"server","delay":300,"loss":0.1,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 20 Hz browser, 50 ms, 0.02 loss, seed 417
+ok 138 - prediction release matrix: 20 Hz browser, 50 ms, 0.02 loss, seed 417
+  ---
+  duration_ms: 983.878834
+  type: 'test'
+  ...
+# {"hz":20,"mode":"browser","delay":50,"loss":0.02,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 20 Hz browser, 50 ms, 0.1 loss, seed 417
+ok 139 - prediction release matrix: 20 Hz browser, 50 ms, 0.1 loss, seed 417
+  ---
+  duration_ms: 648.502125
+  type: 'test'
+  ...
+# {"hz":20,"mode":"browser","delay":50,"loss":0.1,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 20 Hz browser, 150 ms, 0.02 loss, seed 417
+ok 140 - prediction release matrix: 20 Hz browser, 150 ms, 0.02 loss, seed 417
+  ---
+  duration_ms: 698.713041
+  type: 'test'
+  ...
+# {"hz":20,"mode":"browser","delay":150,"loss":0.02,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 20 Hz browser, 150 ms, 0.1 loss, seed 417
+ok 141 - prediction release matrix: 20 Hz browser, 150 ms, 0.1 loss, seed 417
+  ---
+  duration_ms: 617.257417
+  type: 'test'
+  ...
+# {"hz":20,"mode":"browser","delay":150,"loss":0.1,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 20 Hz browser, 300 ms, 0.02 loss, seed 417
+ok 142 - prediction release matrix: 20 Hz browser, 300 ms, 0.02 loss, seed 417
+  ---
+  duration_ms: 630.496916
+  type: 'test'
+  ...
+# {"hz":20,"mode":"browser","delay":300,"loss":0.02,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 20 Hz browser, 300 ms, 0.1 loss, seed 417
+ok 143 - prediction release matrix: 20 Hz browser, 300 ms, 0.1 loss, seed 417
+  ---
+  duration_ms: 656.476208
+  type: 'test'
+  ...
+# {"hz":20,"mode":"browser","delay":300,"loss":0.1,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 30 Hz server, 50 ms, 0.02 loss, seed 417
+ok 144 - prediction release matrix: 30 Hz server, 50 ms, 0.02 loss, seed 417
+  ---
+  duration_ms: 1058.989334
+  type: 'test'
+  ...
+# {"hz":30,"mode":"server","delay":50,"loss":0.02,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 30 Hz server, 50 ms, 0.1 loss, seed 417
+ok 145 - prediction release matrix: 30 Hz server, 50 ms, 0.1 loss, seed 417
+  ---
+  duration_ms: 707.510625
+  type: 'test'
+  ...
+# {"hz":30,"mode":"server","delay":50,"loss":0.1,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 30 Hz server, 150 ms, 0.02 loss, seed 417
+ok 146 - prediction release matrix: 30 Hz server, 150 ms, 0.02 loss, seed 417
+  ---
+  duration_ms: 694.136208
+  type: 'test'
+  ...
+# {"hz":30,"mode":"server","delay":150,"loss":0.02,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 30 Hz server, 150 ms, 0.1 loss, seed 417
+ok 147 - prediction release matrix: 30 Hz server, 150 ms, 0.1 loss, seed 417
+  ---
+  duration_ms: 664.807083
+  type: 'test'
+  ...
+# {"hz":30,"mode":"server","delay":150,"loss":0.1,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 30 Hz server, 300 ms, 0.02 loss, seed 417
+ok 148 - prediction release matrix: 30 Hz server, 300 ms, 0.02 loss, seed 417
+  ---
+  duration_ms: 678.710042
+  type: 'test'
+  ...
+# {"hz":30,"mode":"server","delay":300,"loss":0.02,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 30 Hz server, 300 ms, 0.1 loss, seed 417
+ok 149 - prediction release matrix: 30 Hz server, 300 ms, 0.1 loss, seed 417
+  ---
+  duration_ms: 722.611541
+  type: 'test'
+  ...
+# {"hz":30,"mode":"server","delay":300,"loss":0.1,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 30 Hz browser, 50 ms, 0.02 loss, seed 417
+ok 150 - prediction release matrix: 30 Hz browser, 50 ms, 0.02 loss, seed 417
+  ---
+  duration_ms: 1073.714042
+  type: 'test'
+  ...
+# {"hz":30,"mode":"browser","delay":50,"loss":0.02,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 30 Hz browser, 50 ms, 0.1 loss, seed 417
+ok 151 - prediction release matrix: 30 Hz browser, 50 ms, 0.1 loss, seed 417
+  ---
+  duration_ms: 679.887833
+  type: 'test'
+  ...
+# {"hz":30,"mode":"browser","delay":50,"loss":0.1,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 30 Hz browser, 150 ms, 0.02 loss, seed 417
+ok 152 - prediction release matrix: 30 Hz browser, 150 ms, 0.02 loss, seed 417
+  ---
+  duration_ms: 731.408917
+  type: 'test'
+  ...
+# {"hz":30,"mode":"browser","delay":150,"loss":0.02,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 30 Hz browser, 150 ms, 0.1 loss, seed 417
+ok 153 - prediction release matrix: 30 Hz browser, 150 ms, 0.1 loss, seed 417
+  ---
+  duration_ms: 684.990791
+  type: 'test'
+  ...
+# {"hz":30,"mode":"browser","delay":150,"loss":0.1,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 30 Hz browser, 300 ms, 0.02 loss, seed 417
+ok 154 - prediction release matrix: 30 Hz browser, 300 ms, 0.02 loss, seed 417
+  ---
+  duration_ms: 683.444417
+  type: 'test'
+  ...
+# {"hz":30,"mode":"browser","delay":300,"loss":0.02,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 30 Hz browser, 300 ms, 0.1 loss, seed 417
+ok 155 - prediction release matrix: 30 Hz browser, 300 ms, 0.1 loss, seed 417
+  ---
+  duration_ms: 722.951584
+  type: 'test'
+  ...
+# {"hz":30,"mode":"browser","delay":300,"loss":0.1,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 60 Hz server, 50 ms, 0.02 loss, seed 417
+ok 156 - prediction release matrix: 60 Hz server, 50 ms, 0.02 loss, seed 417
+  ---
+  duration_ms: 1239.643667
+  type: 'test'
+  ...
+# {"hz":60,"mode":"server","delay":50,"loss":0.02,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 60 Hz server, 50 ms, 0.1 loss, seed 417
+ok 157 - prediction release matrix: 60 Hz server, 50 ms, 0.1 loss, seed 417
+  ---
+  duration_ms: 856.248916
+  type: 'test'
+  ...
+# {"hz":60,"mode":"server","delay":50,"loss":0.1,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 60 Hz server, 150 ms, 0.02 loss, seed 417
+ok 158 - prediction release matrix: 60 Hz server, 150 ms, 0.02 loss, seed 417
+  ---
+  duration_ms: 834.95425
+  type: 'test'
+  ...
+# {"hz":60,"mode":"server","delay":150,"loss":0.02,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 60 Hz server, 150 ms, 0.1 loss, seed 417
+ok 159 - prediction release matrix: 60 Hz server, 150 ms, 0.1 loss, seed 417
+  ---
+  duration_ms: 778.887208
+  type: 'test'
+  ...
+# {"hz":60,"mode":"server","delay":150,"loss":0.1,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 60 Hz server, 300 ms, 0.02 loss, seed 417
+ok 160 - prediction release matrix: 60 Hz server, 300 ms, 0.02 loss, seed 417
+  ---
+  duration_ms: 788.358167
+  type: 'test'
+  ...
+# {"hz":60,"mode":"server","delay":300,"loss":0.02,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 60 Hz server, 300 ms, 0.1 loss, seed 417
+ok 161 - prediction release matrix: 60 Hz server, 300 ms, 0.1 loss, seed 417
+  ---
+  duration_ms: 786.756292
+  type: 'test'
+  ...
+# {"hz":60,"mode":"server","delay":300,"loss":0.1,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 60 Hz browser, 50 ms, 0.02 loss, seed 417
+ok 162 - prediction release matrix: 60 Hz browser, 50 ms, 0.02 loss, seed 417
+  ---
+  duration_ms: 1160.750334
+  type: 'test'
+  ...
+# {"hz":60,"mode":"browser","delay":50,"loss":0.02,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 60 Hz browser, 50 ms, 0.1 loss, seed 417
+ok 163 - prediction release matrix: 60 Hz browser, 50 ms, 0.1 loss, seed 417
+  ---
+  duration_ms: 863.657417
+  type: 'test'
+  ...
+# {"hz":60,"mode":"browser","delay":50,"loss":0.1,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 60 Hz browser, 150 ms, 0.02 loss, seed 417
+ok 164 - prediction release matrix: 60 Hz browser, 150 ms, 0.02 loss, seed 417
+  ---
+  duration_ms: 903.083333
+  type: 'test'
+  ...
+# {"hz":60,"mode":"browser","delay":150,"loss":0.02,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 60 Hz browser, 150 ms, 0.1 loss, seed 417
+ok 165 - prediction release matrix: 60 Hz browser, 150 ms, 0.1 loss, seed 417
+  ---
+  duration_ms: 838.355458
+  type: 'test'
+  ...
+# {"hz":60,"mode":"browser","delay":150,"loss":0.1,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# [netplay] in over 60/s was dropped
+# Subtest: prediction release matrix: 60 Hz browser, 300 ms, 0.02 loss, seed 417
+ok 166 - prediction release matrix: 60 Hz browser, 300 ms, 0.02 loss, seed 417
+  ---
+  duration_ms: 876.955042
+  type: 'test'
+  ...
+# {"hz":60,"mode":"browser","delay":300,"loss":0.02,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 60 Hz browser, 300 ms, 0.1 loss, seed 417
+ok 167 - prediction release matrix: 60 Hz browser, 300 ms, 0.1 loss, seed 417
+  ---
+  duration_ms: 859.592667
+  type: 'test'
+  ...
+# {"hz":60,"mode":"browser","delay":300,"loss":0.1,"seed":417,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 60 Hz browser, 300 ms, 0.1 loss, seed 1
+ok 168 - prediction release matrix: 60 Hz browser, 300 ms, 0.1 loss, seed 1
+  ---
+  duration_ms: 812.107625
+  type: 'test'
+  ...
+# {"hz":60,"mode":"browser","delay":300,"loss":0.1,"seed":1,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 60 Hz browser, 300 ms, 0.1 loss, seed 42
+ok 169 - prediction release matrix: 60 Hz browser, 300 ms, 0.1 loss, seed 42
+  ---
+  duration_ms: 952.706208
+  type: 'test'
+  ...
+# {"hz":60,"mode":"browser","delay":300,"loss":0.1,"seed":42,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 60 Hz browser, 300 ms, 0.1 loss, seed 43
+ok 170 - prediction release matrix: 60 Hz browser, 300 ms, 0.1 loss, seed 43
+  ---
+  duration_ms: 934.705583
+  type: 'test'
+  ...
+# {"hz":60,"mode":"browser","delay":300,"loss":0.1,"seed":43,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 60 Hz browser, 300 ms, 0.1 loss, seed 60
+ok 171 - prediction release matrix: 60 Hz browser, 300 ms, 0.1 loss, seed 60
+  ---
+  duration_ms: 2096.36775
+  type: 'test'
+  ...
+# {"hz":60,"mode":"browser","delay":300,"loss":0.1,"seed":60,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction release matrix: 60 Hz browser, 300 ms, 0.1 loss, seed 2026
+ok 172 - prediction release matrix: 60 Hz browser, 300 ms, 0.1 loss, seed 2026
+  ---
+  duration_ms: 1350.118667
+  type: 'test'
+  ...
+# {"hz":60,"mode":"browser","delay":300,"loss":0.1,"seed":2026,"corrections":0,"catches":0,"backwards":0}
+# Subtest: prediction catch-up boundary: replaced history stays forward, seed 1
+ok 173 - prediction catch-up boundary: replaced history stays forward, seed 1
+  ---
+  duration_ms: 1071.109583
+  type: 'test'
+  ...
+# [netplay] in over 60/s was dropped
+# Subtest: prediction clock slewing preserves the drawn pose on a delayed browser-host input path
+ok 174 - prediction clock slewing preserves the drawn pose on a delayed browser-host input path
+  ---
+  duration_ms: 867.693916
+  type: 'test'
+  ...
+# Subtest: prediction transport: server delivers a snapshot every 20 Hz tick on virtual time
+ok 175 - prediction transport: server delivers a snapshot every 20 Hz tick on virtual time
+  ---
+  duration_ms: 80.364417
+  type: 'test'
+  ...
+# Subtest: prediction transport: server delivers a snapshot every 30 Hz tick on virtual time
+ok 176 - prediction transport: server delivers a snapshot every 30 Hz tick on virtual time
+  ---
+  duration_ms: 79.9295
+  type: 'test'
+  ...
+# Subtest: prediction transport: server delivers a snapshot every 60 Hz tick on virtual time
+ok 177 - prediction transport: server delivers a snapshot every 60 Hz tick on virtual time
+  ---
+  duration_ms: 85.261625
+  type: 'test'
+  ...
+# Subtest: prediction transport: browser delivers a snapshot every 20 Hz tick on virtual time
+ok 178 - prediction transport: browser delivers a snapshot every 20 Hz tick on virtual time
+  ---
+  duration_ms: 63.236875
+  type: 'test'
+  ...
+# Subtest: prediction transport: browser delivers a snapshot every 30 Hz tick on virtual time
+ok 179 - prediction transport: browser delivers a snapshot every 30 Hz tick on virtual time
+  ---
+  duration_ms: 66.603333
+  type: 'test'
+  ...
+# Subtest: prediction transport: browser delivers a snapshot every 60 Hz tick on virtual time
+ok 180 - prediction transport: browser delivers a snapshot every 60 Hz tick on virtual time
+  ---
+  duration_ms: 188.378834
+  type: 'test'
+  ...
+# Subtest: prediction recalibration offset survives lossy reconciliation on server host
+ok 181 - prediction recalibration offset survives lossy reconciliation on server host
+  ---
+  duration_ms: 1220.535
+  type: 'test'
+  ...
+# Subtest: 3D facing takes a continuous unit arc through horizontal and vertical half turns
+ok 182 - 3D facing takes a continuous unit arc through horizontal and vertical half turns
+  ---
+  duration_ms: 0.494
+  type: 'test'
+  ...
+# Subtest: seat-or-solo uses a private rules round while full, then joins the server without uploading private state
+ok 183 - seat-or-solo uses a private rules round while full, then joins the server without uploading private state
+  ---
+  duration_ms: 575.229125
+  type: 'test'
+  ...
+# Subtest: 3D prediction clamps vertical bounds and draws animation from the catch-up pose
+ok 184 - 3D prediction clamps vertical bounds and draws animation from the catch-up pose
+  ---
+  duration_ms: 622.971209
+  type: 'test'
+  ...
+# Subtest: a late fast knock does not double its drawn speed while a large correction fades
+ok 185 - a late fast knock does not double its drawn speed while a large correction fades
+  ---
+  duration_ms: 650.584833
+  type: 'test'
+  ...
+# largest frame movement: 0.5760000190734935 m
+# Subtest: fresh 3D input preserves the pose at a 5 ms tick phase
+ok 186 - fresh 3D input preserves the pose at a 5 ms tick phase
+  ---
+  duration_ms: 491.197584
+  type: 'test'
+  ...
+# Subtest: fresh 3D input preserves the pose at a 17 ms tick phase
+ok 187 - fresh 3D input preserves the pose at a 17 ms tick phase
+  ---
+  duration_ms: 524.896833
+  type: 'test'
+  ...
+# Subtest: fresh 3D input preserves the pose at a 33 ms tick phase
+ok 188 - fresh 3D input preserves the pose at a 33 ms tick phase
+  ---
+  duration_ms: 507.116083
+  type: 'test'
+  ...
+# Subtest: fresh 3D input preserves the pose at a 45 ms tick phase
+ok 189 - fresh 3D input preserves the pose at a 45 ms tick phase
+  ---
+  duration_ms: 545.741958
+  type: 'test'
+  ...
+# Subtest: spatial snapshots reach real views, preserve prediction, recover a lost keyframe and reconnect
+ok 190 - spatial snapshots reach real views, preserve prediction, recover a lost keyframe and reconnect
+  ---
+  duration_ms: 495.214416
+  type: 'test'
+  ...
+# Subtest: live cover 2D outside spatial interest: visible prediction, edits, rejoin and restore
+ok 191 - live cover 2D outside spatial interest: visible prediction, edits, rejoin and restore
+  ---
+  duration_ms: 1479.941666
+  type: 'test'
+  ...
+# Subtest: live cover 2D outside spatial interest: visible prediction, edits, rejoin and restore at 300 ms + 12% loss
+ok 192 - live cover 2D outside spatial interest: visible prediction, edits, rejoin and restore at 300 ms + 12% loss
+  ---
+  duration_ms: 1939.69775
+  type: 'test'
+  ...
+# Subtest: live cover 3D outside spatial interest: visible prediction, edits, rejoin and restore
+ok 193 - live cover 3D outside spatial interest: visible prediction, edits, rejoin and restore
+  ---
+  duration_ms: 1548.343583
+  type: 'test'
+  ...
+# Subtest: live cover 3D outside spatial interest: visible prediction, edits, rejoin and restore at 300 ms + 12% loss
+ok 194 - live cover 3D outside spatial interest: visible prediction, edits, rejoin and restore at 300 ms + 12% loss
+  ---
+  duration_ms: 1803.144
+  type: 'test'
+  ...
+# Stormbreak 4058 shapes, six clients, max tick units: 113266
+# Subtest: solid Stormbreak terrain: six bodies, traversal, combat rays, live cover, rejoin and restore
+ok 195 - solid Stormbreak terrain: six bodies, traversal, combat rays, live cover, rejoin and restore
+  ---
+  duration_ms: 6492.005958
+  type: 'test'
+  ...
+# Stormbreak 4058 shapes, six clients, max tick units: 113266
+# Subtest: solid Stormbreak terrain: six bodies, traversal, combat rays, live cover, rejoin and restore at 300 ms + 12% loss
+ok 196 - solid Stormbreak terrain: six bodies, traversal, combat rays, live cover, rejoin and restore at 300 ms + 12% loss
+  ---
+  duration_ms: 8249.633291
+  type: 'test'
+  ...
+# Subtest: filtered rays and hit regions on authority and prediction
+ok 197 - filtered rays and hit regions on authority and prediction
+  ---
+  duration_ms: 704.919375
+  type: 'test'
+  ...
+# Subtest: filtered rays and hit regions on authority and prediction at 300 ms with loss
+ok 198 - filtered rays and hit regions on authority and prediction at 300 ms with loss
+  ---
+  duration_ms: 764.71575
+  type: 'test'
+  ...
+# Subtest: filtered ray declarations and API pass the strict author build
+ok 199 - filtered ray declarations and API pass the strict author build
+  ---
+  duration_ms: 5632.339083
+  type: 'test'
+  ...
+# Subtest: ranked bot admission retains entity resources and gates player control
+ok 200 - ranked bot admission retains entity resources and gates player control
+  ---
+  duration_ms: 569.051208
+  type: 'test'
+  ...
+# Subtest: ranked bot admission retains entity resources and gates player control with 300 ms and loss
+ok 201 - ranked bot admission retains entity resources and gates player control with 300 ms and loss
+  ---
+  duration_ms: 436.641375
+  type: 'test'
+  ...
+# Subtest: admission declarations pass the strict author build
+ok 202 - admission declarations pass the strict author build
+  ---
+  duration_ms: 4528.744166
+  type: 'test'
+  ...
+# Subtest: synchronous events preserve ordered pellet destruction and actor ownership
+ok 203 - synchronous events preserve ordered pellet destruction and actor ownership
+  ---
+  duration_ms: 631.36
+  type: 'test'
+  ...
+# Subtest: synchronous events preserve ordered pellet destruction and actor ownership with delay/loss
+ok 204 - synchronous events preserve ordered pellet destruction and actor ownership with delay/loss
+  ---
+  duration_ms: 358.944042
+  type: 'test'
+  ...
+# Subtest: synchronous event declaration passes the strict author build
+ok 205 - synchronous event declaration passes the strict author build
+  ---
+  duration_ms: 4924.312
+  type: 'test'
+  ...
+# Subtest: historical actor queries hit the rendered pose with 300 ms/loss and restore exactly
+ok 206 - historical actor queries hit the rendered pose with 300 ms/loss and restore exactly
+  ---
+  duration_ms: 568.73375
+  type: 'test'
+  ...
+# Subtest: history query declaration passes the strict author build
+ok 207 - history query declaration passes the strict author build
+  ---
+  duration_ms: 4794.78025
+  type: 'test'
+  ...
+# Subtest: query snapshots preserve captured geometry and fields across dispatch
+ok 208 - query snapshots preserve captured geometry and fields across dispatch
+  ---
+  duration_ms: 569.671375
+  type: 'test'
+  ...
+# Subtest: query snapshots preserve captured geometry and fields across dispatch with delay/loss
+ok 209 - query snapshots preserve captured geometry and fields across dispatch with delay/loss
+  ---
+  duration_ms: 353.21925
+  type: 'test'
+  ...
+# Subtest: round retry skips results and intermission, preserves seats and restores pending intent
+ok 210 - round retry skips results and intermission, preserves seats and restores pending intent
+  ---
+  duration_ms: 359.547709
+  type: 'test'
+  ...
+# Subtest: valued one-frame input survives sampling and private fields stay off every recipient wire
+ok 211 - valued one-frame input survives sampling and private fields stay off every recipient wire
+  ---
+  duration_ms: 422.762084
+  type: 'test'
+  ...
+# Subtest: valued one-frame input survives sampling and private fields stay off every recipient wire under seeded latency/loss
+ok 212 - valued one-frame input survives sampling and private fields stay off every recipient wire under seeded latency/loss
+  ---
+  duration_ms: 397.934375
+  type: 'test'
+  ...
+# Subtest: low-latency player cannot request a one-second-old target pose, seed 4520
+ok 213 - low-latency player cannot request a one-second-old target pose, seed 4520
+  ---
+  duration_ms: 318.976667
+  type: 'test'
+  ...
+# Subtest: an effect with an audience reaches who may perceive it and nobody else, on the wire, seed 4611: a small room
+ok 214 - an effect with an audience reaches who may perceive it and nobody else, on the wire, seed 4611: a small room
+  ---
+  duration_ms: 385.579833
+  type: 'test'
+  ...
+# Subtest: an effect with an audience reaches who may perceive it and nobody else, on the wire, seed 4611: Gates
+ok 215 - an effect with an audience reaches who may perceive it and nobody else, on the wire, seed 4611: Gates
+  ---
+  duration_ms: 437.907458
+  type: 'test'
+  ...
+# Subtest: a held input moves for the part of the tick it was down: sixty-millisecond taps at every phase of the tick, seed 4612: a small room
+ok 216 - a held input moves for the part of the tick it was down: sixty-millisecond taps at every phase of the tick, seed 4612: a small room
+  ---
+  duration_ms: 985.102834
+  type: 'test'
+  ...
+# Subtest: a held input moves for the part of the tick it was down: sixty-millisecond taps at every phase of the tick, seed 4612: Gates
+ok 217 - a held input moves for the part of the tick it was down: sixty-millisecond taps at every phase of the tick, seed 4612: Gates
+  ---
+  duration_ms: 3023.431
+  type: 'test'
+  ...
+# Subtest: own actions are predicted, confirmed and quietly retracted under 300 ms and loss, seed 4613: a small room
+ok 218 - own actions are predicted, confirmed and quietly retracted under 300 ms and loss, seed 4613: a small room
+  ---
+  duration_ms: 586.983334
+  type: 'test'
+  ...
+# Subtest: own actions are predicted, confirmed and quietly retracted under 300 ms and loss, seed 4613: Gates
+ok 219 - own actions are predicted, confirmed and quietly retracted under 300 ms and loss, seed 4613: Gates
+  ---
+  duration_ms: 531.874083
+  type: 'test'
+  ...
+# Subtest: a predicted effect is shown once a tick whatever else the predictor shows beside it, seed 4615: a small room
+ok 220 - a predicted effect is shown once a tick whatever else the predictor shows beside it, seed 4615: a small room
+  ---
+  duration_ms: 421.200959
+  type: 'test'
+  ...
+# Subtest: a predicted effect is shown once a tick whatever else the predictor shows beside it, seed 4615: Gates
+ok 221 - a predicted effect is shown once a tick whatever else the predictor shows beside it, seed 4615: Gates
+  ---
+  duration_ms: 426.862167
+  type: 'test'
+  ...
+# Subtest: the server's word that arrives before the tick is predicted confirms the prediction instead of leaving it to be retracted, seed 4616: a small room
+ok 222 - the server's word that arrives before the tick is predicted confirms the prediction instead of leaving it to be retracted, seed 4616: a small room
+  ---
+  duration_ms: 799.928042
+  type: 'test'
+  ...
+# Subtest: the server's word that arrives before the tick is predicted confirms the prediction instead of leaving it to be retracted, seed 4616: Gates
+ok 223 - the server's word that arrives before the tick is predicted confirms the prediction instead of leaving it to be retracted, seed 4616: Gates
+  ---
+  duration_ms: 800.627542
+  type: 'test'
+  ...
+# Subtest: a valued pulse is acted on in the tick it was predicted for: a predicted swap is drawn once and never drawn back, seed 4617: a small room
+ok 224 - a valued pulse is acted on in the tick it was predicted for: a predicted swap is drawn once and never drawn back, seed 4617: a small room
+  ---
+  duration_ms: 1463.470333
+  type: 'test'
+  ...
+# Subtest: a valued pulse is acted on in the tick it was predicted for: a predicted swap is drawn once and never drawn back, seed 4617: Gates
+ok 225 - a valued pulse is acted on in the tick it was predicted for: a predicted swap is drawn once and never drawn back, seed 4617: Gates
+  ---
+  duration_ms: 1655.893916
+  type: 'test'
+  ...
+# Subtest: a lying client cannot inflate its rewind: delayed acknowledgements, forged acknowledgements and the cap, seed 4614: a small room
+ok 226 - a lying client cannot inflate its rewind: delayed acknowledgements, forged acknowledgements and the cap, seed 4614: a small room
+  ---
+  duration_ms: 1416.887875
+  type: 'test'
+  ...
+# Subtest: a lying client cannot inflate its rewind: delayed acknowledgements, forged acknowledgements and the cap, seed 4614: Gates
+ok 227 - a lying client cannot inflate its rewind: delayed acknowledgements, forged acknowledgements and the cap, seed 4614: Gates
+  ---
+  duration_ms: 1366.705833
+  type: 'test'
+  ...
+# Subtest: a held tap whose frames arrive late still moves for the time it was down, seed 4618: a small room
+ok 228 - a held tap whose frames arrive late still moves for the time it was down, seed 4618: a small room
+  ---
+  duration_ms: 868.335833
+  type: 'test'
+  ...
+# late entries logged: 9
+# Subtest: a held tap whose frames arrive late still moves for the time it was down, seed 4618: Gates
+ok 229 - a held tap whose frames arrive late still moves for the time it was down, seed 4618: Gates
+  ---
+  duration_ms: 879.902709
+  type: 'test'
+  ...
+# late entries logged: 8
+# Subtest: recipient-specific fields through Gates: an owner field reaches its owner alone and a server field nobody, seed 4619
+ok 230 - recipient-specific fields through Gates: an owner field reaches its owner alone and a server field nobody, seed 4619
+  ---
+  duration_ms: 361.93475
+  type: 'test'
+  ...
+# Subtest: a predictor judges its own shot as the server will: the pose at the judged tick, 0 ms each way, seed 4620
+ok 231 - a predictor judges its own shot as the server will: the pose at the judged tick, 0 ms each way, seed 4620
+  ---
+  duration_ms: 755.890833
+  type: 'test'
+  ...
+# 0 ms each way: predicted 40, confirmed 40, retracted 0, not predicted 0
+# Subtest: a predictor judges its own shot as the server will: the pose at the judged tick, 75 ms each way, seed 4620
+ok 232 - a predictor judges its own shot as the server will: the pose at the judged tick, 75 ms each way, seed 4620
+  ---
+  duration_ms: 779.898
+  type: 'test'
+  ...
+# 75 ms each way: predicted 40, confirmed 40, retracted 0, not predicted 0
+# Subtest: a predictor judges its own shot as the server will: the pose at the judged tick, 150 ms each way, seed 4620
+ok 233 - a predictor judges its own shot as the server will: the pose at the judged tick, 150 ms each way, seed 4620
+  ---
+  duration_ms: 776.6995
+  type: 'test'
+  ...
+# 150 ms each way: predicted 0, confirmed 0, retracted 0, not predicted 0
+# Subtest: wrapped world 2D: two spatial views, seam interpolation, replay and restore
+ok 234 - wrapped world 2D: two spatial views, seam interpolation, replay and restore
+  ---
+  duration_ms: 486.583
+  type: 'test'
+  ...
+# {"dims":2,"delayed":false,"maxDrawStep":0.08275413513183594,"stats":{"handlers":452,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":167,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":444,"maxTickUnits":504}}
+# Subtest: wrapped world 2D: two spatial views, seam interpolation, replay and restore with 300 ms loss
+ok 235 - wrapped world 2D: two spatial views, seam interpolation, replay and restore with 300 ms loss
+  ---
+  duration_ms: 430.803916
+  type: 'test'
+  ...
+# {"dims":2,"delayed":true,"maxDrawStep":0.06774520874023438,"stats":{"handlers":474,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":167,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":444,"maxTickUnits":504}}
+# Subtest: wrapped world 3D: two spatial views, seam interpolation, replay and restore
+ok 236 - wrapped world 3D: two spatial views, seam interpolation, replay and restore
+  ---
+  duration_ms: 419.065875
+  type: 'test'
+  ...
+# {"dims":3,"delayed":false,"maxDrawStep":0.08275260925293537,"stats":{"handlers":452,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":319,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":652,"maxTickUnits":772}}
+# Subtest: wrapped world 3D: two spatial views, seam interpolation, replay and restore with 300 ms loss
+ok 237 - wrapped world 3D: two spatial views, seam interpolation, replay and restore with 300 ms loss
+  ---
+  duration_ms: 418.053292
+  type: 'test'
+  ...
+# {"dims":3,"delayed":true,"maxDrawStep":0.07045845031738907,"stats":{"handlers":474,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":319,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":652,"maxTickUnits":772}}
+# Subtest: generated map: atomic collision revision, flow lookup, mid-round regeneration and restore
+ok 238 - generated map: atomic collision revision, flow lookup, mid-round regeneration and restore
+  ---
+  duration_ms: 2444.251209
+  type: 'test'
+  ...
+# {"delayed":false,"mapBytes":1412,"stats":{"handlers":263,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":27821,"worst":"room.on.regenerate","lastError":"","failing":"","lost":0,"held":0,"tickUnits":6600,"maxTickUnits":34433}}
+# Subtest: generated map: atomic collision revision, flow lookup, mid-round regeneration and restore at 300 ms loss
+ok 239 - generated map: atomic collision revision, flow lookup, mid-round regeneration and restore at 300 ms loss
+  ---
+  duration_ms: 870.194709
+  type: 'test'
+  ...
+# {"delayed":true,"mapBytes":1412,"stats":{"handlers":293,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":27821,"worst":"room.on.regenerate","lastError":"","failing":"","lost":0,"held":0,"tickUnits":6600,"maxTickUnits":34433}}
+# Subtest: generated map follows offline fallback and returns to the server revision
+ok 240 - generated map follows offline fallback and returns to the server revision
+  ---
+  duration_ms: 1024.471333
+  type: 'test'
+  ...
+# Subtest: generated map activates immediately when its pending snapshot was lost
+ok 241 - generated map activates immediately when its pending snapshot was lost
+  ---
+  duration_ms: 321.579291
+  type: 'test'
+  ...
+# Subtest: 300 Hz substeps draw the within-tick path with two seeded 150 ms views and restore
+ok 242 - 300 Hz substeps draw the within-tick path with two seeded 150 ms views and restore
+  ---
+  duration_ms: 403.044583
+  type: 'test'
+  ...
+# Subtest: predictor room reads cannot pump or preview recursively during replay, seed 4804
+ok 243 - predictor room reads cannot pump or preview recursively during replay, seed 4804
+  ---
+  duration_ms: 922.45625
+  type: 'test'
+  ...
+# Subtest: input history under loss: small, drop, seed 47101
+ok 244 - input history under loss: small, drop, seed 47101
+  ---
+  duration_ms: 10917.425792
+  type: 'test'
+  ...
+# Subtest: input history under loss: small, burst, seed 47101
+ok 245 - input history under loss: small, burst, seed 47101
+  ---
+  duration_ms: 11144.744166
+  type: 'test'
+  ...
+# Subtest: input history under loss: Gates, drop, seed 47101
+ok 246 - input history under loss: Gates, drop, seed 47101
+  ---
+  duration_ms: 9085.212833
+  type: 'test'
+  ...
+# Subtest: input history under loss: Gates, burst, seed 47101
+ok 247 - input history under loss: Gates, burst, seed 47101
+  ---
+  duration_ms: 11557.707
+  type: 'test'
+  ...
+# Subtest: taken pulses use explicit hold policy
+ok 248 - taken pulses use explicit hold policy
+  ---
+  duration_ms: 344.675459
+  type: 'test'
+  ...
+# Subtest: taken pulses use explicit drop policy
+ok 249 - taken pulses use explicit drop policy
+  ---
+  duration_ms: 336.588166
+  type: 'test'
+  ...
+# Subtest: a fresh held press after ten seconds without view frames has no backlog
+ok 250 - a fresh held press after ten seconds without view frames has no backlog
+  ---
+  duration_ms: 530.714708
+  type: 'test'
+  ...
+# Subtest: twenty ordered pulses a second under 300 ms and 5% stalls: small, seed 47120
+ok 251 - twenty ordered pulses a second under 300 ms and 5% stalls: small, seed 47120
+  ---
+  duration_ms: 2462.143834
+  type: 'test'
+  ...
+# <--- Last few GCs --->
+# [75506:0x8c6400000]   263841 ms: Mark-Compact 3345.1 (3545.7) -> 3342.3 (3545.7) MB, pooled: 7 MB, 868.21 / 0.42 ms  (average mu = 0.086, current mu = 0.049) background allocation failure; GC in old space requested
+# [75506:0x8c6400000]   265232 ms: Mark-Compact 3342.2 (3545.7) -> 3342.2 (3544.9) MB, pooled: 8 MB, 1374.12 / 0.00 ms  (average mu = 0.044, current mu = 0.012) background allocation failure; GC in old space requested
+# <--- JS stacktrace --->
+# FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory
+# ----- Native stack trace -----
+#  1: 0x100b43f14 node::OOMErrorHandler(char const*, v8::OOMDetails const&) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+#  2: 0x100d200a0 v8::internal::V8::FatalProcessOutOfMemory(v8::internal::Isolate*, char const*, v8::OOMDetails const&) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+#  3: 0x100f2f6b4 v8::internal::Heap::stack() [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+#  4: 0x100f45ad0 v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace, v8::internal::GarbageCollectionReason, v8::GCCallbackFlags)::$_1::operator()() const [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+#  5: 0x100f45364 void heap::base::Stack::SetMarkerAndCallbackImpl<v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace, v8::internal::GarbageCollectionReason, v8::GCCallbackFlags)::$_1>(heap::base::Stack*, void*, void const*) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+#  6: 0x101700fc0 PushAllRegistersAndIterateStack [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+#  7: 0x100f2d874 v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace, v8::internal::GarbageCollectionReason, v8::GCCallbackFlags) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+#  8: 0x100f32e88 v8::internal::Heap::CollectGarbageFromAnyThread(v8::internal::LocalHeap*, v8::internal::GarbageCollectionReason) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+#  9: 0x100f4fd1c v8::internal::LocalHeap::PerformCollectionAndAllocateAgain(int, v8::internal::AllocationType, v8::internal::AllocationOrigin, v8::internal::AllocationAlignment) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 10: 0x100f049a4 v8::internal::Factory::CodeBuilder::BuildInternal(bool) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 11: 0x10143c664 v8::internal::baseline::BaselineCompiler::Build(v8::internal::LocalIsolate*) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 12: 0x100d6cf7c v8::internal::GenerateBaselineCode(v8::internal::Isolate*, v8::internal::Handle<v8::internal::SharedFunctionInfo>) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 13: 0x100dc6fbc v8::internal::Compiler::CompileSharedWithBaseline(v8::internal::Isolate*, v8::internal::Handle<v8::internal::SharedFunctionInfo>, v8::internal::Compiler::ClearExceptionFlag, v8::internal::IsCompiledScope*) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 14: 0x100dc72ac v8::internal::Compiler::CompileBaseline(v8::internal::Isolate*, v8::internal::Handle<v8::internal::JSFunction>, v8::internal::Compiler::ClearExceptionFlag, v8::internal::IsCompiledScope*) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 15: 0x101439144 v8::internal::baseline::BaselineBatchCompiler::EnqueueFunction(v8::internal::Handle<v8::internal::JSFunction>) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 16: 0x100eb88f8 v8::internal::TieringManager::OnInterruptTick(v8::internal::Handle<v8::internal::JSFunction>, v8::internal::CodeKind) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 17: 0x1013236e8 v8::internal::(anonymous namespace)::BytecodeBudgetInterrupt(v8::internal::Isolate*, v8::internal::Arguments<(v8::internal::ArgumentsType)0>&, v8::internal::CodeKind) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 18: 0x101321e20 v8::internal::Runtime_BytecodeBudgetInterrupt_Ignition(int, unsigned long*, v8::internal::Isolate*) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 19: 0x1017e5df4 Builtins_CEntry_Return1_ArgvOnStack_NoBuiltinExit [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 20: 0x1018cfaa4 Builtins_ReturnHandler [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 21: 0x101750ef0 Builtins_InterpreterEntryTrampoline [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 22: 0x101750ef0 Builtins_InterpreterEntryTrampoline [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 23: 0x10ed67be0 
+# 24: 0x11bc12bb8 
+# 25: 0x10ed682d0 
+# 26: 0x101750ef0 Builtins_InterpreterEntryTrampoline [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 27: 0x11bc894a4 
+# 28: 0x119198ee8 
+# 29: 0x11485f84c 
+# 30: 0x10178d410 Builtins_AsyncFunctionAwaitResolveClosure [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 31: 0x101858f78 Builtins_PromiseFulfillReactionJob [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 32: 0x10177d6f4 Builtins_RunMicrotasks [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 33: 0x10174eaf4 Builtins_JSRunMicrotasksEntry [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 34: 0x100e87460 v8::internal::(anonymous namespace)::Invoke(v8::internal::Isolate*, v8::internal::(anonymous namespace)::InvokeParams const&) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 35: 0x100e87d08 v8::internal::(anonymous namespace)::InvokeWithTryCatch(v8::internal::Isolate*, v8::internal::(anonymous namespace)::InvokeParams const&) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 36: 0x100e87e40 v8::internal::Execution::TryRunMicrotasks(v8::internal::Isolate*, v8::internal::MicrotaskQueue*) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 37: 0x100eb50c0 v8::internal::MicrotaskQueue::RunMicrotasks(v8::internal::Isolate*) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 38: 0x100eb5844 v8::internal::MicrotaskQueue::PerformCheckpoint(v8::Isolate*) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 39: 0x100a42878 node::InternalCallbackScope::Close() [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 40: 0x100a42b70 node::InternalMakeCallback(node::Environment*, v8::Local<v8::Object>, v8::Local<v8::Object>, v8::Local<v8::Function>, int, v8::Local<v8::Value>*, node::async_context, v8::Local<v8::Value>) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 41: 0x100a42e78 node::InternalMakeCallback(v8::Isolate*, v8::Local<v8::Object>, v8::Local<v8::Function>, int, v8::Local<v8::Value>*, node::async_context, v8::Local<v8::Value>) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 42: 0x100ad017c node::Environment::CheckImmediate(uv_check_s*) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 43: 0x10173426c uv__run_check [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 44: 0x10172d28c uv_run [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 45: 0x100a43394 node::SpinEventLoopInternal(node::Environment*) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 46: 0x100b8e72c node::NodeMainInstance::Run() [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 47: 0x100aff07c node::Start(int, char**) [/Users/ryan/.nvm/versions/node/v22.23.3/bin/node]
+# 48: 0x18b4e7e00 start [/usr/lib/dyld]
+# Subtest: packages/studio/test/rules-view.test.mjs
+not ok 1 - packages/studio/test/rules-view.test.mjs
+  ---
+  duration_ms: 265288.33625
+  type: 'test'
+  location: '/Users/ryan/.homie/worktrees/runner-error-smoothing/packages/studio/test/rules-view.test.mjs:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: ~
+  signal: 'SIGABRT'
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: valid report accepted, duplicate does not move again, missing reports freeze
+ok 253 - valid report accepted, duplicate does not move again, missing reports freeze
+  ---
+  duration_ms: 5.787042
+  type: 'test'
+  ...
+# Subtest: reject forged speed as a cut
+ok 254 - reject forged speed as a cut
+  ---
+  duration_ms: 0.569917
+  type: 'test'
+  ...
+# Subtest: reject forged teleport as a cut
+ok 255 - reject forged teleport as a cut
+  ---
+  duration_ms: 0.963166
+  type: 'test'
+  ...
+# Subtest: reject forged gravity as a cut
+ok 256 - reject forged gravity as a cut
+  ---
+  duration_ms: 0.289042
+  type: 'test'
+  ...
+# Subtest: reject forged wall-pass as a cut
+ok 257 - reject forged wall-pass as a cut
+  ---
+  duration_ms: 0.723833
+  type: 'test'
+  ...
+# Subtest: reject forged NaN as a cut
+ok 258 - reject forged NaN as a cut
+  ---
+  duration_ms: 0.638375
+  type: 'test'
+  ...
+# Subtest: out of order reports wait for missing predecessor
+ok 259 - out of order reports wait for missing predecessor
+  ---
+  duration_ms: 0.265416
+  type: 'test'
+  ...
+# Subtest: transport decodes reports and ignores claims from an old placement
+ok 260 - transport decodes reports and ignores claims from an old placement
+  ---
+  duration_ms: 2.331875
+  type: 'test'
+  ...
+# Subtest: a burst cannot buy extra simulation time
+ok 261 - a burst cannot buy extra simulation time
+  ---
+  duration_ms: 0.946167
+  type: 'test'
+  ...
+# Subtest: an early fresh baseline still spends elapsed server time and cannot buy skipped travel
+ok 262 - an early fresh baseline still spends elapsed server time and cannot buy skipped travel
+  ---
+  duration_ms: 0.433209
+  type: 'test'
+  ...
+# Subtest: a rejected report fences all reports from the old revision
+ok 263 - a rejected report fences all reports from the old revision
+  ---
+  duration_ms: 0.1995
+  type: 'test'
+  ...
+# Subtest: report tolerance cannot accumulate into extra speed
+ok 264 - report tolerance cannot accumulate into extra speed
+  ---
+  duration_ms: 0.14525
+  type: 'test'
+  ...
+# Subtest: wall crossing is rejected even at legal speed and legal one-tick distance
+ok 265 - wall crossing is rejected even at legal speed and legal one-tick distance
+  ---
+  duration_ms: 0.193542
+  type: 'test'
+  ...
+# Subtest: a fresh baseline after a pause grants one physics step, never skipped travel
+ok 266 - a fresh baseline after a pause grants one physics step, never skipped travel
+  ---
+  duration_ms: 0.18475
+  type: 'test'
+  ...
+# Subtest: host replies to an excessive owner clock lead with a new placement instead of dropping forever
+ok 267 - host replies to an excessive owner clock lead with a new placement instead of dropping forever
+  ---
+  duration_ms: 0.475416
+  type: 'test'
+  ...
+# Subtest: every accepted report is available for contact checks and duplicate reports add no paths
+ok 268 - every accepted report is available for contact checks and duplicate reports add no paths
+  ---
+  duration_ms: 0.497083
+  type: 'test'
+  ...
+# Subtest: owner receive queue overflow explicitly resynchronizes without acknowledging a lost path
+ok 269 - owner receive queue overflow explicitly resynchronizes without acknowledging a lost path
+  ---
+  duration_ms: 1.23475
+  type: 'test'
+  ...
+1..269
+# tests 269
+# suites 0
+# pass 268
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 265631.902708

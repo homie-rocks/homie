@@ -1,0 +1,22 @@
+[
+  {
+    "path": "/private/tmp/claude-501/-Users-ryan--homie-workspace-homie--claude-worktrees-dev-feedback-toolkit-3293de/28857d96-0d6d-42cb-ac18-64d8c7896e73/scratchpad/pt6/tp/cmp6.mjs",
+    "sha256": "61f53531650b5c1f734c6b0048b1da0f0efca22638e5b58bfd8f439e2f56db1f",
+    "unchanged": true
+  },
+  {
+    "path": "/private/tmp/claude-501/-Users-ryan--homie-workspace-homie--claude-worktrees-dev-feedback-toolkit-3293de/28857d96-0d6d-42cb-ac18-64d8c7896e73/scratchpad/pt6/tp/browser.mjs",
+    "sha256": "37ba5510af08afabc36fbc8db0e323f57731caaa034499e40f16bc1fc02cc1a1",
+    "unchanged": true
+  },
+  {
+    "path": "/private/tmp/claude-501/-Users-ryan--homie-workspace-homie--claude-worktrees-dev-feedback-toolkit-3293de/28857d96-0d6d-42cb-ac18-64d8c7896e73/scratchpad/pt6/tp/phone.mjs",
+    "sha256": "7e391a49d076a0d5554d094d89fb0d8d3daec11d975c190586ad9d76a315b694",
+    "unchanged": true
+  },
+  {
+    "path": "/tmp/owner-perf-round/profile-phone.mjs",
+    "sha256": "1c3ddb1ad07cfa9367565484b30d0ec2d42ce69721cd420bd66e4620b56b2ea7",
+    "unchanged": true
+  }
+]

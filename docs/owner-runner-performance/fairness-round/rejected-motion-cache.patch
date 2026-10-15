@@ -1,0 +1,18 @@
+--- a/packages/studio/rules/view.ts
++++ b/packages/studio/rules/view.ts
+@@ -267,9 +267,14 @@
+     return f;
+   }
+   const entities = new WeakMap<Unpacked, Entity>();
++  // Movement and unpacking replace motion records; public readers can share
++  // their frozen snapshot without cloning it for every interpolated frame.
++  const motions = new WeakMap<Record<string, unknown>, Readonly<Record<string, unknown>>>();
+   const entityOf = (u: Unpacked, mine = false, cache = !mine): Entity => {
+     if (cache && entities.has(u)) return entities.get(u)!;
+-    const entity = Object.freeze({ id: u.id, kind: u.kind, pos: u.pos, vel: u.vel, heading: u.heading, grounded: u.grounded, ...(u.seat !== undefined ? { seat: u.seat, owner: u.owner, driver: u.driver, away: u.away, goal: u.goal } : {}), ...(mine ? { mine: true } : {}), ...u.fields, motion: Object.freeze({ ...u.motion }) }) as Entity;
++    let motion = motions.get(u.motion);
++    if (!motion) { motion = Object.freeze({ ...u.motion }); motions.set(u.motion, motion); }
++    const entity = Object.freeze({ id: u.id, kind: u.kind, pos: u.pos, vel: u.vel, heading: u.heading, grounded: u.grounded, ...(u.seat !== undefined ? { seat: u.seat, owner: u.owner, driver: u.driver, away: u.away, goal: u.goal } : {}), ...(mine ? { mine: true } : {}), ...u.fields, motion }) as Entity;
+     if (cache) entities.set(u, entity);
+     return entity;
+   };

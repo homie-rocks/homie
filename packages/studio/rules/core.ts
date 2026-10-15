@@ -1129,7 +1129,10 @@ export function createCore(c: Compiled, opts: { validateOwners?: boolean; charac
     const reject = () => { stats.held++; e.r = (e.r+1)&0xffff; owners.delete(e.id); };
     for (const report of reports.slice(0,64)) {
       if (report.r !== e.r) continue;
-      if (!Number.isSafeInteger(report.tick) || !Number.isSafeInteger(report.base) || report.base < state.since-1 || report.base > tick || report.tick <= report.base || report.tick > tick + tickHz ||
+      // A report and its baseline may arrive early after transit improves.
+      // Both remain inside the report's existing future window; the elapsed
+      // simulation allowance below is independent of these clock labels.
+      if (!Number.isSafeInteger(report.tick) || !Number.isSafeInteger(report.base) || report.base < state.since-1 || report.tick <= report.base || report.tick > tick + tickHz ||
           ![report.pos,report.vel,report.heading].every(v => v && [v.x,v.y,v.z].every(Number.isFinite))) { reject(); return; }
       // A fresh snapshot baseline can restart the input clock after a pause.
       // It grants no travel: the next report must still be exactly one move
