@@ -19,13 +19,23 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## Unreleased
 
-- Store Lobby rooms as SQLite rows and deliver room summaries through Queues. Hibernate direct player and watch sockets between browser-hosted rounds, retaining session and moderation state; Gate and server-room hibernation remains draft work.
+- MCP responses no longer wait for tool catalogue notifications to existing streams; delivery stays in the request background work. Owner statistics explain the ingestion and hourly rollup delay for page counters.
 
-- Deliver mutations and verified Stripe webhooks through retryable Queues. Store PaymentIntent ids before follow-up, recover lost responses using the original idempotency key, and retain uncertain payments for review.
+- CI records Chrome launch stderr, process exits, shared-memory availability and concurrent Chrome processes in its timing artifacts so launch failures can be diagnosed from runner evidence.
 
-- Batch cold metadata, use causally consistent D1 sessions, bake catalogues, route public assets first, isolate subscription objects and load rendering modules at their entry points. Index MCP expiry and deliver catalogue notifications in background work.
+- Split routing, room chat and owner controls into focused modules. Retain pending chat and agent counters after failed writes.
+- Save PaymentIntent ids before follow-up calls; recover lost create responses with the original idempotency key, retaining uncertain orders for review.
 
-- Split request routing, runtime helpers, Table, Lobby, room chat, controls and wire validation into modules without changing behavior.
+- Live room lists read queued Lobby snapshots in the startup D1 batch. Reads no longer wake each game, and expired MCP stream cleanup runs in cron.
+
+- Direct player and watch sockets hibernate between browser-hosted rounds, restoring seats, tokens, moderation limits and authorized context from SQLite. Negotiated edge heartbeats keep idle sockets alive without waking JavaScript. Active legacy games retain their normal tick path; Gate diagnostics stop polling when worlds stop arriving.
+
+- Page metrics use Analytics Engine with hourly, retry-safe D1 rollups that preserve existing owner totals. Game and budget counters remain durable.
+
+- Batch cold runtime metadata and bake the catalogue into build modules. Serve public assets before invoking the Worker.
+- Queue mutation notifications and verified Stripe events with retries and a dead-letter queue; cache room listings by metadata revision.
+- Separate stream Durable Objects from matchmaking, migrate Lobby snapshots to SQLite rows, and index MCP prefix/expiry access.
+- Use Chrome debugging pipes for shared test-launch flags.
 
 ## [0.54.0] - 2026-10-15
 

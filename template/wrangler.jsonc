@@ -25,6 +25,15 @@
   ],
   "workers_dev": true,
   "preview_urls": true,
+  "analytics_engine_datasets": [
+    {
+      "binding": "STUDIO_ANALYTICS",
+      "dataset": "my_studio_visits"
+    }
+  ],
+  "analytics": {
+    "binding": "ANALYTICS_SQL"
+  },
   "triggers": {
     "crons": [
       "17 * * * *"
@@ -140,7 +149,8 @@
     }
   ],
   "vars": {
-    "STUDIO_NAME": "My Studio"
+    "STUDIO_NAME": "My Studio",
+    "STUDIO_ANALYTICS_DATASET": "my_studio_visits"
   },
   "observability": {
     "enabled": true
@@ -148,6 +158,7 @@
   "previews": {
     "vars": {
       "STUDIO_NAME": "My Studio",
+      "STUDIO_ANALYTICS_DATASET": "my_studio_visits",
       "HOMIE_PREVIEW": "1"
     },
     "durable_objects": {
