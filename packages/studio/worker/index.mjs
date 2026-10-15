@@ -97,7 +97,7 @@ import { appRole, openPath } from './app-format.mjs';
  */
 import { playerEnabled, EMBED_GAME_JS } from './embed.mjs';
 import { departure, errorLine, versionOf } from './room.mjs';
-import { hostedGame } from './hosted.mjs';
+import { hostedGame } from './hosted-registry.mjs';
 
 import { appCors, isAppOrigin } from './standalone.mjs';
 import { ROOM_ID, badRoomPage, embedAncestors, embedPreview, frameAncestors, noWatchPage, playPage, shellKey, shellStandIn, watchPage } from './pages.mjs';
@@ -140,7 +140,7 @@ import { PART_FILES, isPartsPath, partsRoutes, withPartsBand } from './parts.mjs
 
 export { seatCount, SEAT_MAX } from './seats.mjs';
 // Server-hosted games (NETPLAY.md section 29): the studio's site/src/worker.mjs hands the build's rules over with this.
-export { hostRules } from './hosted.mjs';
+export { hostRules } from './hosted-registry.mjs';
 /** For a studio whose Worker has player accounts: hand their server API to the back office once (worker/office.mjs). */
 export { usePlayers } from './office.mjs';
 /** For a studio's own wrapper Worker: count its own pages the way the template counts its pages. */
@@ -1371,7 +1371,8 @@ async function fallback(request, env, url, getCat) {
 }
 
 
-export {Table, roomEndAt} from './table.mjs';
+export {Table} from './table.mjs';
+export {roomEndAt} from './room-lifecycle.mjs';
 export {Lobby, LOBBY_APP_VERSIONS, LOBBY_ROOMS_MAX} from './lobby.mjs';
 
 export {AppRecordHub, EventHub} from './stream-objects.mjs';

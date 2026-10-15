@@ -20,15 +20,7 @@ const json = (body, status = 200, extra = {}) => new Response(`${JSON.stringify(
   status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...extra },
 });
 
-const ROOM_ALARM_MS = 10 * 60_000;
-
-const ROOM_PAUSE_MS = 60_000;
-
-export function roomEndAt({ people, pausedAt, createdAt, restoredAt = null, savedAt = null, alarmAt = null }) {
-  // Only people keep play alive. With no durable alarm, the last save bounds an unrecorded departure.
-  const absence = pausedAt ?? (restoredAt !== null && alarmAt === null ? savedAt : null) ?? restoredAt ?? createdAt;
-  return people > 0 ? Infinity : absence + ROOM_PAUSE_MS;
-}
+import {ROOM_ALARM_MS,ROOM_PAUSE_MS,roomEndAt} from './room-lifecycle.mjs';
 
 export class Table {
   constructor(ctx, env) {
