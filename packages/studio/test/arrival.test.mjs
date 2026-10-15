@@ -151,22 +151,25 @@ test('the card says what is happening, and lifts when the game says it is playab
   assert.equal(a.phase, 'done');
 });
 
-test('a game whose helper is older lifts the card once seated; one that never says, at the cap', async () => {
+test('seats and elapsed time never claim readiness; a playable signal is required', async () => {
   const old = await page(bright);
   old.post({ what: 'attached', v: 1, rev: 8 });
   old.post({ what: 'role', role: 'host', seat: 0 });
   assert.equal(old.shell.arrival.phase, 'world');
   old.ctx.run(700);
-  assert.equal(old.shell.arrival.by, 'seated');
+  assert.notEqual(old.shell.arrival.phase, 'done');
   const quiet = await page(bright);
   quiet.post({ what: 'attached', v: 1, rev: 8, arrival: 'game' });
   quiet.ctx.run(14_000);
   assert.equal(quiet.shell.arrival.phase, 'join', 'still joining at 14 s');
   quiet.ctx.run(1_100);
-  assert.equal(quiet.shell.arrival.by, 'cap', 'lifted 15 s after the helper attached');
+  assert.notEqual(quiet.shell.arrival.phase, 'done');
+  quiet.post({what:'playable',by:'game'});
+  assert.equal(quiet.shell.arrival.by,'game');
   const none = await page(bright);
   none.ctx.run(30_000);
-  assert.equal(none.shell.arrival.by, 'timeout', 'and 30 s after the page opened, whatever happens');
+  assert.notEqual(none.shell.arrival.phase, 'done');
+  assert.equal(none.shell.arrival.stalled,true);
   const off = await page(bright, '?arrive=0');
   assert.equal(off.el('[data-arrive]').removed, true);
   assert.equal(off.shell.arrival, null);

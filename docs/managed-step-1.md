@@ -1,161 +1,135 @@
-# Managed step 1: studios on Workers for Platforms
+# Managed step 1 — round 2
 
-Tested 2026-10-15 on Homie's account, from `managed-step-1` at toolkit 0.53.0.
-Design reviewed from `origin/managed-design` (`managed-design.md` and
-`managed-first-slice.md`, draft #134). This is the hosting spike only: no signup,
-payments, Artifacts pipeline, operations agent, production migration or version bump.
+Rebased onto toolkit **0.54.0**. This is a draft hosting experiment, not a
+production-ready managed release. Design context is PR #134: operator
+1243116 B.C. Ltd.; Homie's Stripe account is the Connect platform; managed
+payments use server-created Checkout Sessions. No payment integration changed.
 
-## Implementation
+## Changes and regression proofs
 
-`packages/managed` is a private, separate operator package. It prepares a current
-studio build for `wrangler deploy --dispatch-namespace`, creates a dedicated D1,
-applies the studio migrations, deploys an outbound deny Worker and exact-registry
-dispatcher, and records resource cleanup. It never calls the self-hosted deploy
-command. No self-hosted source or behavior changed.
+1. **Request path and measurements.** Compare the same copied Little Inlet studio
+   as a WFP user Worker and an ordinary Worker, with separate D1/DO resources.
+   Sequential requests alternate which deployment goes first. Only test origins
+   are queried. Binding counters preserve object identity so they cannot invalidate
+   the toolkit catalogue cache. Counts are Worker-side calls, not DO-internal SQL
+   or a billing meter. Measurements and sample sizes follow below.
+2. **D1 readiness and deploy correctness.** A bounded `SELECT 1` retry handles
+   provisioning error 7403 before migrations. Arbitrary SQL/auth failures fail
+   immediately. Both fresh databases migrated without a manual rerun. Preparation
+   includes missing current toolkit migrations alongside the studio's migrations:
+   an older built studio's migration folder alone was insufficient for 0.54.0.
+   Every deploy runs the toolkit's `functionDeploymentSQL` before exposing new code.
+   Live reconciliation preserved existing subscriptions/cursors and removed an
+   injected stale subscription. Tests cover transient/error/timeout paths.
+3. **Truthful cleanup.** Read before delete, verify absence afterward, and report
+   `deleted` or `already absent`. DO existence is captured before script deletion
+   can cascade. A 404 is never called a successful explicit deletion. State is
+   exclusively locked to prevent competing control commands losing resource IDs.
+4. **Scheduling and limits.** Cron produces one Queue message per active studio,
+   in batches of at most 100. Consumer batch size one, independent acknowledgments,
+   three retries with 30-second delay and a separate DLQ. Delivery rechecks the
+   route registry. A tenant failure cannot reject another tenant's delivery.
+   This follows [Queues retry semantics](https://developers.cloudflare.com/queues/configuration/batching-retries/).
+   Queues are preferable here to a DO scheduler per tenant because retry and DLQ
+   handling are built in and each delivery already has a durable schedule key.
+   The enqueue producer still iterates the test registry; a production registry
+   needs paginated/sharded scheduling, not one unbounded list in a cron invocation.
+5. **Trust boundary.** No decorative header stripping. Public `/__managed/*`
+   requests are rejected; only dispatcher-supplied `ctx.props.managedTick` invokes
+   scheduled work. Tests send spoofed headers and query parameters and verify they
+   cannot select a script or grant tick access.
+6. **JSONC.** Use pinned `jsonc-parser` 3.2.0 (also used by Wrangler). Inline/block
+   comments and trailing commas work; malformed documents fail with parse errors.
+7. **Arbitrary code and operating controls.** See the explicit boundaries below.
+8. **Honest UI readiness.** The room cover no longer lifts on a seat, missing-helper
+   timer, 15-second cap or 30-second timeout. A playable signal is required. A
+   stalled connection keeps the cover with a reload diagnostic. Tests prove both
+   no false readiness and eventual release on the signal. Old 0.53.0 screenshots
+   and timeout-based room results are historical only, not acceptance evidence.
 
-The copied Little Inlet source came from `/Users/ryan/Studios/examples/little-inlet`
-(read-only). Work happened in `/tmp/hm-test-wcHKn8/studio`. Excluded local state,
-credentials and deployment state; replaced Cloudflare resource declarations in
-the copy, built against this checkout's 0.53.0 toolkit, and added the existing
-Coin Dash starter. The only functional example change was changing the existing
-`rolling-slots` schedule from daily to every minute in the copy to observe a tick.
-No live records, Stripe credentials or payments were copied or exercised.
+## Code, egress and operational boundaries
 
-Versions: Node 22.22.0, Wrangler 4.145.0, studio 0.53.0. Preserved the generated
-studio compatibility date 2026-06-01; new control Workers use 2026-10-01.
-Wrangler upload: 5309.51 KiB raw / 1430.87 KiB gzip, initial startup 4 ms,
-181 assets. All 27 SQL migration files applied to each dedicated database
-(including the example's two differently named `0015` files).
+Owners may supply arbitrary Worker and Durable Object JavaScript. There is no
+rules-only restriction. Preparation accepts extra self-bound DO classes and
+adds migration tags for newly introduced classes; existing identities survive
+redeployment. Destructive class removal is rejected pending an explicit migration.
+The namespace is explicitly configured `trusted_workers:false`; source production
+bindings, routes, platform secrets, dispatch and control databases are excluded.
+[Cloudflare isolation](https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/reference/worker-isolation/)
+is the runtime boundary, not a JavaScript rules compiler.
 
-## Evidence
+The managed adapter removes the source `global_fetch_strictly_public` compatibility flag: live testing showed that retaining it bypassed the WFP outbound hook. Only the trusted outbound Worker enables it for public forwarding. A regression test protects that distinction.
 
-- Real hostname dispatch: `hm-test-dispatch.ryan-d2f.workers.dev`, root mapped
-  explicitly to `hm-test-inlet`. `/__preview` mapped to `hm-test-preview` for API
-  isolation probes. URLs are intentionally retired after the test.
-- Home and app shell returned 200. Little Inlet rendered its canvas and full UI,
-  left the loading cover and reported “Together, live” without page errors.
-  [Screenshot](proof/managed-step-1/app.png), [browser facts](proof/managed-step-1/app.json).
-  MCP initialize, tools/list and studio_info
-  tools/call returned valid SSE JSON-RPC responses identifying Little Inlet.
-- Little Inlet's real records endpoint rejected an unknown field with 400,
-  then created `intentions/hm-test-record` with `{name:"Managed test",x:1,z:2}`.
-  A subsequent GET returned version 1; the preview Worker returned no record
-  for that same ID. Dedicated binding inventories have different D1 and all
-  four DO IDs. No dispatch or cross-studio binding was attached.
-- The existing two-browser Coin Dash check passed: room `pub-1`, seats 0 and 1,
-  both server replicas; round 1 results contained both humans and two bots;
-  no reconnects during the round. [Raw room result](proof/managed-step-1/room.json).
-- [HTTP/MCP and binding evidence](proof/managed-step-1/http.json) includes original
-  and redeployed inlet DO identities: stable script/class names retained them.
-- With final outbound policy restored, a deliberate socket close reconnected
-  to the same `hm-reconnect` room and seat 0. [Reconnect facts](proof/managed-step-1/reconnect.json).
-- The existing rolling-slots function consumed a synthetic `slots.refresh` event
-  with its required function selector and recorded `complete`, creating dated
-  October 17 shoreline/planting slots. Three natural minute cron ticks also completed through the trusted adapter.
-  [Function-run receipts](proof/managed-step-1/functions.json).
-- Narrow managed tests cover registry routing, spoofed headers, public tick
-  rejection, trusted tick dispatch and removal of production capabilities.
-  Engine TypeScript build passed. No toolkit test matrix or performance suite ran.
+The outbound Worker permits public HTTP(S). It stamps `x-homie-tenant` from the
+trusted dispatch parameter, replacing any owner-supplied value, logs tenant/host,
+and blocks configured control-plane hosts plus internal IP literals/names.
+Redirects are returned without automatically following an unchecked destination.
+The stamp is attribution, never authentication. There is no blanket external
+service allowlist. An initial failing block probe unexpectedly made one public GET to homie.rocks; no write occurred. The final block probe uses only the disposable dispatcher host.
 
-The first room proof ran while outbound was temporarily detached for diagnosis;
-it must not be read as proof of that policy's behavior. Final configuration
-restored the outbound binding and removed temporary diagnostic instrumentation.
-Initial requests timed out at 15–20 seconds; later examples returned in roughly
-6–12 seconds. Both browser seat times were around 60 seconds. The room check's
-loading covers lifted by timeout, not an explicit game-ready signal. These are
-functional results with a substantial startup limitation, not production latency
-or capacity acceptance. One run on a shared machine cannot isolate the cause;
-removing outbound was not a controlled performance experiment.
+**DO fetches bypass the outbound Worker.** This is a documented
+[Cloudflare limitation](https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/outbound-workers/),
+not a promise to stamp every DO request. The filter also does not establish a
+DNS-resolution/rebinding firewall. Control services must authenticate every call;
+no tenant gets operator credentials or internal network bindings. Dispatch limits
+bound user invocations, not autonomous DO alarms or already-open room sockets.
 
-## Assumptions and smallest adaptations
+Workers Logs are enabled for user Workers, DO classes, dispatch and outbound. The outbound Worker also implements a Tail consumer, recording platform-provided script identity alongside tenant trace outcomes.
+`analytics.mjs` scopes Worker request/error/subrequest/CPU queries to script name
+and DO CPU queries to recorded tenant namespace IDs. See
+[WFP observability](https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/observability/)
+and [DO analytics](https://developers.cloudflare.com/durable-objects/observability/metrics-and-analytics/).
+Empty/delayed provider results are not recorded as zero CPU. No cost or margin
+acceptance is inferred from this small run.
 
-| Toolkit assumption | Managed adaptation / finding |
-| --- | --- |
-| Ordinary Worker, direct workers.dev URL and source production resource IDs | Separate allowlisted config; WFP upload flag; exact trusted hostname registry. No change to toolkit deploy. |
-| Table/Lobby plus newer Gate/Concentrator exports | All four SQLite classes and self-bindings uploaded unchanged. Each tenant has separate namespace IDs; stable names preserve them on redeploy. |
-| D1 migrations and records | Run existing migrations against a newly allocated tenant D1. Schema validation, role checks and records runtime unchanged. |
-| Built assets and dynamic module graph | Preserve the current immutable Worker generation, ESModule rules and ASSETS binding with run_worker_first. Copy assets and reset catalogue canonical origin and directory-sharing metadata; no extra hosting service. |
-| Studio cron triggers installed by normal deploy | Wrangler's WFP branch returns before trigger installation. Omit user crons; one trusted dispatch cron calls the toolkit scheduled handler through a wrapper with dispatch props. Public requests cannot invoke the reserved path. |
-| URL-rooted links, cookies and sockets | Use one hostname per real studio. Path prefixes work for direct API probes, not a transparent complete-site mount. |
-| All studio configuration may be copied | Source IDs, routes, secrets, custom bindings, AI and R2 are excluded. Additional capabilities require explicit mapping. |
-| Ordinary preview flag can represent managed preview | Allocate a separate user Worker/D1/DO set. Do not set HOMIE_PREVIEW: toolkit preview behavior bypasses some production settings; test isolation should not bypass them. |
-| Arbitrary studio code can be secured by outbound filtering | False for DO code. Restrict room customization to the existing guarded rules language and reviewed runtime; require provenance/review before deployment. |
+`control.mjs kill STATE SCRIPT` removes that tenant's route and redeploys dispatch.
+New requests fail closed and pending ticks are acknowledged without invoking it.
+Other routes remain. Existing sockets and autonomous alarms require a separate
+emergency script removal; the route switch is not represented as instantaneous
+termination of all tenant compute.
 
-Untrusted WFP hides `request.cf` and disables `caches.default`. No direct use of
-those APIs was found in the toolkit Worker source inspected here; no workaround
-or trusted namespace was needed. [Isolation documentation](https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/reference/worker-isolation/).
+`build.mjs` stubs a fail-closed **remote Cloudflare Sandbox** build boundary for
+step 2: immutable source/toolkit snapshots, per-tenant ephemeral containers,
+no operator credentials or host mounts, resource/time/output limits, sealed
+artifact digest and cleanup. No local owner-code fallback exists in this API.
+The actual remote runner is not implemented in step 1. This round's existing test
+fixture was rebuilt in a local macOS process sandbox with network denied and
+writes restricted to test directories. That is fixture evidence only; it does
+**not** meet the requirement to run customer builds off the operator machine.
+Customer onboarding must remain disabled until the remote runner is implemented.
 
-### Room egress boundary
+Before public tenants share a parent domain, put that dedicated tenant parent in
+the Public Suffix List PRIVATE section, keep control/login on a separate origin,
+use host-only `__Host-` cookies, and test sibling Domain-cookie rejection in
+supported browsers after PSL propagation. No domain/PSL submission occurred here.
 
-Cloudflare explicitly says [outbound Workers do not intercept DO fetches](https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/outbound-workers/).
-This package does not claim otherwise. The current rules compiler rejects
-`fetch`, `globalThis`, dynamic imports and other non-allowlisted globals and
-methods. Coin Dash used that compiler unchanged. The reviewed toolkit owns the
-Table/Lobby/Gate/Concentrator implementations. No AI, mTLS, VPC, external service
-or platform credentials were attached. Browser-hosted app code is not a source
-of server privileges.
+## Measurement method and status
 
-This is an **operator-only reviewed-build harness**, not an untrusted upload
-service. A modified Worker entry, dependency or DO class can bypass a JavaScript
-compiler policy. The managed release gate must attest the compiler/runtime and
-review executable changes; general unreviewed JS in tenant DOs requires a stronger
-isolation design. Outbound limits are no substitute for that gate. Even approved
-bindings are explicit capabilities, outside a blanket Internet-fetch policy.
+Node 22.23.3 and Wrangler 4.149.0; Vancouver client on a shared machine/network.
+Both databases report **WNAM**, with direct query metadata **SEA**, primary reads
+and replication disabled. The earlier degraded-region diagnosis is not inferred
+from today's measurements. There is no region-matched control outside WNAM.
 
-## Provider limits and cost notes
+Cold samples require the probe's first-isolate-invocation marker after a code
+redeploy; a request still served by an earlier warm version is excluded. This is
+an observed isolate-first invocation, not a promise about physical host coldness.
+Warm requests reuse the deployment; any unexpected first-isolate samples are
+reported separately. These small samples do not establish tail latency or capacity.
+The lobby endpoint measures seat discovery; browser-to-playable timings are a
+separate proof and are not mislabeled as HTTP timings.
 
-- [Bindings](https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/bindings/): ASSETS, one D1, four DO bindings and four text variables worked. Only explicitly attached resources are available. No binding-count limit was hit.
-- [WFP limits](https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/reference/limits/): current docs state no WFP DO namespace count limit; four per user Worker worked here. That is not a measured maximum or an ordinary-Worker account quota. WFP also removes the ordinary Worker script-count cap. Gradual deployments are unavailable; updates replace 100% of user traffic.
-- [Assets](https://developers.cloudflare.com/changelog/post/2025-09-02-increased-static-asset-limits/): 100,000 files/version for paid/WFP, 25 MiB/file, Wrangler >=4.34.0. This build's 181 files stayed below limits. R2 was not needed or tested.
-- [D1](https://developers.cloudflare.com/d1/platform/limits/): paid accounts support 50,000 databases, 10 GB/database and 1 TB/account. Dedicated databases fit this model; each DB is single-threaded. No quota boundary was stress-tested.
-- [Custom limits](https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/custom-limits/): dispatcher uses 100 CPU-ms/50 subrequests for HTTP, 1000 CPU-ms/100 subrequests for ticks. These are spike settings, not calibrated production budgets, and must not be treated as DO alarm/room CPU caps.
-- [Tags](https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/tags/): tags were written through the script tags API (`hm-test`, `step-1`, studio/preview). Eight tags/script maximum. Tags are management metadata, never authorization.
-- Cron: WFP Wrangler deploy does not install them; the ordinary dispatcher owns one cron. Cloudflare documents [up to 15 minutes for cron changes to propagate](https://developers.cloudflare.com/workers/configuration/cron-triggers/). No claim that a generic Workers pricing reference proves per-user cron support.
-- [WFP pricing](https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/reference/pricing/): US$25/month includes 20 million requests, 60 million CPU-ms and 1,000 scripts; additional usage is $0.30/million requests, $0.02/million CPU-ms and $0.02/script. Dispatch/user/outbound count as one request chain. This account's subscription was already enabled; it was not changed.
-- [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/) is rows/storage, not a per-database rental. [DO compute and storage](https://developers.cloudflare.com/durable-objects/platform/pricing/) remain separate cost dimensions; active real-time rooms and alarms matter. A minutely wake is about 43,200 invocations/studio/30-day month before retries. No invoice-derived cost, per-venue capacity or margin is claimed.
+The first measurement attempt lacked toolkit migrations 0027–0033; scheduled work
+failed on `app_tool_namespaces`. Those results are discarded. Another early probe
+invalidated binding identity; those results are also discarded. Final measurements
+must use the completed schema and identity-preserving probe.
 
-## Resource lifecycle
+## Validation and lifecycle
 
-All test resources were deleted; verified at 2026-10-15 15:25:45 UTC.
-[Recorded resources](proof/managed-step-1/resources.json) and
-[15 individual not-found checks](proof/managed-step-1/cleanup.json).
-Wrangler dispatch-namespace list returned `[]` again.
+Fast managed, arrival and request-budget checks pass. The workerd MCP budget check
+hit its 30-second timeout alongside other work, then passed alone in 3.2 seconds.
+The existing artifact's function declarations were reconciled on both databases.
 
-| Created resource | Identity | Deleted |
-| --- | --- | --- |
-| Dispatch namespace `homie-managed-test` | `854b5b6f-dbdc-4b91-b5e1-2ef9b1cad9bb` | Yes |
-| Ordinary Workers | `hm-test-dispatch`, `hm-test-outbound` | Both |
-| User Workers and asset deployments | `hm-test-inlet`, `hm-test-preview`, 181 assets each | Both scripts removed with namespace; no asset-serving deployment remains |
-| D1 `hm-test-inlet-db` | `e6e9f37b-1b79-4b35-aac0-025c42af93a5` | Yes |
-| D1 `hm-test-preview-db` | `329881a8-179b-4fbb-8a3a-0098eabcbb4f` | Yes |
-
-| DO `hm-test-inlet_Concentrator` | `73d35544e14547998561763c901dd7ae` | Yes |
-| DO `hm-test-inlet_Gate` | `a4a2660f53604ee684a012d7af01ca87` | Yes |
-| DO `hm-test-inlet_Lobby` | `77f95b9943b3411398a29ac2f2f24f89` | Yes |
-| DO `hm-test-inlet_Table` | `264dbd0574754c58933a431f993c3749` | Yes |
-| DO `hm-test-preview_Concentrator` | `33c57a77f8b349c0ba4253a1ae718ba0` | Yes |
-| DO `hm-test-preview_Gate` | `0a6efdc2ca754a3089098b2f75c88583` | Yes |
-| DO `hm-test-preview_Lobby` | `666d54daa1bd45e8b8890c74cfbcf071` | Yes |
-| DO `hm-test-preview_Table` | `9e9e6fc871e24615b778c6e5c414a591` | Yes |
-
-**Cleanup finding:** deleting a dispatch namespace removed its user scripts but
-left their DO namespaces addressable by ID. Each was then explicitly deleted
-through the DO namespace API and re-read as 404. The package now records the DO
-IDs during deployment/before cleanup, removes user scripts with `force=true`,
-and explicitly deletes/verifies any recorded DO namespaces before deleting the
-dispatch namespace. Do not assume parent deletion destroys tenant room storage.
-The forced-user-delete cascade itself was not separately measured here; the
-explicit DO deletion and not-found checks were exercised on all eight IDs.
-
-[Dispatcher cron traces](proof/managed-step-1/cron.json) show actual scheduled
-invocations with `outcome: ok`; these were not an HTTP tick simulation. First
-recorded natural schedule was the 15:18 UTC minute, after the 15:00 initial
-trigger and intervening dispatcher deployments (last at about 15:10). Deleting
-the dispatcher removed that cron. The temporary tail connection was closed by
-terminating only PID 37629, which this task started; browser harnesses closed
-their own processes in `finally` blocks. No other agent's process was touched.
-
-No production Worker, homie.rocks deployment, original example source or live
-example data was changed. Test-only module instrumentation was removed before
-the final deployment. No service subscription was enabled or cancelled. Deleted
-asset deployments are not a claim of immediate physical CDN blob erasure.
+Only `homie-managed-test` and `hm-test-*` resources were created. Original example
+studios, production Workers and homie.rocks were not changed. The per-resource
+inventory, final measurement table, browser facts and verified deletion receipts
+are recorded with the completion of this experiment below.

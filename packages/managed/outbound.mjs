@@ -1,2 +1,28 @@
-// Step 1 has no approved Internet destinations. Bindings remain explicit capabilities.
-export default {fetch() { return new Response('Managed egress denied', {status:403}); }};
+/** DO fetches bypass this Worker. No platform secrets/bindings belong in tenant code. */
+export function blocked(host, controls=[]) {
+  host=host.toLowerCase().replace(/\.$/,'');
+  if(controls.some(h=>host===h||host.endsWith('.'+h)))return true;
+  if(!host.includes('.') && !host.includes(':'))return true;
+  if(/(^|\.)(localhost|local|internal|invalid)$/.test(host))return true;
+  // IPv6 literals: permit only global unicast (2000::/3); deny IPv4-mapped literals too.
+  if(host.startsWith('['))return !/^\[[23][0-9a-f]{3}:/.test(host);
+  if(/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+    const [a,b]=host.split('.').map(Number);
+    return a===0||a===10||a===127||a>=224||a===169&&b===254||a===172&&b>=16&&b<=31||a===192&&b===168||a===100&&b>=64&&b<=127||a===198&&(b===18||b===19);
+  }
+  return false;
+}
+export default {
+  async tail(events) {
+    for(const event of events)console.log(JSON.stringify({tenant:event.scriptName,event:'tenant-trace',outcome:event.outcome,logs:event.logs,exceptions:event.exceptions}));
+  },
+  async fetch(request,env) {
+    if(!/^hm-test-[a-z0-9-]+$/.test(env.tenant??''))return new Response('Missing tenant',{status:403});
+    const url=new URL(request.url);
+    if(!['https:','http:'].includes(url.protocol)||blocked(url.hostname,env.CONTROL_HOSTS??[]))return new Response('Managed destination denied',{status:403});
+    const headers=new Headers(request.headers);headers.set('x-homie-tenant',env.tenant);
+    console.log(JSON.stringify({tenant:env.tenant,event:'egress',host:url.hostname}));
+    // Never follow an unchecked redirect; the tenant's next fetch is checked again.
+    return fetch(new Request(request,{headers,redirect:'manual'}));
+  }
+};

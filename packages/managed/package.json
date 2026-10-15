@@ -2,5 +2,10 @@
   "name": "@homie-rocks/managed",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --test test.mjs" }
+  "scripts": {
+    "test": "node --test test.mjs"
+  },
+  "dependencies": {
+    "jsonc-parser": "3.2.0"
+  }
 }

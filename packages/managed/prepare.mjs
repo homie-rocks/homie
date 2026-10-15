@@ -1,8 +1,13 @@
-import {cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
+import {cpSync, readdirSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
 import {resolve, dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-const read = path => JSON.parse(readFileSync(path,'utf8').replace(/^\s*\/\/.*$/gm,''));
+import {parse, printParseErrorCode} from 'jsonc-parser';
+export const read = path => {
+  const errors=[];const value=parse(readFileSync(path,'utf8'),errors,{allowTrailingComma:true});
+  if(errors.length)throw new Error(`Invalid JSONC ${path}: ${errors.map(e=>printParseErrorCode(e.error)).join(', ')}`);
+  return value;
+};
 export function prepare({studio, output, name, databaseId, accountId, hostname}) {
   if (!/^hm-test-[a-z0-9-]+$/.test(name)) throw new Error('Step 1 only accepts hm-test- resource names');
   if (!/^[0-9a-f-]{36}$/.test(databaseId) || !/^[0-9a-f]{32}$/.test(accountId)) throw new Error('Explicit database/account IDs required');
@@ -13,6 +18,11 @@ export function prepare({studio, output, name, databaseId, accountId, hostname})
   mkdirSync(output,{recursive:true});
   const artifact=mkdtempSync(join(output,'build-'));
   const runtime=join(artifact,'runtime'); mkdirSync(runtime,{recursive:true});
+  const migrationsDir=join(artifact,'migrations');mkdirSync(migrationsDir,{recursive:true});
+  const sourceMigrations=join(studio,'site/migrations');
+  if(existsSync(sourceMigrations))cpSync(sourceMigrations,migrationsDir,{recursive:true});
+  const toolkitMigrations=fileURLToPath(new URL('../../template/site/migrations/',import.meta.url));
+  for(const file of readdirSync(toolkitMigrations))if(file.endsWith('.sql')&&!existsSync(join(migrationsDir,file)))cpSync(join(toolkitMigrations,file),join(migrationsDir,file));
   const assets=join(artifact,'assets');
   cpSync(join(studio,'site/dist'),assets,{recursive:true});
   const catalogue=read(join(assets,'games.json'));
@@ -36,23 +46,34 @@ export default {
 };
 `);
   // Deliberate allowlist: no source routes, secrets, remote bindings, AI, R2 or production IDs.
+  const classes=[...new Set(['Table','Lobby','Gate','Concentrator',...(source.durable_objects?.bindings??[]).filter(b=>!b.script_name).map(b=>b.class_name)])];
+  if(classes.some(c=>!/^[$A-Za-z_][$A-Za-z0-9_]*$/.test(c)))throw new Error('Invalid DO class');
+  const ownBindings=(source.durable_objects?.bindings??[]).filter(b=>!b.script_name).map(({name,class_name})=>({name,class_name}));
+  const previous=existsSync(join(output,'user.json'))?read(join(output,'user.json')):null;
+  const migrations=previous?.migrations??[{tag:'v1',new_sqlite_classes:classes}];
+  const known=migrations.flatMap(m=>m.new_sqlite_classes??[]);
+  const added=classes.filter(c=>!known.includes(c));
+  if(previous&&known.some(c=>!classes.includes(c)))throw new Error('Removing DO classes requires an explicit storage migration');
+  if(added.length)migrations.push({tag:'v'+(migrations.length+1),new_sqlite_classes:added});
   const config={name, account_id:accountId, main:join(runtime,'managed.mjs'),
-    compatibility_date:source.compatibility_date, compatibility_flags:source.compatibility_flags,
+    compatibility_date:source.compatibility_date, // This source flag bypasses the WFP outbound hook; only the trusted outbound Worker uses it.
+    compatibility_flags:(source.compatibility_flags??[]).filter(flag=>flag!=='global_fetch_strictly_public'),
     no_bundle:true, find_additional_modules:true,
     rules:[{type:'ESModule',globs:['**/*.js','**/*.mjs'],fallthrough:true}],
     assets:{directory:assets,binding:'ASSETS',run_worker_first:true},
-    durable_objects:{bindings:['Table','Lobby','Gate','Concentrator'].map(class_name=>({name:class_name.toUpperCase(),class_name}))},
-    migrations:[{tag:'v1',new_sqlite_classes:['Table','Lobby','Gate','Concentrator']}],
-    d1_databases:[{binding:'DB',database_name:name+'-db',database_id:databaseId,migrations_dir:join(studio,'site/migrations')}],
+    durable_objects:{bindings:[...['Table','Lobby','Gate','Concentrator'].filter(c=>!ownBindings.some(b=>b.name===c.toUpperCase())).map(class_name=>({name:class_name.toUpperCase(),class_name})),...ownBindings]},
+    migrations,
+    d1_databases:[{binding:'DB',database_name:name+'-db',database_id:databaseId,migrations_dir:migrationsDir}],
     vars:{STUDIO_NAME:source.vars?.STUDIO_NAME ?? name, HOMIE_CONCEPT:'1',
       STUDIO_FUNCTION_CRONS:source.vars?.STUDIO_FUNCTION_CRONS ?? '[]',
       STUDIO_FUNCTION_MANAGED_CRONS:source.vars?.STUDIO_FUNCTION_MANAGED_CRONS ?? '[]'},
-    observability:{enabled:true}};
+    tail_consumers:[{service:'hm-test-outbound'}],observability:{enabled:true}};
   writeFileSync(join(output,'user.json'),JSON.stringify(config,null,2)+'\n');
   const here=dirname(fileURLToPath(import.meta.url));
-  writeFileSync(join(output,'outbound.json'),JSON.stringify({name:'hm-test-outbound',account_id:accountId,main:join(here,'outbound.mjs'),compatibility_date:'2026-10-01',workers_dev:false},null,2));
+  writeFileSync(join(output,'outbound.json'),JSON.stringify({name:'hm-test-outbound',account_id:accountId,main:join(here,'outbound.mjs'),compatibility_date:'2026-10-01',compatibility_flags:['global_fetch_strictly_public'],workers_dev:false,observability:{enabled:true},vars:{CONTROL_HOSTS:['homie.rocks','api.cloudflare.com',hostname]}},null,2));
   writeFileSync(join(output,'dispatch.json'),JSON.stringify({name:'hm-test-dispatch',account_id:accountId,main:join(here,'dispatch.mjs'),compatibility_date:'2026-10-01',workers_dev:true,
-    dispatch_namespaces:[{binding:'STUDIOS',namespace:'homie-managed-test',outbound:{service:'hm-test-outbound'}}],
+    dispatch_namespaces:[{binding:'STUDIOS',namespace:'homie-managed-test',outbound:{service:'hm-test-outbound',parameters:['tenant']}}],
+    queues:{producers:[{binding:'TICKS',queue:'hm-test-ticks'}],consumers:[{queue:'hm-test-ticks',max_batch_size:1,max_retries:3,dead_letter_queue:'hm-test-ticks-dlq'}]},
     vars:{ROUTES:[{hostname,prefix:'/',script:name}]},triggers:{crons:['* * * * *']},observability:{enabled:true}},null,2));
   return config;
 }
