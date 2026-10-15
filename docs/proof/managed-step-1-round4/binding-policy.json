@@ -1,0 +1,281 @@
+[
+  {
+    "name": "hm-test-inlet",
+    "compatibility_flags": [
+      "nodejs_compat",
+      "global_fetch_strictly_public"
+    ],
+    "limits": {
+      "cpu_ms": 1000
+    },
+    "bindings": [
+      {
+        "name": "ASSETS",
+        "type": "assets"
+      },
+      {
+        "name": "CONCENTRATOR",
+        "type": "durable_object_namespace",
+        "class_name": "Concentrator",
+        "namespace_id": "993b04c8d16b4a16ad227d70df9ae1bb"
+      },
+      {
+        "name": "DB",
+        "type": "d1"
+      },
+      {
+        "name": "GATE",
+        "type": "durable_object_namespace",
+        "class_name": "Gate",
+        "namespace_id": "7c73a9a7a7e643c3b865b7cca0060d88"
+      },
+      {
+        "name": "HOMIE_CONCEPT",
+        "type": "plain_text"
+      },
+      {
+        "name": "HOMIE_STOP",
+        "type": "service",
+        "service": "hm-test-dispatch",
+        "entrypoint": "StopControl"
+      },
+      {
+        "name": "LOBBY",
+        "type": "durable_object_namespace",
+        "class_name": "Lobby",
+        "namespace_id": "ff9f08509d7f47d69eb01d64825b4678"
+      },
+      {
+        "name": "OWNER",
+        "type": "durable_object_namespace",
+        "class_name": "OwnerRoom",
+        "namespace_id": "37e21a79e2fe44ef9cc79029d78bdcb3"
+      },
+      {
+        "name": "STUDIO_FUNCTION_CRONS",
+        "type": "plain_text"
+      },
+      {
+        "name": "STUDIO_FUNCTION_MANAGED_CRONS",
+        "type": "plain_text"
+      },
+      {
+        "name": "STUDIO_NAME",
+        "type": "plain_text"
+      },
+      {
+        "name": "TABLE",
+        "type": "durable_object_namespace",
+        "class_name": "Table",
+        "namespace_id": "cc0941ef5c9a49c98c604187c4941fdb"
+      }
+    ],
+    "tail_consumers": [
+      {
+        "service": "hm-test-outbound"
+      }
+    ],
+    "observability": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "redact_query_string": false,
+      "logs": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "persist": true,
+        "invocation_logs": true
+      },
+      "traces": {
+        "enabled": false,
+        "persist": true,
+        "head_sampling_rate": 1
+      }
+    }
+  },
+  {
+    "name": "hm-test-other",
+    "compatibility_flags": [
+      "nodejs_compat",
+      "global_fetch_strictly_public"
+    ],
+    "limits": {
+      "cpu_ms": 1000
+    },
+    "bindings": [
+      {
+        "name": "ASSETS",
+        "type": "assets"
+      },
+      {
+        "name": "CONCENTRATOR",
+        "type": "durable_object_namespace",
+        "class_name": "Concentrator",
+        "namespace_id": "19334a496fe44cad9ca0717fbc257a50"
+      },
+      {
+        "name": "DB",
+        "type": "d1"
+      },
+      {
+        "name": "GATE",
+        "type": "durable_object_namespace",
+        "class_name": "Gate",
+        "namespace_id": "2c2c780e27c649ae9ca5fc4290f6cfdd"
+      },
+      {
+        "name": "HOMIE_CONCEPT",
+        "type": "plain_text"
+      },
+      {
+        "name": "HOMIE_STOP",
+        "type": "service",
+        "service": "hm-test-dispatch",
+        "entrypoint": "StopControl"
+      },
+      {
+        "name": "LOBBY",
+        "type": "durable_object_namespace",
+        "class_name": "Lobby",
+        "namespace_id": "bd93e67ea121479aa2f5b1be6bb73c84"
+      },
+      {
+        "name": "OWNER",
+        "type": "durable_object_namespace",
+        "class_name": "OwnerRoom",
+        "namespace_id": "c8803b316caa44bca8cdbaa5b14b50e0"
+      },
+      {
+        "name": "STUDIO_FUNCTION_CRONS",
+        "type": "plain_text"
+      },
+      {
+        "name": "STUDIO_FUNCTION_MANAGED_CRONS",
+        "type": "plain_text"
+      },
+      {
+        "name": "STUDIO_NAME",
+        "type": "plain_text"
+      },
+      {
+        "name": "TABLE",
+        "type": "durable_object_namespace",
+        "class_name": "Table",
+        "namespace_id": "53bec3ee40d441848650947bd7f9f4ab"
+      }
+    ],
+    "tail_consumers": [
+      {
+        "service": "hm-test-outbound"
+      }
+    ],
+    "observability": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "redact_query_string": false,
+      "logs": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "persist": true,
+        "invocation_logs": true
+      },
+      "traces": {
+        "enabled": false,
+        "persist": true,
+        "head_sampling_rate": 1
+      }
+    }
+  },
+  {
+    "name": "hm-test-speed-managed",
+    "compatibility_flags": [
+      "nodejs_compat",
+      "global_fetch_strictly_public"
+    ],
+    "limits": {
+      "cpu_ms": 1000
+    },
+    "bindings": [
+      {
+        "name": "ASSETS",
+        "type": "assets"
+      },
+      {
+        "name": "CONCENTRATOR",
+        "type": "durable_object_namespace",
+        "class_name": "Concentrator",
+        "namespace_id": "6ed8deb9aa614fc487755fb7b7c7c6bf"
+      },
+      {
+        "name": "DB",
+        "type": "d1"
+      },
+      {
+        "name": "GATE",
+        "type": "durable_object_namespace",
+        "class_name": "Gate",
+        "namespace_id": "43afd2d86c7946859ef269dfa7c2c260"
+      },
+      {
+        "name": "HOMIE_CONCEPT",
+        "type": "plain_text"
+      },
+      {
+        "name": "HOMIE_STOP",
+        "type": "service",
+        "service": "hm-test-dispatch",
+        "entrypoint": "StopControl"
+      },
+      {
+        "name": "LOBBY",
+        "type": "durable_object_namespace",
+        "class_name": "Lobby",
+        "namespace_id": "75ede55ec75c4d7ead8fd610771ca461"
+      },
+      {
+        "name": "OWNER",
+        "type": "durable_object_namespace",
+        "class_name": "OwnerRoom",
+        "namespace_id": "97e3c422153742f0a83d409d14812b0d"
+      },
+      {
+        "name": "STUDIO_FUNCTION_CRONS",
+        "type": "plain_text"
+      },
+      {
+        "name": "STUDIO_FUNCTION_MANAGED_CRONS",
+        "type": "plain_text"
+      },
+      {
+        "name": "STUDIO_NAME",
+        "type": "plain_text"
+      },
+      {
+        "name": "TABLE",
+        "type": "durable_object_namespace",
+        "class_name": "Table",
+        "namespace_id": "5e468ee13a6d4e8b958285195378da3c"
+      }
+    ],
+    "tail_consumers": [
+      {
+        "service": "hm-test-outbound"
+      }
+    ],
+    "observability": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "redact_query_string": false,
+      "logs": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "persist": true,
+        "invocation_logs": true
+      },
+      "traces": {
+        "enabled": false,
+        "persist": true,
+        "head_sampling_rate": 1
+      }
+    }
+  }
+]

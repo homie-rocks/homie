@@ -1,0 +1,16 @@
+{
+  "started": "2026-10-15T22:18:36.841Z",
+  "sockets": [
+    {
+      "path": "/probe/owner/ws?object=mva3oq7d",
+      "opened": 1792102723605,
+      "messageAt": 1792102723723
+    },
+    {
+      "path": "/probe/owner/ws?object=idle-mva3oq7d",
+      "error": "Error: Unexpected server response: 500",
+      "closed": 1792102724502,
+      "code": 1006
+    }
+  ]
+}

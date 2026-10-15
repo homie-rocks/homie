@@ -1,0 +1,90 @@
+{
+  "caveat": "Matched warm pairs only. Runtime clocks advance with I/O; handler headers exclude client transfer time. Handoff is an elapsed-duration residual, not a provider span.",
+  "results": [
+    {
+      "endpoint": "asset",
+      "kind": "managed",
+      "n": 28,
+      "clientMs": 96,
+      "workerMs": 0,
+      "dispatchMs": 7,
+      "routeMs": 0,
+      "handoffMs": 5
+    },
+    {
+      "endpoint": "asset",
+      "kind": "plain",
+      "n": 28,
+      "clientMs": 49,
+      "workerMs": 0
+    },
+    {
+      "endpoint": "records",
+      "kind": "managed",
+      "n": 27,
+      "clientMs": 81,
+      "workerMs": 17,
+      "dispatchMs": 28,
+      "routeMs": 0,
+      "handoffMs": 10
+    },
+    {
+      "endpoint": "records",
+      "kind": "plain",
+      "n": 27,
+      "clientMs": 78,
+      "workerMs": 15
+    },
+    {
+      "endpoint": "mcp",
+      "kind": "managed",
+      "n": 27,
+      "clientMs": 70,
+      "workerMs": 0,
+      "dispatchMs": 14,
+      "routeMs": 0,
+      "handoffMs": 12
+    },
+    {
+      "endpoint": "mcp",
+      "kind": "plain",
+      "n": 27,
+      "clientMs": 57,
+      "workerMs": 0
+    },
+    {
+      "endpoint": "seat",
+      "kind": "managed",
+      "n": 28,
+      "clientMs": 154.5,
+      "workerMs": 41,
+      "dispatchMs": 49.5,
+      "routeMs": 0,
+      "handoffMs": 8.5
+    },
+    {
+      "endpoint": "seat",
+      "kind": "plain",
+      "n": 28,
+      "clientMs": 95.5,
+      "workerMs": 30.5
+    },
+    {
+      "endpoint": "page",
+      "kind": "managed",
+      "n": 28,
+      "clientMs": 108.5,
+      "workerMs": 16,
+      "dispatchMs": 27,
+      "routeMs": 0,
+      "handoffMs": 10
+    },
+    {
+      "endpoint": "page",
+      "kind": "plain",
+      "n": 28,
+      "clientMs": 89.5,
+      "workerMs": 15
+    }
+  ]
+}

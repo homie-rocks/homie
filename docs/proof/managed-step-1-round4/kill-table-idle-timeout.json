@@ -1,0 +1,186 @@
+{
+  "started": "2026-10-15T22:10:37.604Z",
+  "sockets": [
+    {
+      "path": "/probe/owner/ws?object=mva3egf8",
+      "opened": 1792102245250,
+      "messageAt": 1792102245348,
+      "closed": 1792102280900,
+      "code": 1012
+    },
+    {
+      "path": "/probe/owner/ws?object=idle-mva3egf8",
+      "opened": 1792102246130,
+      "messageAt": 1792102246297,
+      "closed": 1792102280900,
+      "code": 1012
+    },
+    {
+      "path": "/probe/owner/ordinary?object=mva3egf8",
+      "opened": 1792102264778,
+      "messageAt": 1792102265221,
+      "closed": 1792102281057,
+      "code": 1006
+    },
+    {
+      "path": "/race/__net?room=kill-r4",
+      "opened": 1792102267381,
+      "messageAt": 1792102267792,
+      "closed": 1792102278057,
+      "code": 4000
+    },
+    {
+      "path": "/probe/gate/ws",
+      "opened": 1792102270638,
+      "messageAt": 1792102271002,
+      "closed": 1792102281077,
+      "code": 1006
+    },
+    {
+      "path": "/probe/concentrator/ws",
+      "opened": 1792102272515,
+      "messageAt": 1792102272642,
+      "closed": 1792102280696,
+      "code": 1006
+    },
+    {
+      "path": "/other/probe/owner/ws?object=mva3egf8",
+      "opened": 1792102273562,
+      "messageAt": 1792102273644,
+      "closed": 1792102291451,
+      "code": 1006
+    }
+  ],
+  "idleBefore": {
+    "at": 1792102246297,
+    "done": 1792102246620,
+    "status": 200,
+    "body": "{\"instance\":\"f5400a0d-05b4-4178-8c95-74856f3244e3\",\"alarms\":0,\"n\":1,\"pending\":false,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b227e048fdef7d-YVR"
+  },
+  "idleAfter": {
+    "at": 1792102262624,
+    "done": 1792102262882,
+    "status": 200,
+    "body": "{\"instance\":\"f5400a0d-05b4-4178-8c95-74856f3244e3\",\"alarms\":0,\"n\":1,\"pending\":false,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b228462ddcd85f-YVR"
+  },
+  "idleEcho": true,
+  "toolkit": [
+    {
+      "at": 1792102273644,
+      "done": 1792102275489,
+      "status": 200,
+      "body": "{\"room\":\"pub-4\",\"players\":0,\"max\":4,\"server\":\"public\"}\n",
+      "ray": "a4b2288eab5edf81-MRS"
+    },
+    {
+      "at": 1792102275490,
+      "done": 1792102275721,
+      "status": 200,
+      "body": "{\"toolkit\":{\"version\":\"0.54.0\",\"sha256\":\"a417f1755a50c855748bd33f1a70bc5901d9344d818951bd5ecddf704bffb2c9\"},\"room\":null,\"gates\":[],\"diagnostics\":{\"cached\":true,\"at\":null,\"ageMs\":null}}",
+      "ray": "a4b22896c80adf81-MRS"
+    },
+    {
+      "at": 1792102275723,
+      "done": 1792102276707,
+      "status": 200,
+      "body": "{\"toolkit\":{\"version\":\"0.54.0\",\"sha256\":\"a417f1755a50c855748bd33f1a70bc5901d9344d818951bd5ecddf704bffb2c9\"},\"room\":null,\"gates\":[],\"diagnostics\":{\"cached\":true,\"at\":null,\"ageMs\":null}}",
+      "ray": "a4b228983c10df81-MRS"
+    }
+  ],
+  "armed": {
+    "at": 1792102276708,
+    "done": 1792102277464,
+    "status": 200,
+    "body": "armed",
+    "ray": "a4b2289e7ca1df81-MRS"
+  },
+  "before": {
+    "at": 1792102278665,
+    "done": 1792102279558,
+    "status": 200,
+    "body": "{\"instance\":\"db379f2b-f4c8-4c6f-9af7-d1feef1ab7cc\",\"alarms\":4,\"n\":1,\"pending\":false,\"finished\":false,\"alarm\":1792102279591}",
+    "ray": "a4b228ab8f1edf81-MRS"
+  },
+  "kill": {
+    "at": 1792102280161,
+    "done": 1792102280610,
+    "status": 204
+  },
+  "route": [
+    {
+      "at": 1792102280611,
+      "done": 1792102280898,
+      "status": 200,
+      "body": "{\"tenant\":null}",
+      "ray": "a4b228b6ab1ae57f-YVR"
+    },
+    {
+      "at": 1792102281001,
+      "done": 1792102281112,
+      "status": 404,
+      "body": "Not found",
+      "ray": "a4b228b8af0d23f4-YVR"
+    }
+  ],
+  "inflight": {
+    "at": 1792102279558,
+    "done": 1792102281951,
+    "status": 500,
+    "body": "Upstream error (body omitted)",
+    "ray": "a4b228b02901df81-MRS"
+  },
+  "other": {
+    "at": 1792102286614,
+    "done": 1792102287007,
+    "status": 200,
+    "body": "{\"instance\":\"21a705a1-f56b-4926-895f-076fd17095dc\",\"alarms\":0,\"n\":1,\"pending\":false,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b228dc6c21e813-YVR"
+  },
+  "otherEcho": true,
+  "closedWithinWindow": [
+    {
+      "path": "/probe/owner/ws?object=mva3egf8",
+      "ms": 739
+    },
+    {
+      "path": "/probe/owner/ws?object=idle-mva3egf8",
+      "ms": 739
+    },
+    {
+      "path": "/probe/owner/ordinary?object=mva3egf8",
+      "ms": 896
+    },
+    {
+      "path": "/race/__net?room=kill-r4",
+      "ms": -2104
+    },
+    {
+      "path": "/probe/gate/ws",
+      "ms": 916
+    },
+    {
+      "path": "/probe/concentrator/ws",
+      "ms": 535
+    },
+    {
+      "path": "/other/probe/owner/ws?object=mva3egf8",
+      "ms": null
+    }
+  ],
+  "after": {
+    "at": 1792102289576,
+    "done": 1792102289843,
+    "status": 200,
+    "body": "{\"instance\":\"0328e5ec-c53a-4927-994f-3958b24bae1e\",\"alarms\":7,\"n\":1,\"pending\":true,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b228ee3f20e813-YVR"
+  },
+  "later": {
+    "at": 1792102291347,
+    "done": 1792102291449,
+    "status": 200,
+    "body": "{\"instance\":\"0328e5ec-c53a-4927-994f-3958b24bae1e\",\"alarms\":7,\"n\":1,\"pending\":true,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b228f99a8ee813-YVR"
+  }
+}

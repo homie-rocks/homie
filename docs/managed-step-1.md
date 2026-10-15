@@ -1,211 +1,219 @@
-# Managed step 1 — round 3
+# Managed step 1 — round 4
 
-**NOT READY for arbitrary tenant Durable Objects.** The crash recovery and round-3
-experiment are complete. The registry, deployment preparation and measurement
-fixes are implemented; the live isolation and hard-kill acceptance gates fail.
-Customer onboarding must remain disabled. This is draft PR #139, not a release.
+**Draft, not an onboarding release.** Public-internet egress is now the accepted
+policy, and the generated supervisor passes the live socket/alarm/in-flight kill
+fixture while retaining storage. Route lookups no longer require a registry RPC
+on every request. Performance and telemetry acceptance are still qualified:
+isolate-first requests remain slower, repeated warm runs vary, the per-script
+Worker GraphQL query returned no rows, and the Workers Logs query was refused by
+the available OAuth credential. Do not present those gaps as passed gates.
 
-## Changes and evidence by review item
+The [round-3 report](managed-step-1-round3.md) and its proof folder are preserved.
+The current [egress/kill design](managed-design.md) supersedes its proposed egress
+firewall and unimplemented interim. Facets remain a documented future path.
 
-1. **Strict public fetch restored.** `prepare.mjs` always includes
-   `global_fetch_strictly_public`, with an explicit compatibility date/flag
-   allowlist. The old claim that removing it was an acceptable outbound-hook fix
-   is withdrawn. [Deployed binding policy](proof/managed-step-1-round3/binding-policy.json)
-   records the flag and the outbound dispatch binding. The current WFP deployment
-   still failed the control-host/stamping probe; this is an observation of this
-   configuration, **not** a demonstrated causal explanation about the flag.
-2. **Supervisor/facet spike and hard-kill measurements.** See the facet and kill
-   tables below. Actual toolkit classes and a custom tenant class ran, including
-   a two-client round. Alarms fail explicitly; hibernation continuity failed in
-   the idle test. A storage-preserving script swap failed to stop the custom DO
-   within a 74.76-second observation. The interim design below is a proposal, not
-   an implemented safe arbitrary-code fallback.
-3. **Persistent route registry.** An uncached Registry DO replaces dispatch vars.
-   Each studio writes its own record; shared dispatch/outbound deployment is no
-   longer part of each studio deploy. Exact host and longest path-boundary prefix
-   win; duplicate ownership is rejected transactionally. `kill` is one durable
-   record write. The live write took **343 ms**, followed by 404 for the stopped
-   studio and 200 for `/other/probe/echo`.
-   [Registry proof](proof/managed-step-1-round3/registry.json),
-   [kill proof](proof/managed-step-1-round3/kill.json).
-   A DO was chosen over KV because this switch needs strong consistency rather
-   than [KV's potentially stale reads](https://developers.cloudflare.com/kv/concepts/how-kv-works/).
-   One registry object is a bounded experiment; production needs sharding and
-   paginated scheduling, with the same per-tenant authority.
-4. **Deployment authority and exports.** Read bindings from deployed settings and
-   the migration tag from script metadata (settings alone omits it). Ordinary
-   Workers use service metadata, matching Wrangler's implementation. A live
-   redeploy after deleting local `user.json` advanced **v1 → v1-next**, added
-   `ExtraRoom`, and retained all five original namespace IDs. The second studio
-   declared no DOs and acquired none. No implicit toolkit quartet is added.
-   Wrangler validates the configured class exports. Source dates/flags outside
-   the allowlist fail preparation. [Redeploy evidence](proof/managed-step-1-round3/redeploy.json)
-   includes the injected `stale-r3` subscription before deployment and its absence
-   afterward; `keep` retained cursor 17 and start time 123.
-5. **Ticks and DLQ.** Only studios with declared scheduled/function work are
-   enrolled. Durable claims serialize a tenant's attempts across schedule
-   boundaries. An old retry cannot overlap the next tick; late completed/stale
-   ticks are skipped. [Live claim sequence](proof/managed-step-1-round3/tick-claims.json):
-   `run, busy, run, busy, run, skip`. This exercises the real registry remotely;
-   it is not a load test of long-running customer functions. Claims never expire
-   automatically: a crashed delivery fails closed and requires operator
-   reconciliation, rather than guessing that its work has stopped. A deliberate
-   missing-script tick reached the DLQ, whose consumer persisted an alert and
-   acknowledges after persistence. [The alert](proof/managed-step-1-round3/registry.json)
-   appeared 25.08 seconds after its scheduled timestamp. Structured error logging
-   is wired; no external paging service is claimed.
-6. **Tenant identity.** The WFP handler accepts any nonempty bounded tenant name
-   from its trusted dispatch parameter (`env.tenant`, the documented WFP API).
-   Dynamic Workers use `Egress` with supervisor-supplied `ctx.props.tenant`.
-   The live facet replaced `victim` with **ordinary-studio**, blocked the disposable
-   control host and loopback fetch, and intercepted TCP. The reusable Dynamic
-   Worker egress entrypoint denies all raw TCP. This does not repair the failed
-   WFP observation in item 1 or establish a DNS-rebinding firewall.
-7. **Proof honesty.** All successful latency samples retain cf-ray and colo;
-   network failures retain an error and null ray/colo. Only matching-colo,
-   matching warm/cold pairs are compared. The flaky local wall-clock assertion
-   was removed. Spoof probes send tenant/tick, forwarded-host, original-URL,
-   CF-Worker and authorization headers; public tick/operator paths remain 404,
-   `ctx.props` remains empty and `request.cf` is absent. Their unsuccessful egress
-   results remain in [security.json](proof/managed-step-1-round3/security.json).
-   Round-2 speed numbers without colos are historical and cannot support a speed
-   comparison. This round's raw failed attempts are retained too.
-8. **Scope restored.** Arrival runtime, arrival tests and generated toolkit build
-   identity match the base branch. No cold-start/runtime optimization was made.
-   The fixture bundles the existing runtime using code splitting and minification;
-   only the test adapter/probes change. The live fixture embedded a build-ID label
-   copied from newer `main` during recovery; CI caught that metadata mismatch. The
-   label is restored to this branch's base and the identity check passes. The
-   recorded live label is not asserted to be a digest of the executed fixture.
+## What changed
 
-## Facet verdict
+- `route-cache.mjs` caches transactionally versioned route snapshots per isolate.
+  Hard expiry is two seconds from read start, with background refresh halfway
+  through the lease. An expired/failed refresh cannot extend route authority.
+  An operator mutation invalidates the local cache; other isolates refresh or
+  expire. Disabled specific routes cannot fall through into a neighboring tenant.
+- `prepare.mjs` generates every declared DO export through `supervisor.mjs`, using
+  composition instead of inheriting owner methods. This covers Table, Lobby,
+  Gate, Concentrator and OwnerRoom without changing toolkit runtime source.
+  Step 2 can call this hook after its isolated build. Plain comparison Workers
+  keep their original classes; they are not given a fake managed stop cost.
+- Registration precedes owner construction. Fetch, alarm and hibernation
+  message/close/error handlers check the tenant stop lease. The 3.5-second lease
+  uses a strongly consistent read, expires from read start, refreshes in the
+  background and has a two-second read deadline. Active callbacks and ordinary
+  sockets poll every second. A durable object-ID list supplies the push path to
+  idle hibernation sockets. Native cleanup/abort functions are captured before
+  handing state to owner code, and the stop RPC capability is captured privately.
+- Stop closes accepted hibernation sockets, deletes and flushes the alarm, then
+  calls `ctx.abort(..., {retryAlarm:false})`. That interrupts ordinary sockets,
+  timers and in-flight callbacks. No application storage deletion occurs.
+- Dispatch no longer binds the WFP outbound filter. Provider script/namespace
+  identity, native analytics, Workers Logs/Tail, tenant custom limits and
+  authenticated controls replace the filtering/stamping claim. Historical
+  outbound/facet experiments remain reproducible but are not the deployed policy.
 
-The [Cloudflare facet API](https://developers.cloudflare.com/dynamic-workers/usage/durable-object-facets/)
-provides isolated storage, abort and delete. The
-[globalOutbound API](https://developers.cloudflare.com/dynamic-workers/usage/egress-control/)
-provides both fetch and connect interception. Those capabilities alone do not
-establish room compatibility.
+## Kill, storage and the neighboring tenant
 
-| Live probe | Measured result |
-| --- | --- |
-| Fetch to test control host / loopback | Both 403, 736 / 83 ms |
-| Fetch to separate test echo | 200; spoof replaced by `ordinary-studio`, 460 ms |
-| Raw TCP to loopback | Intercepted; diagnostic returned tenant and requested address, no upstream socket opened |
-| Ordinary WebSocket | Echo before and after 16-second idle; abort closed it in **357 ms** |
-| Hibernatable WebSocket | Initial echo, then unexpected 1006 close **8,549 ms** after opening, before abort; continuity not proved |
-| Facet alarm | 500, `Facets currently cannot set alarms.`, **302 ms** |
-| In-flight delayed fetch | Aborted response **236 ms** after abort started |
-| Abort storage | Counter **2** and pending marker retained after resume |
-| Delete storage | Counter **0**, pending false afterward |
+The controlling final-code run is [kill-fresh.json](proof/managed-step-1-round4/kill-fresh.json),
+using fresh `hm-test-kill` namespaces so older DO code from the deliberately broken
+iterations could not contaminate the result. Setup readiness requests are recorded.
+Times below are from the start of the authenticated kill request, including its
+network/write time. This is modest-load evidence, not a worldwide p99 SLA.
 
-[Final probe](proof/managed-step-1-round3/facets-final.json) is the controlling
-result. Earlier internal errors and the alarm-poisoned attempt are retained in
-[facets.json](proof/managed-step-1-round3/facets.json) and
-[facets-alarm-poison.json](proof/managed-step-1-round3/facets-alarm-poison.json).
-The synthetic delayed fetch is held inside the platform egress entrypoint; the
-abort result proves the tenant's response was interrupted, not cancellation of
-work already accepted by a third-party server.
+| Work | Stop observation |
+| --- | ---: |
+| Owner hibernation socket | 632 ms |
+| Separate owner socket after 16 seconds idle | 632 ms |
+| Owner ordinary socket | 632 ms |
+| Actual toolkit Table socket | 639 ms |
+| Actual toolkit Gate socket and its Table uplink | 442 ms |
+| Actual toolkit Concentrator socket and its Table uplink | 632 ms |
+| In-flight 30-second owner callback | 631 ms; interrupted with 500, did not finish |
+| Owner alarm | Cleared before abort; null after resume and 1.5 seconds later |
+| Other tenant | HTTP 200 and live socket echo after kill |
 
-The real toolkit Table carried live/over round frames, snapshots and score state
-between two socket clients [inside a facet](proof/managed-step-1-round3/facet-room.json)
-and [as a regular WFP DO](proof/managed-step-1-round3/room.json). Lobby returned a
-seat; Gate and Concentrator returned their actual diagnostics. These are a
-browser-hosted protocol round and diagnostic checks, not a server-hosted rules
-simulation or a full Gate multiplex load test. The facet wrappers delegate to the
-unchanged toolkit classes. Passing D1 directly in loader `env` failed with
-`DataCloneError: This ServiceStub cannot be serialized.`
-[Initial D1 attempt](proof/managed-step-1-round3/toolkit-facets-d1-error.json),
-[without D1](proof/managed-step-1-round3/toolkit-facets.json).
-The later Table WebSocket test resolves the earlier non-upgrade HTTP error; it
-does not resolve alarms, hibernation or D1 capability transport.
+The owner's stored counter remained **1**, `pending:true` survived, and
+`finished:false` remained false. The alarm counter stayed **5**, and the alarm
+stayed null across both post-resume reads. A new instance ID after resume confirms
+reset; storage survives it. Full resource deletion was performed separately at
+cleanup. Already accepted work on an external server cannot be undone by abort.
 
-## Kill verdict and interim design
+The real Lobby returned a seat, and Gate/Concentrator diagnostics returned 200.
+Both legacy relay classes also carried live sockets in this run. The separate
+[two-client Table round](proof/managed-step-1-round4/room.json) carried live/over
+round frames and score state. Idle continuity was observed, but an unchanged
+instance ID across the 16-second idle period does **not** prove actual eviction
+and rehydration. No such claim is made.
 
-A registry write stops **new dispatch and queued ticks**, not autonomous objects.
-Both owner and Table sockets remained open immediately after the route kill.
-The emergency replacement retained DO bindings/migration tag and installed inert
-classes that clear alarms and close accepted sockets when loaded.
+Error-page HTML containing client IPs was omitted; statuses, timestamps and rays
+remain, with private originals outside the repository. Earlier attempts are retained: the first kill stopped sockets but left a stored
+alarm timestamp until `storage.sync()` and the rescheduling guard were added;
+proxying native state broke owner classes extending DurableObject; capturing an
+RPC method with `.bind()` was invalid; a Table without heartbeat closed before
+kill; some cold socket setup attempts failed closed. The final native workerd
+check exercises the real branded state and a real service RPC across events,
+rather than a mock that would miss the RPC failure.
 
-| Script-swap observation | Result |
-| --- | --- |
-| Wrangler replacement command | **3,812 ms** |
-| Table socket close from swap start | **4,343 ms** |
-| Owner hibernatable socket | Still open through the observation; probe cleanup terminated it |
-| Owner alarms after swap | Still increasing at **74,759 ms** (442 → 447 in the last two samples) |
-| Owner stored counter | Retained at **2**, but this does not establish a successful stop |
+## Route propagation and speed
 
-[Full timeline](proof/managed-step-1-round3/kill.json),
-[first shorter observation](proof/managed-step-1-round3/kill-first-window.json).
-The new top-level Worker returned 410 while the existing owner DO still executed
-old code. Deployment completion is therefore not a hard-kill acknowledgment.
-Cloudflare also documents that [new Workers can call older DO versions during updates](https://developers.cloudflare.com/durable-objects/concepts/durable-object-lifecycle/).
-No storage-preserving, seconds-bounded arbitrary-DO kill is established here.
+[Route probes](proof/managed-step-1-round4/routes.json) observed a version change
+in **524 ms at YVR / 1,106 ms at SEA**, and route kill in **469 / 665 ms** respectively.
+Both clients kept per-sample cf-ray, version, status and route-lookup time. The
+registry remains a single experimental shard; production scale is not proved.
 
-The interim must be **platform-owned executable DO classes**, not an owner subclass
-that can override the guard. Every fetch, RPC, alarm, socket message/close/error,
-and timer callback must check a strongly consistent tenant stop generation before
-entering tenant work. Fail closed when the registry is unavailable. Keep an active
-object registry and a bounded stop poll for idle sockets; a stop closes them,
-cancels timers/alarms, and aborts cancellable requests without deleting storage.
-Recheck after awaited work before scheduling anything else. Guarded classes must
-be shipped before accepting tenants; a script swap alone cannot retrofit that
-contract promptly onto already-running arbitrary code.
+All comparisons alternate sequential managed/plain requests, retain cf-ray and
+colo for every sample, and exclude nonmatching colos or first-isolate markers.
+Both names resolve to the same observed IPv4 edge while retaining their real
+hostname/SNI. Fresh comparison tenants were first accessed through SEA. All D1s
+reported WNAM; that does not establish identical physical DO/D1 placement.
+`x-hm-first` means first Worker invocation in that isolate, not measured startup
+CPU, nor first DO invocation. First/idle cache misses still need a registry read.
 
-Owner logic would need to execute behind a separate constrained Worker capability,
-with owned socket/alarm/storage operations mediated by the platform. Arbitrary
-owner DO classes cannot be admitted under this interim. The full facet design
-needs supported alarms, demonstrated hibernation restart, mediated D1 bindings,
-and a persistent stop check in every facet startup callback. This proposal remains
-unimplemented and requires a separate security/runtime review. Public signup is
-blocked, rather than silently weakening the arbitrary-code promise.
+Latest instrumented run, milliseconds; matched warm SEA pairs only.
 
-## Same-colo speed comparison
+| Endpoint | Managed median | Plain median | Pairs | Median paired Δ |
+| --- | ---: | ---: | ---: | ---: |
+| App page | 108.5 | 89.5 | 28 | +19 |
+| Asset | 96 | 49 | 28 | +17.5 |
+| Records | 81 | 78 | 27 | +4 |
+| MCP tools/list | 70 | 57 | 27 | +11 |
+| Lobby seat | 154.5 | 95.5 | 28 | +14 |
 
-Milliseconds, medians of paired sequential requests from the Vancouver client;
-all retained pairs reached **SEA**. Both HTTPS hostnames were resolved to the same
-Cloudflare IPv4 address, retaining their actual hostname/SNI. The unrestricted
-60-sample run reached different colos and yielded **zero comparable pairs**; it is
-retained but not used below. cf-ray is the edge colo, not proof of identical
-backend DO/D1 placement. This is a small fixture run, not a capacity benchmark.
+[Raw samples](proof/managed-step-1-round4/speed-timed.json),
+[matched pairs and exclusions](proof/managed-step-1-round4/speed-timed-summary.json),
+[handler timing breakdown](proof/managed-step-1-round4/timing-breakdown.json).
+The routing median reports 0 ms on the runtime clock. The elapsed-duration
+residual between dispatch and tenant handler is 5–12 ms by endpoint. Handler
+medians were similar for page (16/15 ms), asset (0/0), records (17/15) and MCP
+(0/0); seat was 41/30.5 ms, including its stop guard and DO work. The remaining
+client-observed gap is outside those measured handler intervals. Edge rays do
+not identify backend placement, and these coarse I/O-driven clocks are not a
+provider trace: attributing the rest specifically to network, scheduling or
+transfer behavior would be inference. The cache removes the demonstrated
+registry bottleneck, but does not establish the requested end-to-end parity.
 
-| Endpoint | Warm managed | Warm plain | Pairs |
-| --- | ---: | ---: | ---: |
-| App page | 104 | 92 | 5 |
-| Asset | 172.5 | 75.5 | 6 |
-| Records | 134.5 | 55 | 6 |
-| MCP tools/list | 129 | 113 | 6 |
-| Lobby seat | 324.5 | 217.5 | 6 |
+The [quiet 30-pair run](proof/managed-step-1-round4/speed-quiet-summary.json) was
+81/72 ms for page, 50.5/48.5 for asset, 70.5/68 for records, 53/52.5 for MCP and
+86.5/93.5 for seat (managed/plain). Its median paired page difference was 0 ms,
+but asset was +8.5 ms; the bootstrap intervals and raw pairs are retained.
+The [next repeat](proof/managed-step-1-round4/speed-head-summary.json) was slower,
+including page 134/88 and seat 104.5/92. Neither a favorable run nor the fact that
+all samples say SEA proves universal latency parity. The old blocking-refresh,
+pre-lease-refresh and cold-object-placement runs are retained as development
+measurements, not mixed into the final table.
 
-The one same-colo isolate-first page pair was **729 ms managed / 383 ms plain**.
-There were no matched cold pairs for the other endpoints. `x-hm-first` means the
-first invocation seen by that isolate's probe, not measured process startup time.
-No general speed advantage is claimed. [Samples](proof/managed-step-1-round3/speed-sea.json),
-[pairs and exclusions](proof/managed-step-1-round3/speed-sea-summary.json),
-[unmatched run](proof/managed-step-1-round3/speed-final.json).
+[Six fresh-version page attempts](proof/managed-step-1-round4/speed-cold-summary.json)
+yielded **five** matched isolate-first SEA pairs: median **526 ms managed / 428 ms
+plain**, a 98 ms gap. One attempt was not first-isolate and was excluded. This
+small sample does not establish cold-start tails. The stronger requirement that
+all warm and isolate-first traffic be within a few milliseconds is **not proved**.
 
-## Recovery, reproducibility and cleanup
+## Attribution, limits and control authentication
 
-Recovery first listed the signed-in Wrangler account's test resources. The crash
-left `homie-managed-test` empty, `hm-test-facets-r3`, its Supervisor namespace and
-two queues, with no matching D1 databases. Deployed spike source was recovered
-privately, then those resources were deleted and absence verified before rebuilding.
-[Crash inventory](proof/managed-step-1-round3/crash-inventory.json),
-[cleanup receipts](proof/managed-step-1-round3/crash-cleanup.json),
-[empty inventory](proof/managed-step-1-round3/after-crash-cleanup.json).
+[Final Tail and authentication probes](proof/managed-step-1-round4/attribution-complete.json)
+show provider `tenant:hm-test-inlet`, `dispatchNamespace:homie-managed-test`,
+and a DO trace with `entrypoint:OwnerRoom` and a durable object ID. Both Worker
+and DO egress signals are present. The fixture deliberately sent
+`x-homie-tenant:victim`: that header remained untrusted and did not alter provider
+attribution. Worker/DO public echo fetches both returned 200. The Tail consumer
+copies identity, CPU/wall time and bounded metadata, not arbitrary owner logs,
+headers, bodies or request URLs.
 
-Tools live in `packages/managed/tools/`; generated artifacts, credentials and logs
-live under `~/.homie/orchestration/managed/`. The fixture is authored in this repo;
-no example studio or customer build script was used. Room tokens are redacted.
-Only test namespace/resource names were mutated. No production resources,
-homie.rocks requests, payments or external messages were part of this round.
+The actual HTTP methods were tested from both tenant Worker and DO code:
+`GET /__operator/routes`, `GET /__operator/alerts`, `PUT /__operator/route` and
+`POST /__operator/kill` all returned **404** without an operator credential.
+Successful authenticated writes and reads prove the control host was reachable;
+this is authentication, not network blocking. `StopControl` authenticates its
+read-only tenant capability through deployment-owned props. Tick/notify paths
+require trusted dispatch props. No operator token or registry binding enters the
+tenant environment.
 
-[Before cleanup](proof/managed-step-1-round3/before-cleanup.json),
-[per-resource receipts](proof/managed-step-1-round3/resources.json), and
-[final independent inventory](proof/managed-step-1-round3/final-inventory.json)
-account for the run. Namespace deletion also removes registry records and their
-alerts. Worker deletion may cascade DO namespace deletion; receipts distinguish
-that from explicit deletion. No claim about immediate physical CDN blob erasure
-is made.
+[Native analytics](proof/managed-step-1-round4/analytics-final.json) returned DO
+subrequest/CPU records and outbound-body-byte rows, scoped to the namespace IDs
+from the deployed tenant binding inventory. The provider returned `__unknown__`
+for DO script-name dimensions, so the persisted namespace → tenant mapping is
+necessary. The recorded values include **79 DO subrequests**, while outbound body
+bytes are zero in that snapshot. This is not proof of complete byte accounting,
+TCP coverage or destination attribution. Initial queries were empty; analytics
+are delayed and sampled. Worker queries by the documented script-name and script
+tag remained empty. Their implementation exists, but a live Worker subrequest
+counter is not proved by these results.
 
-Local validation: **33 tests pass** across managed, arrival and request-budget
-checks. CI status is reported against the final PR head, not an earlier commit.
+[Workers Logs API query](proof/managed-step-1-round4/logs-query.json) returned
+**403 Authentication error** with the available Wrangler OAuth credential.
+Logging is enabled in [deployed settings](proof/managed-step-1-round4/binding-policy.json),
+and live Tail works for both Worker and DO events. Indexed log retrieval needs an
+appropriately scoped operator credential; do not conflate enabled logging with
+successful API access.
+
+[Custom-limit proof](proof/managed-step-1-round4/limits.json): a tenant set to one
+subrequest failed a three-fetch Worker probe with 500; restoring 32 allowed the
+same probe to return 200. The neighbor stayed 200. Route records contain validated
+per-tenant CPU/subrequest limits; generated script settings include a 1000 ms CPU
+limit. These are request/runtime limits, not a hard tenant-wide billing cap or
+an independently verified custom subrequest limit on autonomous DO alarms.
+
+`tools/monitor.mjs` records native usage/coverage and alerts for the thresholds in
+[the abuse runbook](managed-design.md#attribution-limits-and-abuse-response).
+`--enforce` calls authenticated kill for the owned test tenant. Monitoring was run
+manually here; no scheduled monitor, staffed production rotation or external
+paging integration is claimed. Empty coverage is reported, not treated as zero
+activity. Ryan is the operator for this experiment.
+
+## Remaining implementation boundaries
+
+The five-second target passes the supported live fixture. The current push path
+is best effort, has a 1,000-object list and no durable per-object retry/acknowledgment.
+An unreachable idle hibernating object depends on later delivery/entry to stop;
+polling cannot preempt synchronous JavaScript before provider CPU enforcement.
+Generated classes capture trusted operations and do not inherit owner RPCs, but
+sharing a JavaScript isolate is not a general sandbox against arbitrary global
+or prototype tampering. Those boundaries need a runtime/security review before
+advertising a universal arbitrary-code kill guarantee. Facets are deferred until
+alarm and hibernation compatibility is demonstrated; the round-3 evidence remains.
+
+## Resources, validation and cleanup
+
+Created and deleted: **1 dispatch namespace, 4 ordinary Workers, 4 dispatched
+tenant scripts, 31 DO namespaces, 6 D1 databases and 2 queues**.
+[Deletion receipts](proof/managed-step-1-round4/resources.json) include per-resource
+absence checks; DO namespaces were removed by script deletion and independently
+checked absent. [The final inventory](proof/managed-step-1-round4/final-inventory.json)
+at 2026-10-15 22:29:38 UTC is empty for every test resource category.
+[Before cleanup](proof/managed-step-1-round4/before-cleanup.json) records what existed.
+
+Local validation: **39 tests passed**, plus the native workerd/service-RPC check.
+The latter is now part of the managed CI job. The toolkit runtime and arrival code
+were not changed. Proof tools are in `packages/managed/tools/`; generated artifacts,
+credentials and private logs stay under `~/.homie/orchestration/managed/round4/`.
+Only owned `hm-test-*` resources and `homie-managed-test` were mutated. No production
+resources, homie.rocks, example studios, payments or external messages were used.
+No broad process killing was performed; probe-owned tails/sockets and local
+workerd instances were closed by their own harnesses.

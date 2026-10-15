@@ -1,0 +1,131 @@
+{
+  "started": "2026-10-15T21:53:01.893Z",
+  "sockets": [
+    {
+      "path": "/probe/owner/ws",
+      "opened": 1792101185886,
+      "messageAt": 1792101185970,
+      "closed": 1792101194760,
+      "code": 1006
+    },
+    {
+      "path": "/probe/owner/ordinary",
+      "opened": 1792101186927,
+      "messageAt": 1792101187058,
+      "closed": 1792101194807,
+      "code": 1006
+    },
+    {
+      "path": "/race/__net?room=kill-r4",
+      "opened": 1792101188123,
+      "messageAt": 1792101188301,
+      "closed": 1792101194866,
+      "code": 1006
+    },
+    {
+      "path": "/other/probe/owner/ws",
+      "opened": 1792101189433,
+      "messageAt": 1792101189554,
+      "closed": 1792101206131,
+      "code": 1006
+    }
+  ],
+  "toolkit": [
+    {
+      "at": 1792101189554,
+      "done": 1792101190635,
+      "status": 200,
+      "body": "{\"room\":\"pub-1\",\"players\":0,\"max\":4,\"server\":\"public\"}\n",
+      "ray": "a4b20e152e77d2c8-DFW"
+    },
+    {
+      "at": 1792101190636,
+      "done": 1792101191126,
+      "status": 200,
+      "body": "{\"toolkit\":{\"version\":\"0.54.0\",\"sha256\":\"a417f1755a50c855748bd33f1a70bc5901d9344d818951bd5ecddf704bffb2c9\"},\"room\":null,\"gates\":[],\"diagnostics\":{\"cached\":true,\"at\":null,\"ageMs\":null}}",
+      "ray": "a4b20e19e945d2c8-DFW"
+    },
+    {
+      "at": 1792101191128,
+      "done": 1792101191789,
+      "status": 200,
+      "body": "{\"toolkit\":{\"version\":\"0.54.0\",\"sha256\":\"a417f1755a50c855748bd33f1a70bc5901d9344d818951bd5ecddf704bffb2c9\"},\"room\":null,\"gates\":[],\"diagnostics\":{\"cached\":true,\"at\":null,\"ageMs\":null}}",
+      "ray": "a4b20e1cfd69d2c8-DFW"
+    }
+  ],
+  "armed": {
+    "at": 1792101191790,
+    "done": 1792101192153,
+    "status": 200,
+    "body": "armed",
+    "ray": "a4b20e212e11d2c8-DFW"
+  },
+  "before": {
+    "at": 1792101193355,
+    "done": 1792101193543,
+    "status": 200,
+    "body": "{\"alarms\":2,\"n\":1,\"pending\":false,\"finished\":false,\"alarm\":1792101193521}",
+    "ray": "a4b20e2aee3ed2c8-DFW"
+  },
+  "kill": {
+    "at": 1792101194147,
+    "done": 1792101194591,
+    "status": 204
+  },
+  "route": [
+    {
+      "at": 1792101194592,
+      "done": 1792101194778,
+      "status": 404,
+      "body": "Not found",
+      "ray": "a4b20e32eb4cb1f8-YVR"
+    }
+  ],
+  "inflight": {
+    "at": 1792101193545,
+    "done": 1792101194817,
+    "status": 500,
+    "body": "Cloudflare error-page HTML omitted; status and cf-ray retained",
+    "ray": "a4b20e2c1b12d2c8-DFW"
+  },
+  "other": {
+    "at": 1792101200280,
+    "done": 1792101200884,
+    "status": 200,
+    "body": "{\"alarms\":0,\"n\":1,\"pending\":false,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b20e56fafbcb95-YVR"
+  },
+  "otherEcho": true,
+  "closedWithinWindow": [
+    {
+      "path": "/probe/owner/ws",
+      "ms": 613
+    },
+    {
+      "path": "/probe/owner/ordinary",
+      "ms": 660
+    },
+    {
+      "path": "/race/__net?room=kill-r4",
+      "ms": 719
+    },
+    {
+      "path": "/other/probe/owner/ws",
+      "ms": null
+    }
+  ],
+  "after": {
+    "at": 1792101203782,
+    "done": 1792101204331,
+    "status": 200,
+    "body": "{\"alarms\":5,\"n\":1,\"pending\":true,\"finished\":false,\"alarm\":1792101195097}",
+    "ray": "a4b20e6bee55cb95-YVR"
+  },
+  "later": {
+    "at": 1792101205833,
+    "done": 1792101206127,
+    "status": 200,
+    "body": "{\"alarms\":5,\"n\":1,\"pending\":true,\"finished\":false,\"alarm\":1792101195097}",
+    "ray": "a4b20e78a82ecb95-YVR"
+  }
+}

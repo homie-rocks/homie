@@ -21,11 +21,11 @@ export function instrument(worker) {
  }
  return {
   async fetch(request,env,ctx) {
-   const counts={d1:0,assets:0,do:0},cold=first;first=false;
+   const counts={d1:0,assets:0,do:0},cold=first,started=performance.now();first=false;
    return scope.run(counts,async()=>{
     const response=await worker.fetch(request,wrap(env),ctx);
     if(response.status===101)return response;
-    const headers=new Headers(response.headers);headers.set('x-hm-calls',JSON.stringify(counts));headers.set('x-hm-first',String(cold));
+    const headers=new Headers(response.headers);headers.set('x-hm-calls',JSON.stringify(counts));headers.set('x-hm-first',String(cold));headers.set('x-hm-worker-ms',String(performance.now()-started));
     return new Response(response.body,{status:response.status,headers});
    });
   },

@@ -77,7 +77,7 @@ test('adapter excludes production capabilities; tick requires unforgeable dispat
  } finally {rmSync(dir,{recursive:true,force:true})}
 });
 import {waitForDatabase,removeResource} from './lifecycle.mjs';
-import {blocked} from './outbound.mjs';
+import {blocked} from './outbound-spike.mjs';
 test('D1 readiness retries provisioning only and terminates',async()=>{
  let calls=0,waits=0;
  await waitForDatabase(async()=>{if(++calls<3)throw Error('7403');return true;},{sleep:async()=>waits++});
@@ -115,7 +115,7 @@ test('test instrumentation counts D1 calls and reports first isolate invocation'
  const env={DB:{prepare(){return {first:async()=>1}}},ASSETS:{}};
  for(const first of ['true','false']){const r=await worker.fetch(new Request('https://x.test'),env,{});assert.equal(r.headers.get('x-hm-first'),first);assert.equal(JSON.parse(r.headers.get('x-hm-calls')).d1,1);}
 });
-import outbound from './outbound.mjs';
+import outbound from './outbound-spike.mjs';
 test('outbound overwrites spoofed identity and never follows redirects unchecked',async()=>{
  const original=globalThis.fetch;
  try {
@@ -197,4 +197,10 @@ test('owner cannot replace captured stop capability, alarm cleanup or abort thro
  assert.equal((await room.fetch(new Request('https://test/'))).status,200);stopped=true;
  await assert.rejects(room.fetch(new Request('https://test/__homie_supervisor/notify')),/reset/);
  assert.deepEqual(events,['delete','sync','abort']);
+});
+import tailCollector from './outbound.mjs';
+test('Tail attribution uses provider identity and excludes arbitrary owner payloads',async()=>{
+ const original=console.log,rows=[];console.log=line=>rows.push(JSON.parse(line));
+ try{await tailCollector.tail([{scriptName:'hm-test-real',dispatchNamespace:'homie-managed-test',entrypoint:'OwnerRoom',durableObjectId:'a'.repeat(64),outcome:'ok',cpuTime:1,wallTime:2,event:{request:{headers:{authorization:'private'}}},logs:[{message:['{"tenant":"victim","secret":"private","event":"fixture-egress","kind":"do"}']}],exceptions:[]}]);}finally{console.log=original;}
+ assert.equal(rows[0].tenant,'hm-test-real');assert.equal(rows[0].entrypoint,'OwnerRoom');assert.deepEqual(rows[0].signals,['do']);assert.ok(!JSON.stringify(rows).includes('private'));assert.equal(tailCollector.fetch,undefined);
 });

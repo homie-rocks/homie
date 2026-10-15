@@ -11,9 +11,8 @@ Tenant Workers **and Durable Objects may reach the public internet**. Homie does
 not promise to intercept, stamp, allowlist or block their outbound connections.
 The dispatch binding no longer configures the experimental WFP outbound hook.
 `global_fetch_strictly_public` stays enabled, but network position is never an
-operator credential. The old `outbound.mjs` fetch handler and Dynamic Worker
-`egress-entry.mjs` are retained only for reproducing the historical spikes; only
-the former's **Tail consumer** is used by this design.
+operator credential. The old `outbound-spike.mjs` fetch handler and Dynamic Worker
+`egress-entry.mjs` are retained only for reproducing the historical spikes; the deployed `outbound.mjs` contains only the **Tail consumer**.
 
 This policy follows the hosted-code model: [Vercel's function quickstart](https://vercel.com/docs/functions/quickstart)
 fetches an external API; [Netlify's Edge API](https://docs.netlify.com/build/edge-functions/api/)

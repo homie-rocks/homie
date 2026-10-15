@@ -1,0 +1,13 @@
+{
+  "tenant": "hm-test-kill",
+  "prefix": "/kill",
+  "started": "2026-10-15T22:21:04.116Z",
+  "sockets": [
+    {
+      "path": "/probe/owner/ws?object=mva3rvuc",
+      "error": "Error: Unexpected server response: 500",
+      "closed": 1792102870944,
+      "code": 1006
+    }
+  ]
+}

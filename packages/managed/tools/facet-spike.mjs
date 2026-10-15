@@ -1,5 +1,5 @@
 import {DurableObject,WorkerEntrypoint} from 'cloudflare:workers';
-import outbound from '../outbound.mjs';
+import outbound from '../outbound-spike.mjs';
 const code=`import {DurableObject} from 'cloudflare:workers';
 import {connect} from 'cloudflare:sockets';
 export class Tenant extends DurableObject {

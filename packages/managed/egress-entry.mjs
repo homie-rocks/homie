@@ -1,6 +1,6 @@
 /** Dynamic Worker/Facet outbound capability. Only the supervisor supplies props. */
 import {WorkerEntrypoint} from 'cloudflare:workers';
-import outbound from './outbound.mjs';
+import outbound from './outbound-spike.mjs';
 export class Egress extends WorkerEntrypoint {
  fetch(request){return outbound.fetch(request,{CONTROL_HOSTS:this.env.CONTROL_HOSTS,tenant:this.ctx.props.tenant});}
  async connect(socket){

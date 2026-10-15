@@ -19,7 +19,7 @@ export default {
     const routeMs=performance.now()-routeStart;
     const response=await worker(env,route.script,false,route.limits).fetch(new Request(url,request));
     if(response.status===101)return response;
-    const headers=new Headers(response.headers);headers.set('x-hm-route-version',String(snapshot.version));headers.set('x-hm-route-ms',routeMs.toFixed(2));
+    const headers=new Headers(response.headers);headers.set('x-hm-route-version',String(snapshot.version));headers.set('x-hm-route-ms',routeMs.toFixed(2));headers.set('x-hm-dispatch-ms',String(performance.now()-routeStart));
     return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
   },
   async scheduled(event,env) {

@@ -1,0 +1,157 @@
+{
+  "started": "2026-10-15T22:06:09.314Z",
+  "sockets": [
+    {
+      "path": "/probe/owner/ws?object=mva38peq",
+      "opened": 1792101979130,
+      "messageAt": 1792101979434,
+      "closed": 1792102005123,
+      "code": 1012
+    },
+    {
+      "path": "/probe/owner/ws?object=idle-mva38peq",
+      "opened": 1792101980240,
+      "messageAt": 1792101980320,
+      "closed": 1792102004714,
+      "code": 1012
+    },
+    {
+      "path": "/probe/owner/ordinary?object=mva38peq",
+      "opened": 1792101998139,
+      "messageAt": 1792101998331,
+      "closed": 1792102005123,
+      "code": 1006
+    },
+    {
+      "path": "/race/__net?room=kill-r4",
+      "opened": 1792101999079,
+      "messageAt": 1792101999152,
+      "closed": 1792102004730,
+      "code": 1006
+    },
+    {
+      "path": "/other/probe/owner/ws?object=mva38peq",
+      "opened": 1792102000117,
+      "messageAt": 1792102000403,
+      "closed": 1792102016497,
+      "code": 1006
+    }
+  ],
+  "idleBefore": {
+    "at": 1792101980320,
+    "done": 1792101980694,
+    "status": 200,
+    "body": "{\"instance\":\"8f7f3c03-c67d-4d04-93ba-7135ef44f6f5\",\"alarms\":0,\"n\":1,\"pending\":false,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b22162bb34ba29-YVR"
+  },
+  "idleAfter": {
+    "at": 1792101996697,
+    "done": 1792101997002,
+    "status": 200,
+    "body": "{\"instance\":\"8f7f3c03-c67d-4d04-93ba-7135ef44f6f5\",\"alarms\":0,\"n\":1,\"pending\":false,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b221c87bb0dfdb-YVR"
+  },
+  "idleEcho": true,
+  "toolkit": [
+    {
+      "at": 1792102000404,
+      "done": 1792102000929,
+      "status": 200,
+      "body": "{\"room\":\"pub-3\",\"players\":0,\"max\":4,\"server\":\"public\"}\n",
+      "ray": "a4b221df0b2bdfdb-YVR"
+    },
+    {
+      "at": 1792102000929,
+      "done": 1792102001228,
+      "status": 200,
+      "body": "{\"toolkit\":{\"version\":\"0.54.0\",\"sha256\":\"a417f1755a50c855748bd33f1a70bc5901d9344d818951bd5ecddf704bffb2c9\"},\"room\":null,\"gates\":[],\"diagnostics\":{\"cached\":true,\"at\":null,\"ageMs\":null}}",
+      "ray": "a4b221e24beddfdb-YVR"
+    },
+    {
+      "at": 1792102001228,
+      "done": 1792102001540,
+      "status": 200,
+      "body": "{\"toolkit\":{\"version\":\"0.54.0\",\"sha256\":\"a417f1755a50c855748bd33f1a70bc5901d9344d818951bd5ecddf704bffb2c9\"},\"room\":null,\"gates\":[],\"diagnostics\":{\"cached\":true,\"at\":null,\"ageMs\":null}}",
+      "ray": "a4b221e40914dfdb-YVR"
+    }
+  ],
+  "armed": {
+    "at": 1792102001540,
+    "done": 1792102001977,
+    "status": 200,
+    "body": "armed",
+    "ray": "a4b221e5ff0adfdb-YVR"
+  },
+  "before": {
+    "at": 1792102003179,
+    "done": 1792102003394,
+    "status": 200,
+    "body": "{\"instance\":\"4a8bd84f-5214-4724-bba5-61691d625577\",\"alarms\":3,\"n\":1,\"pending\":false,\"finished\":false,\"alarm\":1792102003815}",
+    "ray": "a4b221f03b1edfdb-YVR"
+  },
+  "kill": {
+    "at": 1792102003995,
+    "done": 1792102004598,
+    "status": 204
+  },
+  "route": [
+    {
+      "at": 1792102004599,
+      "done": 1792102005646,
+      "status": 404,
+      "body": "Not found",
+      "ray": "a4b221fd094a18c4-MRS"
+    }
+  ],
+  "inflight": {
+    "at": 1792102003395,
+    "done": 1792102005122,
+    "status": 500,
+    "body": "Upstream error (body omitted)",
+    "ray": "a4b221f19f08dfdb-YVR"
+  },
+  "other": {
+    "at": 1792102011148,
+    "done": 1792102011569,
+    "status": 200,
+    "body": "{\"instance\":\"88a06bc4-58f4-4fc2-ba75-c5ab92acae1c\",\"alarms\":0,\"n\":1,\"pending\":false,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b222229b462914-YVR"
+  },
+  "otherEcho": true,
+  "closedWithinWindow": [
+    {
+      "path": "/probe/owner/ws?object=mva38peq",
+      "ms": 1128
+    },
+    {
+      "path": "/probe/owner/ws?object=idle-mva38peq",
+      "ms": 719
+    },
+    {
+      "path": "/probe/owner/ordinary?object=mva38peq",
+      "ms": 1128
+    },
+    {
+      "path": "/race/__net?room=kill-r4",
+      "ms": 735
+    },
+    {
+      "path": "/other/probe/owner/ws?object=mva38peq",
+      "ms": null
+    }
+  ],
+  "after": {
+    "at": 1792102014143,
+    "done": 1792102014695,
+    "status": 200,
+    "body": "{\"instance\":\"8b57f6e0-1e99-437c-a7da-2f48374e7b58\",\"alarms\":6,\"n\":1,\"pending\":true,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b22234cc802914-YVR"
+  },
+  "later": {
+    "at": 1792102016196,
+    "done": 1792102016494,
+    "status": 200,
+    "body": "{\"instance\":\"8b57f6e0-1e99-437c-a7da-2f48374e7b58\",\"alarms\":6,\"n\":1,\"pending\":true,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b22241997b2914-YVR"
+  }
+}

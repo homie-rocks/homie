@@ -1,0 +1,134 @@
+[
+  {
+    "round": 0,
+    "kind": "managed",
+    "endpoint": "page",
+    "status": 200,
+    "ms": 526,
+    "first": "true",
+    "ray": "a4b222e57aa7a44c-SEA",
+    "colo": "SEA",
+    "routeMs": "68.00"
+  },
+  {
+    "round": 0,
+    "kind": "plain",
+    "endpoint": "page",
+    "status": 200,
+    "ms": 323,
+    "first": "true",
+    "ray": "a4b22323caa96dc4-SEA",
+    "colo": "SEA",
+    "routeMs": null
+  },
+  {
+    "round": 1,
+    "kind": "plain",
+    "endpoint": "page",
+    "status": 200,
+    "ms": 428,
+    "first": "true",
+    "ray": "a4b223559854ebfa-SEA",
+    "colo": "SEA",
+    "routeMs": null
+  },
+  {
+    "round": 1,
+    "kind": "managed",
+    "endpoint": "page",
+    "status": 200,
+    "ms": 514,
+    "first": "true",
+    "ray": "a4b2237f9de52813-SEA",
+    "colo": "SEA",
+    "routeMs": "56.00"
+  },
+  {
+    "round": 2,
+    "kind": "managed",
+    "endpoint": "page",
+    "status": 200,
+    "ms": 569,
+    "first": "true",
+    "ray": "a4b223a6fe067694-SEA",
+    "colo": "SEA",
+    "routeMs": "70.00"
+  },
+  {
+    "round": 2,
+    "kind": "plain",
+    "endpoint": "page",
+    "status": 200,
+    "ms": 424,
+    "first": "true",
+    "ray": "a4b223d31d2a7588-SEA",
+    "colo": "SEA",
+    "routeMs": null
+  },
+  {
+    "round": 3,
+    "kind": "plain",
+    "endpoint": "page",
+    "status": 200,
+    "ms": 504,
+    "first": "true",
+    "ray": "a4b224060e20c396-SEA",
+    "colo": "SEA",
+    "routeMs": null
+  },
+  {
+    "round": 3,
+    "kind": "managed",
+    "endpoint": "page",
+    "status": 200,
+    "ms": 562,
+    "first": "true",
+    "ray": "a4b224244989c3a0-SEA",
+    "colo": "SEA",
+    "routeMs": "58.00"
+  },
+  {
+    "round": 4,
+    "kind": "managed",
+    "endpoint": "page",
+    "status": 200,
+    "ms": 248,
+    "first": "false",
+    "ray": "a4b22440cc6855d1-SEA",
+    "colo": "SEA",
+    "routeMs": "74.00"
+  },
+  {
+    "round": 4,
+    "kind": "plain",
+    "endpoint": "page",
+    "status": 200,
+    "ms": 330,
+    "first": "true",
+    "ray": "a4b22468299fdecc-SEA",
+    "colo": "SEA",
+    "routeMs": null
+  },
+  {
+    "round": 5,
+    "kind": "plain",
+    "endpoint": "page",
+    "status": 200,
+    "ms": 511,
+    "first": "true",
+    "ray": "a4b224a33b0d7548-SEA",
+    "colo": "SEA",
+    "routeMs": null
+  },
+  {
+    "round": 5,
+    "kind": "managed",
+    "endpoint": "page",
+    "status": 200,
+    "ms": 505,
+    "first": "true",
+    "ray": "a4b224c7db33eb97-SEA",
+    "colo": "SEA",
+    "routeMs": "77.00"
+  }
+]

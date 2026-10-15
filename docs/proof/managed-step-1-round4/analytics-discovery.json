@@ -1,0 +1,16 @@
+{
+  "query": "{viewer{accounts(filter:{accountTag:\"d2f6f976cecad2fe130976fe36916cdb\"}){workersInvocationsAdaptive(limit:100,filter:{datetime_geq:\"2026-10-15T21:45:00Z\",dispatchNamespaceName:\"homie-managed-test\"}){dimensions{scriptName dispatchNamespaceName}sum{requests errors subrequests}}durableObjectsPeriodicGroups(limit:100,filter:{datetime_geq:\"2026-10-15T21:45:00Z\",scriptName_like:\"%hm-test%\"}){dimensions{scriptName namespaceId}sum{subrequests}}}}}",
+  "result": {
+    "data": null,
+    "errors": [
+      {
+        "message": "error parsing args for \"durableObjectsPeriodicGroups\": filter: unknown arg scriptName_like",
+        "path": null,
+        "extensions": {
+          "timestamp": "2026-10-15T21:57:20.399316232Z",
+          "ray_id": "a4b21432480da333-SEA"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,167 @@
+{
+  "started": "2026-10-15T22:03:27.726Z",
+  "probes": [
+    {
+      "kind": "worker-fetch",
+      "method": "GET",
+      "target": "/__operator/routes",
+      "status": 404,
+      "body": "Not found",
+      "ms": 457,
+      "ray": "a4b21d4479c058e5-YVR"
+    },
+    {
+      "kind": "worker-fetch",
+      "method": "GET",
+      "target": "/__operator/alerts",
+      "status": 404,
+      "body": "Not found",
+      "ms": 159,
+      "ray": "a4b21d470d58497b-YVR"
+    },
+    {
+      "kind": "worker-fetch",
+      "method": "PUT",
+      "target": "/__operator/route",
+      "status": 404,
+      "body": "Not found",
+      "ms": 94,
+      "ray": "a4b21d478b8758e5-YVR"
+    },
+    {
+      "kind": "worker-fetch",
+      "method": "POST",
+      "target": "/__operator/kill",
+      "status": 404,
+      "body": "Not found",
+      "ms": 91,
+      "ray": "a4b21d4818cb497b-YVR"
+    },
+    {
+      "kind": "owner/fetch",
+      "method": "GET",
+      "target": "/__operator/routes",
+      "status": 500,
+      "body": "Cloudflare error-page HTML omitted; status and cf-ray retained",
+      "ms": 359,
+      "ray": "a4b21d48aea958e5-YVR"
+    },
+    {
+      "kind": "owner/fetch",
+      "method": "GET",
+      "target": "/__operator/alerts",
+      "status": 500,
+      "body": "Cloudflare error-page HTML omitted; status and cf-ray retained",
+      "ms": 64,
+      "ray": "a4b21d4af9c5497b-YVR"
+    },
+    {
+      "kind": "owner/fetch",
+      "method": "PUT",
+      "target": "/__operator/route",
+      "status": 500,
+      "body": "Cloudflare error-page HTML omitted; status and cf-ray retained",
+      "ms": 108,
+      "ray": "a4b21d4b6fcd58e5-YVR"
+    },
+    {
+      "kind": "owner/fetch",
+      "method": "POST",
+      "target": "/__operator/kill",
+      "status": 500,
+      "body": "Cloudflare error-page HTML omitted; status and cf-ray retained",
+      "ms": 171,
+      "ray": "a4b21d4c1d57497b-YVR"
+    },
+    {
+      "kind": "worker-fetch",
+      "target": "other-tenant-echo",
+      "status": 200,
+      "body": "{\"tenant\":\"victim\"}"
+    },
+    {
+      "kind": "owner/fetch",
+      "target": "other-tenant-echo",
+      "status": 500,
+      "body": "Cloudflare error-page HTML omitted; status and cf-ray retained"
+    }
+  ],
+  "traces": [
+    {
+      "tenant": "hm-test-other",
+      "event": "tenant-trace",
+      "outcome": "ok",
+      "entrypoint": null,
+      "eventType": "fetch",
+      "logs": 0,
+      "exceptions": 0,
+      "exceptionNames": [],
+      "supervisorError": []
+    }
+  ],
+  "identity": {
+    "script": "hm-test-inlet",
+    "namespaceIds": [
+      "993b04c8d16b4a16ad227d70df9ae1bb",
+      "7c73a9a7a7e643c3b865b7cca0060d88",
+      "ff9f08509d7f47d69eb01d64825b4678",
+      "37e21a79e2fe44ef9cc79029d78bdcb3",
+      "cc0941ef5c9a49c98c604187c4941fdb"
+    ],
+    "limits": {
+      "cpu_ms": 1000
+    },
+    "observability": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "redact_query_string": false,
+      "logs": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "persist": true,
+        "invocation_logs": true
+      },
+      "traces": {
+        "enabled": false,
+        "persist": true,
+        "head_sampling_rate": 1
+      }
+    },
+    "tailConsumers": [
+      {
+        "service": "hm-test-outbound"
+      }
+    ]
+  },
+  "analyticsQuery": {
+    "query": "query($account: string!, $script: string!, $ids: [string!]!, $start: Time!, $end: Time!) {\n    viewer { accounts(filter:{accountTag:$account}) {\n      workersInvocationsAdaptive(limit:100,filter:{scriptName:$script,datetime_geq:$start,datetime_leq:$end}) {\n        dimensions { scriptName dispatchNamespaceName } sum { requests errors subrequests } quantiles { cpuTimeP50 cpuTimeP99 }\n      }\n      durableObjectsSubrequestsAdaptiveGroups(limit:100,filter:{namespaceId_in:$ids,datetime_geq:$start,datetime_leq:$end}) {\n        dimensions { namespaceId scriptName } sum { requestBodySizeUncached }\n      }\n      durableObjectsInvocationsAdaptiveGroups(limit:100,filter:{namespaceId_in:$ids,datetime_geq:$start,datetime_leq:$end}) {\n        dimensions { namespaceId scriptName } sum { requests }\n      }\n      durableObjectsPeriodicGroups(limit:100,filter:{namespaceId_in:$ids,datetime_geq:$start,datetime_leq:$end}) {\n        dimensions { namespaceId } sum { cpuTime subrequests }\n      }\n    }}\n  }",
+    "variables": {
+      "account": "d2f6f976cecad2fe130976fe36916cdb",
+      "script": "hm-test-inlet",
+      "ids": [
+        "993b04c8d16b4a16ad227d70df9ae1bb",
+        "7c73a9a7a7e643c3b865b7cca0060d88",
+        "ff9f08509d7f47d69eb01d64825b4678",
+        "37e21a79e2fe44ef9cc79029d78bdcb3",
+        "cc0941ef5c9a49c98c604187c4941fdb"
+      ],
+      "start": "2026-10-15T22:03:27.726Z",
+      "end": "2026-10-15T22:03:39.525Z"
+    }
+  },
+  "analytics": {
+    "data": {
+      "viewer": {
+        "accounts": [
+          {
+            "durableObjectsInvocationsAdaptiveGroups": [],
+            "durableObjectsPeriodicGroups": [],
+            "durableObjectsSubrequestsAdaptiveGroups": [],
+            "workersInvocationsAdaptive": []
+          }
+        ]
+      }
+    },
+    "errors": null
+  }
+}

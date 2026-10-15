@@ -1,0 +1,204 @@
+{
+  "tenant": "hm-test-kill",
+  "prefix": "/kill",
+  "started": "2026-10-15T22:23:55.537Z",
+  "sockets": [
+    {
+      "path": "/probe/owner/ws?object=mva3vk41",
+      "opened": 1792103042771,
+      "messageAt": 1792103042919,
+      "closed": 1792103070469,
+      "code": 1012
+    },
+    {
+      "path": "/probe/owner/ws?object=idle-mva3vk41",
+      "opened": 1792103043879,
+      "messageAt": 1792103044003,
+      "closed": 1792103070469,
+      "code": 1012
+    },
+    {
+      "path": "/probe/owner/ordinary?object=mva3vk41",
+      "opened": 1792103061030,
+      "messageAt": 1792103061117,
+      "closed": 1792103070469,
+      "code": 1006
+    },
+    {
+      "path": "/race/__net?room=kill-r4",
+      "opened": 1792103062429,
+      "messageAt": 1792103062607,
+      "closed": 1792103070476,
+      "code": 1006
+    },
+    {
+      "path": "/probe/gate/ws",
+      "opened": 1792103063651,
+      "messageAt": 1792103063768,
+      "closed": 1792103070279,
+      "code": 1006
+    },
+    {
+      "path": "/probe/concentrator/ws",
+      "opened": 1792103065033,
+      "messageAt": 1792103065230,
+      "closed": 1792103070469,
+      "code": 1006
+    },
+    {
+      "path": "/other/probe/owner/ws?object=mva3vk41",
+      "opened": 1792103066526,
+      "messageAt": 1792103066638,
+      "closed": 1792103081132,
+      "code": 1006
+    }
+  ],
+  "readiness": [
+    {
+      "at": 1792103041737,
+      "done": 1792103042279,
+      "status": 200,
+      "body": "{\"instance\":\"95c3ec61-9cdd-4e3a-82a9-fd5c996fc03f\",\"alarms\":0,\"n\":0,\"pending\":false,\"finished\":false,\"alarm\":null}",
+      "ray": "a4b23b4b6fd7514b-DFW"
+    },
+    {
+      "at": 1792103042920,
+      "done": 1792103043363,
+      "status": 200,
+      "body": "{\"instance\":\"90916aef-c24e-4afe-94de-522678ddb18d\",\"alarms\":0,\"n\":0,\"pending\":false,\"finished\":false,\"alarm\":null}",
+      "ray": "a4b23b52ddd4514b-DFW"
+    },
+    {
+      "at": 1792103065230,
+      "done": 1792103066023,
+      "status": 200,
+      "body": "{\"instance\":\"7c937722-e64b-4f24-abd5-050d0130e0a8\",\"alarms\":0,\"n\":0,\"pending\":false,\"finished\":false,\"alarm\":null}",
+      "ray": "a4b23bdfae9d323e-DFW"
+    }
+  ],
+  "idleBefore": {
+    "at": 1792103044003,
+    "done": 1792103044250,
+    "status": 200,
+    "body": "{\"instance\":\"90916aef-c24e-4afe-94de-522678ddb18d\",\"alarms\":0,\"n\":1,\"pending\":false,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b23b59a933514b-DFW"
+  },
+  "idleAfter": {
+    "at": 1792103060252,
+    "done": 1792103060523,
+    "status": 200,
+    "body": "{\"instance\":\"90916aef-c24e-4afe-94de-522678ddb18d\",\"alarms\":0,\"n\":1,\"pending\":false,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b23bbf8cc4da76-YVR"
+  },
+  "idleEcho": true,
+  "toolkit": [
+    {
+      "at": 1792103066638,
+      "done": 1792103067084,
+      "status": 200,
+      "body": "{\"room\":\"pub-1\",\"players\":0,\"max\":4,\"server\":\"public\"}\n",
+      "ray": "a4b23be71b1a323e-DFW"
+    },
+    {
+      "at": 1792103067085,
+      "done": 1792103067483,
+      "status": 200,
+      "body": "{\"toolkit\":{\"version\":\"0.54.0\",\"sha256\":\"a417f1755a50c855748bd33f1a70bc5901d9344d818951bd5ecddf704bffb2c9\"},\"room\":null,\"gates\":[],\"diagnostics\":{\"cached\":true,\"at\":null,\"ageMs\":null}}",
+      "ray": "a4b23bea2e46323e-DFW"
+    },
+    {
+      "at": 1792103067483,
+      "done": 1792103067597,
+      "status": 200,
+      "body": "{\"toolkit\":{\"version\":\"0.54.0\",\"sha256\":\"a417f1755a50c855748bd33f1a70bc5901d9344d818951bd5ecddf704bffb2c9\"},\"room\":null,\"gates\":[],\"diagnostics\":{\"cached\":true,\"at\":null,\"ageMs\":null}}",
+      "ray": "a4b23bec5ec2323e-DFW"
+    }
+  ],
+  "armed": {
+    "at": 1792103067597,
+    "done": 1792103067847,
+    "status": 200,
+    "body": "armed",
+    "ray": "a4b23bed197e323e-DFW"
+  },
+  "before": {
+    "at": 1792103069048,
+    "done": 1792103069234,
+    "status": 200,
+    "body": "{\"instance\":\"95c3ec61-9cdd-4e3a-82a9-fd5c996fc03f\",\"alarms\":2,\"n\":1,\"pending\":false,\"finished\":false,\"alarm\":1792103069230}",
+    "ray": "a4b23bf62f70323e-DFW"
+  },
+  "kill": {
+    "at": 1792103069837,
+    "done": 1792103070238,
+    "status": 204
+  },
+  "route": [
+    {
+      "at": 1792103070238,
+      "done": 1792103070763,
+      "status": 404,
+      "body": "Not found",
+      "ray": "a4b23bffcab475ed-DFW"
+    }
+  ],
+  "inflight": {
+    "at": 1792103069235,
+    "done": 1792103070468,
+    "status": 500,
+    "body": "Upstream error (body omitted)",
+    "ray": "a4b23bf74c20323e-DFW"
+  },
+  "other": {
+    "at": 1792103076265,
+    "done": 1792103076606,
+    "status": 200,
+    "body": "{\"instance\":\"7c937722-e64b-4f24-abd5-050d0130e0a8\",\"alarms\":0,\"n\":1,\"pending\":false,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b23c239ba22937-YVR"
+  },
+  "otherEcho": true,
+  "closedWithinWindow": [
+    {
+      "path": "/probe/owner/ws?object=mva3vk41",
+      "ms": 632
+    },
+    {
+      "path": "/probe/owner/ws?object=idle-mva3vk41",
+      "ms": 632
+    },
+    {
+      "path": "/probe/owner/ordinary?object=mva3vk41",
+      "ms": 632
+    },
+    {
+      "path": "/race/__net?room=kill-r4",
+      "ms": 639
+    },
+    {
+      "path": "/probe/gate/ws",
+      "ms": 442
+    },
+    {
+      "path": "/probe/concentrator/ws",
+      "ms": 632
+    },
+    {
+      "path": "/other/probe/owner/ws?object=mva3vk41",
+      "ms": null
+    }
+  ],
+  "after": {
+    "at": 1792103079195,
+    "done": 1792103079506,
+    "status": 200,
+    "body": "{\"instance\":\"6f875713-603a-4136-9be4-bdb044588aa6\",\"alarms\":5,\"n\":1,\"pending\":true,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b23c356e502937-YVR"
+  },
+  "later": {
+    "at": 1792103081008,
+    "done": 1792103081122,
+    "status": 200,
+    "body": "{\"instance\":\"6f875713-603a-4136-9be4-bdb044588aa6\",\"alarms\":5,\"n\":1,\"pending\":true,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b23c40bf652937-YVR"
+  }
+}

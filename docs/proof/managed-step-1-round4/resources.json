@@ -1,0 +1,847 @@
+{
+  "namespace": "homie-managed-test",
+  "databases": [
+    {
+      "name": "hm-test-inlet-db",
+      "id": "df7c1ee1-c6ac-486b-a29a-db9f48bf7361",
+      "readiness": [
+        {
+          "results": [
+            {
+              "ready": 1
+            }
+          ],
+          "success": true,
+          "meta": {
+            "served_by": "v3-prod",
+            "served_by_region": "WNAM",
+            "served_by_colo": "SEA",
+            "served_by_primary": true,
+            "timings": {
+              "sql_duration_ms": 0.1631
+            },
+            "duration": 0.1631,
+            "changes": 0,
+            "last_row_id": 0,
+            "changed_db": false,
+            "size_after": 684032,
+            "rows_read": 0,
+            "rows_written": 0,
+            "total_attempts": 1
+          }
+        }
+      ],
+      "info": {
+        "uuid": "df7c1ee1-c6ac-486b-a29a-db9f48bf7361",
+        "name": "hm-test-inlet-db",
+        "created_at": "2026-10-15T21:51:14.232Z",
+        "version": "production",
+        "num_tables": 65,
+        "file_size": 684032,
+        "running_in_region": "WNAM",
+        "read_replication": {
+          "mode": "disabled"
+        },
+        "jurisdiction": null
+      }
+    },
+    {
+      "name": "hm-test-other-db",
+      "id": "bf08d86a-960f-463a-ac8c-e3d3e5801dd8",
+      "readiness": [
+        {
+          "results": [
+            {
+              "ready": 1
+            }
+          ],
+          "success": true,
+          "meta": {
+            "served_by": "v3-prod",
+            "served_by_region": "WNAM",
+            "served_by_colo": "SEA",
+            "served_by_primary": true,
+            "timings": {
+              "sql_duration_ms": 0.2384
+            },
+            "duration": 0.2384,
+            "changes": 0,
+            "last_row_id": 0,
+            "changed_db": false,
+            "size_after": 675840,
+            "rows_read": 0,
+            "rows_written": 0,
+            "total_attempts": 1
+          }
+        }
+      ],
+      "info": {
+        "uuid": "bf08d86a-960f-463a-ac8c-e3d3e5801dd8",
+        "name": "hm-test-other-db",
+        "created_at": "2026-10-15T21:52:24.508Z",
+        "version": "production",
+        "num_tables": 65,
+        "file_size": 675840,
+        "running_in_region": "WNAM",
+        "read_replication": {
+          "mode": "disabled"
+        },
+        "jurisdiction": null
+      }
+    },
+    {
+      "name": "hm-test-plain-db",
+      "id": "18fc40eb-71b2-4908-82ba-49bdba2702df",
+      "readiness": [
+        {
+          "results": [
+            {
+              "ready": 1
+            }
+          ],
+          "success": true,
+          "meta": {
+            "served_by": "v3-prod",
+            "served_by_region": "WNAM",
+            "served_by_colo": "SEA",
+            "served_by_primary": true,
+            "timings": {
+              "sql_duration_ms": 0.1781
+            },
+            "duration": 0.1781,
+            "changes": 0,
+            "last_row_id": 0,
+            "changed_db": false,
+            "size_after": 684032,
+            "rows_read": 0,
+            "rows_written": 0,
+            "total_attempts": 1
+          }
+        }
+      ],
+      "info": {
+        "uuid": "18fc40eb-71b2-4908-82ba-49bdba2702df",
+        "name": "hm-test-plain-db",
+        "created_at": "2026-10-15T21:52:45.253Z",
+        "version": "production",
+        "num_tables": 65,
+        "file_size": 684032,
+        "running_in_region": "WNAM",
+        "read_replication": {
+          "mode": "disabled"
+        },
+        "jurisdiction": null
+      }
+    },
+    {
+      "name": "hm-test-speed-managed-db",
+      "id": "0b3c1033-978b-4c91-bfa3-8f1d67614383",
+      "readiness": [
+        {
+          "results": [
+            {
+              "ready": 1
+            }
+          ],
+          "success": true,
+          "meta": {
+            "served_by": "v3-prod",
+            "served_by_region": "WNAM",
+            "served_by_colo": "SEA",
+            "served_by_primary": true,
+            "timings": {
+              "sql_duration_ms": 0.3886
+            },
+            "duration": 0.3886,
+            "changes": 0,
+            "last_row_id": 0,
+            "changed_db": false,
+            "size_after": 684032,
+            "rows_read": 0,
+            "rows_written": 0,
+            "total_attempts": 1
+          }
+        }
+      ],
+      "info": {
+        "uuid": "0b3c1033-978b-4c91-bfa3-8f1d67614383",
+        "name": "hm-test-speed-managed-db",
+        "created_at": "2026-10-15T22:03:29.661Z",
+        "version": "production",
+        "num_tables": 65,
+        "file_size": 684032,
+        "running_in_region": "WNAM",
+        "read_replication": {
+          "mode": "disabled"
+        },
+        "jurisdiction": null
+      }
+    },
+    {
+      "name": "hm-test-speed-plain-db",
+      "id": "6d1363d0-ce81-4c9e-8ad3-0b885daa46c6",
+      "readiness": [
+        {
+          "results": [
+            {
+              "ready": 1
+            }
+          ],
+          "success": true,
+          "meta": {
+            "served_by": "v3-prod",
+            "served_by_region": "WNAM",
+            "served_by_colo": "SEA",
+            "served_by_primary": true,
+            "timings": {
+              "sql_duration_ms": 0.461
+            },
+            "duration": 0.461,
+            "changes": 0,
+            "last_row_id": 0,
+            "changed_db": false,
+            "size_after": 684032,
+            "rows_read": 0,
+            "rows_written": 0,
+            "total_attempts": 1
+          }
+        }
+      ],
+      "info": {
+        "uuid": "6d1363d0-ce81-4c9e-8ad3-0b885daa46c6",
+        "name": "hm-test-speed-plain-db",
+        "created_at": "2026-10-15T22:03:53.433Z",
+        "version": "production",
+        "num_tables": 65,
+        "file_size": 684032,
+        "running_in_region": "WNAM",
+        "read_replication": {
+          "mode": "disabled"
+        },
+        "jurisdiction": null
+      }
+    },
+    {
+      "name": "hm-test-kill-db",
+      "id": "851284b0-1729-477a-811f-61c7c3e14863",
+      "readiness": [
+        {
+          "results": [
+            {
+              "ready": 1
+            }
+          ],
+          "success": true,
+          "meta": {
+            "served_by": "v3-prod",
+            "served_by_region": "WNAM",
+            "served_by_colo": "SEA",
+            "served_by_primary": true,
+            "timings": {
+              "sql_duration_ms": 1.1334
+            },
+            "duration": 1.1334,
+            "changes": 0,
+            "last_row_id": 0,
+            "changed_db": false,
+            "size_after": 12288,
+            "rows_read": 0,
+            "rows_written": 0,
+            "total_attempts": 1
+          }
+        }
+      ],
+      "info": {
+        "uuid": "851284b0-1729-477a-811f-61c7c3e14863",
+        "name": "hm-test-kill-db",
+        "created_at": "2026-10-15T22:20:44.019Z",
+        "version": "production",
+        "num_tables": 0,
+        "file_size": 12288,
+        "running_in_region": "WNAM",
+        "read_replication": {
+          "mode": "disabled"
+        },
+        "jurisdiction": null
+      }
+    }
+  ],
+  "workers": [
+    "hm-test-outbound",
+    "hm-test-dispatch",
+    "hm-test-plain",
+    "hm-test-speed-plain"
+  ],
+  "deleted": [
+    "hm-test-speed-plain",
+    "hm-test-plain",
+    "hm-test-dispatch",
+    "hm-test-outbound",
+    "hm-test-inlet",
+    "hm-test-other",
+    "hm-test-speed-managed",
+    "hm-test-kill",
+    "hm-test-dispatch_Registry",
+    "hm-test-inlet_Concentrator",
+    "hm-test-inlet_Gate",
+    "hm-test-inlet_Lobby",
+    "hm-test-inlet_OwnerRoom",
+    "hm-test-inlet_Table",
+    "hm-test-other_Concentrator",
+    "hm-test-other_Gate",
+    "hm-test-other_Lobby",
+    "hm-test-other_OwnerRoom",
+    "hm-test-other_Table",
+    "hm-test-plain_Concentrator",
+    "hm-test-plain_Gate",
+    "hm-test-plain_Lobby",
+    "hm-test-plain_OwnerRoom",
+    "hm-test-plain_Table",
+    "hm-test-speed-managed_Concentrator",
+    "hm-test-speed-managed_Gate",
+    "hm-test-speed-managed_Lobby",
+    "hm-test-speed-managed_OwnerRoom",
+    "hm-test-speed-managed_Table",
+    "hm-test-speed-plain_Concentrator",
+    "hm-test-speed-plain_Gate",
+    "hm-test-speed-plain_Lobby",
+    "hm-test-speed-plain_OwnerRoom",
+    "hm-test-speed-plain_Table",
+    "hm-test-kill_Concentrator",
+    "hm-test-kill_Gate",
+    "hm-test-kill_Lobby",
+    "hm-test-kill_OwnerRoom",
+    "hm-test-kill_Table",
+    "homie-managed-test",
+    "hm-test-inlet-db",
+    "hm-test-other-db",
+    "hm-test-plain-db",
+    "hm-test-speed-managed-db",
+    "hm-test-speed-plain-db",
+    "hm-test-kill-db",
+    "hm-test-ticks",
+    "hm-test-ticks-dlq"
+  ],
+  "accountId": "d2f6f976cecad2fe130976fe36916cdb",
+  "namespaceCreated": true,
+  "queues": [
+    "hm-test-ticks-dlq",
+    "hm-test-ticks"
+  ],
+  "dispatchHost": "hm-test-dispatch.ryan-d2f.workers.dev",
+  "durableObjects": [
+    {
+      "name": "hm-test-dispatch_Registry",
+      "id": "0271d817cf6d46feb7c719be08c9ee20",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-inlet_Concentrator",
+      "id": "993b04c8d16b4a16ad227d70df9ae1bb",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-inlet_Gate",
+      "id": "7c73a9a7a7e643c3b865b7cca0060d88",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-inlet_Lobby",
+      "id": "ff9f08509d7f47d69eb01d64825b4678",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-inlet_OwnerRoom",
+      "id": "37e21a79e2fe44ef9cc79029d78bdcb3",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-inlet_Table",
+      "id": "cc0941ef5c9a49c98c604187c4941fdb",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-other_Concentrator",
+      "id": "19334a496fe44cad9ca0717fbc257a50",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-other_Gate",
+      "id": "2c2c780e27c649ae9ca5fc4290f6cfdd",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-other_Lobby",
+      "id": "bd93e67ea121479aa2f5b1be6bb73c84",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-other_OwnerRoom",
+      "id": "c8803b316caa44bca8cdbaa5b14b50e0",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-other_Table",
+      "id": "53bec3ee40d441848650947bd7f9f4ab",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-plain_Concentrator",
+      "id": "289e53bdc6294e66b7f054f6b5e2082e",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-plain_Gate",
+      "id": "f493917be46542ae94cbadbfcb1be868",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-plain_Lobby",
+      "id": "3065ab85fffa482fa5b3c159162596b7",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-plain_OwnerRoom",
+      "id": "9733cb625dc24336a197ffa65282a0b2",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-plain_Table",
+      "id": "2f0f277bf6b74e5aa6edc1b534e06c1b",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-speed-managed_Concentrator",
+      "id": "6ed8deb9aa614fc487755fb7b7c7c6bf",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-speed-managed_Gate",
+      "id": "43afd2d86c7946859ef269dfa7c2c260",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-speed-managed_Lobby",
+      "id": "75ede55ec75c4d7ead8fd610771ca461",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-speed-managed_OwnerRoom",
+      "id": "97e3c422153742f0a83d409d14812b0d",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-speed-managed_Table",
+      "id": "5e468ee13a6d4e8b958285195378da3c",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-speed-plain_Concentrator",
+      "id": "f115a93da2bd44fbbd5a77e3d5e410fc",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-speed-plain_Gate",
+      "id": "69ca2d502e4b4af58916184d8eb3ac59",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-speed-plain_Lobby",
+      "id": "3d5e77e3e19e4698b1e3dfda9ccddadc",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-speed-plain_OwnerRoom",
+      "id": "10786c40d34d468c8ea089598d3f46e8",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-speed-plain_Table",
+      "id": "d1b29e1f3e0b4cb9bc64310202543078",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-kill_Concentrator",
+      "id": "be63822388e94aadadaf7b88d2bb2077",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-kill_Gate",
+      "id": "738e17694a36454183817354bde73c0d",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-kill_Lobby",
+      "id": "e6107f095fd94c808ac6397b83ae0562",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-kill_OwnerRoom",
+      "id": "93bc701827f94cc7b412828673db715d",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-kill_Table",
+      "id": "fc3d81ae5218464aba2feb38d4975e48",
+      "existedBeforeCleanup": true
+    }
+  ],
+  "users": [
+    "hm-test-inlet",
+    "hm-test-other",
+    "hm-test-speed-managed",
+    "hm-test-kill"
+  ],
+  "cleanup": [
+    {
+      "name": "hm-test-ticks-dlq consumer",
+      "id": "06ac30f0ed244eb09fa296c7fe3030ea",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-ticks consumer",
+      "id": "f8ff6a266a934309b4480aa3f025c2f2",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-speed-plain",
+      "path": "workers/scripts/hm-test-speed-plain?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain",
+      "path": "workers/scripts/hm-test-plain?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-dispatch",
+      "path": "workers/scripts/hm-test-dispatch?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-outbound",
+      "path": "workers/scripts/hm-test-outbound?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet",
+      "path": "workers/dispatch/namespaces/homie-managed-test/scripts/hm-test-inlet?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-other",
+      "path": "workers/dispatch/namespaces/homie-managed-test/scripts/hm-test-other?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-speed-managed",
+      "path": "workers/dispatch/namespaces/homie-managed-test/scripts/hm-test-speed-managed?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-kill",
+      "path": "workers/dispatch/namespaces/homie-managed-test/scripts/hm-test-kill?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-dispatch_Registry",
+      "path": "workers/durable_objects/namespaces/0271d817cf6d46feb7c719be08c9ee20",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet_Concentrator",
+      "path": "workers/durable_objects/namespaces/993b04c8d16b4a16ad227d70df9ae1bb",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet_Gate",
+      "path": "workers/durable_objects/namespaces/7c73a9a7a7e643c3b865b7cca0060d88",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet_Lobby",
+      "path": "workers/durable_objects/namespaces/ff9f08509d7f47d69eb01d64825b4678",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet_OwnerRoom",
+      "path": "workers/durable_objects/namespaces/37e21a79e2fe44ef9cc79029d78bdcb3",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet_Table",
+      "path": "workers/durable_objects/namespaces/cc0941ef5c9a49c98c604187c4941fdb",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-other_Concentrator",
+      "path": "workers/durable_objects/namespaces/19334a496fe44cad9ca0717fbc257a50",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-other_Gate",
+      "path": "workers/durable_objects/namespaces/2c2c780e27c649ae9ca5fc4290f6cfdd",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-other_Lobby",
+      "path": "workers/durable_objects/namespaces/bd93e67ea121479aa2f5b1be6bb73c84",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-other_OwnerRoom",
+      "path": "workers/durable_objects/namespaces/c8803b316caa44bca8cdbaa5b14b50e0",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-other_Table",
+      "path": "workers/durable_objects/namespaces/53bec3ee40d441848650947bd7f9f4ab",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain_Concentrator",
+      "path": "workers/durable_objects/namespaces/289e53bdc6294e66b7f054f6b5e2082e",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain_Gate",
+      "path": "workers/durable_objects/namespaces/f493917be46542ae94cbadbfcb1be868",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain_Lobby",
+      "path": "workers/durable_objects/namespaces/3065ab85fffa482fa5b3c159162596b7",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain_OwnerRoom",
+      "path": "workers/durable_objects/namespaces/9733cb625dc24336a197ffa65282a0b2",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain_Table",
+      "path": "workers/durable_objects/namespaces/2f0f277bf6b74e5aa6edc1b534e06c1b",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-speed-managed_Concentrator",
+      "path": "workers/durable_objects/namespaces/6ed8deb9aa614fc487755fb7b7c7c6bf",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-speed-managed_Gate",
+      "path": "workers/durable_objects/namespaces/43afd2d86c7946859ef269dfa7c2c260",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-speed-managed_Lobby",
+      "path": "workers/durable_objects/namespaces/75ede55ec75c4d7ead8fd610771ca461",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-speed-managed_OwnerRoom",
+      "path": "workers/durable_objects/namespaces/97e3c422153742f0a83d409d14812b0d",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-speed-managed_Table",
+      "path": "workers/durable_objects/namespaces/5e468ee13a6d4e8b958285195378da3c",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-speed-plain_Concentrator",
+      "path": "workers/durable_objects/namespaces/f115a93da2bd44fbbd5a77e3d5e410fc",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-speed-plain_Gate",
+      "path": "workers/durable_objects/namespaces/69ca2d502e4b4af58916184d8eb3ac59",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-speed-plain_Lobby",
+      "path": "workers/durable_objects/namespaces/3d5e77e3e19e4698b1e3dfda9ccddadc",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-speed-plain_OwnerRoom",
+      "path": "workers/durable_objects/namespaces/10786c40d34d468c8ea089598d3f46e8",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-speed-plain_Table",
+      "path": "workers/durable_objects/namespaces/d1b29e1f3e0b4cb9bc64310202543078",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-kill_Concentrator",
+      "path": "workers/durable_objects/namespaces/be63822388e94aadadaf7b88d2bb2077",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-kill_Gate",
+      "path": "workers/durable_objects/namespaces/738e17694a36454183817354bde73c0d",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-kill_Lobby",
+      "path": "workers/durable_objects/namespaces/e6107f095fd94c808ac6397b83ae0562",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-kill_OwnerRoom",
+      "path": "workers/durable_objects/namespaces/93bc701827f94cc7b412828673db715d",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-kill_Table",
+      "path": "workers/durable_objects/namespaces/fc3d81ae5218464aba2feb38d4975e48",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "homie-managed-test",
+      "path": "workers/dispatch/namespaces/homie-managed-test",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet-db",
+      "path": "d1/database/df7c1ee1-c6ac-486b-a29a-db9f48bf7361",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-other-db",
+      "path": "d1/database/bf08d86a-960f-463a-ac8c-e3d3e5801dd8",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain-db",
+      "path": "d1/database/18fc40eb-71b2-4908-82ba-49bdba2702df",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-speed-managed-db",
+      "path": "d1/database/0b3c1033-978b-4c91-bfa3-8f1d67614383",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-speed-plain-db",
+      "path": "d1/database/6d1363d0-ce81-4c9e-8ad3-0b885daa46c6",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-kill-db",
+      "path": "d1/database/851284b0-1729-477a-811f-61c7c3e14863",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-ticks",
+      "path": "queues/37c935af731847988a834a1086c2b360",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-ticks-dlq",
+      "path": "queues/6b65ccff0c214f67ae1e656188088250",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    }
+  ]
+}

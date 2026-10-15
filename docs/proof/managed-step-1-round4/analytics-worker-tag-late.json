@@ -1,0 +1,15 @@
+{
+  "query": "{viewer{accounts(filter:{accountTag:\"d2f6f976cecad2fe130976fe36916cdb\"}){workersInvocationsAdaptive(limit:100,filter:{datetime_geq:\"2026-10-15T21:45:00Z\",scriptTag:\"6c3b655f9b1f4e13b1e205fb6787424b\"}){dimensions{scriptName dispatchNamespaceName scriptTag}sum{requests subrequests}}}}}",
+  "result": {
+    "data": {
+      "viewer": {
+        "accounts": [
+          {
+            "workersInvocationsAdaptive": []
+          }
+        ]
+      }
+    },
+    "errors": null
+  }
+}

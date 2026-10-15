@@ -1,0 +1,466 @@
+{
+  "samples": [
+    {
+      "client": "dns",
+      "at": 1792101809051,
+      "done": 1792101809353,
+      "status": 200,
+      "version": "14",
+      "routeMs": "59.00",
+      "ray": "a4b21d336f38497b-YVR"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101809058,
+      "done": 1792101809562,
+      "status": 200,
+      "version": "14",
+      "routeMs": "61.00",
+      "ray": "a4b21d3369821c1b-SEA"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101809714,
+      "done": 1792101809776,
+      "status": 200,
+      "version": "14",
+      "routeMs": "0.00",
+      "ray": "a4b21d371c611c1b-SEA"
+    },
+    {
+      "client": "dns",
+      "at": 1792101809713,
+      "done": 1792101810086,
+      "status": 200,
+      "version": "15",
+      "routeMs": "62.00",
+      "ray": "a4b21d37ab4b6d01-YVR"
+    },
+    {
+      "client": "dns",
+      "at": 1792101810237,
+      "done": 1792101810285,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d3a6daa497b-YVR"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101810238,
+      "done": 1792101810324,
+      "status": 200,
+      "version": "14",
+      "routeMs": "0.00",
+      "ray": "a4b21d3a5e301c1b-SEA"
+    },
+    {
+      "client": "dns",
+      "at": 1792101810476,
+      "done": 1792101810655,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d3cbd4e497b-YVR"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101810476,
+      "done": 1792101810668,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d3cbd661c1b-SEA"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101810819,
+      "done": 1792101810867,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d3df9631c1b-SEA"
+    },
+    {
+      "client": "dns",
+      "at": 1792101810819,
+      "done": 1792101810899,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d3df9bd497b-YVR"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101811050,
+      "done": 1792101811180,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d3fffb51c1b-SEA"
+    },
+    {
+      "client": "dns",
+      "at": 1792101811050,
+      "done": 1792101811215,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d3ff81e497b-YVR"
+    },
+    {
+      "client": "dns",
+      "at": 1792101811367,
+      "done": 1792101811411,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d417c55497b-YVR"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101811367,
+      "done": 1792101811479,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d417be31c1b-SEA"
+    },
+    {
+      "client": "dns",
+      "at": 1792101811629,
+      "done": 1792101811705,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d4349d3497b-YVR"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101811630,
+      "done": 1792101811787,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d4349c31c1b-SEA"
+    },
+    {
+      "client": "dns",
+      "at": 1792101811939,
+      "done": 1792101811980,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d44fed2497b-YVR"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101811939,
+      "done": 1792101812183,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d450f511c1b-SEA"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101812334,
+      "done": 1792101812384,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d478fcd1c1b-SEA"
+    },
+    {
+      "client": "dns",
+      "at": 1792101812334,
+      "done": 1792101812415,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d477efb497b-YVR"
+    },
+    {
+      "client": "dns",
+      "at": 1792101812566,
+      "done": 1792101812751,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d49cdb9497b-YVR"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101812566,
+      "done": 1792101812759,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d49df981c1b-SEA"
+    },
+    {
+      "client": "dns",
+      "at": 1792101812911,
+      "done": 1792101812956,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d4b1a34497b-YVR"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101812911,
+      "done": 1792101812975,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d4b1b851c1b-SEA"
+    },
+    {
+      "client": "dns",
+      "at": 1792101813126,
+      "done": 1792101813276,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d4d18ba497b-YVR"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101813127,
+      "done": 1792101813287,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d4d19e41c1b-SEA"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101813754,
+      "done": 1792101813839,
+      "status": 200,
+      "version": "15",
+      "routeMs": "0.00",
+      "ray": "a4b21d505b9d1c1b-SEA"
+    },
+    {
+      "client": "dns",
+      "at": 1792101813753,
+      "done": 1792101813907,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d505fc86d01-YVR"
+    },
+    {
+      "client": "dns",
+      "at": 1792101814058,
+      "done": 1792101814095,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d5239ac497b-YVR"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101814059,
+      "done": 1792101814103,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d52396c1c1b-SEA"
+    },
+    {
+      "client": "dns",
+      "at": 1792101814254,
+      "done": 1792101814319,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d539e02497b-YVR"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101814254,
+      "done": 1792101814323,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d53adaf1c1b-SEA"
+    },
+    {
+      "client": "dns",
+      "at": 1792101814474,
+      "done": 1792101814515,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d54d9cd497b-YVR"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101814474,
+      "done": 1792101814567,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d54e9af1c1b-SEA"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101814717,
+      "done": 1792101814843,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d56ef751c1b-SEA"
+    },
+    {
+      "client": "dns",
+      "at": 1792101814717,
+      "done": 1792101814844,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d56efb7497b-YVR"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101814995,
+      "done": 1792101815039,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d582b921c1b-SEA"
+    },
+    {
+      "client": "dns",
+      "at": 1792101814995,
+      "done": 1792101815040,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d582bdc497b-YVR"
+    },
+    {
+      "client": "dns",
+      "at": 1792101815191,
+      "done": 1792101815367,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d5a2b3a497b-YVR"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101815191,
+      "done": 1792101815367,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d5a39a91c1b-SEA"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101815518,
+      "done": 1792101815559,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d5b6cf11c1b-SEA"
+    },
+    {
+      "client": "dns",
+      "at": 1792101815518,
+      "done": 1792101815603,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d5b5efd497b-YVR"
+    },
+    {
+      "client": "dns",
+      "at": 1792101815754,
+      "done": 1792101815887,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d5d6e24497b-YVR"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101815754,
+      "done": 1792101815947,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d5d6b1f1c1b-SEA"
+    },
+    {
+      "client": "dns",
+      "at": 1792101816098,
+      "done": 1792101816131,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d5efb63497b-YVR"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101816099,
+      "done": 1792101816143,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d5ef81b1c1b-SEA"
+    },
+    {
+      "client": "dns",
+      "at": 1792101816295,
+      "done": 1792101816420,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d60c9e9497b-YVR"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101816295,
+      "done": 1792101816432,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d60ce851c1b-SEA"
+    },
+    {
+      "client": "pinned",
+      "at": 1792101816583,
+      "done": 1792101816623,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d6209fa1c1b-SEA"
+    },
+    {
+      "client": "dns",
+      "at": 1792101816583,
+      "done": 1792101816624,
+      "status": 404,
+      "version": null,
+      "routeMs": null,
+      "ray": "a4b21d620dfc497b-YVR"
+    }
+  ],
+  "changed": {
+    "at": 1792101809562,
+    "done": 1792101809713
+  },
+  "kill": {
+    "at": 1792101813438,
+    "done": 1792101813753
+  },
+  "restored": {
+    "at": 1792101816775,
+    "done": 1792101817029
+  }
+}

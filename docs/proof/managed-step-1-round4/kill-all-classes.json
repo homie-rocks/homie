@@ -1,0 +1,179 @@
+{
+  "started": "2026-10-15T22:12:30.609Z",
+  "sockets": [
+    {
+      "path": "/probe/owner/ws?object=mva3gvm9",
+      "opened": 1792102358539,
+      "messageAt": 1792102358628,
+      "closed": 1792102392269,
+      "code": 1012
+    },
+    {
+      "path": "/probe/owner/ws?object=idle-mva3gvm9",
+      "opened": 1792102359358,
+      "messageAt": 1792102359543,
+      "closed": 1792102392233,
+      "code": 1012
+    },
+    {
+      "path": "/probe/owner/ordinary?object=mva3gvm9",
+      "opened": 1792102378419,
+      "messageAt": 1792102378485,
+      "closed": 1792102392254,
+      "code": 1006
+    },
+    {
+      "path": "/race/__net?room=kill-r4",
+      "opened": 1792102381040,
+      "messageAt": 1792102381562,
+      "closed": 1792102392409,
+      "code": 1006
+    },
+    {
+      "path": "/probe/gate/ws",
+      "opened": 1792102382615,
+      "messageAt": 1792102382816,
+      "closed": 1792102392345,
+      "code": 1006
+    },
+    {
+      "path": "/probe/concentrator/ws",
+      "opened": 1792102384187,
+      "messageAt": 1792102384278,
+      "closed": 1792102392049,
+      "code": 1006
+    },
+    {
+      "path": "/other/probe/owner/ws?object=mva3gvm9",
+      "opened": 1792102385856,
+      "messageAt": 1792102386081,
+      "closed": 1792102403402,
+      "code": 1006
+    }
+  ],
+  "idleBefore": {
+    "at": 1792102359543,
+    "done": 1792102359879,
+    "status": 200,
+    "body": "{\"instance\":\"00f3c1b1-d2ad-48c1-8a71-76de9113fff1\",\"alarms\":0,\"n\":1,\"pending\":false,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b22aa46b1f5ef2-PDX"
+  },
+  "idleAfter": {
+    "at": 1792102375881,
+    "done": 1792102377520,
+    "status": 200,
+    "body": "{\"instance\":\"00f3c1b1-d2ad-48c1-8a71-76de9113fff1\",\"alarms\":0,\"n\":1,\"pending\":false,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b22b0dca9be243-MRS"
+  },
+  "idleEcho": true,
+  "toolkit": [
+    {
+      "at": 1792102386081,
+      "done": 1792102387569,
+      "status": 200,
+      "body": "{\"room\":\"pub-4\",\"players\":0,\"max\":4,\"server\":\"public\"}\n",
+      "ray": "a4b22b4c89b5e228-MRS"
+    },
+    {
+      "at": 1792102387569,
+      "done": 1792102387858,
+      "status": 200,
+      "body": "{\"toolkit\":{\"version\":\"0.54.0\",\"sha256\":\"a417f1755a50c855748bd33f1a70bc5901d9344d818951bd5ecddf704bffb2c9\"},\"room\":null,\"gates\":[],\"diagnostics\":{\"cached\":true,\"at\":null,\"ageMs\":null}}",
+      "ray": "a4b22b532876e228-MRS"
+    },
+    {
+      "at": 1792102387859,
+      "done": 1792102388382,
+      "status": 200,
+      "body": "{\"toolkit\":{\"version\":\"0.54.0\",\"sha256\":\"a417f1755a50c855748bd33f1a70bc5901d9344d818951bd5ecddf704bffb2c9\"},\"room\":null,\"gates\":[],\"diagnostics\":{\"cached\":true,\"at\":null,\"ageMs\":null}}",
+      "ray": "a4b22b551cb8e228-MRS"
+    }
+  ],
+  "armed": {
+    "at": 1792102388383,
+    "done": 1792102389472,
+    "status": 200,
+    "body": "armed",
+    "ray": "a4b22b585b8ee228-MRS"
+  },
+  "before": {
+    "at": 1792102390674,
+    "done": 1792102391205,
+    "status": 200,
+    "body": "{\"instance\":\"64f51a46-0319-4824-852b-f01b877341da\",\"alarms\":4,\"n\":1,\"pending\":false,\"finished\":false,\"alarm\":1792102391539}",
+    "ray": "a4b22b669a7ae228-MRS"
+  },
+  "kill": {
+    "at": 1792102391805,
+    "done": 1792102392073,
+    "status": 204
+  },
+  "route": [
+    {
+      "at": 1792102392073,
+      "done": 1792102392244,
+      "status": 404,
+      "body": "Not found",
+      "ray": "a4b22b6f38ff6d01-YVR"
+    }
+  ],
+  "inflight": {
+    "at": 1792102391205,
+    "done": 1792102392410,
+    "status": 500,
+    "body": "Upstream error (body omitted)",
+    "ray": "a4b22b6a09a9e228-MRS"
+  },
+  "other": {
+    "at": 1792102397745,
+    "done": 1792102398865,
+    "status": 200,
+    "body": "{\"instance\":\"5f3d20aa-c470-4908-9eef-5f0df2e0c470\",\"alarms\":0,\"n\":1,\"pending\":false,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b22b935da088d9-YVR"
+  },
+  "otherEcho": true,
+  "closedWithinWindow": [
+    {
+      "path": "/probe/owner/ws?object=mva3gvm9",
+      "ms": 464
+    },
+    {
+      "path": "/probe/owner/ws?object=idle-mva3gvm9",
+      "ms": 428
+    },
+    {
+      "path": "/probe/owner/ordinary?object=mva3gvm9",
+      "ms": 449
+    },
+    {
+      "path": "/race/__net?room=kill-r4",
+      "ms": 604
+    },
+    {
+      "path": "/probe/gate/ws",
+      "ms": 540
+    },
+    {
+      "path": "/probe/concentrator/ws",
+      "ms": 244
+    },
+    {
+      "path": "/other/probe/owner/ws?object=mva3gvm9",
+      "ms": null
+    }
+  ],
+  "after": {
+    "at": 1792102401591,
+    "done": 1792102401828,
+    "status": 200,
+    "body": "{\"instance\":\"c9542db3-290f-4e5c-a7d2-4bc987636672\",\"alarms\":6,\"n\":1,\"pending\":true,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b22baa5b4288d9-YVR"
+  },
+  "later": {
+    "at": 1792102403331,
+    "done": 1792102403401,
+    "status": 200,
+    "body": "{\"instance\":\"c9542db3-290f-4e5c-a7d2-4bc987636672\",\"alarms\":6,\"n\":1,\"pending\":true,\"finished\":false,\"alarm\":null}",
+    "ray": "a4b22bb5289188d9-YVR"
+  }
+}

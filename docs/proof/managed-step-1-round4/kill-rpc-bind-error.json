@@ -1,0 +1,11 @@
+{
+  "started": "2026-10-15T22:16:37.875Z",
+  "sockets": [
+    {
+      "path": "/probe/owner/ws?object=mva3m6er",
+      "error": "Error: Unexpected server response: 500",
+      "closed": 1792102604914,
+      "code": 1006
+    }
+  ]
+}

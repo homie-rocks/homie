@@ -1,0 +1,21 @@
+{
+  "lowLimit": {
+    "cpuMs": 100,
+    "subRequests": 1
+  },
+  "low": {
+    "status": 500,
+    "body": "Upstream error (body omitted)",
+    "ray": "a4b218d62d2ec710-SJC"
+  },
+  "neighbor": {
+    "status": 200,
+    "body": "{\"tenant\":null}",
+    "ray": "a4b218d94ac65f04-YVR"
+  },
+  "restored": {
+    "status": 200,
+    "body": "three subrequests",
+    "ray": "a4b218e9dbfbc710-SJC"
+  }
+}

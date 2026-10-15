@@ -1,0 +1,1930 @@
+{
+  "summary": [
+    {
+      "endpoint": "page",
+      "cold": false,
+      "n": 28,
+      "colos": [
+        "SEA"
+      ],
+      "managedMs": 108.5,
+      "plainMs": 89.5,
+      "medianPairedDeltaMs": 19,
+      "pairedMedianBootstrap95Ms": [
+        -7,
+        63
+      ]
+    },
+    {
+      "endpoint": "page",
+      "cold": true,
+      "n": 1,
+      "colos": [
+        "SEA"
+      ],
+      "managedMs": 698,
+      "plainMs": 555,
+      "medianPairedDeltaMs": 143,
+      "pairedMedianBootstrap95Ms": [
+        143,
+        143
+      ]
+    },
+    {
+      "endpoint": "asset",
+      "cold": false,
+      "n": 28,
+      "colos": [
+        "SEA"
+      ],
+      "managedMs": 96,
+      "plainMs": 49,
+      "medianPairedDeltaMs": 17.5,
+      "pairedMedianBootstrap95Ms": [
+        0.5,
+        55.5
+      ]
+    },
+    {
+      "endpoint": "asset",
+      "cold": true,
+      "n": 1,
+      "colos": [
+        "SEA"
+      ],
+      "managedMs": 336,
+      "plainMs": 292,
+      "medianPairedDeltaMs": 44,
+      "pairedMedianBootstrap95Ms": [
+        44,
+        44
+      ]
+    },
+    {
+      "endpoint": "records",
+      "cold": false,
+      "n": 27,
+      "colos": [
+        "SEA"
+      ],
+      "managedMs": 81,
+      "plainMs": 78,
+      "medianPairedDeltaMs": 4,
+      "pairedMedianBootstrap95Ms": [
+        -22,
+        15
+      ]
+    },
+    {
+      "endpoint": "records",
+      "cold": true,
+      "n": 0,
+      "colos": [],
+      "managedMs": null,
+      "plainMs": null
+    },
+    {
+      "endpoint": "mcp",
+      "cold": false,
+      "n": 27,
+      "colos": [
+        "SEA"
+      ],
+      "managedMs": 70,
+      "plainMs": 57,
+      "medianPairedDeltaMs": 11,
+      "pairedMedianBootstrap95Ms": [
+        5,
+        99
+      ]
+    },
+    {
+      "endpoint": "mcp",
+      "cold": true,
+      "n": 1,
+      "colos": [
+        "SEA"
+      ],
+      "managedMs": 806,
+      "plainMs": 683,
+      "medianPairedDeltaMs": 123,
+      "pairedMedianBootstrap95Ms": [
+        123,
+        123
+      ]
+    },
+    {
+      "endpoint": "seat",
+      "cold": false,
+      "n": 28,
+      "colos": [
+        "SEA"
+      ],
+      "managedMs": 154.5,
+      "plainMs": 95.5,
+      "medianPairedDeltaMs": 14,
+      "pairedMedianBootstrap95Ms": [
+        -14.5,
+        123
+      ]
+    },
+    {
+      "endpoint": "seat",
+      "cold": true,
+      "n": 1,
+      "colos": [
+        "SEA"
+      ],
+      "managedMs": 603,
+      "plainMs": 388,
+      "medianPairedDeltaMs": 215,
+      "pairedMedianBootstrap95Ms": [
+        215,
+        215
+      ]
+    }
+  ],
+  "pairs": [
+    {
+      "endpoint": "page",
+      "round": 0,
+      "colo": "SEA",
+      "cold": true,
+      "managedMs": 698,
+      "plainMs": 555,
+      "managedRay": "a4b23d781e63deed-SEA",
+      "plainRay": "a4b23d7e4af8b9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 0,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 109,
+      "plainMs": 188,
+      "managedRay": "a4b23d81ad57deed-SEA",
+      "plainRay": "a4b23d839facb9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 0,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 142,
+      "plainMs": 128,
+      "managedRay": "a4b23d86087adeed-SEA",
+      "plainRay": "a4b23d882b48b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 0,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 509,
+      "plainMs": 323,
+      "managedRay": "a4b23d8a5b73deed-SEA",
+      "plainRay": "a4b23d8ebfffb9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 0,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 506,
+      "plainMs": 160,
+      "managedRay": "a4b23d91f8bbdeed-SEA",
+      "plainRay": "a4b23d966d55b9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 1,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 219,
+      "plainMs": 146,
+      "managedRay": "a4b23d9bbecbdeed-SEA",
+      "plainRay": "a4b23d98af72b9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 1,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 137,
+      "plainMs": 239,
+      "managedRay": "a4b23da049b7deed-SEA",
+      "plainRay": "a4b23d9d7b71b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 1,
+      "colo": "SEA",
+      "cold": true,
+      "managedMs": 806,
+      "plainMs": 683,
+      "managedRay": "a4b23dad9ba2deed-SEA",
+      "plainRay": "a4b23da8cc24b9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 1,
+      "colo": "SEA",
+      "cold": true,
+      "managedMs": 603,
+      "plainMs": 388,
+      "managedRay": "a4b23db78ae0deed-SEA",
+      "plainRay": "a4b23db3db6db9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 2,
+      "colo": "SEA",
+      "cold": true,
+      "managedMs": 336,
+      "plainMs": 292,
+      "managedRay": "a4b23dc32aecdeed-SEA",
+      "plainRay": "a4b23dc66fabb9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 3,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 220,
+      "plainMs": 118,
+      "managedRay": "a4b23de269c8deed-SEA",
+      "plainRay": "a4b23de0997fb9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 3,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 334,
+      "plainMs": 163,
+      "managedRay": "a4b23dfcdc98deed-SEA",
+      "plainRay": "a4b23dfacb48b9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 4,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 171,
+      "plainMs": 102,
+      "managedRay": "a4b23e004f0adeed-SEA",
+      "plainRay": "a4b23e0288edb9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 4,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 90,
+      "plainMs": 42,
+      "managedRay": "a4b23e049a12deed-SEA",
+      "plainRay": "a4b23e064b5ab9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 4,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 80,
+      "plainMs": 67,
+      "managedRay": "a4b23e07cc31deed-SEA",
+      "plainRay": "a4b23e098d65b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 4,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 73,
+      "plainMs": 60,
+      "managedRay": "a4b23e0b4ee8deed-SEA",
+      "plainRay": "a4b23e0cffa5b9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 4,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 91,
+      "plainMs": 198,
+      "managedRay": "a4b23e0e992bdeed-SEA",
+      "plainRay": "a4b23e1079beb9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 5,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 105,
+      "plainMs": 91,
+      "managedRay": "a4b23e14ddfddeed-SEA",
+      "plainRay": "a4b23e12fb3fb9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 5,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 108,
+      "plainMs": 49,
+      "managedRay": "a4b23e183826deed-SEA",
+      "plainRay": "a4b23e16bd9fb9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 5,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 326,
+      "plainMs": 206,
+      "managedRay": "a4b23e1ccbc8deed-SEA",
+      "plainRay": "a4b23e1a2849b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 5,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 193,
+      "plainMs": 61,
+      "managedRay": "a4b23e220f5bdeed-SEA",
+      "plainRay": "a4b23e201c19b9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 5,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 321,
+      "plainMs": 190,
+      "managedRay": "a4b23e269aacdeed-SEA",
+      "plainRay": "a4b23e242eeeb9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 6,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 103,
+      "plainMs": 87,
+      "managedRay": "a4b23e29ed2ddeed-SEA",
+      "plainRay": "a4b23e2bebb2b9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 6,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 245,
+      "plainMs": 129,
+      "managedRay": "a4b23e2d9f90deed-SEA",
+      "plainRay": "a4b23e306e84b9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 6,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 168,
+      "plainMs": 214,
+      "managedRay": "a4b23e328b27deed-SEA",
+      "plainRay": "a4b23e35a9c3b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 6,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 256,
+      "plainMs": 50,
+      "managedRay": "a4b23e375eeedeed-SEA",
+      "plainRay": "a4b23e3a3cadb9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 6,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 168,
+      "plainMs": 224,
+      "managedRay": "a4b23e3c5ae9deed-SEA",
+      "plainRay": "a4b23e3e2ee0b9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 7,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 98,
+      "plainMs": 103,
+      "managedRay": "a4b23e42d813deed-SEA",
+      "plainRay": "a4b23e40c88fb9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 7,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 124,
+      "plainMs": 47,
+      "managedRay": "a4b23e462b16deed-SEA",
+      "plainRay": "a4b23e449af1b9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 7,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 78,
+      "plainMs": 190,
+      "managedRay": "a4b23e4a9e8fdeed-SEA",
+      "plainRay": "a4b23e482d65b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 7,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 53,
+      "plainMs": 90,
+      "managedRay": "a4b23e4e296ddeed-SEA",
+      "plainRay": "a4b23e4c9946b9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 7,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 241,
+      "plainMs": 102,
+      "managedRay": "a4b23e51bc06deed-SEA",
+      "plainRay": "a4b23e4feb46b9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 8,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 89,
+      "plainMs": 97,
+      "managedRay": "a4b23e547dc9deed-SEA",
+      "plainRay": "a4b23e566f4db9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 8,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 62,
+      "plainMs": 114,
+      "managedRay": "a4b23e58281adeed-SEA",
+      "plainRay": "a4b23e59c977b9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 8,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 200,
+      "plainMs": 84,
+      "managedRay": "a4b23e5bcc30deed-SEA",
+      "plainRay": "a4b23e5e4c43b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 8,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 148,
+      "plainMs": 49,
+      "managedRay": "a4b23e60496cdeed-SEA",
+      "plainRay": "a4b23e624eeeb9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 8,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 117,
+      "plainMs": 162,
+      "managedRay": "a4b23e63dc1bdeed-SEA",
+      "plainRay": "a4b23e65d8f5b9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 9,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 112,
+      "plainMs": 69,
+      "managedRay": "a4b23e6a183bdeed-SEA",
+      "plainRay": "a4b23e681a41b9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 9,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 113,
+      "plainMs": 54,
+      "managedRay": "a4b23e6d6a3adeed-SEA",
+      "plainRay": "a4b23e6bcc28b9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 9,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 71,
+      "plainMs": 59,
+      "managedRay": "a4b23e70fc75deed-SEA",
+      "plainRay": "a4b23e6f5e76b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 9,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 360,
+      "plainMs": 207,
+      "managedRay": "a4b23e753fc3deed-SEA",
+      "plainRay": "a4b23e72b8bcb9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 9,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 164,
+      "plainMs": 101,
+      "managedRay": "a4b23e7aac73deed-SEA",
+      "plainRay": "a4b23e78cc9ab9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 10,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 223,
+      "plainMs": 74,
+      "managedRay": "a4b23e7dded1deed-SEA",
+      "plainRay": "a4b23e7f98d0b9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 10,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 47,
+      "plainMs": 50,
+      "managedRay": "a4b23e81492edeed-SEA",
+      "plainRay": "a4b23e82db52b9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 10,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 68,
+      "plainMs": 64,
+      "managedRay": "a4b23e846b9edeed-SEA",
+      "plainRay": "a4b23e862daeb9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 10,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 60,
+      "plainMs": 297,
+      "managedRay": "a4b23e87ce14deed-SEA",
+      "plainRay": "a4b23e896fdcb9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 10,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 102,
+      "plainMs": 82,
+      "managedRay": "a4b23e8c89d6deed-SEA",
+      "plainRay": "a4b23e8e7b7eb9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 11,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 87,
+      "plainMs": 193,
+      "managedRay": "a4b23e92be7bdeed-SEA",
+      "plainRay": "a4b23e904caab9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 11,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 111,
+      "plainMs": 81,
+      "managedRay": "a4b23e96492bdeed-SEA",
+      "plainRay": "a4b23e94b80cb9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 11,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 212,
+      "plainMs": 70,
+      "managedRay": "a4b23e9a0bcddeed-SEA",
+      "plainRay": "a4b23e984a0cb9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 11,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 141,
+      "plainMs": 51,
+      "managedRay": "a4b23e9eaec8deed-SEA",
+      "plainRay": "a4b23e9c8cdbb9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 11,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 88,
+      "plainMs": 80,
+      "managedRay": "a4b23ea218fcdeed-SEA",
+      "plainRay": "a4b23ea04f14b9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 12,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 201,
+      "plainMs": 88,
+      "managedRay": "a4b23ea3da36deed-SEA",
+      "plainRay": "a4b23ea66b2cb9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 12,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 82,
+      "plainMs": 110,
+      "managedRay": "a4b23ea85d2ddeed-SEA",
+      "plainRay": "a4b23ea9fd74b9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 12,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 141,
+      "plainMs": 217,
+      "managedRay": "a4b23eabefbadeed-SEA",
+      "plainRay": "a4b23eaef8dbb9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 12,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 63,
+      "plainMs": 69,
+      "managedRay": "a4b23eb0ab63deed-SEA",
+      "plainRay": "a4b23eb26b43b9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 12,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 235,
+      "plainMs": 97,
+      "managedRay": "a4b23eb3fdb9deed-SEA",
+      "plainRay": "a4b23eb6ce4bb9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 13,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 75,
+      "plainMs": 104,
+      "managedRay": "a4b23eba8a58deed-SEA",
+      "plainRay": "a4b23eb8dfecb9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 13,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 58,
+      "plainMs": 41,
+      "managedRay": "a4b23ebdcd26deed-SEA",
+      "plainRay": "a4b23ebc4ac5b9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 13,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 63,
+      "plainMs": 63,
+      "managedRay": "a4b23ec11fb6deed-SEA",
+      "plainRay": "a4b23ebf6e20b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 13,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 72,
+      "plainMs": 65,
+      "managedRay": "a4b23ec46a23deed-SEA",
+      "plainRay": "a4b23ec2b88eb9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 13,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 204,
+      "plainMs": 80,
+      "managedRay": "a4b23ec7ec81deed-SEA",
+      "plainRay": "a4b23ec61b3eb9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 14,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 87,
+      "plainMs": 103,
+      "managedRay": "a4b23eca7e40deed-SEA",
+      "plainRay": "a4b23ecc7f14b9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 14,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 47,
+      "plainMs": 62,
+      "managedRay": "a4b23ece190fdeed-SEA",
+      "plainRay": "a4b23ecfc937b9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 14,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 81,
+      "plainMs": 91,
+      "managedRay": "a4b23ed15b98deed-SEA",
+      "plainRay": "a4b23ed32b9cb9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 14,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 58,
+      "plainMs": 181,
+      "managedRay": "a4b23ed4fe07deed-SEA",
+      "plainRay": "a4b23ed69e7ab9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 14,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 182,
+      "plainMs": 237,
+      "managedRay": "a4b23ed99918deed-SEA",
+      "plainRay": "a4b23edb5944b9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 15,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 117,
+      "plainMs": 64,
+      "managedRay": "a4b23ee01e1ddeed-SEA",
+      "plainRay": "a4b23ede1b36b9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 15,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 59,
+      "plainMs": 49,
+      "managedRay": "a4b23ee368eddeed-SEA",
+      "plainRay": "a4b23ee1cddcb9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 15,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 86,
+      "plainMs": 61,
+      "managedRay": "a4b23ee6bbb4deed-SEA",
+      "plainRay": "a4b23ee4f879b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 15,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 56,
+      "plainMs": 50,
+      "managedRay": "a4b23eea0e6fdeed-SEA",
+      "plainRay": "a4b23ee87b2db9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 15,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 80,
+      "plainMs": 83,
+      "managedRay": "a4b23eed68dbdeed-SEA",
+      "plainRay": "a4b23eebbd41b9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 16,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 204,
+      "plainMs": 70,
+      "managedRay": "a4b23eef49f4deed-SEA",
+      "plainRay": "a4b23ef1b992b9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 16,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 105,
+      "plainMs": 43,
+      "managedRay": "a4b23ef3cd25deed-SEA",
+      "plainRay": "a4b23ef55c24b9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 16,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 98,
+      "plainMs": 70,
+      "managedRay": "a4b23ef71f65deed-SEA",
+      "plainRay": "a4b23ef8ce67b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 16,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 58,
+      "plainMs": 51,
+      "managedRay": "a4b23efa79acdeed-SEA",
+      "plainRay": "a4b23efc1872b9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 16,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 94,
+      "plainMs": 217,
+      "managedRay": "a4b23efdbbd0deed-SEA",
+      "plainRay": "a4b23eff9a84b9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 17,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 103,
+      "plainMs": 81,
+      "managedRay": "a4b23f041871deed-SEA",
+      "plainRay": "a4b23f022c1eb9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 17,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 58,
+      "plainMs": 42,
+      "managedRay": "a4b23f076afbdeed-SEA",
+      "plainRay": "a4b23f05deb6b9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 17,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 67,
+      "plainMs": 87,
+      "managedRay": "a4b23f0acda0deed-SEA",
+      "plainRay": "a4b23f08f90fb9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 17,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 61,
+      "plainMs": 50,
+      "managedRay": "a4b23f0e081bdeed-SEA",
+      "plainRay": "a4b23f0c7b9cb9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 17,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 78,
+      "plainMs": 79,
+      "managedRay": "a4b23f116a99deed-SEA",
+      "plainRay": "a4b23f0fadc1b9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 18,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 211,
+      "plainMs": 67,
+      "managedRay": "a4b23f132bd7deed-SEA",
+      "plainRay": "a4b23f15c97ab9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 18,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 101,
+      "plainMs": 49,
+      "managedRay": "a4b23f17cefddeed-SEA",
+      "plainRay": "a4b23f195bebb9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 18,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 152,
+      "plainMs": 192,
+      "managedRay": "a4b23f1b2930deed-SEA",
+      "plainRay": "a4b23f1d2e6eb9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 18,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 145,
+      "plainMs": 57,
+      "managedRay": "a4b23f1facaadeed-SEA",
+      "plainRay": "a4b23f21d9b3b9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 18,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 80,
+      "plainMs": 73,
+      "managedRay": "a4b23f236f95deed-SEA",
+      "plainRay": "a4b23f253c18b9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 19,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 65,
+      "plainMs": 201,
+      "managedRay": "a4b23f296c20deed-SEA",
+      "plainRay": "a4b23f26ed5eb9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 19,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 62,
+      "plainMs": 106,
+      "managedRay": "a4b23f2d0f12deed-SEA",
+      "plainRay": "a4b23f2b78b1b9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 19,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 65,
+      "plainMs": 61,
+      "managedRay": "a4b23f3059c6deed-SEA",
+      "plainRay": "a4b23f2ebac5b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 19,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 272,
+      "plainMs": 46,
+      "managedRay": "a4b23f339c44deed-SEA",
+      "plainRay": "a4b23f320cfab9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 19,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 86,
+      "plainMs": 94,
+      "managedRay": "a4b23f388875deed-SEA",
+      "plainRay": "a4b23f36a875b9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 20,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 61,
+      "plainMs": 80,
+      "managedRay": "a4b23f3a29d7deed-SEA",
+      "plainRay": "a4b23f3bec89b9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 20,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 45,
+      "plainMs": 41,
+      "managedRay": "a4b23f3d9c78deed-SEA",
+      "plainRay": "a4b23f3f2ebcb9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 20,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 76,
+      "plainMs": 74,
+      "managedRay": "a4b23f40bf1fdeed-SEA",
+      "plainRay": "a4b23f4268f3b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 20,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 62,
+      "plainMs": 53,
+      "managedRay": "a4b23f443a64deed-SEA",
+      "plainRay": "a4b23f45cb70b9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 20,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 248,
+      "plainMs": 78,
+      "managedRay": "a4b23f476d29deed-SEA",
+      "plainRay": "a4b23f4a3e78b9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 21,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 69,
+      "plainMs": 113,
+      "managedRay": "a4b23f4df9f5deed-SEA",
+      "plainRay": "a4b23f4c3fbfb9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 21,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 102,
+      "plainMs": 41,
+      "managedRay": "a4b23f512c54deed-SEA",
+      "plainRay": "a4b23f4faabeb9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 21,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 222,
+      "plainMs": 55,
+      "managedRay": "a4b23f54bec3deed-SEA",
+      "plainRay": "a4b23f530d68b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 21,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 580,
+      "plainMs": 59,
+      "managedRay": "a4b23f595a75deed-SEA",
+      "plainRay": "a4b23f576906b9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 21,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 192,
+      "plainMs": 70,
+      "managedRay": "a4b23f5fef45deed-SEA",
+      "plainRay": "a4b23f5def2eb9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 22,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 185,
+      "plainMs": 73,
+      "managedRay": "a4b23f6208e5deed-SEA",
+      "plainRay": "a4b23f647cc6b9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 22,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 91,
+      "plainMs": 44,
+      "managedRay": "a4b23f666c11deed-SEA",
+      "plainRay": "a4b23f67ffc4b9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 22,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 91,
+      "plainMs": 60,
+      "managedRay": "a4b23f69aeb5deed-SEA",
+      "plainRay": "a4b23f6b5a94b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 22,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 70,
+      "plainMs": 54,
+      "managedRay": "a4b23f6d08f7deed-SEA",
+      "plainRay": "a4b23f6ebdaab9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 22,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 90,
+      "plainMs": 224,
+      "managedRay": "a4b23f704b44deed-SEA",
+      "plainRay": "a4b23f722951b9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 23,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 122,
+      "plainMs": 65,
+      "managedRay": "a4b23f76c828deed-SEA",
+      "plainRay": "a4b23f74db31b9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 23,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 66,
+      "plainMs": 48,
+      "managedRay": "a4b23f7a2b44deed-SEA",
+      "plainRay": "a4b23f788e80b9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 23,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 75,
+      "plainMs": 60,
+      "managedRay": "a4b23f7d7e36deed-SEA",
+      "plainRay": "a4b23f7bb900b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 23,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 58,
+      "plainMs": 53,
+      "managedRay": "a4b23f80b89fdeed-SEA",
+      "plainRay": "a4b23f7f2beab9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 23,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 101,
+      "plainMs": 73,
+      "managedRay": "a4b23f841ad4deed-SEA",
+      "plainRay": "a4b23f825f3bb9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 24,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 198,
+      "plainMs": 70,
+      "managedRay": "a4b23f85fc0bdeed-SEA",
+      "plainRay": "a4b23f887c81b9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 24,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 162,
+      "plainMs": 49,
+      "managedRay": "a4b23f8a8f66deed-SEA",
+      "plainRay": "a4b23f8c7840b9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 24,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 151,
+      "plainMs": 195,
+      "managedRay": "a4b23f8e09b3deed-SEA",
+      "plainRay": "a4b23f910c3bb9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 24,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 255,
+      "plainMs": 47,
+      "managedRay": "a4b23f92bccedeed-SEA",
+      "plainRay": "a4b23f9588c2b9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 24,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 153,
+      "plainMs": 245,
+      "managedRay": "a4b23f978faadeed-SEA",
+      "plainRay": "a4b23f996b9cb9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 25,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 120,
+      "plainMs": 73,
+      "managedRay": "a4b23f9e2cb5deed-SEA",
+      "plainRay": "a4b23f9c2e74b9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 25,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 115,
+      "plainMs": 49,
+      "managedRay": "a4b23fa17f2fdeed-SEA",
+      "plainRay": "a4b23f9fe908b9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 25,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 73,
+      "plainMs": 200,
+      "managedRay": "a4b23fa60abbdeed-SEA",
+      "plainRay": "a4b23fa36c18b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 25,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 54,
+      "plainMs": 93,
+      "managedRay": "a4b23fa99d40deed-SEA",
+      "plainRay": "a4b23fa7ffa6b9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 25,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 254,
+      "plainMs": 84,
+      "managedRay": "a4b23facffd2deed-SEA",
+      "plainRay": "a4b23fab4babb9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 26,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 86,
+      "plainMs": 92,
+      "managedRay": "a4b23fafc9e1deed-SEA",
+      "plainRay": "a4b23fb1cb00b9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 26,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 48,
+      "plainMs": 51,
+      "managedRay": "a4b23fb37ca1deed-SEA",
+      "plainRay": "a4b23fb50e1bb9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 26,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 60,
+      "plainMs": 83,
+      "managedRay": "a4b23fb68f03deed-SEA",
+      "plainRay": "a4b23fb85a5ab9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 26,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 55,
+      "plainMs": 53,
+      "managedRay": "a4b23fba09b5deed-SEA",
+      "plainRay": "a4b23fbbadc1b9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 26,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 121,
+      "plainMs": 72,
+      "managedRay": "a4b23fbd3bf0deed-SEA",
+      "plainRay": "a4b23fbf3a14b9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 27,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 65,
+      "plainMs": 200,
+      "managedRay": "a4b23fc3689bdeed-SEA",
+      "plainRay": "a4b23fc0ebe1b9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 27,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 102,
+      "plainMs": 97,
+      "managedRay": "a4b23fc6fb4adeed-SEA",
+      "plainRay": "a4b23fc578bfb9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 27,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 242,
+      "plainMs": 54,
+      "managedRay": "a4b23fca8dbedeed-SEA",
+      "plainRay": "a4b23fc8ec23b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 27,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 189,
+      "plainMs": 49,
+      "managedRay": "a4b23fcf4945deed-SEA",
+      "plainRay": "a4b23fcd49b3b9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 27,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 156,
+      "plainMs": 202,
+      "managedRay": "a4b23fd3cd8adeed-SEA",
+      "plainRay": "a4b23fd14de9b9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 28,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 114,
+      "plainMs": 172,
+      "managedRay": "a4b23fd60f66deed-SEA",
+      "plainRay": "a4b23fd81c60b9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 28,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 57,
+      "plainMs": 97,
+      "managedRay": "a4b23fda6aeadeed-SEA",
+      "plainRay": "a4b23fdc6f93b9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 28,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 56,
+      "plainMs": 78,
+      "managedRay": "a4b23fdddd26deed-SEA",
+      "plainRay": "a4b23fdfa9beb9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 28,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 63,
+      "plainMs": 63,
+      "managedRay": "a4b23fe13f2edeed-SEA",
+      "plainRay": "a4b23fe2fc18b9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 28,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 70,
+      "plainMs": 91,
+      "managedRay": "a4b23fe48976deed-SEA",
+      "plainRay": "a4b23fe64f00b9ee-SEA"
+    },
+    {
+      "endpoint": "page",
+      "round": 29,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 71,
+      "plainMs": 65,
+      "managedRay": "a4b23fe9cd93deed-SEA",
+      "plainRay": "a4b23fe81904b9ee-SEA"
+    },
+    {
+      "endpoint": "asset",
+      "round": 29,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 106,
+      "plainMs": 39,
+      "managedRay": "a4b23fecf89bdeed-SEA",
+      "plainRay": "a4b23feb7c72b9ee-SEA"
+    },
+    {
+      "endpoint": "records",
+      "round": 29,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 70,
+      "plainMs": 186,
+      "managedRay": "a4b23ff15c52deed-SEA",
+      "plainRay": "a4b23feee850b9ee-SEA"
+    },
+    {
+      "endpoint": "mcp",
+      "round": 29,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 49,
+      "plainMs": 104,
+      "managedRay": "a4b23ff4ef7adeed-SEA",
+      "plainRay": "a4b23ff35b6cb9ee-SEA"
+    },
+    {
+      "endpoint": "seat",
+      "round": 29,
+      "colo": "SEA",
+      "cold": false,
+      "managedMs": 247,
+      "plainMs": 91,
+      "managedRay": "a4b23ff85a45deed-SEA",
+      "plainRay": "a4b23ff69e10b9ee-SEA"
+    }
+  ],
+  "excluded": [
+    {
+      "round": 1,
+      "endpoint": "records",
+      "managedColo": "SEA",
+      "plainColo": "SEA",
+      "managedFirst": "false",
+      "plainFirst": "true"
+    },
+    {
+      "round": 2,
+      "endpoint": "page",
+      "managedColo": "SEA",
+      "plainColo": "SEA",
+      "managedFirst": "false",
+      "plainFirst": "true"
+    },
+    {
+      "round": 2,
+      "endpoint": "records",
+      "managedColo": "SEA",
+      "plainColo": "SEA",
+      "managedFirst": "false",
+      "plainFirst": "true"
+    },
+    {
+      "round": 2,
+      "endpoint": "mcp",
+      "managedColo": "SEA",
+      "plainColo": "SEA",
+      "managedFirst": "false",
+      "plainFirst": "true"
+    },
+    {
+      "round": 2,
+      "endpoint": "seat",
+      "managedColo": "SEA",
+      "plainColo": "SEA",
+      "managedFirst": "true",
+      "plainFirst": "false"
+    },
+    {
+      "round": 3,
+      "endpoint": "asset",
+      "managedColo": "SEA",
+      "plainColo": "SEA",
+      "managedFirst": "false",
+      "plainFirst": "true"
+    },
+    {
+      "round": 3,
+      "endpoint": "records",
+      "managedColo": "SEA",
+      "plainColo": "SEA",
+      "managedFirst": "false",
+      "plainFirst": "true"
+    },
+    {
+      "round": 3,
+      "endpoint": "mcp",
+      "managedColo": "SEA",
+      "plainColo": "SEA",
+      "managedFirst": "true",
+      "plainFirst": "false"
+    }
+  ],
+  "firstSamples": [
+    {
+      "round": 0,
+      "kind": "managed",
+      "endpoint": "page",
+      "ms": 698,
+      "status": 200,
+      "ray": "a4b23d781e63deed-SEA",
+      "colo": "SEA",
+      "first": "true",
+      "routeMs": "69.00",
+      "workerMs": "121",
+      "dispatchMs": null,
+      "routeVersion": "69",
+      "guardMs": null,
+      "ownerMs": null,
+      "calls": "{\"d1\":2,\"assets\":1,\"do\":0}",
+      "bytes": 22973
+    },
+    {
+      "round": 0,
+      "kind": "plain",
+      "endpoint": "page",
+      "ms": 555,
+      "status": 200,
+      "ray": "a4b23d7e4af8b9ee-SEA",
+      "colo": "SEA",
+      "first": "true",
+      "routeMs": null,
+      "workerMs": null,
+      "dispatchMs": null,
+      "routeVersion": null,
+      "guardMs": null,
+      "ownerMs": null,
+      "calls": "{\"d1\":2,\"assets\":1,\"do\":0}",
+      "bytes": 22973
+    },
+    {
+      "round": 1,
+      "kind": "plain",
+      "endpoint": "records",
+      "ms": 357,
+      "status": 200,
+      "ray": "a4b23da25fccb9ee-SEA",
+      "colo": "SEA",
+      "first": "true",
+      "routeMs": null,
+      "workerMs": null,
+      "dispatchMs": null,
+      "routeVersion": null,
+      "guardMs": null,
+      "ownerMs": null,
+      "calls": "{\"d1\":2,\"assets\":1,\"do\":0}",
+      "bytes": 24
+    },
+    {
+      "round": 1,
+      "kind": "plain",
+      "endpoint": "mcp",
+      "ms": 683,
+      "status": 200,
+      "ray": "a4b23da8cc24b9ee-SEA",
+      "colo": "SEA",
+      "first": "true",
+      "routeMs": null,
+      "workerMs": null,
+      "dispatchMs": null,
+      "routeVersion": null,
+      "guardMs": null,
+      "ownerMs": null,
+      "calls": "{\"d1\":1,\"assets\":1,\"do\":0}",
+      "bytes": 3126
+    },
+    {
+      "round": 1,
+      "kind": "managed",
+      "endpoint": "mcp",
+      "ms": 806,
+      "status": 200,
+      "ray": "a4b23dad9ba2deed-SEA",
+      "colo": "SEA",
+      "first": "true",
+      "routeMs": "65.00",
+      "workerMs": "255",
+      "dispatchMs": "478",
+      "routeVersion": "69",
+      "guardMs": null,
+      "ownerMs": null,
+      "calls": "{\"d1\":1,\"assets\":1,\"do\":0}",
+      "bytes": 3126
+    },
+    {
+      "round": 1,
+      "kind": "plain",
+      "endpoint": "seat",
+      "ms": 388,
+      "status": 200,
+      "ray": "a4b23db3db6db9ee-SEA",
+      "colo": "SEA",
+      "first": "true",
+      "routeMs": null,
+      "workerMs": "110",
+      "dispatchMs": null,
+      "routeVersion": null,
+      "guardMs": null,
+      "ownerMs": null,
+      "calls": "{\"d1\":3,\"assets\":1,\"do\":1}",
+      "bytes": 56
+    },
+    {
+      "round": 1,
+      "kind": "managed",
+      "endpoint": "seat",
+      "ms": 603,
+      "status": 200,
+      "ray": "a4b23db78ae0deed-SEA",
+      "colo": "SEA",
+      "first": "true",
+      "routeMs": "64.00",
+      "workerMs": "156",
+      "dispatchMs": null,
+      "routeVersion": "69",
+      "guardMs": "70",
+      "ownerMs": "0",
+      "calls": "{\"d1\":3,\"assets\":1,\"do\":1}",
+      "bytes": 55
+    },
+    {
+      "round": 2,
+      "kind": "plain",
+      "endpoint": "page",
+      "ms": 376,
+      "status": 200,
+      "ray": "a4b23dbfcbc6b9ee-SEA",
+      "colo": "SEA",
+      "first": "true",
+      "routeMs": null,
+      "workerMs": null,
+      "dispatchMs": null,
+      "routeVersion": null,
+      "guardMs": null,
+      "ownerMs": null,
+      "calls": "{\"d1\":2,\"assets\":1,\"do\":0}",
+      "bytes": 22973
+    },
+    {
+      "round": 2,
+      "kind": "managed",
+      "endpoint": "asset",
+      "ms": 336,
+      "status": 200,
+      "ray": "a4b23dc32aecdeed-SEA",
+      "colo": "SEA",
+      "first": "true",
+      "routeMs": "64.00",
+      "workerMs": "14",
+      "dispatchMs": "233",
+      "routeVersion": "69",
+      "guardMs": null,
+      "ownerMs": null,
+      "calls": "{\"d1\":0,\"assets\":1,\"do\":0}",
+      "bytes": 6771
+    },
+    {
+      "round": 2,
+      "kind": "plain",
+      "endpoint": "asset",
+      "ms": 292,
+      "status": 200,
+      "ray": "a4b23dc66fabb9ee-SEA",
+      "colo": "SEA",
+      "first": "true",
+      "routeMs": null,
+      "workerMs": null,
+      "dispatchMs": null,
+      "routeVersion": null,
+      "guardMs": null,
+      "ownerMs": null,
+      "calls": "{\"d1\":0,\"assets\":1,\"do\":0}",
+      "bytes": 6771
+    },
+    {
+      "round": 2,
+      "kind": "plain",
+      "endpoint": "records",
+      "ms": 402,
+      "status": 200,
+      "ray": "a4b23dccdbc3b9ee-SEA",
+      "colo": "SEA",
+      "first": "true",
+      "routeMs": null,
+      "workerMs": null,
+      "dispatchMs": null,
+      "routeVersion": null,
+      "guardMs": null,
+      "ownerMs": null,
+      "calls": "{\"d1\":2,\"assets\":1,\"do\":0}",
+      "bytes": 24
+    },
+    {
+      "round": 2,
+      "kind": "plain",
+      "endpoint": "mcp",
+      "ms": 558,
+      "status": 200,
+      "ray": "a4b23dd4da0ab9ee-SEA",
+      "colo": "SEA",
+      "first": "true",
+      "routeMs": null,
+      "workerMs": "251",
+      "dispatchMs": null,
+      "routeVersion": null,
+      "guardMs": null,
+      "ownerMs": null,
+      "calls": "{\"d1\":1,\"assets\":1,\"do\":0}",
+      "bytes": 3126
+    },
+    {
+      "round": 2,
+      "kind": "managed",
+      "endpoint": "seat",
+      "ms": 609,
+      "status": 200,
+      "ray": "a4b23dd9fc04deed-SEA",
+      "colo": "SEA",
+      "first": "true",
+      "routeMs": "65.00",
+      "workerMs": "128",
+      "dispatchMs": "331",
+      "routeVersion": "69",
+      "guardMs": "58",
+      "ownerMs": "0",
+      "calls": "{\"d1\":3,\"assets\":1,\"do\":1}",
+      "bytes": 55
+    },
+    {
+      "round": 3,
+      "kind": "plain",
+      "endpoint": "asset",
+      "ms": 323,
+      "status": 200,
+      "ray": "a4b23de51c75b9ee-SEA",
+      "colo": "SEA",
+      "first": "true",
+      "routeMs": null,
+      "workerMs": null,
+      "dispatchMs": null,
+      "routeVersion": null,
+      "guardMs": null,
+      "ownerMs": null,
+      "calls": "{\"d1\":0,\"assets\":1,\"do\":0}",
+      "bytes": 6771
+    },
+    {
+      "round": 3,
+      "kind": "plain",
+      "endpoint": "records",
+      "ms": 323,
+      "status": 200,
+      "ray": "a4b23deb98cfb9ee-SEA",
+      "colo": "SEA",
+      "first": "true",
+      "routeMs": null,
+      "workerMs": "28",
+      "dispatchMs": null,
+      "routeVersion": null,
+      "guardMs": null,
+      "ownerMs": null,
+      "calls": "{\"d1\":2,\"assets\":1,\"do\":0}",
+      "bytes": 24
+    },
+    {
+      "round": 3,
+      "kind": "managed",
+      "endpoint": "mcp",
+      "ms": 607,
+      "status": 200,
+      "ray": "a4b23df58ee5deed-SEA",
+      "colo": "SEA",
+      "first": "true",
+      "routeMs": "65.00",
+      "workerMs": "279",
+      "dispatchMs": "486",
+      "routeVersion": "69",
+      "guardMs": null,
+      "ownerMs": null,
+      "calls": "{\"d1\":1,\"assets\":1,\"do\":0}",
+      "bytes": 3126
+    }
+  ],
+  "bootstrap": {
+    "samples": 5000,
+    "seed": 13904,
+    "caveat": "Pairs may be temporally correlated; descriptive interval, not an SLA."
+  }
+}

@@ -1,0 +1,530 @@
+{
+  "at": "2026-10-15T22:28:58.043Z",
+  "account": "d2f6f976cecad2fe130976fe36916cdb",
+  "namespaces": [
+    {
+      "namespace_id": "1285360f-5660-4f15-a67a-7cc3c827291d",
+      "namespace_name": "homie-managed-test",
+      "script_count": 4,
+      "created_on": "2026-10-15T21:50:42.865141Z",
+      "created_by": "d2f6f976cecad2fe130976fe36916cdb",
+      "modified_on": "2026-10-15T22:25:07.736307Z",
+      "modified_by": "d2f6f976cecad2fe130976fe36916cdb"
+    }
+  ],
+  "workers": [
+    {
+      "id": "hm-test-dispatch"
+    },
+    {
+      "id": "hm-test-outbound"
+    },
+    {
+      "id": "hm-test-plain"
+    },
+    {
+      "id": "hm-test-speed-plain"
+    }
+  ],
+  "databases": [
+    {
+      "uuid": "851284b0-1729-477a-811f-61c7c3e14863",
+      "name": "hm-test-kill-db",
+      "created_at": "2026-10-15T22:20:44.019Z",
+      "version": "production",
+      "num_tables": 0,
+      "file_size": 8192,
+      "jurisdiction": null
+    },
+    {
+      "uuid": "6d1363d0-ce81-4c9e-8ad3-0b885daa46c6",
+      "name": "hm-test-speed-plain-db",
+      "created_at": "2026-10-15T22:03:53.433Z",
+      "version": "production",
+      "num_tables": 0,
+      "file_size": 8192,
+      "jurisdiction": null
+    },
+    {
+      "uuid": "0b3c1033-978b-4c91-bfa3-8f1d67614383",
+      "name": "hm-test-speed-managed-db",
+      "created_at": "2026-10-15T22:03:29.661Z",
+      "version": "production",
+      "num_tables": 0,
+      "file_size": 8192,
+      "jurisdiction": null
+    },
+    {
+      "uuid": "18fc40eb-71b2-4908-82ba-49bdba2702df",
+      "name": "hm-test-plain-db",
+      "created_at": "2026-10-15T21:52:45.253Z",
+      "version": "production",
+      "num_tables": 0,
+      "file_size": 8192,
+      "jurisdiction": null
+    },
+    {
+      "uuid": "bf08d86a-960f-463a-ac8c-e3d3e5801dd8",
+      "name": "hm-test-other-db",
+      "created_at": "2026-10-15T21:52:24.508Z",
+      "version": "production",
+      "num_tables": 0,
+      "file_size": 8192,
+      "jurisdiction": null
+    },
+    {
+      "uuid": "df7c1ee1-c6ac-486b-a29a-db9f48bf7361",
+      "name": "hm-test-inlet-db",
+      "created_at": "2026-10-15T21:51:14.232Z",
+      "version": "production",
+      "num_tables": 0,
+      "file_size": 8192,
+      "jurisdiction": null
+    }
+  ],
+  "queues": [
+    {
+      "queue_id": "37c935af731847988a834a1086c2b360",
+      "queue_name": "hm-test-ticks",
+      "settings": {
+        "delivery_delay": 0,
+        "message_retention_period": 345600
+      },
+      "created_on": "2026-10-15T21:50:46.99758Z",
+      "modified_on": "2026-10-15T21:50:46.99758Z",
+      "producers_total_count": 1,
+      "producers": [
+        {
+          "script": "hm-test-dispatch",
+          "type": "worker"
+        }
+      ],
+      "consumers_total_count": 1,
+      "consumers": [
+        {
+          "script": "hm-test-dispatch",
+          "dead_letter_queue": "hm-test-ticks-dlq",
+          "settings": {
+            "batch_size": 1,
+            "max_retries": 3,
+            "max_wait_time_ms": 5000,
+            "retry_delay": 0
+          },
+          "consumer_id": "f8ff6a266a934309b4480aa3f025c2f2",
+          "type": "worker"
+        }
+      ]
+    },
+    {
+      "queue_id": "6b65ccff0c214f67ae1e656188088250",
+      "queue_name": "hm-test-ticks-dlq",
+      "settings": {
+        "delivery_delay": 0,
+        "message_retention_period": 345600
+      },
+      "created_on": "2026-10-15T21:50:45.04262Z",
+      "modified_on": "2026-10-15T21:50:45.04262Z",
+      "producers_total_count": 0,
+      "producers": [],
+      "consumers_total_count": 1,
+      "consumers": [
+        {
+          "script": "hm-test-dispatch",
+          "settings": {
+            "batch_size": 1,
+            "max_retries": 3,
+            "max_wait_time_ms": 5000,
+            "retry_delay": 0
+          },
+          "consumer_id": "06ac30f0ed244eb09fa296c7fe3030ea",
+          "type": "worker"
+        }
+      ]
+    }
+  ],
+  "durableObjects": [
+    {
+      "id": "0271d817cf6d46feb7c719be08c9ee20",
+      "name": "hm-test-dispatch_Registry",
+      "script": "hm-test-dispatch",
+      "class": "Registry",
+      "use_sqlite": true
+    },
+    {
+      "id": "993b04c8d16b4a16ad227d70df9ae1bb",
+      "name": "hm-test-inlet_Concentrator",
+      "script": "hm-test-inlet",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Concentrator",
+      "use_sqlite": true
+    },
+    {
+      "id": "cc0941ef5c9a49c98c604187c4941fdb",
+      "name": "hm-test-inlet_Table",
+      "script": "hm-test-inlet",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Table",
+      "use_sqlite": true
+    },
+    {
+      "id": "37e21a79e2fe44ef9cc79029d78bdcb3",
+      "name": "hm-test-inlet_OwnerRoom",
+      "script": "hm-test-inlet",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "OwnerRoom",
+      "use_sqlite": true
+    },
+    {
+      "id": "ff9f08509d7f47d69eb01d64825b4678",
+      "name": "hm-test-inlet_Lobby",
+      "script": "hm-test-inlet",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Lobby",
+      "use_sqlite": true
+    },
+    {
+      "id": "7c73a9a7a7e643c3b865b7cca0060d88",
+      "name": "hm-test-inlet_Gate",
+      "script": "hm-test-inlet",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Gate",
+      "use_sqlite": true
+    },
+    {
+      "id": "bd93e67ea121479aa2f5b1be6bb73c84",
+      "name": "hm-test-other_Lobby",
+      "script": "hm-test-other",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Lobby",
+      "use_sqlite": true
+    },
+    {
+      "id": "53bec3ee40d441848650947bd7f9f4ab",
+      "name": "hm-test-other_Table",
+      "script": "hm-test-other",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Table",
+      "use_sqlite": true
+    },
+    {
+      "id": "c8803b316caa44bca8cdbaa5b14b50e0",
+      "name": "hm-test-other_OwnerRoom",
+      "script": "hm-test-other",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "OwnerRoom",
+      "use_sqlite": true
+    },
+    {
+      "id": "19334a496fe44cad9ca0717fbc257a50",
+      "name": "hm-test-other_Concentrator",
+      "script": "hm-test-other",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Concentrator",
+      "use_sqlite": true
+    },
+    {
+      "id": "2c2c780e27c649ae9ca5fc4290f6cfdd",
+      "name": "hm-test-other_Gate",
+      "script": "hm-test-other",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Gate",
+      "use_sqlite": true
+    },
+    {
+      "id": "2f0f277bf6b74e5aa6edc1b534e06c1b",
+      "name": "hm-test-plain_Table",
+      "script": "hm-test-plain",
+      "class": "Table",
+      "use_sqlite": true
+    },
+    {
+      "id": "289e53bdc6294e66b7f054f6b5e2082e",
+      "name": "hm-test-plain_Concentrator",
+      "script": "hm-test-plain",
+      "class": "Concentrator",
+      "use_sqlite": true
+    },
+    {
+      "id": "f493917be46542ae94cbadbfcb1be868",
+      "name": "hm-test-plain_Gate",
+      "script": "hm-test-plain",
+      "class": "Gate",
+      "use_sqlite": true
+    },
+    {
+      "id": "3065ab85fffa482fa5b3c159162596b7",
+      "name": "hm-test-plain_Lobby",
+      "script": "hm-test-plain",
+      "class": "Lobby",
+      "use_sqlite": true
+    },
+    {
+      "id": "9733cb625dc24336a197ffa65282a0b2",
+      "name": "hm-test-plain_OwnerRoom",
+      "script": "hm-test-plain",
+      "class": "OwnerRoom",
+      "use_sqlite": true
+    },
+    {
+      "id": "6ed8deb9aa614fc487755fb7b7c7c6bf",
+      "name": "hm-test-speed-managed_Concentrator",
+      "script": "hm-test-speed-managed",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Concentrator",
+      "use_sqlite": true
+    },
+    {
+      "id": "97e3c422153742f0a83d409d14812b0d",
+      "name": "hm-test-speed-managed_OwnerRoom",
+      "script": "hm-test-speed-managed",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "OwnerRoom",
+      "use_sqlite": true
+    },
+    {
+      "id": "75ede55ec75c4d7ead8fd610771ca461",
+      "name": "hm-test-speed-managed_Lobby",
+      "script": "hm-test-speed-managed",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Lobby",
+      "use_sqlite": true
+    },
+    {
+      "id": "5e468ee13a6d4e8b958285195378da3c",
+      "name": "hm-test-speed-managed_Table",
+      "script": "hm-test-speed-managed",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Table",
+      "use_sqlite": true
+    },
+    {
+      "id": "43afd2d86c7946859ef269dfa7c2c260",
+      "name": "hm-test-speed-managed_Gate",
+      "script": "hm-test-speed-managed",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Gate",
+      "use_sqlite": true
+    },
+    {
+      "id": "10786c40d34d468c8ea089598d3f46e8",
+      "name": "hm-test-speed-plain_OwnerRoom",
+      "script": "hm-test-speed-plain",
+      "class": "OwnerRoom",
+      "use_sqlite": true
+    },
+    {
+      "id": "d1b29e1f3e0b4cb9bc64310202543078",
+      "name": "hm-test-speed-plain_Table",
+      "script": "hm-test-speed-plain",
+      "class": "Table",
+      "use_sqlite": true
+    },
+    {
+      "id": "3d5e77e3e19e4698b1e3dfda9ccddadc",
+      "name": "hm-test-speed-plain_Lobby",
+      "script": "hm-test-speed-plain",
+      "class": "Lobby",
+      "use_sqlite": true
+    },
+    {
+      "id": "f115a93da2bd44fbbd5a77e3d5e410fc",
+      "name": "hm-test-speed-plain_Concentrator",
+      "script": "hm-test-speed-plain",
+      "class": "Concentrator",
+      "use_sqlite": true
+    },
+    {
+      "id": "69ca2d502e4b4af58916184d8eb3ac59",
+      "name": "hm-test-speed-plain_Gate",
+      "script": "hm-test-speed-plain",
+      "class": "Gate",
+      "use_sqlite": true
+    },
+    {
+      "id": "738e17694a36454183817354bde73c0d",
+      "name": "hm-test-kill_Gate",
+      "script": "hm-test-kill",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Gate",
+      "use_sqlite": true
+    },
+    {
+      "id": "be63822388e94aadadaf7b88d2bb2077",
+      "name": "hm-test-kill_Concentrator",
+      "script": "hm-test-kill",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Concentrator",
+      "use_sqlite": true
+    },
+    {
+      "id": "e6107f095fd94c808ac6397b83ae0562",
+      "name": "hm-test-kill_Lobby",
+      "script": "hm-test-kill",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Lobby",
+      "use_sqlite": true
+    },
+    {
+      "id": "93bc701827f94cc7b412828673db715d",
+      "name": "hm-test-kill_OwnerRoom",
+      "script": "hm-test-kill",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "OwnerRoom",
+      "use_sqlite": true
+    },
+    {
+      "id": "fc3d81ae5218464aba2feb38d4975e48",
+      "name": "hm-test-kill_Table",
+      "script": "hm-test-kill",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Table",
+      "use_sqlite": true
+    }
+  ],
+  "scripts": [
+    {
+      "created_on": "2026-10-15T21:51:40.252168Z",
+      "modified_on": "2026-10-15T22:18:36.268233Z",
+      "id": "hm-test-inlet",
+      "tag": "6c3b655f9b1f4e13b1e205fb6787424b",
+      "tags": [
+        "hm-test",
+        "step-1",
+        "hm-test-inlet"
+      ],
+      "deployment_id": "",
+      "tail_consumers": [
+        {
+          "service": "hm-test-outbound"
+        }
+      ],
+      "logpush": false,
+      "has_assets": false,
+      "has_modules": false,
+      "etag": "a191edd283cd3658d3ba3456c501f00370a9cdd73e8239d81c44c8e985a8056f",
+      "handlers": [
+        "fetch"
+      ],
+      "last_deployed_from": "",
+      "migration_tag": "v1",
+      "compatibility_date": "2026-10-15",
+      "compatibility_flags": [
+        "nodejs_compat",
+        "global_fetch_strictly_public"
+      ],
+      "usage_model": "standard",
+      "limits": {
+        "cpu_ms": 1000
+      },
+      "routes": null
+    },
+    {
+      "created_on": "2026-10-15T21:52:36.624031Z",
+      "modified_on": "2026-10-15T22:06:08.947221Z",
+      "id": "hm-test-other",
+      "tag": "6df865c80b654df4b851f58f87253081",
+      "tags": [
+        "hm-test",
+        "step-1",
+        "hm-test-other"
+      ],
+      "deployment_id": "",
+      "tail_consumers": [
+        {
+          "service": "hm-test-outbound"
+        }
+      ],
+      "logpush": false,
+      "has_assets": false,
+      "has_modules": false,
+      "etag": "0457e211e7b58e03d37683637099c1d4569029dfee43d6ba676773365fc0e3c0",
+      "handlers": [
+        "fetch"
+      ],
+      "last_deployed_from": "",
+      "migration_tag": "v1",
+      "compatibility_date": "2026-10-15",
+      "compatibility_flags": [
+        "nodejs_compat",
+        "global_fetch_strictly_public"
+      ],
+      "usage_model": "standard",
+      "limits": {
+        "cpu_ms": 1000
+      },
+      "routes": null
+    },
+    {
+      "created_on": "2026-10-15T22:03:44.123911Z",
+      "modified_on": "2026-10-15T22:25:06.295831Z",
+      "id": "hm-test-speed-managed",
+      "tag": "eed965295bac4af18b90d0071e886fd2",
+      "tags": [
+        "hm-test",
+        "step-1",
+        "hm-test-speed-managed"
+      ],
+      "deployment_id": "",
+      "tail_consumers": [
+        {
+          "service": "hm-test-outbound"
+        }
+      ],
+      "logpush": false,
+      "has_assets": false,
+      "has_modules": false,
+      "etag": "6715ee5be4bd0cac9adeb6e4d517a9979a51225c2371d8989afbe166bbcfd873",
+      "handlers": [
+        "fetch"
+      ],
+      "last_deployed_from": "",
+      "migration_tag": "v1",
+      "compatibility_date": "2026-10-15",
+      "compatibility_flags": [
+        "nodejs_compat",
+        "global_fetch_strictly_public"
+      ],
+      "usage_model": "standard",
+      "limits": {
+        "cpu_ms": 1000
+      },
+      "routes": null
+    },
+    {
+      "created_on": "2026-10-15T22:20:56.742343Z",
+      "modified_on": "2026-10-15T22:21:03.656869Z",
+      "id": "hm-test-kill",
+      "tag": "8f04bb67fd0f4a1281293487f8bb6042",
+      "tags": [
+        "hm-test",
+        "step-1",
+        "hm-test-kill"
+      ],
+      "deployment_id": "",
+      "tail_consumers": [
+        {
+          "service": "hm-test-outbound"
+        }
+      ],
+      "logpush": false,
+      "has_assets": false,
+      "has_modules": false,
+      "etag": "20b25dc33a0c5427b112e689028f0a21c073c8497e99661b7567e6f612bb2a46",
+      "handlers": [
+        "fetch"
+      ],
+      "last_deployed_from": "",
+      "migration_tag": "v1",
+      "compatibility_date": "2026-10-15",
+      "compatibility_flags": [
+        "nodejs_compat",
+        "global_fetch_strictly_public"
+      ],
+      "usage_model": "standard",
+      "limits": {
+        "cpu_ms": 1000
+      },
+      "routes": null
+    }
+  ]
+}

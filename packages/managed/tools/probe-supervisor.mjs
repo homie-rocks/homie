@@ -11,6 +11,7 @@ async function operator(path,body){const at=Date.now();const r=await fetch(base+
 async function socket(path,message){
  if(path.startsWith('/probe/owner/')&&!path.includes('object='))path+='?object='+runId;
  if(path.startsWith('/other/probe/owner/'))path+='?object='+runId;
+ if(path.includes('/probe/owner/ws')){evidence.readiness??=[];const statusPath=path.replace('/ws','/status');for(let i=0;i<3;i++){const status=await get(statusPath);evidence.readiness.push(status);save();if(status.status===200)break;if(i===2)throw Error('Owner not ready');await sleep(500);}}
  const row={path};evidence.sockets.push(row);const ws=new WebSocket(base.replace('https:','wss:')+(path.startsWith('/other/')?'':prefix)+path);sockets.push(ws);
  ws.on('close',code=>{row.closed=Date.now();row.code=code;save()});ws.on('error',e=>{row.error=String(e);save()});
  await new Promise((yes,no)=>{const timer=setTimeout(()=>no(Error('Socket open timeout')),10000);ws.once('open',()=>{row.opened=Date.now();clearTimeout(timer);yes()});ws.once('error',no)});
