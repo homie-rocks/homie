@@ -6,6 +6,9 @@ export class Table {
   }
   async fetch(request) {await this.ready;return this.room.fetch(request);}
   async alarm() {await this.ready;return this.room.alarm();}
+  async webSocketMessage(...args) {await this.ready;return this.room.webSocketMessage(...args);}
+  async webSocketClose(...args) {await this.ready;return this.room.webSocketClose(...args);}
+  async webSocketError(...args) {await this.ready;return this.room.webSocketError(...args);}
 }
 export class Lobby {
   constructor(ctx,env) {

@@ -1,3 +1,4 @@
+import {WatchSockets} from './watch-sockets.mjs';
 import { catalogue } from './catalogue.mjs';
 import { RULES_WIRING_MESSAGE } from './rules-wiring.mjs';
 import { characterStore, characterRequest } from './characters.mjs';
@@ -25,6 +26,7 @@ import {ROOM_ALARM_MS,ROOM_PAUSE_MS,roomEndAt} from './room-lifecycle.mjs';
 export class Table {
   constructor(ctx, env) {
     this.ctx = ctx;
+    this.watchSockets = new WatchSockets(ctx);
     this.env = env;
     this.room = null;
     this.timer = null;
@@ -81,6 +83,7 @@ export class Table {
       // A big match room's last unconfirmed checkpoint (worker/room-store.mjs), read once as the object wakes.
       try { this.looseSave = (await ctx.storage.list?.({ prefix: LOOSE_SAVE })) ?? null; }
       catch (error) { this.looseSave = null; this.storageProblem(error); }
+      await this.watchSockets.restore((request, transport) => this.connect(request, transport));
     });
   }
 
@@ -793,6 +796,7 @@ export class Table {
 
   /** The alarm: the house guides' brains decide (worker/agents.mjs), then the day's usage is written. */
   async alarm() {
+    if (this.room && !this.room.clients.size) { this.room.tick(); this.room.tellWatchers(); this.report(); }
     await this.flushRoundRecords();
     await this.flushFunctionEvents();
     // A brain that throws never takes the room with it: the alarm is not retried, the guides answer from the floor.
@@ -983,8 +987,10 @@ export class Table {
       try { await this.acquireCharacter(account); }
       catch (error) { return new Response(String(error.message), { status: 409 }); }
     }
-    const [client, server] = transport ? [null, transport] : Object.values(new WebSocketPair());
-    server.accept();
+    const [client, accepted] = transport ? [null, transport] : Object.values(new WebSocketPair());
+    const hibernating = !transport && url.pathname === '/__watch' && this.ctx.acceptWebSocket;
+    const server = hibernating ? await this.watchSockets.accept(accepted, request) : accepted;
+    if (!hibernating) server.accept();
     const via = url.searchParams.get('via');
     const conn = {
       ip: request.headers.get('cf-connecting-ip'),
@@ -1079,6 +1085,11 @@ export class Table {
     return transport ? null : new Response(null, { status: 101, webSocket: client });
   }
 
+  webSocketMessage(socket, message) { this.watchSockets.message(socket, message); }
+  // Compatibility date >= 2026-04-07 replies to Close frames automatically.
+  async webSocketClose(socket) { await this.watchSockets.close(socket); }
+  async webSocketError(socket, error) { await this.watchSockets.close(socket, error); }
+
   start() {
     if (this.timer) return;
     let n = 0;
@@ -1099,7 +1110,7 @@ export class Table {
       // A server-hosted room in play keeps its alarm ahead of it (re-armed every five minutes of play).
       if (n % 1200 === 0 && this.hostRt?.running) this.armRoom(Date.now() + ROOM_ALARM_MS);
       if (room.seats.size === 0 && room.clients.size === 0) this.openCounted = false;
-      if (room.clients.size === 0 && room.watchers.size === 0) { clearInterval(this.timer); this.timer = null; this.report(); this.ctx.waitUntil(this.flushChat().catch(() => {})); if (this.house) { this.ctx.waitUntil(this.flushBrain(true).catch(() => {})); this.house = null; } }
+      if (room.clients.size === 0 && !this.hostRt?.running) { this.armRoom(Date.now() + 120_000); clearInterval(this.timer); this.timer = null; this.report(); this.ctx.waitUntil(this.flushChat().catch(() => {})); if (this.house) { this.ctx.waitUntil(this.flushBrain(true).catch(() => {})); this.house = null; } }
     }, 250);
   }
 

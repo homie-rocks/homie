@@ -213,3 +213,19 @@ test('analytics page rollups preserve old counts and replay atomically without d
  n=9;await rollupAnalytics(env);assert.equal((await DB.prepare('SELECT n FROM stats_daily').first()).n,19);
  n=8;await rollupAnalytics(env);assert.equal((await DB.prepare('SELECT n FROM stats_daily').first()).n,18);
 });
+
+import {WatchSockets} from '../worker/watch-sockets.mjs';
+test('an idle watch resumes its authenticated context after eviction and removes it on close', async () => {
+ const values=new Map(),accepted=[],messages=[];let attachment;
+ const socket={serializeAttachment:value=>attachment=value,deserializeAttachment:()=>attachment,send:value=>messages.push(value),close:()=>{}};
+ const ctx={storage:{put:async(k,v)=>values.set(k,v),list:async()=>values,delete:async k=>values.delete(k)},acceptWebSocket:s=>accepted.push(s),getWebSockets:()=>accepted};
+ const request=new Request('https://room/__watch?game=cafe&room=public&chat='+ 'a'.repeat(4000),{headers:{'cf-connecting-ip':'192.0.2.1',cookie:'never-persist-this'}});
+ const original=new WatchSockets(ctx);await original.accept(socket,request);
+ assert.ok(JSON.stringify(attachment).length<100,'large policy stays outside the attachment limit');
+ assert.equal([...values.values()][0].headers.some(([k])=>k==='cookie'),false);
+ const restored=new WatchSockets(ctx);let restoredURL,closed=0;
+ await restored.restore(async(req,transport)=>{restoredURL=req.url;transport.addEventListener('message',e=>transport.send(e.data));transport.addEventListener('close',()=>closed++);});
+ assert.equal(restoredURL,request.url);assert.equal(accepted.length,1,'restoring does not accept an existing socket again');
+ restored.message(socket,'hello');assert.deepEqual(messages,['hello']);
+ await restored.close(socket);assert.equal(closed,1);assert.equal(values.size,0);
+});
