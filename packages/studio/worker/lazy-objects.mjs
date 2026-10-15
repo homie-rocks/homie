@@ -15,4 +15,5 @@ export class Lobby {
     this.ready=ctx.blockConcurrencyWhile(async()=>{this.lobby=new (await import('./lobby.mjs')).Lobby(ctx,env);});
   }
   async fetch(request) {await this.ready;return this.lobby.fetch(request);}
+  async alarm() {await this.ready;return this.lobby.alarm();}
 }

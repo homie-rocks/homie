@@ -1118,7 +1118,7 @@ export async function perform(env, cat, a) {
       if (a.budget !== undefined) {
         const day = await brainDay(env);
         const next = { neurons: day.budget.neurons, usd: day.budget.usd, ...(a.mode === 'workers-ai' ? { neurons: Math.round(a.budget) } : { usd: Math.round(a.budget * 100) / 100 }) };
-        await env.DB.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('brain_budget', ?1)").bind(JSON.stringify(next)).run().catch(() => {});
+        await env.DB.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('brain_budget', ?1)").bind(JSON.stringify(next)).run();
       }
       await pushPolicy(env, meta, settings, sv);
       const day = await brainDay(env);

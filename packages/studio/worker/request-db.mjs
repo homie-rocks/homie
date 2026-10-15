@@ -1,3 +1,4 @@
+import {LIVE_ROOMS_QUERY} from './lobby-summary.mjs';
 export const METADATA_REVISION=Symbol('metadata revision');
 export const ORIGINAL_DB=Symbol('original database');
 export const MUTATIONS=Symbol('request mutations');
@@ -14,7 +15,8 @@ export function requestDatabase(DB, request, state={mutated:false}, binding=data
  // this session may use replicas at or beyond that bookmark. This also meets
  // any bookmark returned by an earlier request without trusting stale auth.
  if(DB===binding&&typeof DB.withSession==='function')DB=DB.withSession('first-primary');
- let revision,records,rows;
+ let revision,records,rows,liveRooms;
+ const prefetchRooms=state.summaries&&/^\/(?:api\/(?:rooms|games)|\.well-known\/homie-studio\.json)?\/?$/.test(new URL(request.url).pathname);
  const url=new URL(request.url),match=request.method==='GET'&&/^\/([a-z0-9][a-z0-9-]{0,39})\/api\/app\/records\/([a-z][a-z0-9-]{0,39})(?:\/([A-Za-z0-9_-]{1,64}))?$/.exec(url.pathname);
  const recordQuery=match&&(match[3]?'SELECT id, value, version, updated_at FROM app_records WHERE app = ?1 AND collection = ?2 AND id = ?3':'SELECT id, value, version, updated_at FROM app_records WHERE app = ?1 AND collection = ?2 ORDER BY updated_at, id');
  const stamp=()=>revision??=(async()=>{
@@ -26,7 +28,9 @@ export function requestDatabase(DB, request, state={mutated:false}, binding=data
   const cold=!cached;
   const statements=[query,...(cold?queries.map(sql=>DB.prepare(sql)):[])];
   if(recordQuery)statements.push(DB.prepare(recordQuery).bind(...match.slice(1).filter(x=>x!==undefined)));
+  if(prefetchRooms)statements.push(DB.prepare(LIVE_ROOMS_QUERY));
   const result=await DB.batch(statements);
+  if(prefetchRooms)liveRooms=result.at(-1);
   let version=result[0].results?.[0]?.value??null;
   if(recordQuery)records=result.at(-1);
   if(cold)rows=new Map(queries.map((sql,i)=>[sql,result[i+1]]));
@@ -43,6 +47,7 @@ export function requestDatabase(DB, request, state={mutated:false}, binding=data
  const prepare=(sql,args=[])=>{
   const original=()=>{const stmt=DB.prepare(sql);return args.length?stmt.bind(...args):stmt;};
   const read=async()=>{
+   if(sql===LIVE_ROOMS_QUERY&&prefetchRooms){await stamp();return liveRooms;}
    if(sql===recordQuery&&JSON.stringify(args)===JSON.stringify(match.slice(1).filter(x=>x!==undefined))){await stamp();return records;}
    if(!metadataQueries.has(sql))return original().all();
    await stamp();

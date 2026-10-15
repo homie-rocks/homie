@@ -230,7 +230,7 @@ async function sessionOf(request, env, url = new URL(request.url)) {
     writes.push(env.DB.prepare('UPDATE player_sessions SET expires_at = ?2 WHERE hash = ?1').bind(hash, now + days * DAY));
     session.cookies.push(sessionCookie(url, token, days));
   }
-  if (writes.length) await env.DB.batch(writes).catch(() => {});
+  if (writes.length) await env.DB.batch(writes);
   return session;
 }
 
@@ -248,7 +248,6 @@ async function newGuest(request, env, url, addressLimit = PLAYER_LIMITS.newPlaye
     env.DB.prepare('INSERT INTO players (id, name, named, guest, owner, created_at, seen_at) VALUES (?1, ?2, 0, 1, 0, ?3, ?3)').bind(id, name, now),
     s.statement,
   ]);
-  if (Math.random() < 0.02) pruneGuests(env).catch(() => {});
   return { session: { player: { id, name, named: false, guest: true, owner: false, since: now }, cookies: [s.cookie], fresh: true } };
 }
 

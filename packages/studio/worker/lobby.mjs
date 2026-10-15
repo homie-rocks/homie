@@ -80,12 +80,32 @@ export class Lobby {
       this.eventStreams??=new EventStreams(this.env,this.ctx);
       return this.eventStreams.fetch(request);
     }
-    try { return await this.answer(request); } catch (error) {
+    try {
+      const response=await this.answer(request),url=new URL(request.url);
+      if(response.ok && request.method==='POST' && url.pathname==='/report' && this.env?.BACKGROUND && url.searchParams.get('game')) await this.scheduleSummary(url.searchParams.get('game'));
+      return response;
+    } catch (error) {
       let path = '';
       try { path = new URL(request.url).pathname; } catch { /* not an address */ }
       try { console.error(JSON.stringify({ at: new Date().toISOString(), ev: 'lobby-failed', game: this.game ?? null, path, error: errorLine(error) })); } catch { /* no console */ }
       return json({ ok: false, error: 'lobby' }, 500);
     }
+  }
+
+  async scheduleSummary(game) {
+    if(this.summaryGame!==game) {await this.ctx.storage.put('summary-game',game);this.summaryGame=game;}
+    if(!this.summaryDue) {
+      this.summaryDue=Date.now()+10000;
+      try {await this.ctx.storage.setAlarm(this.summaryDue);} catch(error) {this.summaryDue=null;throw error;}
+    }
+  }
+  async alarm() {
+    this.summaryDue=null;
+    const game=this.summaryGame??await this.ctx.storage.get('summary-game');
+    if(!game||!this.env.BACKGROUND)return;
+    const at=Date.now();
+    const rooms=[...this.rooms.values()].filter(r=>r.players>0&&r.at>at-180000).map(({name,players,agents,ai,server,at})=>({name,players,agents:agents??0,ai:ai??0,server:server??roomServer(name),at}));
+    await this.env.BACKGROUND.send({v:1,type:'lobby.snapshot',game,at,rooms});
   }
 
   async answer(request) {

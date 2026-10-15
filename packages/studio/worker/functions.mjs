@@ -52,8 +52,10 @@ export async function runFunctions(env, cat, origin, {definitions, now = Date.no
   if(typeof cat==='function')cat=await cat();
   definitions=definitions.filter(fn=>!fn.webhook).concat(webhookSubscriptions(env,cat,webhookOptions),env.STUDIO_EVENT_FEEDS?await eventHookSubscriptions(env,cat,{...webhookOptions,now}):[]);
   // An AI notification must not wait behind a slow function handler.
-  const notify=()=>pushEvents(env,cat,origin).catch(error=>console.error('Event notification wake failed',error));
-  const notifications=notify();
+  const notify=()=>pushEvents(env,cat,origin);
+  // A final pass retries an early failed wake. If that also fails the queue
+  // consumer retries the batch; it must never acknowledge a lost notification.
+  const notifications=notify().catch(error=>console.warn('Early event wake failed; retrying after functions',error));
   let more;
   do {
     more=false;

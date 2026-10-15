@@ -53,11 +53,11 @@ export async function subscribeFeed(env,cat,caller,uri,remove=false) {
 export function eventHub(env,connection) {const ns=env.EVENTS??env.LOBBY;return ns.get(ns.idFromName('@studio-events/'+connection));}
 export async function pushEvents(env,cat,origin) {
   if(!(env.EVENTS??env.LOBBY)||!Object.keys(eventFeeds(env)).length)return;
-  // Page subscriptions, without a studio-wide subscription or delivery cap.
-  await env.DB.prepare("DELETE FROM mcp_kv WHERE (key >= 'mcp-event-stream:' AND key < 'mcp-event-stream;') AND expires<?1").bind(Date.now()).run();
+  // Wake only active streams. Durable subscriptions without a connection replay
+  // their cursor when they reconnect; they never need an idle object wake.
   let after='';const seen=new Set();
   for(;;){
-    const rows=(await env.DB.prepare("SELECT key,value FROM mcp_kv WHERE ((key >= 'event-sub:' AND key < 'event-sub;') OR (key >= 'mcp-event-stream:' AND key < 'mcp-event-stream;') OR (key >= 'tools-stream:' AND key < 'tools-stream;')) AND key>?1 ORDER BY key LIMIT 100").bind(after).all()).results;
+    const rows=(await env.DB.prepare("SELECT key,value FROM mcp_kv WHERE ((key >= 'mcp-event-stream:' AND key < 'mcp-event-stream;') OR (key >= 'tools-stream:' AND key < 'tools-stream;')) AND key>?1 AND (expires IS NULL OR expires>?2) ORDER BY key LIMIT 100").bind(after,Date.now()).all()).results;
     for(const row of rows){const {connection}=JSON.parse(row.value);if(seen.has(connection))continue;seen.add(connection);
       const response=await eventHub(env,connection).fetch('https://events/__studio_events',{method:'POST',body:JSON.stringify({op:'wake',connection,cat,origin})});
       if(!response.ok)throw new Error('Event stream wake failed');
@@ -70,7 +70,7 @@ export async function pushEvents(env,cat,origin) {
 const streamCaller=(env,connection)=>connection.startsWith('public:')?Promise.resolve({id:null,owner:false,client:null,connection}):currentCaller(env,{connection});
 export class EventStreams {
   constructor(env,ctx){this.env=env;this.ctx=ctx;this.stream=null;this.tail=Promise.resolve();this.extensions=new McpEventStreams(env,ctx);}
-  close(stream){stream.cancelled=true;stream.resume?.();try{stream.controller.close();}catch{}if(this.stream===stream){this.stream=null;this.ctx.waitUntil(this.env.DB.prepare('DELETE FROM mcp_kv WHERE key=?1').bind('tools-stream:'+stream.connection).run().catch(()=>{}));}}
+  close(stream){stream.cancelled=true;clearTimeout(stream.reconnect);stream.resume?.();try{stream.controller.close();}catch{}if(this.stream===stream){this.stream=null;this.ctx.waitUntil(this.env.DB.prepare('DELETE FROM mcp_kv WHERE key=?1').bind('tools-stream:'+stream.connection).run().catch(()=>{}));}}
   background(input){this.ctx.waitUntil(this.wake(input).catch(error=>{if(this.stream)this.close(this.stream);console.error('Event stream delivery failed',error);}));}
   async fetch(request) {
     const input=await request.json();
@@ -92,7 +92,9 @@ export class EventStreams {
       if(!caller){this.close(stream);return new Response('Unauthorized',{status:401});}
       stream.toolSignature=await this.toolSignature(input.tools??[],caller);
       stream.eventSignature=JSON.stringify(await listEvents(this.env,input.cat,caller));
-      await this.env.DB.prepare('INSERT INTO mcp_kv(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind('tools-stream:'+connection,JSON.stringify({connection})).run();
+      await this.env.DB.prepare('INSERT INTO mcp_kv(key,value,expires) VALUES(?1,?2,?3) ON CONFLICT(key) DO UPDATE SET value=excluded.value,expires=excluded.expires').bind('tools-stream:'+connection,JSON.stringify({connection}),Date.now()+300000).run();
+      stream.reconnect=setTimeout(()=>this.close(stream),240000);
+      stream.reconnect?.unref?.();
       // Replay and later wakes share one ordered pump. Backpressure must not
       // hold up the writer's request or a function handler.
       this.background(input);
@@ -155,9 +157,14 @@ export async function pushToolList(env,cat,tools,origin) {
   await env.DB.prepare("INSERT INTO mcp_kv(key,value) VALUES('tools-catalogue',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(signature).run();
   let after='';
   for(;;){
-    const rows=(await env.DB.prepare("SELECT key,value FROM mcp_kv WHERE (key >= 'tools-stream:' AND key < 'tools-stream;') AND key>?1 ORDER BY key LIMIT 100").bind(after).all()).results;
+    const rows=(await env.DB.prepare("SELECT key,value FROM mcp_kv WHERE (key >= 'tools-stream:' AND key < 'tools-stream;') AND key>?1 AND (expires IS NULL OR expires>?2) ORDER BY key LIMIT 100").bind(after,Date.now()).all()).results;
     for(const row of rows){const connection=JSON.parse(row.value).connection;await eventHub(env,connection).fetch('https://events/__studio_events',{method:'POST',body:JSON.stringify({op:'tools',connection,cat,tools:publicShape,origin})});}
     if(rows.length<100)break;after=rows.at(-1).key;
   }
   toolCatalogues.set(binding,signature);
+}
+
+/** Bounded expiry work belongs to cron, never to each mutation or page. */
+export async function pruneMcpKeys(env) {
+  if(env.DB) await env.DB.prepare('DELETE FROM mcp_kv WHERE key IN (SELECT key FROM mcp_kv WHERE expires IS NOT NULL AND expires<?1 ORDER BY expires LIMIT 1000)').bind(Date.now()).run();
 }

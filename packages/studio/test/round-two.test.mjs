@@ -5,7 +5,7 @@ import {pushEvents} from '../worker/event-resources.mjs';
 
 test('pushEvents with configured feeds completes its subscription wake',async t=>{
  const DB=database(t),wakes=[];
- await DB.prepare('INSERT INTO mcp_kv(key,value) VALUES(?1,?2)').bind('event-sub:c:feed',JSON.stringify({connection:'c'})).run();
+ await DB.prepare('INSERT INTO mcp_kv(key,value) VALUES(?1,?2)').bind('tools-stream:c',JSON.stringify({connection:'c'})).run();
  await pushEvents({DB,STUDIO_EVENT_FEEDS:JSON.stringify({feed:{event:'record.changed'}}),LOBBY:{idFromName:x=>x,get:id=>({fetch:async()=>{wakes.push(id);return new Response(null,{status:204});}})}},{games:[]},'https://test.example');
  assert.deepEqual(wakes,['@studio-events/c']);
 });
@@ -228,4 +228,17 @@ test('an idle watch resumes its authenticated context after eviction and removes
  assert.equal(restoredURL,request.url);assert.equal(accepted.length,1,'restoring does not accept an existing socket again');
  restored.message(socket,'hello');assert.deepEqual(messages,['hello']);
  await restored.close(socket);assert.equal(closed,1);assert.equal(values.size,0);
+});
+
+import {storeLobbySummary,liveRoomSummaries,LIVE_ROOMS_QUERY} from '../worker/lobby-summary.mjs';
+test('lobby snapshots reject queue reordering and share the initial metadata batch', async t => {
+ const DB=database(t),at=Date.now(),room={name:'pub-1',players:4,at};
+ await storeLobbySummary({DB},{game:'cafe',at,rooms:[room]});
+ await storeLobbySummary({DB},{game:'cafe',at:at-1000,rooms:[]});
+ let calls=0;const batch=DB.batch;DB.batch=async rows=>{calls++;return batch(rows);};
+ const env={BACKGROUND:{},DB:requestDatabase(DB,new Request('https://place.test/'),{mutated:false,summaries:true})};
+ await env.DB.prepare('SELECT game, launch, max_players, updated_at FROM office_games LIMIT 500').all();
+ assert.deepEqual((await liveRoomSummaries(env)).get('cafe'),[room]);assert.equal(calls,1);
+ await storeLobbySummary({DB},{game:'cafe',at:at+1,rooms:[]});
+ assert.deepEqual((await liveRoomSummaries({BACKGROUND:{},DB})).get('cafe'),[]);
 });

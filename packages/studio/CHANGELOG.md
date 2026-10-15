@@ -19,6 +19,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## Unreleased
 
+- Live room lists read queued Lobby snapshots in the startup D1 batch. Reads no longer wake each game, and expired MCP stream cleanup runs in cron.
+
 - Idle room watch sockets can hibernate and restore their authorized context. A watch-only room no longer keeps a quarter-second timer running.
 
 - Page metrics use Analytics Engine with hourly, retry-safe D1 rollups that preserve existing owner totals. Game and budget counters remain durable.
