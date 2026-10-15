@@ -1,3 +1,4 @@
+import { fixtureRun } from './studio-fixture.mjs';
 /**
  * One chat (2026-10-01): a new studio goes live with its own home page and no starter game, "see a working game"
  * is a live demo elsewhere, and a hand-off from the Claude app is one line (HANDOFF.md says what it means).
@@ -16,7 +17,7 @@ const CLI = join(PKG, 'bin', 'homie-studio.mjs');
 const REPO_NM = join(PKG, '..', '..', 'node_modules');
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-new-studio-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
-const run = (args, cwd) => spawnSync(process.execPath, [CLI, ...args, '--json'], { cwd, encoding: 'utf8' });
+const run = (args, cwd) => fixtureRun(CLI, args, cwd);
 const out = (r) => JSON.parse(r.stdout);
 
 function studio(name, extra = []) {

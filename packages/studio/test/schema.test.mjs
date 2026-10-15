@@ -1,3 +1,4 @@
+import { fixtureRun } from './studio-fixture.mjs';
 import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * @homie-rocks/studio 0.27.0: search engines and AI agents read a studio site correctly.
@@ -29,7 +30,7 @@ const CLI = join(PKG, 'bin', 'homie-studio.mjs');
 const REPO_NM = join(PKG, '..', '..', 'node_modules');
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-schema-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
-const run = (args, cwd) => spawnSync(process.execPath, [CLI, ...args, '--json'], { cwd, encoding: 'utf8' });
+const run = (args, cwd) => fixtureRun(CLI, args, cwd);
 const out = (r) => JSON.parse(r.stdout);
 const write = (dir, rel, text) => { mkdirSync(dirname(join(dir, rel)), { recursive: true }); writeFileSync(join(dir, rel), text); };
 const ORIGIN = 'https://owls.example';

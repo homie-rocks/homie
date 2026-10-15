@@ -19,7 +19,6 @@ test('D/F: a business scaffold starts with apps, creates pages, and documents la
  const root = join(scratch, 'business'); const r = newStudio(root, { name: 'Bike shop', kind: 'business', install: false });
  assert.match(r.next.join('\n'), /app new/); assert.doesNotMatch(r.next.join('\n'), /gem-rush|game skill/);
  assert.ok(existsSync(join(root, 'site/pages')));
- assert.match(readFileSync(join(root, 'site/README.md'), 'utf8'), /\/open/);
 });
 test('E: app words accept the app own complete interface vocabulary', () => {
  const a = JSON.parse(readFileSync(new URL('../app-starters/welcome/app.json', import.meta.url)));

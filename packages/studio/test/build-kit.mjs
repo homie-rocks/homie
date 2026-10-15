@@ -1,3 +1,4 @@
+import { fixtureRun } from './studio-fixture.mjs';
 import { legacyGame } from './legacy-game.mjs';
 import { browserRulesGame } from './browser-rules-game.mjs';
 /**
@@ -43,7 +44,7 @@ const REPO_NM = join(PKG, '..', '..', 'node_modules');
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-build-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 
-const run = (args, cwd) => spawnSync(process.execPath, [CLI, ...args, '--json'], { cwd, encoding: 'utf8' });
+const run = (args, cwd) => fixtureRun(CLI, args, cwd);
 const plain = (args, cwd) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8' });
 const out = (r) => JSON.parse(r.stdout);
 const json = (file) => JSON.parse(readFileSync(file, 'utf8'));

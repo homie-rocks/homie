@@ -1,2 +1,2 @@
 import { continuationCases } from './topology/properties.mjs';
-continuationCases('z', 0);
+for (const up of ['y', 'z']) continuationCases(up);

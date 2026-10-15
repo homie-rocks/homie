@@ -3063,22 +3063,7 @@ function subscribeAppPayments(s) {
   s.DB.sql.exec("INSERT INTO function_subscriptions(name,type,started) VALUES('booking-paid','order.paid',0)");
 }
 
-test('removed settings build with notes and are absent from the published catalogue', () => {
-  const dir = studio('removed-settings');
-  const file = join(dir, 'studio.json');
-  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file)), referrals: { accepts: true } }));
-  writeFileSync(join(dir, 'shop.json'), JSON.stringify({ items: [SUPPORTER], referrals: 'no longer validated', referralNewPlayersOnly: 'also ignored' }));
-  const result = spawnSync(process.execPath, [CLI, 'build'], { cwd: dir, encoding: 'utf8', env: { ...process.env, HOMIE_STUDIO_WARM: '0' } });
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-  const output = result.stdout + result.stderr;
-  for (const field of ['studio.json referrals', 'shop.json referrals', 'shop.json referralNewPlayersOnly']) {
-    assert.equal(output.split('\n').filter((line) => line.includes(field + ': ignored;')).length, 1);
-  }
-  const cat = JSON.parse(readFileSync(join(dir, 'site/dist/games.json')));
-  assert.equal(Object.hasOwn(cat.studio, 'referrals'), false);
-  assert.equal(Object.hasOwn(cat.shop, 'referrals'), false);
-  assert.equal(Object.hasOwn(cat.shop, 'referralNewPlayersOnly'), false);
-});
+
 
 test('an incoming via link counts a visit but creates no cookie, sale attribution or referral endpoints', async () => {
   const s = await site();

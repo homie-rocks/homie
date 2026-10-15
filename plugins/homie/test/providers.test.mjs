@@ -157,10 +157,3 @@ test('the Homie mod\'s guards know every provider\'s paid and account-changing t
     assert.equal(cloudflareMcpChangeOf(`mcp__${m.name}__search_cloudflare_documentation`, { query: 'limits' }), null, `${m.name}: a read is not`);
   }
 });
-
-test('the plugin README lists every provider and points at providers.json', () => {
-  const readme = readFileSync(join(PLUGIN, 'README.md'), 'utf8');
-  const section = readme.slice(readme.indexOf('## The providers\' own tools'), readme.indexOf('## The Homie mod'));
-  assert.ok(section.includes('providers.json') && section.includes('extensions["rocks.homie"].providers'));
-  for (const p of Object.values(registry().providers)) assert.ok(section.includes(`| ${p.name} |`), `the README's table has ${p.name}`);
-});

@@ -1,3 +1,4 @@
+import { fixtureRun } from './studio-fixture.mjs';
 /**
  * @homie-rocks/studio 0.9.0: `homie-studio upgrade` brings a studio made on an older template up to this one's,
  * and never touches what the studio made its own.
@@ -34,7 +35,7 @@ const ARCADE_AGENTS = readFileSync(join(PKG, 'test', 'fixtures', 'studio-0.17.0-
 const COMMANDS = '## Commands (all through the pinned CLI in node_modules)';
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-upgrade-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
-const run = (args, cwd) => spawnSync(process.execPath, [CLI, ...args, '--json'], { cwd, encoding: 'utf8' });
+const run = (args, cwd) => fixtureRun(CLI, args, cwd);
 const out = (r) => JSON.parse(r.stdout);
 const read = (dir, rel) => readFileSync(join(dir, rel), 'utf8');
 const json = (dir, rel) => JSON.parse(read(dir, rel));

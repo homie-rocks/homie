@@ -1,0 +1,31 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { realpathSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { fixtureRun } from './studio-fixture.mjs';
+
+test('fixture copies isolate mutations, reuse identical inputs, and execute rebuilds and changed inputs', t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'fixture-contract-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const cli = join(root, 'cli.mjs');
+  const calls = join(root, 'calls');
+  writeFileSync(cli, `import {appendFileSync,mkdirSync,writeFileSync,readFileSync} from 'node:fs';
+    appendFileSync(${JSON.stringify(calls)}, 'call\\n');
+    mkdirSync('site/dist',{recursive:true});
+    writeFileSync('site/dist/output',readFileSync('input'));
+    console.log(JSON.stringify({ok:true,root:process.cwd()}));`);
+  const make = (name, text) => { const dir = join(root,name); mkdirSync(dir); writeFileSync(join(dir,'input'),text); return dir; };
+  const a = make('a','unique fixture input');
+  const b = make('b','unique fixture input');
+  assert.equal(fixtureRun(cli,['build'],a).status,0);
+  assert.equal(fixtureRun(cli,['build'],b).status,0);
+  assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,1);
+  writeFileSync(join(a,'site/dist/output'),'mutated');
+  assert.equal(readFileSync(join(b,'site/dist/output'),'utf8'),'unique fixture input');
+  assert.equal(JSON.parse(fixtureRun(cli,['build'],b).stdout).root,b);
+  assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,2);
+  const c = make('c','different input');
+  fixtureRun(cli,['build'],c);
+  assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,3);
+});

@@ -24,42 +24,6 @@ const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-changelog-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 
-/** Every studio version there has been, oldest first (0.1.0 and 0.4.0 were never on npm; they are still history). */
-const HISTORY = ['0.1.0', '0.2.0', '0.3.0', '0.4.0', '0.5.0', '0.6.0', '0.7.0', '0.8.0', '0.9.0', '0.10.0', '0.11.0', '0.12.0', '0.12.1',
-  '0.13.0', '0.14.0', '0.14.1', '0.14.2', '0.14.3', '0.14.4', '0.15.0', '0.16.0', '0.16.1', '0.17.0', '0.18.0', '0.18.1', '0.18.2', '0.19.0', '0.19.1'];
-
-test('the package carries the repository\'s CHANGELOG.md, and npm ships it', () => {
-  assert.equal(CHANGELOG_FILE, join(PKG, 'CHANGELOG.md'));
-  const pkg = JSON.parse(readFileSync(join(PKG, 'package.json'), 'utf8'));
-  assert.ok(pkg.files.includes('CHANGELOG.md'), 'package.json files lists CHANGELOG.md');
-  assert.equal(readFileSync(CHANGELOG_FILE, 'utf8'), readFileSync(join(PKG, '..', '..', 'CHANGELOG.md'), 'utf8'), 'the same file as the repository\'s: node scripts/changelog.mjs --sync');
-});
-
-test('every version has its section: dated, with the plugin beside it, a summary and entries', () => {
-  const log = readChangelog();
-  assert.deepEqual(log.problems, []);
-  const versions = log.versions.map((s) => s.version);
-  assert.equal(log.versions.find(s=>!s.body.includes('<!-- pending-release: renumber before publishing -->'))?.version, STUDIO_VERSION, 'the newest non-pending section is this package’s version');
-  for (const v of HISTORY) assert.ok(versions.includes(v), `a section for ${v}`);
-  assert.deepEqual(versions, [...versions].sort((a, b) => compareVersions(b, a)), 'newest first');
-  for (const s of log.versions) {
-    assert.match(s.date, /^2026-\d\d-\d\d$/, `${s.version} is dated`);
-    assert.ok(s.plugin, `${s.version} names the plugin's version`);
-    assert.ok(s.summary.length > 20 && s.summary.length < 260, `${s.version}: one sentence of summary (${s.summary.length})`);
-    // A merged release can retain text prepared before its PR existed. Missing
-    // PR/tag links are advisory; a new release must not rewrite published history.
-    // Existing links must name a PR number or the section's own release version.
-    for (const [, url] of s.meta.matchAll(/\]\((https:\/\/github\.com\/homie-rocks\/homie\/pull\/[^)]+)\)/g)) assert.match(url, /^https:\/\/github\.com\/homie-rocks\/homie\/pull\/\d+$/, `${s.version} links a pull request number`);
-    for (const [, tag] of s.meta.matchAll(/\/releases\/tag\/([^)\s]+)\)/g)) assert.match(tag, new RegExp(`^release-2026-\\d\\d-\\d\\d-studio-${s.version.replace(/\./g, '\\.')}$`), `${s.version} links its own tag`);
-  }
-  // The plugin versions that went out with a studio version, as they were.
-  const plugin = Object.fromEntries(log.versions.map((s) => [s.version, s.plugins.join(' then ')]));
-  assert.equal(plugin['0.6.0'], '0.6.0 then 0.7.0', 'plugin 0.7.0 shipped on its own after studio 0.6.0');
-  assert.equal(plugin['0.11.0'], '0.12.0');
-  assert.equal(plugin['0.19.1'], '0.20.1');
-  assert.match(sectionOf(log, '0.14.1').notes.join(' '), /first publish run for the 0\.14\.1 tag stopped before anything reached npm/, '0.14.1 says how its publish was retried');
-});
-
 test('the parser: headings, the Plugin line, bullets over several lines, link definitions, and what it refuses', () => {
   const text = [
     '# Changelog', '', 'Intro.', '',

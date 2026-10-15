@@ -1,23 +1,46 @@
-# Every pull request and every push to main: the packages build and pass their tests,
-# the plugin validates and passes its tests, and CHANGELOG.md has a section for the
-# studio's version.
-# Releases are publish.yml (a release-* tag).
 name: CI
 
 on:
   pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      full:
+        description: Run the nightly/release suite on this ref
+        type: boolean
+        default: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  full:
+    if: github.event_name == 'workflow_dispatch' && inputs.full
+    uses: ./.github/workflows/nightly.yml
+
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      paths: ${{ steps.diff.outputs.paths }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - id: diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch --depth=1 origin "$BASE_SHA" "$HEAD_SHA"
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" > changed-paths.txt
+          echo "paths=$(node -e 'console.log(JSON.stringify(require("fs").readFileSync("changed-paths.txt","utf8").trim().split("\n")))')" >> "$GITHUB_OUTPUT"
+
   package-shards:
+    needs: changes
+    env:
+      HOMIE_TEST_FIXTURES: /tmp/homie-studio-fixtures
     name: Package shard ${{ matrix.shard }} (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     timeout-minutes: 13
@@ -41,30 +64,18 @@ jobs:
           - { node: 22, shard: 13, mode: '' }
           - { node: 22, shard: 14, mode: '' }
           - { node: 22, shard: 15, mode: '' }
-          - { node: 22, shard: 16, mode: '' }
-          - { node: 22, shard: 17, mode: '' }
-          - { node: 22, shard: 18, mode: '' }
-          - { node: 22, shard: 19, mode: '' }
           - { node: 24, shard: 0, mode: '--compat' }
-          - { node: 24, shard: 1, mode: '--compat' }
-          - { node: 24, shard: 2, mode: '--compat' }
-          - { node: 24, shard: 3, mode: '--compat' }
-          - { node: 24, shard: 4, mode: '--compat' }
-          - { node: 24, shard: 5, mode: '--compat' }
-          - { node: 24, shard: 6, mode: '--compat' }
-          - { node: 24, shard: 7, mode: '--compat' }
-          - { node: 24, shard: 8, mode: '--compat' }
-          - { node: 24, shard: 9, mode: '--compat' }
-          - { node: 24, shard: 10, mode: '--compat' }
-          - { node: 24, shard: 11, mode: '--compat' }
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 0
       - uses: ./.github/actions/ci-setup
         with:
           node: ${{ matrix.node }}
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: /tmp/homie-studio-fixtures
+          key: studio-fixtures-v1-${{ runner.os }}-node${{ matrix.node }}-${{ matrix.shard }}-${{ hashFiles('package-lock.json', 'template/**', 'packages/**', 'scripts/ci-shards.mjs') }}
       - name: stripe-mock (the shop's tests send their Checkout Sessions and refunds to Stripe's own open-source API mock)
         # Pinned and checked by SHA-256. It is stateless, checks every parameter against Stripe's API description,
         # and never reaches Stripe: no key, no account, no money.
@@ -75,7 +86,16 @@ jobs:
           "$RUNNER_TEMP/stripe-mock/stripe-mock" -http-port 12111 -https-port 12112 > "$RUNNER_TEMP/stripe-mock.log" 2>&1 &
           for i in $(seq 1 30); do curl -fs -u sk_test_ci: http://127.0.0.1:12111/v1/checkout/sessions?limit=1 > /dev/null && break; sleep 1; done
           echo "STRIPE_MOCK_URL=http://127.0.0.1:12111" >> "$GITHUB_ENV"
+      - name: Release history only when this shard tests upgrades
+        env:
+          CI_CHANGED_PATHS: ${{ needs.changes.outputs.paths }}
+        run: |
+          if node scripts/ci-shards.mjs ${{ matrix.shard }} ${{ matrix.mode }} --files | grep -q 'packages/studio/test/upgrade.test.mjs'; then
+            git fetch --unshallow --tags origin
+          fi
       - name: Run every assigned file, with a bounded wall clock
+        env:
+          CI_CHANGED_PATHS: ${{ needs.changes.outputs.paths }}
         run: |
           timeout --signal=TERM --kill-after=15s 11m node scripts/ci-shards.mjs ${{ matrix.shard }} ${{ matrix.mode }} || {
             code=$?
@@ -85,12 +105,13 @@ jobs:
             exit "$code"
           }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
+        if: always() && github.event_name == 'pull_request'
         with:
           name: timings-node${{ matrix.node }}-${{ matrix.shard }}
           path: ci-results/
 
   packaging:
+    if: github.event_name == 'pull_request'
     name: Packaging (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     timeout-minutes: 8
@@ -102,18 +123,18 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 0
       - uses: ./.github/actions/ci-setup
         with:
           node: ${{ matrix.node }}
       - name: Fresh lockfile install (also exercises npm 11 on Node 24)
         run: npm ci
+      - run: npm run prepack --workspaces --if-present
       - run: node scripts/publish.mjs --check
 
   packages:
     name: Packages (Node ${{ matrix.node }})
-    if: always()
-    needs: [package-shards, packaging]
+    if: always() && github.event_name == 'pull_request'
+    needs: [package-shards, packaging, plugin, studio-scenarios]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     strategy:
@@ -128,6 +149,7 @@ jobs:
           node -e 'const n=JSON.parse(process.env.RESULTS); if(Object.values(n).some(j=>j.result!=="success")) { console.error("Required package shard or packaging check failed/cancelled/skipped",n); process.exit(1); }'
 
   plugin:
+    if: github.event_name == 'pull_request'
     name: Plugin
     runs-on: ubuntu-latest
     timeout-minutes: 13
@@ -154,6 +176,7 @@ jobs:
         run: node scripts/desktop.mjs --check
 
   changelog:
+    if: github.event_name == 'pull_request'
     # A pull request that moves @homie-rocks/studio's version adds that version's section to CHANGELOG.md (and its
     # copy in the package). The check prints exactly what to write when it is missing.
     name: Changelog
@@ -163,16 +186,20 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 0
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 24
+      - name: Fetch the comparison commit
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: git fetch --depth=1 origin "$BASE_SHA"
       - name: A section for the studio's version, naming the plugin's, and the package's copy the same file
         env:
-          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
+          BASE: ${{ github.event.pull_request.base.sha }}
         run: node scripts/changelog.mjs --check ${BASE:+--base "$BASE"}
 
   studio-scenarios:
+    if: github.event_name == 'pull_request'
     # The check a Claude Code cloud session runs, on a Linux VM with no GPU (the closest free stand-in): a studio
     # from the public template, @homie-rocks/studio from this checkout, Chrome for Testing, `homie-studio dev`, and
     # the real two-browser check. It prints each browser's frame rate and renderer (SwiftShader here).
@@ -182,7 +209,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [gem-rush, coin-dash, legacy]
+        scenario: [gem-rush]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -207,12 +234,12 @@ jobs:
           if [ "$SCENARIO" = legacy ]; then
             node scripts/studio-check.mjs --chrome-for-testing --legacy
           else
-            node scripts/studio-check.mjs --chrome-for-testing --record --perf --lab --controls --game "$SCENARIO"
+            node scripts/studio-check.mjs --chrome-for-testing --game "$SCENARIO"
           fi
 
   studio-linux:
     name: A studio on Linux, no GPU (two browsers finish a round)
-    if: always()
+    if: always() && github.event_name == 'pull_request'
     needs: studio-scenarios
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -220,24 +247,3 @@ jobs:
       - env:
           RESULT: ${{ needs.studio-scenarios.result }}
         run: test "$RESULT" = success
-
-  apps-first-run:
-    name: Fresh business and cause apps
-    runs-on: ubuntu-latest
-    timeout-minutes: 13
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: ./.github/actions/ci-setup
-        with:
-          node: 22
-      - name: Packed installs, strict builds, busy port, text checks and Chrome captures
-        env:
-          HOMIE_FIRST_RUN_SHOTS: proof/apps-first-run
-        run: node packages/studio/test/apps-first-run-proof.mjs
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
-        with:
-          name: apps-first-run
-          path: proof/apps-first-run/
