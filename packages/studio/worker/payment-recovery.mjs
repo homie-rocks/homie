@@ -16,6 +16,11 @@ export async function saveRecording(env, order, params, options) {
   }
   return id;
 }
+/** Persist the provider id before any follow-up retrieve/cancel/fulfillment call. */
+export async function recordProviderId(env, order, id, pi) {
+  if (!/^pi_[A-Za-z0-9]+$/.test(pi.id) || pi.amount !== order.amount || pi.currency !== order.currency || pi.livemode !== (order.mode === 'live')) throw new Error('Provider receipt does not match order');
+  await env.DB.prepare('UPDATE purchase_jobs SET payment=?2,updated_at=?3 WHERE id=?1').bind(id,pi.id,Date.now()).run();
+}
 export async function recordProviderResult(env, order, id, pi) {
   if (pi.amount !== order.amount || pi.currency !== order.currency || pi.livemode !== (order.mode === 'live')) throw new Error('Provider receipt does not match order');
   await env.DB.prepare("UPDATE purchase_jobs SET payment = ?2, state = ?3, error = NULL, updated_at = ?4 WHERE id = ?1").bind(id, pi.id, pi.status === 'succeeded' ? 'recorded' : ['canceled','requires_payment_method'].includes(pi.status) ? 'failed' : 'processing', Date.now()).run();
@@ -37,31 +42,35 @@ export async function recordingFailure(env, id, error) {
     await env.DB.prepare("UPDATE purchase_jobs SET state = 'failed', error = ?2, attempts = attempts + 1, updated_at = ?3 WHERE id = ?1 AND state = 'submitted'").bind(id, String(error.message).slice(0, 500), Date.now()).run();
     return;
   }
+  if(error.manualReview) {
+    await env.DB.prepare("UPDATE purchase_jobs SET state='manual_review',error=?2,updated_at=?3 WHERE id=?1").bind(id,error.message,Date.now()).run();
+    return;
+  }
   // A failure of our call is not a fact about the original payment.
   await env.DB.prepare("UPDATE purchase_jobs SET error = ?2, attempts = attempts + 1, updated_at = ?3 WHERE id = ?1")
     .bind(id, String(error.message).slice(0, 500), Date.now()).run();
 }
 
-/** Read existing objects first. Listing avoids the search index's delayed negative answers. */
+/** Read the recorded object, or recover a lost create response with its original key. */
 export async function readProviderPayment(env, order, job, payment = null) {
-  const options = { version: STRIPE_VERSION };
+  const readOptions = { version: STRIPE_VERSION };
   if (payment && !/^pi_[A-Za-z0-9]+$/.test(payment)) throw new Error('Supply an existing Stripe PaymentIntent id');
   if (job.payment || payment) {
-    const pi = await stripeCall(env, 'GET', `/v1/payment_intents/${encodeURIComponent(job.payment ?? payment)}`, null, options);
+    const pi = await stripeCall(env, 'GET', `/v1/payment_intents/${encodeURIComponent(job.payment ?? payment)}`, null, readOptions);
     if (pi.metadata?.order !== order.id) throw new Error('The existing PaymentIntent belongs to another order');
     return pi;
   }
-  let cursor;
-  for (let page = 0; page < 100; page++) {
-    const result = await stripeCall(env, 'GET', '/v1/payment_intents', { limit: 100, created: { gte: Math.floor(order.created_at / 1000) - 60 }, ...(cursor ? { starting_after: cursor } : {}) }, options);
-    if (!Array.isArray(result.data)) throw new Error('Stripe did not return an existing-payment list');
-    const found = result.data.find((pi) => pi.metadata?.order === order.id);
-    if (found) return found;
-    if (!result.has_more) return null;
-    cursor = result.data.at(-1)?.id;
-    if (!cursor) throw new Error('Stripe payment list has no continuation');
+  const {params,options,startedAt}=JSON.parse(job.payload??'{}');
+  if(params&&options?.idempotencyKey&&Date.now()-(startedAt??order.created_at)<REPLAY_LIMIT_MS) {
+    // If the create response was lost, replay only the original request/key
+    // inside Stripe's guaranteed retention window. Never scan the account.
+    const pi=await stripeCall(env,'POST','/v1/payment_intents',params,{...options,version:STRIPE_VERSION});
+    await recordProviderId(env,order,job.id,pi);
+    return pi;
   }
-  throw new Error(`Existing payment scan exceeded 100 pages for order ${order.id}; the owner must reconcile this order.`);
+  const error=new Error(`PaymentIntent id missing after the safe replay window for order ${order.id}; reconcile with an existing PaymentIntent id. The order and its claim are retained.`);
+  error.manualReview=true;
+  throw error;
 }
 async function releaseUnpaid(env, order, job, pi = null) {
   await env.DB.batch([
