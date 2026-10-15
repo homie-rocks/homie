@@ -1,3 +1,4 @@
+import {staticWorkerRoutes} from './static-assets.mjs';
 import {createHash} from 'node:crypto';
 import {refreshWorkerConfig} from './worker-config.mjs';
 import {pathToFileURL} from 'node:url';
@@ -7,7 +8,7 @@ import {readConfig} from './routes.mjs';
 import {PACKAGE_ROOT,workerDir} from './studio.mjs';
 import {paidReleases} from './parts-upload.mjs';
 /** Preserve dynamic imports as real Worker modules: page startup never evaluates MCP libraries. */
-export async function buildWorker(root,esbuild) {
+export async function buildWorker(root,esbuild,metadata=null) {
   const source=join(root,'site/src/worker.mjs');if(!existsSync(source))return;
   const out=join(root,'site/src/runtime');
 
@@ -18,7 +19,7 @@ export async function buildWorker(root,esbuild) {
   // Older studio entries export only Table and Lobby. Supply the new toolkit-owned
   // classes in the generated bundle without rewriting the studio's source/customizations.
   const contents=`export * from ${JSON.stringify(source)};\nexport { default } from ${JSON.stringify(source)};\nexport { Gate, Concentrator } from ${JSON.stringify(join(PACKAGE_ROOT,'worker/gate.mjs'))};\n`;
-  const result=await esbuild.build({stdin:{contents,resolveDir:root,sourcefile:'worker.mjs'},entryNames:'worker',absWorkingDir:root,alias,outdir:out,bundle:true,splitting:true,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*'],target:'es2022',write:false,minify:true,metafile:true,logLevel:'silent'});
+  const result=await esbuild.build({stdin:{contents,resolveDir:root,sourcefile:'worker.mjs'},entryNames:'worker',absWorkingDir:root,alias,outdir:out,bundle:true,splitting:true,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*'],target:'es2022',write:false,minify:true,metafile:true,logLevel:'silent',plugins:metadata?[{name:'studio-metadata',setup(build){build.onLoad({filter:/[/\\]worker[/\\]built-metadata\.mjs$/},()=>({contents:'export default '+JSON.stringify(metadata),loader:'js'}));}}]:[]});
   // A watcher may already have read the previous entry while this build is
   // publishing. Keep its entire graph available. Publish immutable modules first,
   // then switch the single entry atomically; never remove a running graph.
@@ -41,7 +42,7 @@ export async function buildWorker(root,esbuild) {
   }
   // Wrangler's module root is the immutable generation, so old generations are
   // retained locally for in-flight reloads but are never added to a deployment.
-  refreshWorkerConfig(root);
+  refreshWorkerConfig(root, metadata ? {workerRoutes: staticWorkerRoutes(metadata.catalogue)} : {});
   const current=join(out,'current.json'), pending=`${current}.${process.pid}.tmp`;
   writeFileSync(pending,JSON.stringify({main:join(dir,'worker.js')})+'\n');renameSync(pending,current);
   // Dev sometimes watches a copy with routes/remote AI removed. Publish its

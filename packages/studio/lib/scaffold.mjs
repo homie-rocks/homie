@@ -1,3 +1,4 @@
+import {WORKER_ROUTES} from './static-assets.mjs';
 import {TOOL_NAMESPACE_MIGRATION,TOOL_NAMESPACE_MIGRATION_FILE,CACHE_MIGRATION,CACHE_MIGRATION_FILE,OPERATIONAL_MIGRATION,OPERATIONAL_MIGRATION_FILE} from '../worker/operational-schema.mjs';
 import {BOOKING_RESOURCES_MIGRATION,BOOKING_RESOURCES_MIGRATION_FILE} from '../worker/booking-resources.mjs';
 import {BOOKING_HOLDS_MIGRATION,BOOKING_HOLDS_MIGRATION_FILE} from '../worker/booking-holds.mjs';
@@ -76,7 +77,7 @@ export function slugify(name) {
  * No `database_id` until one is known: Wrangler (4.45.0+) and the Deploy to Cloudflare flow create the database
  * the binding names and keep it linked.
  */
-export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layout = 'root', main = null, ai = false, routes = null, paidParts = false, partsRateLimit = null, triggers = null, eventFeeds = null }) {
+export function wranglerConfig({workerRoutes = WORKER_ROUTES, worker, name, d1, d1Id = null, r2 = null, layout = 'root', main = null, ai = false, routes = null, paidParts = false, partsRateLimit = null, triggers = null, eventFeeds = null }) {
   const at = layout === 'site' ? { schema: '../node_modules', main: 'src/runtime/worker.js', dist: './dist', migrations: 'migrations' }
     : { schema: 'node_modules', main: 'site/src/runtime/worker.js', dist: './site/dist', migrations: 'site/migrations' };
   const rooms = [{ name: 'TABLE', class_name: 'Table' }, { name: 'LOBBY', class_name: 'Lobby' }, { name: 'GATE', class_name: 'Gate' }, { name: 'CONCENTRATOR', class_name: 'Concentrator' }];
@@ -100,7 +101,7 @@ export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layou
     // (lib/routes.mjs). A studio without routes gets no key at all.
     ...(routes?.length ? { routes } : {}),
     ...(triggers ? { triggers: paidParts ? { ...triggers, crons: [...new Set([...(triggers.crons ?? []), '*/5 * * * *'])] } : triggers } : {}),
-    assets: { directory: at.dist, binding: 'ASSETS', run_worker_first: true },
+    assets: { directory: at.dist, binding: 'ASSETS', run_worker_first: workerRoutes },
     durable_objects: { bindings: rooms },
     migrations: [{ tag: 'v1', new_sqlite_classes: ['Table', 'Lobby'] }, { tag: 'v2-gates', new_sqlite_classes: ['Gate', 'Concentrator'] }],
     d1_databases: [{ binding: 'DB', database_name: d1, ...(d1Id ? { database_id: d1Id } : {}), migrations_dir: at.migrations }],
