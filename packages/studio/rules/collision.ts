@@ -123,6 +123,7 @@ function castMap3Uncached(map: Map3, p: Vec3, d: Vec3, body: BodyShape, hits?: H
   charge(24);
   const a = solidAt(p, body), r = body.radius, height = body.height || r * 2;
   let best: Hit3 | null = null;
+  const currentBest = (): Hit3 | null => best;
   const take = (h: Hit3 | null, id?: string): void => { if (h && h.t >= 0 && h.t <= 1) { const hit = id ? {...h, id} : h; if (hits) {charge(8); hits.push(hit);} if (!best || h.t < best.t) best = hit; } };
   for (const axis of ['x', 'y', 'z'] as const) {
     const low = map.bounds.min[axis] + (axis === 'z' ? 0 : r);
@@ -141,10 +142,11 @@ function castMap3Uncached(map: Map3, p: Vec3, d: Vec3, body: BodyShape, hits?: H
     charge(terrain.length*(16+Math.ceil(Math.log2(terrain.length+1))));const order=new Map(terrain.map(t=>[t,first(t)]));terrain.sort((a,b)=>order.get(a)!-order.get(b)!);
   }
   for (const tile of terrain) {
-    if(exactTerrain && !hits && best?.t===0)break;
+    const nearest: Hit3 | null = currentBest();
+    if(exactTerrain && !hits && nearest?.t===0)break;
     // Once a nearer surface is known, later solids only need to beat that time.
     // This also bounds work on densely tessellated terrain behind the first hit.
-    const limit = exactTerrain && !hits && best ? best.t : 1;
+    const limit = exactTerrain && !hits && nearest ? nearest.t : 1;
     const delta = limit < 1 ? point(d.x * limit, d.y * limit, d.z * limit) : d;
     const hit = tile.base === undefined ? castHeightTile(tile, p, delta) : (exactTerrain ? castTerrain : legacyTerrain)(tile, a, delta);
     if (hit) take({...hit, t: hit.t * limit});

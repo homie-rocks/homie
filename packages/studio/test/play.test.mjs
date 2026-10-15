@@ -16,7 +16,7 @@
  *     allow-listed switches are handed to the game's frame (never the room's own); the page keeps `net.prefs` for
  *     the frame, capped; it tells the frame where its own controls sit; it says the link's state, and loads the game
  *     again when a newer build is live.
- * The shell script runs here against a small stand-in page (no browser needed).
+ * Shell logic uses a small stand-in page; palette safety is checked in real Chrome.
  * Run: node --test packages/studio/test/play.test.mjs
  */
 import assert from 'node:assert/strict';
@@ -218,13 +218,28 @@ test('local development: the TV view and the landing never put this computer\'s 
 });
 
 test('a game with an art direction: the play page\'s pills wear its paper and text (games.json ui), like its own HUD', async () => {
-  const cat = { studio: { name: 'Test Studio' }, games: [] };
-  const plain = await playPage(cat, { id: 'tiny', name: 'Tiny', players: { max: 4 } }).text();
-  assert.doesNotMatch(plain, /\.pill, \.chip, \.pill\.dim \{ background: #/);
-  const styled = await playPage(cat, { id: 'tiny', name: 'Tiny', players: { max: 4 }, ui: { paper: '#f6ecd9', text: '#1f2a24' } }).text();
-  assert.match(styled, /\.pill, \.chip, \.pill\.dim \{ background: #f6ecd9e6; color: #1f2a24;/);
-  const junk = await playPage(cat, { id: 'tiny', name: 'Tiny', players: { max: 4 }, ui: { paper: 'red;}body{display:none', text: '#000000' } }).text();
-  assert.doesNotMatch(junk, /display:none/);
+  const {default:puppeteer}=await import('puppeteer-core');
+  const {findChrome,chromeArgs}=await import('../lib/chrome.mjs');
+  const browser=await puppeteer.launch({executablePath:findChrome(),headless:true,args:chromeArgs()});
+  try {
+    const page=await browser.newPage();
+    const cat={studio:{name:'Test Studio'},games:[]};
+    const render=async ui=>{
+      await page.setContent(await playPage(cat,{id:'tiny',name:'Tiny',players:{max:4},ui}).text());
+      return page.evaluate(()=>({body:getComputedStyle(document.body).display,color:getComputedStyle(document.querySelector('.chip')).color,background:getComputedStyle(document.querySelector('.chip')).backgroundColor}));
+    };
+    const plain=await render();
+    const styled=await render({paper:'#f6ecd9',text:'#1f2a24'});
+    assert.equal(styled.color,'rgb(31, 42, 36)');
+    const rgba=styled.background.match(/[0-9.]+/g).map(Number);
+    assert.deepEqual(rgba.slice(0,3),[246,236,217]);
+    assert.ok(Math.abs(rgba[3]-230/255)<0.003);
+    assert.notEqual(styled.color,plain.color);
+    const junk=await render({paper:'red;}body{display:none',text:'#000000'});
+    assert.notEqual(junk.body,'none');
+    assert.equal(junk.color,plain.color);
+    assert.equal(junk.background,plain.background);
+  } finally {await browser.close();}
 });
 
 /* ------------------------------------------------------------------ netplay revision 9: the page around the frame */

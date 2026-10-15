@@ -56,6 +56,28 @@ export async function actInApp(surface, selector, action, {ready=appReady,timeou
   for (;;) {
     try {
       await waitInApp(surface,selector,frame=>frame.waitForSelector(selector,{visible:true,timeout:Math.max(1,end-Date.now())}),{ready,timeout:Math.max(1,end-Date.now())});
+      const handle=await surface.frame.$?.(selector);
+      if(handle)try {
+        await handle.scrollIntoView();
+        const point=await handle.clickablePoint();
+        const ancestors=[];
+        for(let frame=surface.frame;frame.parentFrame();frame=frame.parentFrame())ancestors.unshift(await frame.frameElement());
+        const describeHit=(el,p)=>{
+          const hit=document.elementFromPoint(p.x,p.y);
+          return hit&&!el.contains(hit)?hit.tagName.toLowerCase()+(hit.id?'#'+hit.id:'')+[...hit.classList].map(c=>'.'+c).join(''):null;
+        };
+        let local={...point};
+        try {
+          for(const ancestor of ancestors){
+            const covered=await ancestor.evaluate(describeHit,local);
+            if(covered)throw new Error(`${surface.name}: ${selector} is covered at the click point by ${covered}`);
+            const offset=await ancestor.evaluate(el=>{const r=el.getBoundingClientRect();return {x:r.x+el.clientLeft,y:r.y+el.clientTop};});
+            local={x:local.x-offset.x,y:local.y-offset.y};
+          }
+          const covered=await handle.evaluate(describeHit,local);
+          if(covered)throw new Error(`${surface.name}: ${selector} is covered at the click point by ${covered}`);
+        }finally{await Promise.all(ancestors.map(h=>h.dispose()));}
+      }finally{await handle.dispose();}
       return await action(surface.frame);
     } catch(error) {
       if(!/node is detached|element.*(?:detach|stale)|stale.*element/i.test(error.message)) {
@@ -68,4 +90,13 @@ export async function actInApp(surface, selector, action, {ready=appReady,timeou
       await ready(surface,{timeout:Math.max(1,end-Date.now())});
     }
   }
+}
+
+/** Install before navigation: every app iframe observes a real context creation failure. */
+export function forceWebglFailure() {
+ for(const proto of [globalThis.HTMLCanvasElement?.prototype,globalThis.OffscreenCanvas?.prototype]) {
+  if(!proto)continue;
+  const original=proto.getContext;
+  proto.getContext=function(kind,...args){return /^(webgl2?|experimental-webgl)$/.test(kind)?null:Reflect.apply(original,this,[kind,...args]);};
+ }
 }

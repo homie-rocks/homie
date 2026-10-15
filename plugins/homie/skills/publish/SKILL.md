@@ -282,3 +282,5 @@ Use Cloudflare’s official plugin/MCP for Workers Issues events, logs and D1 in
 Read [connection guidance](../studio-setup/references/OFFICIAL-MEDIA.md), discover current
 tools and scope reads to this studio. Keep pinned Wrangler and its own browser login for
 deploys. MCP consent and Wrangler login are separate connections.
+
+Cloudflare's official MCP request interface cannot authorize new static-asset uploads with an upload JWT; deploy with Wrangler, Cloudflare's own CLI using browser OAuth.

@@ -43,6 +43,18 @@ test('official SDK client discovers and calls a public studio in workerd',{timeo
     const denied=await client.callTool({name:'studio_office',arguments:{}});assert.equal(denied.isError,true);
     const bad=await client.callTool({name:'hello',arguments:{name:42}});assert.equal(bad.isError,true);
     await client.close();
+    // Owner CLI issued capability: no authorization page, only named tools, re-read after revocation.
+    const bearer='homie_owner_'+'c'.repeat(64), bearerId=createHash('sha256').update(bearer).digest('hex');
+    await db.prepare('INSERT INTO mcp_kv(key,value,expires) VALUES(?1,?2,?3)').bind('connector:'+bearerId,JSON.stringify({origin:'http://localhost',tools:['private_hello'],expires:Math.floor(Date.now()/1000)+3600}),Math.floor(Date.now()/1000)+3600).run();
+    const scopedClient=new Client({name:'scoped-owner',version:'1'});clients.push(scopedClient);
+    await scopedClient.connect(new StreamableHTTPClientTransport(new URL('http://localhost/mcp/auth'),{fetch:fetcher,requestInit:{headers:{authorization:'Bearer '+bearer}}}));
+    assert.deepEqual((await scopedClient.listTools()).tools.map(t=>t.name),['private_hello']);
+    assert.equal((await scopedClient.callTool({name:'private_hello',arguments:{}})).isError,undefined);
+    assert.equal((await scopedClient.callTool({name:'hello',arguments:{name:'No'}})).isError,true);
+    await assert.rejects(scopedClient.listResources());
+    await db.prepare('DELETE FROM mcp_kv WHERE key=?1').bind('connector:'+bearerId).run();
+    await assert.rejects(scopedClient.callTool({name:'private_hello',arguments:{}}));
+    await scopedClient.close();
     // Existing studio browser sign-in; no OAuth back door or key passed to the MCP client.
     await db.prepare("INSERT INTO players(id,name,guest,owner,created_at,seen_at) VALUES('existing','Existing account',0,0,1,1)").run();
     const playerToken='b'.repeat(43);

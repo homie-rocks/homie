@@ -729,6 +729,7 @@ test('a command that changes something outside this computer stops at a flag it 
   });
   // Each command with the words it would need to run for real, and one invented flag.
   const commands = {
+    connector: ['--tools', 'studio_stats', '--out', 'private-connector.json'],
     'events webhook': ['add', 'bookings', 'https://receiver.example/events'],
     'function new': ['example'], 'function fire': ['order.paid'], 'function replay':['example'], 'function runs': [], 'functions runs': [],
     'tool new': ['example'], 'tool list': [], 'tool call': ['example'],

@@ -1,3 +1,5 @@
+import {appGraphicsFallback} from './app-graphics.mjs';
+import {JOIN_AREA_FRAME_JS} from './join-area.mjs';
 import { directoryUrl } from './directory-choice.mjs';
 import {APP_STORAGE_JS} from './app-frame.mjs';
 import {recordsPage} from './records-page.mjs';
@@ -506,6 +508,7 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
   const params = paramsFrom(url.searchParams, meta);
   if (meta.kind === 'app' && !params.role) params.role = appRole(meta, url);
   const cfg = {
+    ...(meta.kind === 'app' ? {kind: 'app'} : {}),
     v: 1,
     url: `${wsBase}/${game}/__net?room=${encodeURIComponent(room)}${b ? `&b=${b}` : ''}${t ? `&t=${encodeURIComponent(t)}` : ''}${watching ? '&w=1' : ''}${ver ? `&gv=${encodeURIComponent(ver)}` : ''}`,
     room,
@@ -534,8 +537,8 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
     ...(!agent && !watching && await availableShellShop(env, cat, game) ? { shop: true } : {}),
   };
   let html = await res.text();
-  const fallback = meta?.kind === 'app' ? `<script>addEventListener('DOMContentLoaded',function(){if(!document.querySelector('canvas')||document.querySelector('[data-webgl-fallback]'))return;try{var c=document.createElement('canvas');if(c.getContext('webgl2'))return;}catch(e){}var p=document.createElement('p');p.dataset.webglFallback='';p.setAttribute('role','status');p.textContent=${JSON.stringify(meta.words?.fallback ?? 'This device cannot display the 3D scene. Try a browser with WebGL enabled; use any available controls below.').replace(/</g, '\u003c')};p.style.cssText='position:fixed;z-index:2147483647;left:16px;right:16px;bottom:16px;padding:12px;background:#fff;color:#222;font:16px system-ui;border-radius:12px';document.body.append(p);});</script>` : '';
-  const head = (meta.kind==='app'?`<script>${APP_STORAGE_JS}</script>`:'') + fallback + `${embedded ? `<script>${EMBED_GAME_JS}</script>` : ''}<script>window.HOMIE_NET=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script>`;
+  const fallback = meta?.kind === 'app' ? `<script>addEventListener('DOMContentLoaded',()=>(${appGraphicsFallback.toString()})(${JSON.stringify(meta.words?.fallback ?? 'This device cannot display the 3D scene. Use the text controls to continue.').replace(/</g, '\\u003c')}));</script>` : '';
+  const head = `<script>${JOIN_AREA_FRAME_JS}</script>` + (meta.kind==='app'?`<script>${APP_STORAGE_JS}</script>`:'') + fallback + `${embedded ? `<script>${EMBED_GAME_JS}</script>` : ''}<script>window.HOMIE_NET=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script>`;
   html = /<head[^>]*>/i.test(html) ? html.replace(/<head([^>]*)>/i, `<head$1>${head}`) : head + html;
   return new Response(html, {
     headers: {

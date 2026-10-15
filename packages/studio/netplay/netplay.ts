@@ -116,6 +116,8 @@ export type Movement = 'owner' | 'host';
 
 /** What the shell injects as `window.HOMIE_NET` before the game boots. */
 export interface NetConfig {
+  /** The served experience kind, independent of standalone packaging. */
+  kind?: 'app';
   v: number;
   /** The relay socket: dev `ws://127.0.0.1:<port>/__net?room=main`, site `wss://<host>/api/table/<CODE>/ws?as=net&s=<nonce>`. */
   url: string;
@@ -1939,6 +1941,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   }
   /** What is true of a page that plays by itself: it never says "reconnecting" to somebody who was never connected. */
   function aloneText(): string {
+    if (cfg?.kind === 'app') return 'Reconnecting. Your saved updates will appear shortly.';
     if (!canOffline) return 'This game needs a connection.';
     if (rulesGame && !rulesHost) return 'Loading offline play…';
     if (aloneWhy === 'reconnect-timeout') return 'Playing on your own · the room dropped, still trying…';
