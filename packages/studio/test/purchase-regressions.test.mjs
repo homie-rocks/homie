@@ -77,7 +77,10 @@ test('N4a unknown outcome: Stripe unreachable for 23 hours after a card credenti
     say('N4a two days later, same claim:', later, '| jobs', jobs(s.w).map((j) => j.state), '| order', orders(s.w)[0]?.status);
     const fresh = await s.post(s.body('e'.repeat(64))); say('N4a a different claim can start:', fresh.status);
     t.mock.timers.reset();
-    assert.ok(!later.startsWith('503'), 'the claim is locked for ever and nothing the owner can do releases it');
+    assert.equal(jobs(s.w)[0].state,'manual_review','an unknown outcome beyond the replay window requires owner reconciliation');
+    assert.ok(orders(s.w).some(row=>row.id===o.id),'retain the original order and claim instead of treating an absent receipt as proof of no charge');
+    assert.equal(posts(),p0,'never create a second PaymentIntent after the safe replay deadline');
+    assert.equal(fresh.status,402,'a separate purchase can still obtain a challenge');
   } finally { s.K.restore(); await s.w.close(); }
 });
 

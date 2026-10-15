@@ -1,3 +1,4 @@
+const officeShopPage = async (...args) => (await import('./shop-page.mjs')).officeShopPage(...args);
 import {claimHoldStatement,ownedHold} from './booking-holds.mjs';
 import { stripeEventOwner } from './stripe-ownership.mjs';
 import { localSession } from './local-test.mjs';
@@ -47,7 +48,7 @@ import {
   setBand, shopDataOf, spentThisMonth,
 } from './shop-store.mjs';
 import { apiBase, STRIPE_API, redactStripe, WEBHOOK_SECRET_SHAPE, KEY_SHAPE, stripeCall, StripeError, createCheckoutSession, createRefund, expireCheckoutSession, dashboardLink, isApprovalRequired, isMissingProduct, productIdOf, verifyWebhook } from './stripe.mjs';
-import { SHOP_JS, officeShopPage, parentPage, refundsPage, shopPage, thanksPage } from './shop-page.mjs';
+
 import { notFoundPage } from './site.mjs';
 
 export { forgetPlayerShop, officeShopPage, shopDataOf };
@@ -217,7 +218,7 @@ export async function shopRoutes(request, env, ctx, url, { catalogueOf }) {
   const requestAt = Date.now();
   const path = url.pathname;
   const read = request.method === 'GET' || request.method === 'HEAD';
-  if (path === '/_homie/shop.js') return new Response(SHOP_JS, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=300', 'x-content-type-options': 'nosniff' } });
+  if (path === '/_homie/shop.js') return new Response((await import('./shop-page.mjs')).SHOP_JS, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=300', 'x-content-type-options': 'nosniff' } });
   const shopPath = path === '/shop' || path === '/shop/' || path.startsWith('/shop/') || path === '/api/shop' || path.startsWith('/api/shop/') || path === '/api/player/owns';
   if (selling.enabled && (path.startsWith('/api/purchases/') || path.startsWith('/purchases/'))) return selling.purchaseRoutes(request, env, url, await catalogueOf());
   if (!shopPath) return null;
@@ -230,7 +231,7 @@ export async function shopRoutes(request, env, ctx, url, { catalogueOf }) {
     if (path === '/api/player/owns') return json({ ok: true, owns: [], open: false });
     if (path.startsWith('/api/')) return json({ ok: true, open: false, items: [], missing: [shop ? 'kids-studio' : 'shop.json'] });
     // No shop.json: /shop/ is the studio's own to use (a page in site/pages, say). The policy can close a kids studio's shop.
-    if(!shop && path==='/shop/' && read && !cat.site?.pages?.includes('/shop/')) return shopPage(cat,checkShop({}).shop,{origin:url.origin,open:false});
+    if(!shop && path==='/shop/' && read && !cat.site?.pages?.includes('/shop/')) return (await import('./shop-page.mjs')).shopPage(cat,checkShop({}).shop,{origin:url.origin,open:false});
     return shop ? notFoundPage('This studio sells nothing.', cat) : null;
   }
   const ready = await readiness(env, shop);
@@ -271,9 +272,9 @@ export async function shopRoutes(request, env, ctx, url, { catalogueOf }) {
     if (path === '/api/shop/parent' && request.method === 'POST') return await parentLinkRoute(request, env, url, cat, shop, ready);
     if (path === '/api/shop/used' && request.method === 'POST') return await usedRoute(request, env, shop);
     if (path === '/api/shop/refund' && request.method === 'POST') return await selfRefundRoute(request, env, shop, ready);
-    if (path === '/shop/' && read) return shopPage(cat, shop, { origin: url.origin, game: GAME_ID.test(url.searchParams.get('game') ?? '') ? url.searchParams.get('game') : null, item: url.searchParams.get('item'), open: ready.ready, mode: ready.mode });
-    if (path === '/shop/thanks' && read) return thanksPage(cat, shop, { session: /^cs_[A-Za-z0-9_]{1,200}$/.test(url.searchParams.get('session_id') ?? '') ? url.searchParams.get('session_id') : null, game: GAME_ID.test(url.searchParams.get('game') ?? '') ? url.searchParams.get('game') : null });
-    if ((path === '/shop/refunds/' || path === '/shop/refunds') && read) return refundsPage(cat, shop);
+    if (path === '/shop/' && read) return (await import('./shop-page.mjs')).shopPage(cat, shop, { origin: url.origin, game: GAME_ID.test(url.searchParams.get('game') ?? '') ? url.searchParams.get('game') : null, item: url.searchParams.get('item'), open: ready.ready, mode: ready.mode });
+    if (path === '/shop/thanks' && read) return (await import('./shop-page.mjs')).thanksPage(cat, shop, { session: /^cs_[A-Za-z0-9_]{1,200}$/.test(url.searchParams.get('session_id') ?? '') ? url.searchParams.get('session_id') : null, game: GAME_ID.test(url.searchParams.get('game') ?? '') ? url.searchParams.get('game') : null });
+    if ((path === '/shop/refunds/' || path === '/shop/refunds') && read) return (await import('./shop-page.mjs')).refundsPage(cat, shop);
     const parent = /^\/shop\/parent\/([A-Za-z0-9_-]{43})$/.exec(path);
     if (parent) return await parentRoute(request, env, url, cat, shop, ready, parent[1], ctx);
   } catch (error) {
@@ -738,35 +739,35 @@ async function parentRoute(request, env, url, cat, shop, ready, token, ctx) {
   const cart = row ? row.cart ? JSON.parse(row.cart) : [{ item: row.item, quantity: 1 }] : [];
   const lines = cart.map((entry) => ({ item: shop.items.find((i) => i.id === entry.item), quantity: entry.quantity }));
   const item = lines[0]?.item;
-  if (lines.some((line) => !line.item)) return parentPage(cat, shop, { gone: true });
-  if (!row || !item || Number(row.expires_at) < Date.now()) return parentPage(cat, shop, { gone: true });
+  if (lines.some((line) => !line.item)) return (await import('./shop-page.mjs')).parentPage(cat, shop, { gone: true });
+  if (!row || !item || Number(row.expires_at) < Date.now()) return (await import('./shop-page.mjs')).parentPage(cat, shop, { gone: true });
   const kid = await players.get(env, row.player);
-  if (!kid) return parentPage(cat, shop, { gone: true });
+  if (!kid) return (await import('./shop-page.mjs')).parentPage(cat, shop, { gone: true });
   const done = row.order_id ? await orderById(env, row.order_id) : null;
-  if (done?.status === 'paid') return parentPage(cat, shop, { item, lines, name: kid.name, paid: true });
-  if (request.method === 'GET' || request.method === 'HEAD') return parentPage(cat, shop, { item, lines, name: kid.name, token, open: ready.ready });
+  if (done?.status === 'paid') return (await import('./shop-page.mjs')).parentPage(cat, shop, { item, lines, name: kid.name, paid: true });
+  if (request.method === 'GET' || request.method === 'HEAD') return (await import('./shop-page.mjs')).parentPage(cat, shop, { item, lines, name: kid.name, token, open: ready.ready });
   if (request.method !== 'POST' || !sameOrigin(request, url)) return new Response('Not allowed', { status: 403 });
   let form = null;
   try { form = await request.formData(); } catch { form = null; }
-  if (String(form?.get('grownup') ?? '') !== 'yes') return parentPage(cat, shop, { item, lines, name: kid.name, token, open: ready.ready, said: 'Tick the box to say you are their parent or guardian and an adult.' });
-  if (!ready.ready) return parentPage(cat, shop, { item, lines, name: kid.name, token, open: false });
-  if (purchaseLimited(request, shop, row.player, 'parentpay')) return parentPage(cat, shop, { item, lines, name: kid.name, token, open: true, said: 'One moment: too many tries.' });
+  if (String(form?.get('grownup') ?? '') !== 'yes') return (await import('./shop-page.mjs')).parentPage(cat, shop, { item, lines, name: kid.name, token, open: ready.ready, said: 'Tick the box to say you are their parent or guardian and an adult.' });
+  if (!ready.ready) return (await import('./shop-page.mjs')).parentPage(cat, shop, { item, lines, name: kid.name, token, open: false });
+  if (purchaseLimited(request, shop, row.player, 'parentpay')) return (await import('./shop-page.mjs')).parentPage(cat, shop, { item, lines, name: kid.name, token, open: true, said: 'One moment: too many tries.' });
   const band = await bandOfPlayer(env, row.player);
   const owns = await ownsOf(env, row.player);
   let amount = 0;
   for (const [index, line] of lines.entries()) {
     const it = line.item;
     const owned = it.gives.length > 0 && it.gives.every((key) => owns.some((o) => o.key === key && o.item === it.id));
-    if (wayFor(it, { player: kid, band, owned, spent: 0, cap: null, policy: shop.policy }) !== 'ask-a-parent') return parentPage(cat, shop, { gone: true });
+    if (wayFor(it, { player: kid, band, owned, spent: 0, cap: null, policy: shop.policy }) !== 'ask-a-parent') return (await import('./shop-page.mjs')).parentPage(cat, shop, { gone: true });
     line.amount = it.price === 'choose' ? parseAmount(form?.get(lines.length === 1 ? 'amount' : `amount_${index}`), currencyScale(shop.currency)) : it.price;
     const invalid = amountError(line.amount, shop.currency);
-    if (invalid || it.price === 'choose' && (line.amount < it.min || it.max !== null && line.amount > it.max)) return parentPage(cat, shop, { item, lines, name: kid.name, token, said: invalid ?? 'This amount is outside the studio range.' });
+    if (invalid || it.price === 'choose' && (line.amount < it.min || it.max !== null && line.amount > it.max)) return (await import('./shop-page.mjs')).parentPage(cat, shop, { item, lines, name: kid.name, token, said: invalid ?? 'This amount is outside the studio range.' });
     const total = BigInt(amount) + BigInt(line.amount) * BigInt(line.quantity);
-    if (total > BigInt(Number.MAX_SAFE_INTEGER)) return parentPage(cat, shop, { item, lines, name: kid.name, token, said: 'The total exceeds safe integer arithmetic.' });
+    if (total > BigInt(Number.MAX_SAFE_INTEGER)) return (await import('./shop-page.mjs')).parentPage(cat, shop, { item, lines, name: kid.name, token, said: 'The total exceeds safe integer arithmetic.' });
     amount = Number(total);
   }
   const r = await startCheckout(env, url, cat, shop, item, { player: { id: row.player }, game: row.game, amount, parent: true, lines });
-  if (r.error) return parentPage(cat, shop, { item, lines, name: kid.name, token, open: true, said: (await r.error.json()).message });
+  if (r.error) return (await import('./shop-page.mjs')).parentPage(cat, shop, { item, lines, name: kid.name, token, open: true, said: (await r.error.json()).message });
   await env.DB.prepare('UPDATE shop_parent_links SET order_id = ?2 WHERE hash = ?1').bind(await sha256Hex(token), r.order.id).run();
   if (!r.reconciled && ctx?.waitUntil) ctx.waitUntil(reconcileOrders(env, shop, row.player).catch((error) => logOrderError(env, r.order.id, error)));
   return Response.redirect(r.url, 303);
@@ -836,7 +837,13 @@ async function hook(request, env, cat, shop, ready) {
   if (payload === null) return fail(413, 'too-large', 'The studio webhook byte limit was reached.');
   const v = await verifyWebhook(payload, request.headers.get('stripe-signature'), env.STRIPE_WEBHOOK_SECRET);
   if (!v.ok) return fail(v.why === 'no-secret' ? 503 : 400, v.why, 'not a webhook from this studio\'s Stripe');
-  const ev = v.event;
+  if(env.BACKGROUND)return (await import('./stripe-intake.mjs')).acceptStripeEvent(env,v.event,new URL(request.url).origin);
+  return reconcileShopEvent(request,env,shop,v.event);
+}
+
+/** Internal verified-event seam shared by direct legacy intake and the queue consumer. */
+export async function reconcileShopEvent(request,env,shop,ev) {
+  shop??=checkShop({}).shop;
   const obj = ev.data?.object ?? {};
   const needed = ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired', 'charge.refunded', 'refund.created', 'refund.updated', 'refund.failed', 'charge.dispute.created', 'charge.dispute.closed'];
   if (selling.enabled) {
@@ -955,7 +962,6 @@ async function hook(request, env, cat, shop, ready) {
     if (did === 'needs-keyed-recovery') return fail(503, did, 'This earlier multi-item checkout needs its original connection to recover tax per line. Reconnect it, then resend this event.');
     if (did === 'missing-item' || did === 'unknown-order') return fail(503, did, did === 'missing-item' ? 'Restore this order item in shop.json to grant it; the office can refund its payment.' : 'Payment order is not recorded yet; retry this event.');
     await env.DB.prepare('INSERT INTO shop_events (id, type, at) VALUES (?1, ?2, ?3) ON CONFLICT(id) DO NOTHING').bind(ev.id, ev.type, Date.now()).run();
-    if (Math.random() < 0.02) await env.DB.prepare('DELETE FROM shop_events WHERE at < ?1').bind(Date.now() - 60 * DAY).run();
     return json({ ok: true, did });
   } catch (error) {
     if(/(?:booking|resource) capacity unavailable/.test(error.message)&&obj.payment_link&&await reviewLinkPayment(env,obj,ev.livemode?'live':'test','The paid group exceeds remaining capacity. Staff will arrange a replacement or refund.'))return json({ok:true,did:'review'});

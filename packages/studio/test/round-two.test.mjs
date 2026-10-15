@@ -171,3 +171,25 @@ test('runtime index upgrade preserves 0.54.0 rows and uses indexed expiry and pr
  }
 });
 
+
+test('Stripe queue intake deduplicates durable events, and consumers acknowledge only reconciliation',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:1700000000000});
+ const {acceptStripeEvent,reconcileStripeEvent}=await import('../worker/stripe-intake.mjs');
+ const {consumeBackground}=await import('../worker/background-queue.mjs');
+ const DB=database(t),sent=[],env={DB,BACKGROUND:{send:async body=>sent.push(body)},ASSETS:{fetch:async()=>Response.json({games:[]})}};
+ const event={id:'evt_rbp',type:'unhandled.fixture',data:{object:{}},livemode:false};
+ await acceptStripeEvent(env,event,'https://studio.test');await acceptStripeEvent(env,event,'https://studio.test');
+ assert.equal(DB.sql.prepare('SELECT COUNT(*) AS n FROM stripe_intake').get().n,1);
+ assert.deepEqual(sent[0],{v:1,type:'stripe.event',id:'evt_rbp'});
+ await reconcileStripeEvent(env,event.id,{games:[]});await reconcileStripeEvent(env,event.id,{games:[]});
+ assert.ok(DB.sql.prepare('SELECT done FROM stripe_intake').get().done);
+ let ack=0,retry=0;
+ await consumeBackground({messages:[{body:{v:1,type:'studio.changed',origin:'https://studio.test'},ack(){ack++;},retry(){retry++;}}]},{});
+ assert.equal(ack,1);assert.equal(retry,0);
+ DB.sql.prepare('UPDATE stripe_intake SET done=NULL,lease=?').run(Date.now()+300000);
+ const delays=[],message={body:{v:1,type:'stripe.event',id:event.id},ack(){ack++;},retry(opts){delays.push(opts.delaySeconds);}};
+ await consumeBackground({messages:[message]},env);assert.deepEqual(delays,[301]);assert.equal(ack,1);
+ t.mock.timers.tick(301000);
+ await consumeBackground({messages:[message]},env);assert.equal(ack,2);assert.equal(delays.length,1);
+});
+
