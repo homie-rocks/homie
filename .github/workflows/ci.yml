@@ -107,13 +107,13 @@ jobs:
             exit "$code"
           }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always() && github.event_name == 'pull_request'
+        if: always() && (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.full))
         with:
           name: timings-node${{ matrix.node }}-${{ matrix.shard }}
           path: ci-results/
 
   packaging:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.full)
     name: Packaging (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     timeout-minutes: 8
@@ -135,7 +135,7 @@ jobs:
 
   packages:
     name: Packages (Node ${{ matrix.node }})
-    if: always() && github.event_name == 'pull_request'
+    if: always() && (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.full))
     needs: [package-shards, packaging, plugin, studio-scenarios]
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -151,7 +151,7 @@ jobs:
           node -e 'const n=JSON.parse(process.env.RESULTS); if(Object.values(n).some(j=>j.result!=="success")) { console.error("Required package shard or packaging check failed/cancelled/skipped",n); process.exit(1); }'
 
   plugin:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.full)
     name: Plugin
     runs-on: ubuntu-latest
     timeout-minutes: 13
@@ -178,7 +178,7 @@ jobs:
         run: node scripts/desktop.mjs --check
 
   changelog:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.full)
     # A pull request that moves @homie-rocks/studio's version adds that version's section to CHANGELOG.md (and its
     # copy in the package). The check prints exactly what to write when it is missing.
     name: Changelog
@@ -197,11 +197,11 @@ jobs:
         run: git fetch --depth=1 origin "$BASE_SHA"
       - name: A section for the studio's version, naming the plugin's, and the package's copy the same file
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}
+          BASE: ${{ github.event.pull_request.base.sha || 'FETCH_HEAD' }}
         run: node scripts/changelog.mjs --check ${BASE:+--base "$BASE"}
 
   studio-scenarios:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.full)
     # The check a Claude Code cloud session runs, on a Linux VM with no GPU (the closest free stand-in): a studio
     # from the public template, @homie-rocks/studio from this checkout, Chrome for Testing, `homie-studio dev`, and
     # the real two-browser check. It prints each browser's frame rate and renderer (SwiftShader here).
@@ -241,7 +241,7 @@ jobs:
 
   studio-linux:
     name: A studio on Linux, no GPU (two browsers finish a round)
-    if: always() && github.event_name == 'pull_request'
+    if: always() && (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.full))
     needs: studio-scenarios
     runs-on: ubuntu-latest
     timeout-minutes: 2
