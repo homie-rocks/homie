@@ -103,3 +103,12 @@ test('records-only preferences survive reload and stay scoped to the app frame',
  await page.evaluate(()=>window.postMessage({t:'homie-net',what:'prefs',n:3,op:'set',k:'team',v:'forged'},'*'));
  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('homie-prefs.form')).team),'Saltwater Otters');
 });
+
+test('supported app context returns a public self address without access tokens',async t=>{
+ const {page,origin}=await fixture(t,`<!doctype html><output></output><script>
+ addEventListener('message',e=>{if(e.source===parent&&e.data.type==='homie-app-context')document.querySelector('output').textContent=JSON.stringify(e.data.context);});
+ parent.postMessage({type:'homie-app-context'},'*');</script>`);
+ await page.goto(origin+'/form/open?room=main');const frame=page.frames().find(f=>f.url().includes('/__game/'));
+ await frame.waitForFunction(()=>document.querySelector('output').textContent,{timeout:2000});
+ const context=JSON.parse(await frame.$eval('output',e=>e.textContent));assert.equal(context.app,'form');assert.equal(context.url,origin+'/form/open');assert.equal(context.origin,origin);
+});

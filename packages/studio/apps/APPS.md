@@ -222,3 +222,40 @@ and pass a role when deliberately testing the customer experience.
 `check --shots` may capture outside the studio, but persistent needs evidence copies
 those pictures into `.studio/checks` and stores studio-relative paths. Keep that
 folder with the Codex evidence. Deploy can render it without outside-path warnings.
+
+## Screens and AI share tools
+
+Import `createAppTools` from `@homie-rocks/studio/apps`, then call
+`await tools.call('place_book', {slot, request})`. It runs the studio's `defineTool`
+handler, with its strict input schema, audience checks, rate policy and versioned
+`context.database`. The shell supplies identity; message fields cannot grant a
+role. Only studio-defined tools are exposed. Priced tools still use MCP's payment
+approval flow. Dispose the client on unmount. Use a stable request ID across
+retries; a lost response does not mean the write failed. Keep rules in a shared
+`domain.ts`, but only the server handler commits them.
+
+## Live records and frame context
+
+`records.subscribe(() => void refresh())` returns an unsubscribe function. It
+notifies on connection/reconnection and when the collection changes; `refresh`
+calls `records.list()` to obtain currently authorized data. Do an initial read as
+well. Coalesce overlapping refreshes in a busy screen. This uses the existing
+Lobby, without a rules file or a dummy map. Notifications contain collection names,
+not records or private IDs. A 15-second server heartbeat repairs missed wakes;
+screens do not poll. Closing the page closes its stream. Apply `0027_app_live.sql`
+on upgrade before starting the new Worker.
+
+`createAppContext()` provides `ready`, `current`, `subscribe`, `now()` and `dispose`.
+After `await context.ready`, `current` has `app`, `origin`, public `url`, and
+`presence` (connected screens in this app/room and isolated proof scope, including
+the current screen). Presence is screens, not unique people or paid customers.
+The public address excludes role grants and booking credentials. Do not inspect
+`HOMIE_NET` or cast room internals to read peers.
+
+For a signed local proof session, the shell supports
+`window.homieApp.setTestClock(epochMilliseconds)` and `null` to restore wall time;
+frame code reads `context.now()`. Production shells refuse the setter. This is a
+view clock, never authority for capacity, payment or server deadlines. Scheduled
+needs supply their own explicit `scheduledTime`.
+
+See `guides/app/PLACES.md` for the six-build recipe and small typed examples.

@@ -6,6 +6,9 @@ compatibility: Node 22 and Chrome; the studio's pinned toolkit and Wrangler.
 
 # Make an app
 
+For place-based builds, read [the six-build patterns](../app/PLACES.md): owner words to needs, records as objects, a local scene and ambience, one trusted operation for screens and AI, graceful graphics, and adversarial proof. Apply the same authority and honest-evidence rules to game economies and tickets.
+
+
 For the installed version’s payment, records and local-check contracts, start with
 `node_modules/@homie-rocks/studio/apps/APPS.md`. Its “Real Stripe test checkout on
 this computer” section is the supported offline-hosting path: real Stripe test

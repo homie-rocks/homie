@@ -27,6 +27,19 @@ file) and what the upgrade would change, and changes nothing until you agree.
 - Replanning reuses saved public observations; explicit refresh uses paginated expanded Payment Link lists instead of individual reads.
 - Private webhook setup automatically installs Stripe's official npm CLI when missing, then continues to the browser approval.
 
+### Added
+- App screens call studio-defined tools through `createAppTools`, sharing strict
+  schemas, server role checks and versioned writes with MCP.
+- Live record subscriptions and screen presence through the existing Lobby,
+  without polling or a dummy rules room; isolated proof scopes stay separate.
+- Supported frame context with a public self address and a local proof clock.
+- Six-place authoring patterns and explicit security alternatives in app/game
+  skills and packaged guides, with compilable toolkit examples.
+
+### Upgrade notes
+- Apply `0027_app_live.sql`. Replace refresh timers with record subscriptions and
+  internal origin/peer/clock reads with `createAppContext`. No version bump.
+
 ## [0.51.8] - 2026-10-15
 
 **Plugin 0.51.8**
