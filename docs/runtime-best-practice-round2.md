@@ -30,7 +30,8 @@ deployment. Measurements used only the throwaway studio.
 retain cf-rays, version markers, TCP/TLS timings, Worker elapsed time and individual
 D1/DO call durations. Baseline and branch used the same throwaway database and
 room namespace, in sequential deployments. The measured code is `d91bd316`.
-Only matching version markers and colos are included. Each request used a fresh
+Only matching version markers and colos are included. Version/status filtering
+retained 45/48 baseline, 46/48 initial and 37/48 final requests. Each request used a fresh
 curl process, as in the first comparison. No concurrent admission load ran during
 the final comparison. The initial batch overlapped the short analytics probe.
 
@@ -45,9 +46,10 @@ Warm seat PDX: 1208 [580–2038], 296–2074 → 272 [245–344], 243–423 ms
 (n=8/7). Its baseline spread is too large for a general speedup claim.
 
 Cold here means first request in an isolate, not cold D1 or a cold room. Cold MCP
-YVR: 1474 → 480 ms (n=1/3, after range 335–655); PDX: 690 → 615 ms
-(n=1/4, after range 431–814). Cold seat PDX: 574 → 446 ms (n=2/7,
-ranges 432–716 and 384–505). These cold samples are particularly small.
+YVR: 1474 → 407 ms (n=1/2, after range 335–480). There were no
+matching-version final cold MCP PDX samples. Cold seat PDX: 432 → 493 ms
+(n=1/5, after range 384–505), a higher observed median. These cold samples
+are particularly small and do not establish cold-seat non-regression.
 
 The initial branch warm-seat YVR TTFB was 356 ms, but both baseline and initial
 branch had **67 ms median Worker duration**. Thus that apparent regression was
@@ -55,7 +57,7 @@ not explained by extra Worker work. Final branch Worker median was 50.5 ms
 (range 44–56). No speculative seat-cache or placement change was added. MCP
 foreground Worker time in the final warm YVR samples was 0 ms at Date.now's
 resolution. This does not mean zero CPU work. D1 work still occurs in background.
-The measured medians do not regress; these sequential observational samples do
+The measured warm medians do not regress; these sequential observational samples do
 not establish a universal latency guarantee or isolate every network effect.
 
 ## Admission reliability
@@ -64,7 +66,10 @@ Five independent batches, 48 sockets at concurrency 8: **48/48 each, 240/240**.
 No retries, full-seat answers, duplicate welcomes or early closes during the
 observation. Each retained row records reservation cf-ray, socket upgrade cf-ray,
 seat and admission timing. Tests use the real deployed network and WebSockets;
-they do not run a game's browser rendering or play a round.
+they do not run a game's browser rendering or play a round. The observation ends
+1.5 seconds after the last admission, then the probe closes its sockets. Raw rows
+retain subsequent close callbacks (including abnormal close codes); the admission
+summary does not claim clean shutdowns or long-lived connection reliability.
 
 The original failing attempt was overwritten by the successful run in the old
 probe file. Its retained summary says only “hello timeout” and “fetch failure”,

@@ -758,5 +758,93 @@
     "The original Chrome timeout did not reproduce; no underlying root cause is established.",
     "Analytics Engine retains hm_rbp_proof_visits (21 points); no deletion control was found in its API or dashboard."
   ],
-  "rawSamples": "runtime-best-practice-round2-samples.jsonl"
+  "rawSamples": "runtime-best-practice-round2-samples.jsonl",
+  "versionFiltering": {
+    "before": {
+      "included": 45,
+      "excluded": 3
+    },
+    "initial": {
+      "included": 46,
+      "excluded": 2
+    },
+    "fixed": {
+      "included": 37,
+      "excluded": 11
+    }
+  },
+  "coldComparisons": [
+    {
+      "phase": "before",
+      "kind": "mcp",
+      "colo": "YVR",
+      "n": 1,
+      "median": 1474.366,
+      "min": 1474.366,
+      "max": 1474.366
+    },
+    {
+      "phase": "before",
+      "kind": "mcp",
+      "colo": "PDX",
+      "n": 1,
+      "median": 690.1089999999999,
+      "min": 690.1089999999999,
+      "max": 690.1089999999999
+    },
+    {
+      "phase": "before",
+      "kind": "seat",
+      "colo": "YVR",
+      "n": 1,
+      "median": 506.203,
+      "min": 506.203,
+      "max": 506.203
+    },
+    {
+      "phase": "before",
+      "kind": "seat",
+      "colo": "PDX",
+      "n": 1,
+      "median": 431.85699999999997,
+      "min": 431.85699999999997,
+      "max": 431.85699999999997
+    },
+    {
+      "phase": "fixed",
+      "kind": "mcp",
+      "colo": "YVR",
+      "n": 2,
+      "median": 407.45000000000005,
+      "min": 334.552,
+      "max": 480.348
+    },
+    {
+      "phase": "fixed",
+      "kind": "mcp",
+      "colo": "PDX",
+      "n": 0,
+      "median": null,
+      "min": null,
+      "max": null
+    },
+    {
+      "phase": "fixed",
+      "kind": "seat",
+      "colo": "YVR",
+      "n": 0,
+      "median": null,
+      "min": null,
+      "max": null
+    },
+    {
+      "phase": "fixed",
+      "kind": "seat",
+      "colo": "PDX",
+      "n": 5,
+      "median": 492.779,
+      "min": 383.913,
+      "max": 505.44100000000003
+    }
+  ]
 }
