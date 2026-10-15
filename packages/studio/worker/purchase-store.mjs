@@ -5,7 +5,7 @@ import { offerVersion } from "./purchase-core.mjs";
 
 import { canonicalJson } from "./canonical-json.mjs";
 
-import { modeOf } from "./stripe.mjs";
+import { modeOf, stripeCall } from "./stripe.mjs";
 
 import { digest, manifestHash } from "./purchase-crypto.mjs";
 import { resourceKind } from "./resource-kinds.mjs";
@@ -90,9 +90,14 @@ export async function coveredPurchase(env, origin, order, wanted) {
 }
 
 export async function recurringReady(env) {
-  // App-issued keys carry the declared subscription/invoice permissions. Any
-  // revocation is detected by the provider and closes checkout for reconnection.
-  return hasStripeKey(env);
+  if (!hasStripeKey(env)) return false;
+  // A legacy or manually installed key may predate the App permission contract.
+  // These reads catch missing dependencies; they do not prove write grants.
+  try {
+    await stripeCall(env,'GET','/v1/subscriptions',{limit:1});
+    await stripeCall(env,'GET','/v1/invoices',{limit:1});
+    return true;
+  } catch { return false; }
 }
 
 export async function deliveryAllowed(env, o) {

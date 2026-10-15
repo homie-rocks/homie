@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import {readdirSync,readFileSync} from 'node:fs';
 import {parse} from '@babel/parser';
 import {workerPermission,WORKER_PERMISSIONS,OPTIONAL_STRIPE_RESOURCES} from '../worker/stripe-permissions.mjs';
-import {stripeCall} from '../worker/stripe.mjs';
-test('every Worker Stripe resource is classified; unknown and optional calls cannot escape the credential ceiling',async()=>{
+test('every Worker Stripe call is classified; optional capability probes do not expand the App grant',async()=>{
  const dir=new URL('../worker/',import.meta.url);let checked=0;
  for(const file of readdirSync(dir,{recursive:true}).filter(f=>f.endsWith('.mjs') && f!=='stripe-permissions.mjs')) {
   const ast=parse(readFileSync(new URL(file,dir),'utf8'),{sourceType:'module'});
@@ -27,7 +26,7 @@ test('every Worker Stripe resource is classified; unknown and optional calls can
   };visit(ast);
  }
  assert.ok(checked>40);
- for(const path of [...OPTIONAL_STRIPE_RESOURCES,'/v1/api_keys','/v1/transfers'])await assert.rejects(stripeCall({STRIPE_KEY:'rk_test_fixture'},'GET',path,null,{fetcher:()=>assert.fail('forbidden request reached network')}),e=>e.status===403);
+ for(const path of [...OPTIONAL_STRIPE_RESOURCES,'/v1/api_keys','/v1/transfers'])assert.equal(workerPermission('GET',path),null);
  assert.equal(WORKER_PERMISSIONS.includes('api_key_write'),false);
 });
 

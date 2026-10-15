@@ -870,11 +870,11 @@ test('stripe-mock: Stripe\'s own API description accepts both tills\' Checkout S
     assert.match(j.url, /^https:\/\/checkout\.stripe\.com\//);
     const tip = await s.post('/api/shop/buy', { item: 'tip', amount: 400 }, s.as(p));
     assert.equal(tip.status, 200, JSON.stringify(await tip.clone().json()));
-    // Paid (the webhook), then the owner's refund through stripe-mock.
-    const order = s.DB.sql.prepare("SELECT * FROM shop_orders WHERE id = ?").get(j.order);
-    await s.hook('checkout.session.completed', { id: order.session, payment_status: 'paid', payment_intent: 'pi_test_mock', client_reference_id: p.id, metadata: { order: j.order }, currency: 'usd', amount_subtotal: 500 });
-    const refund = await s.fetchSite('/_studio/api/shop/refund', { method: 'POST', headers: s.owner, body: JSON.stringify({ order: j.order }) });
-    assert.equal((await refund.json()).ok, true);
+    // stripe-mock is stateless: it validates API shapes, not payment truth.
+    // Stateful fulfilment/refund behavior is covered by the provider fixture and sandbox.
+    const { createRefund } = await import('../worker/stripe.mjs');
+    const refund = await createRefund(s.env, {payment_intent:'pi_test_mock'});
+    assert.equal(refund.object,'refund');
     s.stripe.close();
   }
 });

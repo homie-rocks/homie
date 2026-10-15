@@ -1,5 +1,5 @@
-/** Public Stripe Apps permission names. Unknown/preview capabilities are denied
- * before network I/O; the Checkout credential does not silently acquire them.
+/** Public Stripe Apps permission names. Optional capability probes are classified separately and never added to the
+ * App grant. Stripe enforces the credential scope; callers handle denied probes.
  * https://docs.stripe.com/stripe-apps/reference/permissions */
 export const WORKER_PERMISSIONS = Object.freeze(['checkout_session_write','payment_intent_write','charge_write','dispute_read','webhook_write','subscription_write','invoice_read','customer_portal_write','product_read','plan_read']);
 export const STRIPE_RESOURCES = Object.freeze({

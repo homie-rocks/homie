@@ -183,3 +183,10 @@ disconnect. Full migration against a real 0.53 database remains an acceptance ga
   passed signature and test-mode checks. The listener process was stopped.
 - App template command stopped at the agreement gate. Nothing was uploaded.
 - No real RAK uninstall, scope or cross-account isolation proof is claimed.
+- Broader CI review found an overly broad round-3 local API denylist; it was
+  removed. Stripe remains the scope enforcement boundary, and the static test
+  classifies optional machine-payment capability probes without granting them.
+  Machine-payment/Workerd regressions passed after correction. Legacy recurring
+  readiness now checks subscription/invoice read access instead of assuming that
+  any existing key satisfies the App contract; schema-less legacy shops ignore
+  unrelated lifecycle notifications without granting anything.

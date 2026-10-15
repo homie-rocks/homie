@@ -799,6 +799,18 @@ async function hook(request, env, cat, shop, ready) {
   if (!v.ok) return fail(v.why === 'no-secret' ? 503 : 400, v.why, 'not a webhook from this studio\'s Stripe');
   const ev = v.event;
   const notified = ev.data?.object ?? {};
+  // Old player-only studios may receive App-wide lifecycle events before the
+  // corresponding schema exists. Ignoring them grants nothing and avoids an
+  // endless retry loop on permissions for products this studio does not sell.
+  if (stripeEventOwner(notified) === 'parts' || ev.type.startsWith('invoice.') || ev.type.startsWith('customer.subscription.')) {
+    const hasTable = async table => {
+      try { await env.DB.prepare(`SELECT 1 FROM ${table} LIMIT 0`).first(); return true; }
+      catch(e) { if(/no such table/.test(String(e.message)))return false; throw e; }
+    };
+    const purchases = await hasTable('purchase_orders');
+    if (!purchases && (stripeEventOwner(notified) === 'parts' || !await hasTable('shop_subscriptions'))) return json({ok:true,did:'ignored'});
+  }
+
   if (ev.type.startsWith('checkout.session.') && !notified.metadata?.order && !notified.client_reference_id && !await orderBySession(env,notified.id)) return json({ok:true,did:'ignored'});
   if (ev.type.startsWith('invoice.') && !notified.subscription && !notified.parent?.subscription_details?.subscription) return json({ok:true,did:'ignored'});
   try { ev.data.object = await retrieveEventObject(env, ev); } catch { return fail(503, 'stripe-verification', 'Retry after Stripe verification is available.'); }
