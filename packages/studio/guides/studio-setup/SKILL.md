@@ -409,3 +409,7 @@ and slug. It fills missing generated files and retries installation, preserving 
 already there. A different studio or unrelated nonempty folder is still refused.
 New studios do not request a directory listing by default; set `homie.directory: true`
 or a directory URL only when the person chooses listing.
+
+Cloudflare's official MCP request interface cannot authorize new static-asset uploads with an upload JWT; deploy with Wrangler, Cloudflare's own CLI using browser OAuth.
+
+An owner's existing Wrangler login can connect another studio without a new browser approval: in that studio run `homie-studio connector --tools <exact-tool-names> --out <private-config.json>`, then load the file directly into the AI client's connector configuration. Never print the bearer or paste the file in chat. Revoke with `homie-studio connector --revoke <id>`. See the installed `docs/toolkit-place-patterns.md` for scope and expiry.

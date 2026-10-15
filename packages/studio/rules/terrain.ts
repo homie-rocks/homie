@@ -136,12 +136,13 @@ function roundedCast(source:Prism,a:Solid,d:Vec3):Hit3|null {
 
   const speed2=dot(d,d);if(speed2<1e-20)return null;
   let best:Hit3|null=null;
+  const currentBest=():Hit3|null=>best;
   const take=(t:number,normal:Vec3)=>{if(t< -1e-9||t>1||best&&t>=best.t)return;const len=Math.sqrt(dot(normal,normal));if(len<1e-12||dot(normal,d)>=-1e-12)return;best={t:Math.max(0,t),nx:normal.x/len,ny:normal.y/len,nz:normal.z/len};};
   const sphere=(v:Vec3)=>{const o=sub(p,v),b=dot(o,d),c=dot(o,o)-r*r,h=b*b-speed2*c;if(h<0)return;const t=(-b-Math.sqrt(h))/speed2;take(t,sub(add(p,d,t),v));};
   // Reuse the plane times from clipping. Parallel and receding faces cannot
   // be entry contacts; do not project or retest their already-known times.
   for(const {plane,t} of approaching){
-    charge(8);if(best&&t>=best.t)continue;charge(16);const hit=add(add(p,d,t),plane.n,-r);let inside=true;
+    charge(8);const nearest=currentBest();if(nearest&&t>=nearest.t)continue;charge(16);const hit=add(add(p,d,t),plane.n,-r);let inside=true;
     for(const q of prism.planes){charge(4);if(dot(q.n,hit)>q.c+1e-10){inside=false;break;}}
     if(inside)take(t,plane.n);
   }

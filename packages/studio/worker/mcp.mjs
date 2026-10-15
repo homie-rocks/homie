@@ -1,3 +1,4 @@
+import {tokenCaller,toolInScope} from './connector-token.mjs';
 import {eventMethods,eventsCapability} from './mcp-events-wire.mjs';
 import {eventsRequest} from './mcp-events.mjs';
 function freshErrorMessage(error,env,caller) {
@@ -38,10 +39,17 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
   if(path.startsWith('/hooks/tools/')) return (await import('./tool-webhook.mjs')).toolWebhook(request,env,{cat:await catalogueOf(),definitions});
   const scoped={...env,OAUTH_KV:oauthStorage(env.DB)};
   const localIdentity=await localCaller(request,env);
+  const bearer=request.headers.get('authorization')?.startsWith('Bearer homie_owner_');
+  const bearerIdentity=bearer?await tokenCaller(request,env):null;
+  if(bearer&&!bearerIdentity)return json({error:'connector expired or revoked'},401);
   const api=async(request,env,ctx)=>{
-    const identity=()=>localIdentity ?? currentCaller(env,ctx.props);
+    const identity=async()=>{if(bearer){const fresh=await tokenCaller(request,env);if(!fresh)throw new Error('connector revoked');return fresh;}return localIdentity ?? currentCaller(env,ctx.props);};
     let caller;
     try{caller=await identity();}catch{return new Response(JSON.stringify({error:'connection revoked'}),{status:401,headers:{'content-type':'application/json','cache-control':'no-store','www-authenticate':`Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp", error="invalid_token"`}});}
+    if(caller.tools){
+      const body=request.method==='POST'?await request.clone().json().catch(()=>null):null;
+      if(request.method!=='POST'||!['initialize','notifications/initialized','ping','tools/list','tools/call'].includes(body?.method))return json({error:'connector is scoped to tools'},403);
+    }
     const cat=await catalogueOf();
     const tools=[...builtins(env,cat,origin),...definitions];
     await pushToolList(env,cat,tools,origin);
@@ -110,11 +118,11 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
         }
       }
       for(const tool of tools){
-        if (!await allowed(tool.audience,caller,env)) continue;
+        if (!toolInScope(caller,tool.name) || !await allowed(tool.audience,caller,env)) continue;
         if (tool.kind==='prompt') {
-          if (!await allowed(tool.audience,caller,env)) continue;
+          if (!toolInScope(caller,tool.name) || !await allowed(tool.audience,caller,env)) continue;
           s.registerPrompt(tool.name,{description:tool.description,argsSchema:fromJsonSchema(tool.inputSchema,validator)},async(args)=>read('prompt:'+tool.name,async fresh=>{
-            if(!await allowed(tool.audience,fresh,env))throw new Error('Permission denied');
+            if(!toolInScope(fresh,tool.name)||!await allowed(tool.audience,fresh,env))throw new Error('Permission denied');
             const text=await tool.handler(args,services(env,cat,origin,fresh,tool.namespace??tool.name,tool));
             return {messages:[{role:'user',content:{type:'text',text:JSON.stringify({kind:'studio-prompt-data',prompt:tool.name,data:text})}}]};
           }));continue;
@@ -125,7 +133,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
           try{
             // Recheck inside dispatch, even when a connection listed tools earlier.
             const fresh=await identity();
-            if(!await allowed(tool.audience,fresh,env)){outcome='denied';throw new Error('Permission denied');}
+            if(!toolInScope(fresh,tool.name)||!await allowed(tool.audience,fresh,env)){outcome='denied';throw new Error('Permission denied');}
             try{await rate(fresh);}catch(error){outcome='limited';throw error;}
             const context=services(env,cat,origin,fresh,tool.namespace??tool.name,tool);
             if(tool.price) {const result=await selling.paidTool(env,cat,origin,tool,args,context,extra);outcome=result.isError?'error':'ok';return result;}
@@ -163,7 +171,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
     };
     return createMcpHandler(server,{route:path === '/mcp/auth' ? '/mcp/auth' : '/mcp'})(request,env,ctx);
   };
-  if(localIdentity)return api(request,scoped,ctx);
+  if(localIdentity||bearerIdentity)return api(request,scoped,ctx);
   const provider=new OAuthProvider({
     apiRoute:'/mcp',apiHandler:{fetch:api},
     authorizeEndpoint:'/oauth/authorize',tokenEndpoint:'/oauth/token',clientRegistrationEndpoint:'/oauth/register',

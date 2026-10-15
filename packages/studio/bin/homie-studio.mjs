@@ -37,7 +37,9 @@
  *                                         AI guides, chat review and game decisions think with Clef on this computer
  *                                         when Ollama has clef-flash (free; dev never downloads it), else scripted;
  *                                         --remote-ai: the real Workers AI, billed)
- *   homie-studio check <id> [--url <site>] [--shots <dir>]
+ *   homie-studio check <id> [--url <site>] [--shots <dir>] [--webgl-failure]
+ *   homie-studio connector --tools <name,...> --out <private-config.json> [--days 30]
+ *   homie-studio connector --revoke <id>
  *   homie-studio shoot <id> [--url <site> | --preview] [--frames 60] [--fps 30] [--device computer|phone]
  *                      [--out <dir>] [--hold <key code>] [--no-smoke] [--timeout 180]
  *                                         pictures of the game on a clock this command steps (one frame = 1/fps s
@@ -380,14 +382,14 @@ import { standaloneDeployNotes } from '../lib/standalone.mjs';
 const argv = process.argv.slice(2);
 const flags = new Map();
 // build --quick keeps compilation and type checks, skips rules generated play/smoke checks.
-const BOOL_FLAGS = ['quick', 'public', 'lan', 'off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'giving', 'managed', 'live', 'manual', 'renew', 'send', 'accept-tos', 'quiet', 'no-local-ai', 'timestamps', 'overwrite', 'own-route', 'before', 'release', 'device'];
+const BOOL_FLAGS = ['webgl-failure', 'quick', 'public', 'lan', 'off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'giving', 'managed', 'live', 'manual', 'renew', 'send', 'accept-tos', 'quiet', 'no-local-ai', 'timestamps', 'overwrite', 'own-route', 'before', 'release', 'device'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a.startsWith('--')) {
     const [k, v] = a.slice(2).split(/=(.*)/s, 2);
     if (v !== undefined) flags.set(k, v);
-    else if (argv[i + 1] !== undefined && !argv[i + 1].startsWith('--') && (!BOOL_FLAGS.includes(k) || k === 'profile' && argv[0] === 'shop')) flags.set(k, argv[++i]);
+    else if (argv[i + 1] !== undefined && !argv[i + 1].startsWith('--') && (!BOOL_FLAGS.includes(k) || k === 'revoke' && argv[0] === 'connector' || k === 'profile' && argv[0] === 'shop')) flags.set(k, argv[++i]);
     else flags.set(k, true);
   } else positional.push(a);
 }
@@ -407,6 +409,7 @@ function print(result) {
   if (/^(style|assets|cast|anim)( |$)/.test(String(result.command ?? ''))) { process.stdout.write(`${artLines(result).join('\n')}\n`); return; }
   if (/^collision /.test(String(result.command ?? '')) && result.lines) { process.stdout.write(`${result.lines.join('\n')}\n`); return; }
   switch (result.command) {
+    case 'connector': lines.push(JSON.stringify(result,null,2)); break;
     case 'new':
       lines.push(`${result.name} is a studio now: ${result.dir}`, '', 'Wrote:', ...result.wrote.map((f) => `  ${f}`), '', `Dependencies: ${result.installed}`, '', 'Next:', ...result.next.map((n) => `  ${n}`), '', result.online);
       break;
@@ -831,6 +834,7 @@ const OUTWARD_FLAGS = {
   'setup attach': ['homie', 'client'],
   handoff: ['homie', 'client'],
   'players owner': ['url', 'revoke'],
+  'connector': ['url','tools','out','days','revoke'],
   'stats key': ['url', 'hours'], 'stats link': ['url'], 'stats revoke': ['url'], 'stats share': [],
   'office link': ['url', 'to'], 'office key': ['url', 'hours'], 'office announce': ['url', 'game', 'room', 'seconds'],
   'office invite': ['url', 'label', 'uses', 'count', 'days', 'server'], 'office launch': ['url', 'max'],
@@ -914,6 +918,7 @@ async function main() {
   }
   if (cmd === 'events') return (await import('../lib/events-cli.mjs')).eventsCommand(root, sub, positional, flags, { log });
   if (cmd === 'function' || cmd === 'functions') return (await import('../lib/functions-cli.mjs')).functionCommand(root, sub, positional, flags, { log });
+  if (cmd === 'connector') return (await import('../lib/connector-token.mjs')).connectorToken(root,{url:flags.get('url'),tools:typeof flags.get('tools')==='string'?flags.get('tools').split(','):[],out:flags.get('out'),days:flags.has('days')?Number(flags.get('days')):30,revoke:flags.get('revoke')});
   if (cmd === 'tool') return (await import('../lib/tools-cli.mjs')).toolCommand(root, sub, positional, flags, { log });
   // A trailer is the plugin's video skill; this hands the words after the id over to it (lib/trailer.mjs).
   if (cmd === 'trailer') return trailerCommand(root, sub, argv.slice(argv.indexOf(sub) + 1), { skills: flags.get('skills') ?? null, slug: flags.get('slug') ?? null });
@@ -995,7 +1000,7 @@ async function main() {
       const results = [];
       for (const game of games) {
         const shots = flags.get('shots') ? resolve(flags.get('shots'), ...(games.length > 1 ? [game] : [])) : null;
-        const r = await tracked(root, 'checks', (report) => check({ root, url: site.url, game, shots, log, report, isolate:!flags.has('no-isolate') }), 'check');
+        const r = await tracked(root, 'checks', (report) => check({ webglFailure:flags.has('webgl-failure'), root, url: site.url, game, shots, log, report, isolate:!flags.has('no-isolate') }), 'check');
         results.push({ ...r, game, site: site.url, local: site.local });
         const receiptDir = join(root, '.studio', 'checks');
         mkdirSync(receiptDir, { recursive: true });

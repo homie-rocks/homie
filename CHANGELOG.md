@@ -17,6 +17,15 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## Unreleased
+
+- TV join cards publish a measured safe area to shell and app CSS, with bounded size and wrapped addresses.
+- `check` reports covered action targets immediately, naming the blocker; `--webgl-failure` proves text navigation without graphics.
+- `connector` uses the existing owner Wrangler login to write a private, scoped, expiring MCP configuration; tokens are hashed, origin-bound and revocable.
+- Authoring guides include server-owned capacity with atomic versioned writes (one winner from six requests) and text-first graphics recovery.
+- Deploy guidance keeps Wrangler as the static-asset upload path; the official Cloudflare MCP request interface lacks upload-JWT authorization.
+- Fix toolkit collision, terrain and tile-coordinate type diagnostics under `build --types`.
+
 ## [0.51.7] - 2026-10-14
 
 **Plugin 0.51.7**
