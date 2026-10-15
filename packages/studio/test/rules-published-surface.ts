@@ -56,7 +56,8 @@ export const entityHandlers:NonNullable<Def['entities']['pawn']['on']>={
 };
 export function inspectView(){
  const room=openRoom();
- const members:Record<keyof typeof room,true>={viewTick:true,poseAt:true,status:true,seat:true,me:true,each:true,get:true,on:true,shared:true,input:true,command:true,round:true,roster:true,follow:true,probe:true,ask:true,askButtons:true,tune:true,map:true,net:true,pump:true,close:true,ray:true,rayAll:true,rays:true,__rules:true};
+ const members:Record<keyof typeof room,true>={viewTick:true,ownTick:true,poseAt:true,status:true,seat:true,me:true,each:true,get:true,on:true,shared:true,input:true,command:true,round:true,roster:true,follow:true,probe:true,ask:true,askButtons:true,tune:true,map:true,net:true,pump:true,close:true,ray:true,rayAll:true,rays:true,__rules:true};
+ const ownTick:number|null=room.ownTick;
  const status:string=room.status;const seat:number|null=room.seat;room.me?.id;room.get('a')?.pos.x;
  room.each('pawn',p=>{const b:boolean=p.away;const n:number=p.floors;const s:string=p.goal?.goal??'';});
  room.ray({x:0,y:0},{x:1,y:0},3,{geometryOnly:true})?.dist;room.rayAll({x:0,y:0},{x:1,y:0},3,{entitiesOnly:true}).map(hit=>hit.entity);
