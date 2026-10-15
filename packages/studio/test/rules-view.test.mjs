@@ -147,6 +147,10 @@ export default defineRules({contract:2,space:{dims:3},move,shapes:{commands:{lau
         if(b.motion.launch){const age=c.tick-b.motion.launch;b.motion.phase=Math.min(20,age);if(age===1)b.pos={x:b.pos.x+4,y:0,z:0};b.grounded=age>=10;b.vel={x:0,y:0,z:age<10?1:0};b.pos={x:b.pos.x,y:0,z:age<10?age*.1:0};}
         else b.pos={x:0,y:0,z:b.pos.z+i.az/127};
       }});`);
+    } else if (runaway === 'steer-knock') {
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[0,0],max:[20,20]},wrap:{x:true,y:true}}));
+      writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{launch:{}}},entities:{runner:{player:true,input:{ay:f.held()},motion:{launch:f.tick()},body:{shape:'circle',radius:.2,maxSpeed:36},commands:{launch(w,s){s.motion.launch=w.tick;}}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:19,y:10,z:0}};}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){const k=b.motion.launch;b.vel={x:k&&c.tick-k<=8?9:0,y:i.ay*9,z:0};if(i.ay)b.heading={x:0,y:i.ay,z:0};c.world.sweep(b,c.math.scale(b.vel,c.dt));}});`);
     } else if (runaway === 'counter-knock') {
       writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-100,-100], max: [100,100] } }));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
@@ -2775,4 +2779,24 @@ for(const delay of [0,300])test(`small repeated host clock slips do not accumula
   t.diagnostic(JSON.stringify({gaps}));
   assert.ok(Math.max(...gaps)<6+2*delay/50, `low-latency host slips accumulated ${Math.max(...gaps)} ticks of prediction lead`);
   assert.equal(r.host.core.stats.errors,0);
+});
+
+for(const delay of [80,150,300])test(`held steering leaves wrapped catch-up without delaying the next frame: ${delay} ms`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'steer-knock',{catchM:.2,catchUp:1});
+ const clock=virtualTime(t),r=rig(L,compiled,false,delay,delay);
+ const a=openRoom({net:{config:cfg('Steering'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();r.stop();});
+ await clock.wait(12000);a.command('launch');let caught=false;
+ for(let i=0;i<120;i++){await clock.wait(16);void a.me;if(globalThis.__homieNet.probe.prediction().catchTick!==null){caught=true;break;}}
+ assert.ok(caught,'a real authoritative impulse entered catch-up');
+ for(let i=0;i<6;i++){await clock.wait(16);void a.me;}
+ const before=a.me.pos;a.input({ay:-1});const immediate=a.me.pos;
+ const wd=v=>((v+30)%20)-10;
+ assert.ok(Math.hypot(wd(immediate.x-before.x),wd(immediate.y-before.y))<.001,'input preserves the painted origin');
+ await clock.wait(16);const next=a.me;
+ assert.ok(next.heading.y<-.1,`held steering must turn on the next frame, not after history catch-up: ${next.heading.y}`);
+ assert.ok(wd(next.pos.y-before.y)<-.02,'held thrust moves on the next frame');
+ let previous=next.pos,worst=0;
+ for(let i=0;i<240;i++){await clock.wait(16);const p=a.me.pos;worst=Math.max(worst,Math.hypot(wd(p.x-previous.x),wd(p.y-previous.y)));previous=p;}
+ assert.ok(worst<.7,`no wrapped correction jump: ${worst}`);
+ assert.equal(r.host.core.stats.errors,0);
 });

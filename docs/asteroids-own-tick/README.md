@@ -45,3 +45,10 @@ The final packed comparison exposed local rooms ending as overruns while their i
 All 36 host and hostile-rules tests pass, including slow 70 ms/120 ms/one-second ticks, budget failures, the new external-wait regression, and an explicit frozen-clock safeguard test. No period, five-second deadline, throughput threshold, or execution budget was relaxed. Studio packed-build validation must be repeated for the affected local-host cases.
 
 A further under-limit browser interruption exposed duplicate attribution: the same measured slow entry could be charged by several later callbacks. A second failing regression uses a 200 ms tick once in eight ticks, 1 ms otherwise, with 300 ms callback waits. It incorrectly ended after 5.3 seconds. Each measured execution is now charged at most once; the frozen-clock fallback is unchanged. All 54 host, hostile-rules and browser-adapter tests pass with both regressions, including genuine sustained slow execution.
+
+
+## Held steering during catch-up
+
+The 0422c157 packed matrix exposed a seven-player 300 ms/5% loss/±60 ms case with 162.9 ms steering p90 versus 13.0 ms for the browser control. Frames continued normally while the view replayed catch-up history: fresh held input changed the live forecast, but the painted body still sampled old heading/thrust. The existing immediate discrete-action path did not cover held changes.
+
+Three deterministic regressions at 80/150/300 ms fail first with no heading response on the next frame. Changed controls now resume live prediction and reuse the existing offset carry, preserving the painted origin and bounded wrapped displacement. The three regressions and 12 existing catch-up/wrap/clock tests pass; 70 broader virtual-time regressions and all five real-Chrome prediction tests also pass. A fresh packed game comparison follows. This is not a claim that the earlier matrix met parity.
