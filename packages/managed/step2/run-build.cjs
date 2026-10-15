@@ -1,5 +1,6 @@
 // Runs ONLY inside the remote VM. This file is platform-owned, never read from the repo.
 const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),crypto=require('node:crypto'),zlib=require('node:zlib');
+(async()=>{
 const job=JSON.parse(fs.readFileSync(0,'utf8'));
 function run(bin,args,env={}){const started=Date.now();console.error('stage',bin,args[0],args[1]??'');const r=cp.spawnSync(bin,args,{cwd:'/work',env:{PATH:process.env.PATH,HOME:'/root',CI:'true',...env},encoding:'utf8',maxBuffer:1024*1024,timeout:240000});if(r.status!==0)throw new Error(bin+' failed: '+String(r.stderr+'\n'+r.stdout+'\n'+(r.error??'')).slice(-8000));console.error('finished',bin,Date.now()-started);return r.stdout;}
 if(job.mode==='check'&&job.previewURL!=='https://hm-s2-dispatch.ryan-d2f.workers.dev')throw new Error('Only test preview checks allowed');
@@ -17,7 +18,7 @@ const pkg=JSON.parse(fs.readFileSync('/work/package.json'));if(pkg.devDependenci
 // No Cloudflare credentials, git auth, mounts, or inherited operator environment.
 run('npm',['ci','--no-audit','--no-fund']);
 if(JSON.parse(fs.readFileSync('/work/node_modules/@homie-rocks/studio/package.json')).version!==job.toolkit)throw new Error('Installed toolkit mismatch');
-run('npm',['run','build']);
+if(job.mode!=='check')run('npm',['run','build']);
 if(job.mode==='check'){
  run('apt-get',['install','-y','-qq','--no-install-recommends','chromium'],{DEBIAN_FRONTEND:'noninteractive'});
  // The toolkit's authenticated staff checks deliberately require its local test
@@ -29,9 +30,10 @@ if(job.mode==='check'){
  const dev=cp.spawn('npm',['run','dev','--','--port','8787','--no-local-ai'],{cwd:'/work',env:{PATH:process.env.PATH,HOME:'/root',CI:'true',WRANGLER_SEND_METRICS:'false'},stdio:['ignore',log,log]});
  try {
   let ready=false;
-  for(let n=0;n<60;n++){
-   const probe=cp.spawnSync('node',['-e',"fetch('http://127.0.0.1:8787/api/games',{signal:AbortSignal.timeout(2000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"],{timeout:3000,stdio:'ignore'});
-   if(probe.status===0){ready=true;break;}Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,1000);
+  const deadline=Date.now()+180000;
+  while(Date.now()<deadline){
+   try{const response=await fetch('http://127.0.0.1:8787/api/games',{signal:AbortSignal.timeout(2000)});ready=response.ok;await response.body?.cancel();if(ready)break;}catch{}
+   await new Promise(resolve=>setTimeout(resolve,1000));
   }
   if(!ready)throw new Error('Local VM preview did not start: '+fs.readFileSync('/work/check-dev.log','utf8').slice(-5000));
   const result=run('npm',['run','check','--','--url','http://127.0.0.1:8787'],{CHROME_PATH:'/usr/bin/chromium'});
@@ -48,3 +50,5 @@ collect(runtime,'modules/');collect('/work/site/dist','assets/');collect('/work/
 const credentialProbe=fs.existsSync('/work/hm-s2-credential-proof.json')?JSON.parse(fs.readFileSync('/work/hm-s2-credential-proof.json')):null;
 const output={credentialProbe,files,commit:job.commit,node:process.version,toolkit:job.toolkit,lockDigest:job.lockDigest,checks:{build:true},credentialKeys:Object.keys(process.env)};
 process.stdout.write(zlib.gzipSync(JSON.stringify(output)).toString('base64'));
+
+})().catch(error=>{console.error(error.stack);process.exit(1)});

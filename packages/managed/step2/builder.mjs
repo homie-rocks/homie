@@ -9,7 +9,7 @@ export class BuildSandbox extends DurableObject {
   const c=this.ctx.container;if(!c)throw new Error('Remote container required');
   await this.ctx.storage.setAlarm(Date.now()+600000);
   try {
-   c.start({image:'cloudflare/debian-trixie',entrypoint:['sleep','infinity'],enableInternet:true,instance:'standard-1'});
+   c.start({image:'cloudflare/debian-trixie',entrypoint:['sleep','infinity'],enableInternet:true,instance:'standard-2'});
    // exec alone does not prevent DO eviction during a long browser check.
    // monitor keeps the controller active for up to 15 minutes; our alarm is 10.
    this.ctx.waitUntil(c.monitor().catch(error=>console.error('Container stopped',error.message)));
@@ -25,7 +25,7 @@ export class BuildSandbox extends DurableObject {
   const container=this.ctx.container;
   if(!container)throw new Error('Remote container required');
   try {
-   container.start({image:'cloudflare/debian-trixie',entrypoint:['sleep','infinity'],enableInternet:false,instance:'standard-1'});
+   container.start({image:'cloudflare/debian-trixie',entrypoint:['sleep','infinity'],enableInternet:false,instance:'standard-2'});
    const p=await container.exec(['node','-e','console.log(JSON.stringify({platform:process.platform,node:process.version,keys:Object.keys(process.env)}))']);
    const out=await p.output();
    return {exitCode:out.exitCode,stdout:new TextDecoder().decode(out.stdout)};
