@@ -371,3 +371,47 @@ dev bindings and disposable studios when finished.
 See `apps/APPS.md`, “Real Stripe test checkout on this computer”, for the supported
 `shop connect --local` and Stripe CLI forwarding recipe. Every paid monthly cycle
 creates a paid order and `order.paid` with the subscription’s original app reference.
+
+## Preserve a local basket with keyless checkout
+
+For a venue that wants the phone's exact items and quantities, opt into a saved
+basket in `shop.json` before syncing Payment Links:
+
+```json
+"basket": {
+  "name": "Round for your table",
+  "description": "Enter the total shown on your pub basket. Any shortfall is settled at the bar."
+}
+```
+
+Use Stripe (`till: "stripe"`) and tax-inclusive menu prices (`automaticTax: false`).
+Sync creates one custom-amount Price and Payment Link per app, with one line and
+quantity one. `shop.checkout({reference: "table-7"})` saves the validated basket
+lines, quantities, total and reference in the studio's D1 before opening Stripe.
+Even a basket containing only one item keeps its exact quantity. The opaque order
+ID travels as `client_reference_id`; no Stripe API key or Homie payment relay is
+used by the Worker. Existing menus without `basket` retain their behavior.
+
+The link prefills the saved total using Stripe's documented
+[`prefilled_amount`](https://docs.stripe.com/payment-links/customize#customize-checkout-with-url-parameters)
+in minor currency units. The guest can edit it, so a preset is never payment proof.
+[`custom_unit_amount.preset`](https://docs.stripe.com/api/prices/create?query=custom_unit_amount)
+is the Price-level fallback, not a per-buyer setting. Never mutate that shared Price
+at checkout: concurrent baskets would race. Both the Price fallback and the URL
+override were verified in the Homie sandbox. Invalid overrides fall back to the
+stored preset or an empty amount; keep the expected total visible on the phone.
+
+After a signed paid session matches the frozen link, revision, mode, currency and
+order reference, `order.paid` contains the **saved basket lines**, `amount` (actual
+payment), `basketTotal` (expected total), and `settlement` (`paid` or `short`).
+Line `amount` is the saved extended amount (unit price × quantity); line `total`
+is its proportionally allocated share of the actual aggregate payment for refunds.
+A short payment emits the event so staff can resolve it, but grants no automatic
+entitlements. Apps must compare the actual payment with `basketTotal`, show a
+shortfall explicitly, and deduplicate by order ID. More than the total is paid.
+Reopening and paying the link creates another order for the same frozen basket;
+repeated delivery of the same session never creates another round.
+
+The Stripe heading is the connected Stripe account's business name. A sandbox
+account named “Homie sandbox” shows that name; a real pub's account shows the pub's
+name. The basket's product name and description use the pub's own wording.

@@ -48,3 +48,24 @@ export function answerDialogs(page,surface,dialogs,report) {
   await dialog.accept().catch(()=>{});
  });
 }
+
+/** Retry only errors identifying a detached element, never an ambiguous navigation after dispatch. */
+export async function actInApp(surface, selector, action, {ready=appReady,timeout=10000}={}) {
+  const end=Date.now()+timeout;
+  let stale;
+  for (;;) {
+    try {
+      await waitInApp(surface,selector,frame=>frame.waitForSelector(selector,{visible:true,timeout:Math.max(1,end-Date.now())}),{ready,timeout:Math.max(1,end-Date.now())});
+      return await action(surface.frame);
+    } catch(error) {
+      if(!/node is detached|element.*(?:detach|stale)|stale.*element/i.test(error.message)) {
+        if(stale && Date.now()>=end)throw new Error(`${surface.name}: stale element ${selector} never settled within ${timeout}ms: ${error.message}`);
+        throw error;
+      }
+      stale=error;
+      if(Date.now()>=end)throw new Error(`${surface.name}: stale element ${selector} never settled within ${timeout}ms: ${error.message}`);
+      await new Promise(resolve=>setTimeout(resolve,Math.min(50,Math.max(1,end-Date.now()))));
+      await ready(surface,{timeout:Math.max(1,end-Date.now())});
+    }
+  }
+}

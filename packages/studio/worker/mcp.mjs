@@ -82,7 +82,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
         const readPage=async(resourceUri,after=0)=>read('events:'+name,async fresh=>{
           if(!await readableFeed(env,cat,fresh,name))throw new Error('Event resource unavailable');
           if(!Number.isSafeInteger(after)||after<0)throw new Error('Invalid event cursor');
-          const page=await feedEvents(env,name,{after});
+          const page=await feedEvents(env,name,{after,caller:fresh});
           const events=page.filter(e=>matchesFeed(eventFeeds(env)[name],e));
           return {contents:[{uri:String(resourceUri),mimeType:'application/json',text:JSON.stringify({kind:'untrusted-event-data',events,next:page.length===100?uri+'?after='+page.at(-1).seq:null})}]};
         });

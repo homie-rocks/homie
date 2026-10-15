@@ -42,7 +42,7 @@ test('check auto-answers real dialogs and observes real sound and haptic calls',
  const {page,origin}=await fixture(t,`<!doctype html><button id="fit">Fit board</button><output id="done"></output><script>document.querySelector('button').onclick=()=>{{const audio=new AudioContext();const tone=audio.createOscillator();tone.connect(audio.destination);tone.start();tone.stop(audio.currentTime+.01);navigator.vibrate(10);document.querySelector('output').textContent='Fitted';}};</script>`);
  const dialogs=[];answerDialogs(page,'tablet',dialogs);await page.evaluateOnNewDocument(observeEffects);await page.goto(origin+'/frame');await page.evaluate(()=>{confirm('Fit this board?');alert('Fitted');});const frame=page.frames().find(f=>f.url().includes('/__game/'));
  const [need]=await proveAppNeeds({plan:{needs:[{id:'fit',statement:'Confirm fitting with a sound and haptic',steps:[{surface:'tablet',selector:'#fit',click:true}],assertions:[{surface:'tablet',selector:'#done',text:'Fitted'},{surface:'tablet',effect:'sound',name:'audio'},{surface:'tablet',effect:'haptic',name:'vibrate'}]}]},surfaces:[{name:'tablet',frame,page}]});
- assert.equal(need.status,'partly',need.why);assert.deepEqual(dialogs.map(d=>d.type),['confirm','alert']);
+ assert.equal(need.status,'met',need.why);assert.deepEqual(dialogs.map(d=>d.type),['confirm','alert']);
 });
 
 test('records-only shell sends booking checkout and returns the booking to the frame',{timeout:15000},async t=>{

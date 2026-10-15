@@ -14,6 +14,7 @@ export async function allowed(audience, caller, env) {
   if (audience === 'signed-in') return true;
   if (audience === 'owner') return caller.owner === true;
   if (audience && typeof audience === 'object' && audience.app && audience.role) {
+    if(env.HOMIE_LOCAL_TEST_SECRET && caller.localTest)return caller.owner || Boolean(caller.roles?.[audience.app]?.includes(audience.role));
     return caller.owner || Boolean(await env.DB.prepare("SELECT player FROM app_roles WHERE app IN (?1,'*') AND role=?2 AND player=?3").bind(audience.app,audience.role,caller.id).first());
   }
   return false;
@@ -86,7 +87,7 @@ export function builtins(env,cat,origin) {
       const {readableFeed,feedEvents,matchesFeed,eventFeeds}=await import('./event-resources.mjs');
       if(!await readableFeed(env,cat,ctx.caller,feed))throw new Error('Event feed unavailable');
       if(!Number.isSafeInteger(after)||after<0)throw new Error('Invalid event cursor');
-      const page=await feedEvents(env,feed,{after});
+      const page=await feedEvents(env,feed,{after,caller:ctx.caller});
       return {kind:'untrusted-event-data',events:page.filter(e=>matchesFeed(eventFeeds(env)[feed],e)),next:page.length===100?page.at(-1).seq:null};
     }),
     tool('studio_events_webhook_status','Owner delivery attempts, last errors and next page for an outbound event webhook.','owner',object({feed:str,after:{type:'integer',minimum:0}},['feed']),async({feed,after},ctx)=>{
@@ -104,6 +105,23 @@ export function builtins(env,cat,origin) {
     tool('studio_function_replay','Replay retained events for a declaration with replay: true.','owner',object({name:str},['name']),async({name})=>{
       const {replayFunction,runFunctions}=await import('./functions.mjs');
       await replayFunction(env,name);await runFunctions(env,cat,origin);return {ok:true};
+    }),
+    tool('studio_schedule_fire','Locally invoke a named scheduled function at a simulated timestamp.','owner',object({name:str,at:{type:'integer',minimum:0}},['name','at']),async({name,at},ctx)=>{
+      if(!env.HOMIE_LOCAL_TEST_SECRET || !['localhost','127.0.0.1','[::1]'].includes(new URL(origin).hostname))throw new Error('Local dev testing only');
+      const {syncFunctions,emitEvent,runFunctions}=await import('./functions.mjs');
+      const definitions=await syncFunctions(env), fn=definitions.find(f=>f.name===name&&f.schedule);
+      if(!fn)throw new Error(`Unknown scheduled function ${name}; declare it and rebuild dev`);
+      const data={function:name,cron:fn.schedule,scheduledTime:at,...(ctx.caller.testScope?{app:`${ctx.caller.testApp}:check:${ctx.caller.testScope}`}:{})};
+      const id=await emitEvent(env,fn.event,data);
+      await runFunctions(env,cat,origin);
+      let run;const end=Date.now()+10000;
+      do {
+        run=await env.DB.prepare('SELECT outcome,error FROM function_runs WHERE event=?1 AND function=?2 ORDER BY started DESC LIMIT 1').bind(id,name).first();
+        if(run && !['running','interrupted'].includes(run.outcome))break;
+        await new Promise(resolve=>setTimeout(resolve,50));
+      }while(Date.now()<end);
+      if(!run || run.outcome!=='complete')throw new Error(`Schedule ${name}: ${run?.error??run?.outcome??'no handler run'}`);
+      return {id,name,scheduledTime:at,simulated:true};
     }),
     tool('studio_function_fire','Fire an event locally through the durable function dispatcher.','owner',object({event:str,id:str,data:{type:'object'}},['event']),async(args)=>{
       if(!['localhost','127.0.0.1','[::1]'].includes(new URL(origin).hostname))throw new Error('Local testing only');

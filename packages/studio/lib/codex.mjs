@@ -318,7 +318,7 @@ function sectionHtml(section, emb, ctx) {
     if (block) {
       try {
         const needs = JSON.parse(block[1]);
-        if (Array.isArray(needs)) return `<section class="tab" id="${esc(section.id)}" data-key="needs"><h2>${esc(section.title)}</h2>${renderMarkdown(source.replace(block[0], '')).html}<div class="cards">${needs.map(n => `<article class="card"><h3>${esc(n.id)}</h3><p>${esc(n.statement)}</p><p class="meta">${Array.isArray(n.assertions) && n.assertions.length ? 'To demonstrate on the wall and phone' : 'Not yet demonstrable'}</p></article>`).join('')}</div></section>`;
+        if (Array.isArray(needs)) return `<section class="tab" id="${esc(section.id)}" data-key="needs"><h2>${esc(section.title)}</h2>${renderMarkdown(source.replace(block[0], '')).html}<div class="cards">${needs.map(n => `<article class="card"><h3>${esc(n.id)}</h3><p>${esc(n.statement)}</p><p class="meta">${Array.isArray(n.assertions) && n.assertions.length ? 'To demonstrate with check' : 'Not yet demonstrable'}</p></article>`).join('')}</div></section>`;
       } catch { /* Keep malformed source visible for correction. */ }
     }
   }
@@ -582,7 +582,7 @@ export function renderCodex(root, id, { mode = 'file', feed, now = new Date() } 
       const r = JSON.parse(readFileSync(needReportFile, 'utf8'));
       const stale = r.codexHash !== createHash('sha256').update(readFileSync(file, 'utf8')).digest('hex');
       tabs.push('<a href="#needs-status">Needs status</a>');
-      needStatus = `<section class="tab" id="needs-status"><h2>Needs status</h2><p>${stale ? 'Plan changed: this evidence is stale; check again. ' : ''}Checked ${esc(r.at)}. Screen assertions are evidence; review the captures against Their words.</p>${r.needs.map(n => `<article><h3>${esc(n.statement)}</h3><p><strong>${stale ? 'not yet rechecked' : esc(n.status)}</strong> — ${esc(n.why ?? '')}</p>${(n.captures ?? []).map(p => figure(emb, n.statement, relative(root, resolve(root, p)), p)).join('')}</article>`).join('')}</section>`;
+      needStatus = `<section class="tab" id="needs-status"><h2>Needs status</h2><p>${stale ? 'Plan changed: this evidence is stale; check again. ' : ''}Checked ${esc(r.at)}. Assertions are evidence; review available captures against Their words.</p>${r.needs.map(n => `<article><h3>${esc(n.statement)}</h3><p><strong>${stale ? 'not yet rechecked' : esc(n.status)}</strong> — ${esc(n.why ?? '')}</p>${(n.captures ?? []).map(p => figure(emb, n.statement, relative(root, resolve(root, p)), p)).join('')}</article>`).join('')}</section>`;
     } catch { /* The next check repairs an incomplete receipt. */ }
   }
   const body = needStatus + sections.map((x) => sectionHtml(x, emb, ctx)).join('\n');
@@ -772,9 +772,11 @@ try: "Open the wall and phone. Follow a real request through the scene."
 <!-- What is sold or given, price and currency, once/monthly, and what payment fulfils. -->
 
 ## Needs
-<!-- Each statement is observable on a real screen. Fill this executable needs block.
-Each need: id, statement, steps (surface wall/phone/phone-two; click/fill/select and selector/value),
-assertions (surface, selector, optional text). Include wall and phone assertions and real flow steps.
+<!-- Each owner statement belongs in this executable needs block.
+Each need: id, statement, optional role, steps and assertions. UI: surface/selector with
+click/fill/select/reload; headless: mcp tool/arguments + save, or schedule name/at.
+Assert UI selectors, saved result/path/equals/contains, records, or file/text.
+See node_modules/@homie-rocks/studio/guides/app/NEEDS.md for complete examples.
 A missing flow is reported not met. Do not replace an unmet need with an easier one. -->
 \`\`\`needs
 []

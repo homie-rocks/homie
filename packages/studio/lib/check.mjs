@@ -1,5 +1,6 @@
+import {needsHeadless} from './needs-headless.mjs';
 import {randomBytes} from 'node:crypto';
-import {appReady,observeEffects,waitInApp,answerDialogs} from './app-ready.mjs';
+import {actInApp,appReady,observeEffects,waitInApp,answerDialogs} from './app-ready.mjs';
 import {localCredential,localCookie} from './local-test.mjs';
 import { readAppNeeds, proveAppNeeds, saveAppNeeds } from './app-needs.mjs';
 /**
@@ -148,6 +149,12 @@ export async function check({ isolate = true, root = null, url, game, roundTimeo
     if (meta?.rulesError) return { ok: false, command: 'check', why: meta.rulesError };
     if (meta?.kind === 'app') appMeta = meta;
   } catch { /* browser preflight below still names failures */ }
+  if(appMeta && !appMeta.check?.action) {
+    try {
+      const plan=readAppNeeds(root,game);
+      if(plan && !plan.needs.some(n=>[...(n.steps??[]),...(n.assertions??[])].some(i=>i.surface)))return checkApp({isolate,root,url:base,game,meta:appMeta,shots,log,report});
+    } catch(error) {return {ok:false,command:'check',kind:'app',why:error.message};}
+  }
   const chrome = findChrome();
   if (!chrome) return { ok: false, command: 'check', why: noChrome() };
   let puppeteer;
@@ -357,13 +364,13 @@ export async function checkApp({ isolate = true, root = null, url, game, meta, s
   const proof = meta.check??{};
   const baseline=typeof proof.action==='string'&&typeof proof.observe==='string';
   if (!baseline && !plan) return { ok: false, command: 'check', kind: 'app', why: 'app.json check needs action and observe CSS selectors for a real shared action' };
-  if (shots) mkdirSync(shots, { recursive: true });
+  const captureWarnings=[];
   const profile = mkdtempSync(join(tmpdir(), 'homie-app-check-'));
   let browser;
   const surfaces = [];
   const room = `check-${randomBytes(10).toString('hex')}`;
   try {
-    browser = await puppeteer.launch({ executablePath: chrome, headless: true, userDataDir: profile, timeout: LAUNCH_TIMEOUT_MS, args: chromeArgs() });
+    if(baseline || plan?.needs.some(n=>[...(n.steps??[]),...(n.assertions??[])].some(i=>i.surface))) browser = await puppeteer.launch({ executablePath: chrome, headless: true, userDataDir: profile, timeout: LAUNCH_TIMEOUT_MS, args: chromeArgs() });
     const openSurface = async (name, role) => {
       const dimensions={wall:[1280,720],phone:[390,844],'phone-two':[390,844],tablet:[1024,768],staff:[1024,768],kiosk:[1080,1920]};
       if(!dimensions[name])throw new Error(`Unknown needs surface ${name}`);
@@ -390,7 +397,7 @@ export async function checkApp({ isolate = true, root = null, url, game, meta, s
     await appReady(actor);
     await waitInApp(actor,proof.action,f=>f.waitForFunction((selector) => { const el = document.querySelector(selector); return el && !el.disabled && !el.hidden; }, {}, proof.action));
     before = await waitInApp(actor,proof.observe,textOf);
-    await actor.frame.click(proof.action);
+    await actInApp(actor,proof.action,f=>f.click(proof.action));
     await waitInApp(actor,proof.observe+' changes after action',f=>f.waitForFunction((selector, was) => document.querySelector(selector)?.textContent !== was, {}, proof.observe, before));
     after = await waitInApp(actor,proof.observe,textOf);
     for (const s of surfaces) await waitInApp(s,proof.observe+' equals '+after,f=>f.waitForFunction((selector, wanted) => document.querySelector(selector)?.textContent === wanted, {}, proof.observe, after));
@@ -402,19 +409,21 @@ export async function checkApp({ isolate = true, root = null, url, game, meta, s
     if (rooms.some((r) => r !== room)) throw new Error('surfaces did not retain the same room');
     for (const s of surfaces) {
       await appReady(s);
-      if (shots) await s.page.screenshot({ path: join(shots, `${s.name}.jpg`), type: 'jpeg', quality: 85 });
+      if (shots) try {mkdirSync(shots,{recursive:true});await s.page.screenshot({ path: join(shots, `${s.name}.jpg`), type: 'jpeg', quality: 85 });}
+      catch(error){const warning=`${s.name} capture failed: ${error.message}. Resolve this capture error and rerun check with --shots .checks`;captureWarnings.push(warning);log(warning);}
     }
     report?.check?.('app-action', 'pass', { note: 'action reached wall and both phones; reconnect retained it' });
     }
     for(const need of plan?.needs??[])for(const item of [...(need.steps??[]),...(need.assertions??[])]) {
+      if(!item.surface)continue;
       if(plan.needs.some(n=>(n.steps??[]).some(s=>s.popup===item.surface)))continue;
       const role=item.role??need.role??meta.surfaces?.[item.surface]??(item.surface==='staff'?'staff':undefined);
       if(!surfaces.some(s=>s.name===item.surface&&s.role===role))await openSurface(item.surface,role);
     }
-    const needs = plan ? await proveAppNeeds({ plan, surfaces, shots, report, ready:appReady }) : null;
+    const needs = plan ? await proveAppNeeds({ plan, surfaces, shots, report, ready:appReady, root, headless:needsHeadless({url,secret,app:game,meta,scope:isolate?room:null}) }) : null;
     if (plan) { saveAppNeeds(root, game, plan, needs); const { refreshCodexFile } = await import('./codex.mjs'); refreshCodexFile(root, game); }
     const ok = !needs || needs.every(n => n.status === 'met');
-    return { ok, ...(needs ? { needs, why: ok ? undefined : 'Some needs from the person’s Codex are not yet met; see needs and captures' } : {}), command: 'check', kind: 'app', isolatedRecords:isolate, dialogs, room, surfaces: surfaces.map((s) => s.name), action: proof.action, before, after, reconnect: baseline };
+    return { ok, ...(needs ? { needs, why: ok ? undefined : 'Some needs from the person’s Codex are not yet met; see needs and captures' } : {}), command: 'check', kind: 'app', isolatedRecords:isolate, captureWarnings, dialogs, room, surfaces: surfaces.map((s) => s.name), action: proof.action, before, after, reconnect: baseline };
   } catch (error) { return { ok: false, command: 'check', kind: 'app', dialogs, why: error.message }; }
   finally { await browser?.close().catch(() => {}); rmSync(profile, { recursive: true, force: true }); }
 }

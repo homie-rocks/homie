@@ -47,6 +47,7 @@ export async function appAccess(request, env, meta, url) {
   const caller = toolIdentity(request);
   if (caller) {
     if (caller.owner) return { ok: true, role, can: declared.can };
+    if(env.HOMIE_LOCAL_TEST_SECRET && caller.localTest && caller.roles?.[meta.id]?.includes(role))return {ok:true,role,can:declared.can};
     if (!caller.id) return { ok: false, status: 401, error: 'sign in to this studio' };
     const grant = await env.DB.prepare("SELECT player FROM app_roles WHERE app IN (?1, '*') AND role = ?2 AND player = ?3").bind(meta.id, role, caller.id).first();
     return grant ? { ok: true, role, can: declared.can } : { ok: false, status: 403, error: 'this account has no role grant' };
