@@ -1,3 +1,4 @@
+import {enableReadReplication} from './read-replication.mjs';
 import {ensureBackgroundQueues,backgroundQueues} from './background-queue.mjs';
 import { directoryUrl } from '../worker/directory-choice.mjs';
 import { roomLayout } from '../worker/gate.mjs';
@@ -391,6 +392,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   try {ensureBackgroundQueues(root,w);for(const key of readStudio(root).cloudflare.created??[])created.add(key);} catch(error) {return refuse(error.message);}
   const migrate = w(['d1', 'migrations', 'apply', cf.d1, '--remote']);
   if (migrate.code !== 0) return refuse(`D1 migrations failed: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
+  try {const replication=await enableReadReplication(root,w,{accountId,databaseId:db.uuid,...(fetchFn?{fetchFn}:{})});step(replication.enabled?'D1 read replication enabled':`D1 uses the primary: ${replication.reason}`);} catch(error) {return refuse(error.message);}
   step('D1 migrations applied');
   const subscriptions=w(['d1','execute',cf.d1,'--remote','--command',(await import('./functions-build.mjs')).functionDeploymentSQL(root)]);
   if(subscriptions.code!==0)return refuse('Could not register studio functions',subscriptions.out);
@@ -639,6 +641,7 @@ export async function ciDeploy(root, { log = () => {}, wrangler = null } = {}) {
     step('D1 migrations applied (the database was created with this first deploy)');
     const registered=register();if(registered.code!==0)return refuse('Could not register studio functions',registered.out);
   }
+  try {const replication=await enableReadReplication(root,w);step(replication.enabled?'D1 read replication enabled':`D1 uses the primary: ${replication.reason}`);} catch(error) {return refuse(error.message);}
   // The live address, from what Wrangler printed (a custom domain in studio.json wins).
   const workersDev = /https:\/\/[a-z0-9.-]+\.workers\.dev/i.exec(dep.out)?.[0] ?? null;
   let url = null;
