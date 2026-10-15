@@ -1,0 +1,69 @@
+{
+  "sockets": [
+    {
+      "path": "/probe/owner/ws",
+      "openAt": 1792098212947,
+      "swapToCloseMs": null,
+      "closeAt": 1792098229726,
+      "closeCode": 1006,
+      "termination": "Probe cleanup; no closure observed during kill window"
+    },
+    {
+      "path": "/race/__net?room=kill-r3",
+      "openAt": 1792098213695,
+      "closeAt": 1792098224006,
+      "closeCode": 4000,
+      "swapToCloseMs": 5804
+    }
+  ],
+  "alarmArmed": {
+    "status": 200,
+    "body": "armed",
+    "ms": 557,
+    "ray": "a4b1c56cfb81fff0-PDX",
+    "at": 1792098214252
+  },
+  "before": {
+    "status": 200,
+    "body": "{\"alarms\":3,\"n\":1}",
+    "ms": 489,
+    "ray": "a4b1c578ed45fff0-PDX",
+    "at": 1792098216243
+  },
+  "routeKillStarted": 1792098216243,
+  "routeKillWriteMs": 375,
+  "routeStopped": {
+    "status": 404,
+    "body": "Not found",
+    "ms": 135,
+    "ray": "a4b1c57e5c3efff0-PDX",
+    "at": 1792098216753
+  },
+  "other": {
+    "status": 200,
+    "body": "{\"tenant\":null}",
+    "ms": 391,
+    "ray": "a4b1c57f0df7e19b-YVR",
+    "at": 1792098217144
+  },
+  "socketsAfterRouteKill": [
+    1,
+    1
+  ],
+  "swapStarted": 1792098218202,
+  "swapCommandMs": 3269,
+  "after": {
+    "status": 200,
+    "body": "{\"alarms\":25,\"n\":1}",
+    "ms": 357,
+    "ray": "a4b1c5be6c5d4220-YVR",
+    "at": 1792098227152
+  },
+  "later": {
+    "status": 200,
+    "body": "{\"alarms\":30,\"n\":1}",
+    "ms": 331,
+    "ray": "a4b1c5ccff541f9b-PDX",
+    "at": 1792098229482
+  }
+}

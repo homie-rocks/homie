@@ -1,0 +1,448 @@
+{
+  "namespace": "homie-managed-test",
+  "databases": [
+    {
+      "name": "hm-test-inlet-db",
+      "id": "4b1e92f4-b6cd-46bf-bea6-3ef101dc03cc",
+      "readiness": [
+        {
+          "results": [
+            {
+              "ready": 1
+            }
+          ],
+          "success": true,
+          "meta": {
+            "served_by": "v3-prod",
+            "served_by_region": "WNAM",
+            "served_by_colo": "SEA",
+            "served_by_primary": true,
+            "timings": {
+              "sql_duration_ms": 0.1636
+            },
+            "duration": 0.1636,
+            "changes": 0,
+            "last_row_id": 0,
+            "changed_db": false,
+            "size_after": 684032,
+            "rows_read": 0,
+            "rows_written": 0,
+            "total_attempts": 1
+          }
+        }
+      ],
+      "info": {
+        "uuid": "4b1e92f4-b6cd-46bf-bea6-3ef101dc03cc",
+        "name": "hm-test-inlet-db",
+        "created_at": "2026-10-15T20:54:13.659Z",
+        "version": "production",
+        "num_tables": 65,
+        "file_size": 684032,
+        "running_in_region": "WNAM",
+        "read_replication": {
+          "mode": "disabled"
+        },
+        "jurisdiction": null
+      }
+    },
+    {
+      "name": "hm-test-plain-db",
+      "id": "e11322b0-88d5-4c9e-b6e3-be40c40a6bfc",
+      "readiness": [
+        {
+          "results": [
+            {
+              "ready": 1
+            }
+          ],
+          "success": true,
+          "meta": {
+            "served_by": "v3-prod",
+            "served_by_region": "WNAM",
+            "served_by_colo": "SEA",
+            "served_by_primary": true,
+            "timings": {
+              "sql_duration_ms": 0.3992
+            },
+            "duration": 0.3992,
+            "changes": 0,
+            "last_row_id": 0,
+            "changed_db": false,
+            "size_after": 684032,
+            "rows_read": 0,
+            "rows_written": 0,
+            "total_attempts": 1
+          }
+        }
+      ],
+      "info": {
+        "uuid": "e11322b0-88d5-4c9e-b6e3-be40c40a6bfc",
+        "name": "hm-test-plain-db",
+        "created_at": "2026-10-15T20:56:41.471Z",
+        "version": "production",
+        "num_tables": 65,
+        "file_size": 684032,
+        "running_in_region": "WNAM",
+        "read_replication": {
+          "mode": "disabled"
+        },
+        "jurisdiction": null
+      }
+    },
+    {
+      "name": "hm-test-other-db",
+      "id": "383c0180-d370-4dde-ba94-db89bd6f1691",
+      "readiness": [
+        {
+          "results": [
+            {
+              "ready": 1
+            }
+          ],
+          "success": true,
+          "meta": {
+            "served_by": "v3-prod",
+            "served_by_region": "WNAM",
+            "served_by_colo": "SEA",
+            "served_by_primary": true,
+            "timings": {
+              "sql_duration_ms": 0.4604
+            },
+            "duration": 0.4604,
+            "changes": 0,
+            "last_row_id": 0,
+            "changed_db": false,
+            "size_after": 12288,
+            "rows_read": 0,
+            "rows_written": 0,
+            "total_attempts": 1
+          }
+        }
+      ],
+      "info": {
+        "uuid": "383c0180-d370-4dde-ba94-db89bd6f1691",
+        "name": "hm-test-other-db",
+        "created_at": "2026-10-15T20:57:39.290Z",
+        "version": "production",
+        "num_tables": 0,
+        "file_size": 12288,
+        "running_in_region": "WNAM",
+        "read_replication": {
+          "mode": "disabled"
+        },
+        "jurisdiction": null
+      }
+    }
+  ],
+  "workers": [
+    "hm-test-outbound",
+    "hm-test-dispatch",
+    "hm-test-plain",
+    "hm-test-claim-probe",
+    "hm-test-facets-r3"
+  ],
+  "deleted": [
+    "hm-test-facets-r3",
+    "hm-test-claim-probe",
+    "hm-test-plain",
+    "hm-test-dispatch",
+    "hm-test-outbound",
+    "hm-test-inlet",
+    "hm-test-other",
+    "hm-test-inlet_Concentrator",
+    "hm-test-inlet_Gate",
+    "hm-test-inlet_Lobby",
+    "hm-test-inlet_OwnerRoom",
+    "hm-test-inlet_Table",
+    "hm-test-dispatch_Registry",
+    "hm-test-plain_Concentrator",
+    "hm-test-plain_Gate",
+    "hm-test-plain_Lobby",
+    "hm-test-plain_OwnerRoom",
+    "hm-test-plain_Table",
+    "hm-test-inlet_ExtraRoom",
+    "hm-test-facets-r3_Supervisor",
+    "homie-managed-test",
+    "hm-test-inlet-db",
+    "hm-test-plain-db",
+    "hm-test-other-db",
+    "hm-test-ticks",
+    "hm-test-ticks-dlq"
+  ],
+  "accountId": "d2f6f976cecad2fe130976fe36916cdb",
+  "namespaceCreated": true,
+  "queues": [
+    "hm-test-ticks-dlq",
+    "hm-test-ticks"
+  ],
+  "users": [
+    "hm-test-inlet",
+    "hm-test-other"
+  ],
+  "durableObjects": [
+    {
+      "name": "hm-test-inlet_Concentrator",
+      "id": "b581ac8893a144bcaa71c54047f23b28",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-inlet_Gate",
+      "id": "a3dfb5a408784895a3a7f907ce28bbbc",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-inlet_Lobby",
+      "id": "77f4ca51a1854f6d8ef60b4cd08a794a",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-inlet_OwnerRoom",
+      "id": "d91be3b3984545dca1d911f3888263e2",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-inlet_Table",
+      "id": "99188d1c91c244129c189d4aa51dc652",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-dispatch_Registry",
+      "id": "509479705b6949859fee7c8599824c8d",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-plain_Concentrator",
+      "id": "d0daafe173ab42c98accd97f95c9f329",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-plain_Gate",
+      "id": "10b115cfd1a742f6a58d03301fa3a74f",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-plain_Lobby",
+      "id": "a991d7d330784aedaa2e1709450d3b16",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-plain_OwnerRoom",
+      "id": "9841f1c15a824c3891243561f5f78cf4",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-plain_Table",
+      "id": "a362cc5c0cfe41c5b8ab5bfd38d6771f",
+      "existedBeforeCleanup": true
+    },
+    {
+      "name": "hm-test-inlet_ExtraRoom",
+      "id": "efcce2a2a022414d90c246108ea095b1",
+      "existedBeforeCleanup": true
+    },
+    {
+      "id": "abe98e588135454ca5ef4f2d713bd2a7",
+      "name": "hm-test-facets-r3_Supervisor",
+      "existedBeforeCleanup": true
+    }
+  ],
+  "dispatchHost": "hm-test-dispatch.ryan-d2f.workers.dev",
+  "cleanup": [
+    {
+      "name": "hm-test-ticks-dlq consumer",
+      "id": "41a32c05904b4040be58a1ffeac7f82c",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-ticks consumer",
+      "id": "a4ae0a33b7f04b179ceb8ff318da9bc9",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-facets-r3",
+      "path": "workers/scripts/hm-test-facets-r3?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-claim-probe",
+      "path": "workers/scripts/hm-test-claim-probe?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain",
+      "path": "workers/scripts/hm-test-plain?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-dispatch",
+      "path": "workers/scripts/hm-test-dispatch?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-outbound",
+      "path": "workers/scripts/hm-test-outbound?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet",
+      "path": "workers/dispatch/namespaces/homie-managed-test/scripts/hm-test-inlet?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-other",
+      "path": "workers/dispatch/namespaces/homie-managed-test/scripts/hm-test-other?force=true",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet_Concentrator",
+      "path": "workers/durable_objects/namespaces/b581ac8893a144bcaa71c54047f23b28",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet_Gate",
+      "path": "workers/durable_objects/namespaces/a3dfb5a408784895a3a7f907ce28bbbc",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet_Lobby",
+      "path": "workers/durable_objects/namespaces/77f4ca51a1854f6d8ef60b4cd08a794a",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet_OwnerRoom",
+      "path": "workers/durable_objects/namespaces/d91be3b3984545dca1d911f3888263e2",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet_Table",
+      "path": "workers/durable_objects/namespaces/99188d1c91c244129c189d4aa51dc652",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-dispatch_Registry",
+      "path": "workers/durable_objects/namespaces/509479705b6949859fee7c8599824c8d",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain_Concentrator",
+      "path": "workers/durable_objects/namespaces/d0daafe173ab42c98accd97f95c9f329",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain_Gate",
+      "path": "workers/durable_objects/namespaces/10b115cfd1a742f6a58d03301fa3a74f",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain_Lobby",
+      "path": "workers/durable_objects/namespaces/a991d7d330784aedaa2e1709450d3b16",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain_OwnerRoom",
+      "path": "workers/durable_objects/namespaces/9841f1c15a824c3891243561f5f78cf4",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain_Table",
+      "path": "workers/durable_objects/namespaces/a362cc5c0cfe41c5b8ab5bfd38d6771f",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet_ExtraRoom",
+      "path": "workers/durable_objects/namespaces/efcce2a2a022414d90c246108ea095b1",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "hm-test-facets-r3_Supervisor",
+      "path": "workers/durable_objects/namespaces/abe98e588135454ca5ef4f2d713bd2a7",
+      "existed": false,
+      "result": "already absent",
+      "absent": true
+    },
+    {
+      "name": "homie-managed-test",
+      "path": "workers/dispatch/namespaces/homie-managed-test",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-inlet-db",
+      "path": "d1/database/4b1e92f4-b6cd-46bf-bea6-3ef101dc03cc",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-plain-db",
+      "path": "d1/database/e11322b0-88d5-4c9e-b6e3-be40c40a6bfc",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-other-db",
+      "path": "d1/database/383c0180-d370-4dde-ba94-db89bd6f1691",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-ticks",
+      "path": "queues/3778c43c63e6440a98da69e5808b13d8",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    },
+    {
+      "name": "hm-test-ticks-dlq",
+      "path": "queues/2a2dd99e8a0b4c52a74095b04840b1c4",
+      "existed": true,
+      "result": "deleted",
+      "absent": true
+    }
+  ]
+}

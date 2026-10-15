@@ -2,67 +2,700 @@
   "sockets": [
     {
       "path": "/probe/owner/ws",
-      "openAt": 1792098212947,
+      "openAt": 1792098357126,
       "swapToCloseMs": null,
-      "closeAt": 1792098229726,
-      "closeCode": 1006
+      "closeAt": 1792098439272,
+      "closeCode": 1006,
+      "termination": "Probe cleanup; no closure observed during kill window"
     },
     {
       "path": "/race/__net?room=kill-r3",
-      "openAt": 1792098213695,
-      "closeAt": 1792098224006,
+      "openAt": 1792098357997,
+      "closeAt": 1792098368290,
       "closeCode": 4000,
-      "swapToCloseMs": 5804
+      "swapToCloseMs": 4343
     }
   ],
   "alarmArmed": {
     "status": 200,
     "body": "armed",
-    "ms": 557,
-    "ray": "a4b1c56cfb81fff0-PDX",
-    "at": 1792098214252
+    "ms": 709,
+    "ray": "a4b1c8f38ba05012-PDX",
+    "at": 1792098358708
   },
   "before": {
     "status": 200,
-    "body": "{\"alarms\":3,\"n\":1}",
-    "ms": 489,
-    "ray": "a4b1c578ed45fff0-PDX",
-    "at": 1792098216243
+    "body": "{\"alarms\":291,\"n\":2}",
+    "ms": 591,
+    "ray": "a4b1c90039c45012-PDX",
+    "at": 1792098360800
   },
-  "routeKillStarted": 1792098216243,
-  "routeKillWriteMs": 375,
+  "routeKillStarted": 1792098360800,
+  "routeKillWriteMs": 343,
   "routeStopped": {
     "status": 404,
     "body": "Not found",
-    "ms": 135,
-    "ray": "a4b1c57e5c3efff0-PDX",
-    "at": 1792098216753
+    "ms": 366,
+    "ray": "a4b1c905ba715012-PDX",
+    "at": 1792098361509
   },
   "other": {
     "status": 200,
     "body": "{\"tenant\":null}",
-    "ms": 391,
-    "ray": "a4b1c57f0df7e19b-YVR",
-    "at": 1792098217144
+    "ms": 340,
+    "ray": "a4b1c907f891d0a0-PDX",
+    "at": 1792098361850
   },
   "socketsAfterRouteKill": [
     1,
     1
   ],
-  "swapStarted": 1792098218202,
-  "swapCommandMs": 3269,
+  "swapStarted": 1792098363947,
+  "swapCommandMs": 3812,
+  "propagation": [
+    {
+      "status": 200,
+      "body": "{\"alarms\":306,\"n\":2}",
+      "ms": 707,
+      "ray": "a4b1c931bb18dabf-PDX",
+      "at": 1792098368664
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":308,\"n\":2}",
+      "ms": 267,
+      "ray": "a4b1c937dea28f72-YVR",
+      "at": 1792098369432
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":310,\"n\":2}",
+      "ms": 306,
+      "ray": "a4b1c93c6b578f72-YVR",
+      "at": 1792098370239
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":311,\"n\":2}",
+      "ms": 297,
+      "ray": "a4b1c941ae668f72-YVR",
+      "at": 1792098371037
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":313,\"n\":2}",
+      "ms": 269,
+      "ray": "a4b1c9466d078f72-YVR",
+      "at": 1792098371807
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":315,\"n\":2}",
+      "ms": 266,
+      "ray": "a4b1c94b6c188f72-YVR",
+      "at": 1792098372574
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":316,\"n\":2}",
+      "ms": 303,
+      "ray": "a4b1c95009768f72-YVR",
+      "at": 1792098373379
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":318,\"n\":2}",
+      "ms": 237,
+      "ray": "a4b1c95548328f72-YVR",
+      "at": 1792098374117
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":319,\"n\":2}",
+      "ms": 338,
+      "ray": "a4b1c959ae158f72-YVR",
+      "at": 1792098374956
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":321,\"n\":2}",
+      "ms": 222,
+      "ray": "a4b1c95f1de38f72-YVR",
+      "at": 1792098375679
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":322,\"n\":2}",
+      "ms": 342,
+      "ray": "a4b1c9637aed8f72-YVR",
+      "at": 1792098376527
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":324,\"n\":2}",
+      "ms": 227,
+      "ray": "a4b1c968eaad8f72-YVR",
+      "at": 1792098377263
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":325,\"n\":2}",
+      "ms": 335,
+      "ray": "a4b1c96d582b8f72-YVR",
+      "at": 1792098378099
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":327,\"n\":2}",
+      "ms": 215,
+      "ray": "a4b1c972b8258f72-YVR",
+      "at": 1792098378816
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":328,\"n\":2}",
+      "ms": 199,
+      "ray": "a4b1c9771cd68f72-YVR",
+      "at": 1792098379515
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":330,\"n\":2}",
+      "ms": 194,
+      "ray": "a4b1c97b696e8f72-YVR",
+      "at": 1792098380210
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":331,\"n\":2}",
+      "ms": 220,
+      "ray": "a4b1c97fdeb38f72-YVR",
+      "at": 1792098380932
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":333,\"n\":2}",
+      "ms": 339,
+      "ray": "a4b1c9844c168f72-YVR",
+      "at": 1792098381771
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":334,\"n\":2}",
+      "ms": 221,
+      "ray": "a4b1c989ab298f72-YVR",
+      "at": 1792098382493
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":336,\"n\":2}",
+      "ms": 353,
+      "ray": "a4b1c98e089c8f72-YVR",
+      "at": 1792098383347
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":338,\"n\":2}",
+      "ms": 233,
+      "ray": "a4b1c993890e8f72-YVR",
+      "at": 1792098384081
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":339,\"n\":2}",
+      "ms": 333,
+      "ray": "a4b1c997fee88f72-YVR",
+      "at": 1792098384915
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":341,\"n\":2}",
+      "ms": 229,
+      "ray": "a4b1c99d5e078f72-YVR",
+      "at": 1792098385644
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":342,\"n\":2}",
+      "ms": 599,
+      "ray": "a4b1c9a1cc4a8f72-YVR",
+      "at": 1792098386747
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":344,\"n\":2}",
+      "ms": 292,
+      "ray": "a4b1c9a898058f72-YVR",
+      "at": 1792098387540
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":346,\"n\":2}",
+      "ms": 222,
+      "ray": "a4b1c9adbe4e8f72-YVR",
+      "at": 1792098388264
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":347,\"n\":2}",
+      "ms": 193,
+      "ray": "a4b1c9b21af18f72-YVR",
+      "at": 1792098388958
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":349,\"n\":2}",
+      "ms": 243,
+      "ray": "a4b1c9b668e08f72-YVR",
+      "at": 1792098389701
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":350,\"n\":2}",
+      "ms": 192,
+      "ray": "a4b1c9bb1e658f72-YVR",
+      "at": 1792098390395
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":352,\"n\":2}",
+      "ms": 311,
+      "ray": "a4b1c9bf6a1e8f72-YVR",
+      "at": 1792098391207
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":353,\"n\":2}",
+      "ms": 240,
+      "ray": "a4b1c9c4a9528f72-YVR",
+      "at": 1792098391947
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":355,\"n\":2}",
+      "ms": 331,
+      "ray": "a4b1c9c91e008f72-YVR",
+      "at": 1792098392779
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":356,\"n\":2}",
+      "ms": 234,
+      "ray": "a4b1c9ce8d5d8f72-YVR",
+      "at": 1792098393515
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":358,\"n\":2}",
+      "ms": 334,
+      "ray": "a4b1c9d2ea068f72-YVR",
+      "at": 1792098394351
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":360,\"n\":2}",
+      "ms": 223,
+      "ray": "a4b1c9d859bf8f72-YVR",
+      "at": 1792098395077
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":361,\"n\":2}",
+      "ms": 198,
+      "ray": "a4b1c9dcadce8f72-YVR",
+      "at": 1792098395775
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":362,\"n\":2}",
+      "ms": 199,
+      "ray": "a4b1c9e10c118f72-YVR",
+      "at": 1792098396474
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":364,\"n\":2}",
+      "ms": 196,
+      "ray": "a4b1c9e56c4d8f72-YVR",
+      "at": 1792098397170
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":365,\"n\":2}",
+      "ms": 196,
+      "ray": "a4b1c9e9ca208f72-YVR",
+      "at": 1792098397868
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":367,\"n\":2}",
+      "ms": 243,
+      "ray": "a4b1c9ee28338f72-YVR",
+      "at": 1792098398612
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":368,\"n\":2}",
+      "ms": 221,
+      "ray": "a4b1c9f2ceb78f72-YVR",
+      "at": 1792098399334
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":369,\"n\":2}",
+      "ms": 289,
+      "ray": "a4b1c9f74bca8f72-YVR",
+      "at": 1792098400123
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":371,\"n\":2}",
+      "ms": 256,
+      "ray": "a4b1c9fc6b398f72-YVR",
+      "at": 1792098400880
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":373,\"n\":2}",
+      "ms": 311,
+      "ray": "a4b1ca00e9f08f72-YVR",
+      "at": 1792098401691
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":374,\"n\":2}",
+      "ms": 228,
+      "ray": "a4b1ca063bd18f72-YVR",
+      "at": 1792098402420
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":376,\"n\":2}",
+      "ms": 194,
+      "ray": "a4b1ca0a9b3e8f72-YVR",
+      "at": 1792098403115
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":377,\"n\":2}",
+      "ms": 194,
+      "ray": "a4b1ca0eeaf88f72-YVR",
+      "at": 1792098403810
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":378,\"n\":2}",
+      "ms": 203,
+      "ray": "a4b1ca134f7c8f72-YVR",
+      "at": 1792098404514
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":380,\"n\":2}",
+      "ms": 192,
+      "ray": "a4b1ca17aab68f72-YVR",
+      "at": 1792098405208
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":381,\"n\":2}",
+      "ms": 199,
+      "ray": "a4b1ca1bfe428f72-YVR",
+      "at": 1792098405907
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":383,\"n\":2}",
+      "ms": 210,
+      "ray": "a4b1ca206abf8f72-YVR",
+      "at": 1792098406619
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":384,\"n\":2}",
+      "ms": 191,
+      "ray": "a4b1ca24cf5c8f72-YVR",
+      "at": 1792098407311
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":385,\"n\":2}",
+      "ms": 190,
+      "ray": "a4b1ca292bba8f72-YVR",
+      "at": 1792098408002
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":387,\"n\":2}",
+      "ms": 207,
+      "ray": "a4b1ca2d88068f72-YVR",
+      "at": 1792098408710
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":388,\"n\":2}",
+      "ms": 348,
+      "ray": "a4b1ca31ec018f72-YVR",
+      "at": 1792098409559
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":390,\"n\":2}",
+      "ms": 225,
+      "ray": "a4b1ca375a6f8f72-YVR",
+      "at": 1792098410285
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":391,\"n\":2}",
+      "ms": 345,
+      "ray": "a4b1ca3bbe958f72-YVR",
+      "at": 1792098411131
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":393,\"n\":2}",
+      "ms": 224,
+      "ray": "a4b1ca412cd48f72-YVR",
+      "at": 1792098411855
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":395,\"n\":2}",
+      "ms": 348,
+      "ray": "a4b1ca4588908f72-YVR",
+      "at": 1792098412703
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":396,\"n\":2}",
+      "ms": 221,
+      "ray": "a4b1ca4b0f2b8f72-YVR",
+      "at": 1792098413424
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":398,\"n\":2}",
+      "ms": 190,
+      "ray": "a4b1ca4f5b488f72-YVR",
+      "at": 1792098414114
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":399,\"n\":2}",
+      "ms": 204,
+      "ray": "a4b1ca53b8118f72-YVR",
+      "at": 1792098414818
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":400,\"n\":2}",
+      "ms": 212,
+      "ray": "a4b1ca581cc18f72-YVR",
+      "at": 1792098415530
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":402,\"n\":2}",
+      "ms": 191,
+      "ray": "a4b1ca5c7a0a8f72-YVR",
+      "at": 1792098416223
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":403,\"n\":2}",
+      "ms": 191,
+      "ray": "a4b1ca60dda78f72-YVR",
+      "at": 1792098416915
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":405,\"n\":2}",
+      "ms": 203,
+      "ray": "a4b1ca65391c8f72-YVR",
+      "at": 1792098417618
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":406,\"n\":2}",
+      "ms": 351,
+      "ray": "a4b1ca699bf28f72-YVR",
+      "at": 1792098418471
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":408,\"n\":2}",
+      "ms": 217,
+      "ray": "a4b1ca6f09ac8f72-YVR",
+      "at": 1792098419189
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":409,\"n\":2}",
+      "ms": 195,
+      "ray": "a4b1ca736d278f72-YVR",
+      "at": 1792098419886
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":411,\"n\":2}",
+      "ms": 200,
+      "ray": "a4b1ca77c9e38f72-YVR",
+      "at": 1792098420586
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":412,\"n\":2}",
+      "ms": 203,
+      "ray": "a4b1ca7c2e228f72-YVR",
+      "at": 1792098421290
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":413,\"n\":2}",
+      "ms": 356,
+      "ray": "a4b1ca8089908f72-YVR",
+      "at": 1792098422147
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":415,\"n\":2}",
+      "ms": 302,
+      "ray": "a4b1ca85f8258f72-YVR",
+      "at": 1792098422950
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":417,\"n\":2}",
+      "ms": 260,
+      "ray": "a4b1ca8aed4d8f72-YVR",
+      "at": 1792098423711
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":418,\"n\":2}",
+      "ms": 235,
+      "ray": "a4b1ca8fca318f72-YVR",
+      "at": 1792098424448
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":420,\"n\":2}",
+      "ms": 339,
+      "ray": "a4b1ca944e528f72-YVR",
+      "at": 1792098425288
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":421,\"n\":2}",
+      "ms": 225,
+      "ray": "a4b1ca999dea8f72-YVR",
+      "at": 1792098426014
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":423,\"n\":2}",
+      "ms": 345,
+      "ray": "a4b1ca9e0b3f8f72-YVR",
+      "at": 1792098426859
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":425,\"n\":2}",
+      "ms": 223,
+      "ray": "a4b1caa379c08f72-YVR",
+      "at": 1792098427583
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":426,\"n\":2}",
+      "ms": 197,
+      "ray": "a4b1caa7dce38f72-YVR",
+      "at": 1792098428282
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":427,\"n\":2}",
+      "ms": 194,
+      "ray": "a4b1caac38bf8f72-YVR",
+      "at": 1792098428977
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":429,\"n\":2}",
+      "ms": 204,
+      "ray": "a4b1cab09d938f72-YVR",
+      "at": 1792098429682
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":430,\"n\":2}",
+      "ms": 344,
+      "ray": "a4b1cab509bb8f72-YVR",
+      "at": 1792098430527
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":432,\"n\":2}",
+      "ms": 225,
+      "ray": "a4b1caba6a648f72-YVR",
+      "at": 1792098431252
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":433,\"n\":2}",
+      "ms": 346,
+      "ray": "a4b1cabedee78f72-YVR",
+      "at": 1792098432100
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":435,\"n\":2}",
+      "ms": 218,
+      "ray": "a4b1cac43d288f72-YVR",
+      "at": 1792098432818
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":436,\"n\":2}",
+      "ms": 194,
+      "ray": "a4b1cac898eb8f72-YVR",
+      "at": 1792098433514
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":438,\"n\":2}",
+      "ms": 204,
+      "ray": "a4b1caccfca88f72-YVR",
+      "at": 1792098434219
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":439,\"n\":2}",
+      "ms": 203,
+      "ray": "a4b1cad1592e8f72-YVR",
+      "at": 1792098434923
+    },
+    {
+      "status": 200,
+      "body": "{\"alarms\":441,\"n\":2}",
+      "ms": 350,
+      "ray": "a4b1cad5be3a8f72-YVR",
+      "at": 1792098435774
+    }
+  ],
   "after": {
     "status": 200,
-    "body": "{\"alarms\":25,\"n\":1}",
-    "ms": 357,
-    "ray": "a4b1c5be6c5d4220-YVR",
-    "at": 1792098227152
+    "body": "{\"alarms\":442,\"n\":2}",
+    "ms": 236,
+    "ray": "a4b1cadb2cef8f72-YVR",
+    "at": 1792098436510
   },
   "later": {
     "status": 200,
-    "body": "{\"alarms\":30,\"n\":1}",
-    "ms": 331,
-    "ray": "a4b1c5ccff541f9b-PDX",
-    "at": 1792098229482
+    "body": "{\"alarms\":447,\"n\":2}",
+    "ms": 194,
+    "ray": "a4b1cae90a738f72-YVR",
+    "at": 1792098438706
   }
 }

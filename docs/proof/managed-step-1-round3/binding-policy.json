@@ -1,0 +1,24 @@
+{
+  "dispatch": [
+    {
+      "name": "STUDIOS",
+      "namespace": "homie-managed-test",
+      "outbound": {
+        "worker": {
+          "service": "hm-test-outbound"
+        },
+        "params": [
+          {
+            "name": "tenant"
+          }
+        ],
+        "prebuilt_pipeline_id": null
+      },
+      "type": "dispatch_namespace"
+    }
+  ],
+  "tenantFlags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ]
+}

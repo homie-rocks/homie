@@ -1,0 +1,283 @@
+{
+  "at": "2026-10-15T21:08:20.496Z",
+  "account": "d2f6f976cecad2fe130976fe36916cdb",
+  "namespaces": [
+    {
+      "namespace_id": "7df6f86b-0108-4d0b-ae7d-f7d7771e36d8",
+      "namespace_name": "homie-managed-test",
+      "script_count": 2,
+      "created_on": "2026-10-15T20:54:04.792631Z",
+      "created_by": "d2f6f976cecad2fe130976fe36916cdb",
+      "modified_on": "2026-10-15T21:04:56.340551Z",
+      "modified_by": "d2f6f976cecad2fe130976fe36916cdb"
+    }
+  ],
+  "workers": [
+    {
+      "id": "hm-test-claim-probe"
+    },
+    {
+      "id": "hm-test-dispatch"
+    },
+    {
+      "id": "hm-test-facets-r3"
+    },
+    {
+      "id": "hm-test-outbound"
+    },
+    {
+      "id": "hm-test-plain"
+    }
+  ],
+  "databases": [
+    {
+      "uuid": "383c0180-d370-4dde-ba94-db89bd6f1691",
+      "name": "hm-test-other-db",
+      "created_at": "2026-10-15T20:57:39.290Z",
+      "version": "production",
+      "num_tables": 0,
+      "file_size": 8192,
+      "jurisdiction": null
+    },
+    {
+      "uuid": "e11322b0-88d5-4c9e-b6e3-be40c40a6bfc",
+      "name": "hm-test-plain-db",
+      "created_at": "2026-10-15T20:56:41.471Z",
+      "version": "production",
+      "num_tables": 0,
+      "file_size": 8192,
+      "jurisdiction": null
+    },
+    {
+      "uuid": "4b1e92f4-b6cd-46bf-bea6-3ef101dc03cc",
+      "name": "hm-test-inlet-db",
+      "created_at": "2026-10-15T20:54:13.659Z",
+      "version": "production",
+      "num_tables": 0,
+      "file_size": 8192,
+      "jurisdiction": null
+    }
+  ],
+  "queues": [
+    {
+      "queue_id": "3778c43c63e6440a98da69e5808b13d8",
+      "queue_name": "hm-test-ticks",
+      "settings": {
+        "delivery_delay": 0,
+        "message_retention_period": 345600
+      },
+      "created_on": "2026-10-15T20:54:10.372372Z",
+      "modified_on": "2026-10-15T20:54:10.372372Z",
+      "producers_total_count": 1,
+      "producers": [
+        {
+          "script": "hm-test-dispatch",
+          "type": "worker"
+        }
+      ],
+      "consumers_total_count": 1,
+      "consumers": [
+        {
+          "script": "hm-test-dispatch",
+          "dead_letter_queue": "hm-test-ticks-dlq",
+          "settings": {
+            "batch_size": 1,
+            "max_retries": 3,
+            "max_wait_time_ms": 5000,
+            "retry_delay": 0
+          },
+          "consumer_id": "a4ae0a33b7f04b179ceb8ff318da9bc9",
+          "type": "worker"
+        }
+      ]
+    },
+    {
+      "queue_id": "2a2dd99e8a0b4c52a74095b04840b1c4",
+      "queue_name": "hm-test-ticks-dlq",
+      "settings": {
+        "delivery_delay": 0,
+        "message_retention_period": 345600
+      },
+      "created_on": "2026-10-15T20:54:06.921447Z",
+      "modified_on": "2026-10-15T20:54:06.921447Z",
+      "producers_total_count": 0,
+      "producers": [],
+      "consumers_total_count": 1,
+      "consumers": [
+        {
+          "script": "hm-test-dispatch",
+          "settings": {
+            "batch_size": 1,
+            "max_retries": 3,
+            "max_wait_time_ms": 5000,
+            "retry_delay": 0
+          },
+          "consumer_id": "41a32c05904b4040be58a1ffeac7f82c",
+          "type": "worker"
+        }
+      ]
+    }
+  ],
+  "durableObjects": [
+    {
+      "id": "abe98e588135454ca5ef4f2d713bd2a7",
+      "name": "hm-test-facets-r3_Supervisor",
+      "script": "hm-test-facets-r3",
+      "class": "Supervisor",
+      "use_sqlite": true
+    },
+    {
+      "id": "d91be3b3984545dca1d911f3888263e2",
+      "name": "hm-test-inlet_OwnerRoom",
+      "script": "hm-test-inlet",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "OwnerRoom",
+      "use_sqlite": true
+    },
+    {
+      "id": "b581ac8893a144bcaa71c54047f23b28",
+      "name": "hm-test-inlet_Concentrator",
+      "script": "hm-test-inlet",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Concentrator",
+      "use_sqlite": true
+    },
+    {
+      "id": "a3dfb5a408784895a3a7f907ce28bbbc",
+      "name": "hm-test-inlet_Gate",
+      "script": "hm-test-inlet",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Gate",
+      "use_sqlite": true
+    },
+    {
+      "id": "77f4ca51a1854f6d8ef60b4cd08a794a",
+      "name": "hm-test-inlet_Lobby",
+      "script": "hm-test-inlet",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Lobby",
+      "use_sqlite": true
+    },
+    {
+      "id": "99188d1c91c244129c189d4aa51dc652",
+      "name": "hm-test-inlet_Table",
+      "script": "hm-test-inlet",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "Table",
+      "use_sqlite": true
+    },
+    {
+      "id": "509479705b6949859fee7c8599824c8d",
+      "name": "hm-test-dispatch_Registry",
+      "script": "hm-test-dispatch",
+      "class": "Registry",
+      "use_sqlite": true
+    },
+    {
+      "id": "d0daafe173ab42c98accd97f95c9f329",
+      "name": "hm-test-plain_Concentrator",
+      "script": "hm-test-plain",
+      "class": "Concentrator",
+      "use_sqlite": true
+    },
+    {
+      "id": "9841f1c15a824c3891243561f5f78cf4",
+      "name": "hm-test-plain_OwnerRoom",
+      "script": "hm-test-plain",
+      "class": "OwnerRoom",
+      "use_sqlite": true
+    },
+    {
+      "id": "a362cc5c0cfe41c5b8ab5bfd38d6771f",
+      "name": "hm-test-plain_Table",
+      "script": "hm-test-plain",
+      "class": "Table",
+      "use_sqlite": true
+    },
+    {
+      "id": "10b115cfd1a742f6a58d03301fa3a74f",
+      "name": "hm-test-plain_Gate",
+      "script": "hm-test-plain",
+      "class": "Gate",
+      "use_sqlite": true
+    },
+    {
+      "id": "a991d7d330784aedaa2e1709450d3b16",
+      "name": "hm-test-plain_Lobby",
+      "script": "hm-test-plain",
+      "class": "Lobby",
+      "use_sqlite": true
+    },
+    {
+      "id": "efcce2a2a022414d90c246108ea095b1",
+      "name": "hm-test-inlet_ExtraRoom",
+      "script": "hm-test-inlet",
+      "dispatch_namespace": "homie-managed-test",
+      "class": "ExtraRoom",
+      "use_sqlite": true
+    }
+  ],
+  "scripts": [
+    {
+      "created_on": "2026-10-15T20:54:43.427519Z",
+      "modified_on": "2026-10-15T21:06:07.28045Z",
+      "id": "hm-test-inlet",
+      "tag": "57a368984b3b4af5887fa63aae0c5910",
+      "tags": [
+        "hm-test",
+        "step-1",
+        "hm-test-inlet"
+      ],
+      "deployment_id": "",
+      "tail_consumers": null,
+      "logpush": false,
+      "has_assets": false,
+      "has_modules": false,
+      "etag": "2e521aa1bc7de1009bf3d4bf6984b06c214c57b4efbb65ade4bd3476c085c5fa",
+      "handlers": [
+        "fetch"
+      ],
+      "last_deployed_from": "",
+      "migration_tag": "v1-next",
+      "compatibility_date": "2026-10-15",
+      "compatibility_flags": [
+        "nodejs_compat",
+        "global_fetch_strictly_public"
+      ],
+      "usage_model": "standard",
+      "routes": null
+    },
+    {
+      "created_on": "2026-10-15T20:57:51.303652Z",
+      "modified_on": "2026-10-15T20:57:59.388761Z",
+      "id": "hm-test-other",
+      "tag": "7afee5fba4d04d00a4ced6a6fd5f3310",
+      "tags": [
+        "hm-test",
+        "step-1",
+        "hm-test-other"
+      ],
+      "deployment_id": "",
+      "tail_consumers": [
+        {
+          "service": "hm-test-outbound"
+        }
+      ],
+      "logpush": false,
+      "has_assets": false,
+      "has_modules": false,
+      "etag": "252730f3cea8229e04b044f9fafc3915cf6d0e311346b8d2c6d0e962e5b39497",
+      "handlers": [
+        "fetch"
+      ],
+      "last_deployed_from": "",
+      "compatibility_date": "2026-10-15",
+      "compatibility_flags": [
+        "nodejs_compat",
+        "global_fetch_strictly_public"
+      ],
+      "usage_model": "standard",
+      "routes": null
+    }
+  ]
+}
