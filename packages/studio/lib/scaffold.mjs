@@ -1,3 +1,4 @@
+import {ANALYTICS_MIGRATION,ANALYTICS_MIGRATION_FILE} from '../worker/analytics.mjs';
 import {TOOL_NAMESPACE_MIGRATION,TOOL_NAMESPACE_MIGRATION_FILE,CACHE_MIGRATION,CACHE_MIGRATION_FILE,OPERATIONAL_MIGRATION,OPERATIONAL_MIGRATION_FILE} from '../worker/operational-schema.mjs';
 import {BOOKING_RESOURCES_MIGRATION,BOOKING_RESOURCES_MIGRATION_FILE} from '../worker/booking-resources.mjs';
 import {BOOKING_HOLDS_MIGRATION,BOOKING_HOLDS_MIGRATION_FILE} from '../worker/booking-holds.mjs';
@@ -92,14 +93,16 @@ export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layou
     // later). A game's rules run in this Worker (NETPLAY.md section 29), and nothing in them is ever made from text.
     no_bundle: true, find_additional_modules: true, rules: [{ type: 'ESModule', globs: ['**/*.js'], fallthrough: true }],
     compatibility_flags: ['nodejs_compat', 'global_fetch_strictly_public', 'disallow_eval_during_startup'],
-    ...(paidParts ? { alias: { '@homie-rocks/studio/worker': '@homie-rocks/studio/worker/selling' }, triggers: { crons: ['*/5 * * * *'] }, ...(partsRateLimit ? { ratelimits: [partsRateLimit] } : {}) } : {}),
+    ...(paidParts ? { alias: { '@homie-rocks/studio/worker': '@homie-rocks/studio/worker/selling' }, ...(partsRateLimit ? { ratelimits: [partsRateLimit] } : {}) } : {}),
     workers_dev: true,
     preview_urls: true,
     // The studio's own custom-domain and exact-host routes, as its owner wrote them: this file is written again by
     // every deploy, and one written without them sends the studio's domain back to whatever else the zone routes
     // (lib/routes.mjs). A studio without routes gets no key at all.
     ...(routes?.length ? { routes } : {}),
-    ...(triggers ? { triggers: paidParts ? { ...triggers, crons: [...new Set([...(triggers.crons ?? []), '*/5 * * * *'])] } : triggers } : {}),
+    analytics_engine_datasets: [{binding:'STUDIO_ANALYTICS',dataset:`${worker.replace(/-/g,'_')}_visits`}],
+    analytics: {binding:'ANALYTICS_SQL'},
+    triggers: {crons:[...new Set([...(triggers?.crons??[]),...(paidParts?['*/5 * * * *']:[]),'17 * * * *'])]},
     assets: { directory: at.dist, binding: 'ASSETS', run_worker_first: true },
     durable_objects: { bindings: rooms },
     migrations: [{ tag: 'v1', new_sqlite_classes: ['Table', 'Lobby'] }, { tag: 'v2-gates', new_sqlite_classes: ['Gate', 'Concentrator'] }],
@@ -108,9 +111,9 @@ export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layou
     // Workers AI, only when a server's AI guides think with it (agents_brain workers-ai; deploy adds it, 0.17.0).
     // Never in Previews: they do not inherit it, so a Preview's guides answer from the game's script.
     ...(ai ? { ai: { binding: 'AI' } } : {}),
-    vars: { STUDIO_NAME: name, ...(eventFeeds&&Object.keys(eventFeeds).length?{STUDIO_EVENT_FEEDS:JSON.stringify(eventFeeds)}:{}) },
+    vars: { STUDIO_NAME: name, STUDIO_ANALYTICS_DATASET: `${worker.replace(/-/g,'_')}_visits`, ...(eventFeeds&&Object.keys(eventFeeds).length?{STUDIO_EVENT_FEEDS:JSON.stringify(eventFeeds)}:{}) },
     observability: { enabled: true },
-    previews: { vars: { STUDIO_NAME: name, HOMIE_PREVIEW: '1' }, durable_objects: { bindings: rooms } },
+    previews: { vars: { STUDIO_NAME: name, STUDIO_ANALYTICS_DATASET: `${worker.replace(/-/g,'_')}_visits`, HOMIE_PREVIEW: '1' }, durable_objects: { bindings: rooms } },
   };
   return `// This studio's site on its own Cloudflare account (written by homie-studio). Everything here runs on
 // the studio's Cloudflare Workers account. \`npm run deploy\` (on this computer, or in Workers Builds) puts it live;
@@ -833,6 +836,7 @@ export { default, Table, Lobby, Gate, Concentrator } from '@homie-rocks/studio/w
     [`site/migrations/${OPERATIONAL_MIGRATION_FILE}`]: OPERATIONAL_MIGRATION,
     [`site/migrations/${CACHE_MIGRATION_FILE}`]: CACHE_MIGRATION,
     [`site/migrations/${TOOL_NAMESPACE_MIGRATION_FILE}`]: TOOL_NAMESPACE_MIGRATION,
+    [`site/migrations/${ANALYTICS_MIGRATION_FILE}`]: ANALYTICS_MIGRATION,
     [`site/migrations/${BOOKING_HOLDS_MIGRATION_FILE}`]: BOOKING_HOLDS_MIGRATION,
     [`site/migrations/${APP_LIVE_MIGRATION_FILE}`]: APP_LIVE_MIGRATION,
     [`site/migrations/${TOOL_DATABASE_MIGRATION_FILE}`]: TOOL_DATABASE_MIGRATION,
@@ -1095,8 +1099,13 @@ function ensureOperational(root) {
  if(existsSync(file))return null;
  mkdirSync(dirname(file),{recursive:true});writeFileSync(file,OPERATIONAL_MIGRATION);return `site/migrations/${OPERATIONAL_MIGRATION_FILE}`;
 }
+function ensureAnalytics(root) {
+ const file=join(root,'site','migrations',ANALYTICS_MIGRATION_FILE);
+ if(existsSync(file))return null;
+ mkdirSync(dirname(file),{recursive:true});writeFileSync(file,ANALYTICS_MIGRATION);return `site/migrations/${ANALYTICS_MIGRATION_FILE}`;
+}
 export function ensureMigrations(root) {
-  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root), ensureFunctionReference(root), ensureShopRemoveReferrals(root), ensureFunctionRuns(root), ensureToolDatabase(root), ensureBookings(root), ensureSubscriptions(root), ensureAppLive(root), ensureBusinessEvents(root), ensureBookingHolds(root),ensureBookingResources(root),ensureOperational(root),ensureCache(root),ensureToolNamespaces(root)].filter(Boolean);
+  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root), ensureFunctionReference(root), ensureShopRemoveReferrals(root), ensureFunctionRuns(root), ensureToolDatabase(root), ensureBookings(root), ensureSubscriptions(root), ensureAppLive(root), ensureBusinessEvents(root), ensureBookingHolds(root),ensureBookingResources(root),ensureOperational(root),ensureCache(root),ensureToolNamespaces(root),ensureAnalytics(root)].filter(Boolean);
 }
 
 /** What a migration file the template added is for, in a few words (deploy and dev say it). */

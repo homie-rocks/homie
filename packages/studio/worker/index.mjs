@@ -628,6 +628,8 @@ function finish(res, path) {
 export default {
   async scheduled(event, env, ctx) {
     env=await loadShopLinks(env);
+    const analytics=event.cron === '17 * * * *' ? (await import('./analytics.mjs')).rollupAnalytics(env) : Promise.resolve();
+    ctx.waitUntil(analytics);
     const maintenance=(async () => {
       const cat = await catalogue(env, 'https://studio.invalid');
       await notifyTools(env,cat,cat.studio?.url??'https://studio.invalid').catch(error=>console.warn('Tool catalogue refresh:',error.message));
@@ -635,7 +637,7 @@ export default {
       await (await import('./functions.mjs')).scheduleFunctions(event,env,cat,cat.studio?.url??'https://studio.invalid');
     })();
     ctx.waitUntil(maintenance);
-    await maintenance;
+    await Promise.all([maintenance,analytics]);
   },
   async fetch(request, env, ctx) {
     const staticPath=new URL(request.url).pathname;

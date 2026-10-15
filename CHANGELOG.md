@@ -17,6 +17,10 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## Unreleased
+
+- Count page activity with Analytics Engine and hourly, replay-safe D1 rollups that preserve historical totals. Owner statistics explain ingestion lag and sampling.
+
 ## [0.54.0] - 2026-10-15
 
 **Plugin 0.54.0**
