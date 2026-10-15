@@ -13,12 +13,13 @@ const frame=value=>new TextEncoder().encode('data: '+JSON.stringify(value)+'\n\n
 export const appHub=(env,app)=>env.LOBBY.get(env.LOBBY.idFromName('@app-records/'+app));
 const pushedRevisions=new WeakMap();
 export async function pushAppRecords(env,cat){
- if(!env.LOBBY||!env.DB)return;
+ const apps=(cat.games??[]).filter(g=>g.kind==='app');
+ if(!env.LOBBY||!env.DB||!apps.length)return;
  const rows=(await env.DB.prepare(`SELECT app,collection,revision FROM app_record_revisions
  UNION ALL SELECT a.app,'*',SUM(COALESCE(r.revision,0)) FROM app_tool_namespaces a LEFT JOIN tool_data_revisions r ON r.namespace=a.namespace GROUP BY a.app`).all()).results;
  const signatures=new Map();for(const row of rows){const app=row.app.split(':check:')[0];signatures.set(app,(signatures.get(app)??'')+JSON.stringify(row));}
  const binding=databaseBinding(env.DB),previous=pushedRevisions.get(binding)??new Map();
- for(const meta of (cat.games??[]).filter(g=>g.kind==='app')){
+ for(const meta of apps){
   const signature=signatures.get(meta.id)??'';
   if((previous.get(meta.id)??'')===signature)continue;
   const response=await appHub(env,meta.id).fetch('https://app/__app_records',{method:'POST',body:JSON.stringify({op:'wake',meta})});

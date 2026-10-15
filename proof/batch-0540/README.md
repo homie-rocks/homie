@@ -32,6 +32,10 @@ MCP request-budget and two-client app-live workerd tests passed. The app-live te
 initially exceeded its 30-second timeout on the busy machine and passed alone in
 1.7 seconds. Seven payment cases passed again after the final replay guard; six
 changelog tests, generated identity and migration/template equality checks passed.
+CI exposed game-only fixtures querying app notification tables; a regression now
+asserts zero app-table reads for game-only catalogues. The companion pacing and
+chat-page cases pass after that early return. Migration inventory expectations
+include 0032 and 0033.
 
 ## Populated deployed comparison
 

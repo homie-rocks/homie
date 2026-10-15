@@ -147,3 +147,6 @@ test('an expired player cookie does not hide a live invite pass',async t=>{
  const ticket=await appAssetTicket(env,'cafe',undefined,{request,meta,launch:'invite'});assert.ok(ticket);
  assert.equal(await appAssetTicket(env,'cafe',ticket,{meta,launch:'invite'}),true);
 });
+test('game-only catalogues never query app notification tables',async()=>{
+ await pushAppRecords({DB:{prepare(){assert.fail('no app tables are needed');}},LOBBY:{}},{games:[{id:'race'}]});
+});
