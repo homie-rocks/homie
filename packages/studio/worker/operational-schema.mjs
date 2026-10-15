@@ -28,3 +28,7 @@ ${['INSERT','UPDATE','DELETE'].map(op=>{const row=op==='DELETE'?'OLD':'NEW';retu
  ${op==='UPDATE'?`INSERT INTO tool_data_revisions SELECT OLD.namespace,1 WHERE OLD.namespace!=NEW.namespace ON CONFLICT(namespace) DO UPDATE SET revision=revision+1;`:''}
 END;`;}).join('\n')}
 `;
+
+export const RUNTIME_INDEX_MIGRATION_FILE='0034_runtime_indexes.sql';
+export const RUNTIME_INDEX_MIGRATION=`CREATE INDEX IF NOT EXISTS mcp_kv_expires ON mcp_kv(expires) WHERE expires IS NOT NULL;
+`;

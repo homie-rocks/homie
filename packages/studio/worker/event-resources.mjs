@@ -54,10 +54,10 @@ export function eventHub(env,connection) {return env.LOBBY.get(env.LOBBY.idFromN
 export async function pushEvents(env,cat,origin) {
   if(!env.LOBBY||!Object.keys(eventFeeds(env)).length)return;
   // Page subscriptions, without a studio-wide subscription or delivery cap.
-  await env.DB.prepare("DELETE FROM mcp_kv WHERE key LIKE 'mcp-event-stream:%' AND expires<?1").bind(Date.now()).run();
+  await env.DB.prepare("DELETE FROM mcp_kv WHERE (key >= 'mcp-event-stream:' AND key < 'mcp-event-stream;') AND expires<?1").bind(Date.now()).run();
   let after='';const seen=new Set();
   for(;;){
-    const rows=(await env.DB.prepare("SELECT key,value FROM mcp_kv WHERE (key LIKE 'event-sub:%' OR key LIKE 'mcp-event-stream:%' OR key LIKE 'tools-stream:%') AND key>?1 ORDER BY key LIMIT 100").bind(after).all()).results;
+    const rows=(await env.DB.prepare("SELECT key,value FROM mcp_kv WHERE ((key >= 'event-sub:' AND key < 'event-sub;') OR (key >= 'mcp-event-stream:' AND key < 'mcp-event-stream;') OR (key >= 'tools-stream:' AND key < 'tools-stream;')) AND key>?1 ORDER BY key LIMIT 100").bind(after).all()).results;
     for(const row of rows){const {connection}=JSON.parse(row.value);if(seen.has(connection))continue;seen.add(connection);
       const response=await eventHub(env,connection).fetch('https://events/__studio_events',{method:'POST',body:JSON.stringify({op:'wake',connection,cat,origin})});
       if(!response.ok)throw new Error('Event stream wake failed');
@@ -82,7 +82,7 @@ export class EventStreams {
       if(this.stream)this.close(this.stream);
       await this.tail;
       const {connection,lastId}=input;
-      const subscriptions=(await this.env.DB.prepare("SELECT value FROM mcp_kv WHERE key LIKE ?1").bind('event-sub:'+connection+':%').all()).results;
+      const subscriptions=(await this.env.DB.prepare("SELECT value FROM mcp_kv WHERE key >= ?1 AND key < ?2").bind('event-sub:'+connection+':','event-sub:'+connection+';').all()).results;
       let after=subscriptions.length?Math.min(...subscriptions.map(r=>JSON.parse(r.value).after)):(await this.env.DB.prepare('SELECT COALESCE(MAX(seq),0) seq FROM studio_events').first()).seq,name='';
       if(lastId){const parts=lastId.split('/');if(parts.length!==3||parts[0]!==connection||!/^\d+$/.test(parts[1]))return new Response('Invalid Last-Event-ID',{status:400});after=Number(parts[1]);name=parts[2];}
       const stream={...input,after,name,controller:null,cancelled:false,resume:null};
@@ -113,7 +113,7 @@ export class EventStreams {
       const signature=await this.toolSignature(input.tools,caller);
       if(stream.toolSignature!==signature){stream.toolSignature=signature;stream.controller.enqueue(new TextEncoder().encode('event: message\ndata: '+JSON.stringify({jsonrpc:'2.0',method:'notifications/tools/list_changed'})+'\n\n'));}
     }
-    const rows=(await this.env.DB.prepare("SELECT value FROM mcp_kv WHERE key LIKE ?1").bind('event-sub:'+caller.connection+':%').all()).results;
+    const rows=(await this.env.DB.prepare("SELECT value FROM mcp_kv WHERE key >= ?1 AND key < ?2").bind('event-sub:'+caller.connection+':','event-sub:'+caller.connection+';').all()).results;
     const subscriptions=[];
     for(const row of rows){const sub=JSON.parse(row.value);if(await readableFeed(this.env,input.cat,caller,sub.name))subscriptions.push(sub);}
     const through=(await this.env.DB.prepare('SELECT COALESCE(MAX(seq),0) seq FROM studio_events').first()).seq;
@@ -155,7 +155,7 @@ export async function pushToolList(env,cat,tools,origin) {
   await env.DB.prepare("INSERT INTO mcp_kv(key,value) VALUES('tools-catalogue',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(signature).run();
   let after='';
   for(;;){
-    const rows=(await env.DB.prepare("SELECT key,value FROM mcp_kv WHERE key LIKE 'tools-stream:%' AND key>?1 ORDER BY key LIMIT 100").bind(after).all()).results;
+    const rows=(await env.DB.prepare("SELECT key,value FROM mcp_kv WHERE (key >= 'tools-stream:' AND key < 'tools-stream;') AND key>?1 ORDER BY key LIMIT 100").bind(after).all()).results;
     for(const row of rows){const connection=JSON.parse(row.value).connection;await eventHub(env,connection).fetch('https://events/__studio_events',{method:'POST',body:JSON.stringify({op:'tools',connection,cat,tools:publicShape,origin})});}
     if(rows.length<100)break;after=rows.at(-1).key;
   }

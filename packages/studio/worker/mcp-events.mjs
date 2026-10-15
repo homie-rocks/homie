@@ -78,7 +78,7 @@ export async function subscribeEvents(env,cat,caller,params,{now=Date.now}={}){
   const id=await subId(caller,params,url),previous=await stored(env,id),live=previous&&previous.expires>now();
   if(live&&previous.source!==eventSource(feed)){await removeEventHook(env,id);throw new EventsError(EVENT_ERRORS.unsupported,{feature:'payloadSchema',reason:'schema_changed'});}
   if(previous&&!live)await removeEventHook(env,id);
-  if(!live&&feed.maxSubscriptions!==undefined){const rows=(await env.DB.prepare("SELECT value FROM mcp_kv WHERE key LIKE 'mcp-event-hook:%'").all()).results;if(rows.filter(row=>{const sub=JSON.parse(row.value);return sub.name===params.name&&sub.expires>now();}).length>=feed.maxSubscriptions)throw new EventsError(EVENT_ERRORS.exhausted,{limit:'subscriptions',max:feed.maxSubscriptions});}
+  if(!live&&feed.maxSubscriptions!==undefined){const rows=(await env.DB.prepare("SELECT value FROM mcp_kv WHERE (key >= 'mcp-event-hook:' AND key < 'mcp-event-hook;')").all()).results;if(rows.filter(row=>{const sub=JSON.parse(row.value);return sub.name===params.name&&sub.expires>now();}).length>=feed.maxSubscriptions)throw new EventsError(EVENT_ERRORS.exhausted,{limit:'subscriptions',max:feed.maxSubscriptions});}
   const start=await eventStart(env,params,now());
   const sub={id,name:params.name,source:eventSource(feed),url,secret,principal:caller.id,connection:caller.connection??'local-test-owner',start:live?previous.start:start.after,expires:now()+Math.min(params.ttlMs??3600000,86400000)};
   if(live){if(previous.secret!==secret){sub.previous=previous.secret;sub.rotateUntil=now()+300000;}else if(previous.rotateUntil>now()){sub.previous=previous.previous;sub.rotateUntil=previous.rotateUntil;}}
@@ -98,7 +98,7 @@ export async function unsubscribeEvents(env,caller,params){
 /** Dynamic hooks become ordinary durable function deliveries: one queue and retry engine. */
 export async function eventHookSubscriptions(env,cat,options={}){
   const now=options.now??Date.now,definitions=[];let after='';
-  for(;;){const rows=(await env.DB.prepare("SELECT key,value FROM mcp_kv WHERE key LIKE 'mcp-event-hook:%' AND key>?1 ORDER BY key LIMIT 100").bind(after).all()).results;
+  for(;;){const rows=(await env.DB.prepare("SELECT key,value FROM mcp_kv WHERE (key >= 'mcp-event-hook:' AND key < 'mcp-event-hook;') AND key>?1 ORDER BY key LIMIT 100").bind(after).all()).results;
     for(const row of rows){const sub=JSON.parse(row.value);if(sub.expires<=now()){await removeEventHook(env,sub.id);continue;}
       let feed;
       try{feed=await checkEvent(env,cat,await eventCaller(env,sub.connection),{name:sub.name});if(!permittedCallback(env,sub.name,sub.url))throw new EventsError(EVENT_ERRORS.forbidden);if(sub.source!==eventSource(feed))throw new EventsError(EVENT_ERRORS.unsupported,{feature:'payloadSchema',reason:'schema_changed'});}

@@ -153,3 +153,20 @@ test('an expired player cookie does not hide a live invite pass',async t=>{
 test('game-only catalogues never query app notification tables',async()=>{
  await pushAppRecords({DB:{prepare(){assert.fail('no app tables are needed');}},LOBBY:{}},{games:[{id:'race'}]});
 });
+
+test('runtime index upgrade preserves 0.54.0 rows and uses indexed expiry and prefix scans',async t=>{
+ const {DatabaseSync}=await import('node:sqlite');
+ const {readFileSync,readdirSync}=await import('node:fs');
+ const {RUNTIME_INDEX_MIGRATION}=await import('../worker/operational-schema.mjs');
+ const sql=new DatabaseSync(':memory:');t.after(()=>sql.close());
+ const dir=new URL('../../../template/site/migrations/',import.meta.url);
+ for(const file of readdirSync(dir).filter(f=>f<'0034').sort())sql.exec(readFileSync(new URL(file,dir),'utf8'));
+ sql.exec("INSERT INTO mcp_kv VALUES('client:kept','old connection',NULL),('event-sub:c:feed','{}',123)");
+ const before=sql.prepare('SELECT * FROM mcp_kv ORDER BY key').all();
+ sql.exec(RUNTIME_INDEX_MIGRATION);
+ assert.deepEqual(sql.prepare('SELECT * FROM mcp_kv ORDER BY key').all(),before);
+ for(const query of ["SELECT * FROM mcp_kv WHERE expires IS NOT NULL AND expires<123", "SELECT * FROM mcp_kv WHERE key>='event-sub:' AND key<'event-sub;' ORDER BY key"]){
+  const plan=sql.prepare('EXPLAIN QUERY PLAN '+query).all().map(r=>r.detail).join(' ');
+  assert.match(plan,/SEARCH.*USING INDEX/);assert.doesNotMatch(plan,/SCAN mcp_kv/);
+ }
+});
