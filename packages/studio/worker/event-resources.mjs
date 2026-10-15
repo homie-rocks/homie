@@ -28,7 +28,7 @@ export async function readableFeed(env,cat,caller,name) {
 export async function feedEvents(env,name,{after=0,through=Number.MAX_SAFE_INTEGER,caller}={}) {
   const feed=eventFeeds(env)[name];if(!feed)return [];
   const scopedApp=env.HOMIE_LOCAL_TEST_SECRET&&caller?.localTest&&caller.testScope&&feed.event==='record.changed'?`${feed.app}:check:${caller.testScope}`:null;
-  const rows=(await env.DB.prepare("SELECT seq,id,type,data,at FROM studio_events WHERE type=?1 AND seq>?2 AND seq<=?3 AND (?4 IS NULL OR json_extract(data,'$.app')=?4) ORDER BY seq LIMIT 100").bind(feed.event,after,through,scopedApp).all()).results;
+  const rows=(await env.DB.prepare("SELECT seq,id,type,data,at FROM studio_events WHERE type=?1 AND seq>?2 AND seq<=?3 AND scope IS ?5 AND (?4 IS NULL OR json_extract(data,'$.app')=?4) ORDER BY seq LIMIT 100").bind(feed.event,after,through,scopedApp,feed.event==='record.changed'?null:caller?.testScope??null).all()).results;
   const events=rows.map(r=>({...r,data:JSON.parse(r.data)}));
   if(env.HOMIE_LOCAL_TEST_SECRET && caller?.localTest && caller.testScope && feed.event==='record.changed') {
     const app=`${feed.app}:check:${caller.testScope}`;

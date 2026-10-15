@@ -1,0 +1,29 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+import {Miniflare} from 'miniflare';
+import {readFileSync,readdirSync} from 'node:fs';
+test('real Lobby streams push tool-created records to two clients without a rules room',{timeout:30000},async t=>{
+ const meta={id:'place',kind:'app',roles:{customer:{can:['read:spots','create:spots']}},surfaces:{phone:'customer'},records:{persist:true,collections:{spots:{fields:{name:{type:'string'}}}}}};
+ const bundled=await build({stdin:{resolveDir:new URL('../worker/',import.meta.url).pathname,contents:`
+ import worker,{useTools} from './index.mjs';export {Lobby} from './index.mjs';
+ useTools(async()=>[{name:'reserve',audience:'public',description:'Reserve',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false},handler:({id},ctx)=>ctx.records({app:'place',role:'customer',collection:'spots',id,operation:'create',data:{name:'Ada'}})}]);
+ export default {fetch(request,env,ctx){env.ASSETS={fetch:async()=>Response.json({studio:{name:'Place'},games:[${JSON.stringify(meta)}]})};return worker.fetch(request,env,ctx);}};
+ `},bundle:true,write:false,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*']});
+ const mf=new Miniflare({telemetry:{enabled:false},workers:[{config:{name:'live',compatibilityDate:'2026-10-07',compatibilityFlags:['nodejs_compat'],manifest:{mainModule:'entry.mjs',modules:{'entry.mjs':{type:'esm',contents:bundled.outputFiles[0].text}}},exports:{Lobby:{type:'durable-object',storage:'sqlite'}},env:{DB:{type:'d1',id:'live'},LOBBY:{type:'durable-object',worker:'live',exportName:'Lobby'}}}}]});t.after(()=>mf.dispose());
+ const DB=await mf.getD1Database('DB'),dir=new URL('../../../template/site/migrations/',import.meta.url);
+ for(const file of readdirSync(dir).sort())for(const sql of readFileSync(new URL(file,dir),'utf8').replace(/^--.*$/gm,'').match(/\s*CREATE TRIGGER[\s\S]*?END;|[^;]+;/g)??[])if(sql.trim())await DB.prepare(sql).run();
+ const origin=(await mf.ready).origin;
+ const open=async()=>{const abort=new AbortController();t.after(()=>abort.abort());const res=await fetch(origin+'/place/api/app/live?collection=spots',{signal:abort.signal});assert.equal(res.status,200);return res.body.getReader();};
+ const a=await open();assert.match(new TextDecoder().decode((await a.read()).value),/"reset":true/);
+ const b=await open();assert.match(new TextDecoder().decode((await b.read()).value),/"presence":2/);
+ const waitChange=async reader=>{
+  for(;;){const {done,value}=await reader.read();assert.equal(done,false);const text=new TextDecoder().decode(value);if(text.includes('"collections":["spots"]')&&!text.includes('"reset":true'))return;}
+ };
+ const changed=Promise.all([waitChange(a),waitChange(b)]);
+ const response=await fetch(origin+'/place/api/app/tools',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({name:'reserve',input:{id:'one'}})});
+ assert.equal(response.status,200,await response.text());
+ let timer;try{await Promise.race([changed,new Promise((_,reject)=>timer=setTimeout(()=>reject(new Error('push did not arrive before the recovery heartbeat')),4000))]);}finally{clearTimeout(timer);}
+ const rows=await (await fetch(origin+'/place/api/app/records/spots')).json();assert.equal(rows.records[0].data.name,'Ada');
+ await a.cancel();await b.cancel();
+});

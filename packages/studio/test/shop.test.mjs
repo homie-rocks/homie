@@ -2595,8 +2595,8 @@ test('browser pairing: missing CLI, permission failure, and hostile continuation
   const h = await pairingHarness('pairing-errors');
   const managed = await shopConnect(h.dir, { ...h.opts, managed: true });
   assert.equal(managed.needs, 'shop-settings', 'a seller flag is not silently ignored');
-  const missing = await shopConnect(h.dir, { ...h.opts, exec: async () => ({ code: 1, missing: true }) });
-  assert.equal(missing.needs, 'stripe-cli'); assert.deepEqual(missing.next, ['npm install -g @stripe/cli@latest']);
+  const missing = await shopConnect(h.dir, { ...h.opts, installExec: async () => ({code:1}), exec: async () => ({ code: 1, missing: true }) });
+  assert.equal(missing.needs, 'stripe-cli'); assert.deepEqual(missing.next, ['npm install --global @stripe/cli@latest']);
   assert.equal(completionArgs("stripe login --complete 'https://evil.example/x'"), null);
   assert.equal(completionArgs('stripe login --complete-device; echo token'), null);
   assert.deepEqual(completionArgs("stripe login --complete 'https://dashboard.stripe.com/stripecli/auth/a'"), ['login', '--complete', 'https://dashboard.stripe.com/stripecli/auth/a']);

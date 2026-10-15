@@ -1,3 +1,4 @@
+import {placeUpgradeChanges} from './upgrade-places.mjs';
 import { upgradeMediaGuidance } from './upgrade-media.mjs';
 import {appPresetChanges} from './upgrade-app-presets.mjs';
 import {refreshWorkerConfig} from './worker-config.mjs';
@@ -176,7 +177,7 @@ export function upgradePlan(root, { history = readHistory() } = {}) {
   const who = { name, slug };
   const tmpl = studioFiles({ name, slug, homie: studio.homie?.directory ?? 'https://homie.rocks' });
   const { files: oldFiles, secs: oldSecs } = known(history, who);
-  const changes = appPresetChanges(root);
+  const changes = [...appPresetChanges(root),...placeUpgradeChanges(root)];
   const kept = [];
 
   // package.json: the pin, and the scripts the template's studios have.

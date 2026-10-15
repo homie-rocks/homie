@@ -1,5 +1,6 @@
 import {appGraphicsFallback} from './app-graphics.mjs';
 import {JOIN_AREA_FRAME_JS} from './join-area.mjs';
+import {loadShopLinks} from './shop-links.mjs';
 import { directoryUrl } from './directory-choice.mjs';
 import {APP_STORAGE_JS} from './app-frame.mjs';
 import {recordsPage} from './records-page.mjs';
@@ -621,6 +622,7 @@ async function removeReferralLeftovers(env) {
 
 export default {
   async scheduled(event, env, ctx) {
+    env=await loadShopLinks(env);
     const maintenance=(async () => {
       await removeReferralLeftovers(env);
       const cat = await catalogue(env, 'https://studio.invalid');
@@ -632,6 +634,7 @@ export default {
     await maintenance;
   },
   async fetch(request, env, ctx) {
+    env=await loadShopLinks(env,new URL(request.url).origin);
     await removeReferralLeftovers(env);
     const url = new URL(request.url);
     await (await import('./functions.mjs')).syncFunctions(env);
@@ -947,6 +950,12 @@ async function route(request, env, ctx) {
     const max = seatsFor(meta, settings);
     if (meta.kind === 'app') {
       if (launch !== 'public' && !(await accessOf(request, env, game, launch)).ok) return json({ ok: false, error: 'not-found' }, 404);
+      if(sub==='api/app/live') {
+        if(request.method!=='GET')return new Response('GET required',{status:405});
+        const {appHub}=await import('./app-streams.mjs');
+        return appHub(env,meta.id).fetch('https://app/__app_records',{method:'POST',body:JSON.stringify({op:'open',meta,url:request.url,headers:Object.fromEntries(request.headers),collections:url.searchParams.getAll('collection')})});
+      }
+      if(sub==='api/app/tools')return (await import('./app-tools.mjs')).appToolsRoute(request,env,meta,url,cat,await studioTools());
       const api = await appRecordsRoute(request, env, meta, url, sub);
       if (api) return api;
       if (['play', 'tv', 'watch'].includes(sub)) {
@@ -956,7 +965,7 @@ async function route(request, env, ctx) {
           if (a.status === 401) return Response.redirect(`${url.origin}/account/?next=${encodeURIComponent(url.pathname + url.search)}`, 302);
           return json({ ok: false, error: a.error }, a.status);
         }
-        if(!meta.room)return recordsPage(meta,url,cat,await availableShellShop(env,cat,game));
+        if(!meta.room)return recordsPage(meta,url,cat,await availableShellShop(env,cat,game),Boolean(await (await import('./local-test.mjs')).localSession(request,env)));
       }
     }
     const lobby = () => env.LOBBY.get(env.LOBBY.idFromName(game));
@@ -1101,11 +1110,11 @@ async function route(request, env, ctx) {
         const sh = await availableShellShop(env, cat, game, { kids: pol.kids });
         let shopQr = null;
         if (sh && !local) try { shopQr = qrSvg(`${url.origin}/shop/?game=${encodeURIComponent(game)}`, { title: `Shop: ${meta.name ?? game}` }); } catch { shopQr = null; }
-        return playPage(cat, meta, { origin: url.origin, screen: true, joinUrl, qr, local, room, ticket, owner: d.owner, launch, server, shop: sh ? { ...sh, qr: shopQr, url: `${url.origin}/shop/?game=${game}` } : null });
+        return playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, screen: true, joinUrl, qr, local, room, ticket, owner: d.owner, launch, server, shop: sh ? { ...sh, qr: shopQr, url: `${url.origin}/shop/?game=${game}` } : null });
       }
       await countVisit(request, env, ctx, game, 'play');
       shareDaily(cat, url, ctx);
-      const page=playPage(cat, meta, { origin: url.origin, embed, preview: env.HOMIE_EMBED_PREVIEW === '1', ticket: embed ? null : ticket, owner: !embed && d.owner, launch, server, ...(embed ? {} : await chatWho(env, game, srv, d.acct)), shop: await availableShellShop(env, cat, game, { kids: pol.kids }) });
+      const page=playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, embed, preview: env.HOMIE_EMBED_PREVIEW === '1', ticket: embed ? null : ticket, owner: !embed && d.owner, launch, server, ...(embed ? {} : await chatWho(env, game, srv, d.acct)), shop: await availableShellShop(env, cat, game, { kids: pol.kids }) });
       for(const cookie of recordsGuest?.cookies??[])page.headers.append('set-cookie',cookie);return page;
     }
     if (sub === 'watch') {
@@ -1123,7 +1132,7 @@ async function route(request, env, ctx) {
       const ticket = d.holder ? await ticketFor(env, game, d.holder) : null;
       await countVisit(request, env, ctx, game, 'watch');
       shareDaily(cat, url, ctx);
-      return watchPage(cat, meta, { origin: url.origin, room: asked, ticket, policy, owner: d.owner, ...(await chatWho(env, game, srv, d.acct)) });
+      return watchPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, room: asked, ticket, policy, owner: d.owner, ...(await chatWho(env, game, srv, d.acct)) });
     }
     if (sub === 'api/watch') {
       if (!door.ok || watchOf(meta) === 'off') return json({ ok: false, error: 'not-found' }, 404);
@@ -2604,6 +2613,12 @@ export class Lobby {
 
   /** A request that throws is said with what it was (never its body) and answered as a failure, not left uncaught. */
   async fetch(request) {
+    if(new URL(request.url).pathname==='/__app_records') {
+      const {AppRecordStreams}=await import('./app-streams.mjs');
+      this.appStreams??=new AppRecordStreams(this.env,this.ctx);
+      const input=await request.json();
+      return input.op==='open'?this.appStreams.open(input):this.appStreams.wake(input.meta);
+    }
     if(new URL(request.url).pathname==='/__studio_events') {
       const {EventStreams}=await import('./event-resources.mjs');
       this.eventStreams??=new EventStreams(this.env,this.ctx);

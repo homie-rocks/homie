@@ -6,6 +6,14 @@ export interface ToolContext {
   records(args: { app: string; role?: string; collection: string; id?: string; operation?: 'read' | 'create' | 'update' | 'delete'; data?: Record<string, unknown>; version?: number }): Promise<unknown>;
   office(path: string, body?: Record<string, unknown>, query?: Record<string, string>): Promise<unknown>;
   shop(): Promise<unknown>;
+  bookings: {
+    hold(args: {app: string; collection: string; slot: string; quantity?: number; id: string; token?: string; expiresAt: number}): Promise<BookingHold>;
+    get(args: {id: string; token?: string}): Promise<BookingHold>;
+    confirm(args: {id: string; token?: string; version: number}): Promise<BookingHold>;
+    release(args: {id: string; token?: string; version: number}): Promise<BookingHold>;
+    releaseExpired(args: {app: string; collection: string; now?: number}): Promise<{released: number}>;
+  };
+  events: { publish(event: {feed: string; id: string; data: unknown}): Promise<{id: string}> };
   rooms: { send(event: {game: string; room: string; event: string; data: unknown}): Promise<unknown> };
   database: {
     get(key: string): Promise<unknown>;
@@ -32,7 +40,11 @@ export interface StudioTool<Input = Record<string, unknown>> {
   namespace?: string;
   /** A named HMAC secret delegates this one tool as an existing account. */
   webhook?: { secret: string; person: string };
+  /** Named business feeds this trusted definition may publish. */
+  publish?: string[];
   events?: Record<string, {game: string; schema: Record<string, unknown>; audience?: Audience}>;
   handler(input: Input, context: ToolContext): unknown | Promise<unknown>;
 }
 export function defineTool<Input = Record<string, unknown>>(tool: StudioTool<Input>): StudioTool<Input> { return tool; }
+
+export interface BookingHold { id: string; slot: string; quantity: number; state: string; version: number; expiresAt: number | null; paid: boolean }

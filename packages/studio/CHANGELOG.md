@@ -17,6 +17,38 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.52.0] - 2026-10-15
+
+**Plugin 0.52.0**
+
+Run your place with trusted actions across screens and AI, live business records, shared booking capacity and stronger proofs that it works for your customers.
+
+### Added
+
+- **One trusted action from any screen or AI:** App screens call the same studio tools as MCP through `createAppTools`, with strict input schemas, server role checks and versioned writes.
+- **Screens that stay in step:** Live record subscriptions and presence use the existing Lobby without polling or a dummy game room. Supported app context supplies your public address and a local proof clock; isolated proofs stay separate.
+- **Business events with useful history:** Record changes include the previous value. Trusted functions publish schema-checked business feeds with durable receipts that prevent duplicate events.
+- **Bookings that share one capacity:** App holds and Stripe session checkout use the same capacity row, including group quantities, ownership, version checks and scheduled release. Confirmations distinguish unpaid reservations from verified payments.
+- **Proofs for difficult situations:** Needs can force disabled clicks to check server refusals, race actions from separate browsers, restart local development and reload without WebGL.
+- **Time at your place:** IANA time zones support local scheduling and explicitly reject nonexistent or ambiguous wall times around clock changes.
+
+### Fixed
+
+- **Shops that survive upgrades:** Matching 0.51.6 Stripe plugin verifications remain valid; real shop, slot or site changes explain what needs verification. Unfinished setup still builds and deploys with checkout closed and a clear next step.
+- **Room for your whole catalogue:** Verified public links ship as a JSON asset instead of a size-limited Worker text binding, including catalogues with more than 100 links. Missing assets keep checkout closed.
+- **Faster Stripe setup and replanning:** Saved public observations avoid repeated discovery. Explicit refresh paginates expanded Payment Link lists, refreshes changed links and preserves verification freshness. Private webhook setup installs Stripe's official npm CLI automatically when missing, then continues to browser approval.
+
+### Changed
+
+- **Guides grounded in six real builds:** App and game guides include place patterns, security alternatives and small examples that compile against the toolkit.
+- **Cleaner upgrades:** Recognized polling workarounds and exact obsolete capability notes are retired; custom business logic remains available for review.
+
+### Upgrade notes
+
+- Apply migrations `0027_app_live.sql`, `0028_business_events.sql` and `0029_booking_holds.sql` in order.
+- Replace refresh timers with record subscriptions, and private origin, peer and clock reads with `createAppContext`.
+- Shared local booking holds require Stripe session checkout. Keyless Payment Links cannot claim those holds and are explicitly refused.
+
 ## [0.51.8] - 2026-10-15
 
 **Plugin 0.51.8**

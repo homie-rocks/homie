@@ -1,3 +1,4 @@
+import {claimHoldStatement,ownedHold} from './booking-holds.mjs';
 import { stripeEventOwner } from './stripe-ownership.mjs';
 import { localSession } from './local-test.mjs';
 import { bindSubscription, subscriptionEvent, subscriptionPortal } from './shop-subscriptions.mjs';
@@ -154,7 +155,7 @@ export async function readiness(env, shop) {
   let migration = null;
   if (!env?.DB) missing.push('database');
   else if ((migration = await migrationNeeded(env))) missing.push('migration');
-  return { ready: missing.length === 0, missing, next: missing.length ? MISSING_WORDS[missing[0]] : null, migration, mode: paidItems ? shopMode(env) : null };
+  return { ready: missing.length === 0, missing, next: missing.length ? (missing[0]==='payment-links' && env.STRIPE_SHOP_SETUP || MISSING_WORDS[missing[0]]) : null, migration, mode: paidItems ? shopMode(env) : null };
 }
 
 export const MISSING_WORDS = Object.freeze({
@@ -516,6 +517,7 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
   lines ??= [{ item, amount, quantity: 1 }];
   const keyless = (amount > 0 || lines.some(l => l.item.interval)) && !hasStripeKey(env);
   const config=linkConfig(env);
+  if(booking?.hold&&keyless)return {error:fail(409,'booking','A held slot needs session checkout; keyless payment links cannot claim it.')};
   if(booking && amount===0 && !hasStripeKey(env) && config?.slots?.some(l=>l.app===game&&l.slots===booking.slots&&l.slot===booking.slot))return {error:fail(409,'booking','Publish a separate local slot for a free booking; it cannot share a paid Stripe capacity budget.')};
   const menu=keyless && !booking && lines.length>0 ? config?.menus?.find(m=>(m.basket || lines.length>1)&&lines.every(l=>m.items.some(i=>i.item===l.item.id))) : null;
   const link=keyless ? booking ? config?.slots?.find(l=>l.app===game&&l.collection===booking.collection&&l.slots===booking.slots&&l.slot===booking.slot&&l.item===item.id) : menu ?? config?.items.find(l=>l.item===item.id) : null;
@@ -546,7 +548,7 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
   lines = lines.map((line, i) => ({ ...line, id: `${order.id}_${i}` }));
   const reserve = async () => {
     const results = await env.DB.batch([reservation(),
-      ...(booking ? [bookingStatement(env, { ...booking, pending: keyless, id: order.id, app: booking.app ?? game, order: order.id })] : []),
+      ...(booking ? [booking.hold?claimHoldStatement(env,{...booking,order:order.id}):bookingStatement(env, { ...booking, pending: keyless, id: order.id, app: booking.app ?? game, order: order.id })] : []),
       ...(reference === null ? [] : [env.DB.prepare("INSERT INTO meta(key,value) SELECT ?1,?2 WHERE EXISTS (SELECT 1 FROM shop_orders WHERE id=?3)").bind(`shop-reference:${order.id}`, reference, order.id)]),
       ...(menu ? [env.DB.prepare('INSERT INTO meta(key,value) VALUES(?1,?2)').bind(`shop-menu:${order.id}`,JSON.stringify(lines))] : []),
       ...lines.map((line, i) => env.DB.prepare("INSERT INTO shop_order_lines (id, order_id, position, item, quantity, unit_amount, amount, snapshot) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8 WHERE EXISTS (SELECT 1 FROM shop_orders WHERE id = ?2)")
@@ -558,7 +560,7 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
   await reconcileOrders(env, shop, player.id, { expireOpen: true, before: Math.min(requestAt, now - 60000) });
   let reserved;
   try { reserved = await reserve(); } catch (error) {
-    if (/booking capacity unavailable/.test(error.message)) return { error: fail(409, 'capacity', 'That slot is full. Choose another slot.') };
+    if (/booking capacity unavailable|booking hold changed or expired/.test(error.message)) return { error: fail(409, 'capacity', 'That slot is full. Choose another slot.') };
     throw error;
   }
   const reconciled = !reserved.meta?.changes;
@@ -679,9 +681,17 @@ async function buyRoute(request, env, url, cat, shop, ready, ctx, requestAt) {
     if (!spec || !/^[A-Za-z0-9_-]{1,64}$/.test(requestedBooking?.slot ?? '') || lines.length !== 1 || item.id !== spec.item || item.interval) return fail(400, 'booking', 'Choose a declared booking slot and its service item.');
     const local = await localSession(request, env);
     booking = { app: local?.app === game && local.scope ? `${game}:check:${local.scope}` : game, collection, slots: spec.slots, slot: requestedBooking.slot, quantity: lines[0].quantity };
+    if(requestedBooking.hold!==undefined){
+      try {
+        const caller=local?.app===game?{id:`local-test-${local.app}-${local.role}`,testScope:local.scope}:{id:player.guest?null:player.id};
+        const hold=await ownedHold(env,caller,{id:requestedBooking.hold,token:requestedBooking.token});
+        if(hold.app!==booking.app||hold.collection!==collection||hold.slot!==booking.slot||hold.quantity!==booking.quantity||hold.order_id!=='hold:'+hold.id||!['held','confirmed'].includes(hold.state)||(hold.state==='held'&&hold.hold_until<=Date.now()))return fail(409,'booking','Hold changed or expired; reload.');
+        booking.hold=hold.id;
+      }catch{return fail(403,'booking','Booking owner required');}
+    }
   }
   const r = await startCheckout(env, url, cat, shop, item, { player, game, amount, lines, reference, booking, requestAt });
-  const response = r.error ?? json({ ok: true, order: r.order.id, url: r.url, ...(booking ? { booking: r.order.id } : {}) });
+  const response = r.error ?? json({ ok: true, order: r.order.id, url: r.url, ...(booking ? { booking: booking.hold??r.order.id } : {}) });
   if (!r.error && !r.reconciled && ctx?.waitUntil) ctx.waitUntil(reconcileOrders(env, shop, player.id).catch((error) => logOrderError(env, r.order.id, error)));
   for (const cookie of cookies) response.headers.append('set-cookie', cookie);
   return response;

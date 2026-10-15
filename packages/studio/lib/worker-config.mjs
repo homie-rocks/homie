@@ -1,4 +1,4 @@
-import {verifiedMcpConfig} from './shop-mcp.mjs';
+import {verifiedMcpConfig,publicMcpSetup} from './shop-mcp.mjs';
 import {readFileSync,writeFileSync,existsSync,renameSync} from 'node:fs';
 import {join} from 'node:path';
 import {configPath,readStudio,layoutOf,listExperiences} from './studio.mjs';
@@ -27,8 +27,11 @@ export function updateWorkerConfig(root,generated) {
     writeFileSync(join(root,'wrangler.custom.json'),JSON.stringify(custom,null,2)+'\n');
   }
   const next=merge(base,custom);
-  const verified=verifiedMcpConfig(root);
-  if(verified)next.vars={...next.vars,STRIPE_CHECKOUT_MODE:'links',STRIPE_SHOP_LINKS:JSON.stringify(verified.result.config)};
+  verifiedMcpConfig(root);
+  if(publicMcpSetup(root)) {
+    next.vars={...next.vars,STRIPE_CHECKOUT_MODE:'links',STRIPE_SHOP_LINKS_ASSET:'/_site/stripe-shop-links.json'};
+    delete next.vars.STRIPE_SHOP_LINKS;
+  }
   // Crons are additive: studio-owned entries cannot erase required toolkit ticks.
   const crons=[...new Set([...(base.triggers?.crons??[]),...(custom.triggers?.crons??[])])].sort();
   next.triggers={...next.triggers,crons}; // [] explicitly removes old generated triggers in Wrangler.

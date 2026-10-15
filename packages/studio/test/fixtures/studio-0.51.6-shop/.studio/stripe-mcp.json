@@ -1,0 +1,2638 @@
+{
+  "options": {
+    "slots": [
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time0",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time1",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time2",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time3",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time4",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time5",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time6",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time7",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time8",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time9",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time10",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time11",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time12",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time13",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time14",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time15",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time16",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time17",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time18",
+        "item": "round",
+        "capacity": 4
+      },
+      {
+        "app": "golf",
+        "collection": "bookings",
+        "slots": "times",
+        "slot": "time19",
+        "item": "round",
+        "capacity": 4
+      }
+    ],
+    "observations": [
+      {
+        "method": "GET",
+        "path": "/v1/products",
+        "params": {
+          "limit": 100
+        },
+        "body": {
+          "data": [
+            {
+              "id": "homie_golf_round",
+              "active": true,
+              "livemode": false,
+              "name": "Golf round",
+              "description": "",
+              "tax_code": "txcd_10201000",
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example"
+              },
+              "default_price": "price_1"
+            },
+            {
+              "id": "homie_golf_lunch",
+              "active": true,
+              "livemode": false,
+              "name": "Lunch",
+              "description": "",
+              "tax_code": "txcd_10201000",
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example"
+              },
+              "default_price": "price_3"
+            }
+          ],
+          "has_more": false
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/prices",
+        "params": {
+          "limit": 100
+        },
+        "body": {
+          "data": [
+            {
+              "id": "price_1",
+              "active": true,
+              "livemode": false,
+              "product": "homie_golf_round",
+              "currency": "usd",
+              "tax_behavior": "exclusive",
+              "unit_amount": 4000,
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "revision": "410c88a6ce7fc0e0d3dfff8a731cd33221c86c62d0ae5c9636382c6f6a534fbd"
+              }
+            },
+            {
+              "id": "price_3",
+              "active": true,
+              "livemode": false,
+              "product": "homie_golf_lunch",
+              "currency": "usd",
+              "tax_behavior": "exclusive",
+              "unit_amount": 1500,
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "revision": "34c8647a19210312f664c525a35ef40e5303cc9f1bdc448131d95a9312529541"
+              }
+            }
+          ],
+          "has_more": false
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links",
+        "params": {
+          "limit": 100
+        },
+        "body": {
+          "data": [
+            {
+              "id": "plink_2",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1,
+                  "adjustable_quantity": {
+                    "enabled": true,
+                    "minimum": 1,
+                    "maximum": 999999
+                  }
+                }
+              ],
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "automatic_tax": {
+                "enabled": false
+              },
+              "payment_intent_data": {
+                "metadata": {
+                  "homie": "shop-links-v1",
+                  "studio": "golf",
+                  "origin": "https://golf.example"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "revision": "25a31ed93bec6eafb39ae19e4f8909746df576dbcc84957fa82d6c1cedb2ae51"
+              },
+              "url": "https://buy.stripe.com/test_plink_2"
+            },
+            {
+              "id": "plink_4",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_3",
+                  "quantity": 1,
+                  "adjustable_quantity": {
+                    "enabled": true,
+                    "minimum": 1,
+                    "maximum": 999999
+                  }
+                }
+              ],
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "automatic_tax": {
+                "enabled": false
+              },
+              "payment_intent_data": {
+                "metadata": {
+                  "homie": "shop-links-v1",
+                  "studio": "golf",
+                  "origin": "https://golf.example"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "revision": "6cb593e903761e1180535708bf9081cc2344a4a7837c5908adb55e290dfb93a8"
+              },
+              "url": "https://buy.stripe.com/test_plink_4"
+            },
+            {
+              "id": "plink_5",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1,
+                  "adjustable_quantity": {
+                    "enabled": true,
+                    "minimum": 0,
+                    "maximum": 999999
+                  }
+                },
+                {
+                  "price": "price_3",
+                  "quantity": 1,
+                  "adjustable_quantity": {
+                    "enabled": true,
+                    "minimum": 0,
+                    "maximum": 999999
+                  }
+                }
+              ],
+              "invoice_creation": {
+                "enabled": true,
+                "invoice_data": {
+                  "metadata": {
+                    "homie": "shop-links-v1",
+                    "studio": "golf",
+                    "origin": "https://golf.example"
+                  }
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "automatic_tax": {
+                "enabled": false
+              },
+              "payment_intent_data": {
+                "metadata": {
+                  "homie": "shop-links-v1",
+                  "studio": "golf",
+                  "origin": "https://golf.example"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "revision": "061da2ba11b81a54ff8bc6b0841657d0ec55bccb90a386e7257b43811ccf3f7a"
+              },
+              "url": "https://buy.stripe.com/test_plink_5"
+            },
+            {
+              "id": "plink_6",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "e79d5e5db3c6a34cfe157bcf4da457e6465d34c370cd2dbcffdb3834e966ecd5",
+                "revision": "e79d5e5db3c6a34cfe157bcf4da457e6465d34c370cd2dbcffdb3834e966ecd5",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_6"
+            },
+            {
+              "id": "plink_7",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "b816a25cb93ac5bfdf130236809f8fb88c8b193979d74f0cdd55e7c32cc4c02b",
+                "revision": "b816a25cb93ac5bfdf130236809f8fb88c8b193979d74f0cdd55e7c32cc4c02b",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_7"
+            },
+            {
+              "id": "plink_8",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "4e17cdf4786d7d5ec0c436bae86f8fbed4e769e0b7a63420c5e429ec33288e51",
+                "revision": "4e17cdf4786d7d5ec0c436bae86f8fbed4e769e0b7a63420c5e429ec33288e51",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_8"
+            },
+            {
+              "id": "plink_9",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "e3bda0793539a188d112d18f01d38c692de501b11ed062c9b5c1af11693ba589",
+                "revision": "e3bda0793539a188d112d18f01d38c692de501b11ed062c9b5c1af11693ba589",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_9"
+            },
+            {
+              "id": "plink_10",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "9c8b79d25aa9c047da247f4fdd13c1f2ce6a7a4c739359562f61132cd89b9dc3",
+                "revision": "9c8b79d25aa9c047da247f4fdd13c1f2ce6a7a4c739359562f61132cd89b9dc3",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_10"
+            },
+            {
+              "id": "plink_11",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "ab3f86244516bdea29c41c022d73e46b2911eeda457df8f3f61aa0ffb416543f",
+                "revision": "ab3f86244516bdea29c41c022d73e46b2911eeda457df8f3f61aa0ffb416543f",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_11"
+            },
+            {
+              "id": "plink_12",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "a1997084faac5950231638ac51fd8d420d97b0d925fe5947dfc903a386163867",
+                "revision": "a1997084faac5950231638ac51fd8d420d97b0d925fe5947dfc903a386163867",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_12"
+            },
+            {
+              "id": "plink_13",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "97cad7ff4a7f76da40e062b9dc3a896db2ef47978586528b10b9106cf4081b35",
+                "revision": "97cad7ff4a7f76da40e062b9dc3a896db2ef47978586528b10b9106cf4081b35",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_13"
+            },
+            {
+              "id": "plink_14",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "902e735cfad7eace69d8018bad1dd8defc1ff5ac0acd3c256fb3a13babcecc89",
+                "revision": "902e735cfad7eace69d8018bad1dd8defc1ff5ac0acd3c256fb3a13babcecc89",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_14"
+            },
+            {
+              "id": "plink_15",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "c1ec83fd21d58ab2d244f6f2fcad2c337daa3025e2d6e1776f522c6fa75b13d8",
+                "revision": "c1ec83fd21d58ab2d244f6f2fcad2c337daa3025e2d6e1776f522c6fa75b13d8",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_15"
+            },
+            {
+              "id": "plink_16",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "253cfed6d320eb9f2aee085a310271c84741af16e0e96078a5840336b90801db",
+                "revision": "253cfed6d320eb9f2aee085a310271c84741af16e0e96078a5840336b90801db",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_16"
+            },
+            {
+              "id": "plink_17",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "18f46547b13cb19df172bf8ec2fc765b7d10b13c23e47438b48a32597996f26e",
+                "revision": "18f46547b13cb19df172bf8ec2fc765b7d10b13c23e47438b48a32597996f26e",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_17"
+            },
+            {
+              "id": "plink_18",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "64ed023f0ab96feef9d14ae8afdf901e733fc7dddc654e7f82b19c020a791290",
+                "revision": "64ed023f0ab96feef9d14ae8afdf901e733fc7dddc654e7f82b19c020a791290",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_18"
+            },
+            {
+              "id": "plink_19",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "0773fbcb3d8db1fc210086bae48594cb20b18b2c46565ba7169b4831a01797ba",
+                "revision": "0773fbcb3d8db1fc210086bae48594cb20b18b2c46565ba7169b4831a01797ba",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_19"
+            },
+            {
+              "id": "plink_20",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "11395791faf7802dc307ede1b03caa44e54b82236e026a4d1bb9ce6b8523ce58",
+                "revision": "11395791faf7802dc307ede1b03caa44e54b82236e026a4d1bb9ce6b8523ce58",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_20"
+            },
+            {
+              "id": "plink_21",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "e6ac927db7252f85fab81649b9a771a62dee6c2df37588a79542e1e9e4214eda",
+                "revision": "e6ac927db7252f85fab81649b9a771a62dee6c2df37588a79542e1e9e4214eda",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_21"
+            },
+            {
+              "id": "plink_22",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "50652fea0f5ec10eb7704908f77bcd3991999a0e52b75ee8ebe4d6eb8fdee62b",
+                "revision": "50652fea0f5ec10eb7704908f77bcd3991999a0e52b75ee8ebe4d6eb8fdee62b",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_22"
+            },
+            {
+              "id": "plink_23",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "ba6a9c3a4472105763562fcd6b803f25370fa12162af9f301c0896d01f90a58d",
+                "revision": "ba6a9c3a4472105763562fcd6b803f25370fa12162af9f301c0896d01f90a58d",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_23"
+            },
+            {
+              "id": "plink_24",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "0efd8da871182a6a1be835d592eb7c349003380f2f501480251fd5e0ef27dab1",
+                "revision": "0efd8da871182a6a1be835d592eb7c349003380f2f501480251fd5e0ef27dab1",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_24"
+            },
+            {
+              "id": "plink_25",
+              "active": true,
+              "livemode": false,
+              "line_items": [
+                {
+                  "price": "price_1",
+                  "quantity": 1
+                }
+              ],
+              "payment_method_types": [
+                "card"
+              ],
+              "restrictions": {
+                "completed_sessions": {
+                  "limit": 4,
+                  "count": 0
+                }
+              },
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+                }
+              },
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example",
+                "slot": "7523ec0b309f1e48c44564d6e9db961860e3c392ee17ed8c2d9817d2e7143d08",
+                "revision": "7523ec0b309f1e48c44564d6e9db961860e3c392ee17ed8c2d9817d2e7143d08",
+                "price": "price_1"
+              },
+              "url": "https://buy.stripe.com/test_plink_25"
+            }
+          ],
+          "has_more": false
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_2",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_2",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1,
+                "adjustable_quantity": {
+                  "enabled": true,
+                  "minimum": 1,
+                  "maximum": 999999
+                }
+              }
+            ]
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "automatic_tax": {
+            "enabled": false
+          },
+          "payment_intent_data": {
+            "metadata": {
+              "homie": "shop-links-v1",
+              "studio": "golf",
+              "origin": "https://golf.example"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "revision": "25a31ed93bec6eafb39ae19e4f8909746df576dbcc84957fa82d6c1cedb2ae51"
+          },
+          "url": "https://buy.stripe.com/test_plink_2"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_4",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_4",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_3"
+                },
+                "quantity": 1,
+                "adjustable_quantity": {
+                  "enabled": true,
+                  "minimum": 1,
+                  "maximum": 999999
+                }
+              }
+            ]
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "automatic_tax": {
+            "enabled": false
+          },
+          "payment_intent_data": {
+            "metadata": {
+              "homie": "shop-links-v1",
+              "studio": "golf",
+              "origin": "https://golf.example"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "revision": "6cb593e903761e1180535708bf9081cc2344a4a7837c5908adb55e290dfb93a8"
+          },
+          "url": "https://buy.stripe.com/test_plink_4"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_5",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_5",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1,
+                "adjustable_quantity": {
+                  "enabled": true,
+                  "minimum": 0,
+                  "maximum": 999999
+                }
+              },
+              {
+                "price": {
+                  "id": "price_3"
+                },
+                "quantity": 1,
+                "adjustable_quantity": {
+                  "enabled": true,
+                  "minimum": 0,
+                  "maximum": 999999
+                }
+              }
+            ]
+          },
+          "invoice_creation": {
+            "enabled": true,
+            "invoice_data": {
+              "metadata": {
+                "homie": "shop-links-v1",
+                "studio": "golf",
+                "origin": "https://golf.example"
+              }
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "automatic_tax": {
+            "enabled": false
+          },
+          "payment_intent_data": {
+            "metadata": {
+              "homie": "shop-links-v1",
+              "studio": "golf",
+              "origin": "https://golf.example"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "revision": "061da2ba11b81a54ff8bc6b0841657d0ec55bccb90a386e7257b43811ccf3f7a"
+          },
+          "url": "https://buy.stripe.com/test_plink_5"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_6",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_6",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "e79d5e5db3c6a34cfe157bcf4da457e6465d34c370cd2dbcffdb3834e966ecd5",
+            "revision": "e79d5e5db3c6a34cfe157bcf4da457e6465d34c370cd2dbcffdb3834e966ecd5",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_6"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_7",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_7",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "b816a25cb93ac5bfdf130236809f8fb88c8b193979d74f0cdd55e7c32cc4c02b",
+            "revision": "b816a25cb93ac5bfdf130236809f8fb88c8b193979d74f0cdd55e7c32cc4c02b",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_7"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_8",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_8",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "4e17cdf4786d7d5ec0c436bae86f8fbed4e769e0b7a63420c5e429ec33288e51",
+            "revision": "4e17cdf4786d7d5ec0c436bae86f8fbed4e769e0b7a63420c5e429ec33288e51",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_8"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_9",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_9",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "e3bda0793539a188d112d18f01d38c692de501b11ed062c9b5c1af11693ba589",
+            "revision": "e3bda0793539a188d112d18f01d38c692de501b11ed062c9b5c1af11693ba589",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_9"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_10",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_10",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "9c8b79d25aa9c047da247f4fdd13c1f2ce6a7a4c739359562f61132cd89b9dc3",
+            "revision": "9c8b79d25aa9c047da247f4fdd13c1f2ce6a7a4c739359562f61132cd89b9dc3",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_10"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_11",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_11",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "ab3f86244516bdea29c41c022d73e46b2911eeda457df8f3f61aa0ffb416543f",
+            "revision": "ab3f86244516bdea29c41c022d73e46b2911eeda457df8f3f61aa0ffb416543f",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_11"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_12",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_12",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "a1997084faac5950231638ac51fd8d420d97b0d925fe5947dfc903a386163867",
+            "revision": "a1997084faac5950231638ac51fd8d420d97b0d925fe5947dfc903a386163867",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_12"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_13",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_13",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "97cad7ff4a7f76da40e062b9dc3a896db2ef47978586528b10b9106cf4081b35",
+            "revision": "97cad7ff4a7f76da40e062b9dc3a896db2ef47978586528b10b9106cf4081b35",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_13"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_14",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_14",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "902e735cfad7eace69d8018bad1dd8defc1ff5ac0acd3c256fb3a13babcecc89",
+            "revision": "902e735cfad7eace69d8018bad1dd8defc1ff5ac0acd3c256fb3a13babcecc89",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_14"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_15",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_15",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "c1ec83fd21d58ab2d244f6f2fcad2c337daa3025e2d6e1776f522c6fa75b13d8",
+            "revision": "c1ec83fd21d58ab2d244f6f2fcad2c337daa3025e2d6e1776f522c6fa75b13d8",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_15"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_16",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_16",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "253cfed6d320eb9f2aee085a310271c84741af16e0e96078a5840336b90801db",
+            "revision": "253cfed6d320eb9f2aee085a310271c84741af16e0e96078a5840336b90801db",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_16"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_17",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_17",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "18f46547b13cb19df172bf8ec2fc765b7d10b13c23e47438b48a32597996f26e",
+            "revision": "18f46547b13cb19df172bf8ec2fc765b7d10b13c23e47438b48a32597996f26e",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_17"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_18",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_18",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "64ed023f0ab96feef9d14ae8afdf901e733fc7dddc654e7f82b19c020a791290",
+            "revision": "64ed023f0ab96feef9d14ae8afdf901e733fc7dddc654e7f82b19c020a791290",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_18"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_19",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_19",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "0773fbcb3d8db1fc210086bae48594cb20b18b2c46565ba7169b4831a01797ba",
+            "revision": "0773fbcb3d8db1fc210086bae48594cb20b18b2c46565ba7169b4831a01797ba",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_19"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_20",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_20",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "11395791faf7802dc307ede1b03caa44e54b82236e026a4d1bb9ce6b8523ce58",
+            "revision": "11395791faf7802dc307ede1b03caa44e54b82236e026a4d1bb9ce6b8523ce58",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_20"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_21",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_21",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "e6ac927db7252f85fab81649b9a771a62dee6c2df37588a79542e1e9e4214eda",
+            "revision": "e6ac927db7252f85fab81649b9a771a62dee6c2df37588a79542e1e9e4214eda",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_21"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_22",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_22",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "50652fea0f5ec10eb7704908f77bcd3991999a0e52b75ee8ebe4d6eb8fdee62b",
+            "revision": "50652fea0f5ec10eb7704908f77bcd3991999a0e52b75ee8ebe4d6eb8fdee62b",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_22"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_23",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_23",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "ba6a9c3a4472105763562fcd6b803f25370fa12162af9f301c0896d01f90a58d",
+            "revision": "ba6a9c3a4472105763562fcd6b803f25370fa12162af9f301c0896d01f90a58d",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_23"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_24",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_24",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "0efd8da871182a6a1be835d592eb7c349003380f2f501480251fd5e0ef27dab1",
+            "revision": "0efd8da871182a6a1be835d592eb7c349003380f2f501480251fd5e0ef27dab1",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_24"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_25",
+        "params": {
+          "expand": [
+            "line_items"
+          ]
+        },
+        "body": {
+          "id": "plink_25",
+          "active": true,
+          "livemode": false,
+          "line_items": {
+            "data": [
+              {
+                "price": {
+                  "id": "price_1"
+                },
+                "quantity": 1
+              }
+            ]
+          },
+          "payment_method_types": [
+            "card"
+          ],
+          "restrictions": {
+            "completed_sessions": {
+              "limit": 4,
+              "count": 0
+            }
+          },
+          "after_completion": {
+            "type": "redirect",
+            "redirect": {
+              "url": "https://golf.example/shop/thanks?session_id={CHECKOUT_SESSION_ID}"
+            }
+          },
+          "metadata": {
+            "homie": "shop-links-v1",
+            "studio": "golf",
+            "origin": "https://golf.example",
+            "slot": "7523ec0b309f1e48c44564d6e9db961860e3c392ee17ed8c2d9817d2e7143d08",
+            "revision": "7523ec0b309f1e48c44564d6e9db961860e3c392ee17ed8c2d9817d2e7143d08",
+            "price": "price_1"
+          },
+          "url": "https://buy.stripe.com/test_plink_25"
+        }
+      }
+    ],
+    "account": "acct_fixture"
+  },
+  "result": {
+    "command": "shop verify",
+    "mode": "test",
+    "site": "https://golf.example",
+    "apiVersion": "2026-09-30.endive",
+    "webhook": {
+      "method": "POST",
+      "path": "/v1/webhook_endpoints",
+      "private": true,
+      "params": {
+        "url": "https://golf.example/api/shop/hook",
+        "enabled_events": [
+          "payment_link.updated",
+          "invoice.paid",
+          "invoice.payment_failed",
+          "customer.subscription.updated",
+          "customer.subscription.deleted",
+          "checkout.session.completed",
+          "checkout.session.async_payment_succeeded",
+          "checkout.session.async_payment_failed",
+          "checkout.session.expired",
+          "charge.refunded",
+          "refund.created",
+          "refund.updated",
+          "refund.failed",
+          "charge.dispute.created",
+          "charge.dispute.closed"
+        ],
+        "api_version": "2026-09-30.endive",
+        "metadata": {
+          "homie": "shop-v1"
+        },
+        "description": "Studio shop"
+      }
+    },
+    "ok": true,
+    "verified": true,
+    "verifiedAt": "2026-10-15T04:14:29.007Z",
+    "config": {
+      "v": 1,
+      "mode": "test",
+      "settings": "{\"currency\":\"usd\",\"till\":\"stripe\",\"automaticTax\":false,\"policy\":{\"preset\":\"custom\",\"withdrawalAcknowledgement\":false,\"childAge\":13,\"adultAge\":18,\"requireAccount\":false,\"ageQuestion\":false,\"children\":\"allow\",\"teens\":\"allow\",\"kidsStudio\":true,\"kidsServer\":true,\"beginnerAdvantages\":true,\"kidsAdvantages\":true,\"repeatPurchases\":true,\"refundUsedItems\":true,\"televisionCheckout\":true},\"cap\":null,\"checkoutMinutes\":1440,\"items\":[{\"id\":\"round\",\"kind\":\"item\",\"name\":\"Golf round\",\"price\":4000,\"gives\":[],\"advantage\":false},{\"id\":\"lunch\",\"kind\":\"item\",\"name\":\"Lunch\",\"price\":1500,\"gives\":[],\"advantage\":false}]}",
+      "items": [
+        {
+          "item": "round",
+          "id": "plink_2",
+          "url": "https://buy.stripe.com/test_plink_2",
+          "price": "price_1",
+          "revision": "25a31ed93bec6eafb39ae19e4f8909746df576dbcc84957fa82d6c1cedb2ae51"
+        },
+        {
+          "item": "lunch",
+          "id": "plink_4",
+          "url": "https://buy.stripe.com/test_plink_4",
+          "price": "price_3",
+          "revision": "6cb593e903761e1180535708bf9081cc2344a4a7837c5908adb55e290dfb93a8"
+        }
+      ],
+      "menus": [
+        {
+          "id": "plink_5",
+          "url": "https://buy.stripe.com/test_plink_5",
+          "revision": "061da2ba11b81a54ff8bc6b0841657d0ec55bccb90a386e7257b43811ccf3f7a",
+          "items": [
+            {
+              "item": "round",
+              "price": "price_1"
+            },
+            {
+              "item": "lunch",
+              "price": "price_3"
+            }
+          ]
+        }
+      ],
+      "slots": [
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time0",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_6",
+          "url": "https://buy.stripe.com/test_plink_6",
+          "price": "price_1",
+          "revision": "e79d5e5db3c6a34cfe157bcf4da457e6465d34c370cd2dbcffdb3834e966ecd5",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time1",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_7",
+          "url": "https://buy.stripe.com/test_plink_7",
+          "price": "price_1",
+          "revision": "b816a25cb93ac5bfdf130236809f8fb88c8b193979d74f0cdd55e7c32cc4c02b",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time2",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_8",
+          "url": "https://buy.stripe.com/test_plink_8",
+          "price": "price_1",
+          "revision": "4e17cdf4786d7d5ec0c436bae86f8fbed4e769e0b7a63420c5e429ec33288e51",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time3",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_9",
+          "url": "https://buy.stripe.com/test_plink_9",
+          "price": "price_1",
+          "revision": "e3bda0793539a188d112d18f01d38c692de501b11ed062c9b5c1af11693ba589",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time4",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_10",
+          "url": "https://buy.stripe.com/test_plink_10",
+          "price": "price_1",
+          "revision": "9c8b79d25aa9c047da247f4fdd13c1f2ce6a7a4c739359562f61132cd89b9dc3",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time5",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_11",
+          "url": "https://buy.stripe.com/test_plink_11",
+          "price": "price_1",
+          "revision": "ab3f86244516bdea29c41c022d73e46b2911eeda457df8f3f61aa0ffb416543f",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time6",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_12",
+          "url": "https://buy.stripe.com/test_plink_12",
+          "price": "price_1",
+          "revision": "a1997084faac5950231638ac51fd8d420d97b0d925fe5947dfc903a386163867",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time7",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_13",
+          "url": "https://buy.stripe.com/test_plink_13",
+          "price": "price_1",
+          "revision": "97cad7ff4a7f76da40e062b9dc3a896db2ef47978586528b10b9106cf4081b35",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time8",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_14",
+          "url": "https://buy.stripe.com/test_plink_14",
+          "price": "price_1",
+          "revision": "902e735cfad7eace69d8018bad1dd8defc1ff5ac0acd3c256fb3a13babcecc89",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time9",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_15",
+          "url": "https://buy.stripe.com/test_plink_15",
+          "price": "price_1",
+          "revision": "c1ec83fd21d58ab2d244f6f2fcad2c337daa3025e2d6e1776f522c6fa75b13d8",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time10",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_16",
+          "url": "https://buy.stripe.com/test_plink_16",
+          "price": "price_1",
+          "revision": "253cfed6d320eb9f2aee085a310271c84741af16e0e96078a5840336b90801db",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time11",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_17",
+          "url": "https://buy.stripe.com/test_plink_17",
+          "price": "price_1",
+          "revision": "18f46547b13cb19df172bf8ec2fc765b7d10b13c23e47438b48a32597996f26e",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time12",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_18",
+          "url": "https://buy.stripe.com/test_plink_18",
+          "price": "price_1",
+          "revision": "64ed023f0ab96feef9d14ae8afdf901e733fc7dddc654e7f82b19c020a791290",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time13",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_19",
+          "url": "https://buy.stripe.com/test_plink_19",
+          "price": "price_1",
+          "revision": "0773fbcb3d8db1fc210086bae48594cb20b18b2c46565ba7169b4831a01797ba",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time14",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_20",
+          "url": "https://buy.stripe.com/test_plink_20",
+          "price": "price_1",
+          "revision": "11395791faf7802dc307ede1b03caa44e54b82236e026a4d1bb9ce6b8523ce58",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time15",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_21",
+          "url": "https://buy.stripe.com/test_plink_21",
+          "price": "price_1",
+          "revision": "e6ac927db7252f85fab81649b9a771a62dee6c2df37588a79542e1e9e4214eda",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time16",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_22",
+          "url": "https://buy.stripe.com/test_plink_22",
+          "price": "price_1",
+          "revision": "50652fea0f5ec10eb7704908f77bcd3991999a0e52b75ee8ebe4d6eb8fdee62b",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time17",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_23",
+          "url": "https://buy.stripe.com/test_plink_23",
+          "price": "price_1",
+          "revision": "ba6a9c3a4472105763562fcd6b803f25370fa12162af9f301c0896d01f90a58d",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time18",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_24",
+          "url": "https://buy.stripe.com/test_plink_24",
+          "price": "price_1",
+          "revision": "0efd8da871182a6a1be835d592eb7c349003380f2f501480251fd5e0ef27dab1",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        },
+        {
+          "app": "golf",
+          "collection": "bookings",
+          "slots": "times",
+          "slot": "time19",
+          "item": "round",
+          "capacity": 4,
+          "id": "plink_25",
+          "url": "https://buy.stripe.com/test_plink_25",
+          "price": "price_1",
+          "revision": "7523ec0b309f1e48c44564d6e9db961860e3c392ee17ed8c2d9817d2e7143d08",
+          "active": true,
+          "count": 0,
+          "limit": 4,
+          "paused": false
+        }
+      ]
+    },
+    "retire": [],
+    "local": false,
+    "fingerprint": "7f790a4d9d571e89c45ca727842b92f0b6899dd03ee4b4730682f49c2e9c9d41"
+  }
+}

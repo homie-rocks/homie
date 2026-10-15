@@ -2,7 +2,7 @@ import {needsHeadless} from './needs-headless.mjs';
 import {randomBytes} from 'node:crypto';
 import {actInApp,appReady,observeEffects,forceWebglFailure,waitInApp,answerDialogs} from './app-ready.mjs';
 import {localCredential,localCookie} from './local-test.mjs';
-import { readAppNeeds, proveAppNeeds, saveAppNeeds } from './app-needs.mjs';
+import { readAppNeeds, proveAppNeeds, saveAppNeeds, needSteps } from './app-needs.mjs';
 /**
  * `homie-studio check [<game>] [--url <site> | --live]` — the promise, measured (where it runs and on which games
  * when nobody says: lib/check-site.mjs; never the live site unless asked): two fresh
@@ -152,7 +152,7 @@ export async function check({ webglFailure = false, isolate = true, root = null,
   if(appMeta && !appMeta.check?.action) {
     try {
       const plan=readAppNeeds(root,game);
-      if(plan && !plan.needs.some(n=>[...(n.steps??[]),...(n.assertions??[])].some(i=>i.surface)))return checkApp({webglFailure,isolate,root,url:base,game,meta:appMeta,shots,log,report});
+      if(plan && !plan.needs.some(n=>[...needSteps(n.steps),...(n.assertions??[])].some(i=>i.surface)))return checkApp({webglFailure,isolate,root,url:base,game,meta:appMeta,shots,log,report});
     } catch(error) {return {ok:false,command:'check',kind:'app',why:error.message};}
   }
   const chrome = findChrome();
@@ -365,14 +365,14 @@ export async function checkApp({ webglFailure = false, isolate = true, root = nu
   const proof = meta.check??{};
   const baseline=typeof proof.action==='string'&&typeof proof.observe==='string';
   if (!baseline && !plan) return { ok: false, command: 'check', kind: 'app', why: 'app.json check needs action and observe CSS selectors for a real shared action' };
-  if(webglFailure&&!baseline&&!plan?.needs.some(n=>[...(n.steps??[]),...(n.assertions??[])].some(i=>i.surface)))return {ok:false,command:'check',why:'--webgl-failure requires UI steps or assertions'};
+  if(webglFailure&&!baseline&&!plan?.needs.some(n=>[...needSteps(n.steps),...(n.assertions??[])].some(i=>i.surface)))return {ok:false,command:'check',why:'--webgl-failure requires UI steps or assertions'};
   const captureWarnings=[];
   const profile = mkdtempSync(join(tmpdir(), 'homie-app-check-'));
   let browser;
   const surfaces = [];
   const room = `check-${randomBytes(10).toString('hex')}`;
   try {
-    if(baseline || plan?.needs.some(n=>[...(n.steps??[]),...(n.assertions??[])].some(i=>i.surface))) browser = await puppeteer.launch({ executablePath: chrome, headless: true, userDataDir: profile, timeout: LAUNCH_TIMEOUT_MS, args: chromeArgs() });
+    if(baseline || plan?.needs.some(n=>[...needSteps(n.steps),...(n.assertions??[])].some(i=>i.surface))) browser = await puppeteer.launch({ executablePath: chrome, headless: true, userDataDir: profile, timeout: LAUNCH_TIMEOUT_MS, args: chromeArgs() });
     const openSurface = async (name, role) => {
       const dimensions={wall:[1280,720],phone:[390,844],'phone-two':[390,844],tablet:[1024,768],staff:[1024,768],kiosk:[1080,1920]};
       if(!dimensions[name])throw new Error(`Unknown needs surface ${name}`);
@@ -417,13 +417,13 @@ export async function checkApp({ webglFailure = false, isolate = true, root = nu
     }
     report?.check?.('app-action', 'pass', { note: 'action reached wall and both phones; reconnect retained it' });
     }
-    for(const need of plan?.needs??[])for(const item of [...(need.steps??[]),...(need.assertions??[])]) {
+    for(const need of plan?.needs??[])for(const item of [...needSteps(need.steps),...(need.assertions??[])]) {
       if(!item.surface)continue;
       if(plan.needs.some(n=>(n.steps??[]).some(s=>s.popup===item.surface)))continue;
       const role=item.role??need.role??meta.surfaces?.[item.surface]??(item.surface==='staff'?'staff':undefined);
       if(!surfaces.some(s=>s.name===item.surface&&s.role===role))await openSurface(item.surface,role);
     }
-    const needs = plan ? await proveAppNeeds({ plan, surfaces, shots, report, ready:appReady, root, headless:needsHeadless({url,secret,app:game,meta,scope:isolate?room:null}) }) : null;
+    const needs = plan ? await proveAppNeeds({ plan, surfaces, shots, report, ready:appReady, root, restart:()=>import('./dev-restart.mjs').then(m=>m.requestDevRestart(root,url)), headless:needsHeadless({url,secret,app:game,meta,scope:isolate?room:null}) }) : null;
     if (plan) { saveAppNeeds(root, game, plan, needs); const { refreshCodexFile } = await import('./codex.mjs'); refreshCodexFile(root, game); }
     const ok = !needs || needs.every(n => n.status === 'met');
     return { ok, ...(needs ? { needs, why: ok ? undefined : 'Some needs from the person’s Codex are not yet met; see needs and captures' } : {}), command: 'check', kind: 'app', webglFailure, isolatedRecords:isolate, captureWarnings, dialogs, room, surfaces: surfaces.map((s) => s.name), action: proof.action, before, after, reconnect: baseline };
