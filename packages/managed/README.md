@@ -7,11 +7,11 @@ Private operator package, separate from self-hosted deploy. It accepts only
 npm ci --prefix packages/managed --ignore-scripts
 export WRANGLER=/absolute/path/to/wrangler
 export CLOUDFLARE_ACCOUNT_ID=<Homie-account>
-node packages/managed/control.mjs init /tmp/hm-test-state
-node packages/managed/control.mjs deploy /tmp/hm-test-state /tmp/sealed-studio hm-test-inlet hm-test-dispatch.YOUR-SUBDOMAIN.workers.dev
-node packages/managed/control.mjs deploy-plain /tmp/hm-test-state /tmp/sealed-studio hm-test-plain hm-test-plain.YOUR-SUBDOMAIN.workers.dev
-node packages/managed/control.mjs kill /tmp/hm-test-state hm-test-inlet
-node packages/managed/control.mjs cleanup /tmp/hm-test-state
+node packages/managed/control.mjs init ~/.homie/orchestration/managed/run
+node packages/managed/control.mjs deploy ~/.homie/orchestration/managed/run ~/.homie/orchestration/managed/fixture hm-test-inlet hm-test-dispatch.YOUR-SUBDOMAIN.workers.dev
+node packages/managed/control.mjs deploy-plain ~/.homie/orchestration/managed/run ~/.homie/orchestration/managed/fixture hm-test-plain hm-test-plain.YOUR-SUBDOMAIN.workers.dev
+node packages/managed/control.mjs kill ~/.homie/orchestration/managed/run hm-test-inlet
+node packages/managed/control.mjs cleanup ~/.homie/orchestration/managed/run
 ```
 
 Run commands serially; an exclusive state lock rejects concurrent control commands.
@@ -39,12 +39,12 @@ subscriptions. Readiness retries only provisioning failures, not arbitrary SQL.
 
 Dispatch uses the exact operator hostname registry. Headers confer no privileges.
 The reserved tick path accepts only dispatch `ctx.props.managedTick`. Cron queues
-one message per active script; bounded enqueue batches and one-message consumers
+one message per active script with declared scheduled work; bounded enqueue batches and one-message consumers
 avoid all-tenant dispatch fan-out. Each tick retries independently (three retries,
-30-second delay) then reaches `hm-test-ticks-dlq`. Delivery rechecks the registry.
+5-second delay) then reaches `hm-test-ticks-dlq`. Delivery rechecks the registry.
 Duplicate ticks are possible; toolkit schedule/delivery idempotency still matters.
 
-`kill` removes a tenant's route and redeploys the dispatcher. It stops new requests
+`kill` writes the tenant stop state in the strongly consistent Registry DO; it does not redeploy dispatch. It stops new requests
 and queued ticks. It does **not** terminate already-open sockets or autonomous DO
 alarms. For an active abuse incident, remove the user script (`force=true`) and
 verify termination; that is destructive and separate from reversible route removal.
@@ -76,3 +76,9 @@ counts Worker-side D1/ASSETS/DO calls; it does not count calls inside DOs. See
 ```sh
 node --test packages/managed/test.mjs
 ```
+
+Round 3 restores `global_fetch_strictly_public` on every tenant, uses deployed
+migration tags, and allowlists compatibility settings. Registry route lookups are
+uncached. Durable tick claims serialize attempts across minute boundaries; a
+crashed attempt leaves a fail-closed claim requiring operator reconciliation.
+The DLQ consumer persists an alert and emits a structured error before ack.

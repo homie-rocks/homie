@@ -17,7 +17,7 @@ export default {
     for(const event of events)console.log(JSON.stringify({tenant:event.scriptName,event:'tenant-trace',outcome:event.outcome,logs:event.logs,exceptions:event.exceptions}));
   },
   async fetch(request,env) {
-    if(!/^hm-test-[a-z0-9-]+$/.test(env.tenant??''))return new Response('Missing tenant',{status:403});
+    if(typeof env.tenant!=='string'||!env.tenant||env.tenant.length>255)return new Response('Missing tenant',{status:403});
     const url=new URL(request.url);
     if(!['https:','http:'].includes(url.protocol)||blocked(url.hostname,env.CONTROL_HOSTS??[]))return new Response('Managed destination denied',{status:403});
     const headers=new Headers(request.headers);headers.set('x-homie-tenant',env.tenant);

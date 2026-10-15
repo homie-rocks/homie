@@ -1,4 +1,8 @@
-# Managed step 1 — round 2
+# Managed step 1 — round 3 (in progress)
+
+Round 2 results below are historical. Its egress flag interpretation was incorrect,
+and its latency comparisons were not colo matched; neither is acceptance evidence.
+Round 3 evidence is in `proof/managed-step-1-round3/`.
 
 Rebased onto toolkit **0.54.0**. This is a draft hosting experiment, not a
 production-ready managed release. Design context is PR #134: operator
@@ -42,11 +46,7 @@ payments use server-created Checkout Sessions. No payment integration changed.
 6. **JSONC.** Use pinned `jsonc-parser` 3.2.0 (also used by Wrangler). Inline/block
    comments and trailing commas work; malformed documents fail with parse errors.
 7. **Arbitrary code and operating controls.** See the explicit boundaries below.
-8. **Honest UI readiness.** The room cover no longer lifts on a seat, missing-helper
-   timer, 15-second cap or 30-second timeout. A playable signal is required. A
-   stalled connection keeps the cover with a reload diagnostic. Tests prove both
-   no false readiness and eventual release on the signal. Old 0.53.0 screenshots
-   and timeout-based room results are historical only, not acceptance evidence.
+8. **Toolkit scope.** Arrival runtime, its tests and generated build identity are restored to the base branch. Runtime improvements belong in separate toolkit PRs.
 
 ## Code, egress and operational boundaries
 
@@ -59,7 +59,7 @@ bindings, routes, platform secrets, dispatch and control databases are excluded.
 [Cloudflare isolation](https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/reference/worker-isolation/)
 is the runtime boundary, not a JavaScript rules compiler.
 
-The managed adapter removes the source `global_fetch_strictly_public` compatibility flag: live testing showed that retaining it bypassed the WFP outbound hook. Only the trusted outbound Worker enables it for public forwarding. A regression test protects that distinction.
+The managed adapter always enables `global_fetch_strictly_public`. The round-2 bypass claim was false: disabling this flag can let tenant DO fetches to the platform zone bypass Cloudflare security. WFP DO egress remains a separate limitation.
 
 The outbound Worker permits public HTTP(S). It stamps `x-homie-tenant` from the
 trusted dispatch parameter, replacing any owner-supplied value, logs tenant/host,
@@ -147,8 +147,7 @@ Milliseconds, **median [min–max], n**. Cold includes observed `first:true` inv
 | mcp | 617 [609–1313], n=3 | 1503 [1470–1536], n=2 | 111 [74–242], n=5 | 326 [245–1220], n=5 |
 | seat | 1414 [1035–1793], n=2 | 2202.5 [1756–2649], n=2 | 201 [119–292], n=5 | 372 [285–849], n=5 |
 
-The paired run shows no WFP latency penalty here; it does not establish a general
-WFP speed advantage. D1 placement, edge/isolate placement and network variability
+The round-2 run cannot establish a WFP latency penalty or advantage: these samples lack cf-ray/colo and are not comparable pairs. D1 placement, edge/isolate placement and network variability
 remain confounders. Both databases were WNAM/SEA. Steady managed counts were
 one D1 round trip for page, records, MCP and lobby, zero for the asset. A cold
 request included catalogue/metadata work (up to three D1 + one asset + one DO

@@ -1,4 +1,5 @@
 /** Operator-only step-1 harness. Run from a trusted shell, never in a studio Worker. */
+import {randomBytes} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {readFileSync,writeFileSync,existsSync,mkdirSync,openSync,closeSync,unlinkSync} from 'node:fs';
 import {resolve,join} from 'node:path';
@@ -41,6 +42,12 @@ async function api(path, method='GET', body) {
   if(!response.ok||!value.success)throw new Error(`Cloudflare ${method} failed (${response.status}): ${JSON.stringify(value.errors)}`);
   return value.result;
 }
+async function operator(path,body) {
+  if(!/^hm-test-dispatch\.[a-z0-9-]+\.workers\.dev$/.test(state.dispatchHost??''))throw Error('Test dispatch host required');
+  const secretPath=join(stateDir,'operator-token');
+  const response=await fetch('https://'+state.dispatchHost+'/__operator/'+path,{method:path==='route'?'PUT':'POST',headers:{authorization:'Bearer '+readFileSync(secretPath,'utf8'),'content-type':'application/json'},body:JSON.stringify(body)});
+  if(!response.ok)throw Error('Registry write failed: '+response.status);
+}
 async function inventoryUsers() {
   for(const user of state.users??[]) {
     if(!/^hm-test-[a-z0-9-]+$/.test(user))throw new Error('Unexpected user Worker');
@@ -79,7 +86,8 @@ if(command==='init') {
   db.readiness=await waitForDatabase(()=>api(`d1/database/${db.id}/query`,'POST',{sql:'SELECT 1 AS ready'}));
   db.info=await api(`d1/database/${db.id}`);save();
   const output=join(stateDir,name);
-  prepare({studio,output,name,databaseId:db.id,accountId:state.accountId,hostname});
+  const deployed=await api(command==='deploy-plain'?`workers/scripts/${name}/settings`:`workers/dispatch/namespaces/${state.namespace}/scripts/${name}/settings`);
+  prepare({studio,output,name,databaseId:db.id,accountId:state.accountId,hostname,deployed});
   run(['d1','migrations','apply','DB','--remote','--config',join(output,'user.json')]);
   // Same deploy-time reconciliation as self-hosted, including removed/changed declarations.
   await api(`d1/database/${db.id}/query`,'POST',{sql:functionDeploymentSQL(resolve(studio))});
@@ -93,25 +101,34 @@ if(command==='init') {
     for(const b of settings.bindings.filter(b=>b.type==='durable_object_namespace'))if(!state.durableObjects.some(d=>d.id===b.namespace_id))state.durableObjects.push({name:name+'_'+b.class_name,id:b.namespace_id});
     save();process.exit(0);
   }
-  if(!state.workers.includes('hm-test-outbound')){state.workers.push('hm-test-outbound');save();}
-  run(['deploy','--config',join(output,'outbound.json')]);
+  if(!state.workers.includes('hm-test-outbound')){
+    state.workers.push('hm-test-outbound');save();
+    run(['deploy','--config',join(output,'outbound.json')]);
+  }
   state.users??=[];if(!state.users.includes(name))state.users.push(name);save();
   run(['deploy','--config',join(output,'user.json'),'--dispatch-namespace',state.namespace]);
   await inventoryUsers();
   await api(`workers/dispatch/namespaces/${state.namespace}/scripts/${name}/tags`,'PUT',['hm-test','step-1',name]);
-  for(const kind of ['dispatch']) {
-    const worker='hm-test-'+kind;
-    if(!state.workers.includes(worker)){state.workers.push(worker);save();}
-    run(['deploy','--config',join(output,kind+'.json')]);
+  if(!state.workers.includes('hm-test-dispatch')) {
+    state.workers.push('hm-test-dispatch');save();
+    const secretPath=join(stateDir,'operator-token');
+    const secret=randomBytes(32).toString('hex');
+    writeFileSync(secretPath,secret,{mode:0o600});
+    run(['deploy','--config',join(output,'dispatch.json')]);
+    await api('workers/scripts/hm-test-dispatch/secrets','PUT',{name:'OPERATOR_TOKEN',type:'secret_text',text:secret});
+    state.dispatchHost=hostname;
+    const settings=await api('workers/scripts/hm-test-dispatch/settings');
+    state.durableObjects??=[];
+    for(const b of settings.bindings.filter(b=>b.type==='durable_object_namespace'))state.durableObjects.push({name:'hm-test-dispatch_'+b.class_name,id:b.namespace_id});
+    save();
   }
+  const cfg=JSON.parse(readFileSync(join(output,'user.json')));
+  const ticks=JSON.parse(cfg.vars.STUDIO_FUNCTION_CRONS).length>0||JSON.parse(cfg.vars.STUDIO_FUNCTION_MANAGED_CRONS).length>0;
+  await operator('route',{tenant:name,routes:[{hostname,prefix:'/'}],ticks});
   save();
 } else if(command==='kill') {
   if(!/^hm-test-[a-z0-9-]+$/.test(studio??''))throw new Error('kill STATE SCRIPT');
-  const configPath=join(stateDir,studio,'dispatch.json');
-  const config=JSON.parse(readFileSync(configPath));
-  config.vars.ROUTES=config.vars.ROUTES.filter(r=>r.script!==studio);
-  writeFileSync(configPath,JSON.stringify(config,null,2));
-  run(['deploy','--config',configPath]);
+  await operator('kill',{tenant:studio});
   state.killed??=[];state.killed.push(studio);save();
 } else if(command==='cleanup') {
   if(state.namespace!=='homie-managed-test')throw new Error('Unexpected namespace');

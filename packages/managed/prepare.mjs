@@ -8,7 +8,7 @@ export const read = path => {
   if(errors.length)throw new Error(`Invalid JSONC ${path}: ${errors.map(e=>printParseErrorCode(e.error)).join(', ')}`);
   return value;
 };
-export function prepare({studio, output, name, databaseId, accountId, hostname, controlHosts}) {
+export function prepare({studio, output, name, databaseId, accountId, hostname, controlHosts, deployed=null}) {
   if (!/^hm-test-[a-z0-9-]+$/.test(name)) throw new Error('Step 1 only accepts hm-test- resource names');
   if (!/^[0-9a-f-]{36}$/.test(databaseId) || !/^[0-9a-f]{32}$/.test(accountId)) throw new Error('Explicit database/account IDs required');
   if (!hostname || new URL('https://' + hostname).hostname !== hostname) throw new Error('Exact hostname required');
@@ -51,22 +51,28 @@ export default {
 };
 `);
   // Deliberate allowlist: no source routes, secrets, remote bindings, AI, R2 or production IDs.
-  const classes=[...new Set(['Table','Lobby','Gate','Concentrator',...(source.durable_objects?.bindings??[]).filter(b=>!b.script_name).map(b=>b.class_name)])];
-  if(classes.some(c=>!/^[$A-Za-z_][$A-Za-z0-9_]*$/.test(c)))throw new Error('Invalid DO class');
   const ownBindings=(source.durable_objects?.bindings??[]).filter(b=>!b.script_name).map(({name,class_name})=>({name,class_name}));
-  const previous=existsSync(join(output,'user.json'))?read(join(output,'user.json')):null;
-  const migrations=previous?.migrations??[{tag:'v1',new_sqlite_classes:classes}];
-  const known=migrations.flatMap(m=>m.new_sqlite_classes??[]);
+  const classes=[...new Set(ownBindings.map(b=>b.class_name))];
+  if(classes.some(c=>!/^[$A-Za-z_][$A-Za-z0-9_]*$/.test(c)))throw new Error('Invalid DO class');
+  // Provider settings, never the local output directory, are migration authority.
+  const known=[...new Set((deployed?.bindings??[]).filter(b=>b.type==='durable_object_namespace'&&!b.script_name).map(b=>b.class_name))];
+  if(known.some(c=>!classes.includes(c)))throw new Error('Removing DO classes requires an explicit storage migration');
   const added=classes.filter(c=>!known.includes(c));
-  if(previous&&known.some(c=>!classes.includes(c)))throw new Error('Removing DO classes requires an explicit storage migration');
-  if(added.length)migrations.push({tag:'v'+(migrations.length+1),new_sqlite_classes:added});
+  const tag=deployed?.migration_tag;
+  if(deployed&&known.length&&!tag)throw new Error('Deployed migration tag missing');
+  const migrations=tag?[{tag}]:[];
+  if(added.length)migrations.push({tag:tag?tag+'-next':'v1',new_sqlite_classes:added});
+  const dates=new Set(['2026-06-01','2026-10-01','2026-10-15']);
+  const flags=new Set(['nodejs_compat','global_fetch_strictly_public','disallow_eval_during_startup']);
+  if(!dates.has(source.compatibility_date))throw new Error('Compatibility date is not approved');
+  if((source.compatibility_flags??[]).some(flag=>!flags.has(flag)))throw new Error('Compatibility flag is not approved');
   const config={name, account_id:accountId, main:join(runtime,'managed.mjs'),
-    compatibility_date:source.compatibility_date, // This source flag bypasses the WFP outbound hook; only the trusted outbound Worker uses it.
-    compatibility_flags:(source.compatibility_flags??[]).filter(flag=>flag!=='global_fetch_strictly_public'),
+    compatibility_date:source.compatibility_date,
+    compatibility_flags:[...new Set([...(source.compatibility_flags??[]),'global_fetch_strictly_public'])],
     no_bundle:true, find_additional_modules:true,
     rules:[{type:'ESModule',globs:['**/*.js','**/*.mjs'],fallthrough:true}],
     assets:{directory:assets,binding:'ASSETS',run_worker_first:true},
-    durable_objects:{bindings:[...['Table','Lobby','Gate','Concentrator'].filter(c=>!ownBindings.some(b=>b.name===c.toUpperCase())).map(class_name=>({name:class_name.toUpperCase(),class_name})),...ownBindings]},
+    durable_objects:{bindings:ownBindings},
     migrations,
     d1_databases:[{binding:'DB',database_name:name+'-db',database_id:databaseId,migrations_dir:migrationsDir}],
     vars:{STUDIO_NAME:source.vars?.STUDIO_NAME ?? name, HOMIE_CONCEPT:'1',
@@ -76,10 +82,10 @@ export default {
   writeFileSync(join(output,'user.json'),JSON.stringify(config,null,2)+'\n');
   const here=dirname(fileURLToPath(import.meta.url));
   writeFileSync(join(output,'outbound.json'),JSON.stringify({name:'hm-test-outbound',account_id:accountId,main:join(here,'outbound.mjs'),compatibility_date:'2026-10-01',compatibility_flags:['global_fetch_strictly_public'],workers_dev:false,observability:{enabled:true},vars:{CONTROL_HOSTS:controlHosts??[hostname]}},null,2));
-  writeFileSync(join(output,'dispatch.json'),JSON.stringify({name:'hm-test-dispatch',account_id:accountId,main:join(here,'dispatch.mjs'),compatibility_date:'2026-10-01',workers_dev:true,
+  writeFileSync(join(output,'dispatch.json'),JSON.stringify({name:'hm-test-dispatch',account_id:accountId,main:join(here,'dispatch-entry.mjs'),compatibility_date:'2026-10-01',workers_dev:true,
     dispatch_namespaces:[{binding:'STUDIOS',namespace:'homie-managed-test',outbound:{service:'hm-test-outbound',parameters:['tenant']}}],
-    queues:{producers:[{binding:'TICKS',queue:'hm-test-ticks'}],consumers:[{queue:'hm-test-ticks',max_batch_size:1,max_retries:3,dead_letter_queue:'hm-test-ticks-dlq'}]},
-    vars:{ROUTES:[{hostname,prefix:'/',script:name}]},triggers:{crons:['* * * * *']},observability:{enabled:true}},null,2));
+    queues:{producers:[{binding:'TICKS',queue:'hm-test-ticks'}],consumers:[{queue:'hm-test-ticks',max_batch_size:1,max_retries:3,dead_letter_queue:'hm-test-ticks-dlq'},{queue:'hm-test-ticks-dlq',max_batch_size:1,max_retries:3}]},
+    durable_objects:{bindings:[{name:'REGISTRY',class_name:'Registry'}]},migrations:[{tag:'v1',new_sqlite_classes:['Registry']}],triggers:{crons:['* * * * *']},observability:{enabled:true}},null,2));
   return config;
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

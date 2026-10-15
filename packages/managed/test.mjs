@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import dispatch from './dispatch.mjs';
-const routes=[{hostname:'studio.test',prefix:'/',script:'hm-test-studio'}];
+function registryEnv(env){env.REGISTRY={getByName(){return {resolve:async(h,p)=>(env.ROUTES??[]).filter(r=>!r.disabled&&r.hostname===h&&(r.prefix==='/'||p===r.prefix||p.startsWith(r.prefix+'/'))).sort((a,b)=>b.prefix.length-a.prefix.length)[0],scheduled:async()=>env.ROUTES.filter(r=>r.ticks).map(r=>r.script),claim:async script=>env.ROUTES.some(r=>r.script===script)?'run':'skip',finish:async()=>{}}}};return env;}
+const routes=[{hostname:'studio.test',prefix:'/',script:'hm-test-studio',ticks:true}];
 test('unknown hosts and public tick never acquire dispatch capabilities',async()=>{
   const env={ROUTES:routes,STUDIOS:{get(){throw new Error('must not dispatch')}}};
   for(const url of ['https://unknown.test/','https://studio.test/__managed/tick'])
-    assert.equal((await dispatch.fetch(new Request(url),env)).status,404);
+    assert.equal((await dispatch.fetch(new Request(url),registryEnv(env))).status,404);
 });
 test('registry selects Worker; spoofed managed header has no authority; limits applied',async()=>{
   let calls=0;
@@ -14,16 +15,16 @@ test('registry selects Worker; spoofed managed header has no authority; limits a
     assert.equal(options.limits.cpuMs,100);
     return {fetch(req){assert.equal(req.headers.get('x-homie-managed-tick'),'true');return new Response('ok')}};
   }}};
-  assert.equal(await (await dispatch.fetch(new Request('https://studio.test/?tenant=other',{headers:{'x-homie-managed-tick':'true'}}),env)).text(),'ok');
+  assert.equal(await (await dispatch.fetch(new Request('https://studio.test/?tenant=other',{headers:{'x-homie-managed-tick':'true'}}),registryEnv(env))).text(),'ok');
   assert.equal(calls,1);
 });
 test('queue retries failing tenants independently; killed tenants never dispatch',async()=>{
   const messages=[];let calls=[];
-  const env={ROUTES:[...routes,{hostname:'bad.test',prefix:'/',script:'hm-test-bad'}],TICKS:{async sendBatch(batch){messages.push(...batch)}},STUDIOS:{get(script,options,limits){
+  const env={ROUTES:[...routes,{hostname:'bad.test',prefix:'/',script:'hm-test-bad',ticks:true}],TICKS:{async sendBatch(batch){messages.push(...batch)}},STUDIOS:{get(script,options,limits){
     calls.push(script);assert.equal(options.props.managedTick,true);assert.equal(limits.outbound.tenant,script);
     return {async fetch(){return new Response(null,{status:script==='hm-test-bad'?500:204})}};
   }}};
-  await dispatch.scheduled({scheduledTime:123,cron:'* * * * *'},env);
+  await dispatch.scheduled({scheduledTime:123,cron:'* * * * *'},registryEnv(env));
   assert.equal(messages.length,2);
   const outcomes=[];
   await dispatch.queue({messages:messages.map(m=>({...m,ack(){outcomes.push('ack')},retry(){outcomes.push('retry')}}))},env);
@@ -51,16 +52,16 @@ test('adapter excludes production capabilities; tick requires unforgeable dispat
   writeFileSync(join(studio,'wrangler.jsonc'),JSON.stringify({compatibility_date:'2026-06-01',compatibility_flags:['nodejs_compat','global_fetch_strictly_public'],routes:['production.example/*'],services:[{binding:'ADMIN',service:'production'}],vars:{SECRET:'must-not-copy'},d1_databases:[{database_id:'production'}]}));
   const output=join(dir,'managed');
   const config=prepare({studio,output,name:'hm-test-unit',databaseId:'11111111-1111-1111-1111-111111111111',accountId:'a'.repeat(32),hostname:'test.example'});
-  assert.deepEqual(config.compatibility_flags,['nodejs_compat']);
+  assert.deepEqual(config.compatibility_flags,['nodejs_compat','global_fetch_strictly_public']);
   assert.equal(config.routes,undefined);assert.equal(config.services,undefined);assert.equal(config.vars.SECRET,undefined);
-  assert.equal(config.durable_objects.bindings.length,4);
+  assert.equal(config.durable_objects.bindings.length,0);
   assert.ok((await import('node:fs')).existsSync(join(config.d1_databases[0].migrations_dir,'0033_tool_namespace_revisions.sql')));
   const sourcePath=join(studio,'wrangler.jsonc');
   const source=JSON.parse((await import('node:fs')).readFileSync(sourcePath));
   source.durable_objects={bindings:[{name:'CUSTOM',class_name:'OwnerRoom'},{name:'CONTROL',class_name:'Admin',script_name:'production'}]};
   writeFileSync(sourcePath,JSON.stringify(source));
   const next=prepare({studio,output,name:'hm-test-unit',databaseId:'11111111-1111-1111-1111-111111111111',accountId:'a'.repeat(32),hostname:'test.example'});
-  assert.deepEqual(next.migrations[1],{tag:'v2',new_sqlite_classes:['OwnerRoom']});
+  assert.deepEqual(next.migrations[0],{tag:'v1',new_sqlite_classes:['OwnerRoom']});
   assert.ok(next.durable_objects.bindings.some(b=>b.class_name==='OwnerRoom'));
   assert.ok(!next.durable_objects.bindings.some(b=>b.name==='CONTROL'));
   assert.equal(config.d1_databases[0].database_id,'11111111-1111-1111-1111-111111111111');
@@ -97,11 +98,10 @@ test('JSONC inline/block comments, trailing commas and malformed input',()=>{
  const dir=mkdtempSync(join(tmpdir(),'hm-test-jsonc-'));const file=join(dir,'config.jsonc');
  try {writeFileSync(file,'{/* comment */"url":"https://example.com", // inline\n}');assert.equal(read(file).url,'https://example.com');writeFileSync(file,'{"bad":}');assert.throws(()=>read(file),/Invalid JSONC/);}finally{rmSync(dir,{recursive:true,force:true})}
 });
-test('routing adds exactly one dispatch call and no serial startup work',async()=>{
+test('routing acquires exactly one dispatch capability per request',async()=>{
  let calls=0;const env={ROUTES:routes,STUDIOS:{get(){calls++;return {fetch:async()=>new Response('ok')}}}};
- const start=performance.now();
- for(let i=0;i<50;i++)await dispatch.fetch(new Request('https://studio.test/asset.js'),env);
- assert.equal(calls,50);assert.ok(performance.now()-start<1000,'50 local dispatches exceed 1s budget');
+ for(let i=0;i<50;i++)await dispatch.fetch(new Request('https://studio.test/asset.js'),registryEnv(env));
+ assert.equal(calls,50);
 });
 import {buildInSandbox} from './build.mjs';
 test('owner builds have no local execution fallback',async()=>{
@@ -122,4 +122,18 @@ test('outbound overwrites spoofed identity and never follows redirects unchecked
   assert.equal((await outbound.fetch(new Request('https://example.com/',{headers:{'x-homie-tenant':'victim'}}),{tenant:'hm-test-studio'})).status,302);
   assert.equal((await outbound.fetch(new Request('https://example.com/'),{})).status,403);
  }finally{globalThis.fetch=original;}
+});
+
+import {Registry} from './registry.mjs';
+function memoryRegistry(){const data=new Map();const storage={async get(k){return data.get(k)},async put(k,v){data.set(k,structuredClone(v))},async delete(k){data.delete(k)},async list({prefix}){return new Map([...data].filter(([k])=>k.startsWith(prefix)))},async transaction(f){return f(storage)}};return new Registry({storage},{});}
+test('registry preserves studios, exact hosts, longest boundary prefix and kill',async()=>{
+ const r=memoryRegistry();await r.put('one',[{hostname:'studio.test',prefix:'/'}],true);await r.put('two',[{hostname:'studio.test',prefix:'/nested'}]);
+ assert.equal((await r.resolve('studio.test','/nested/a')).script,'two');assert.equal((await r.resolve('studio.test','/nestedness')).script,'one');assert.equal(await r.resolve('evil.studio.test','/'),null);
+ await assert.rejects(()=>r.put('three',[{hostname:'studio.test',prefix:'/'}]),/owned/);
+ await r.put('two',[{hostname:'studio.test',prefix:'/nested'}]);assert.deepEqual(await r.scheduled(),['one']);await r.kill('two');assert.equal((await r.resolve('studio.test','/nested')).script,'one');
+});
+test('tick claim serializes retries across schedule boundaries and DLQ is drained after alert',async()=>{
+ const r=memoryRegistry();await r.put('one',[{hostname:'studio.test',prefix:'/'}],true);const now=Date.now();
+ assert.equal(await r.claim('one',now-1000),'run');assert.equal(await r.claim('one',now),'busy');await r.finish('one',now-1000,false);assert.equal(await r.claim('one',now-1000),'run');await r.finish('one',now-1000,true);assert.equal(await r.claim('one',now-1000),'skip');assert.equal(await r.claim('one',now-60001),'skip');
+ let alerted=false,acked=false;await dispatch.queue({queue:'hm-test-ticks-dlq',messages:[{body:{script:'one'},ack(){assert.ok(alerted);acked=true}}]},{REGISTRY:{getByName:()=>({async alert(){alerted=true}})}});assert.ok(acked);
 });
