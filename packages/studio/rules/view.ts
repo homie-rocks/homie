@@ -414,7 +414,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   function rebase(k: number, reason = 'placement'): void {
     // Recalibrating an input clock is not a placement. Keep the drawn pose while
     // the new prediction catches up, just as for a snapshot reconciliation.
-    const shown = reason === 'lead' ? meNow()?.pos : null;
+    // A long frame is a clock reset, not a new authoritative placement. Carry
+    // the last painted origin even when the newest snapshot is far behind it.
+    const shown = reason === 'frame' && presented?.id === mine?.id ? presented?.pos
+      : reason === 'lead' || reason === 'frame' ? meNow()?.pos : null;
     const continuousTick = reason === 'placement' && base && tickAt(clock()) >= k && tickAt(clock()) - k <= tickHz ? tickAt(clock()) : null;
     if(reason==='placement' || reason==='epoch')pulseQueue.length=0;
     correction.rebaseReason = reason; correction.rebaseError = medianLead() - targetLead();

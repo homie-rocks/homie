@@ -52,3 +52,11 @@ A further under-limit browser interruption exposed duplicate attribution: the sa
 The 0422c157 packed matrix exposed a seven-player 300 ms/5% loss/±60 ms case with 162.9 ms steering p90 versus 13.0 ms for the browser control. Frames continued normally while the view replayed catch-up history: fresh held input changed the live forecast, but the painted body still sampled old heading/thrust. The existing immediate discrete-action path did not cover held changes.
 
 Three deterministic regressions at 80/150/300 ms fail first with no heading response on the next frame. Changed controls now resume live prediction and reuse the existing offset carry, preserving the painted origin and bounded wrapped displacement. The three regressions and 12 existing catch-up/wrap/clock tests pass; 70 broader virtual-time regressions and all five real-Chrome prediction tests also pass. A fresh packed game comparison follows. This is not a claim that the earlier matrix met parity.
+
+## Long-frame clock reset
+
+The fbe020e4 packed phone-zero-delay trace exposed two stale-snapshot cuts after long callbacks: 247 px and 269 px, with unchanged death/round/placement markers. Prediction time moved backwards by 18 and 33 ticks. The frame-reset path cleared visual offsets without preserving the last painted origin; the lead-reset path already carried it.
+
+Two deterministic regressions hold the host while the view continues, then advance the view clock through a 700 ms callback gap. Before the fix they cut 2.790 m and 1.370 m at 0/300 ms. Frame recalibration now carries the last painted origin across the reset, permitting its one normal 50 ms movement tick (0.200 m) and then bounded frame corrections. Genuine authoritative placements remain immediate. Both regressions and 11 related clock/wrap/input tests pass. Packed game validation is repeated; the preceding 22 accepted configurations remain regression evidence.
+
+Post-fix validation: 13 focused virtual-time regressions, all 70 broader movement/input tests, and all five real-Chrome prediction smoke tests pass. The red test uses the same 0.201 m one-tick bound as the green test.

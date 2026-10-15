@@ -2800,3 +2800,21 @@ for(const delay of [80,150,300])test(`held steering leaves wrapped catch-up with
  assert.ok(worst<.7,`no wrapped correction jump: ${worst}`);
  assert.equal(r.host.core.stats.errors,0);
 });
+
+for(const delay of [0,300])test(`long frame clock reset preserves the painted wrapped ship at ${delay} ms`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'wrap2');
+ const clock=virtualTime(t),r=rig(L,compiled,false,delay,delay);let offset=0;
+ const a=openRoom({timers:false,now:()=>performance.now()+offset,net:{config:cfg('Frame reset'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);a.input({ax:1});
+ for(let i=0;i<100;i++){await clock.wait(16);void a.me;}
+ r.host.pause();for(let i=0;i<40;i++){await clock.wait(16);void a.me;}
+ const before=a.me.pos;await Promise.resolve();offset+=700;
+ const after=a.me.pos,wd=v=>((v+30)%20)-10;
+ const cut=Math.hypot(wd(after.x-before.x),wd(after.y-before.y));
+ // Rebase completes one 50 ms movement tick; it must not spend the stale snapshot gap.
+ assert.ok(cut<.201,`clock recalibration cut the painted ship ${cut} metres`);
+ r.host.resume();let previous=after,worst=0;
+ for(let i=0;i<300;i++){await clock.wait(16);const p=a.me.pos;worst=Math.max(worst,Math.hypot(wd(p.x-previous.x),wd(p.y-previous.y)));previous=p;}
+ assert.ok(worst<.12,`post-reset correction jumped ${worst} metres`);
+ assert.equal(r.host.core.stats.errors,0);
+});

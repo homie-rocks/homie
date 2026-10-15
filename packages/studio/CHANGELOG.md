@@ -19,6 +19,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [Unreleased]
 
+- Long-frame prediction clock resets preserve the last painted wrapped position instead of cutting back to a stale snapshot; authoritative placements remain immediate.
+
 ### Changed
 
 - Reduce pull-request CI work through shared studio fixtures, focused compatibility coverage, and nightly release checks.
