@@ -974,7 +974,7 @@ async function route(request, env, ctx) {
         response.headers.set('referrer-policy','no-referrer');
         return response;
       }
-      const frameTicket = ['__game','__game/','__game/index.html'].includes(sub) && await ticketAllows(env, await ticketSub(env,game,url.searchParams.get('t')), launch);
+      const frameTicket = ['__game','__game/','__game/index.html','__net','__watch'].includes(sub) && await ticketAllows(env, await ticketSub(env,game,url.searchParams.get('t')), launch);
       if (launch !== 'public' && !frameTicket && !(await accessOf(request, env, game, launch)).ok && (await (await import('./local-test.mjs')).localSession(request,env))?.app!==game) return json({ ok: false, error: 'not-found' }, 404);
       if(launch==='public') {
         const web=await (await import('./app-web.mjs')).appWeb(request,env,meta,url,sub,()=>gameDocument(request,env,url,game,meta,cat));

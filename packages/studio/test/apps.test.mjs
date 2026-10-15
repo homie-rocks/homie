@@ -189,6 +189,7 @@ test('private room-backed app uses its play ticket for the frame and scoped asse
  const env={DB,ASSETS:{fetch:async req=>new URL(req.url).pathname==='/games.json'?Response.json(cat):new Response(new URL(req.url).pathname.endsWith('index.html')?'<head></head><script type="module" src="./assets/main.js"></script>':'globalThis.started=true;')}};
  try {
   const ticket=await ticketFor(env,'welcome','o');
+  const socket=await worker.fetch(new Request(origin+'/welcome/__net?t='+ticket),env,{waitUntil:()=>{}});assert.equal(socket.status,426,'authorized opaque frame reaches the socket protocol handler');
   const response=await worker.fetch(new Request(origin+'/welcome/__game/?t='+ticket),env,{waitUntil:()=>{}});assert.equal(response.status,200);
   const html=await response.text(),base=/<base href="([^"]+)"/.exec(html)?.[1];assert.ok(base);
   assert.equal((await worker.fetch(new Request(new URL('assets/main.js',origin+base)),env,{waitUntil:()=>{}})).status,200);

@@ -60,3 +60,10 @@ test('a need customer role applies to its phone while the wall retains its own r
  const results=await proveAppNeeds({plan:{needs:[{id:'visible',statement:'Both views work',role:'customer',assertions:[{surface:'phone',selector:'#ready'},{surface:'wall',selector:'#ready'}]}]},surfaces,shots:root});
  assert.equal(results[0].status,'met',results[0].why);assert.equal(captures.length,2);assert.ok(captures.every(existsSync));
 });
+
+test('readiness recognizes a private frame served through its signed asset path',async()=>{
+ const {appReady}=await import('../lib/app-ready.mjs');let rendered=false;
+ const frame={url:()=> 'https://place.test/app/__assets/signed/index.html',evaluate:async()=>{rendered=true;}};
+ const surface={name:'phone',page:{waitForFunction:async()=>{},frames:()=>[frame]}};
+ await appReady(surface,{timeout:10});assert.equal(surface.frame,frame);assert.equal(rendered,true);
+});

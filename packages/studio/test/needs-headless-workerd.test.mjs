@@ -45,9 +45,9 @@ test('check proves bookings, staff queries, scheduled reminders, owner events an
   const needs=[
    {id:'booking',statement:'Customer AI books in one call',role:'customer',steps:[{mcp:{tool:'book'},save:'booking'}],assertions:[{result:'booking',contains:{ok:true,id:'one'}}]},
    {id:'staff',statement:'Staff AI asks which roles are open',role:'staff',steps:[{mcp:{tool:'open_roles'},save:'roles'}],assertions:[{result:'roles',contains:{roles:['cook']}}]},
-   {id:'reminders',statement:'Scheduled reminders queue for bookings',role:'owner',steps:[{schedule:{name:'reminders',at:1800000000000}}],assertions:[{role:'staff',records:{collection:'reminders'},contains:{records:[{id:'one',data:{name:'Ada'}}]}}]},
-   {id:'feed',statement:'Owner AI hears bookings on its event feed',role:'owner',assertions:[{mcp:{tool:'studio_events_read',arguments:{feed:'bookings'}},contains:{events:[{type:'record.changed',data:{app:'cafe',record:'one'}}]}}]},
-   {id:'events',statement:'Owner AI reads MCP Events',role:'owner',assertions:[{mcp:{method:'events/poll',params:{name:'bookings',cursor:'v1:bookings:0'}},contains:{events:[{name:'bookings',data:{record:'one'}}]}}]},
+   {id:'reminders',statement:'Scheduled reminders queue for bookings',role:'owner',steps:[{role:'customer',mcp:{tool:'book'}},{schedule:{name:'reminders',at:1800000000000}}],assertions:[{role:'staff',records:{collection:'reminders'},contains:{records:[{id:'one',data:{name:'Ada'}}]}}]},
+   {id:'feed',statement:'Owner AI hears bookings on its event feed',role:'owner',steps:[{role:'customer',mcp:{tool:'book'}}],assertions:[{mcp:{tool:'studio_events_read',arguments:{feed:'bookings'}},contains:{events:[{type:'record.changed',data:{app:'cafe',record:'one'}}]}}]},
+   {id:'events',statement:'Owner AI reads MCP Events',role:'owner',steps:[{role:'customer',mcp:{tool:'book'}}],assertions:[{mcp:{method:'events/poll',params:{name:'bookings',cursor:'v1:bookings:0'}},contains:{events:[{name:'bookings',data:{record:'one'}}]}}]},
    {id:'webhook',statement:'Owner webhook acknowledges a signed test event',role:'owner',steps:[{mcp:{tool:'studio_events_webhook_test',arguments:{feed:'bookings'}},save:'delivery'}],assertions:[{mcp:{tool:'studio_events_webhook_status',arguments:{feed:'bookings'}},waitMs:5000,contains:{deliveries:[{event:{$result:'delivery.id'},state:'complete',attempts:1}]}}]},
    {id:'handover',statement:'Owner has connection and reminder instructions',assertions:[{file:'HANDOVER.md',text:['/mcp','Reminders run daily']}]}
   ];
@@ -56,6 +56,7 @@ test('check proves bookings, staff queries, scheduled reminders, owner events an
   const result=await checkApp({root,url,game:'cafe',meta});
   assert.equal(result.ok,true,JSON.stringify(result));
   assert.deepEqual(result.surfaces,[]);
+  const rooms=await db.prepare("SELECT DISTINCT app FROM app_records WHERE collection='bookings'").all();assert.equal(rooms.results.length,4,'each independent need can create the same booking id in a fresh namespace');
   assert.ok(received.some(e=>e.type==='webhook.test')); 
   const action=needsHeadless({url,secret:'test',app:'cafe',meta,scope:'other'});
   assert.deepEqual((await action({records:{collection:'bookings'}},'customer')).records,[],'another run sees no fixtures');

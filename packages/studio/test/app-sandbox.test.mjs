@@ -120,3 +120,21 @@ test('phone booking choices return the same option and resource fields as the AI
  await frame.waitForSelector('select[name="option"]',{timeout:1000});await frame.select('select[name="option"]','long');await frame.select('select[name="resource"]','two');await frame.click('#continue');
  assert.deepEqual(JSON.parse(await frame.$eval('output',el=>el.textContent)),{option:'long',resource:'two'});
 });
+
+test('check baseline and each passing need mutate their own fresh room and save pictures',{timeout:45000},async t=>{
+ const {checkApp}=await import('../lib/check.mjs');const {mkdtempSync,mkdirSync,writeFileSync,rmSync,readdirSync}=await import('node:fs');const {tmpdir}=await import('node:os');const {join}=await import('node:path');
+ const root=mkdtempSync(join(tmpdir(),'check-rooms-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ mkdirSync(join(root,'apps/form'),{recursive:true});mkdirSync(join(root,'.studio'));writeFileSync(join(root,'.studio/local-test.json'),JSON.stringify({secret:'test'}));
+ const needs=['first','second'].map(id=>({id,statement:'One action starts from empty',role:'customer',steps:[{surface:'phone',selector:'#act',click:true}],assertions:[{surface:'phone',selector:'#count',text:'1'},{surface:'wall',selector:'#count',text:'1'}]}));
+ writeFileSync(join(root,'apps/form/CODEX.md'),'# Form\n## Needs\n```needs\n'+JSON.stringify(needs)+'\n```');
+ const counts=new Map(),opened=[],metadata={...meta,roles:{...meta.roles,display:{signIn:false,can:[]}},surfaces:{phone:'customer',wall:'display'},check:{action:'#act',observe:'#count'}};
+ const server=createServer(async(req,res)=>{
+  const origin=`http://localhost:${server.address().port}`,url=new URL(req.url,origin),room=url.searchParams.get('room');
+  if(url.pathname==='/state'){res.setHeader('access-control-allow-origin','*');if(req.method==='POST')counts.set(room,(counts.get(room)??0)+1);res.end(String(counts.get(room)??0));return;}
+  if(url.pathname.startsWith('/form/__game/')){res.setHeader('content-type','text/html');res.end(`<button id="act">Act</button><output id="count"></output><script>const address=${JSON.stringify(origin+'/state?room='+room)};const show=()=>fetch(address).then(r=>r.text()).then(v=>document.querySelector('output').textContent=v);document.querySelector('button').onclick=()=>fetch(address,{method:'POST'}).then(show);show();setInterval(show,50);</script>`);return;}
+  opened.push({room,role:url.searchParams.get('role'),surface:url.searchParams.get('surface')});
+  const page=recordsPage(metadata,url,{studio:{name:'Test'},games:[metadata]});res.writeHead(page.status,Object.fromEntries(page.headers));res.end(await page.text());
+ });server.listen(0,'127.0.0.1');await once(server,'listening');t.after(()=>new Promise(r=>{server.close(r);server.closeAllConnections();}));
+ const result=await checkApp({root,url:`http://localhost:${server.address().port}`,game:'form',meta:metadata,shots:join(root,'shots'),puppeteer,chrome:findChrome()});
+ assert.equal(result.ok,true,JSON.stringify(result));assert.equal(counts.size,3);assert.deepEqual([...counts.values()],[1,1,1]);assert.ok(opened.filter(s=>s.surface==='wall').every(s=>s.role==='display'));assert.ok(readdirSync(join(root,'shots')).length>=7);
+});
