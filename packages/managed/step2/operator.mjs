@@ -10,7 +10,7 @@ export const wrangler=here+'node_modules/.bin/wrangler';
 mkdirSync(local,{recursive:true});
 // Serialize stateful harness commands. Read-only status/proof collection can run
 // while a remote build is pending; mutations may not overwrite another snapshot.
-const readOnly=/\/(status|collect-proof)\.mjs$/.test(process.argv[1]??'')||process.argv[1]==='-';
+const readOnly=/\/(status|collect-proof|scenario)\.mjs$/.test(process.argv[1]??'')||process.argv[1]==='-';
 if(!readOnly)process.once('exit',acquireStateLock(local));
 
 export const state=existsSync(local+'resources.json')?JSON.parse(readFileSync(local+'resources.json')):{account,resources:[],receipts:[]};

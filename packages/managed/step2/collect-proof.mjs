@@ -2,7 +2,7 @@
 import {readFileSync,writeFileSync,mkdirSync,existsSync} from 'node:fs';
 import {local,here,state,api} from './operator.mjs';
 const proof=here+'proof/';mkdirSync(proof,{recursive:true});
-for(const name of ['container-probe.json','share-proof.json','expiry-proof.json','synthetic.json','preview-upload.json','continuity-before.json','continuity-after.json','sentinel-proof.json'])if(existsSync(local+name))writeFileSync(proof+name,readFileSync(local+name));
+for(const name of ['container-probe.json','share-proof.json','expiry-proof.json','synthetic.json','preview-upload.json','continuity-before.json','continuity-after.json','sentinel-proof.json','failed-production-proof.json'])if(existsSync(local+name))writeFileSync(proof+name,readFileSync(local+name));
 const workflows=[];
 for(const push of state.pushes??[]){const result=await api('workflows/hm-s2-release/instances/'+state.tenant.id+'-'+push.commit);if(result)workflows.push({variant:push.variant,commit:push.commit,...result});}
 if(workflows.length)writeFileSync(proof+'workflows.json',JSON.stringify(workflows,null,2)+'\n');
