@@ -190,3 +190,8 @@ test('verification fingerprints the effective file-backed slot manifest for depl
 test('write observations match nested API parameter ordering',()=>{
  assert.equal(readKey('/v1/products',{default_price_data:{currency:'usd',unit_amount:300},metadata:{studio:'proof',origin:'https://proof.example'}}),readKey('/v1/products',{metadata:{origin:'https://proof.example',studio:'proof'},default_price_data:{unit_amount:300,currency:'usd'}}));
 });
+
+test('local verification remains usable for dev builds without installing localhost links in deploy vars',async t=>{
+ const {verifiedMcpConfig}=await import('../lib/shop-mcp.mjs');const root=studio(t),f=fixture();await reconcile(root,f,{url:'http://localhost:8787'});
+ assert.equal(verifiedMcpConfig(root),null);assert.match(readFileSync(join(root,'.dev.vars'),'utf8'),/STRIPE_SHOP_LINKS=base64:/);
+});

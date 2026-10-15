@@ -78,7 +78,8 @@ export async function saveMcpVerification(root, options) {
 export function verifiedMcpConfig(root) {
   const file=join(root,'.studio','stripe-mcp.json');if(!existsSync(file))return null;
   const saved=JSON.parse(readFileSync(file,'utf8'));
+  if(saved.result?.local)return null; // Local builds read .dev.vars, never production bindings.
   const slots=existsSync(join(root,'.studio','booking-slots.json'))?JSON.parse(readFileSync(join(root,'.studio','booking-slots.json'),'utf8')):saved.options?.slots??[];
-  if(!saved.result?.verified || saved.result.local || saved.source!==hash({shop:readShop(root).shop,slots}) || saved.result.site!==new URL(siteUrl(root)).origin)throw new Error('Shop configuration changed; verify through stripe_shop_plan before deploying or installing its webhook.');
+  if(!saved.result?.verified || saved.source!==hash({shop:readShop(root).shop,slots}) || saved.result.site!==new URL(siteUrl(root)).origin)throw new Error('Shop configuration changed; verify through stripe_shop_plan before deploying or installing its webhook.');
   return saved;
 }
