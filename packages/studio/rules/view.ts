@@ -795,25 +795,29 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const before = latest;
     if (before && before.e === f.e && f.k <= before.k) return;
     latest = f;
-    if (before && before.e !== f.e) { sceneHistory.length = 0; sceneCursor = null; }
-    for (const [id, q] of ownerHistory) if (q.epoch !== f.e || !f.ents.has(id)) ownerHistory.delete(id);
-    for (const [id, u] of f.ents) {
-      if (!kindOf.get(u.kind)?.validatedOwner || u.driver !== 'person' || u.ownerTick === undefined || u.ownerTick < 0) continue;
-      let q = ownerHistory.get(id);
-      if (!q || q.epoch !== f.e || q.r !== u.r) { q={epoch:f.e,r:u.r,placedAt:f.k,samples:[],...(q?.epoch===f.e?{previous:q}:{})};ownerHistory.set(id,q); }
-      if (sceneCursor !== null && sceneCursor >= q.placedAt) q.previous = undefined;
-      // Retain no more placement history than the bounded scene history can use.
-      let oldestRevision = q;
-      const oldestTick = sceneHistory[0]?.k ?? f.k;
-      while (oldestRevision.previous && oldestRevision.placedAt > oldestTick) oldestRevision = oldestRevision.previous;
-      oldestRevision.previous = undefined;
-      if (!q.samples.length || u.ownerTick > q.samples.at(-1)!.t) q.samples.push({t:u.ownerTick,u});
-      while (q.samples.length > 2 && sceneCursor !== null && q.samples[1].t < sceneCursor - 2) q.samples.shift();
-      if (q.samples.length > 512) q.samples.shift();
+    // Ordinary rooms already use net.sample's bounded history; retain a second
+    // history only when accepted owner reports need the shared scene clock.
+    if (hasValidatedOwners) {
+      if (before && before.e !== f.e) { sceneHistory.length = 0; sceneCursor = null; }
+      for (const [id, q] of ownerHistory) if (q.epoch !== f.e || !f.ents.has(id)) ownerHistory.delete(id);
+      for (const [id, u] of f.ents) {
+        if (!kindOf.get(u.kind)?.validatedOwner || u.driver !== 'person' || u.ownerTick === undefined || u.ownerTick < 0) continue;
+        let q = ownerHistory.get(id);
+        if (!q || q.epoch !== f.e || q.r !== u.r) { q={epoch:f.e,r:u.r,placedAt:f.k,samples:[],...(q?.epoch===f.e?{previous:q}:{})};ownerHistory.set(id,q); }
+        if (sceneCursor !== null && sceneCursor >= q.placedAt) q.previous = undefined;
+        // Retain no more placement history than the bounded scene history can use.
+        let oldestRevision = q;
+        const oldestTick = sceneHistory[0]?.k ?? f.k;
+        while (oldestRevision.previous && oldestRevision.placedAt > oldestTick) oldestRevision = oldestRevision.previous;
+        oldestRevision.previous = undefined;
+        if (!q.samples.length || u.ownerTick > q.samples.at(-1)!.t) q.samples.push({t:u.ownerTick,u});
+        while (q.samples.length > 2 && sceneCursor !== null && q.samples[1].t < sceneCursor - 2) q.samples.shift();
+        if (q.samples.length > 512) q.samples.shift();
+      }
+      sceneHistory.push(s);
+      if (sceneHistory.length > 512) sceneHistory.shift();
+      sceneCached = null;
     }
-    sceneHistory.push(s);
-    if (sceneHistory.length > 512) sceneHistory.shift();
-    sceneCached = null;
     if (before && before.e !== f.e) held2.length = 0;
     held2.push(f); if (held2.length > 2 * tickHz) held2.shift();
     if (!before || before.e !== f.e) collisionHistory = [];
@@ -1286,13 +1290,14 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   // Accepted owner ticks and server ticks describe the same simulation clock.
   // Receipt time only decides how much history is available, never where one
   // body stands relative to another body's hazards.
+  const hasValidatedOwners = schema.kinds.some(k => k.validatedOwner);
   const sceneHistory: Snapshot<unknown>[] = [];
   interface OwnerHistory { epoch:number; r:number; placedAt:number; samples:{t:number; u:Unpacked}[]; previous?:OwnerHistory }
   const ownerHistory = new Map<string, OwnerHistory>();
   let sceneCursor: number | null = null, sceneAt = 0, sceneFrame: number | null = null;
   let sceneCached: ReturnType<typeof net.sample> = null;
   function sceneSample(raw = net.sample()): ReturnType<typeof net.sample> {
-    if (!raw || raw.renderT === undefined || !schema.kinds.some(k => k.validatedOwner)) return raw;
+    if (!raw || raw.renderT === undefined || !hasValidatedOwners) return raw;
     const now = clock();
     const frame = typeof document === 'undefined' ? now : Number(document.timeline?.currentTime ?? now);
     if (sceneCached && sceneFrame === frame) return sceneCached;

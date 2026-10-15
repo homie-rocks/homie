@@ -50,7 +50,7 @@ export type World<E, F, S, V, C, A, T, Room extends boolean = false> = Clock & {
   inBox<K extends keyof V>(box: { min: Point; max: Point }, kind: K): readonly Query<V[K]>[];
   inBox(box: { min: Point; max: Point }): readonly Query<V[keyof V]>[];
   movement<K extends keyof V>(id: string, kind: K): readonly (Pick<Query<V[K]>, Extract<keyof Query<V[K]>, 'pos' | 'vel' | 'heading' | 'grounded' | 'motion'>> & { readonly tick: number })[];
-  movement(id: string): readonly { readonly tick: number; readonly pos: Vec3; readonly vel: Vec3; readonly motion: Readonly<Record<string, unknown>> }[];
+  movement(id: string): readonly (Pick<Query<V[keyof V]>, Extract<keyof Query<V[keyof V]>, 'pos' | 'vel' | 'heading' | 'grounded' | 'motion'>> & { readonly tick: number })[];
   route(graph: string | ReadonlyArray<readonly [number,number,number,readonly number[]]>, from: number, to: number, options?: {radius?:number;height?:number}): readonly number[];
   ray(from: Point, direction: Point, max: number, options?: RayOptions): RayHit | undefined;
   rays(options?:RayOptions):RaySnapshot;
