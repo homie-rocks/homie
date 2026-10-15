@@ -1,4 +1,3 @@
-import {CfWorkerJsonSchemaValidator} from '@modelcontextprotocol/server/validators/cf-worker';
 import {canonicalJson} from './canonical-json.mjs';
 export const BUSINESS_EVENTS_MIGRATION_FILE='0028_business_events.sql';
 export const BUSINESS_EVENTS_MIGRATION=`
@@ -18,6 +17,7 @@ export async function publishBusinessEvent(env,caller,definition,namespace,{feed
  const declaration=JSON.parse(env.STUDIO_EVENT_FEEDS??'{}')[feed];
  if(!definition.publish?.includes(feed)||!declaration?.schema)throw new Error('Business feed must be declared with a schema and publish capability');
  if(typeof id!=='string'||!id.length||id.length>128)throw new Error('Event id must contain 1–128 characters');
+ const {CfWorkerJsonSchemaValidator}=await import('@modelcontextprotocol/server/validators/cf-worker');
  if(!new CfWorkerJsonSchemaValidator().getValidator(declaration.schema)(data).valid)throw new Error('Event data does not match feed schema');
  const text=canonicalJson(data);if(text.length>8192)throw new Error('Event exceeds 8192 characters');
  const key=JSON.stringify([namespace,feed,id]),digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(declaration.event+'\n'+text))),b=>b.toString(16).padStart(2,'0')).join('');

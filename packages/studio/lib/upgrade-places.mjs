@@ -1,8 +1,10 @@
-import ts from 'typescript';
+import {createRequire} from 'node:module';
 import {existsSync,readdirSync,readFileSync} from 'node:fs';
 import {join} from 'node:path';
 /** Only a standalone, named refresh timer over known record clients is mechanical. */
-export function upgradePlaceView(source){
+export function upgradePlaceView(source,root){
+ // Desktop ships no compiler; use the studio’s installed compiler when available.
+ let ts;try{ts=createRequire(root?join(root,'package.json'):import.meta.url)('typescript');}catch{return source;}
  const file=ts.createSourceFile('view.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
  const factories=new Set(),clients=[];
  for(const statement of file.statements){
@@ -41,7 +43,7 @@ export function placeUpgradeChanges(root){
  const changes=[];
  for(const app of readdirSync(dir,{withFileTypes:true}).filter(d=>d.isDirectory()))for(const [suffix,rewrite] of [['CODEX.md',upgradePlaceCodex],['src/view.ts',upgradePlaceView]]){
   const file=`apps/${app.name}/${suffix}`,path=join(root,file);if(!existsSync(path))continue;
-  const from=readFileSync(path,'utf8'),text=rewrite(from);if(from!==text)changes.push({file,kind:'update-file',from,text,what:'replace a recognized obsolete place workaround with the supported toolkit contract; rerun needs'});
+  const from=readFileSync(path,'utf8'),text=rewrite(from,root);if(from!==text)changes.push({file,kind:'update-file',from,text,what:'replace a recognized obsolete place workaround with the supported toolkit contract; rerun needs'});
  }
  return changes;
 }

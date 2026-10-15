@@ -1,3 +1,6 @@
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {runInNewContext} from 'node:vm';
@@ -16,4 +19,10 @@ test('upgrade corrects exact obsolete capability notes without claiming old need
  const input='# Place\n\n## Limits\nThe runner has no staff surface or MCP step.\n\n## Needs\nOwner has not checked payments.\n';
  const expected='# Place\n\n## Limits\nThe toolkit supports staff surfaces and MCP needs. Rerun the needs; earlier manual evidence is not a passing proof.\n\n## Needs\nOwner has not checked payments.\n';
  assert.equal(upgradePlaceCodex(input),expected);assert.equal(upgradePlaceCodex(expected),expected);
+});
+
+test('upgrade leaves views intact when a desktop studio has no installed compiler',t=>{
+ const root=mkdtempSync(join(tmpdir(),'homie-upgrade-no-compiler-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const source="import {createAppRecords} from '@homie-rocks/studio/apps'; const records=createAppRecords({collection:'spots'});setInterval(refresh,2500);";
+ assert.equal(upgradePlaceView(source,root),source);
 });

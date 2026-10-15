@@ -334,7 +334,8 @@ runtime itself.
 `upgrade --diff` includes recognized obsolete capability notes and standalone
 2–3-second named refresh timers over `createAppRecords` clients. `upgrade --apply`
 replaces those timers with subscriptions and corrects exact stale notes without
-marking old needs passed. Review the diff and rerun the affected needs. Custom
+marking old needs passed. Timer conversion uses the studio’s installed TypeScript
+compiler; run `npm install` in the studio first if it is missing. Review the diff and rerun the affected needs. Custom
 combined timer/jobs, hand-written routes and business-event mirrors need a semantic
 migration to the APIs above; they are not automatically deleted. The owner's
 words, historical evidence and unresolved integration work remain intact.
