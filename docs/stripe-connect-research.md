@@ -1,9 +1,31 @@
-# Stripe connection: managed keys and per-purchase Checkout
+# Stripe connection research — 2026-10-15
 
-The current contract is [SHOP.md](../packages/studio/shop/SHOP.md). The previous Payment Link architecture is removed in this release, including its planner, manual key entry, public assets and slot synchronization.
+See [round 2 status](stripe-round2-status.md). This implementation is not ready for
+release: key lifecycle expiry/rotation and real preview contracts are unfinished.
 
-Stripe's [managed-key preview](https://docs.stripe.com/stripe-apps/api-authentication/managed-api-keys) documents `POST /v2/iam/api_keys`, developer App credentials with `api_key_write` Connect permission, `Stripe-Context`, and encrypted delivery to an RSA public key. The [OAuth flow](https://docs.stripe.com/stripe-apps/api-authentication/oauth) establishes the installing account from a one-use code. The local tool owns the private key; Homie's service stores only ciphertext until acknowledgement and audit identities for lifecycle management. No payment goes through Homie.
+Stripe's [managed-key guide](https://docs.stripe.com/stripe-apps/api-authentication/managed-api-keys)
+documents App `api_key_write`, developer credentials with Connect permission,
+`Stripe-Context`, and RSA-encrypted live delivery. Its prose names RSA-OAEP, while
+its Node example imports RSA-OAEP-256; local decryption accepts those two algorithms
+with A256GCM. Only test-mode plaintext tokens are re-encrypted before delivery;
+there is no live plaintext fallback. Synthetic tests are not recorded responses.
 
-Preview approval and App review are required before real minting. Tests currently use the documented JSON/JWE contract. The App service contains the single real mint acceptance test for after approval; real sandbox payment acceptance is separate and cannot prove preview access.
+The [OAuth guide](https://docs.stripe.com/stripe-apps/api-authentication/oauth)
+uses the App developer secret for code exchange. The service separates that from
+the restricted IAM credential, and uses the OAuth access token for v1 migration
+calls. The service is configured as its own Worker with its own setup DB. OAuth
+access tokens remain in that temporary setup state; no studio webhook signing
+secret passes through it.
 
-The owner runs one tool and approves Homie once. Upgrade retains the old deployment during the in-flight drain, verifies its signed D1 receipts, then installs the Session-only Worker connection. See [migration](../packages/studio/docs/shop-migration.md).
+Webhook setup uses the studio Worker key and stores the endpoint secret in the
+studio DB. The [permission reference](https://docs.stripe.com/stripe-apps/reference/permissions)
+describes object permissions, but does not resolve whether the managed-key preview
+allows an App to mint permissions beyond its own grant. Both mint-only and mirrored
+App manifests are available behind `--permission-model`; Stripe must resolve the
+ceiling before either configuration is released.
+
+The remote callback cannot mint. A one-use confirmation redirects to the local
+127.0.0.1 listener; the owner sees the account, and a same-origin local POST sends
+both confirmation and collect capability. The install URL is opened privately.
+Provider objects, retrieved using the studio key, are required before fulfilment;
+a signed event body alone is insufficient.

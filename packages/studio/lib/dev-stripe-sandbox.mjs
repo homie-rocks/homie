@@ -6,7 +6,7 @@ import { stripeProcess } from './stripe-connect.mjs';
 export async function startStripeSandbox({ origin, profile, restrictedKey }) {
   const target = new URL(origin);
   if (target.protocol !== 'http:' || !['127.0.0.1','localhost'].includes(target.hostname)) throw new Error('Sandbox acceptance requires loopback');
-  if (profile !== 'Homie sandbox') throw new Error('Acceptance uses only the Homie sandbox CLI profile');
+  if (profile !== 'homie-636e9d423df0184d0af88019') throw new Error('Acceptance uses only the Homie sandbox CLI profile');
   if (!/^rk_test_[A-Za-z0-9]+$/.test(restrictedKey ?? '')) throw new Error('Inject a Dashboard-made sandbox restricted key privately through stdin');
   const call = async (method,path,params=new URLSearchParams(),idempotency) => {
     const args=['--project-name',profile,method.toLowerCase(),path,'--stripe-version','2025-03-31.basil'];

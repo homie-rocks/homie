@@ -36,13 +36,7 @@ export async function bindSubscription(env, order, session, shop) {
   const firstInvoice=idOf(session.invoice);
   if(firstInvoice)await env.DB.prepare('INSERT INTO meta(key,value) VALUES(?1,?2) ON CONFLICT(key) DO NOTHING').bind(`subscription-first-invoice:${subscription}`,firstInvoice).run();
   await reconcileMembership(env, subscription, shop);
-  if(!hasStripeKey(env)) {
-    const invoice=typeof session.invoice==='string'?session.invoice:session.invoice?.id;
-    if(invoice) {
-      const saved=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-invoice:${invoice}`).first();
-      if(saved)await invoiceMembership(env,subscription,JSON.parse(saved.value));
-    }
-  }
+
 }
 
 /** Stripe retries unknown subscriptions until their Checkout has established ownership.
@@ -68,7 +62,6 @@ export async function subscriptionEvent(env, event, shop) {
   }
   if (event.livemode !== (row.mode === 'live')) return 'ignored';
   await reconcileMembership(env, subscription, shop);
-  if(event.type==='invoice.paid' && !hasStripeKey(env))await invoiceMembership(env,subscription,obj);
   const at=(event.created ?? 0)*1000;
   let type, state;
   if (event.type === 'customer.subscription.deleted') { type='subscription.cancelled'; state='cancelled'; }

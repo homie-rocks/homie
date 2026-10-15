@@ -1,9 +1,20 @@
-# Checkout migration
+# Checkout migration — unreleased
 
-Run `homie-studio upgrade`, then `homie-studio shop connect`. The owner approves the official Homie Stripe App once. Do not manually deploy over the old payment handler during the drain.
+Do not use this branch for a production cutover yet. See
+[round 2 status](../../../docs/stripe-round2-status.md) for remaining release gates.
 
-The App matches existing links and webhook endpoints to this studio origin in the installing account, stops new link sessions, and waits for in-flight payments. The local tool reads D1 to confirm every completed Session already has a receipt committed by the old signed webhook. It never grants from an API read.
+The intended sequence implemented by connect is: origin proof and local account
+confirmation; encrypted key delivery; private key installation; Checkout deployment;
+Worker-owned webhook bootstrap; link deactivation and immediate expiry of open
+link sessions; cursor-based receipt drain; old hook retirement and acknowledgement.
+The new webhook is excluded from retirement. Polling is at least 30 seconds.
+Completed asynchronous unpaid sessions do not hold up deployment.
 
-After the drain, the tool deploys the upgraded Worker, installs the encrypted managed key and webhook secret privately, disables old endpoints, and removes retired bindings and public link configuration. Orders, bookings and subscription ownership stay in the existing database.
-
-Only Checkout Sessions remain. Missing, revoked or expired credentials ask for reconnection; there is no manual-key or Payment Link fallback. Managed-key preview access and App review are prerequisites for real minting.
+Legacy `purchase-links-v1` orders retain their payment/subscription ownership
+bindings. A compatibility path verifies pending purchase link sessions through
+Stripe. The requested real 0.53 database fixture and complete shop-link async
+migration acceptance have not been supplied/proven. In particular, older deployments
+without the well-known proof route need a verified bootstrap rollout; there is no
+origin-proof bypass. Crash recovery, OAuth refresh for long migrations and managed-key
+expiry/rotation remain unfinished. Existing rows are retained, but that alone is
+not evidence that every legacy purchase flow survives migration.

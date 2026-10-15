@@ -401,10 +401,10 @@ async function site({ key = true, managed = false, catalog = null, settings = nu
   /** Stripe's webhook, signed with the endpoint's (test) secret. */
   const hook = async (type, object, { id = `evt_${Math.random().toString(36).slice(2, 12)}`, livemode = false, secret = HOOK_SECRET, t = Math.floor(Date.now() / 1000), created = t, updateProvider = true } = {}) => {
     // Provider truth changes before delivery; duplicate deliveries do not add refunds.
-    if (type.startsWith('checkout.session.') && object.payment_intent && secret === HOOK_SECRET && !livemode) {
-      stripe.behave.payments.set(object.payment_intent, { ...stripe.behave.payments.get(object.payment_intent), amount: object.amount_total ?? object.amount_subtotal, metadata: object.metadata });
+    if (updateProvider && type.startsWith('checkout.session.') && secret === HOOK_SECRET && !livemode) {
+      if(object.payment_intent) stripe.behave.payments.set(object.payment_intent, { ...stripe.behave.payments.get(object.payment_intent), amount: object.amount_total ?? object.amount_subtotal, metadata: object.metadata });
       const session = stripe.behave.sessions.get(object.id);
-      if (session) Object.assign(session, object);
+      if (session) Object.assign(session, object, {status:type==='checkout.session.expired'?'expired':'complete',livemode:false});
     }
     if (updateProvider && type.startsWith('refund.') && object.id) stripe.behave.refunds.set(object.id, { ...object });
     if (type === 'charge.refunded') {
@@ -880,7 +880,7 @@ test('stripe-mock: Stripe\'s own API description accepts both tills\' Checkout S
 });
 
 test('stripe-mock: the catalog\'s writes, a checkout that names its Product, and the webhook the connect page makes', { skip: MOCK ? false : 'STRIPE_MOCK_URL is not set (CI starts stripe-mock; locally: stripe-mock -http-port 12111)' }, async () => {
-  const { stripeCall, createWebhookEndpoint, updateWebhookEndpoint } = await import('../worker/stripe.mjs');
+  const { stripeCall } = await import('../worker/stripe.mjs');
   const { HOOK_EVENTS } = await import('../lib/shop.mjs');
   const env = { STRIPE_CHECKOUT_MODE: 'sessions', STRIPE_KEY: TEST_KEY, STRIPE_API_BASE: MOCK };
   // The writes `shop catalog --have` lists for an empty account, then a price change, as the owner's AI sends them.
@@ -900,9 +900,9 @@ test('stripe-mock: the catalog\'s writes, a checkout that names its Product, and
   const price = await stripeCall(env, change.writes[1].method, change.writes[1].path, change.writes[1].params);
   await stripeCall(env, 'POST', change.writes[2].path, { default_price: price.id });
   // The webhook, as the connect page makes it, and an older one turned off.
-  const made = await createWebhookEndpoint(env, { url: 'https://owls.example/api/shop/hook', enabled_events: [...HOOK_EVENTS], api_version: '2025-03-31.basil', description: 'Homie shop', metadata: { homie: 'shop-v1' } });
+  const made = await stripeCall(env, 'POST', '/v1/webhook_endpoints', { url: 'https://owls.example/api/shop/hook', enabled_events: [...HOOK_EVENTS], api_version: '2025-03-31.basil', description: 'Homie shop', metadata: { homie: 'shop-v1' } });
   assert.match(String(made.id), /^we_/);
-  await updateWebhookEndpoint(env, made.id, { disabled: true });
+  await stripeCall(env, 'POST', `/v1/webhook_endpoints/${made.id}`, { disabled: true });
   // A checkout naming the catalog's Product, both tills.
   for (const managed of [false, true]) {
     const s = await site({ managed, catalog: ['test'] });
@@ -1698,6 +1698,7 @@ test('verified late payments grant once after missing, release, expiry or failur
       assert.equal(office.orders[0].status, state);
       assert.ok(office.orders[0].note);
     }
+    s.stripe.behave.error = null; // Provider has recovered; notifications alone cannot authorize fulfilment.
     const paid = { ...row.truth, payment_intent: 'pi_late', payment_status: 'paid' };
     const event = { id: 'evt_late_payment' };
     assert.equal((await (await s.hook(type, paid, event)).json()).did, 'paid');
@@ -2008,7 +2009,7 @@ test('working setup, unseen paid orders, cancellation, free carts and redacted S
   const freeSession = s.stripe.behave.sessions.get(free.session ?? s.DB.sql.prepare('SELECT session FROM shop_orders WHERE id=?').get(free.order).session);
   await s.hook('checkout.session.completed', {...freeSession, payment_status:'no_payment_required', payment_intent:null});
   assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(free.order).status, 'paid');
-  assert.equal(s.stripe.calls.length, calls + 1);
+  assert.equal(s.stripe.calls.length, calls + 3, 'create and independently verify Checkout before granting');
   const { StripeError, redactStripe } = await import('../worker/stripe.mjs');
   const secret = ['cs', 'test', 'example', 'secret', 'sensitive'].join('_');
   const error = new StripeError(502, { error: { message: `${TEST_KEY} ${HOOK_SECRET} ${secret}`, code: secret, param: TEST_KEY } });
@@ -2681,4 +2682,16 @@ test('exact deposit and giver-chosen Checkout preserve references and enforce co
       assert.ok(s.DB.sql.prepare('SELECT paid_at FROM shop_orders WHERE id=?').get(row.id).paid_at);
     }
   } finally { s.stripe.close(); }
+});
+
+test('a forged signed paid notification cannot grant an unpaid provider Checkout',async()=>{
+ const s=await site({settings:{policy:undefined,capPerPlayerMonth:null,automaticTax:false}});
+ const p=s.player();
+ const buy=await(await s.post('/api/shop/buy',{item:'supporter'},s.as(p))).json();
+ const row=s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id=?').get(buy.order);
+ const real=s.stripe.behave.sessions.get(row.session);
+ const response=await s.hook('checkout.session.completed',{...real,status:'complete',payment_status:'paid',payment_intent:'pi_forged'},{updateProvider:false});
+ assert.equal(response.status,200);
+ assert.equal(s.DB.sql.prepare('SELECT paid_at FROM shop_orders WHERE id=?').get(row.id).paid_at,null);
+ assert.equal(s.DB.sql.prepare('SELECT COUNT(*) n FROM entitlements WHERE order_id=?').get(row.id).n,0);
 });

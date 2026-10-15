@@ -1,6 +1,5 @@
 /** Checkout credentials stay in the studio Worker. */
 import { KEY_SHAPE, modeOf } from './stripe.mjs';
-export const LINKS_STRIPE_VERSION = '2026-09-30.endive';
 export const hasStripeKey = env => KEY_SHAPE.test(String(env?.STRIPE_KEY ?? ''));
 export const shopMode = env => modeOf(env?.STRIPE_KEY);
 /** Only signed snapshot events call this. Store financial fields, never customer/card data.

@@ -21,6 +21,8 @@ import {
   active,
 } from "./purchase-store.mjs";
 export async function reconcilePurchaseSession(env, session) {
+  session = await retrieveCheckoutSession(env, session.id);
+  if(session.payment_link && session.metadata?.homie === 'purchase-links-v1')return reconcileLinkSession(env,session);
   if (
     !session.metadata?.order ||
     !(await env.DB.prepare(
@@ -90,7 +92,7 @@ export async function reconcileSubscription(env, o, { signed = false } = {}) {
     { expand: ["latest_invoice"] },
   );
   if (
-    sub.metadata?.order !== o.id ||
+    (sub.metadata?.order !== o.id && !await legacyPurchaseBinding(env,o,sub,'subscription')) ||
     Boolean(sub.livemode) !== (o.mode === "live")
   )
     throw new Error("Subscription mismatch");
@@ -255,24 +257,13 @@ export async function reconcileSubscription(env, o, { signed = false } = {}) {
 /** Re-read the provider so delayed or missing webhooks cannot preserve refunded access. */
 export async function reconcileOneTime(env, o) {
   if (!o.paid_at || !o.payment || o.mode !== shopMode(env)) return;
-  if (!hasStripeKey(env)) {
-    const refunds = await paymentRefunds(env, o.payment, o);
-    const refunded = [...refunds.values()].filter(r=>r.status === 'succeeded').reduce((n,r)=>n+r.amount,0);
-    if (!Number.isSafeInteger(refunded) || refunded < 0 || refunded > Number(o.total ?? o.amount)) throw new Error('Invalid Stripe refund total');
-    const dispute = (await rememberedMoney(env,o.payment,o.mode)).find(r=>r.id.startsWith('dp_'));
-    const state = refunded === Number(o.total ?? o.amount) && refunded > 0 ? 'refunded' : dispute?.status === 'lost' ? 'lost' : dispute && !['won','warning_closed'].includes(dispute.status) ? 'disputed' : 'paid';
-    const completed = [...refunds.values()].find(r=>r.status === 'succeeded');
-    const reversed = [...refunds.values()].some(r=>['failed','canceled'].includes(r.status));
-    await orderFact(env,o.id,state,state === 'refunded' ? {refund:completed?.id} : {},{refundReversal:Boolean(reversed)}).run();
-    return;
-  }
   const pi = await stripeCall(
     env,
     "GET",
     `/v1/payment_intents/${encodeURIComponent(o.payment)}`,
     { expand: ["latest_charge"] },
   );
-  if (pi.metadata?.order !== o.id || pi.metadata?.homie !== "purchase-v1")
+  if ((pi.metadata?.order !== o.id || pi.metadata?.homie !== "purchase-v1") && !await legacyPurchaseBinding(env,o,pi,'payment'))
     throw new Error("Payment order mismatch");
   const charge = pi.latest_charge;
   if (!charge || typeof charge !== "object") return;
@@ -326,11 +317,13 @@ export async function purchasePaymentEvent(env, event) {
   try { await env.DB.prepare("SELECT 1 FROM purchase_orders LIMIT 0").first(); }
   catch (error) { if (/no such table/.test(error.message)) return null; throw error; }
 
+  if (event.type.startsWith('checkout.session.') && obj.payment_link && obj.metadata?.homie === 'purchase-links-v1') return reconcilePurchaseSession(env,obj);
   if (!event.type.startsWith('checkout.session.')) await rememberMoneyEvent(env,event);
   if (
     event.type === "payment_intent.succeeded" &&
     obj.metadata?.homie === "purchase-v1"
   ) {
+    if (obj.status !== "succeeded") return null;
     const o = await byId(env, obj.metadata.order);
     if (
       !o ||
@@ -509,4 +502,46 @@ export async function purchasePaymentEvent(env, event) {
       await cancelSubscription(env, o.subscription);
   }
   return "purchase-reconciled";
+}
+
+/** Link-era identifiers differ from metadata.order; only the persisted 0.53 binding authorizes them. */
+export async function legacyPurchaseBinding(env, order, object, kind) {
+ if(object.metadata?.homie !== 'purchase-links-v1' || object.id !== order[kind])return false;
+ const row=kind==='subscription'
+  ? await env.DB.prepare('SELECT id FROM purchase_orders WHERE id=?1 AND subscription=?2').bind(order.id,object.id).first()
+  : await env.DB.prepare('SELECT order_id FROM purchase_payments WHERE order_id=?1 AND payment=?2').bind(order.id,object.id).first();
+ return Boolean(row);
+}
+
+// Compatibility for asynchronous link payments opened before Checkout cutover.
+async function reconcileLinkSession(env, session) {
+  let o = await byId(env, session.client_reference_id);
+  if (!o) return 'purchase-unknown';
+  const saved = await env.DB.prepare('SELECT value FROM meta WHERE key = ?1').bind(`purchase-link:${o.id}`).first();
+  const link = saved && JSON.parse(saved.value);
+  if (!link || session.payment_link !== link.id || session.metadata?.revision !== link.revision || session.currency !== o.currency || session.amount_subtotal !== o.amount || session.livemode !== (o.mode === 'live')) throw new Error('Purchase Payment Link terms mismatch');
+  if (!['paid','no_payment_required'].includes(session.payment_status)) return 'purchase-waiting';
+  await bindHostedSession(env,o.id,session.id);
+  o = await byId(env,o.id);
+  if (o.session !== session.id) {
+    // Public links are reusable. Every verified payment gets its own immutable order.
+    const { createPurchase } = await import('./purchase-store.mjs');
+    const { digest } = await import('./purchase-crypto.mjs');
+    const existing = await env.DB.prepare('SELECT id FROM purchase_orders WHERE session = ?1').bind(session.id).first();
+    const next = {...o,id:`ord_${(await digest(session.id)).slice(0,20)}`,session:null,payment:null,status:'started',claim_hash:await digest(`${o.claim_hash}:${session.id}`),created_at:Date.now()};
+    if (!existing) { try { await createPurchase(env,next); } catch(error) { if (!await byId(env,next.id)) throw error; } }
+    o = await byId(env,existing?.id ?? next.id);
+    await env.DB.prepare('INSERT OR IGNORE INTO meta (key,value) VALUES (?1,?2)').bind(`purchase-link:${o.id}`,JSON.stringify(link)).run();
+    await bindHostedSession(env,o.id,session.id);
+  }
+  const payment = idOf(session.payment_intent), subscription = idOf(session.subscription);
+  if ((termsOf(o).billing !== 'one-time') !== Boolean(subscription) || !subscription && !payment && session.amount_total !== 0) throw new Error('Purchase payment kind mismatch');
+  await env.DB.batch([
+    orderFact(env,o.id,'details',{session:session.id,customer:idOf(session.customer) ?? null,subscription:subscription ?? null}),
+    ...(!subscription ? [orderFact(env,o.id,'payment',{payment:payment ?? null,total:session.amount_total,tax:session.total_details?.amount_tax ?? 0,paid_at:Date.now()})] : []),
+    ...(payment ? [env.DB.prepare('INSERT OR IGNORE INTO purchase_payments (payment,order_id) VALUES (?1,?2)').bind(payment,o.id)] : [])
+  ]);
+  if (payment) await reconcileOneTime(env,await byId(env,o.id));
+  if (subscription) await reconcileSubscription(env,await byId(env,o.id),{signed:true});
+  return 'purchase-checkout';
 }

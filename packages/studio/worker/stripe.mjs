@@ -93,11 +93,11 @@ export async function stripeCall(env, method, path, params = null, { idempotency
   try { return await sdk.rawRequest(method, path + query, method === 'POST' ? params : null,
     { ...(idempotencyKey ? { idempotencyKey } : {}) }); }
   catch (error) {
-    if ([401, 403].includes(error.statusCode) && env.DB) {
+    if ((error.statusCode === 401 || error.code === 'api_key_expired') && env.DB) {
       const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key))), b => b.toString(16).padStart(2, '0')).join('');
       await env.DB.prepare('INSERT INTO meta(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind('stripe-reconnect', digest).run();
     }
-    throw new StripeError(error.statusCode ?? 502, { error: { message: [401,403].includes(error.statusCode) ? 'Reconnect Stripe by approving the Homie app.' : redactStripe(error.message, env), code: error.code, type: error.type, param: error.param } });
+    throw new StripeError(error.statusCode ?? 502, { error: { message: (error.statusCode === 401 || error.code === 'api_key_expired') ? 'Reconnect Stripe by approving the Homie app.' : redactStripe(error.message, env), code: error.code, type: error.type, param: error.param } });
   }
 }
 
@@ -105,11 +105,6 @@ export const createCheckoutSession = (env, params, opts) => stripeCall(env, 'POS
 export const retrieveCheckoutSession = (env, id, opts) => stripeCall(env, 'GET', `/v1/checkout/sessions/${encodeURIComponent(id)}`, null, opts);
 export const createRefund = (env, params, opts) => stripeCall(env, 'POST', '/v1/refunds', params, opts);
 export const expireCheckoutSession = (env, id, opts) => stripeCall(env, 'POST', `/v1/checkout/sessions/${encodeURIComponent(id)}/expire`, {}, opts);
-export const listWebhookEndpoints = (env, opts) => stripeCall(env, 'GET', '/v1/webhook_endpoints', { limit: 100 }, opts);
-/** The answer carries the endpoint's signing secret (`secret`), once: the caller puts it in the Worker and drops it. */
-export const createWebhookEndpoint = (env, params, opts) => stripeCall(env, 'POST', '/v1/webhook_endpoints', params, opts);
-export const updateWebhookEndpoint = (env, id, params, opts) => stripeCall(env, 'POST', `/v1/webhook_endpoints/${encodeURIComponent(id)}`, params, opts);
-
 /* ------------------------------------------------------------------ webhooks */
 
 const enc = new TextEncoder();
@@ -208,4 +203,19 @@ export async function portalConfiguration(env, origin) {
   if (!/^bpc_[A-Za-z0-9]+$/.test(config.id ?? '')) throw new Error('Stripe portal configuration unavailable');
   await env.DB.prepare('INSERT INTO meta(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(key, config.id).run();
   return config.id;
+}
+
+/** Webhook signatures identify a notification; the studio key establishes money truth. */
+export async function retrieveEventObject(env, event, call = stripeCall) {
+  const type = event.type;
+  const resource = type.startsWith('checkout.session.') ? 'checkout/sessions' :
+    type.startsWith('payment_intent.') ? 'payment_intents' :
+    type.startsWith('invoice.') ? 'invoices' :
+    type.startsWith('customer.subscription.') ? 'subscriptions' : null;
+  if (!resource) return event.data?.object;
+  const id = event.data?.object?.id;
+  if (typeof id !== 'string' || !/^[A-Za-z0-9_]+$/.test(id)) throw new Error('Invalid Stripe object');
+  const object = await call(env, 'GET', `/v1/${resource}/${encodeURIComponent(id)}`);
+  if (object.id !== id) throw new Error('Stripe identity mismatch');
+  return object;
 }

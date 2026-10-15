@@ -1,3 +1,4 @@
+import {webhookSecret} from './stripe-bootstrap.mjs';
 import {claimHoldStatement,ownedHold} from './booking-holds.mjs';
 import { stripeEventOwner } from './stripe-ownership.mjs';
 import { localSession } from './local-test.mjs';
@@ -46,7 +47,7 @@ import {
   orderLines, lineView, bandOfPlayer, forgetPlayerShop, grantStatements, migrationNeeded, migrated, newOrderId, orderById, orderByPayment, orderBySession, orderView, playerOrderStatus, ownsOf, restoreStatement, revokeStatement,
   setBand, shopDataOf, spentThisMonth,
 } from './shop-store.mjs';
-import { apiBase, STRIPE_API, redactStripe, WEBHOOK_SECRET_SHAPE, KEY_SHAPE, stripeCall, StripeError, createCheckoutSession, createRefund, expireCheckoutSession, dashboardLink, isApprovalRequired, isMissingProduct, productIdOf, verifyWebhook } from './stripe.mjs';
+import { retrieveEventObject, apiBase, STRIPE_API, redactStripe, WEBHOOK_SECRET_SHAPE, KEY_SHAPE, stripeCall, StripeError, createCheckoutSession, createRefund, expireCheckoutSession, dashboardLink, isApprovalRequired, isMissingProduct, productIdOf, verifyWebhook } from './stripe.mjs';
 import { SHOP_JS, officeShopPage, parentPage, refundsPage, shopPage, thanksPage } from './shop-page.mjs';
 import { notFoundPage } from './site.mjs';
 
@@ -143,7 +144,7 @@ export async function readiness(env, shop) {
   else if (shop.broken) missing.push('shop.json-refused');
   else if (shop.till === 'off') missing.push('till-off');
   else if (!shop.items.length) missing.push('items');
-  const paidItems = Boolean(shop?.items.length);
+  const paidItems = Boolean(shop?.items.some(item => item.price !== 0));
   if (paidItems && !hasStripeKey(env)) missing.push('stripe-key');
   if (paidItems && hasStripeKey(env) && env.DB) {
     const saved = await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind('stripe-reconnect').first();
@@ -154,7 +155,7 @@ export async function readiness(env, shop) {
   }
   // Reliable fulfillment requires the webhook as well as the redirect.
   // https://docs.stripe.com/checkout/fulfillment
-  if (paidItems && !WEBHOOK_SECRET_SHAPE.test(String(env?.STRIPE_WEBHOOK_SECRET ?? ''))) missing.push('webhook-secret');
+  if (paidItems && !WEBHOOK_SECRET_SHAPE.test(String(await webhookSecret(env) ?? ''))) missing.push('webhook-secret');
   let migration = null;
   if (!env?.DB) missing.push('database');
   else if ((migration = await migrationNeeded(env))) missing.push('migration');
@@ -792,9 +793,13 @@ async function hook(request, env, cat, shop, ready) {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) return fail(503, 'setting', 'SHOP_WEBHOOK_BYTES is a positive whole number.');
   const payload = await boundedText(request, maxBytes);
   if (payload === null) return fail(413, 'too-large', 'The studio webhook byte limit was reached.');
-  const v = await verifyWebhook(payload, request.headers.get('stripe-signature'), env.STRIPE_WEBHOOK_SECRET);
+  const v = await verifyWebhook(payload, request.headers.get('stripe-signature'), await webhookSecret(env));
   if (!v.ok) return fail(v.why === 'no-secret' ? 503 : 400, v.why, 'not a webhook from this studio\'s Stripe');
   const ev = v.event;
+  const notified = ev.data?.object ?? {};
+  if (ev.type.startsWith('checkout.session.') && !notified.metadata?.order && !notified.client_reference_id && !await orderBySession(env,notified.id)) return json({ok:true,did:'ignored'});
+  if (ev.type.startsWith('invoice.') && !notified.subscription && !notified.parent?.subscription_details?.subscription) return json({ok:true,did:'ignored'});
+  try { ev.data.object = await retrieveEventObject(env, ev); } catch { return fail(503, 'stripe-verification', 'Retry after Stripe verification is available.'); }
   const obj = ev.data?.object ?? {};
   const needed = ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired', 'charge.refunded', 'refund.created', 'refund.updated', 'refund.failed', 'charge.dispute.created', 'charge.dispute.closed'];
   if (selling.enabled) {
@@ -815,7 +820,7 @@ async function hook(request, env, cat, shop, ready) {
     if (subscriptionResult !== null) return json({ ok: true, did: subscriptionResult });
     const sessionEvent = ev.type.startsWith('checkout.session.');
     if (!sessionEvent) await rememberMoneyEvent(env, ev);
-    if (sessionEvent && obj.metadata?.order && !obj.payment_link) {
+    if (sessionEvent && obj.metadata?.order) {
       await env.DB.prepare(`UPDATE shop_orders SET session=?2 WHERE id=?1 AND session IS NULL AND mode=?3
         AND EXISTS(SELECT 1 FROM meta WHERE key='booking-checkout:' || shop_orders.id)`)
         .bind(obj.metadata.order, obj.id, ev.livemode ? 'live' : 'test').run();
@@ -838,8 +843,7 @@ async function hook(request, env, cat, shop, ready) {
         metadata = payment.metadata;
         named = metadata?.order ? await orderById(env, metadata.order) : null;
       }
-      if (!named) return json({ ok: true, did: !sessionEvent && !hasStripeKey(env) ? 'remembered' : 'ignored' });
-      if (!hasStripeKey(env) && !sessionEvent) return json({ ok: true, did: 'remembered' });
+      if (!named) return json({ ok: true, did: 'ignored' });
       if (sessionEvent) return fail(503, 'unknown-order', 'Payment order is not recorded yet; retry this event.');
       if (!(await migrated(env))) return fail(503, 'not-migrated', MISSING_WORDS.migration);
       if (named.payment || named.mode !== shopMode(env)) return json({ ok: true, did: 'ignored' });
@@ -879,7 +883,6 @@ async function hook(request, env, cat, shop, ready) {
         break;
       case 'charge.dispute.created':
         did = await disputed(env, String(obj.payment_intent ?? ''), String(obj.id ?? ''));
-        if (!hasStripeKey(env)) for (const d of await rememberedMoney(env, obj.payment_intent, known.mode)) if (d.id === obj.id && ['lost', 'won', 'warning_closed'].includes(d.status)) did = await disputeClosed(env, obj.payment_intent, d.status);
         break;
       case 'charge.dispute.closed':
         did = await disputeClosed(env, String(obj.payment_intent ?? ''), String(obj.status ?? ''));
@@ -887,7 +890,6 @@ async function hook(request, env, cat, shop, ready) {
       default:
         break;
     }
-    if (did === 'needs-keyed-recovery') return fail(503, did, 'This earlier multi-item checkout needs its original connection to recover tax per line. Reconnect it, then resend this event.');
     if (did === 'missing-item' || did === 'unknown-order') return fail(503, did, did === 'missing-item' ? 'Restore this order item in shop.json to grant it; the office can refund its payment.' : 'Payment order is not recorded yet; retry this event.');
     await env.DB.prepare('INSERT INTO shop_events (id, type, at) VALUES (?1, ?2, ?3) ON CONFLICT(id) DO NOTHING').bind(ev.id, ev.type, Date.now()).run();
     if (Math.random() < 0.02) await env.DB.prepare('DELETE FROM shop_events WHERE at < ?1').bind(Date.now() - 60 * DAY).run();
@@ -900,6 +902,10 @@ async function hook(request, env, cat, shop, ready) {
 
 /** A paid checkout: the order is paid, its entitlements granted, its payment recorded. Idempotent. */
 export async function paid(env, shop, session, paidAt = Date.now()) {
+  // A signed notification is a hint, never authority to grant access.
+  session = await stripeCall(env, 'GET', `/v1/checkout/sessions/${encodeURIComponent(session.id)}`);
+  if (!['paid', 'no_payment_required'].includes(session.payment_status)) return 'unpaid';
+  if (session.livemode !== (shopMode(env) === 'live')) return 'mismatch';
   const o = await orderBySession(env, session.id);
   if (!o) return 'unknown-order';
   // The session must be the one this order opened, for this player and this price.
@@ -913,7 +919,7 @@ export async function paid(env, shop, session, paidAt = Date.now()) {
     return 'already';
   }
   const payment = typeof session.payment_intent === 'string'
-    ? !hasStripeKey(env) ? { id: session.payment_intent } : await stripeCall(env, 'GET', `/v1/payment_intents/${encodeURIComponent(session.payment_intent)}`, { expand: ['latest_charge'] }) : session.payment_intent;
+    ? await stripeCall(env, 'GET', `/v1/payment_intents/${encodeURIComponent(session.payment_intent)}`, { expand: ['latest_charge'] }) : session.payment_intent;
   let dispute = null;
   if (hasStripeKey(env) && payment?.latest_charge?.disputed) {
     const list = await stripeCall(env, 'GET', '/v1/disputes', { payment_intent: payment.id, limit: 100 });
@@ -928,18 +934,11 @@ export async function paid(env, shop, session, paidAt = Date.now()) {
   if (!Number.isSafeInteger(total) || !Number.isSafeInteger(tax) || total < 0 || tax < 0 || total !== Number(o.amount) + tax) return 'mismatch';
   let stripeLines = null;
   if (lines.length > 1 && tax) {
-    if (!hasStripeKey(env)) {
-      const saved=await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-invoice:${typeof session.invoice==='string'?session.invoice:session.invoice?.id}`).first();
-      const invoice=saved&&JSON.parse(saved.value);
-      if(!invoice || invoice.lines?.has_more)throw new Error('Waiting for complete signed invoice');
-      stripeLines=invoice.lines.data.map(l=>({quantity:l.quantity,amount_subtotal:l.amount,amount_total:l.amount+(l.taxes??l.tax_amounts??[]).reduce((n,t)=>n+t.amount,0),price:{id:l.price?.id??l.pricing?.price_details?.price,product:JSON.parse(lines.find(x=>JSON.parse(x.snapshot).stripePrice===(l.price?.id??l.pricing?.price_details?.price))?.snapshot??'{}').stripeProduct}}));
-    } else {
     // Use Stripe's actual tax per line, never spread tax across products with different tax codes.
     // https://docs.stripe.com/api/checkout/sessions/line_items
     const response = await stripeCall(env, 'GET', `/v1/checkout/sessions/${encodeURIComponent(session.id)}/line_items`, { limit: 100, expand: ['data.price.product'] });
     if (response.has_more || response.data?.length !== lines.length) throw new Error('Stripe line totals are incomplete');
     stripeLines = [...response.data];
-    }
   }
   const writes = [];
   let lineTotal = 0;
@@ -976,10 +975,7 @@ export async function paid(env, shop, session, paidAt = Date.now()) {
   }
   if (paymentId) {
     await syncRefunds(env, paymentId);
-    if (!hasStripeKey(env)) for (const d of await rememberedMoney(env, paymentId, o.mode)) if (d.id.startsWith('dp_')) {
-      await disputed(env, paymentId, d.id);
-      if (['lost', 'won', 'warning_closed'].includes(d.status)) await disputeClosed(env, paymentId, d.status);
-    }
+
   }
   if (lines.some(l => l.snapshot && JSON.parse(l.snapshot).interval)) await bindSubscription(env, await orderById(env,o.id), session, shop);
   await env.DB.prepare('UPDATE shop_orders SET attention = 0 WHERE id = ?1').bind(o.id).run();

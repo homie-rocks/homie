@@ -27,7 +27,7 @@ test('real Stripe sandbox acceptance', async t => {
  sql.prepare('INSERT INTO app_records VALUES(?,?,?,?,1,1)').run('tuning','slots','morning',JSON.stringify({capacity:1}));
  const server=createServer(async(req,res)=>{let body='';for await(const c of req)body+=c;const url=new URL(req.url,origin);const r=await shopRoutes(new Request(url,{method:req.method,headers:req.headers,...(req.method==='POST'?{body}:{})}),env,{},url,{catalogueOf:async()=>cat});res.writeHead(r.status,Object.fromEntries(r.headers));res.end(await r.text());});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin=`http://127.0.0.1:${server.address().port}`;t.after(()=>new Promise(r=>server.close(r)));
- const profile='Homie sandbox';
+ const profile='homie-636e9d423df0184d0af88019';
  const restrictedKey=readFileSync(0,'utf8').trim();
  if(!/^rk_test_[A-Za-z0-9]+$/.test(restrictedKey))throw new Error('A sandbox restricted key must be supplied privately on stdin');
  const stripe=await startStripeSandbox({origin,profile,restrictedKey});t.after(async()=>{await stripe.close();sql.close();});Object.assign(env,stripe.bindings);

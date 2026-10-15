@@ -1,3 +1,4 @@
+import {stripeBootstrapRoute} from './stripe-bootstrap.mjs';
 import {appGraphicsFallback} from './app-graphics.mjs';
 import {JOIN_AREA_FRAME_JS} from './join-area.mjs';
 import { directoryUrl } from './directory-choice.mjs';
@@ -633,6 +634,7 @@ export default {
     await maintenance;
   },
   async fetch(request, env, ctx) {
+    if (new URL(request.url).pathname === '/api/shop/stripe-setup') return stripeBootstrapRoute(request, env);
     if (request.method === 'GET' && new URL(request.url).pathname === '/.well-known/homie-stripe-setup') return Response.json({ challenge: env.STRIPE_SETUP_CHALLENGE ?? null }, { headers: { 'cache-control': 'no-store' } });
     await removeReferralLeftovers(env);
     const url = new URL(request.url);
