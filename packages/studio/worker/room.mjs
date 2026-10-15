@@ -401,7 +401,7 @@ export class NetRoom {
   /* ------------------------------------------------------------ sockets */
 
   /** A new relay socket. Returns the two callbacks the transport must call. */
-  attach(conn) {
+  attach(conn, resume = null) {
     const now = this.now();
     const c = {
       id: randomId(6), conn, ip: conn.ip ?? null, browser: conn.browser ?? null, player: conn.player ?? null, via: conn.via ?? null, helloed: false, seat: null, token: null, name: '', typed: '', colour: 0,
@@ -422,6 +422,7 @@ export class NetRoom {
       // address, so a helper from before revisions carries it too) when the transport gives one, else the hello's.
       verWord: 'ver' in conn ? versionOf(conn.ver) : undefined, ver: null, feat: [], staleTold: false,
     };
+    if(resume)Object.assign(c,resume,{conn});
     this.clients.set(c.id, c);
     return {
       id: c.id,

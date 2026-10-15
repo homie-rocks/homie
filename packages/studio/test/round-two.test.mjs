@@ -261,3 +261,15 @@ test('SQLite idle chat survives wake, keeps large moderation buckets and expires
  assert.equal(restored.buckets.size,512);assert.equal(restored.buckets.get('1').lastSayAt,-Infinity);assert.equal(alarm,at+900000);
  t.mock.timers.enable({apis:['Date'],now:at+900001});await expireIdleChat(storage);assert.equal(await readIdleChat(storage),null);
 });
+
+import {roomSessions,restoreRoomFields} from '../worker/room-sessions.mjs';
+test('room session snapshots retain identity and rates without serializing callbacks or sockets',async t=>{
+ const {DatabaseSync}=await import('node:sqlite'),db=new DatabaseSync(':memory:');t.after(()=>db.close());
+ const storage={sql:{exec:(query,...args)=>{const stmt=db.prepare(query);return {toArray:()=>stmt.all(...args),...(!/^SELECT/.test(query)?{done:stmt.run(...args)}:{})};}},transactionSync:fn=>{db.exec('BEGIN');try{fn();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}}};
+ const original={hostId:'client',seats:new Map([[0,{token:'resume'}]]),clients:new Map([['client',{id:'client',seat:0,caps:new Set(['chat']),rates:new Map([['say',{at:1}]]),conn:{send(){throw new Error('never serialize transport');}}}]]),watchers:new Set([{send(){}}]),now:Date.now,holdMs:Infinity};
+ const store=roomSessions(storage);assert.equal(store.read(),null);store.write(original);
+ const saved=roomSessions(storage).read(),restored={hostId:null,seats:new Map(),now:Date.now,holdMs:0};restoreRoomFields(restored,saved);
+ assert.equal(restored.hostId,'client');assert.equal(restored.seats.get(0).token,'resume');assert.equal(restored.holdMs,Infinity);
+ assert.equal(saved.clients.get('client').caps.has('chat'),true);assert.equal(saved.clients.get('client').rates.get('say').at,1);assert.equal(saved.clients.get('client').conn,undefined);
+ assert.equal(saved.fields.has('watchers'),false);assert.equal(typeof restored.now,'function');
+});
