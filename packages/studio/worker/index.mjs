@@ -612,15 +612,18 @@ export default {
   async queue(batch,env) {return (await import('./background-queue.mjs')).consumeBackground(batch,await loadShopLinks(env));},
   async scheduled(event, env, ctx) {
     env=await loadShopLinks(env);
+    const analytics = event.cron === '17 * * * *' ? (await import('./analytics.mjs')).rollupAnalytics(env) : Promise.resolve();
+    ctx.waitUntil(analytics);
     const maintenance=(async () => {
       const cat = await catalogue(env, 'https://studio.invalid');
       await notifyTools(env,cat,cat.studio?.url??'https://studio.invalid').catch(error=>console.warn('Tool catalogue refresh:',error.message));
       await reconcileOrders(env, shopOf(cat));
       if(env.DB)await (await import('./stripe-intake.mjs')).pruneStripeEvents(env);
+
       await (await import('./functions.mjs')).scheduleFunctions(event,env,cat,cat.studio?.url??'https://studio.invalid');
     })();
     ctx.waitUntil(maintenance);
-    await maintenance;
+    await Promise.all([maintenance, analytics]);
   },
   async fetch(request, env, ctx) {
     const staticPath=new URL(request.url).pathname;

@@ -19,6 +19,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## Unreleased
 
+- Page metrics use Analytics Engine with hourly, retry-safe D1 rollups that preserve existing owner totals. Game and budget counters remain durable.
+
 - Batch cold runtime metadata and bake the catalogue into build modules. Serve public assets before invoking the Worker.
 - Queue mutation notifications and verified Stripe events with retries and a dead-letter queue; cache room listings by metadata revision.
 - Separate stream Durable Objects from matchmaking, migrate Lobby snapshots to SQLite rows, and index MCP prefix/expiry access.

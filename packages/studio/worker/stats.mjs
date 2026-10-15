@@ -1,3 +1,4 @@
+import {writePageMetric} from './analytics.mjs';
 /**
  * STUDIO METRICS: count, don't track (@homie-rocks/studio 0.6.0).
  *
@@ -5,7 +6,7 @@
  * party, no cookie is set on a visitor, and no visitor is identified: a count is a number on a day, never a row
  * about a person. Referrers are kept as a host name only (never a path, a query or an address).
  *
- * WHAT IS COUNTED, one D1 row write each (an UPSERT on a daily counter; never per frame):
+ * WHAT IS COUNTED (page metrics go to Analytics Engine; daily rollups preserve D1 history):
  *   visit   a page opened (home, a game's page, /music/, a song's page, /videos/, a video's page)
  *   play    a game's play page opened: somebody pressed Play (or followed a Play link or QR code)
  *   screen  a big screen opened (/<game>/tv)
@@ -36,9 +37,8 @@
  * (HttpOnly, SameSite=Lax; from 0.13.0 at / so the owner is recognised in their own games, never readable by a
  * page or a game). There is no other way in.
  *
- * FREE PLAN: D1 allows 100,000 row writes and 5 million row reads a day. A visit, a play, a room and a
- * song or video start are one write each; a finished round is three (its row in `rounds`, the round and the
- * humans counters). Past the day's writes, counting stops until 00:00 UTC and the site keeps working.
+ * Page totals refresh hourly and can be sampled at high traffic. Older wrappers without the analytics
+ * binding retain D1 counting. Game, payment and budget facts remain in durable storage.
  */
 
 export const STATS_MIGRATION_FILE = '0002_studio_stats.sql';
@@ -97,6 +97,7 @@ export function counter(env, { metric, subject = '', source = '', n = 1, day = t
 
 /** Run a counter write after the response (ctx.waitUntil), or before it when the caller gave no ctx. Never throws. */
 export async function count(env, ctx, row) {
+  if (writePageMetric(env, row)) return;
   const stmt = counter(env, row);
   if (!stmt) return;
   const p = stmt.run().catch(() => {}); // before migration 0002, or past the free plan's daily writes: not counted

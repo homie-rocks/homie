@@ -198,3 +198,18 @@ test('Stripe queue intake deduplicates durable events, and consumers acknowledge
  await consumeBackground({messages:[{body:{v:1,type:'studio.changed',origin:'https://studio.test'},ack(){ack++;},retry(){retry++;}}]},{});
  assert.equal(ack,1);assert.equal(retry,0);
 });
+
+import {writePageMetric,rollupAnalytics} from '../worker/analytics.mjs';
+test('analytics page rollups preserve old counts and replay atomically without double counting', async t => {
+ const DB=database(t),day='2026-10-15',points=[];
+ await DB.prepare("INSERT INTO stats_daily VALUES(?1,'visit','cafe','',10)").bind(day).run();
+ let n=7;
+ const env={DB,STUDIO_ANALYTICS_DATASET:'studio_visits',STUDIO_ANALYTICS:{writeDataPoint:p=>points.push(p)},ANALYTICS_SQL:{query:async({query})=>{assert.match(query,/SUM\(double1\)/);return {data:[{day,metric:'visit',subject:'cafe',source:'',n}]};}}};
+ assert.equal(writePageMetric(env,{metric:'visit',subject:'cafe',day}),true);
+ assert.equal(points.length,1);assert.deepEqual(points[0].blobs,[day,'visit','cafe','']);
+ assert.equal(writePageMetric(env,{metric:'room'}),false);
+ await rollupAnalytics(env);await rollupAnalytics(env);
+ assert.equal((await DB.prepare('SELECT n FROM stats_daily').first()).n,17);
+ n=9;await rollupAnalytics(env);assert.equal((await DB.prepare('SELECT n FROM stats_daily').first()).n,19);
+ n=8;await rollupAnalytics(env);assert.equal((await DB.prepare('SELECT n FROM stats_daily').first()).n,18);
+});
