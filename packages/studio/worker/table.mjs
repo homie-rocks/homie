@@ -78,19 +78,28 @@ export class Table {
       this.recoveredAlarmAt = Infinity;
       try { this.recoveredAlarmAt = (await ctx.storage.getAlarm?.()) ?? null; }
       catch (error) { this.storageProblem(error); }
-      this.sessionStore=roomSessions(ctx.storage);
-      this.sessionSnapshot=this.sessionStore.read();
-      if(this.sessionSnapshot)Object.assign(this,this.sessionSnapshot.table);
+      this.hibernationReady=true;
+      try {
+        this.sessionStore=roomSessions(ctx.storage);
+        this.sessionSnapshot=this.sessionStore.read();
+        this.idleChat=(await readIdleChat(ctx.storage))??null;
+        if(this.sessionSnapshot)Object.assign(this,this.sessionSnapshot.table);
+      } catch(error) {
+        // Optional session state must not bypass the existing host-storage
+        // failure response and strand a player before its socket is handled.
+        this.hibernationReady=false;this.sessionStore=null;this.sessionSnapshot=null;this.idleChat=null;
+        this.storageProblem(error);
+      }
       this.saved = (await ctx.storage.get('net')) ?? null;
       if (this.saved?.retired === true) this.cleanupPending = true;
       this.recorded = (await ctx.storage.get('recorded')) ?? 0;
       this.officeSaved = (await ctx.storage.get('office')) ?? null;
-      this.idleChat = (await readIdleChat(ctx.storage)) ?? null;
       // A big match room's last unconfirmed checkpoint (worker/room-store.mjs), read once as the object wakes.
       try { this.looseSave = (await ctx.storage.list?.({ prefix: LOOSE_SAVE })) ?? null; }
       catch (error) { this.looseSave = null; this.storageProblem(error); }
       this.restoringSockets=true;
       await this.watchSockets.restore((request, transport, attachment) => {
+        if(!this.hibernationReady){transport.close(1011,"room storage unavailable");return;}
         if(attachment.clientId) {
           transport.resume=this.sessionSnapshot?.clients.get(attachment.clientId);
           if(!transport.resume){transport.close(1012,'room session restarted');return;}
@@ -852,7 +861,7 @@ export class Table {
     try { if (this.house) await this.house.onAlarm(); } catch (error) { try { console.log(JSON.stringify({ ev: 'brain-alarm-failed', room: this.code, error: String(error?.stack ?? error).slice(0, 400) })); } catch { /* no console */ } }
     try { await this.flushBrain(); } catch { /* counted next time */ }
     try { await this.roomAlarm(); } catch (error) { this.say({ ev: 'failed', op: 'room-alarm', error: errorLine(error) }); }
-    await expireIdleChat(this.ctx.storage);
+    if(this.hibernationReady)await expireIdleChat(this.ctx.storage);
     if(this.canSleep())await this.sleepRoom();
   }
 
@@ -1039,7 +1048,7 @@ export class Table {
       catch (error) { return new Response(String(error.message), { status: 409 }); }
     }
     const [client, accepted] = transport ? [null, transport] : Object.values(new WebSocketPair());
-    const hibernating = !transport && this.ctx.acceptWebSocket && (url.pathname === '/__watch' || Boolean(this.ctx.storage.sql));
+    const hibernating = !transport && this.hibernationReady && this.ctx.acceptWebSocket && (url.pathname === '/__watch' || Boolean(this.ctx.storage.sql));
     const server = hibernating ? await this.watchSockets.accept(accepted, request) : accepted;
     if (!hibernating) server.accept();
     const via = url.searchParams.get('via');
@@ -1140,7 +1149,7 @@ export class Table {
   }
 
   async keepIdleChat() {
-    if(!this.room)return;
+    if(!this.room||!this.hibernationReady)return;
     try { await this.flushChat(); }
     finally { await writeIdleChat(this.ctx.storage,idleChatSnapshot(this)); }
   }
@@ -1154,7 +1163,7 @@ export class Table {
   async webSocketError(socket, error) { await this.watchSockets.close(socket, error); if(this.canSleep())await this.sleepRoom(); }
 
   canSleep() {
-    return this.room && this.ctx.storage.sql && this.ctx.acceptWebSocket && !this.relayed && !this.hostRt && this.room.lastRound?.phase !== 'live' && !this.restoringSockets;
+    return this.room && this.hibernationReady && this.sessionStore && this.ctx.storage.sql && this.ctx.acceptWebSocket && !this.relayed && !this.hostRt && this.room.lastRound?.phase !== 'live' && !this.restoringSockets;
   }
   async sleepRoom() {
     if(!this.canSleep())return;
