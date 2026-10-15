@@ -45,6 +45,13 @@ const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = join(PKG, 'bin', 'homie-studio.mjs');
 const REPO_NM = join(PKG, '..', '..', 'node_modules');
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-servers-')));
+const objects = new Set();
+function disposeObject(object) {
+  const host=object.hostRt;object.hostRt=null;host?.stop();
+  clearInterval(object.timer);object.timer=null;
+  for(const key of ['saveRetry','cleanupRetry','netCleanupRetry','alarmRetry']){clearTimeout(object[key]);object[key]=null;}
+}
+test.after(() => {for(const object of objects)disposeObject(object);});
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 const run = (args, cwd) => fixtureRun(CLI, args, cwd);
 const sha = (s) => createHash('sha256').update(s).digest('hex');
@@ -130,18 +137,19 @@ function assetsOf(dir) {
 }
 
 function namespace(Klass, envRef, waits) {
-  const objs = new Map();
+  const objs = new Map(),ready = new Map();
   return {
     objs,
     idFromName: (n) => n,
     get(id) {
       if (!objs.has(id)) {
         const store = new Map();
-        const ctx = { storage: { get: async (k) => store.get(k), put: async (k, v) => { store.set(k, v); }, delete: async (k) => { store.delete(k); }, getAlarm: async () => store.get('__alarm') ?? null, setAlarm: async (at) => { store.set('__alarm', at); } }, blockConcurrencyWhile: async (fn) => fn(), waitUntil: (p) => waits.push(p) };
+        const ctx = { storage: { get: async (k) => store.get(k), put: async (k, v) => { store.set(k, v); }, delete: async (k) => { store.delete(k); }, getAlarm: async () => store.get('__alarm') ?? null, setAlarm: async (at) => { store.set('__alarm', at); } }, blockConcurrencyWhile: fn => {const work=Promise.resolve().then(fn);ready.set(id,work);return work;}, waitUntil: (p) => waits.push(p) };
         objs.set(id, new Klass(ctx, envRef.env));
+        objects.add(objs.get(id));
       }
       const o = objs.get(id);
-      return { fetch: (req, init) => o.fetch(req instanceof Request ? req : new Request(req, init)) };
+      return { fetch: async (req, init) => {await ready.get(id);return o.fetch(req instanceof Request ? req : new Request(req, init));} };
     },
   };
 }
@@ -630,7 +638,7 @@ async function rulesSockets(t) {
   }
   const previous = globalThis.WebSocketPair;
   globalThis.WebSocketPair = class { constructor() { const c = new Socket(); const server = new Socket(); ends.push(server); return { 0: c, 1: server }; } };
-  t.after(() => { globalThis.WebSocketPair = previous; for (const table of s.env.TABLE.objs.values()) { table.hostRt?.stop(); if (table.timer) clearInterval(table.timer); } });
+  t.after(() => { globalThis.WebSocketPair = previous; for (const table of s.env.TABLE.objs.values())disposeObject(table); });
   const socket = async (room, ticket = '', hello = {}) => {
     const n = ends.length;
     const res = await s.fetchSite(`/rules-run/__net?room=${room}&gv=${ver}${ticket ? `&t=${encodeURIComponent(ticket)}` : ''}`, { headers: { upgrade: 'websocket' } }).catch(e => { if (!/status/.test(String(e))) throw e; });
