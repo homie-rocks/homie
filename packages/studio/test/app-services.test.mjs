@@ -63,12 +63,12 @@ test('shell trusts only its own frame, preserves server role, and gates the proo
  for(const testMode of [false,true]){
   const messages=[],requests=[],handlers={};const child={postMessage:m=>messages.push(m)};
   const window={__HOMIE_APP:{kind:'app',game:'place',test:testMode}};
-  const sandbox={window,document:{querySelector:()=>({contentWindow:child})},location:{origin:'https://place.test',search:'?role=staff&access=private',pathname:'/place/open'},URLSearchParams,AbortSignal,history:{},addEventListener:(name,fn)=>handlers[name]=fn,fetch:async(url,init)=>{requests.push({url,init});return {json:async()=>({ok:true,data:{booked:true}})};}};
+  const sandbox={window,document:{querySelector:()=>({contentWindow:child})},location:{origin:'https://place.test',search:'?role=staff&access=private',pathname:'/place/open'},URLSearchParams,AbortSignal,history:{replaceState(){}},addEventListener:(name,fn)=>handlers[name]=fn,fetch:async(url,init)=>{requests.push({url,init});return {json:async()=>({ok:true,data:{booked:true}})};}};
   runInNewContext(APP_SHELL_JS,sandbox);
   const data={type:'homie-app-tool',id:'a'.repeat(32),name:'reserve',input:{id:'a'},role:'owner'};
   await handlers.message({source:{},data});assert.equal(requests.length,0);
   await handlers.message({source:child,data});assert.equal(requests.length,1);
-  assert.match(requests[0].url,/role=staff/);assert.doesNotMatch(requests[0].init.body,/owner/);
+  assert.match(requests[0].url,/role=staff/);assert.doesNotMatch(requests[0].url,/access=|private/);assert.doesNotMatch(requests[0].init.body,/owner/);
   assert.equal(messages[0].result.data.booked,true);
   if(testMode){window.homieApp.setTestClock(1234);assert.equal(window.homieApp.context.now,1234);window.homieApp.setTestClock(null);assert.equal(window.homieApp.context.now,null);}
   else assert.throws(()=>window.homieApp.setTestClock(1234),/Local proof/);

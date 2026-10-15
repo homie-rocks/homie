@@ -1,3 +1,4 @@
+import {databaseBinding} from './request-db.mjs';
 /**
  * The shop's rows in the studio's own D1 (@homie-rocks/studio 0.24.0, migration 0008_studio_shop.sql). Kept apart
  * from worker/shop.mjs so player accounts (worker/players.mjs) can export and forget a player's purchases without
@@ -137,7 +138,7 @@ const completeSchemas = new WeakSet();
 /** Name the first missing schema migration, including a present table with an older shape. */
 export async function migrationNeeded(env) {
   if (!env?.DB) return SHOP_MIGRATION_FILE;
-  if (completeSchemas.has(env.DB)) return null;
+  if (completeSchemas.has(databaseBinding(env.DB))) return null;
   for (const [file, query] of [
     [SHOP_MIGRATION_FILE, 'SELECT 1 FROM shop_orders LIMIT 1'],
     [SHOP_RESERVATIONS_FILE, 'SELECT expires_at FROM shop_orders LIMIT 1'],
@@ -148,7 +149,7 @@ export async function migrationNeeded(env) {
   ]) {
     try { await env.DB.prepare(query).first(); } catch { return file; }
   }
-  completeSchemas.add(env.DB);
+  completeSchemas.add(databaseBinding(env.DB));
   return null;
 }
 
@@ -244,7 +245,7 @@ export const orderByPayment = (env, payment) => env.DB.prepare('SELECT * FROM sh
 export function orderView(r) {
   return {
     id: r.id, refundedAmount: Number(r.refunded_amount ?? 0), item: r.item, game: r.game ?? null, amount: Number(r.amount), currency: r.currency, tax: r.tax === null ? null : Number(r.tax), total: r.total === null ? null : Number(r.total),
-    status: r.status, till: r.till, mode: r.mode, parent: Number(r.parent) === 1,
+    status: r.status, ...(r.status==='review'?{note:'Payment received. Staff will reconcile the payment or refund it.'}:{}), till: r.till, mode: r.mode, parent: Number(r.parent) === 1,
     createdAt: Number(r.created_at), paidAt: r.paid_at === null ? null : Number(r.paid_at), refundedAt: r.refunded_at === null ? null : Number(r.refunded_at),
   };
 }

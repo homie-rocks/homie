@@ -105,7 +105,7 @@ async function page(g, search = '') {
     navigator: {},
     WebSocket: class { constructor(u) { this.url = u; } },
     fetch: async () => ({ json: async () => ({ room: 'pub-4' }) }),
-    URLSearchParams, clearTimeout: (id) => { const t = timers.find((x) => x.id === id); if (t) t.gone = true; },
+    URL, URLSearchParams, clearTimeout: (id) => { const t = timers.find((x) => x.id === id); if (t) t.gone = true; },
     // The card's timers are stepped by hand: `run(ms)` fires every timer due by then.
     setTimeout: (fn, ms) => { const t = { id: timers.length + 1, fn, at: (ctx.clock ?? 0) + (ms ?? 0) }; timers.push(t); return t.id; },
     clock: 0, innerWidth: 390, innerHeight: 844,

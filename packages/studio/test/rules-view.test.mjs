@@ -2828,3 +2828,16 @@ for(const delay of [0,300])test(`long frame clock reset preserves the painted wr
  const after=a.me.pos;
  assert.ok(Math.abs(after.x-10)<.01,`a real placement was hidden by frame reset: ${before.x} -> ${after.x}`);
  });
+test('a slow synchronous reader crossing a tick boundary shares the current presentation', async t => {
+ const {L,compiled,openRoom}=await coinDashKit('server',false,60,'push-effects');
+ const clock=virtualTime(t);
+ const previous=Object.getOwnPropertyDescriptor(globalThis,'window');
+ globalThis.window={addEventListener(){},removeEventListener(){}};
+ t.after(()=>{if(previous)Object.defineProperty(globalThis,'window',previous);else delete globalThis.window;});
+ const r=rig(L,compiled,false,25,25),a=openRoom({timers:false,net:{config:cfg('Slow reader'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);a.input({ax:127});await clock.wait(100);
+ const first=a.me,now=performance.now;
+ performance.now=()=>now()+40; // CPU work crosses two ticks without an event-loop/microtask boundary.
+ assert.equal(a.me,first);
+ await Promise.resolve();assert.notEqual(a.me,first);
+});

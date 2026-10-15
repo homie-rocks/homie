@@ -22,6 +22,9 @@ test('a real Worker record write reaches the signed receiver without another req
  try {
   const db=await mf.getD1Database('DB');
   for(const file of readdirSync(new URL('../../../template/site/migrations/',import.meta.url)).sort())for(const sql of readFileSync(new URL('../../../template/site/migrations/'+file,import.meta.url),'utf8').replace(/^--.*$/gm,'').match(/\s*CREATE TRIGGER[\s\S]*?END;|[^;]+;/g)??[])if(sql.trim())await db.prepare(sql).run();
+  // Deployment installs subscriptions before the first record can be written.
+  await db.batch(['@events/bookings','@webhook/bookings/'+id].map(name=>db.prepare("INSERT INTO function_subscriptions(name,type,cursor,started) VALUES(?1,'record.changed',0,0)").bind(name)));
+  await db.prepare("INSERT INTO meta(key,value) VALUES('function-registry-deployed','1')").run();
   const response=await mf.dispatchFetch('http://localhost/cafe/api/app/records/bookings/one',{method:'POST',headers:{origin:'http://localhost','content-type':'application/json'},body:JSON.stringify({data:{name:'Tea'}})});
   assert.equal(response.status,200,await response.text());
   await Promise.race([delivered,new Promise((_,reject)=>{timer=setTimeout(async()=>reject(new Error('Webhook did not arrive: '+JSON.stringify((await db.prepare('SELECT * FROM function_deliveries').all()).results))),5000);})]);

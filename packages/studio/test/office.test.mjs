@@ -22,7 +22,7 @@ import { browserRulesGame } from './browser-rules-game.mjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -283,14 +283,14 @@ function studio(name) {
 
 function fakeD1(dir) {
   const sql = new DatabaseSync(':memory:');
-  for (const f of ['0001_studio.sql', STATS_MIGRATION_FILE, '0004_players.sql', OFFICE_MIGRATION_FILE]) sql.exec(readFileSync(join(dir, 'site', 'migrations', f), 'utf8'));
+  for (const f of readdirSync(join(dir, 'site', 'migrations')).sort()) sql.exec(readFileSync(join(dir, 'site', 'migrations', f), 'utf8'));
   const stmt = (query, args = []) => ({
-    bind: (...a) => stmt(query, a),
+    query, bind: (...a) => stmt(query, a),
     first: async () => sql.prepare(query).get(...args) ?? null,
     all: async () => ({ results: sql.prepare(query).all(...args) }),
     run: async () => { const r = sql.prepare(query).run(...args); return { success: true, meta: { changes: r.changes } }; },
   });
-  return { sql, prepare: (q) => stmt(q), batch: async (list) => { for (const s of list) await s.run(); return []; } };
+  return { sql, prepare: (q) => stmt(q), batch: async (list) => { return Promise.all(list.map(s => /^SELECT/i.test(s.query) ? s.all() : s.run())); } };
 }
 
 function assetsOf(dir) {
@@ -631,11 +631,11 @@ test('a new studio has the back office\'s migration, after the players one, and 
   // 0.16.0 added 0006_studio_servers.sql after it (servers and agent seats; test/servers.test.mjs), 0.23.0
   // 0007_studio_chat.sql (room chat's rules and reports; test/chat.test.mjs), 0.24.0 0008_studio_shop.sql (the shop) and
   // 0.29.0 0009_studio_lounge.sql (the Lounge and kept chat; test/lounge.test.mjs).
-  assert.deepEqual(Object.keys(files).filter((f) => f.startsWith('site/migrations/')).sort(), ['site/migrations/0001_studio.sql', 'site/migrations/0002_studio_stats.sql', 'site/migrations/0004_players.sql', 'site/migrations/0005_studio_office.sql', 'site/migrations/0006_studio_servers.sql', 'site/migrations/0007_studio_chat.sql', 'site/migrations/0008_studio_shop.sql', 'site/migrations/0009_studio_lounge.sql', 'site/migrations/0010_shop_reservations.sql', 'site/migrations/0012_shop_lines.sql', 'site/migrations/0014_studio_apps.sql', 'site/migrations/0015_purchases.sql', 'site/migrations/0016_purchase_facts.sql', 'site/migrations/0017_studio_mcp.sql', 'site/migrations/0018_studio_functions.sql', 'site/migrations/0019_function_cursors.sql', 'site/migrations/0020_function_meta.sql', 'site/migrations/0021_app_payment_reference.sql', 'site/migrations/0022_remove_referrals.sql', 'site/migrations/0023_function_runs.sql', 'site/migrations/0024_tool_data_versions.sql', 'site/migrations/0025_bookings.sql', 'site/migrations/0026_shop_subscriptions.sql', 'site/migrations/0027_app_live.sql', 'site/migrations/0028_business_events.sql', 'site/migrations/0029_booking_holds.sql', 'site/migrations/0030_booking_resources.sql']);
+  assert.deepEqual(Object.keys(files).filter((f) => f.startsWith('site/migrations/')).sort(), ['site/migrations/0001_studio.sql', 'site/migrations/0002_studio_stats.sql', 'site/migrations/0004_players.sql', 'site/migrations/0005_studio_office.sql', 'site/migrations/0006_studio_servers.sql', 'site/migrations/0007_studio_chat.sql', 'site/migrations/0008_studio_shop.sql', 'site/migrations/0009_studio_lounge.sql', 'site/migrations/0010_shop_reservations.sql', 'site/migrations/0012_shop_lines.sql', 'site/migrations/0014_studio_apps.sql', 'site/migrations/0015_purchases.sql', 'site/migrations/0016_purchase_facts.sql', 'site/migrations/0017_studio_mcp.sql', 'site/migrations/0018_studio_functions.sql', 'site/migrations/0019_function_cursors.sql', 'site/migrations/0020_function_meta.sql', 'site/migrations/0021_app_payment_reference.sql', 'site/migrations/0022_remove_referrals.sql', 'site/migrations/0023_function_runs.sql', 'site/migrations/0024_tool_data_versions.sql', 'site/migrations/0025_bookings.sql', 'site/migrations/0026_shop_subscriptions.sql', 'site/migrations/0027_app_live.sql', 'site/migrations/0028_business_events.sql', 'site/migrations/0029_booking_holds.sql', 'site/migrations/0030_booking_resources.sql', 'site/migrations/0031_request_and_tool_notifications.sql', 'site/migrations/0032_metadata_revisions.sql', 'site/migrations/0033_tool_namespace_revisions.sql']);
   const dir = join(scratch, 'from-012');
   mkdirSync(join(dir, 'site', 'migrations'), { recursive: true });
   for (const f of ['0001_studio.sql', '0002_studio_stats.sql', '0004_players.sql']) writeFileSync(join(dir, 'site', 'migrations', f), files[`site/migrations/${f}`]);
-  assert.deepEqual(ensureMigrations(dir), [`site/migrations/${OFFICE_MIGRATION_FILE}`, 'site/migrations/0006_studio_servers.sql', 'site/migrations/0007_studio_chat.sql', 'site/migrations/0008_studio_shop.sql', 'site/migrations/0009_studio_lounge.sql', 'site/migrations/0010_shop_reservations.sql', 'site/migrations/0012_shop_lines.sql', 'site/migrations/0014_studio_apps.sql', 'site/migrations/0015_purchases.sql', 'site/migrations/0016_purchase_facts.sql', 'site/migrations/0017_studio_mcp.sql', 'site/migrations/0018_studio_functions.sql', 'site/migrations/0019_function_cursors.sql', 'site/migrations/0020_function_meta.sql', 'site/migrations/0021_app_payment_reference.sql', 'site/migrations/0022_remove_referrals.sql', 'site/migrations/0023_function_runs.sql', 'site/migrations/0024_tool_data_versions.sql', 'site/migrations/0025_bookings.sql', 'site/migrations/0026_shop_subscriptions.sql', 'site/migrations/0027_app_live.sql', 'site/migrations/0028_business_events.sql', 'site/migrations/0029_booking_holds.sql', 'site/migrations/0030_booking_resources.sql'], 'a 0.12.0 studio gets the office migration, then the servers one, room chat\'s, the shop\'s and the Lounge\'s');
+  assert.deepEqual(ensureMigrations(dir), [`site/migrations/${OFFICE_MIGRATION_FILE}`, 'site/migrations/0006_studio_servers.sql', 'site/migrations/0007_studio_chat.sql', 'site/migrations/0008_studio_shop.sql', 'site/migrations/0009_studio_lounge.sql', 'site/migrations/0010_shop_reservations.sql', 'site/migrations/0012_shop_lines.sql', 'site/migrations/0014_studio_apps.sql', 'site/migrations/0015_purchases.sql', 'site/migrations/0016_purchase_facts.sql', 'site/migrations/0017_studio_mcp.sql', 'site/migrations/0018_studio_functions.sql', 'site/migrations/0019_function_cursors.sql', 'site/migrations/0020_function_meta.sql', 'site/migrations/0021_app_payment_reference.sql', 'site/migrations/0022_remove_referrals.sql', 'site/migrations/0023_function_runs.sql', 'site/migrations/0024_tool_data_versions.sql', 'site/migrations/0025_bookings.sql', 'site/migrations/0026_shop_subscriptions.sql', 'site/migrations/0027_app_live.sql', 'site/migrations/0028_business_events.sql', 'site/migrations/0029_booking_holds.sql', 'site/migrations/0030_booking_resources.sql', 'site/migrations/0031_request_and_tool_notifications.sql', 'site/migrations/0032_metadata_revisions.sql', 'site/migrations/0033_tool_namespace_revisions.sql'], 'a 0.12.0 studio gets the office migration, then the servers one, room chat\'s, the shop\'s and the Lounge\'s');
   assert.deepEqual(ensureMigrations(dir), []);
   const sql = new DatabaseSync(':memory:');
   sql.exec(OFFICE_MIGRATION);

@@ -1,3 +1,4 @@
+import {databaseBinding, ORIGINAL_DB} from './request-db.mjs';
 /**
  * SERVERS (@homie-rocks/studio 0.16.0; NETPLAY.md section 17): a named, lasting pool of rooms for one game, with its
  * own policy, its own door and its own Lobby pool. Strangers are matched only inside one server, never across.
@@ -171,8 +172,8 @@ const serverCache = new WeakMap();
 /** Every server row of every game (D1), read at most every 5 s per Worker instance; an empty map before migration 0006. */
 async function rowsOf(env, { fresh = false } = {}) {
   if (!env?.DB || env.HOMIE_PREVIEW === '1') return new Map();
-  const hit = serverCache.get(env.DB);
-  if (!fresh && hit && Date.now() - hit.at < 5000) return hit.map;
+  const hit = serverCache.get(databaseBinding(env.DB));
+  if (!env.DB[ORIGINAL_DB] && !fresh && hit && Date.now() - hit.at < 5000) return hit.map;
   let map = new Map();
   try {
     const { results } = await env.DB.prepare('SELECT * FROM servers LIMIT 2000').all();
@@ -182,10 +183,10 @@ async function rowsOf(env, { fresh = false } = {}) {
       map.set(r.game, list);
     }
   } catch { map = new Map(); }
-  serverCache.set(env.DB, { at: Date.now(), map });
+  serverCache.set(databaseBinding(env.DB), { at: Date.now(), map });
   return map;
 }
-export const forgetServers = (env) => { if (env?.DB) serverCache.delete(env.DB); };
+export const forgetServers = (env) => { if (env?.DB) serverCache.delete(databaseBinding(env.DB)); };
 
 /**
  * A game's servers: `public` first, then the rest by when they were made. The game.json seeds (the catalogue's

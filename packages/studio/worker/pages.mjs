@@ -494,7 +494,13 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
     ui.querySelector('[data-room-code]').textContent = labelOf(room) + (boot.embed ? ' \u00b7 Site' : '');
     ui.querySelector('[data-room-label]').textContent = labelOf(room);
     ui.querySelector('[data-room-link]').textContent = LOCAL ? 'Deploy to share: this preview address works on this computer only.' : link.replace(/^https?:\/\//, '');
-    ui.querySelector('[data-bigscreen]').href = '/' + boot.game + '/tv?room=' + encodeURIComponent(room);
+    var tv = new URL('/' + boot.game + '/tv', location.origin);
+    tv.searchParams.set('room', room);
+    if (boot.kind === 'app') {
+      var context = new URLSearchParams(location.search);
+      ['role'].forEach(function (key) { if (context.has(key)) tv.searchParams.set(key, context.get(key)); });
+    }
+    ui.querySelector('[data-bigscreen]').href = tv.pathname + tv.search;
     toggle.addEventListener('click', function (e) { e.stopPropagation(); open(sheet.hidden); });
     ui.querySelector('[data-invite]').addEventListener('click', function () {
       var data = { title: boot.name, text: (boot.appWords ? boot.appWords.open : 'Play') + ' ' + boot.name + ' with me: join my room.', url: link };

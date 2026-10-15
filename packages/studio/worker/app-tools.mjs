@@ -37,6 +37,7 @@ export async function appToolsRoute(request,env,meta,url,cat,definitions){
   if(tool.price)return fail(402,'Use MCP to approve payment for this tool');
   if(!await rateLimit(env,caller.id??`public:${request.headers.get('cf-connecting-ip')??'local'}`,callsPerMinute(cat)))return fail(429,'Rate limit reached');
   const namespace=(tool.namespace??tool.name)+(caller.testScope?':check:'+caller.testScope:'');
+  await env.DB.prepare('INSERT OR IGNORE INTO app_tool_namespaces(app,namespace) VALUES(?1,?2)').bind(meta.id+(caller.testScope?':check:'+caller.testScope:''),namespace).run();
   const data=await invokeAppTool(tool,body.input??{},services(env,cat,url.origin,caller,namespace,tool));
   outcome='ok';return Response.json({ok:true,data});
  }catch(error){return fail(error.status??(error instanceof SyntaxError?400:500),error.status||error.name==='StudioOperationError'?error.message:'Tool request failed');}

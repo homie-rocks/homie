@@ -689,7 +689,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
   mkdirSync(join(dist, '_site'), { recursive: true });
   if(publicMcpSetup(root)) {
     const verified=verifiedMcpConfig(root);
-    writeFileSync(join(dist,'_site','stripe-shop-links.json'),JSON.stringify({config:verified?.result.config??null,next:verified?null:'Ask your AI to finish stripe_shop_plan with verify:true.'}));
+    writeFileSync(join(dist,'_site','stripe-shop-links.json'),JSON.stringify({config:verified?.result.config??null,purchases:existsSync(join(root,'.studio','stripe-purchase-links.json'))?JSON.parse(readFileSync(join(root,'.studio','stripe-purchase-links.json'),'utf8')):null,next:verified?null:'Ask your AI to finish stripe_shop_plan with verify:true.'}));
   }
   writeFileSync(join(dist, '_site', 'posts.json'), `${JSON.stringify({ v: 1, posts })}\n`);
   const studioExtras = schemaExtras(s.schema, { where: 'studio.json site', types: 'Organization', log });

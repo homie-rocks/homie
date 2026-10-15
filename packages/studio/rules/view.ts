@@ -1359,7 +1359,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     get viewTick() { return solo ? solo.viewTick : viewTickNow(); },
     get status() { return solo ? 'offline' : status; },
     get seat() { return solo ? solo.seat : net.seat; },
-    get me() { pump(); return meNow(true); },
+    get me() { if (!presentedEntity) pump(); return meNow(true); },
     each, get,
     ray: (from,direction,max,options) => solo ? solo.ray(from,direction,max,options) : viewRay(from,direction,max,options)[0],
     rays: options => solo ? solo.rays(options) : raySnapshot(mapAt(latest?.k??0),viewTargets(atTickOf(options)),dims,options,mine?.id),
