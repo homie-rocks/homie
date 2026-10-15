@@ -1,0 +1,12 @@
+{
+ "name":"hm-s2-builder",
+ "main":"builder.mjs",
+ "compatibility_date":"2026-10-15",
+ "compatibility_flags":["nodejs_compat"],
+ "workers_dev":true,
+ "rules":[{"type":"Text","globs":["**/run-build.cjs"],"fallthrough":true}],
+ "observability":{"enabled":true},
+ "containers":[{"name":"hm-s2-build-vm","class_name":"BuildSandbox","scheduling_policy":"durable_object"}],
+ "durable_objects":{"bindings":[{"name":"BUILDS","class_name":"BuildSandbox"}]},
+ "exports":{"BuildSandbox":{"type":"durable-object","storage":"sqlite"}}
+}
