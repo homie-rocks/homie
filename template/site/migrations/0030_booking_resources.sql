@@ -1,0 +1,21 @@
+ALTER TABLE shop_bookings ADD COLUMN allocation TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE shop_bookings ADD COLUMN choices TEXT NOT NULL DEFAULT '{}';
+CREATE TRIGGER booking_resource_0 BEFORE INSERT ON shop_bookings WHEN NEW.state IN ('held','confirmed') BEGIN 
+ SELECT RAISE(ABORT,'resource capacity unavailable') WHERE EXISTS (
+ WITH wanted AS (SELECT json_extract(value,'$.resource') resource,json_extract(value,'$.collection') collection,json_extract(value,'$.start') start,json_extract(value,'$.end') end,json_extract(value,'$.units') units FROM json_each(NEW.allocation)),
+ existing AS (SELECT json_extract(a.value,'$.resource') resource,json_extract(a.value,'$.collection') collection,json_extract(a.value,'$.start') start,json_extract(a.value,'$.end') end,json_extract(a.value,'$.units') units FROM shop_bookings b,json_each(b.allocation) a WHERE b.app=NEW.app AND b.id!=NEW.id AND b.state IN ('held','confirmed')),
+ points AS (SELECT resource,collection,start point FROM wanted UNION SELECT resource,collection,start FROM existing)
+ SELECT 1 FROM points p WHERE EXISTS(SELECT 1 FROM wanted w WHERE w.resource=p.resource AND w.collection=p.collection AND w.start<=p.point AND w.end>p.point)
+ AND (COALESCE((SELECT SUM(units) FROM wanted w WHERE w.resource=p.resource AND w.collection=p.collection AND w.start<=p.point AND w.end>p.point),0)+COALESCE((SELECT SUM(units) FROM existing e WHERE e.resource=p.resource AND e.collection=p.collection AND e.start<=p.point AND e.end>p.point),0))>
+ COALESCE((SELECT json_extract(value,'$.capacity') FROM app_records WHERE app=NEW.app AND collection=p.collection AND id=p.resource),0)); END;
+CREATE TRIGGER booking_resource_1 BEFORE UPDATE OF state,allocation ON shop_bookings WHEN NEW.state IN ('held','confirmed') BEGIN 
+ SELECT RAISE(ABORT,'resource capacity unavailable') WHERE EXISTS (
+ WITH wanted AS (SELECT json_extract(value,'$.resource') resource,json_extract(value,'$.collection') collection,json_extract(value,'$.start') start,json_extract(value,'$.end') end,json_extract(value,'$.units') units FROM json_each(NEW.allocation)),
+ existing AS (SELECT json_extract(a.value,'$.resource') resource,json_extract(a.value,'$.collection') collection,json_extract(a.value,'$.start') start,json_extract(a.value,'$.end') end,json_extract(a.value,'$.units') units FROM shop_bookings b,json_each(b.allocation) a WHERE b.app=NEW.app AND b.id!=NEW.id AND b.state IN ('held','confirmed')),
+ points AS (SELECT resource,collection,start point FROM wanted UNION SELECT resource,collection,start FROM existing)
+ SELECT 1 FROM points p WHERE EXISTS(SELECT 1 FROM wanted w WHERE w.resource=p.resource AND w.collection=p.collection AND w.start<=p.point AND w.end>p.point)
+ AND (COALESCE((SELECT SUM(units) FROM wanted w WHERE w.resource=p.resource AND w.collection=p.collection AND w.start<=p.point AND w.end>p.point),0)+COALESCE((SELECT SUM(units) FROM existing e WHERE e.resource=p.resource AND e.collection=p.collection AND e.start<=p.point AND e.end>p.point),0))>
+ COALESCE((SELECT json_extract(value,'$.capacity') FROM app_records WHERE app=NEW.app AND collection=p.collection AND id=p.resource),0)); END;
+CREATE TRIGGER booking_resource_move BEFORE UPDATE OF slot,quantity ON shop_bookings WHEN (OLD.slot!=NEW.slot OR OLD.quantity!=NEW.quantity) AND OLD.allocation!='[]' AND OLD.state IN ('held','confirmed') BEGIN SELECT RAISE(ABORT,'resource booking move requires release and a new allocation'); END;
+CREATE TRIGGER booking_resource_edit BEFORE UPDATE OF value ON app_records WHEN EXISTS(SELECT 1 FROM shop_bookings b,json_each(b.allocation) a WHERE b.app=OLD.app AND b.state IN ('held','confirmed') AND json_extract(a.value,'$.resource')=OLD.id AND json_extract(a.value,'$.collection')=OLD.collection) AND NEW.value!=OLD.value BEGIN SELECT RAISE(ABORT,'resource has active bookings; release or finish them before editing'); END;
+CREATE TRIGGER booking_resource_delete BEFORE DELETE ON app_records WHEN EXISTS(SELECT 1 FROM shop_bookings b,json_each(b.allocation) a WHERE b.app=OLD.app AND b.state IN ('held','confirmed') AND json_extract(a.value,'$.resource')=OLD.id AND json_extract(a.value,'$.collection')=OLD.collection) BEGIN SELECT RAISE(ABORT,'resource has active bookings'); END;

@@ -195,3 +195,53 @@ test('local verification remains usable for dev builds without installing localh
  const {verifiedMcpConfig}=await import('../lib/shop-mcp.mjs');const root=studio(t),f=fixture();await reconcile(root,f,{url:'http://localhost:8787'});
  assert.equal(verifiedMcpConfig(root),null);assert.match(readFileSync(join(root,'.dev.vars'),'utf8'),/STRIPE_SHOP_LINKS=base64:/);
 });
+
+test('missing legacy portal ID discovers the existing portal without a duplicate',async t=>{
+ const root=studio(t),f=fixture();await reconcile(root,f);
+ const file=join(root,'.studio','stripe-mcp.json'),saved=JSON.parse(readFileSync(file));
+ delete saved.result.config.portalId;writeFileSync(file,JSON.stringify(saved));
+ rmSync(join(root,'.studio','stripe-mcp-observations.json'));
+ const result=await reconcile(root,f);
+ assert.equal(f.rows.configurations.length,1);
+ assert.equal(result.writes.filter(o=>o.path==='/v1/billing_portal/configurations').length,0);
+ assert.equal(result.p.config.portalId,f.rows.configurations[0].id);
+});
+
+test('legacy verification without account migrates from the signed-in account after reading its links',async t=>{
+ const {shopConnect}=await import('../lib/stripe-connect.mjs');
+ const root=studio(t),f=fixture();await reconcile(root,f);
+ const file=join(root,'.studio','stripe-mcp.json'),saved=JSON.parse(readFileSync(file));delete saved.result.config.portalId;writeFileSync(file,JSON.stringify(saved));
+ const reads=[];
+ const result=await shopConnect(root,{webhookOnly:true,storage:join(root,'private'),open:()=>assert.fail('saved login'),exec:async args=>{
+   const path=args.find(a=>a.startsWith('/v1/'));reads.push(path);
+   if(path==='/v1/billing_portal/configurations')return {code:0,stdout:JSON.stringify(f.call({method:'GET',path,params:{}}))};
+   if(path==='/v1/account')return {code:0,stdout:'{"id":"acct_fixture"}'};
+   if(path?.startsWith('/v1/payment_links/'))return {code:0,stdout:JSON.stringify(f.call({method:'GET',path,params:{}}))};
+   if(path==='/v1/webhook_endpoints'&&args.includes('post'))return {code:0,stdout:'{"id":"we_fixture","secret":"whsec_fixture"}'};
+   return {code:0,stdout:'{"data":[],"has_more":false}'};
+ },wrangler:async()=>({code:0,stdout:'[]'})});
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.ok(reads.some(p=>p?.startsWith('/v1/payment_links/')));
+ assert.equal(JSON.parse(readFileSync(join(root,'.studio','stripe-mcp.json'))).options.account,'acct_fixture');
+ assert.equal(JSON.parse(readFileSync(file)).result.config.portalId,f.rows.configurations[0].id);
+});
+
+test('observation helper accumulates incremental official-plugin responses and reuses links by metadata',async t=>{
+ const {recordShopObservations}=await import('../lib/shop-mcp.mjs');
+ const root=studio(t),f=fixture();const first=await reconcile(root,f);
+ rmSync(join(root,'.studio'),{recursive:true});
+ let plan=await shopMcpPlan(root),writes=[];
+ for(let i=0;i<30&&!plan.verified;i++) {
+   const observations=plan.operations.map(op=>{if(op.method==='POST')writes.push(op);return {...op,body:f.call(op)};});
+   plan=await recordShopObservations(root,{observations});
+ }
+ assert.equal(plan.verified,true);assert.deepEqual(writes,[]);
+ assert.deepEqual(plan.config.items.map(i=>i.id).sort(),first.p.config.items.map(i=>i.id).sort());
+});
+
+test('supporter and deposit Payment Links lock quantity while ordinary items remain adjustable',async t=>{
+ const root=studio(t);writeFileSync(join(root,'shop.json'),JSON.stringify({till:'stripe',currency:'usd',items:[{id:'support',kind:'supporter',name:'Support',price:500},{id:'deposit',kind:'deposit',name:'Deposit',price:'choose'},{id:'item',name:'Item',price:300}]}));
+ const f=fixture();const {p}=await reconcile(root,f);
+ for(const id of ['support','deposit']) {const link=f.rows.payment_links.find(l=>l.id===p.config.items.find(i=>i.item===id).id);assert.equal(link.line_items[0].quantity,1);assert.equal(link.line_items[0].adjustable_quantity?.enabled??false,false);}
+ assert.equal(f.rows.payment_links.find(l=>l.id===p.config.items.find(i=>i.item==='item').id).line_items[0].adjustable_quantity.enabled,true);
+});

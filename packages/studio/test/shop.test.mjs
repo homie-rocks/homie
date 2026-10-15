@@ -1141,6 +1141,8 @@ test('@homie-rocks/studio/shop in a game: has, entitlements, change, open, used;
     assert.equal(sent.at(-1).reference, 'gift:42');
     assert.deepEqual(sent.at(-1).lines, [{ item: 'ember', quantity: 3 }, { item: 'tip', quantity: 1, amount: 500 }]);
     assert.equal(shop.cart().length, 0);
+    assert.equal((await shop.book('ember', {collection:'bookings',slot:'morning'}, 1, {reference:'booking:42'})).ok, true);
+    assert.equal(sent.at(-1).reference, 'booking:42');
     assert.equal(await shop.buy('ember', 1, undefined, { reference: 'ticket:42' }), true);
     assert.equal(sent.at(-1).reference, 'ticket:42');
     assert.deepEqual(sent.at(-1).lines, [{ item: 'ember', quantity: 1 }]);
@@ -2661,6 +2663,7 @@ test('keyless: setup, changed catalog, purchase, tips, reordered refund/dispute,
   const h = await pairingHarness('pairing-purchase');
   const file = join(h.dir, 'shop.json');
   const raw = JSON.parse(readFileSync(file));
+  raw.items[0].kind='item'; // Ordinary items retain adjustable quantity; supporters are fixed at one.
   raw.items.push({ id: 'tip', kind: 'tip', name: 'A tip', price: 'choose', min: 200, max: 1000 }, { id: 'free', name: 'Free badge', price: 0, gives: ['badge:free'] });
   writeFileSync(file, JSON.stringify(raw));
   assert.equal((await shopConnect(h.dir, h.opts)).ok, true);
@@ -3158,4 +3161,37 @@ test('a free item keeps the shell checkout bridge available without Stripe', asy
   const boot=JSON.parse(html.match(/window\.__HOMIE_PLAY\s*=\s*(\{[^\n]+\});/)[1]);
   assert.ok(boot.shop);
  }finally{s.stripe.close()}
+});
+
+test('keyless variable deposit retains the app reference and only fulfills the saved amount',async()=>{
+ const {shopConnect}=await import('../lib/stripe-connect.mjs');const {readShop}=await import('../lib/shop.mjs');const h=await pairingHarness('variable-deposit');
+ const file=join(h.dir,'shop.json'),raw=JSON.parse(readFileSync(file));raw.items=[{id:'deposit',kind:'deposit',name:'Deposit',price:'choose',min:50,gives:['reserved']}];writeFileSync(file,JSON.stringify(raw));
+ assert.equal((await shopConnect(h.dir,h.opts)).ok,true);
+ const s=await site({key:false,settings:readShop(h.dir).shop});Object.assign(s.env,h.state.saved);
+ try {
+  const person=s.player(30,{band:'adult'});subscribeAppPayments(s);
+  const response=await s.post('/api/shop/buy',{item:'deposit',amount:1250,reference:'reservation-42'},s.as(person));const order=await response.json();assert.equal(response.status,200,JSON.stringify(order));
+  assert.equal(new URL(order.url).searchParams.get('prefilled_amount'),'1250');
+  const link=JSON.parse(s.env.STRIPE_SHOP_LINKS).items[0];
+  const event=amount=>({id:'cs_test_deposit'+amount,payment_link:link.id,client_reference_id:order.order,metadata:{revision:link.revision},currency:'usd',amount_subtotal:amount,amount_total:amount,payment_status:'paid',payment_intent:'pi_deposit'+amount});
+  for(const amount of [500,1500])await s.hook('checkout.session.completed',event(amount),{secret:s.env.STRIPE_WEBHOOK_SECRET});
+  assert.equal(s.DB.sql.prepare("SELECT count(*) n FROM shop_orders WHERE status='paid'").get().n,0);
+  await s.hook('checkout.session.completed',event(1250),{secret:s.env.STRIPE_WEBHOOK_SECRET});
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id=?').get(order.order).status,'paid');
+  assert.equal(JSON.parse(s.DB.sql.prepare("SELECT data FROM studio_events WHERE type='order.paid'").get().data).reference,'reservation-42');
+ }finally{s.stripe.close();h.stripe.close();}
+});
+
+test('resource checkout refuses a raw slot without its allocated hold',async()=>{
+ const {shopRoutes}=await import('../worker/shop.mjs');const s=await site();
+ try {
+  subscribeAppPayments(s);
+  for(const file of readdirSync(join(s.dir,'site/migrations')).sort().filter(f=>f>'0022_remove_referrals.sql'))s.DB.sql.exec(readFileSync(join(s.dir,'site/migrations',file),'utf8'));
+  s.DB.sql.exec(`INSERT INTO app_records VALUES('place','slots','morning','{"capacity":1}',1,1)`);
+  const cat=await (await s.env.ASSETS.fetch(new Request('https://owls.example/games.json'))).json();
+  cat.games.push({id:'place',kind:'app',records:{collections:{bookings:{booking:{slots:'slots',resources:'resources',item:'supporter'}}}}});
+  const person=s.player(30,{band:'adult'}),url=new URL('https://owls.example/api/shop/buy');
+  const response=await shopRoutes(new Request(url,{method:'POST',headers:{...s.as(person),'content-type':'application/json',origin:url.origin},body:JSON.stringify({item:'supporter',game:'place',booking:{collection:'bookings',slot:'morning'}})}),s.env,{waitUntil:()=>{}},url,{catalogueOf:async()=>cat});
+  const body=await response.json();assert.equal(response.status,409,JSON.stringify(body));assert.match(body.message,/resource.*hold|hold.*resource/i);
+ }finally{s.stripe.close();}
 });

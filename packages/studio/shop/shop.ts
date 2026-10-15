@@ -71,7 +71,7 @@ export interface Shop {
   cart(): CartLine[];
   clear(): void;
   /** Opens Checkout: keyless bookings are pending until paid; explicit session checkout holds capacity. The returned ID tracks the public booking record. */
-  book(item: string, booking: { collection: string; slot: string; hold?: string; token?: string }, quantity?: number): Promise<{ ok: boolean; booking?: string; error?: string }>;
+  book(item: string, booking: { collection: string; slot: string; hold?: string; token?: string }, quantity?: number, options?: { reference?: string }): Promise<{ ok: boolean; booking?: string; error?: string }>;
   checkout(options?: { reference?: string }): Promise<boolean>;
   buy(item: string, quantity?: number, amount?: number, options?: { reference?: string }): Promise<boolean>;
   /** Mark an item used; the studio's refundUsedItems policy decides whether self-service refunds still apply. */
@@ -154,8 +154,8 @@ export function createShop(opts: ShopOptions = {}): Shop {
     add: (item, quantity = 1, amount) => { cart.push({ item, quantity, ...(amount === undefined ? {} : { amount }) }); },
     cart: () => cart.map((line) => ({ ...line })),
     clear: () => { cart = []; },
-    book: async (item, booking, quantity = 1) => {
-      const r = await send({ op: 'checkout', booking, lines: [{ item, quantity }] });
+    book: async (item, booking, quantity = 1, options = {}) => {
+      const r = await send({ op: 'checkout', booking, reference: options.reference, lines: [{ item, quantity }] });
       return { ok: Boolean(r.ok), ...(typeof r.booking === 'string' ? { booking: r.booking } : {}), ...(typeof r.message === 'string' ? { error: r.message } : {}) };
     },
     checkout: async (options = {}) => { const ok = Boolean((await send({ op: 'checkout', lines: cart, reference: options.reference })).ok); if (ok) cart = []; return ok; },

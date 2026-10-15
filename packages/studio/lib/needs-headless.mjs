@@ -1,13 +1,14 @@
 import {localCookie} from './local-test.mjs';
 
 /** Each action has an explicit local identity, using the real MCP transport and permissions. */
-export function needsHeadless({url,secret,app,meta,scope}) {
+export function needsHeadless({url,secret,app,meta,scope,sessionFor}) {
   return async (item,role) => {
-    if(!secret)throw new Error('Headless role proof requires homie-studio dev in this studio and its localhost URL');
+    if(!secret&&!sessionFor)throw new Error('Headless role proof requires homie-studio dev in this studio and its localhost URL');
     if(!role || (role!=='owner'&&!Object.hasOwn(meta.roles??{},role)))throw new Error(`Name a declared role (or owner) for headless proof; got ${role??'none'}`);
     const {Client,StreamableHTTPClientTransport}=await import('mcp-studio-client');
     const client=new Client({name:'Homie needs check',version:'1.0.0'});
-    const transport=new StreamableHTTPClientTransport(new URL('/mcp',url),{requestInit:{headers:{authorization:`Bearer ${secret}`,cookie:`homie_test=${localCookie(secret,{app,role,scope})}`}}});
+    const cookie=sessionFor?await sessionFor(role):{name:'homie_test',value:localCookie(secret,{app,role,scope})};
+    const transport=new StreamableHTTPClientTransport(new URL('/mcp',url),{requestInit:{headers:{...(secret?{authorization:`Bearer ${secret}`} : {}),...(cookie?{cookie:`${cookie.name}=${cookie.value}`}:{})}}});
     try {
       await client.connect(transport);
       let call=item.mcp;

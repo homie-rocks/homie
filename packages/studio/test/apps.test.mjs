@@ -85,6 +85,8 @@ test('records require account grants, survive room lifetimes, validate and compa
   a = await appAccess(request('/welcome/open'+query,'GET',null,staff),env,meta,new URL(link));assert.equal(a.status,403);
   assert.equal((await call('/welcome/api/app/roles','POST',{role:'staff',player:id},owner)).status,200);
   a=await appAccess(request('/welcome/open'+query,'GET',null,staff),env,meta,new URL(link));assert.equal(a.ok,true);
+  const missing=await call('/welcome/api/app/records/queue','POST',{data:{label:'A',status:'waiting'}});
+  assert.equal((await missing.json()).error,'Put the record id in the URL: /welcome/api/app/records/queue/<id> (1–64 letters, digits, underscore or hyphen).');
   const path='/welcome/api/app/records/queue/ticket';
   assert.equal((await call(path,'POST',{data:{label:'A',status:'called'}})).status,400);
   assert.equal((await call(path,'POST',{data:{label:'A',status:'waiting'}})).status,200);
@@ -160,4 +162,49 @@ test('a cause can retain and read more than a thousand gifts',async()=>{
   assert.equal((await appRecordsRoute(req,{DB},meta,new URL(req.url),'api/app/records/queue/next')).status,200);
   const list=new Request('https://example.test/welcome/api/app/records/queue');const response=await appRecordsRoute(list,{DB},meta,new URL(list.url),'api/app/records/queue');assert.equal((await response.json()).records.length,1001);
  }finally{DB.sql.close();}
+});
+
+test('private records app can load its module without cookies using a scoped expiring asset address',async()=>{
+ const root=studio('Private module');await newApp(root,'welcome');const meta=listApps(root)[0];meta.launch='private';delete meta.room;
+ const DB=database(root),token='c'.repeat(64),origin='https://private.test';
+ DB.sql.prepare('INSERT INTO stats_keys (hash,kind,expires_at) VALUES (?,?,?)').run(hash(token),'session',Date.now()+3600000);
+ const cat={studio:{name:'Private'},games:[meta]},assets=new Map([['/games.json',JSON.stringify(cat)],['/games/welcome/index.html','<script type="module" src="./assets/main.js"></script>'],['/games/welcome/assets/main.js','import "./chunk.js";'],['/games/welcome/assets/chunk.js','globalThis.started=true;']]);
+ const env={DB,ASSETS:{fetch:async req=>new Response(assets.get(new URL(req.url).pathname)??'missing',{status:assets.has(new URL(req.url).pathname)?200:404})}};
+ const get=(path,cookie='')=>worker.fetch(new Request(origin+path,{headers:{cookie}}),env,{waitUntil:()=>{}});
+ try {
+  const page=await get('/welcome/open',`studio_owner=${token}`);assert.equal(page.status,200);
+  const html=await page.text(),src=JSON.parse(/frame.src=("[^";]+")/.exec(html)[1]);
+  const frame=await get(src);assert.equal(frame.status,200,'authorized frame has no owner cookie');
+  assert.notEqual(frame.headers.get('x-frame-options'),'DENY');
+  const module=new URL('./assets/main.js',origin+src);assert.equal((await get(module.pathname)).status,200);
+  assert.equal(await (await get(new URL('./chunk.js',module).pathname)).text(),'globalThis.started=true;');
+  for(const path of ['/welcome/__game/assets/main.js','/games/welcome/assets/main.js','/welcome/api/app/records/queue'])assert.equal((await get(path)).status,404,path);
+  assert.equal((await get(src.replace('welcome','different'))).status,404);
+ }finally{DB.sql.close();}
+});
+
+test('private room-backed app uses its play ticket for the frame and scoped asset paths for modules',async()=>{
+ const {ticketFor}=await import('../worker/office.mjs');const root=studio('Private room module');await newApp(root,'welcome');const meta=listApps(root)[0];meta.launch='private';
+ const DB=database(root),origin='https://private-room.test',cat={studio:{name:'Private'},games:[meta]};
+ const env={DB,ASSETS:{fetch:async req=>new URL(req.url).pathname==='/games.json'?Response.json(cat):new Response(new URL(req.url).pathname.endsWith('index.html')?'<head></head><script type="module" src="./assets/main.js"></script>':'globalThis.started=true;')}};
+ try {
+  const ticket=await ticketFor(env,'welcome','o');
+  const socket=await worker.fetch(new Request(origin+'/welcome/__net?t='+ticket),env,{waitUntil:()=>{}});assert.equal(socket.status,426,'authorized opaque frame reaches the socket protocol handler');
+  const response=await worker.fetch(new Request(origin+'/welcome/__game/?t='+ticket),env,{waitUntil:()=>{}});assert.equal(response.status,200);
+  const html=await response.text(),base=/<base href="([^"]+)"/.exec(html)?.[1];assert.ok(base);
+  assert.equal((await worker.fetch(new Request(new URL('assets/main.js',origin+base)),env,{waitUntil:()=>{}})).status,200);
+ }finally{DB.sql.close();}
+});
+
+test('resource booking declarations reject missing collections and anonymous resource edits',()=>{
+ const meta={id:'place',name:'Place',kind:'app',roles:{customer:{signIn:false,can:['read:slots','update:resources']}},surfaces:{phone:'customer'},records:{persist:true,collections:{slots:{fields:{capacity:{type:'number'}}},resources:{fields:{capacity:{type:'number'},skills:{type:'array'},attributes:{type:'object'}}},bookings:{fields:{},booking:{slots:'slots',item:'ticket',resources:'resources'}}}}};
+ assert.ok(appProblems(meta).some(p=>/resource.*signed.in|writes.*signed.in/.test(p)));
+ meta.roles.customer.can=['read:slots'];meta.records.collections.bookings.booking.resources='missing';
+ assert.ok(appProblems(meta).some(p=>/resources collection/.test(p)));
+});
+
+test('writing needs evidence does not restart the app runtime while source edits still do',async()=>{
+ const root=studio('Needs evidence');await newApp(root,'welcome');const app=listApps(root)[0],before=rulesStamp(app);
+ writeFileSync(join(app.dir,'CODEX.md'),'# Needs\nA new proof result.\n');assert.equal(rulesStamp(app),before,'authoring evidence cannot interrupt a running check');
+ writeFileSync(join(app.dir,'src/changed.ts'),'export const changed=true;');assert.notEqual(rulesStamp(app),before);
 });

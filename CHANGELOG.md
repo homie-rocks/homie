@@ -17,6 +17,33 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.53.0] - 2026-10-15
+
+**Plugin 0.53.0**
+
+Take bookings against real resources, keep private apps usable, collect deposits reliably and turn tested examples into your own place.
+
+### Added
+
+- **Bookings that fit your place:** Reserve shared resources alongside booking capacity, allocate packages, and use seasonal calendars in your place's time zone. Shared phone controls let customers choose booking options and resources; common booking argument aliases work across tools.
+- **Keep upcoming slots ready to sell:** Declared `booking.slots_need_payment_links` events let your studio respond when rolling slot inventory needs payment links.
+- **Apps customers can install:** Public apps can offer a direct install page with a web manifest and optional service worker. Add your own icons and offline behavior; installation support depends on the browser.
+- **A quicker start from an example:** Fork editable source with new studio and app identities and fresh deployment settings. A single concept flag marks previews with a TEST / CONCEPT banner and keeps them out of the directory and search indexing.
+- **Turn-based games without unnecessary physics:** Participants can have private roles and timed phases without needing physics bodies. Private fields remain visible only to their owning player.
+- **Simpler Stripe setup:** `shop observe` accepts incremental public responses from Stripe's official plugin and returns the next setup plan without a hand-built observations file. New Stripe sign-ins show pairing instructions in the job's progress before approval completes.
+
+### Fixed
+
+- **Deposits tied to the right booking:** Supporter and deposit links keep quantity at one. Variable deposits retain the app reference and require the saved subtotal before fulfillment; booking and AI checkout also preserve the reference in the saved order.
+- **Private apps that load safely:** Authorized private app frames can load their modules through expiring asset links while anonymous modules and records stay closed. Missing record IDs explain exactly where to supply the ID.
+- **Checks that reflect each screen's role:** Wall and phone permissions remain separate, each need starts in a fresh room after the baseline, and saving check evidence no longer restarts development. Brief Cloudflare startup failures retry with a visible notice.
+- **Smoother shop upgrades:** Existing billing portals are discovered when older verifications lack their IDs. Webhook setup fills missing account IDs after checking link ownership with the saved Stripe login; reused logins no longer show unnecessary pairing instructions.
+
+### Upgrade notes
+
+- Apply `0030_booking_resources.sql` after the existing booking migrations to use resource-aware bookings.
+- Concept mode labels a preview; it does not isolate payment credentials or data. Installed public app surfaces run as same-origin studio code; private app shells keep their sandbox.
+
 ## [0.52.0] - 2026-10-15
 
 **Plugin 0.52.0**

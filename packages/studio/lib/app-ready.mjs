@@ -9,7 +9,7 @@ export async function appReady(surface, {timeout=60000}={}) {
         const cover=document.querySelector('[data-arrive]');
         return window.__shell?.link?.state==='online' && window.__shell?.arrival?.phase==='done' && (!cover || (getComputedStyle(cover).opacity==='0' && getComputedStyle(cover).visibility==='hidden'));
       },{timeout:Math.max(1,end-Date.now())});
-      const frame=surface.page.frames().find(f=>/\/__game\//.test(f.url()));
+      const frame=surface.page.frames().find(f=>/\/(?:__game|__assets)\//.test(f.url()));
       if(!frame)throw new Error('app frame missing');
       await frame.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
       surface.frame=frame;return;

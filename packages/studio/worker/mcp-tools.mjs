@@ -1,3 +1,4 @@
+import {bookingInputSchema,normalizeBookingArgs} from './booking-options.mjs';
 import {bookingHolds} from './booking-holds.mjs';
 import {toolDatabase} from './tool-database.mjs';
 import { selling } from './extensions.mjs';
@@ -16,7 +17,7 @@ export async function allowed(audience, caller, env) {
   if (audience === 'studio-staff') return caller.owner === true || Boolean(await env.DB.prepare("SELECT player FROM app_roles WHERE app='*' AND role='staff' AND player=?1").bind(caller.id).first());
   if (audience === 'owner') return caller.owner === true;
   if (audience && typeof audience === 'object' && audience.app && audience.role) {
-    if(env.HOMIE_LOCAL_TEST_SECRET && caller.localTest)return caller.owner || Boolean(caller.roles?.[audience.app]?.includes(audience.role));
+    if((env.HOMIE_LOCAL_TEST_SECRET || caller.remoteTest) && caller.localTest)return caller.owner || Boolean(caller.roles?.[audience.app]?.includes(audience.role));
     return caller.owner || Boolean(await env.DB.prepare("SELECT player FROM app_roles WHERE app IN (?1,'*') AND role=?2 AND player=?3").bind(audience.app,audience.role,caller.id).first());
   }
   return false;
@@ -38,9 +39,11 @@ export async function currentCaller(env, props) {
 }
 export function services(env, cat, origin, caller, namespace, definition = {}) {
   const records = async ({app,role,collection,id,operation='read',data,version}) => {
+    if(operation!=='read'&&!id)throw Object.assign(new Error('Put id at the top level of the arguments, alongside app and collection (1–64 letters, digits, underscore or hyphen).'),{name:'StudioOperationError'});
+    if(caller.remoteTest&&app!==caller.testApp)throw new Error('Test session belongs to another app');
     const meta = cat.games.find(g=>g.id===app && g.kind==='app');
     if (!meta || !/^[a-z][a-z0-9-]{0,39}$/.test(collection) || (id!==undefined && !/^[A-Za-z0-9_-]{1,64}$/.test(id))) throw Object.assign(new Error('Unknown app or collection; collection names start with a lowercase letter and use lowercase letters, digits and hyphens (1–40). Record id: 1–64 letters, digits, underscore or hyphen.'),{name:'StudioOperationError'});
-    if (!caller.owner && launchOf(meta,await settingsOf(env,{fresh:true}),env)!=='public') throw new Error('app is private');
+    if (!caller.owner && !caller.remoteTest && launchOf(meta,await settingsOf(env,{fresh:true}),env)!=='public') throw new Error('app is private');
     if(!role) {
       const candidates=[];
       for(const [name,declared] of Object.entries(meta.roles??{})) {
@@ -90,6 +93,13 @@ export function services(env, cat, origin, caller, namespace, definition = {}) {
 export function builtins(env,cat,origin) {
   const tool=(name,description,audience,inputSchema,handler)=>({name,description,audience,inputSchema,handler});
   const tools=[
+    tool('studio_check_session','Owner: create a short-lived app-role test session with isolated records. Never grants global owner access.','owner',object({app:str,role:str,scope:{type:'string',pattern:'^check-[a-zA-Z0-9-]{1,64}$'}},['app','role','scope']),async(args,ctx)=>{
+      if(!ctx.caller.owner)throw new Error('Owner required');
+      const meta=cat.games.find(g=>g.id===args.app&&g.kind==='app');
+      if(!meta?.roles?.[args.role])throw new Error('Name a declared app role');
+      const token=await (await import('./office.mjs')).checkSessionTicket(env,{...args,origin});
+      return {token,expiresIn:900};
+    }),
     tool('studio_events_clear','Owner: permanently clear retained events and deliveries through a sequence number. Newer events remain.','owner',object({through:{type:'integer',minimum:0}},['through']),async({through},ctx)=>{
       if(!ctx.caller.owner)throw new Error('Owner only');
       if(!Number.isSafeInteger(through)||through<0)throw new Error('Invalid event cursor');
@@ -165,6 +175,14 @@ export function builtins(env,cat,origin) {
       const roles={};for(const [role,definition] of Object.entries(meta.roles??{}))if(!definition.signIn||await allowed({app,role},ctx.caller,env))roles[role]={can:definition.can,signIn:Boolean(definition.signIn)};
       const collections=new Set(Object.values(roles).flatMap(r=>r.can.map(cap=>cap.split(':')[1])));
       return {app,roles,collections:Object.fromEntries(Object.entries(meta.records?.collections??{}).filter(([name])=>collections.has(name)))};
+    }),
+    tool('studio_book','Reserve a declared booking slot. Accepts slot/time, resource/preferredResource, and addons/addOns as an array or quantity object. Supply a stable id, future expiresAt and a private token for an anonymous booking. Payment is separate.','public',bookingInputSchema,async(input,ctx)=>{
+      const args=normalizeBookingArgs(input),meta=cat.games.find(g=>g.id===args.app&&g.kind==='app'),spec=meta?.records?.collections?.[args.collection]?.booking;
+      if(!spec)throw Object.assign(new Error('Unknown booking collection'),{name:'StudioOperationError'});
+      const minutes=Number.isSafeInteger(spec.holdMinutes)&&spec.holdMinutes>0?Math.min(spec.holdMinutes,1440):15;
+      if(!Number.isSafeInteger(args.expiresAt)||args.expiresAt<=Date.now()||args.expiresAt>Date.now()+minutes*60000)throw Object.assign(new Error(`Hold expiry must be within ${minutes} minutes`),{name:'StudioOperationError'});
+      await ctx.records({app:args.app,collection:spec.slots,id:args.slot});
+      return ctx.bookings.hold(args);
     }),
     tool('app_records','List, read, create, update or delete app records with the app role and record version.','public',object({app:str,role:str,collection:{type:'string',pattern:'^[a-z][a-z0-9-]{0,39}$'},id:{type:'string',pattern:'^[A-Za-z0-9_-]{1,64}$',description:'1–64 letters, digits, underscore or hyphen'},operation:{enum:['read','create','update','delete']},data:{type:'object',propertyNames:{pattern:'^[a-z][a-z0-9_]*$'},description:'Field names start with a lowercase letter and use lowercase letters, digits and underscore; discover fields with app_schema.'},version:{type:'integer',minimum:1}},['app','collection']), (args,ctx)=>ctx.records(args)),
   ];

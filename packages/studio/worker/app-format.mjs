@@ -6,6 +6,7 @@ const object = (x) => x && typeof x === 'object' && !Array.isArray(x);
 export function appProblems(meta) {
   const bad = [];
   if (!object(meta)) return ['app.json must be an object'];
+  if(meta.web!==undefined && (!object(meta.web)||!object(meta.web.manifest)||meta.web.serviceWorker!==undefined&&(typeof meta.web.serviceWorker!=='string'||meta.web.serviceWorker.includes('..')||!/^[-\w/]+\.js$/.test(meta.web.serviceWorker))))bad.push('web needs a manifest object and optional relative serviceWorker .js path');
   const roles = object(meta.roles) ? meta.roles : {};
   const collections = object(meta.records?.collections) ? meta.records.collections : {};
   if (!object(meta.roles) || !Object.keys(meta.roles).length) bad.push('roles must declare at least one role');
@@ -18,13 +19,15 @@ export function appProblems(meta) {
   if (!object(meta.records) || typeof meta.records.persist !== 'boolean' || !object(meta.records.collections)) bad.push('records declares persist and collections');
   for (const [id, c] of Object.entries(collections)) {
     if (!key.test(id) || !object(c) || !object(c.fields)) { bad.push(`collection ${id}: declare fields`); continue; }
-    for (const [field, spec] of Object.entries(c.fields)) if (!/^[a-z][a-z0-9_]*$/.test(field) || !object(spec) || !['string', 'number', 'boolean'].includes(spec.type) || (spec.enum && (!Array.isArray(spec.enum) || !spec.enum.length))) bad.push(`collection ${id}.${field}: invalid field: names start with a lowercase letter and use lowercase letters, digits and underscore; declare a string, number or boolean type`);
+    for (const [field, spec] of Object.entries(c.fields)) if (!/^[a-z][a-z0-9_]*$/.test(field) || !object(spec) || !['string', 'number', 'boolean', 'array', 'object'].includes(spec.type) || (spec.enum && (!Array.isArray(spec.enum) || !spec.enum.length))) bad.push(`collection ${id}.${field}: invalid field: names start with a lowercase letter and use lowercase letters, digits and underscore; declare a string, number, boolean, array or object type`);
   }
   for (const [id, c] of Object.entries(collections)) if (c.booking) {
     const spec = c.booking;
     if (!object(spec) || !key.test(spec.slots ?? '') || !collections[spec.slots] || typeof spec.item !== 'string' || !spec.item.trim()) bad.push(`collection ${id}: booking needs slots collection and shop item`);
+    if(spec.resources!==undefined&&(!key.test(spec.resources)||!collections[spec.resources]))bad.push(`collection ${id}: booking needs a declared resources collection`);
+    if(spec.holdMinutes!==undefined&&(!Number.isSafeInteger(spec.holdMinutes)||spec.holdMinutes<1||spec.holdMinutes>1440))bad.push(`collection ${id}: holdMinutes is 1–1440`);
     if (!meta.records.persist) bad.push(`collection ${id}: bookings need persistent records`);
-    for (const role of Object.values(roles)) if (!role.signIn && (role.can ?? []).some(cap => ['create','update','delete'].some(op => cap === `${op}:${id}` || cap === `${op}:${spec.slots}`))) bad.push(`collection ${id}: booking and slot writes require a signed-in staff role`);
+    for (const role of Object.values(roles)) if (!role.signIn && (role.can ?? []).some(cap => ['create','update','delete'].some(op => cap === `${op}:${id}` || cap === `${op}:${spec.slots}` || spec.resources&&cap === `${op}:${spec.resources}`))) bad.push(`collection ${id}: booking, slot and resource writes require a signed-in staff role`);
   }
   for (const r of Object.values(roles)) for (const cap of Array.isArray(r?.can) ? r.can : []) if (!Object.hasOwn(meta.records?.collections ?? {}, String(cap).split(':')[1])) bad.push(`unknown collection in ${cap}`);
   for (const [k, v] of Object.entries(meta.words ?? {})) if (!/^[a-z][a-zA-Z0-9-]*$/.test(k) || typeof v !== 'string' || v.length > 500) bad.push(`words.${k}: use a short label`);
@@ -43,7 +46,7 @@ export function recordProblem(collection, data, { create = false } = {}) {
   for (const [k, s] of Object.entries(collection.fields)) {
     const v = data[k];
     if (v === undefined) { if (s.required) return `missing ${k}`; continue; }
-    if (typeof v !== s.type || (s.type === 'number' && !Number.isFinite(v)) || (typeof v === 'string' && v.length > (s.maxLength ?? 256)) || (s.enum && !s.enum.includes(v)) || (create && s.initial !== undefined && v !== s.initial)) return `invalid ${k}`;
+    if ((s.type==='array'?!Array.isArray(v):s.type==='object'?!object(v):typeof v !== s.type) || (s.type === 'number' && !Number.isFinite(v)) || (typeof v === 'string' && v.length > (s.maxLength ?? 256)) || (s.enum && !s.enum.includes(v)) || (create && s.initial !== undefined && v !== s.initial)) return `invalid ${k}`;
   }
   return null;
 }

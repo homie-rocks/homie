@@ -1195,7 +1195,7 @@ export function toolDefs(ctx, avail = {}) {
       run:async a=>{
         const job=cliJob(ctx.root(a.studio),'Private Stripe webhook',['shop','webhook',...(a.live?['--live']:[]),...(a.renew?['--renew']:[])],{cli:join(PACKAGE_ROOT,'bin','homie-studio.mjs'),keep:false});
         await waitJob(job,Math.min(ctx.waitMs,1000));
-        return ok('Follow studio_job; approve Stripe in the browser if requested.',{kind:'job',...jobView(job)});
+        return ok('Follow studio_job. Its events contain any required Stripe pairing; a saved login needs no new approval.',{kind:'job',...jobView(job)});
       },
     },
     {

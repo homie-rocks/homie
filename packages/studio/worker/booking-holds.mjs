@@ -1,3 +1,6 @@
+import {calendarSlots} from './booking-calendar.mjs';
+import {allocateResources} from './booking-resources.mjs';
+import {normalizeBookingArgs} from './booking-options.mjs';
 import {BOOKINGS_MIGRATION} from './booking-store.mjs';
 import {linkConfig,hasStripeKey} from './shop-links.mjs';
 export const BOOKING_HOLDS_MIGRATION_FILE='0029_booking_holds.sql';
@@ -44,7 +47,7 @@ export async function ownedHold(env,caller,{id,token}){
 }
 /** A hold is the very row checkout later confirms. Secrets never enter its public projection. */
 export function bookingHolds(env,caller,cat){
- const result=r=>({id:r.id,slot:r.slot,quantity:r.quantity,state:r.state,version:r.version,expiresAt:r.hold_until,paid:r.paid_at!==null});
+ const result=r=>({id:r.id,slot:r.slot,quantity:r.quantity,state:r.state,version:r.version,expiresAt:r.hold_until,paid:r.paid_at!==null,...(r.allocation&&r.allocation!=='[]'?{allocations:JSON.parse(r.allocation)}:{}),...(r.choices&&r.choices!=='{}'?{choices:JSON.parse(r.choices)}:{})});
  const change=async(args,state)=>{
   const row=await ownedHold(env,caller,args);
   if(row.order_id!=='hold:'+row.id)throw refusal('Checkout owns this booking; reconcile payment before release');
@@ -53,7 +56,10 @@ export function bookingHolds(env,caller,cat){
   if(!changed)throw refusal('Booking changed or expired; reload',409);return result(changed);
  };
  return Object.freeze({
-  async hold({app,collection,slot,quantity=1,id,token,expiresAt}){
+  calendar({app,...options}){const meta=cat.games.find(g=>g.id===app&&g.kind==='app');if(!meta)throw refusal('Unknown app');return calendarSlots({timeZone:meta.timeZone,...options});},
+  async hold(input){
+   const args=normalizeBookingArgs(input);
+   let {app,collection,slot,quantity=1,id,token,expiresAt}=args;
    const meta=cat.games.find(g=>g.id===app&&g.kind==='app'),spec=meta?.records?.collections?.[collection]?.booking;
    if(!spec||!valid(id)||!valid(slot)||!Number.isSafeInteger(quantity)||quantity<1)throw refusal('Choose a declared slot, positive quantity and stable booking id');
    if(!Number.isSafeInteger(expiresAt)||expiresAt<=Date.now())throw refusal('Hold needs a future expiry');
@@ -62,11 +68,18 @@ export function bookingHolds(env,caller,cat){
    if(!hasStripeKey(env)&&linkConfig(env)?.slots?.some(l=>l.app===app&&l.slots===spec.slots&&l.slot===slot))throw refusal('Keyless Stripe inventory cannot share local holds; configure session checkout first');
    const scope=caller.testScope?`${app}:check:${caller.testScope}`:app;
    id=await hash(JSON.stringify([scope,collection,id]));
+   const choices={option:args.option??null,resource:args.resource??null,addons:args.addons??{}};
+   if(await env.DB.prepare('SELECT id FROM shop_bookings WHERE id=?1').bind(id).first()) {
+     const previous=await ownedHold(env,caller,{id,token});
+     if(previous.app!==scope||previous.collection!==collection||previous.slot!==slot||previous.quantity!==quantity||JSON.stringify({...choices,...JSON.parse(previous.choices??'{}')})!==JSON.stringify(choices))throw refusal('Booking id reused with different request',409);
+     return result(previous);
+   }
+   let allocation;try{allocation=await allocateResources(env,scope,spec,slot,args);}catch(error){throw refusal(error.message,409);}
    const secret=token?await hash(token):null;
-   try {await env.DB.prepare(`INSERT INTO shop_bookings(id,app,collection,slots,slot,quantity,order_id,state,updated_at,actor,token_hash,hold_until)
-    SELECT ?1,?2,?3,?4,?5,?6,'hold:'||?1,'held',?7,?8,?9,?10 WHERE NOT EXISTS(SELECT 1 FROM shop_bookings WHERE id=?1)`).bind(id,scope,collection,spec.slots,slot,quantity,Date.now(),caller.id??null,secret,expiresAt).run();}catch(error){if(/booking capacity unavailable/.test(error.message))throw refusal('That slot is full. No place has been taken.',409);throw error;}
+   try {await env.DB.prepare(`INSERT INTO shop_bookings(id,app,collection,slots,slot,quantity,order_id,state,updated_at,actor,token_hash,hold_until,allocation,choices)
+    SELECT ?1,?2,?3,?4,?5,?6,'hold:'||?1,'held',?7,?8,?9,?10,?11,?12 WHERE NOT EXISTS(SELECT 1 FROM shop_bookings WHERE id=?1)`).bind(id,scope,collection,spec.slots,slot,quantity,Date.now(),caller.id??null,secret,expiresAt,JSON.stringify(allocation),JSON.stringify(choices)).run();}catch(error){if(/booking capacity unavailable|resource capacity unavailable/.test(error.message))throw refusal('That slot or resource capacity is unavailable. No place has been taken.',409);throw error;}
    const row=await ownedHold(env,caller,{id,token});
-   if(row.app!==scope||row.collection!==collection||row.slot!==slot||row.quantity!==quantity)throw refusal('Booking id reused with different request',409);
+   if(row.app!==scope||row.collection!==collection||row.slot!==slot||row.quantity!==quantity||JSON.stringify(JSON.parse(row.choices??'{}'))!==JSON.stringify(choices))throw refusal('Booking id reused with different request',409);
    return result(row);
   },
   async get(args){return result(await ownedHold(env,caller,args));},

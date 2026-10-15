@@ -150,3 +150,16 @@ test('shop reconciliation in a GET background task dispatches without a subseque
   assert.ok(delivered,'background shop commit must wake its function in the same lifetime: '+JSON.stringify({data,orders:(await r.db.prepare('SELECT id,status,session,paid_at FROM shop_orders').all()).results,events:(await r.db.prepare('SELECT id,type FROM studio_events').all()).results,functions:(await r.db.prepare('SELECT * FROM function_deliveries').all()).results}));
  }finally{await r.mf.dispose();await w.close();}
 });
+
+test('customer checkout accepts the app reference over MCP and saves it with the order',{timeout:120000},async()=>{
+ const w=await world('customer-reference',{key:LIVE_KEY,shop:{v:1,till:'stripe',currency:'usd',items:[{id:'pass',name:'Pass',price:400}]}});
+ delete w.env.TURNSTILE_SECRET;const r=await runtime(w),client=new Client({name:'reference-test',version:'1'});
+ try {
+  await client.connect(new StreamableHTTPClientTransport(new URL(origin+'/mcp'),{fetch:r.fetcher}));
+  const result=await client.callTool({name:'studio_checkout',arguments:{lines:[{item:'pass'}],reference:'booking:42'}});
+  assert.equal(result.isError,undefined,JSON.stringify(result));
+  const data=JSON.parse(result.content[0].text).data;
+  assert.equal(data.ok,true,JSON.stringify(data));
+  assert.equal((await r.db.prepare('SELECT value FROM meta WHERE key=?1').bind('shop-reference:'+data.order).first()).value,'booking:42');
+ }finally{await client.close();await r.mf.dispose();await w.close();}
+});

@@ -635,7 +635,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
     const bundle = bundleOf(dir);
     builds[g.id] = { hash: gameDigest(dir), ...(bundle ? { bundle } : {}) };
     return {
-      ...(g.kind === 'app' ? { kind: 'app', roles: g.roles, surfaces: g.surfaces, words: g.words, records: g.records, parts: g.parts ?? [], check: g.check } : {}),
+      ...(g.kind === 'app' ? { kind: 'app', ...(g.web?{web:g.web}:{}), ...(g.timeZone?{timeZone:g.timeZone}:{}), roles: g.roles, surfaces: g.surfaces, words: g.words, records: g.records, parts: g.parts ?? [], check: g.check } : {}),
       id: g.id, name: g.name ?? g.id, blurb: g.blurb ?? '', players: { min, max },
       ...(ui ? { ui } : {}),
       // A rules game's round is its rules' own (`room.rounds`), and its movement a per-kind choice there: game.json's
@@ -698,6 +698,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
   const lounge = loungeConfig(studio, rows, { audience: audienceOf(studio) });
   const catalogue = {
     studio: {
+      ...(studio.concept===true?{concept:true}:{}),
       name: studio.name, slug: studio.slug, version: STUDIO_VERSION, ...(studio.kind ? { kind: studio.kind } : {}),
       ...(typeof studio.tagline === 'string' && studio.tagline.trim() ? { tagline: studio.tagline.trim().slice(0, 140) } : {}),
       theme,
@@ -716,7 +717,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
       ...(studio.rooms?.share === false ? { rooms: { share: false } } : {}),
       // The directory the live site claims itself in (0.10.0); studio.json `homie.directory: false` keeps it out.
       // HOMIE_DIRECTORY (a build variable) points one build at another directory, such as a staging one.
-      directory: directoryUrl(process.env.HOMIE_DIRECTORY ?? studio.homie?.directory),
+      directory: studio.concept===true?false:directoryUrl(process.env.HOMIE_DIRECTORY ?? studio.homie?.directory),
       canonical: domainOrigin(studio.cloudflare?.domain) ?? domainOrigin(studio.cloudflare?.url),
       // A copy of the public template that nobody has named yet shows the name typed in Cloudflare's form.
       ...(studio.template === true ? { template: true } : {}),

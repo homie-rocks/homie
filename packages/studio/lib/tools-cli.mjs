@@ -16,9 +16,10 @@ export async function connectToolClient(root,site,{publicOnly=false,open=default
   const {Client,StreamableHTTPClientTransport,auth}=await import('mcp-studio-client');
   const url=new URL('/mcp',site);if(url.protocol!=='https:'&&!['localhost','127.0.0.1','[::1]'].includes(url.hostname))throw new Error('Use HTTPS, or localhost for local development');
   const client=new Client({name:'Homie studio tool CLI',version:'1.0.0'});
-  if(publicOnly){await client.connect(new StreamableHTTPClientTransport(url));return client;}
+  const fetch=startupFetch({log});
+  if(publicOnly){await client.connect(new StreamableHTTPClientTransport(url,{fetch}));return client;}
   const secret=localCredential(root,url);
-  if(secret){await client.connect(new StreamableHTTPClientTransport(url,{requestInit:{headers:{authorization:`Bearer ${secret}`}}}));return client;}
+  if(secret){await client.connect(new StreamableHTTPClientTransport(url,{fetch,requestInit:{headers:{authorization:`Bearer ${secret}`}}}));return client;}
   const file=join(root,'.studio','mcp',Buffer.from(url.origin).toString('base64url')+'.json');
   let state={};try{state=JSON.parse(readFileSync(file,'utf8'));}catch{}
   // Credentials without an issuer predate the SDK's OAuth binding fix; reconnect safely.
@@ -46,7 +47,7 @@ export async function connectToolClient(root,site,{publicOnly=false,open=default
       if(back.searchParams.has('error'))throw new Error('Connection declined');
       await auth(provider,{serverUrl:url,authorizationCode:back.searchParams.get('code'),iss:back.searchParams.get('iss')??undefined});
     }
-    await client.connect(new StreamableHTTPClientTransport(url,{authProvider:provider}));return client;
+    await client.connect(new StreamableHTTPClientTransport(url,{fetch,authProvider:provider}));return client;
   }finally{server.close();}
 }
 function defaultOpen(url){const cmd=process.platform==='darwin'?'open':process.platform==='win32'?'explorer':'xdg-open';const child=spawn(cmd,[url],{stdio:'ignore',detached:true});child.unref();}
@@ -55,4 +56,25 @@ export async function toolCommand(root,sub,positional,flags,{log=()=>{}}={}) {
   if(!['call','list'].includes(sub))throw new Error('Use tool new <name>, tool list, or tool call <name> --input <JSON>');
   const client=await connectToolClient(root,flags.get('url')??'http://localhost:8787',{publicOnly:flags.has('public'),log});
   try{const result=sub==='list'?await client.listTools():await client.callTool({name:positional[2],arguments:JSON.parse(flags.get('input')??'{}')});return {ok:result.isError!==true,command:'tool '+sub,result,...(result.isError?{why:'The tool refused or failed; see its result.'}:{})};}finally{await client.close();}
+}
+
+/** A new Worker can briefly return Cloudflare 1042 before MCP starts. */
+export function startupFetch({fetch: send=globalThis.fetch,log=()=>{},sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms))}={}) {
+  return async(input,init)=>{
+    const request=new Request(input,init);
+    for(let attempt=0;;attempt++) {
+      const response=await send(request.clone());
+      if(response.status!==500 || attempt>=3)return response;
+      const reader=response.clone().body?.getReader();
+      let text='';
+      if(reader)try {
+        const decoder=new TextDecoder();
+        while(text.length<4096) {const {value,done}=await reader.read();if(done)break;text+=decoder.decode(value).slice(0,4096-text.length);}
+      }finally{void reader.cancel().catch(()=>{});}
+      if(!/error code:\s*1042\b/i.test(text))return response;
+      log(`Cloudflare 1042 during Worker startup; retrying MCP (${attempt+1}/3).`);
+      await response.body?.cancel();
+      await sleep(250*2**attempt);
+    }
+  };
 }

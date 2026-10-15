@@ -52,3 +52,30 @@ test('Codex needs run real flow operations, retain failures, capture both surfac
   assert.equal(result[0].captures.length,2);assert.equal(result[1].captures.length,2);
   assert.equal(result[1].statement,'Follow my own gear');
 });
+
+test('a need customer role applies to its phone while the wall retains its own role; passing needs save shots',async t=>{
+ const root=mkdtempSync(join(tmpdir(),'needs-roles-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const captures=[];
+ const surfaces=[['phone','customer'],['wall','display']].map(([name,role])=>({name,role,frame:{waitForSelector:async()=>{}},page:{screenshot:async({path})=>{writeFileSync(path,'capture');captures.push(path);}}}));
+ const results=await proveAppNeeds({plan:{needs:[{id:'visible',statement:'Both views work',role:'customer',assertions:[{surface:'phone',selector:'#ready'},{surface:'wall',selector:'#ready'}]}]},surfaces,shots:root});
+ assert.equal(results[0].status,'met',results[0].why);assert.equal(captures.length,2);assert.ok(captures.every(existsSync));
+});
+
+test('readiness recognizes a private frame served through its signed asset path',async()=>{
+ const {appReady}=await import('../lib/app-ready.mjs');let rendered=false;
+ const frame={url:()=> 'https://place.test/app/__assets/signed/index.html',evaluate:async()=>{rendered=true;}};
+ const surface={name:'phone',page:{waitForFunction:async()=>{},frames:()=>[frame]}};
+ await appReady(surface,{timeout:10});assert.equal(surface.frame,frame);assert.equal(rendered,true);
+});
+
+test('an explicit UI step role selects its own context on the same surface',async()=>{
+ const clicked=[];const surfaces=['customer','staff'].map(role=>({name:'phone',role,frame:{waitForSelector:async()=>{},click:async()=>clicked.push(role)},page:{}}));
+ const [need]=await proveAppNeeds({plan:{needs:[{id:'staff-step',statement:'Use the named role',role:'customer',steps:[{surface:'phone',role:'staff',selector:'#act',click:true}],assertions:[{surface:'phone',role:'staff',selector:'#ready'}]}]},surfaces});
+ assert.equal(need.status,'met',need.why);assert.deepEqual(clicked,['staff']);
+});
+
+test('wall-first assertions keep the wall role while the need role belongs to the phone',async()=>{
+ const surfaces=[['wall','display'],['phone','customer']].map(([name,role])=>({name,role,frame:{waitForSelector:async()=>{}},page:{}}));
+ const [need]=await proveAppNeeds({plan:{needs:[{id:'wall-first',statement:'Both surfaces show the change',role:'customer',assertions:[{surface:'wall',selector:'#ready'},{surface:'phone',selector:'#ready'}]}]},surfaces});
+ assert.equal(need.status,'met',need.why);
+});

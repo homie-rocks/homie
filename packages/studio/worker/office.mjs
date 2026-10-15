@@ -1377,3 +1377,30 @@ export async function officeRoutes(request, env, url, { catalogueOf }) {
   }
   return null;
 }
+
+/** Asset-only capability: cannot authenticate records, tools or room sockets. */
+export async function appAssetTicket(env, app, ticket) {
+  const key=await officeKey(env);if(!key)return null;
+  if(ticket===undefined) {
+    const exp=(Date.now()+5*60_000).toString(36);
+    return `${exp}.${(await mac(key,`app-assets|${app}|${exp}`)).slice(0,32)}`;
+  }
+  const m=/^([a-z0-9]+)\.([A-Za-z0-9_-]{32})$/.exec(ticket);
+  return Boolean(m && parseInt(m[1],36)>Date.now() && same((await mac(key,`app-assets|${app}|${m[1]}`)).slice(0,32),m[2]));
+}
+
+/** Owner-issued test role, scoped to one app/record namespace; never an owner credential. */
+export async function checkSessionTicket(env, data, token) {
+ const key=await officeKey(env);if(!key)return null;
+ if(token===undefined) {
+  const payload=b64url(new TextEncoder().encode(JSON.stringify({...data,expires:Date.now()+15*60_000})));
+  return payload+'.'+await mac(key,'check-session|'+payload);
+ }
+ try {
+  const [payload,signature,...extra]=token.split('.');
+  if(extra.length||!signature||!same(await mac(key,'check-session|'+payload),signature))return null;
+  const session=JSON.parse(atob(payload.replaceAll('-','+').replaceAll('_','/')));
+  if(session.expires<=Date.now()||!Number.isSafeInteger(session.expires)||!/^check-[a-zA-Z0-9-]{1,64}$/.test(session.scope)||!GAME_ID.test(session.app)||!/^[a-z][a-z0-9-]{0,39}$/.test(session.role))return null;
+  return session;
+ }catch{return null;}
+}

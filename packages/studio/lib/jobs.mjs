@@ -158,6 +158,7 @@ export function jobView(job, { lines = 12 } = {}) {
     startedAt: job.startedAt, endedAt: job.endedAt,
     seconds: Math.round(((job.endedAt ? Date.parse(job.endedAt) : Date.now()) - Date.parse(job.startedAt)) / 1000),
     tail: text.slice(-lines), log: job.log, result: job.result,
+    events: job.err.split('\n').filter(line=>line.startsWith('HOMIE_EVENT ')).flatMap(line=>{try{return [JSON.parse(line.slice(12))];}catch{return [];}}),
   };
 }
 

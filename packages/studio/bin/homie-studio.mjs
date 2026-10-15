@@ -911,6 +911,7 @@ async function main() {
   }
   // The starter library and the optimiser work anywhere; the rest of style and assets inside a studio (lib/art-cli.mjs).
   if (cmd === 'assets' && ['find', 'optimise', 'optimize'].includes(sub)) return assetsCommand(null, sub, positional, flags, { log });
+  if(cmd==='fork')return (await import('../lib/fork.mjs')).forkStudio(positional[1],positional[2],{name:flags.get('name'),slug:flags.get('slug'),ids:flags.get('ids')?JSON.parse(flags.get('ids')):{}});
   const root = requireStudio();
   // Keep guidance visible to AI callers using --json as well as human output.
   if (['build', 'check', 'upgrade'].includes(cmd)) {
@@ -1111,18 +1112,23 @@ async function main() {
     if (sub === 'init') return shopInit(root, { supporter: flags.has('supporter'), giving: flags.has('giving'), currency: flags.get('currency') ?? null, price: flags.get('price') ?? 500, managed: flags.has('managed') });
     if(sub==='listen')return (await import('../lib/shop-listen.mjs')).shopListen(root,{profile:flags.get('profile'),port:flags.get('port')??8787,log});
     if (sub === 'check') return shopCheck(root);
+    if(sub==='observe') {
+      const {recordShopObservations}=await import('../lib/shop-mcp.mjs');
+      const input=JSON.parse(readFileSync(0,'utf8'));
+      return recordShopObservations(root,Array.isArray(input)?{observations:input}:input);
+    }
     if (sub === 'plan' || sub === 'verify') {
       const {shopMcpPlan,saveMcpVerification}=await import('../lib/shop-mcp.mjs');
       const file=flags.get('have');
       const input=file?JSON.parse(readFileSync(file==='-'?0:file,'utf8')):{};
       return (sub==='verify'?saveMcpVerification:shopMcpPlan)(root,input);
     }
-    if (sub === 'webhook') return shopConnect(root,{webhookOnly:true,live:flags.has('live'),renew:flags.has('renew'),profile:flags.get('profile'),log:line=>process.stderr.write(`${line}\n`)});
+    if (sub === 'webhook') return shopConnect(root,{onEvent:event=>process.stderr.write('HOMIE_EVENT '+JSON.stringify(event)+'\n'),webhookOnly:true,live:flags.has('live'),renew:flags.has('renew'),profile:flags.get('profile'),log:line=>process.stderr.write(`${line}\n`)});
     if (sub === 'connect' && flags.has('local')) {
       if(flags.has('live'))throw new Error('Local checkout requires test mode');
       return (await import('../lib/shop-local.mjs')).shopConnectLocal(root,{url:flags.get('url'),profile:flags.get('profile')});
     }
-    if (sub === 'connect') return shopConnect(root, { managed: flags.has('managed') ? true : null, live: flags.has('live'), manual: flags.has('manual'), fromClipboard: flags.has('from-clipboard'), renew: flags.has('renew'), log: (line) => process.stderr.write(`${line}\n`) });
+    if (sub === 'connect') return shopConnect(root, { onEvent:event=>process.stderr.write('HOMIE_EVENT '+JSON.stringify(event)+'\n'), managed: flags.has('managed') ? true : null, live: flags.has('live'), manual: flags.has('manual'), fromClipboard: flags.has('from-clipboard'), renew: flags.has('renew'), log: (line) => process.stderr.write(`${line}\n`) });
     if (sub === 'disconnect') return shopDisconnect(root);
     if (sub === 'catalog') {
       const from = flags.get('have');
