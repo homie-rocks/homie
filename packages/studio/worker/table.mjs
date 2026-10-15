@@ -1163,7 +1163,11 @@ export class Table {
   async webSocketError(socket, error) { await this.watchSockets.close(socket, error); if(this.canSleep())await this.sleepRoom(); }
 
   canSleep() {
-    return this.room && this.hibernationReady && this.sessionStore && this.ctx.storage.sql && this.ctx.acceptWebSocket && !this.relayed && !this.hostRt && this.room.lastRound?.phase !== 'live' && !this.restoringSockets;
+    // Older ports publish snapshots without a round protocol. Once play starts,
+    // treat them as active until empty: persisting every frame would turn their
+    // ordinary network traffic into a stream of SQLite writes.
+    const active = this.room?.lastRound?.phase === 'live' || (!this.room?.lastRound && this.room?.lastSnap != null && this.room?.clients.size > 0);
+    return this.room && this.hibernationReady && this.sessionStore && this.ctx.storage.sql && this.ctx.acceptWebSocket && !this.relayed && !this.hostRt && !active && !this.restoringSockets;
   }
   async sleepRoom() {
     if(!this.canSleep())return;

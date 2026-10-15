@@ -287,3 +287,13 @@ test('an expired empty room does not keep a recurring hibernation alarm',async()
  table.sessionStore={clear:()=>clears++};table.ctx={storage:{getAlarm:async()=>null,setAlarm:async()=>alarms++}};
  await table.sleepRoom();assert.equal(clears,1);assert.equal(alarms,0);
 });
+
+test('legacy snapshot traffic stays active without writing a hibernation snapshot per frame',async()=>{
+ const {Table}=await import('../worker/table.mjs');const table=Object.create(Table.prototype);
+ Object.assign(table,{hibernationReady:true,sessionStore:{},ctx:{storage:{sql:{}},acceptWebSocket(){}},room:{clients:new Map([['player',{}]]),lastSnap:null,lastRound:null}});
+ assert.ok(table.canSleep());
+ table.room.lastSnap={x:1};assert.equal(Boolean(table.canSleep()),false);
+ table.room.lastRound={phase:'waiting'};assert.ok(table.canSleep());
+ table.room.lastRound={phase:'live'};assert.equal(Boolean(table.canSleep()),false);
+ table.room.lastRound=null;table.room.clients.clear();assert.ok(table.canSleep());
+});
