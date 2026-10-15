@@ -203,7 +203,7 @@ export interface Core {
  * `noted`: told, as it happens, of a value the rules wrote that the runtime changed to make it fit, or dropped (pack.ts
  * `Adjusted`; also `effect`, `think` and `decision`): the handler, what was done, the field's name and what was written.
  */
-export function createCore(c: Compiled, opts: { validateOwners?: boolean; characterForSeat?: (seat: number) => import('./rules.ts').Character | null | undefined; characterSaved?: (seat: number, character: import('./rules.ts').Character) => void; rewindTicks?: (seat: number)=>number; label?: (seat:number,driver:Driver)=>string; moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes, id: string) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
+export function createCore(c: Compiled, opts: { ownerTime?: () => number; validateOwners?: boolean; characterForSeat?: (seat: number) => import('./rules.ts').Character | null | undefined; characterSaved?: (seat: number, character: import('./rules.ts').Character) => void; rewindTicks?: (seat: number)=>number; label?: (seat:number,driver:Driver)=>string; moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes, id: string) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
   if (opts.restore && (c.map.physics !== undefined) !== (opts.restore.physics !== undefined)) throw new Error('physics: save and game differ');
   const physics = physicsWorld(c.map.physics, opts.restore?.physics);
   let currentMap=c.map;
@@ -1118,21 +1118,22 @@ export function createCore(c: Compiled, opts: { validateOwners?: boolean; charac
   }
   // Validation state is transient. A restored epoch establishes a new baseline;
   // durable entity rows keep their existing format.
-  const owners = new Map<string, {r:number; last:number|null; since:number; used:number; pending:Map<number,OwnerReport>}>();
+  const owners = new Map<string, {r:number; last:number|null; since:number; started:number; used:number; pending:Map<number,OwnerReport>}>();
   const acceptedMovement = new Map<string, {r:number; steps:readonly Readonly<MovementState & {tick:number}>[]}>();
   function validateOwner(e: Ent, reports: OwnerReport[]): void {
     const body = e.kind.body!;
     let state = owners.get(e.id);
     if (!state || state.r !== e.r) {
-      state = {r:e.r,last:null,since:tick,used:0,pending:new Map()}; owners.set(e.id,state);
+      state = {r:e.r,last:null,since:tick,started:opts.ownerTime?.() ?? tick,used:0,pending:new Map()}; owners.set(e.id,state);
     }
+    const elapsed = Math.max(tick - state.since, Math.floor((opts.ownerTime?.() ?? tick) - state.started));
     const reject = () => { stats.held++; e.r = (e.r+1)&0xffff; owners.delete(e.id); };
-    for (const report of reports.slice(0,64)) {
+    for (const report of reports.slice(0,256)) {
       if (report.r !== e.r) continue;
       // A report and its baseline may arrive early after transit improves.
       // Both remain inside the report's existing future window; the elapsed
       // simulation allowance below is independent of these clock labels.
-      if (!Number.isSafeInteger(report.tick) || !Number.isSafeInteger(report.base) || report.base < state.since-1 || report.tick <= report.base || report.tick > tick + tickHz ||
+      if (!Number.isSafeInteger(report.tick) || !Number.isSafeInteger(report.base) || report.base < state.since-1 || report.tick <= report.base || report.tick > state.since + elapsed + tickHz ||
           ![report.pos,report.vel,report.heading].every(v => v && [v.x,v.y,v.z].every(Number.isFinite))) { reject(); return; }
       // A fresh snapshot baseline can restart the input clock after a pause.
       // It grants no travel: the next report must still be exactly one move
@@ -1149,7 +1150,7 @@ export function createCore(c: Compiled, opts: { validateOwners?: boolean; charac
     for (let count=0; count<8 && state.last !== null; count++) {
       const report = state.pending.get(state.last+1);
       if (!report) break;
-      if (state.used >= tick-state.since+1) break;
+      if (state.used >= elapsed+1) break;
       const before = movementState(e), serverTick = tick;
       const input = Object.freeze(coerceFields(e.kind.input,report.values,dims));
       const b = {pos:e.pos,vel:e.vel,heading:e.heading,grounded:e.grounded,motion:e.mself};
@@ -1703,7 +1704,11 @@ export function createCore(c: Compiled, opts: { validateOwners?: boolean; charac
     },
     snapshot: () => {
       packed.n = 0;
-      const list = [...ents.values()].map((e) => packEntity(e.kind, e, dims));
+      const list = [...ents.values()].map((e) => {
+        const row = packEntity(e.kind, e, dims), owner = owners.get(e.id);
+        if (e.kind.player && e.kind.body?.validatedOwner) { row.push(owner?.last ?? null); packed.n++; }
+        return row;
+      });
       // Include all three components of position, velocity and heading in a 3D snapshot.
       snapCells = packed.n + (dims === 3 ? 13 : 10) * list.length;
       const collision = hasColliders||mapRevision||pendingMap ? collisionState() : currentMap.wrap ? [0,0,[],{wrap:currentMap.wrap}] : null;

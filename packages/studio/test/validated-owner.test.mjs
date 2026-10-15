@@ -54,9 +54,39 @@ test('every accepted report is available for contact checks and duplicate report
 
 test('owner receive queue overflow explicitly resynchronizes without acknowledging a lost path',()=>{
  const r=hostRig(L,compile());r.join(0);r.ticks();const k=r.host.tick,start=state(r.host.core);
- for(let batch=0;batch<3;batch++)r.host.frame({t:'in',from:0,e:r.host.epoch,k:k+1,r:start.r,s:Array.from({length:64},(_,i)=>[i,1,.2,.025,0,4,.5,0,1,0,0,k,-471,1+batch*64+i,0])});
+ for(let batch=0;batch<5;batch++)r.host.frame({t:'in',from:0,e:r.host.epoch,k:k+1,r:start.r,s:Array.from({length:64},(_,i)=>[i,1,.2,.025,0,4,.5,0,1,0,0,k,-471,1+batch*64+i,0])});
  assert.equal(state(r.host.core).r,(start.r+1)&65535);r.ticks();
  const fresh=state(r.host.core),at=r.host.tick;
  r.host.frame({t:'in',from:0,e:r.host.epoch,k:at+1,r:fresh.r,s:[[0,1,.2,.025,0,4,.5,0,1,0,0,at,-471,500,0]]});r.ticks();
  assert.ok(Math.abs(state(r.host.core).pos.x-.2)<1e-6);r.host.stop();
+});
+
+ test('server wall time permits valid continued reports across a stalled simulation',()=>{
+  let wall=0;
+  const c=compile(),core=L.C.createCore(c,{validateOwners:true,ownerTime:()=>wall});
+  core.seatJoin({seat:0,driver:'person',owner:'p'});apply(core,[]);
+  const a=report(core);apply(core,[a]);const revision=state(core).r;
+  wall=80;
+  // A browser can restart its clock without gaining any skipped travel. This
+  // report is ahead of simulation, but within real elapsed time and one move.
+  apply(core,[{...a,base:75,tick:76,pos:{x:.4,y:.075,z:0},vel:{x:4,y:1,z:0}}]);
+  assert.equal(state(core).r,revision);assert.ok(Math.abs(state(core).pos.x-.4)<1e-6);
+  apply(core,[{...a,base:76,tick:77,pos:{x:8,y:.15,z:0},vel:{x:4,y:1.5,z:0}}]);
+  assert.equal(state(core).r,(revision+1)&65535,'wall time never bypasses physics');
+ });
+
+test('a stalled transport batch retains reports beyond the first 64 entries',()=>{
+ let wall=0;
+ const c=compile(),core=L.C.createCore(c,{validateOwners:true,ownerTime:()=>wall}),reference=L.C.createCore(c);
+ for(const r of [core,reference]){r.seatJoin({seat:0,driver:'person',owner:'p'});r.step(new Map([[0,{values:{x:0},reports:[]}]]));}
+ const base=core.tick,revision=state(core).r,reports=[];
+ for(let i=1;i<=80;i++){
+  reference.step(new Map([[0,{values:{x:0}}]]));
+  const pose=state(reference);
+  reports.push({tick:base+i,base,r:revision,pos:pose.pos,vel:pose.vel,heading:{x:1,y:0,z:0},values:{x:0}});
+ }
+ wall=80;apply(core,reports);for(let i=1;i<10;i++)apply(core,[]);
+ assert.equal(state(core).r,revision);assert.equal(core.stats.held,0);
+ assert.equal(core.snapshot()[1][0][14],base+80,'all reports were consumed, not just the first batch slice');
+ assert.deepEqual(state(core).pos,state(reference).pos);
 });

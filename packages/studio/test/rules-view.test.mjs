@@ -42,11 +42,12 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-10,-10],max:[10,10]},boxes:[{min:[0,1],max:[1,2]}]}));
       writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';export default defineRules({contract:2,space:{dims:2},move,map:'./map',entities:{runner:{player:true,input:{ax:f.held()},body:{shape:'box',radius:.5,maxSpeed:60,move:'validated-owner'}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:1.6,y:1.2,z:0}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){c.substeps(b,60,()=>{if(i.ax){b.pos={x:1.35,y:.5,z:0};b.grounded=true;}});}});`);
-    } else if (runaway === 'validated-owner') {
+    } else if (runaway === 'validated-owner' || runaway === 'validated-owner-substeps') {
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-100,-100],max:[100,100]},boxes:[{min:[-100,1],max:[100,3]}]}));
       writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
 export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{respawn:{},knock:{},point:{}}},entities:{runner:{player:true,input:{ax:f.held()},fields:{score:f.u16({score:true})},motion:{push:f.u8()},body:{shape:'box',radius:.5,maxSpeed:10,move:'validated-owner'},commands:{respawn(w,s){w.place(s,{x:0,y:.5},{vel:{x:0,y:0}});},knock(w,s){s.motion.push=4;},point(w,s){s.score++;}}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:0,y:.5,z:0}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:b.motion.push?8:i.ax*4,y:0,z:0};if(b.motion.push)b.motion.push--;c.map.sweep(b,{x:b.vel.x*c.dt,y:0,z:0});}});`);
+      if (runaway === 'validated-owner-substeps') writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax*4,y:0,z:0};c.substeps(b,60,s=>c.map.sweep(b,{x:b.vel.x*s.dt,y:0,z:0}));}});`);
     } else if (runaway === 'substeps') {
       writeFileSync(join(dir,'src/view.ts'), "import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.input({ax:1});");
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-20,-20],max:[20,20]}}));
@@ -2832,4 +2833,63 @@ test('an observer switches an owner placement at its sampled time, without inter
  t.after(()=>{a.net.sample=sample;});
  a.net.sample=()=>({a:before,b:after,alpha:.5});assert.equal(a.get(id).pos.x,x,'before the placement tick the old revision remains');
  a.net.sample=()=>({a:before,b:after,alpha:1});assert.equal(a.get(id).pos.x,0,'at the placement tick jump directly to spawn');
+});
+
+test('a three-second server stall does not rewind continued valid owner movement',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t);let until=0;
+ const r=rig(L,compiled,{enforceOverrun:true,clock:{now:()=>Date.now(),setTimer:(fn,ms)=>{
+   const run=()=>Date.now()<until?setTimeout(run,until-Date.now()):fn();return setTimeout(run,ms);
+ },clearTimer:h=>clearTimeout(h)}});
+ const a=openRoom({net:{config:cfg('Continued owner'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(1000);a.input({ax:1});await clock.wait(500);
+ until=Date.now()+3000;let previous=a.me.pos.x;
+ for(let i=0;i<375;i++){await clock.wait(16);const x=a.me.pos.x;assert.ok(x>=previous-1e-6,`owner rewound ${previous} -> ${x}`);previous=x;}
+ assert.equal(r.host.core.stats.held,0);
+});
+
+test('remote validated movement stays bounded while an owner catches up from an outage',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),r=rig(L,compiled);
+ const viewer=openRoom({net:{config:cfg('Buffered viewer'),WebSocketImpl:r.socket(),post:null}});await clock.wait(300);
+ const owner=openRoom({net:{config:cfg('Buffered owner'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{viewer.close();owner.close();r.stop();});await clock.wait(1000);owner.input({ax:1});
+ const id=owner.me.id;let previous=viewer.get(id).pos.x;
+ for(let i=0;i<60;i++){await clock.wait(16);previous=viewer.get(id).pos.x;}
+ r.network.up=false;r.sockets.at(-1).cut();await clock.wait(3000);r.network.up=true;
+ for(let i=0;i<375;i++){await clock.wait(16);const x=viewer.get(id).pos.x;assert.ok(Math.abs(x-previous)<1.4+1e-6,`observer jumped ${previous} -> ${x}`);previous=x;}
+ assert.ok(previous>8,'bounded drawing still makes progress');
+});
+
+test('committing a forecast preserves physics across control changes and isolates preview motion',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner-substeps');
+ const clock=virtualTime(t),r=rig(L,compiled);let previews=0;
+ const a=openRoom({predict:{runner(me,input,c){if(c.preview){previews++;me.motion.push=250;}}},net:{config:cfg('Forecast commit'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(1000);
+ let resets=0;a.on('placed',()=>resets++);
+ for(let i=0;i<300;i++){a.input({ax:i%37<25?1:-1});await clock.wait(16);assert.equal(a.me.motion.push,0,'preview mutation cannot enter canonical movement');}
+ a.input({ax:0});await clock.wait(500);
+ assert.ok(previews>20);assert.equal(resets,0);assert.equal(r.host.core.stats.held,0);
+ assert.ok(Math.abs(a.me.pos.x-r.host.core.listeners()[0].pos.x)<.01,'committed forecasts agree with separately validated server physics');
+ });
+
+test('remote owner buffering consumes fresh reports without waiting in the shared scene buffer twice',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),r=rig(L,compiled),viewer=openRoom({net:{config:cfg('One buffer'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const owner=openRoom({net:{config:cfg('Fresh reports'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{viewer.close();owner.close();r.stop();});await clock.wait(1000);
+ const id=owner.me.id,scene=viewer.net.sample();viewer.net.sample=()=>scene;
+ const start=viewer.get(id).pos.x;owner.input({ax:1});
+ for(let i=0;i<90;i++){await clock.wait(16);viewer.get(id);}
+ assert.ok(viewer.get(id).pos.x>start+3,'owner reports use their own buffer, even while the shared sample lags');
+});
+
+test('owner confirmations ignore a sampled scene from before the current placement',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),r=rig(L,compiled),a=openRoom({net:{config:cfg('Current acknowledgement'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(1500);
+ assert.ok(a.confirmedTick>0);const sample=a.net.sample.bind(a.net),before=sample();
+ a.command('respawn');await clock.wait(300);a.net.sample=()=>before;
+ assert.equal(a.confirmedTick,-1,'the old revision cannot acknowledge a new provisional contact');
+ a.net.sample=sample;assert.ok(a.confirmedTick>0);
 });

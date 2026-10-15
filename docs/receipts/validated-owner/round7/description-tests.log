@@ -1,0 +1,42 @@
+TAP version 13
+# (node:80609) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: predictor room reads cannot pump or preview recursively during replay, seed 4804
+ok 1 - predictor room reads cannot pump or preview recursively during replay, seed 4804
+  ---
+  duration_ms: 1235.951333
+  type: 'test'
+  ...
+# Subtest: unchanged delta snapshot rows reuse their immutable unpacked view
+ok 2 - unchanged delta snapshot rows reuse their immutable unpacked view
+  ---
+  duration_ms: 344.332208
+  type: 'test'
+  ...
+# Subtest: validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame
+ok 3 - validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame
+  ---
+  duration_ms: 292.5875
+  type: 'test'
+  ...
+# Subtest: remote presentation is shared within a frame and refreshed by snapshots
+ok 4 - remote presentation is shared within a frame and refreshed by snapshots
+  ---
+  duration_ms: 311.956542
+  type: 'test'
+  ...
+# Subtest: committing a forecast preserves physics across control changes and isolates preview motion
+ok 5 - committing a forecast preserves physics across control changes and isolates preview motion
+  ---
+  duration_ms: 444.021375
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2770.307708

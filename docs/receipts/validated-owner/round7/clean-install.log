@@ -1,0 +1,8 @@
+
+> postinstall
+> node scripts/apply-validated-owner.mjs
+
+Applied validated-owner patch to published studio 0.53.0
+
+added 361 packages in 25s
+Applied validated-owner patch to published studio 0.53.0

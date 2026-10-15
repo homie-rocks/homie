@@ -150,6 +150,8 @@ export interface PredictContext extends RayQueries {
 }
 export type Predictor = (me: any, input: any, ctx: PredictContext) => void;
 export interface Room<R = unknown> extends RayQueries {
+  /** Last owner input tick in the sampled authoritative scene. */
+  readonly confirmedTick: number;
   readonly viewTick: number;
   /** Where a body was at a tick, from the snapshots this browser holds (0.46.5); `known: false` past the newest one. */
   poseAt(id: string, tick: number): { pos: Vec3; vel: Vec3; known: boolean } | null;
@@ -643,7 +645,12 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (fresh) { pressed = new Map(); pulseNumber = new Map(); }
     held = Object.freeze({ ...input });
     {
-      const body = runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: mine.motion }, held, t);
+      moveTick = t;
+      // A rendered full-tick forecast is already the guarded physics result.
+      // Commit it only when every input and collision revision still agrees.
+      const reuse = kind.validatedOwner && !map.physics && substepKinds.has(kind.name) && forecast && forecast.mine === mine && forecast.pos === mine.pos && forecast.motion === mine.motion && forecast.tick === t - 1 && forecast.key === JSON.stringify(held) && forecast.geometry === geometryAt();
+      const body = reuse ? forecast!.next : runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: mine.motion }, held, t);
+      forecast = null;
       mine.pos = body.pos; mine.vel = body.vel; mine.heading = body.heading; mine.grounded = body.grounded; mine.motion = body.motion;
       runPredict(kind.name, body, mine.fields, held, t, true, false);
       previewKey = '';
@@ -782,6 +789,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const before = latest;
     if (before && before.e === f.e && f.k <= before.k) return;
     latest = f;
+    for (const [id, buffered] of remoteOwners) if (buffered.epoch !== f.e || !f.ents.has(id)) remoteOwners.delete(id);
     if (before && before.e !== f.e) held2.length = 0;
     held2.push(f); if (held2.length > 2 * tickHz) held2.shift();
     if (!before || before.e !== f.e) collisionHistory = [];
@@ -1039,6 +1047,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let route: Vec3[] = [];
   let routeDirection = 0;
   let presentedEntity: Entity | null = null;
+  let ownDescription: {server:Unpacked; fields:Record<string,unknown>; motion:Record<string,unknown>; tick:number; entity:Entity} | null = null;
   let presentationQueued = false;
   let presentationFrame: number | null = null;
   let forecast: { mine: Mine; pos: Vec3; motion: Record<string, unknown>; tick: number; key: string; geometry: unknown; next: ReturnType<typeof runMove> } | null = null;
@@ -1072,9 +1081,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       // A recorded substep path needs the whole tick's forecast instead: include
       // the remaining duration of controls held now, then sample its actual steps.
       for (const [name, fd] of kind.input) now[name] = (fd.t === 'press' || fd.t === 'pulse') ? (pressed.get(name) ?? (fd.t === 'pulse' && pulseQueue[0]?.name===name ? pulseQueue[0].value : fd.t === 'press' ? false : 0)) : fd.t === 'held' ? coerce(fd, heldMean(name, fd.init, Math.min(clock(), edgeOf(stepped + 1)), false, substepKinds.has(kind.name) ? edgeOf(stepped + 1) : Math.min(clock(), edgeOf(stepped + 1))), dims) : coerce(fd, sample[name] ?? fd.init, dims);
+      moveTick = stepped + 1;
       const forecastKey = JSON.stringify(now), scene = geometryAt();
       const reuse = !map.physics && substepKinds.has(kind.name) && forecast && forecast.mine === mine && forecast.pos === mine.pos && forecast.motion === mine.motion && forecast.tick === stepped && forecast.key === forecastKey && forecast.geometry === scene;
-      const next = reuse ? forecast!.next : runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: motionOf(mine.kind, mine.motion) }, Object.freeze(now), stepped + 1);
+      const next = reuse ? forecast!.next : runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: mine.motion }, Object.freeze(now), stepped + 1);
       if (!reuse) forecast = {mine, pos:mine.pos, motion:mine.motion, tick:stepped, key:forecastKey, geometry:scene, next};
       if (!next.steps?.length) {
         // A landing does not take the whole tick (0.46.5): the body met the ground part way through it. How far through is
@@ -1111,7 +1121,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       if (predictors[kind.name]) {
         // The own actions between ticks: the predictor on a copy of the fields, for the tick about to be stepped.
         const key = stepped + forecastKey;
-        if (key !== previewKey) { previewKey = key; previewFields = thawFields(kind.fields, mine.fields); runPredict(kind.name, next, previewFields, Object.freeze(now), stepped + 1, true, true); }
+        if (key !== previewKey) { previewKey = key; previewFields = thawFields(kind.fields, mine.fields); runPredict(kind.name, {...next, motion:motionOf(kind.name,next.motion)}, previewFields, Object.freeze(now), stepped + 1, true, true); }
       }
       settled = distance(next.pos, mine.pos) < 0.00001;
     }
@@ -1226,7 +1236,15 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       heading = blendHeading(headingBlend.from, heading, t, dims);
       if (t >= 1) headingBlend = null;
     }
-    const result = entityOf({ ...server, ...(kind && predictors[kind.name] ? { fields: (base ? previewFields : null) ?? mine.fields } : {}), pos, vel: velocity, heading, grounded, motion }, true);
+    const fields = kind && predictors[kind.name] ? (base ? previewFields : null) ?? mine.fields : server.fields;
+    // Field and motion descriptions change on simulation/input/snapshot edges,
+    // while the interpolated pose changes each animation frame. Reuse the
+    // immutable description without copying every declared field again.
+    let result: Entity;
+    if (kind?.validatedOwner) {
+      if (!ownDescription || ownDescription.server !== server || ownDescription.fields !== fields || ownDescription.motion !== motion || ownDescription.tick !== stepped) ownDescription = {server,fields,motion,tick:stepped,entity:entityOf({...server,fields,motion},true)};
+      result = Object.freeze({...ownDescription.entity,pos,vel:velocity,heading,grounded});
+    } else result = entityOf({...server,fields,pos,vel:velocity,heading,grounded,motion},true);
     // Readers share one presentation in a browser frame. Without a document
     // timeline, retain the synchronous cache and clear at the microtask boundary.
     // Inputs, snapshots and simulation steps still invalidate immediately.
@@ -1240,6 +1258,45 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       }
     }
     return result;
+  }
+  // Owner reports have their own clock. Keep their cadence when several arrive
+  // together, rather than interpreting a delivery burst as one server tick.
+  const remoteOwners = new Map<string, {epoch:number; r:number; last:number; offset:number; delay:number; arrival:number; samples:{t:number; u:Unpacked}[]; shown:Vec3; at:number}>();
+  function ownerRemote(u: Unpacked, f: Frame): Entity {
+    // This stream has its own jitter buffer. Feeding it the shared scene's
+    // delayed sample would buffer twice and put runners behind moving hazards.
+    // A placement still waits for the shared scene's revision boundary.
+    const fresh = latest?.ents.get(u.id);
+    if (latest && latest.e === f.e && fresh?.r === u.r && (fresh.ownerTick ?? -1) >= (u.ownerTick ?? -1)) { u = fresh; f = latest; }
+    const now = clock(), stamp = u.ownerTick ?? f.k;
+    let q = remoteOwners.get(u.id);
+    if (!q || q.r !== u.r || q.epoch !== f.e) {
+      q = {epoch:f.e,r:u.r,last:stamp,offset:f.at-stamp*period,delay:period,arrival:f.at,samples:[{t:stamp,u}],shown:u.pos,at:now};
+      remoteOwners.set(u.id,q);
+    } else if (stamp > q.last) {
+      const gap = f.at-q.arrival;
+      q.delay += (Math.max(period,Math.min(250,gap))-q.delay)*.1;
+      // The snapshot receipt maps its server-clock sample and owner tick to
+      // this clock. Do not add time spent waiting in the shared render buffer.
+      // The minimum observed offset removes transport jitter. Clock drift moves
+      // it slowly; an outage cannot move the playback cursor by seconds.
+      const offset = f.at-stamp*period;
+      q.offset = offset < q.offset ? offset : q.offset + Math.min(1,offset-q.offset)*.01;
+      q.samples.push({t:stamp,u}); q.last=stamp; q.arrival=f.at;
+      if(q.samples.length>64)q.samples.shift();
+    }
+    const at = (now-q.offset-q.delay)/period;
+    while(q.samples.length>2 && q.samples[1].t<=at)q.samples.shift();
+    const a=q.samples[0], b=q.samples[1] ?? a;
+    const alpha=b.t>a.t?Math.max(0,Math.min(1,(at-a.t)/(b.t-a.t))):1;
+    const target=vec3(blendPosition(a.u.pos,b.u.pos,alpha,map.wrap),dims);
+    const dt=Math.max(0,Math.min(.05,(now-q.at)/1000));
+    const d=distance(q.shown,target), kind=kindOf.get(u.kind)!;
+    const speed=Math.max(Math.hypot(a.u.vel.x,a.u.vel.y,a.u.vel.z),Math.hypot(b.u.vel.x,b.u.vel.y,b.u.vel.z),kind.radius*4);
+    const limit=Math.min(kind.radius*2.8,speed*dt*1.5);
+    const pos=d>limit && d>0?vec3(blendPosition(q.shown,target,limit/d,map.wrap),dims):target;
+    q.shown=pos; q.at=now;
+    return Object.freeze({...entityOf(u),pos,vel:alpha<1?a.u.vel:b.u.vel,heading:blendHeading(a.u.heading,b.u.heading,alpha,dims)});
   }
   const drawnFrame = new Map<string, Entity | null>();
   let drawnAt: number | null = null;
@@ -1265,10 +1322,12 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // A placed body jumps, never glides across the map. An observer's owner
     // body must reach that snapshot's time before showing its new revision;
     // otherwise the respawn precedes the encounter in the interpolated scene.
-    if (ea.r !== eb.r || a?.e !== b?.e || !s) return entityOf(kind?.validatedOwner && s && s.alpha < 1 && a?.e === b?.e ? ea : eb);
-    // A recovered owner can deliver seconds of validated travel in one batch.
-    // Cut that discontinuity instead of playing it at packet delivery speed.
-    if (kind?.validatedOwner && a && b && distance(ea.pos,eb.pos) > Math.max(kind.radius * 4, Math.max(Math.hypot(ea.vel.x,ea.vel.y,ea.vel.z),Math.hypot(eb.vel.x,eb.vel.y,eb.vel.z)) * (b.k-a.k) / tickHz * 1.5)) return entityOf(eb);
+    if (ea.r !== eb.r || a?.e !== b?.e || !s) {
+      if (kind?.validatedOwner && s && s.alpha < 1 && a && a.e === b?.e && ea.driver === 'person') return ownerRemote(ea,a);
+      remoteOwners.delete(id);
+      return entityOf(eb);
+    }
+    if (kind?.validatedOwner && b && eb.driver === 'person') return ownerRemote(eb,b);
     const t = s.alpha;
     // Static pickups and scenery need no new vectors or wrappers for every HUD,
     // scene and probe traversal. Fields still follow the sampled snapshot.
@@ -1277,7 +1336,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     })) return entityOf(t < 1 ? ea : eb);
     const h = blendHeading(ea.heading, eb.heading, t, dims);
     // This interpolated key exists for one read only; caching it retains useless weak entries.
-    return entityOf({ ...(t < 1 ? ea : eb), grounded: t >= 1 ? eb.grounded : ea.grounded && (t === 0 || eb.grounded), pos: vec3(blendPosition(ea.pos, eb.pos, t, map.wrap), dims), vel: vec3({ x: lerp(ea.vel.x, eb.vel.x, t), y: lerp(ea.vel.y, eb.vel.y, t), z: lerp(ea.vel.z, eb.vel.z, t) }, dims), heading: h }, false, false);
+    return Object.freeze({ ...entityOf(t < 1 ? ea : eb), grounded: t >= 1 ? eb.grounded : ea.grounded && (t === 0 || eb.grounded), pos: vec3(blendPosition(ea.pos, eb.pos, t, map.wrap), dims), vel: vec3({ x: lerp(ea.vel.x, eb.vel.x, t), y: lerp(ea.vel.y, eb.vel.y, t), z: lerp(ea.vel.z, eb.vel.z, t) }, dims), heading: h });
   }
   function get(id: string): Entity | null { const g = ghosts.get(id); return g ? ghostEntity(g) : drawn(id); }
   function each(kind: string, fn: (e: Entity) => void): void {
@@ -1394,6 +1453,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   };
   const viewRay = (from: unknown, direction: unknown, max: number, options?: RayOptions, all=false) => rayQuery(mapAt(latest?.k??0),viewTargets(atTickOf(options)),dims,from,direction,max,options,mine?.id,all);
   return {
+    get confirmedTick() {
+      const s=net.sample(), f=s?frameOf(s.alpha>=1?s.b:s.a):latest;
+      const own = mine && f?.ents.get(mine.id);
+      return own && own.r === mine!.r && f?.e === epoch ? own.ownerTick ?? -1 : -1;
+    },
     get viewTick() { return solo ? solo.viewTick : viewTickNow(); },
     get status() { return solo ? 'offline' : status; },
     get seat() { return solo ? solo.seat : net.seat; },

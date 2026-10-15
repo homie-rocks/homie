@@ -1,5 +1,7 @@
 # Tiny Platformer: validated owner movement
 
+Latest: [round 7 follow-up](round7/README.md), **NOT READY**. The measurements below are historical and do not replace the missing current-head proof.
+
 The owning browser runs and draws the original runner physics. It sends each input tick with its pose and velocity; the server runs the same guarded move from the last accepted state and accepts numerical equivalence within 0.002 per axis. Canonical state prevents tolerance accumulation. Ordinary snapshots update game fields without moving the owner. Impossible reports and authoritative respawns, round starts and knockback cut to the server pose. Other players retain interpolation. Transient absence keeps ownership and bounded report history. Shared collision and save-row code match the toolkit base; there is no version bump, merge or deployment.
 
 Toolkit PR: https://github.com/homie-rocks/homie/pull/116. Studio branch: arcade-server-rules. The studio uses the locally patched toolkit; its package pin is unchanged.

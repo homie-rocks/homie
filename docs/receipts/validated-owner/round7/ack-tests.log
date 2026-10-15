@@ -1,0 +1,36 @@
+TAP version 13
+# (node:2346) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: an observer switches an owner placement at its sampled time, without interpolating across the map
+ok 1 - an observer switches an owner placement at its sampled time, without interpolating across the map
+  ---
+  duration_ms: 1067.081416
+  type: 'test'
+  ...
+# Subtest: a three-second server stall does not rewind continued valid owner movement
+ok 2 - a three-second server stall does not rewind continued valid owner movement
+  ---
+  duration_ms: 1389.534208
+  type: 'test'
+  ...
+# Subtest: remote owner buffering consumes fresh reports without waiting in the shared scene buffer twice
+ok 3 - remote owner buffering consumes fresh reports without waiting in the shared scene buffer twice
+  ---
+  duration_ms: 1077.722333
+  type: 'test'
+  ...
+# Subtest: owner confirmations ignore a sampled scene from before the current placement
+ok 4 - owner confirmations ignore a sampled scene from before the current placement
+  ---
+  duration_ms: 851.221583
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4712.303709

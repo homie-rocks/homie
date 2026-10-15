@@ -295,7 +295,7 @@ export function createHost(o: HostOptions): Host {
     const need = Math.ceil(((measuredRtt.get(seat) ?? 0) + 150) / period) + waited;
     return rewindCap === null ? need : Math.min(rewindCap, need);
   };
-  const core = createCore(c, { validateOwners:true, ...characterOptions, rewindTicks, label: (seat,driver)=>nameOf(seat,driver), moved: o.moved, observe: o.observe, noted: o.noted, seed: Math.floor(random() * 4294967296) >>> 0, epoch: saved ? undefined : (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
+  const core = createCore(c, { validateOwners:true, ownerTime:()=>o.clock.now()/period, ...characterOptions, rewindTicks, label: (seat,driver)=>nameOf(seat,driver), moved: o.moved, observe: o.observe, noted: o.noted, seed: Math.floor(random() * 4294967296) >>> 0, epoch: saved ? undefined : (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
   let epoch = core.epoch;
   if (saved && (o.startPaused ?? o.restoreEpoch !== undefined)) for (const body of core.bodies()) if (body.driver !== 'bot' && body.owner !== 'reserved') core.seatAway(body.seat, true);
   let lastSaveAt = o.clock.now();
@@ -504,7 +504,7 @@ export function createHost(o: HostOptions): Host {
       if (kind.body?.validatedOwner) {
         if (!claim || !raw.slice(i,i+10).every(v=>typeof v==='number' && Number.isFinite(v))) continue;
         const reports = ownerReports.get(seat as number) ?? [];
-        if (reports.length >= 128) { core.resyncOwner(seat as number); ownerReports.delete(seat as number); queues.delete(seat as number); return; }
+        if (reports.length >= 256) { core.resyncOwner(seat as number); ownerReports.delete(seat as number); queues.delete(seat as number); return; }
         reports.push({...claim,tick:j,base:raw[i+9],values:{...values,...Object.fromEntries(presses.filter(p=>typeof p==='string').map(p=>[p,true]))}});
         ownerReports.set(seat as number,reports);
         q.receipts??=[]; if(seq)q.receipts.push([seq,j]); if(q.receipts.length>64)q.receipts.splice(0,q.receipts.length-64);

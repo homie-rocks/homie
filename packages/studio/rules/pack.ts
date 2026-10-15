@@ -376,7 +376,7 @@ export const DRIVERS = Object.freeze(['person', 'bot', 'ai']);
 /** An entity as every side holds it once unpacked. A player's body also has `seat`, `owner`, `driver` and `away`. */
 export interface Unpacked {
   id: string; kind: string; r: number; pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean;
-  seat?: number; owner?: string; driver?: string; away?: boolean; goal?: unknown;
+  ownerTick?: number; seat?: number; owner?: string; driver?: string; away?: boolean; goal?: unknown;
   fields: Record<string, unknown>; motion: Record<string, unknown>;
 }
 
@@ -394,6 +394,6 @@ export function unpackEntity(kinds: readonly KindShape[], w: unknown, dims: numb
     id: w[0], kind: kind.name, r: Number(w[2]) || 0, pos: unpackVec(w[3], dims), vel: unpackVec(w[4], dims), heading: unpackVec(w[5], dims), grounded: w[6] === 1,
     fields: unpackFields(kind.fields, w[7], dims), motion: unpackFields(kind.motion, w[8], dims),
   };
-  if (kind.player) { out.seat = Number(w[9]); out.driver = DRIVERS[Number(w[10])] ?? 'bot'; out.away = w[11] === 1; out.owner = typeof w[12] === 'string' ? w[12] : ''; out.goal = w[13] ?? null; }
+  if (kind.player) { out.seat = Number(w[9]); out.driver = DRIVERS[Number(w[10])] ?? 'bot'; out.away = w[11] === 1; out.owner = typeof w[12] === 'string' ? w[12] : ''; out.goal = w[13] ?? null; if (Number.isSafeInteger(w[14])) out.ownerTick = w[14]; }
   return out;
 }
