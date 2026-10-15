@@ -2,6 +2,10 @@
 const local = (request, env) => env.HOMIE_LOCAL_TEST_SECRET && ['localhost','127.0.0.1','[::1]'].includes(new URL(request.url).hostname);
 export async function localCaller(request, env) {
   if (!local(request, env) || request.headers.get('authorization') !== `Bearer ${env.HOMIE_LOCAL_TEST_SECRET}`) return null;
+  const session=await localSession(request,env);
+  // A supplied but invalid signed session must never fall back to owner.
+  if(request.headers.get('cookie')?.includes('homie_test=')&&!session)return null;
+  if(session)return {id:`local-test-${session.app}-${session.role}`,owner:session.role==='owner',client:null,localTest:true,roles:{[session.app]:[session.role]},testApp:session.app,testScope:session.scope??null};
   return {id:'local-test-owner',owner:true,client:null};
 }
 export async function localSession(request, env) {

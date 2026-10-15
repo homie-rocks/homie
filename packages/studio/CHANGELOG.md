@@ -17,6 +17,26 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.51.6] - 2026-10-14
+
+**Plugin 0.51.6**
+
+Keep each customer's exact basket through payment, and check that your studio meets its needs across screens, AI jobs and handover.
+
+### Added
+
+- **Check the whole service:** Owner needs can call studio MCP tools as customer, staff or owner, assert returned results and saved records, invoke declared scheduled functions locally, read event feeds and MCP Events, check webhook delivery, and verify handover files. Checks keep role permissions and test-record isolation. Headless-only plans run without Chrome; missing tools, permissions, effects and text explain why a need is not met.
+
+### Fixed
+
+- **Exact rounds and baskets:** Opt-in keyless saved baskets keep the phone's exact items and quantities. One custom-amount Payment Link carries the saved total; signed payments are checked against the saved basket and report full payment or a shortfall for staff. Short payments grant no automatic entitlements. The Worker needs no Stripe API key, and existing adjustable Stripe menus keep their behavior.
+- **Clear acceptance and evidence:** Passing assertions mark a need met even when captures are absent or fail. Capture diagnostics identify the surface, explain the failure and show how to collect evidence with `--shots`.
+- **Reliable changing controls:** Click, fill and select actions retry detached elements within a bounded wait. The app skill, packaged guides and Codex template explain how updating controls in place preserves a held press across delayed refreshes.
+
+### Upgrade notes
+
+- Saved baskets are opt-in through `shop.json.basket` and require Stripe with tax-inclusive menu prices. Automatic tax and Managed Payments are refused for basket mode. Staff can use the reported basket total, actual payment and settlement status to collect a shortfall.
+
 ## [0.51.5] - 2026-10-14
 
 **Plugin 0.51.5**

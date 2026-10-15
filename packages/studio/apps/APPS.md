@@ -181,3 +181,18 @@ The phone remains its own surface; assert its confirmed gift after checkout. The
 checker brings each page forward before reading or capturing it. Use the real
 provider's controls, never a test-only app action. App sharing defaults to the top
 right, clear of bottom tabs; `screen.share` remains an author-controlled override.
+
+## Every owner need is executable
+
+The Codex `needs` block supports existing UI steps plus named-role MCP calls,
+returned-result assertions, simulated schedule ticks, record/results reads,
+event feed/MCP Events/webhook checks and handover file contents. See the packaged
+[needs format and examples](../guides/app/NEEDS.md). Passing assertions are **met**;
+captures are additional evidence. Missing captures name their surface, reason and
+how to rerun with `--shots .checks`. Detached action elements are re-queried for a
+bounded ten seconds; ambiguous post-dispatch failures are not replayed.
+
+Keep buttons connected during delayed refreshes: create the button once and set
+`button.textContent = label` when data arrives. Never replace a held button with
+`innerHTML` or `replaceWith`; that can cancel navigation between pointer down and
+up. The needs guide has a short complete example and explains outcome assertions.

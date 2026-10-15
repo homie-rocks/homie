@@ -100,7 +100,7 @@ The Codex's `needs` fenced block is a JSON array, one entry per need from the re
 
 Steps support `fill`, `select`, `click: true` and `reload: true`; surfaces are `wall`, `phone`, `phone-two`, `tablet`, `kiosk` and `staff` (a tablet viewport). Set a need’s `role` to the declared role to prove. Each assertion names its surface; only the named screens are required. Assertions use a visible selector with optional contained text, or an observed effect. An honestly unavailable capability remains in the block with no assertions and a plain explanation in the prose; check reports it not met. Do not delete, weaken or replace a need to get green. Static needs such as accurate prices may have no action steps. Use semantic attributes on real visible scene elements for testability, never hidden QA-only counters.
 
-Run build and the shared-action check, then the needs step runs on those real browsers. Save captures with `--shots .checks`. The result contains each statement, met/partly/not, the assertion result and captures of all named surfaces; `.studio/checks/<id>-needs.json` drives the Codex's Needs status. Redraw `codex <id>` after checking. Passing a selector assertion is evidence, not a visual judgement: read every capture and perform the full flows as owner and customer using the playtest skill. If the picture fails the words, it is not done even with green assertions.
+Run build and the shared-action check, then the needs step runs on those real browsers. Save captures with `--shots .checks`. The result contains each statement, met/partly/not, the assertion result and available captures of named surfaces; `.studio/checks/<id>-needs.json` drives the Codex's Needs status. Redraw `codex <id>` after checking. Passing a selector assertion is evidence, not a visual judgement: read every capture and perform the full flows as owner and customer using the playtest skill. If the picture fails the words, it is not done even with green assertions.
 
 For staff flows, sign in through the existing local owner link and prove the transition in real Chrome. Keep evidence in the Codex alongside the automated flows. Confirm unauthorized writes are refused and records remain after all screens close. Never call an untested privileged path passed. Before final handover, show the need table with evidence and explicit remaining gaps. If the starter or a board of boxes is still visible, return to the scene design and build it.
 
@@ -252,8 +252,8 @@ a notification or a person heard audio. Observations reset before each need.
 After reloads and rebuilt frames, check waits for online state, completed arrival,
 a hidden loading cover and two frames before assertions/captures. Timeout evidence
 names the surface and selector/effect it awaited. Dialogs are automatically accepted
-and reported. Read retries recover detached frames; dispatched actions are not
-silently repeated. `dev` rebuilds root HTML, CSS and JS as well as source and map
+and reported. Read retries recover detached frames. Click/fill/select retry detached elements by
+re-querying for up to ten seconds; other dispatched action failures are not replayed. `dev` rebuilds root HTML, CSS and JS as well as source and map
 changes. Unavailable sandbox Web Storage uses frame-local memory; use app records
 or `net.prefs` for persistence across reloads.
 
@@ -312,3 +312,19 @@ Issues and grant Notifications Write and Workers Observability Write. Cloudflare
 posts signed events to the client's webhook so new or recurring reliability
 problems reach the AI without polling; Homie hosts nothing for this. See
 [Cloudflare's announcement](https://developers.cloudflare.com/changelog/post/2026-10-13-cloudflare-mcp-events/).
+
+## Every need has a check
+
+Read [NEEDS.md](NEEDS.md) for the complete executable format and examples for UI,
+customer/staff MCP tools, owner event feeds and MCP Events, webhook delivery,
+simulated scheduled functions, records/results and handover files. Keep existing
+UI steps. Headless steps use an explicit named role and the local dev credential;
+assertions check actual returned values and effects. Missing capabilities stay
+not met with their reason. Passing assertions are met even without captures;
+missing evidence names each surface, its error and the `--shots .checks` remedy.
+
+Keep interactive DOM nodes connected across delayed refreshes. Update a button's
+text and attributes in place; never replace a button under a press. The short
+example in NEEDS.md preserves its click listener and focus. A stale-element retry
+helps a replaced handle before dispatch; it cannot recover a silently cancelled
+press. Assert the resulting navigation as well as the button's presence.

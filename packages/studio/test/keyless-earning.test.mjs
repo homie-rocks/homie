@@ -116,3 +116,41 @@ test('free volunteer booking confirms locally without a Stripe connection',async
  assert.equal(f.sql.prepare('SELECT state FROM shop_bookings WHERE id=?').get(r.booking).state,'confirmed');
  assert.equal((await f.buy({item:'tune',game:'tune',booking:{collection:'bookings',slot:'morning'}},'bob')).status,409);
 });
+
+for (const amount of [13000,14000,12000]) test(`saved basket preserves exact lines at payment ${amount}`,async t=>{
+ const f=fixture(t);f.config.menus[0].basket=true;f.config.menus[0].price='price_round';f.env.STRIPE_SHOP_LINKS=JSON.stringify(f.config);
+ const cart=await f.buy({lines:[{item:'tune',quantity:2},{item:'wax',quantity:3}],reference:'table-7'});
+ assert.equal(cart.ok,true);assert.equal(new URL(cart.url).searchParams.get('prefilled_amount'),'13000');assert.deepEqual(f.sql.prepare('SELECT item,quantity FROM shop_order_lines WHERE order_id=? ORDER BY position').all(cart.order).map(r=>[r.item,r.quantity]),[['tune',2],['wax',3]]);
+ const s=f.session(cart,'menu',{amount_subtotal:amount,amount_total:amount});
+ for(const forged of [{currency:'usd'},{payment_link:'plink_wrong'},{metadata:{revision:'wrong'}},{client_reference_id:'ord_missing'}]){await f.hook('checkout.session.completed',{...s,...forged});assert.equal(f.sql.prepare('SELECT paid_at FROM shop_orders WHERE id=?').get(cart.order).paid_at,null);}
+ assert.equal((await f.hook('checkout.session.completed',s)).status,200);
+ await f.hook('checkout.session.completed',s);
+ const events=f.sql.prepare("SELECT data FROM studio_events WHERE type='order.paid'").all().map(r=>JSON.parse(r.data));assert.equal(events.length,1);
+ const e=events[0];assert.equal(e.reference,'table-7');assert.equal(e.basketTotal,13000);assert.equal(e.amount,amount);assert.equal(e.settlement,amount<13000?'short':'paid');assert.deepEqual(e.lines.map(l=>[l.item,l.quantity,l.amount]),[['tune',2,10000],['wax',3,3000]]);
+ await f.hook('checkout.session.completed',{...s,id:s.id+'again',payment_intent:s.payment_intent+'again'});
+ assert.equal(f.sql.prepare("SELECT count(*) n FROM studio_events WHERE type='order.paid'").get().n,2);
+});
+
+test('basket sync creates one custom-amount line with studio wording and no Worker key',async()=>{
+ const {syncPaymentLinks}=await import('../lib/shop-links.mjs');
+ const {checkShop}=await import('../worker/shop-rules.mjs');
+ const calls=[];let seq=0;
+ const shop=checkShop({till:'stripe',currency:'cad',basket:{name:'Round for your table',description:'Your pub basket'},items:[{id:'pale',name:'Pale',price:800,game:'pub'},{id:'chips',name:'Chips',price:900,game:'pub'}]}).shop;
+ const api=async(method,path,params)=>{calls.push({method,path,params});if(method==='GET')return {data:[],has_more:false};const id=path==='/v1/products'?params.id:path==='/v1/prices'?'price_'+(++seq):'plink_'+(++seq);return {id,active:true,url:'https://buy.stripe.com/test_'+seq,...params};};
+ const result=await syncPaymentLinks({api,shop,slug:'pub',site:'http://localhost:8787',mode:'test',local:true});
+ assert.equal(result.ok,true);const menu=result.config.menus[0];assert.equal(menu.basket,true);
+ const price=calls.find(c=>c.path==='/v1/prices'&&c.params.custom_unit_amount);assert.deepEqual(price.params.custom_unit_amount,{enabled:true});
+ const link=calls.find(c=>c.path==='/v1/payment_links'&&c.method==='POST'&&c.params.line_items[0].price===menu.price);assert.deepEqual(link.params.line_items,[{price:menu.price,quantity:1}]);assert.equal(link.params.invoice_creation,undefined);
+ assert.ok(calls.some(c=>c.path==='/v1/products'&&c.params.name==='Round for your table'&&c.params.description==='Your pub basket'));
+});
+
+test('saved single-item basket keeps quantity; unpaid events do not fulfil; full refund uses actual payment',async t=>{
+ const f=fixture(t);f.config.menus[0].basket=true;f.config.menus[0].price='price_round';f.env.STRIPE_SHOP_LINKS=JSON.stringify(f.config);
+ const a=await f.buy({lines:[{item:'wax',quantity:3}],reference:'table-2'});assert.match(a.url,/test_menu/);
+ const s=f.session(a,'menu',{amount_subtotal:2000,amount_total:2000});
+ await f.hook('checkout.session.completed',{...s,payment_status:'unpaid'});assert.equal(f.sql.prepare('SELECT paid_at FROM shop_orders WHERE id=?').get(a.order).paid_at,null);
+ await f.hook('checkout.session.completed',s);assert.equal(f.sql.prepare('SELECT quantity FROM shop_order_lines WHERE order_id=?').get(a.order).quantity,3);
+ await f.hook('refund.created',{id:'re_basket',payment_intent:s.payment_intent,currency:'cad',amount:2000,status:'succeeded'});
+ assert.equal(f.sql.prepare('SELECT status FROM shop_orders WHERE id=?').get(a.order).status,'refunded');
+ await f.hook('checkout.session.completed',s);assert.equal(f.sql.prepare('SELECT status FROM shop_orders WHERE id=?').get(a.order).status,'refunded');
+});
