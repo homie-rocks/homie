@@ -22,7 +22,7 @@ jobs:
     uses: ./.github/workflows/nightly.yml
 
   changes:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.full)
     runs-on: ubuntu-latest
     outputs:
       paths: ${{ steps.diff.outputs.paths }}
@@ -30,10 +30,12 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - id: diff
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || 'main' }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          git fetch --depth=1 origin "$BASE_SHA" "$HEAD_SHA"
+          git fetch --depth=1 origin "$BASE_SHA"
+          BASE_SHA=$(git rev-parse FETCH_HEAD)
+          git fetch --depth=1 origin "$HEAD_SHA"
           git diff --name-only "$BASE_SHA" "$HEAD_SHA" > changed-paths.txt
           echo "paths=$(node -e 'console.log(JSON.stringify(require("fs").readFileSync("changed-paths.txt","utf8").trim().split("\n")))')" >> "$GITHUB_OUTPUT"
 
@@ -191,7 +193,7 @@ jobs:
           node-version: 24
       - name: Fetch the comparison commit
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || 'main' }}
         run: git fetch --depth=1 origin "$BASE_SHA"
       - name: A section for the studio's version, naming the plugin's, and the package's copy the same file
         env:
