@@ -90,14 +90,14 @@ export async function shopConnect(root, options = {}) {
   let catalog, mcpAccount;
   if (options.webhookOnly) {
     try {
-      const {saveMcpVerification} = await import('./shop-mcp.mjs');
-      const saved=JSON.parse(readFileSync(join(root,'.studio','stripe-mcp.json'),'utf8'));
+      const {verifiedMcpConfig} = await import('./shop-mcp.mjs');
+      const saved=verifiedMcpConfig(root);
       if(!saved.result?.verifiedAt || Date.now()-Date.parse(saved.result.verifiedAt)>15*60_000) return fail('verify','Run shop verify with fresh Stripe MCP reads before installing the webhook (verification is valid for 15 minutes).');
-      const verified=await saveMcpVerification(root,saved.options);
+      const verified=saved.result;
       if(!verified.verified || verified.local || verified.mode!==mode || verified.site!==new URL(siteUrl(root)).origin) return fail('verify','Run shop verify with fresh Stripe MCP reads for this site and mode first.');
       mcpAccount=saved.options.account;
       if(!/^acct_[A-Za-z0-9]+$/.test(mcpAccount??''))return fail('account','Verify with the Stripe MCP account ID first.');
-      catalog={config:verified.config,retire:verified.retire};
+      catalog={config:verified.config,retire:[]};
     } catch { return fail('verify','Run shop verify with fresh Stripe MCP reads for this site first.'); }
   }
   const id = hash(realpathSync(root)).slice(0, 24);

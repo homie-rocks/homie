@@ -103,9 +103,18 @@ test('owner run history retains failures, successful retries, pagination and nex
  assert.equal((await functionRuns(env,{name:'other'})).runs.length,0);
  const tool=builtins(env,{games:[]},'https://studio.test').find(t=>t.name==='studio_function_runs');
  assert.equal(await allowed(tool.audience,{owner:false,id:null},env),false);assert.equal(await allowed(tool.audience,{owner:false,id:'staff'},env),false);assert.equal(await allowed(tool.audience,{owner:true,id:'owner'},env),true);
- assert.equal(builtins(env,{studio:{mcp:{audiences:{studio_function_runs:'public'}}},games:[]},'https://studio.test').find(t=>t.name==='studio_function_runs').audience,'owner');
- await assert.rejects(tool.handler({},{caller:{owner:false}}),/Owner only/);
- assert.equal((await tool.handler({errors:true},{caller:{owner:true}})).runs[0].outcome,'failed');
+ assert.equal(builtins(env,{studio:{mcp:{audiences:{studio_function_runs:'public'}}},games:[]},'https://studio.test').find(t=>t.name==='studio_function_runs').audience,'studio-staff');
+ await assert.rejects(tool.handler({},{caller:{owner:false}}),/Owner or studio staff only/);
+ assert.equal((await tool.handler({errors:true},{caller:{owner:true,id:'owner'}})).runs[0].outcome,'failed');
  for(let i=0;i<101;i++)DB.sql.prepare("INSERT INTO function_runs(id,function,event,trigger,started,outcome,attempt) VALUES(?,'other','event','manual',1,'complete',1)").run('page-'+i);
  const page=await functionRuns(env);assert.equal(page.runs.length,100);assert.ok(page.next);assert.equal((await functionRuns(env,{before:page.next})).runs.length,3);
+});
+
+test('studio staff can inspect scheduled attempts through MCP and revoked staff cannot',async t=>{
+ const {builtins,allowed}=await import('../worker/mcp-tools.mjs');const DB=database();t.after(()=>DB.sql.close());
+ DB.sql.exec("INSERT INTO app_roles(app,role,player) VALUES('*','staff','crew')");
+ const env={DB},caller={id:'crew',owner:false};const tool=builtins(env,{games:[]},'https://studio.test').find(t=>t.name==='studio_function_runs');
+ assert.equal(await allowed(tool.audience,caller,env),true);
+ const report=await tool.handler({},{caller});assert.ok(Array.isArray(report.runs));assert.ok(Array.isArray(report.schedules));
+ DB.sql.exec('DELETE FROM app_roles');assert.equal(await allowed(tool.audience,caller,env),false);await assert.rejects(()=>tool.handler({},{caller}));
 });

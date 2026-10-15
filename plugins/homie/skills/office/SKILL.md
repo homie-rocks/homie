@@ -118,7 +118,7 @@ build/deploy; the Worker dispatches due functions without an office browser.
 Build and redeploy after upgrading; custom crons are kept. Check the deploy plan's
 cron line. Do not add a default cron to a studio with no declared need.
 
-To inspect runs from the owner's AI, call the owner-only studio MCP tool
+To inspect runs from the owner's AI, call the owner or studio-staff MCP tool
 `studio_function_runs` (optional `name`, `errors`, `before`), or run
 `homie-studio functions runs [<name>] [--errors] [--url <studio-site>]`.
 Use the existing owner OAuth connection; never request an office key. Results
@@ -180,3 +180,29 @@ Issues and grant Notifications Write and Workers Observability Write. Cloudflare
 posts signed events to the client's webhook so new or recurring reliability
 problems reach the AI without polling; Homie hosts nothing for this. See
 [Cloudflare's announcement](https://developers.cloudflare.com/changelog/post/2026-10-13-cloudflare-mcp-events/).
+
+
+## Selling and operational checks over MCP
+
+Use Stripe's official plugin and the shop skill's batched `stripe_shop_plan` flow.
+Retain write responses, verify, then deploy the compact public links. Until the
+private `stripe_webhook` step completes, checkout names that one remaining step.
+The AI starts the tool; the owner approves Stripe CLI once if needed. No secrets
+or API keys pass through chat. Deploy distinguishes **claimed, not listed** from
+an actual directory listing; publishing is a separate action.
+
+On the existing signed-in studio connector (`<site>/mcp/auth`), call
+`studio_function_runs` with optional `name`, `errors`, `before` for actual attempts,
+redacted errors and next due times. Owners and studio-wide `staff` grants can read
+this operational history; per-app staff grants do not expose other apps' runs.
+Do not start `functions runs --url` in a headless shell with no CLI OAuth session:
+that is a different client and would need its own initial browser approval.
+
+`app_records` without `role` selects the highest available declared role: signed-in
+roles first, then the largest permission set, with role name as a stable tie-break.
+Each response reports `role`; an explicit role stays explicit. Inspect `app_schema`
+and pass a role when deliberately testing the customer experience.
+
+`check --shots` may capture outside the studio, but persistent needs evidence copies
+those pictures into `.studio/checks` and stores studio-relative paths. Keep that
+folder with the Codex evidence. Deploy can render it without outside-path warnings.

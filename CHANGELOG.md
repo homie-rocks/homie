@@ -17,6 +17,19 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.51.7] - 2026-10-14
+
+**Plugin 0.51.7**
+
+Finish setting up your shop through Stripe's official plugin, and see what your studio's scheduled work is doing.
+
+### Fixed
+
+- **Finish shop setup with fewer calls:** Products, prices and payment links are set up together where possible, and setup remembers completed changes instead of repeatedly searching your Stripe account. Verified shop settings are saved and installed on deploy; checkout explains when private webhook setup is the remaining step.
+- **Clear, private webhook setup:** The guided flow explains when you need one separate Stripe CLI browser approval. The installer passes the signing secret privately to Wrangler. You do not need to supply an API key, and payments stay with Stripe.
+- **See your studio's work:** Owners and studio-wide staff can inspect function run history, errors and the next scheduled run through their authenticated studio connection. Record actions use your highest declared role by default and tell you which role was used.
+- **Reliable handover:** Deploy distinguishes claiming your studio from listing it in the directory. Screenshots used as evidence that owner needs are met are copied into the studio so they remain available with its Codex handover.
+
 ## [0.51.6] - 2026-10-14
 
 **Plugin 0.51.6**

@@ -1,3 +1,4 @@
+import {stripeFixture as fixture} from './selling-stripe-fixture.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,writeFileSync,mkdirSync,rmSync,readFileSync} from 'node:fs';
@@ -12,39 +13,17 @@ function studio(t) {
  writeFileSync(join(root,'shop.json'),JSON.stringify({till:'stripe',currency:'usd',automaticTax:false,items:[{id:'coffee',name:'Coffee',price:300},{id:'cake',name:'Cake',price:400},{id:'giving',name:'Monthly giving',price:1000,interval:'month'}]}));
  return root;
 }
-function fixture() {
- const rows={products:[],prices:[],payment_links:[],configurations:[]}; let sequence=0;
- return {rows,call(op){
-   if(op.path==='/v1/checkout/sessions')return {data:[],has_more:false};
-   const segments=op.path.split('/'),kind=segments.at(-2)==='billing_portal'?'configurations':segments[2];
-   const data=rows[kind];assert.ok(data,op.path);const id=segments.at(-1)===kind?null:segments.at(-1);
-   if(op.method==='GET') {
-     if(!id)return {data:structuredClone(data),has_more:false};
-     const object=structuredClone(data.find(o=>o.id===id));
-     if(kind==='payment_links')object.line_items={data:object.line_items.map(line=>({...line,price:{id:line.price}}))};
-     return object;
-   }
-   let object=id?data.find(o=>o.id===id):null;
-   if(!object){object={id:op.params.id??`${kind==='payment_links'?'plink':kind==='prices'?'price':kind==='products'?'prod':'bpc'}_${++sequence}`,active:true,livemode:false};data.push(object);}
-   const metadata={...object.metadata,...op.params.metadata};
-   const count=object.restrictions?.completed_sessions?.count;
-   Object.assign(object,structuredClone(op.params));
-   object.metadata=metadata;
-   if(count!==undefined && object.restrictions)object.restrictions.completed_sessions.count=count;
-   if(kind==='payment_links'){object.url=`https://buy.stripe.com/test_${object.id}`;if(object.restrictions)object.restrictions.completed_sessions.count??=0;}
-   if(kind==='configurations')object.login_page={enabled:true,url:'https://billing.stripe.com/p/login/test_fixture'};
-   return structuredClone(object);
- }};
-}
 async function reconcile(root,f,options={}) {
  let observations=[],writes=[];
  for(let i=0;i<150;i++) {
    const p=await shopMcpPlan(root,{...options,observations});
-   if(p.verified)return {p,observations,writes};
-   assert.ok(p.next,JSON.stringify(p)); const op=p.next;
-   const body=f.call(op);
-   if(op.method==='GET')observations.push({path:op.path,params:op.params,body});
-   else {assert.ok(op.idempotency || op.path.split('/').length>3);writes.push(op);observations=[];}
+   if(p.verified){await saveMcpVerification(root,{...options,observations});return {p,observations,writes};}
+   assert.ok(p.operations,JSON.stringify(p));
+   for(const op of p.operations) {
+     const body=f.call(op);
+     observations.push({...op,body});
+     if(op.method!=='GET'){assert.ok(op.idempotency || op.path.split('/').length>3);writes.push(op);}
+   }
  }
  throw new Error('Plan did not converge');
 }
@@ -57,12 +36,12 @@ test('official MCP plan converges and verifies items, menu, slots, recurring and
  const {p,observations,writes}=await reconcile(root,f,{slots});
  assert.equal(p.config.items.length,3);assert.equal(p.config.menus.length,1);assert.equal(p.config.slots[0].limit,2);assert.ok(p.config.portal);
  assert.equal(writes.some(o=>o.path.includes('webhook')),false);
- assert.ok(writes.some(o=>o.params.recurring?.interval==='month'));
+ assert.ok(writes.some(o=>o.params.default_price_data?.recurring?.interval==='month'));
  const again=await saveMcpVerification(root,{slots,observations,account:'acct_fixture'});assert.equal(again.verified,true);
  assert.equal((await reconcile(root,f,{slots})).writes.length,0);
  assert.equal(JSON.parse(readFileSync(join(root,'.studio','stripe-mcp.json'))).result.verified,true);
  f.rows.prices[0].unit_amount=999;
- await assert.rejects(()=>reconcile(root,f,{slots}),/differs from shop.json/);
+ await assert.rejects(()=>reconcile(root,f,{slots}),/differs from shop.json|Slot service price changed/);
 });
 test('verification rejects wrong mode, secrets, pagination gaps and drifted link fields',async t=>{
  const root=studio(t),f=fixture();await reconcile(root,f);
@@ -71,8 +50,8 @@ test('verification rejects wrong mode, secrets, pagination gaps and drifted link
  const first=await shopMcpPlan(root);assert.equal(first.next.method,'GET');
  await assert.rejects(()=>shopMcpPlan(root,{observations:[{...first.next,body:{data:[{livemode:true}],has_more:false}}]}),/wrong mode/);
  await assert.rejects(()=>shopMcpPlan(root,{observations:[{body:{secret:'whsec_fixture'}}]}),/never credentials/);
- const page=await shopMcpPlan(root,{observations:[{...first.next,body:{data:[{id:'prod_cursor'}],has_more:true}}]});
- assert.equal(page.next.params.starting_after,'prod_cursor');
+ const page=await shopMcpPlan(root,{observations:[{...first.next,body:{data:[{id:'prod_cursor'}],has_more:true,next_page:'page_cursor'}}]});
+ assert.equal(page.next.params.page,'page_cursor');
 });
 test('private webhook installer sends secret only to Wrangler stdin without outputting it',async()=>{
  const secret='whsec_private_fixture',saved=[],receipts=[];
@@ -129,5 +108,90 @@ test('CLI verification preserves the next operation without requiring --json',as
  const result=spawnSync(process.execPath,[fileURLToPath(new URL('../bin/homie-studio.mjs',import.meta.url)),'shop','verify'],{cwd:root,encoding:'utf8'});
  assert.equal(result.status,1);
  const report=JSON.parse(result.stdout);
- assert.equal(report.verified,false);assert.equal(report.next.method,'GET');assert.equal(report.next.path,'/v1/products');
+ assert.equal(report.verified,false);assert.equal(report.next.method,'GET');assert.equal(report.next.path,'/v1/products/search');
+});
+
+test('planner batches independent product writes and retains write observations',async t=>{
+ const root=studio(t), observations=[];
+ for(let i=0;i<10;i++) {
+   const plan=await shopMcpPlan(root,{observations});
+   const operations=plan.operations??[plan.next];
+   if(operations.some(op=>op.method==='POST')) {
+     assert.equal(operations.filter(op=>op.path==='/v1/products').length,3);
+     assert.ok(operations.every(op=>op.params.default_price_data));
+     return;
+   }
+   observations.push(...operations.map(op=>({...op,body:{data:[],has_more:false}})));
+ }
+ assert.fail('No product batch');
+});
+
+test('verified public links become deploy bindings and storage omits observations',async t=>{
+ const {refreshWorkerConfig}=await import('../lib/worker-config.mjs');
+ const root=studio(t), f=fixture();
+ writeFileSync(join(root,'studio.json'),JSON.stringify({name:'Proof',slug:'proof',cloudflare:{domain:'proof.example',worker:'proof',d1:'proof'}}));
+ mkdirSync(join(root,'site'),{recursive:true});
+ const {observations}=await reconcile(root,f);await saveMcpVerification(root,{observations,account:'acct_fixture'});
+ const saved=JSON.parse(readFileSync(join(root,'.studio','stripe-mcp.json')));assert.equal(saved.options.observations,undefined);
+ refreshWorkerConfig(root);
+ const config=JSON.parse(readFileSync(join(root,'wrangler.jsonc'),'utf8').replace(/^\s*\/\/.*$/gm,''));
+ assert.equal(config.vars.STRIPE_CHECKOUT_MODE,'links');assert.equal(JSON.parse(config.vars.STRIPE_SHOP_LINKS).items.length,3);
+});
+
+test('public checkout with verified links names only the private webhook step',async t=>{
+ const {DatabaseSync}=await import('node:sqlite');const {readdirSync}=await import('node:fs');
+ const {customerTools}=await import('../worker/customer-mcp.mjs');const {readShop}=await import('../lib/shop.mjs');
+ const root=studio(t),f=fixture(),{p}=await reconcile(root,f),sql=new DatabaseSync(':memory:');t.after(()=>sql.close());
+ for(const file of readdirSync(new URL('../../../template/site/migrations/',import.meta.url)).sort())sql.exec(readFileSync(new URL('../../../template/site/migrations/'+file,import.meta.url),'utf8'));
+ const DB={prepare:q=>({first:async()=>sql.prepare(q).get()??null})};
+ const env={DB,STRIPE_CHECKOUT_MODE:'links',STRIPE_SHOP_LINKS:JSON.stringify(p.config)};
+ const tool=customerTools(env,{shop:readShop(root).shop,games:[]},'https://proof.example').find(t=>t.name==='studio_checkout');
+ const result=await tool.handler({lines:[{item:'coffee'}]},{caller:{id:null,owner:false}});
+ assert.equal(result.error,'closed');assert.deepEqual(result.missing,['webhook-secret']);assert.match(result.next,/shop webhook/);
+});
+
+test('partial batches resume from responses without account-wide reads or separate default updates',async t=>{
+ const root=studio(t),f=fixture(),observations=[];
+ writeFileSync(join(root,'shop.json'),JSON.stringify({till:'stripe',currency:'usd',automaticTax:false,items:[{id:'one',name:'One',price:300},{id:'tip',name:'Tip',price:'choose',min:200,max:2000},{id:'month',name:'Monthly',price:500,interval:'month'}]}));
+ const first=await shopMcpPlan(root);assert.deepEqual(first.operations.map(o=>o.path),['/v1/products/search','/v1/prices/search']);
+ for(const op of first.operations){assert.match(op.params.query,/metadata\['studio'\]:'proof'/);observations.push({...op,body:f.call(op)});}
+ const products=await shopMcpPlan(root,{observations});assert.equal(products.operations.length,3);
+ const op=products.operations[0];observations.push({...op,body:f.call(op)});
+ const resumed=await shopMcpPlan(root,{observations});assert.equal(resumed.operations.filter(o=>o.path==='/v1/products').length,2);assert.equal(resumed.operations.some(o=>o.method==='GET'),false);
+ const writes=[];
+ for(let i=0;i<20;i++){
+   const plan=await shopMcpPlan(root,{observations});if(plan.verified){assert.equal(plan.config.items.length,3);break;}
+   for(const operation of plan.operations){writes.push(operation);observations.push({...operation,body:f.call(operation)});}
+ }
+ assert.equal(writes.some(op=>op.path==='/v1/prices'),false);assert.equal(writes.some(op=>Object.hasOwn(op.params,'default_price')),false);
+ const verified=await saveMcpVerification(root,{observations,account:'acct_fixture'});assert.equal(verified.verified,true);
+ const file=readFileSync(join(root,'.studio/stripe-mcp.json'),'utf8');assert.ok(Buffer.byteLength(file)<8000);assert.equal(file.includes('observations'),false);
+});
+
+test('deploy refuses changed shop configuration until verified again',async t=>{
+ const {verifiedMcpConfig}=await import('../lib/shop-mcp.mjs');const root=studio(t),f=fixture();await reconcile(root,f);
+ assert.ok(verifiedMcpConfig(root));const shop=JSON.parse(readFileSync(join(root,'shop.json')));shop.items[0].price+=1;writeFileSync(join(root,'shop.json'),JSON.stringify(shop));
+ assert.throws(()=>verifiedMcpConfig(root),/verify/);
+});
+
+test('verified MCP baskets retain the released aggregate link and verify its fields',async t=>{
+ const root=studio(t),f=fixture();const shop=JSON.parse(readFileSync(join(root,'shop.json')));shop.items=shop.items.slice(0,2);shop.basket={name:'Order',description:'Your order'};writeFileSync(join(root,'shop.json'),JSON.stringify(shop));
+ const {p,writes}=await reconcile(root,f);assert.equal(p.config.menus[0].basket,true);assert.equal(writes.filter(op=>op.path==='/v1/products').length,3);assert.equal(writes.some(op=>op.path==='/v1/prices'),false);
+ f.rows.payment_links.find(l=>l.id===p.config.menus[0].id).automatic_tax.enabled=true;
+ await assert.rejects(()=>reconcile(root,f),/differs from its planned fields/);
+});
+
+test('verification fingerprints the effective file-backed slot manifest for deployment',async t=>{
+ const {verifiedMcpConfig}=await import('../lib/shop-mcp.mjs');const root=studio(t),f=fixture();mkdirSync(join(root,'.studio'),{recursive:true});
+ const slots=[{app:'classes',collection:'bookings',slots:'sessions',slot:'monday',item:'coffee',capacity:2}];writeFileSync(join(root,'.studio/booking-slots.json'),JSON.stringify(slots));
+ await reconcile(root,f);assert.equal(verifiedMcpConfig(root).result.config.slots.length,1);
+});
+
+test('write observations match nested API parameter ordering',()=>{
+ assert.equal(readKey('/v1/products',{default_price_data:{currency:'usd',unit_amount:300},metadata:{studio:'proof',origin:'https://proof.example'}}),readKey('/v1/products',{metadata:{origin:'https://proof.example',studio:'proof'},default_price_data:{unit_amount:300,currency:'usd'}}));
+});
+
+test('local verification remains usable for dev builds without installing localhost links in deploy vars',async t=>{
+ const {verifiedMcpConfig}=await import('../lib/shop-mcp.mjs');const root=studio(t),f=fixture();await reconcile(root,f,{url:'http://localhost:8787'});
+ assert.equal(verifiedMcpConfig(root),null);assert.match(readFileSync(join(root,'.dev.vars'),'utf8'),/STRIPE_SHOP_LINKS=base64:/);
 });

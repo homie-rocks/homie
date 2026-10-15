@@ -1,7 +1,7 @@
 import {actInApp,waitInApp} from './app-ready.mjs';
 /** Opt-in acceptance evidence, sourced from the person's Codex, not starter labels. */
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join, resolve, relative, isAbsolute } from 'node:path';
+import { existsSync, readFileSync, mkdirSync, writeFileSync, copyFileSync, realpathSync } from 'node:fs';
+import { join, resolve, relative, isAbsolute, basename } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { createHash } from 'node:crypto';
 
@@ -129,6 +129,12 @@ export async function proveAppNeeds({ plan, surfaces, shots, report, ready = asy
 export function saveAppNeeds(root, id, plan, needs) {
   if (!root) return;
   const dir = join(root, '.studio', 'checks'); mkdirSync(dir, { recursive: true });
+  needs=needs.map(need=>({...need,captures:(need.captures??[]).map(file=>{
+    const source=realpathSync(resolve(root,file)),rel=relative(realpathSync(root),source);
+    if(!rel.startsWith('..')&&!isAbsolute(rel))return rel;
+    const target=join(dir,`${id}-${createHash('sha256').update(source).digest('hex').slice(0,12)}-${basename(source)}`);
+    copyFileSync(source,target);return relative(root,target);
+  })}));
   writeFileSync(join(dir, `${id}-needs.json`), JSON.stringify({ at: new Date().toISOString(), codexHash: plan.hash, needs }, null, 2));
 }
 

@@ -87,8 +87,8 @@ homie-studio functions runs --before 101
 The command uses the studio's deployed address unless `--url` overrides it. It
 uses the existing owner OAuth connection (one initial browser approval; no office
 key). After approval, checks need no browser. An AI connected to `<site>/mcp` calls
-the owner-only `studio_function_runs` tool with optional `name`, `errors` and
-`before`. Anonymous callers and staff cannot read it.
+the owner/studio-staff `studio_function_runs` tool with optional `name`, `errors` and
+`before`. Anonymous callers and per-app staff cannot read it. A studio-wide `staff` grant can read it; revocation takes effect on the next call. Reuse the authenticated connector at `/mcp/auth`; a headless CLI with no saved OAuth session requires a separate initial browser approval.
 
 Results include function, event ID, trigger, started/finished UTC times, outcome,
 error message and attempt. Failed attempts survive successful retries; history

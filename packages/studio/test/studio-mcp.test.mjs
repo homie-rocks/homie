@@ -208,3 +208,16 @@ test('office tools offer sales controls without referral views or settlement act
  assert.ok(actions.includes('shop/release'));
  assert.equal(actions.includes('shop/settle'),false);
 });
+
+test('connector records default to highest granted role and report it',async()=>{
+ const {services}=await import('../worker/mcp-tools.mjs');
+ const DB=database();try{
+  DB.sql.exec("CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT); CREATE TABLE app_records(app TEXT,collection TEXT,id TEXT,value TEXT,version INTEGER,updated_at INTEGER,PRIMARY KEY(app,collection,id)); INSERT INTO app_roles VALUES('cafe','staff','alice')");
+  const meta={id:'cafe',kind:'app',launch:'public',roles:{customer:{can:['create:orders']},staff:{signIn:true,can:['read:orders','create:orders','update:orders']}},records:{persist:true,collections:{orders:{fields:{title:{type:'string'}}}}}};
+  const ctx=services({DB},{games:[meta]},'https://studio.test',{id:'alice',owner:false,roles:{cafe:['staff']}},'test');
+  const created=await ctx.records({app:'cafe',collection:'orders',id:'one',operation:'create',data:{title:'Coffee'}});
+  assert.equal(created.role,'staff');
+  const read=await ctx.records({app:'cafe',collection:'orders'});assert.equal(read.role,'staff');assert.equal(read.records.length,1);
+  await assert.rejects(()=>ctx.records({app:'cafe',collection:'orders',role:'customer'}),/role: customer/);
+ }finally{DB.sql.close();}
+});

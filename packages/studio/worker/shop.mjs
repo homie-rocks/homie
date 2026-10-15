@@ -632,7 +632,7 @@ async function buyRoute(request, env, url, cat, shop, ready, ctx, requestAt) {
   const reference = b.body.reference ?? null;
   if (reference !== null && (typeof reference !== 'string' || !reference.trim() || /[\u0000-\u001f\u007f]/.test(reference))) return fail(400, 'reference', 'reference must be a nonempty string without control characters');
   const freeOnly = (b.body.lines ?? [{ item: b.body.item }]).every?.((l) => shop.items.some((i) => i.id === l?.item && i.price === 0 && !i.interval));
-  if (!ready.ready && !(freeOnly && ready.missing.every((m) => ['payment-links', 'webhook-secret', 'fuller-checkout'].includes(m)))) return fail(503, 'closed', 'The shop is not open yet.', { missing: ready.missing, migration: ready.migration });
+  if (!ready.ready && !(freeOnly && ready.missing.every((m) => ['payment-links', 'webhook-secret', 'fuller-checkout'].includes(m)))) return fail(503, 'closed', 'The shop is not open yet.', { missing: ready.missing, next: ready.next, migration: ready.migration });
   const requested = b.body.lines ?? [{ item: b.body.item, quantity: b.body.quantity ?? 1, amount: b.body.amount }];
   // Stripe's documented limit, not a studio policy: https://docs.stripe.com/api/checkout/sessions/create#line_items
   if (!Array.isArray(requested) || !requested.length || requested.length > 100) return fail(400, 'stripe-lines', 'Stripe Checkout takes between 1 and 100 lines.');
@@ -691,7 +691,7 @@ async function buyRoute(request, env, url, cat, shop, ready, ctx, requestAt) {
 async function parentLinkRoute(request, env, url, cat, shop, ready) {
   const b = await bodyOf(request, requestSize(shop));
   if (b.error) return b.error;
-  if (!ready.ready) return fail(503, 'closed', 'The shop is not open yet.', { missing: ready.missing, migration: ready.migration });
+  if (!ready.ready) return fail(503, 'closed', 'The shop is not open yet.', { missing: ready.missing, next: ready.next, migration: ready.migration });
   const requested = b.body.lines ?? [{ item: b.body.item, quantity: b.body.quantity ?? 1 }];
   if (!Array.isArray(requested) || !requested.length || requested.length > 100) return fail(400, 'stripe-lines', 'Stripe Checkout takes between 1 and 100 lines.');
   const game = GAME_ID.test(String(b.body.game ?? '')) ? String(b.body.game) : null;

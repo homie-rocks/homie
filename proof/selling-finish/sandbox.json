@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "profile": "Homie sandbox",
+  "stripeCalls": 19,
+  "stripeBytes": 56933,
+  "plannerCalls": 5,
+  "publicConfigBytes": 5617,
+  "links": 9,
+  "withoutWebhook": [
+    "webhook-secret"
+  ],
+  "withWebhook": "ready",
+  "webhookCreated": true,
+  "secretTransport": "private installer stdin captured in-process; no remote Wrangler mutation or deploy",
+  "paymentTested": false
+}
