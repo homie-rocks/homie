@@ -6,8 +6,8 @@ import {feedSubscriptions,pushEvents} from './event-resources.mjs';
 import { services } from './mcp-tools.mjs';
 import { isOwner, sameOrigin } from './office.mjs';
 import { esc } from './site.mjs';
-let load = async () => [];
-export function useFunctions(loader) { load = loader; }
+import {loadFunctions as load} from './function-registry.mjs';
+export {useFunctions} from './function-registry.mjs';
 export async function hasFunctionType(type,env={}) { return [...await load(),...feedSubscriptions(env)].some(fn=>fn.event===type); }
 export async function syncFunctions(env, definitions = null, now = Date.now()) {
   definitions ??= await load();

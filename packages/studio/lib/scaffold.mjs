@@ -1,3 +1,4 @@
+import {backgroundQueues} from './background-queue.mjs';
 import {WORKER_ROUTES} from './static-assets.mjs';
 import {RUNTIME_INDEX_MIGRATION,RUNTIME_INDEX_MIGRATION_FILE,TOOL_NAMESPACE_MIGRATION,TOOL_NAMESPACE_MIGRATION_FILE,CACHE_MIGRATION,CACHE_MIGRATION_FILE,OPERATIONAL_MIGRATION,OPERATIONAL_MIGRATION_FILE} from '../worker/operational-schema.mjs';
 import {BOOKING_RESOURCES_MIGRATION,BOOKING_RESOURCES_MIGRATION_FILE} from '../worker/booking-resources.mjs';
@@ -102,6 +103,7 @@ export function wranglerConfig({workerRoutes = WORKER_ROUTES, worker, name, d1, 
     ...(routes?.length ? { routes } : {}),
     ...(triggers ? { triggers: paidParts ? { ...triggers, crons: [...new Set([...(triggers.crons ?? []), '*/5 * * * *'])] } : triggers } : {}),
     assets: { directory: at.dist, binding: 'ASSETS', run_worker_first: workerRoutes },
+    queues:{producers:[{binding:'BACKGROUND',queue:backgroundQueues(worker).work},{binding:'BACKGROUND_DLQ',queue:backgroundQueues(worker).dead}],consumers:[{queue:backgroundQueues(worker).work,max_batch_size:100,max_batch_timeout:1,max_retries:5,dead_letter_queue:backgroundQueues(worker).dead}]},
     durable_objects: { bindings: rooms },
     migrations: [{ tag: 'v1', new_sqlite_classes: ['Table', 'Lobby'] }, { tag: 'v2-gates', new_sqlite_classes: ['Gate', 'Concentrator'] }, {tag:'v3-streams',new_sqlite_classes:['AppRecordHub','EventHub']}],
     d1_databases: [{ binding: 'DB', database_name: d1, ...(d1Id ? { database_id: d1Id } : {}), migrations_dir: at.migrations }],

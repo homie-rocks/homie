@@ -8,7 +8,7 @@ import {APP_STORAGE_JS} from './app-frame.mjs';
 import {recordsPage} from './records-page.mjs';
 import { RULES_WIRING_MESSAGE } from './rules-wiring.mjs';
 
-export { useFunctions } from './functions.mjs';
+export { useFunctions } from './function-registry.mjs';
 import { appAccess, appRecordsRoute } from './app-records.mjs';
 import { appRole, openPath } from './app-format.mjs';
 /**
@@ -609,12 +609,14 @@ function finish(res, path) {
 }
 
 export default {
+  async queue(batch,env) {return (await import('./background-queue.mjs')).consumeBackground(batch,await loadShopLinks(env));},
   async scheduled(event, env, ctx) {
     env=await loadShopLinks(env);
     const maintenance=(async () => {
       const cat = await catalogue(env, 'https://studio.invalid');
       await notifyTools(env,cat,cat.studio?.url??'https://studio.invalid').catch(error=>console.warn('Tool catalogue refresh:',error.message));
       await reconcileOrders(env, shopOf(cat));
+      if(env.DB)await (await import('./stripe-intake.mjs')).pruneStripeEvents(env);
       await (await import('./functions.mjs')).scheduleFunctions(event,env,cat,cat.studio?.url??'https://studio.invalid');
     })();
     ctx.waitUntil(maintenance);
@@ -628,7 +630,7 @@ export default {
     const url = new URL(request.url);
     if(env.HOMIE_CONCEPT==='1' && url.pathname==='/robots.txt')return new Response('User-agent: *\nDisallow: /\n',{headers:{'content-type':'text/plain','x-robots-tag':'noindex, nofollow'}});
     if(env.HOMIE_CONCEPT==='1' && url.pathname==='/.well-known/homie-studio.json')return json({ok:false,error:'concept-unlisted'},404,{'x-robots-tag':'noindex, nofollow'});
-    const dispatch=()=>import('./functions.mjs').then(m=>m.runFunctions(env,()=>catalogue(env,url.origin),url.origin));
+    const dispatch=()=>import('./background-queue.mjs').then(m=>m.enqueueChanges(env,url.origin));
     // Some routes reconcile shop state in waitUntil after returning their page.
     // Keep dispatch behind those writes too, preserving the runtime context's
     // methods and OAuth verification symbols through the proxy.
@@ -813,11 +815,12 @@ async function route(request, env, ctx) {
     return json({ studio: cat.studio, games: (cat.games ?? []).map(g => g.room?.host === 'server' && !hostedGame(g.id) ? { ...g, rulesError: RULES_WIRING_MESSAGE } : g), live: await liveCounts(env, cat.games ?? []) });
   }
   if (path === '/api/rooms') {
+    if(request.method!=='GET')return json({ok:false,error:'method'},405);
     const cat = await getCat();
-    const { rooms } = await roomsOf(env, cat.games ?? []);
-    // Short-lived and cacheable: the hub reads every studio's rooms at most every 45 s, and a room's count is a
-    // few seconds stale at worst. (The site's own pages ask with cache: 'no-store'.)
-    return json({ ok: true, playing: rooms.reduce((n, r) => n + r.players, 0), rooms }, 200, { 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=15' });
+    return (await import('./rooms-cache.mjs')).cachedRooms(request,env,ctx,cat,async()=>{
+      const {rooms}=await roomsOf(env,cat.games??[]);
+      return json({ok:true,playing:rooms.reduce((n,r)=>n+r.players,0),rooms},200,{'access-control-allow-origin':'*','cache-control':'public, max-age=15'});
+    });
   }
   if (path.startsWith('/media/')) {
     if (!env.MEDIA) return new Response('this studio keeps no media in R2 yet', { status: 404 });

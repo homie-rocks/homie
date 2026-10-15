@@ -2,7 +2,7 @@ import { pendingJobsSQL, definitiveRefusal, REPLAY_LIMIT_MS, recoveryAction } fr
 import { orderFact, recordOrderState, releaseClaim } from './purchase-core.mjs';
 import { resumeSettlement } from './settlement-journal.mjs';
 /** Durable provider recordings outlive responses. A verified chain transfer is payment. */
-import { stripeCall, refundPayment, modeOf } from './stripe.mjs';
+import { stripeCall, refundPayment, modeOf, STRIPE_VERSION } from './stripe.mjs';
 import { byId, resourceAvailable } from './purchase-store.mjs';
 export async function saveRecording(env, order, params, options) {
   const chain = params.payment_method_options?.crypto?.transaction_verification_options;
@@ -44,7 +44,7 @@ export async function recordingFailure(env, id, error) {
 
 /** Read existing objects first. Listing avoids the search index's delayed negative answers. */
 export async function readProviderPayment(env, order, job, payment = null) {
-  const options = { version: '2026-07-29.preview' };
+  const options = { version: STRIPE_VERSION };
   if (payment && !/^pi_[A-Za-z0-9]+$/.test(payment)) throw new Error('Supply an existing Stripe PaymentIntent id');
   if (job.payment || payment) {
     const pi = await stripeCall(env, 'GET', `/v1/payment_intents/${encodeURIComponent(job.payment ?? payment)}`, null, options);
@@ -87,18 +87,18 @@ export async function reconcileRecordings(env, orderId = null, dependencies = {}
       switch (recoveryAction(observation)) {
         case 'fail':
           if (pi?.status === 'requires_payment_method') {
-            pi = await stripeCall(env, 'POST', `/v1/payment_intents/${encodeURIComponent(pi.id)}/cancel`, {}, { idempotencyKey: `cancel-action-${pi.id}`, version: '2026-07-29.preview' });
+            pi = await stripeCall(env, 'POST', `/v1/payment_intents/${encodeURIComponent(pi.id)}/cancel`, {}, { idempotencyKey: `cancel-action-${pi.id}`, version: STRIPE_VERSION });
             if (pi.status !== 'canceled') throw new Error('The unpaid payment could not be canceled; the claim remains reserved');
           }
           await releaseUnpaid(env, order, job, pi); continue;
-        case 'replay': pi = await stripeCall(env, 'POST', '/v1/payment_intents', params, { ...options, version: '2026-07-29.preview' }); break;
+        case 'replay': pi = await stripeCall(env, 'POST', '/v1/payment_intents', params, { ...options, version: STRIPE_VERSION }); break;
         default:
           if (!pi) {
             if (deadline) throw new Error(`Paid transfer still needs recording: order ${order.id}; key ${options.idempotencyKey}`);
-            pi = await stripeCall(env, 'POST', '/v1/payment_intents', params, { ...options, version: '2026-07-29.preview' });
+            pi = await stripeCall(env, 'POST', '/v1/payment_intents', params, { ...options, version: STRIPE_VERSION });
           }
       }
-      if (['requires_action','requires_confirmation','requires_capture','requires_payment_method'].includes(pi.status) || orderId && dependencies.cancel === true && pi.status === 'processing') pi = await stripeCall(env, 'POST', `/v1/payment_intents/${encodeURIComponent(pi.id)}/cancel`, {}, { idempotencyKey: `cancel-action-${pi.id}`, version: '2026-07-29.preview' });
+      if (['requires_action','requires_confirmation','requires_capture','requires_payment_method'].includes(pi.status) || orderId && dependencies.cancel === true && pi.status === 'processing') pi = await stripeCall(env, 'POST', `/v1/payment_intents/${encodeURIComponent(pi.id)}/cancel`, {}, { idempotencyKey: `cancel-action-${pi.id}`, version: STRIPE_VERSION });
       await recordProviderResult(env, order, job.id, pi);
       if (['canceled','requires_payment_method'].includes(pi.status)) { await releaseUnpaid(env, order, job, pi); continue; }
       if (pi.status !== 'succeeded') {

@@ -836,7 +836,13 @@ async function hook(request, env, cat, shop, ready) {
   if (payload === null) return fail(413, 'too-large', 'The studio webhook byte limit was reached.');
   const v = await verifyWebhook(payload, request.headers.get('stripe-signature'), env.STRIPE_WEBHOOK_SECRET);
   if (!v.ok) return fail(v.why === 'no-secret' ? 503 : 400, v.why, 'not a webhook from this studio\'s Stripe');
-  const ev = v.event;
+  if(env.BACKGROUND)return (await import('./stripe-intake.mjs')).acceptStripeEvent(env,v.event,new URL(request.url).origin);
+  return reconcileShopEvent(request,env,shop,v.event);
+}
+
+/** Internal verified-event seam shared by direct legacy intake and the queue consumer. */
+export async function reconcileShopEvent(request,env,shop,ev) {
+  shop??=checkShop({}).shop;
   const obj = ev.data?.object ?? {};
   const needed = ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired', 'charge.refunded', 'refund.created', 'refund.updated', 'refund.failed', 'charge.dispute.created', 'charge.dispute.closed'];
   if (selling.enabled) {
@@ -955,7 +961,6 @@ async function hook(request, env, cat, shop, ready) {
     if (did === 'needs-keyed-recovery') return fail(503, did, 'This earlier multi-item checkout needs its original connection to recover tax per line. Reconnect it, then resend this event.');
     if (did === 'missing-item' || did === 'unknown-order') return fail(503, did, did === 'missing-item' ? 'Restore this order item in shop.json to grant it; the office can refund its payment.' : 'Payment order is not recorded yet; retry this event.');
     await env.DB.prepare('INSERT INTO shop_events (id, type, at) VALUES (?1, ?2, ?3) ON CONFLICT(id) DO NOTHING').bind(ev.id, ev.type, Date.now()).run();
-    if (Math.random() < 0.02) await env.DB.prepare('DELETE FROM shop_events WHERE at < ?1').bind(Date.now() - 60 * DAY).run();
     return json({ ok: true, did });
   } catch (error) {
     if(/(?:booking|resource) capacity unavailable/.test(error.message)&&obj.payment_link&&await reviewLinkPayment(env,obj,ev.livemode?'live':'test','The paid group exceeds remaining capacity. Staff will arrange a replacement or refund.'))return json({ok:true,did:'review'});

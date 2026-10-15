@@ -1,3 +1,4 @@
+export const METADATA_REVISION=Symbol('metadata revision');
 export const ORIGINAL_DB=Symbol('original database');
 export const MUTATIONS=Symbol('request mutations');
 export const databaseBinding=db=>db?.[ORIGINAL_DB]??db;
@@ -44,7 +45,7 @@ export function requestDatabase(DB, request, state={mutated:false}, binding=data
   };
   return {bind:(...args)=>prepare(sql,args),first:async column=>{writing(sql);if(!metadataQueries.has(sql)&&sql!==recordQuery)return original().first(column);const row=(await read()).results?.[0]??null;return column&&row?row[column]:row;},all:()=>{writing(sql);return read();},run:()=>{writing(sql);return original().run();},raw:(...args)=>{writing(sql);return original().raw(...args);},_original:original,_sql:sql};
  };
- const methods={[ORIGINAL_DB]:binding,get [MUTATIONS](){return state.mutated;},prepare,batch:statements=>{for(const s of statements)writing(s._sql??'UPDATE');return DB.batch(statements.map(s=>s._original?.()??s));},exec:(sql,...args)=>{writing(sql);return DB.exec(sql,...args);},withSession:(...args)=>requestDatabase(DB.withSession(...args),request,state,binding)};
+ const methods={[METADATA_REVISION]:stamp,[ORIGINAL_DB]:binding,get [MUTATIONS](){return state.mutated;},prepare,batch:statements=>{for(const s of statements)writing(s._sql??'UPDATE');return DB.batch(statements.map(s=>s._original?.()??s));},exec:(sql,...args)=>{writing(sql);return DB.exec(sql,...args);},withSession:(...args)=>requestDatabase(DB.withSession(...args),request,state,binding)};
  return new Proxy(methods,{get(target,key){if(key in target)return target[key];const value=DB[key];return typeof value==='function'?value.bind(DB):value;}});
 }
 
