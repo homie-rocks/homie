@@ -14,7 +14,11 @@ export function blocked(host, controls=[]) {
 }
 export default {
   async tail(events) {
-    for(const event of events)console.log(JSON.stringify({tenant:event.scriptName,event:'tenant-trace',outcome:event.outcome,logs:event.logs,exceptions:event.exceptions}));
+    // Provider scriptName is authority; never promote owner log fields into identity.
+    // Do not copy URLs, headers, console payloads or exceptions (may contain secrets).
+    for(const event of events)console.log(JSON.stringify({tenant:event.scriptName,event:'tenant-trace',outcome:event.outcome,
+      entrypoint:event.entrypoint??null,eventType:event.event?.type??(event.event?.request?'fetch':event.event?.scheduledTime?'scheduled':'other'),
+      logs:event.logs?.length??0,exceptions:event.exceptions?.length??0}));
   },
   async fetch(request,env) {
     if(typeof env.tenant!=='string'||!env.tenant||env.tenant.length>255)return new Response('Missing tenant',{status:403});

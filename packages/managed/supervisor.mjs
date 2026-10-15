@@ -3,10 +3,10 @@
  */
 const leases=new WeakMap();
 const TTL=1000;
-async function allowed(control,force=false){
+async function allowed(control,force=false,strong=false){
  const start=Date.now(),cached=leases.get(control);
  if(!force&&cached&&start<cached.expires)return !cached.stopped;
- const state=await control.status();
+ const state=await control.status(undefined,strong);
  if(Date.now()>=start+TTL)throw Error('Stop lease expired in transit');
  leases.set(control,{...state,expires:start+TTL});return !state.stopped;
 }
@@ -18,12 +18,13 @@ export function supervise(Owner,{tenant,binding,className}){
    this.#stopped=true;clearInterval(this.#timer);
    for(const ws of this.#ctx.getWebSockets())try{ws.close(1012,'Tenant stopped');}catch{}
    await this.#ctx.storage.deleteAlarm();
+   await this.#ctx.storage.sync();
    console.log(JSON.stringify({tenant,event:'supervisor-stop',className,object:this.#ctx.id.toString()}));
    // Resets timers, ordinary sockets, and running callbacks; storage is preserved.
    this.#ctx.abort('Homie tenant stopped',{retryAlarm:false});
   }
-  async #check(force=false){
-   let ok=false;try{ok=!this.#stopped&&await allowed(this.#env.HOMIE_STOP,force);}catch{}
+  async #check(force=false,strong=false){
+   let ok=false;try{ok=!this.#stopped&&await allowed(this.#env.HOMIE_STOP,force,strong);}catch{}
    if(!ok){await this.#stop();throw Error('Tenant stopped');}
   }
   #watch(){
@@ -39,7 +40,17 @@ export function supervise(Owner,{tenant,binding,className}){
    }
    await this.#check();this.#active++;this.#watch();
    try{
-    this.#owner??=new Owner(this.#ctx,this.#env);
+    if(!this.#owner){
+     const storage=new Proxy(this.#ctx.storage,{get:(target,key)=>{
+      if(key==='setAlarm')return (...args)=>{if(this.#stopped)throw Error('Tenant stopped');return target.setAlarm(...args);};
+      const value=target[key];return typeof value==='function'?value.bind(target):value;
+     }});
+     const state=new Proxy(this.#ctx,{get:(target,key)=>{
+      if(key==='storage')return storage;
+      const value=target[key];return typeof value==='function'?value.bind(target):value;
+     }});
+     this.#owner=new Owner(state,this.#env);
+    }
     const result=await this.#owner[method]?.(...args);
     await this.#check();
     if(result?.webSocket&&!this.#ctx.getWebSockets().length)this.#ordinary=true;
@@ -53,7 +64,7 @@ export function supervise(Owner,{tenant,binding,className}){
   }
   async fetch(request){
    if(new URL(request.url).pathname==='/__homie_supervisor/notify'){
-    await this.#check(true);return new Response(null,{status:204});
+    await this.#check(true,true);return new Response(null,{status:204});
    }
    return this.#call('fetch',[request]);
   }

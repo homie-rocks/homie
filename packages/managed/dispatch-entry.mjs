@@ -1,6 +1,6 @@
 import {DurableObject,WorkerEntrypoint} from 'cloudflare:workers';
 import dispatch from './dispatch.mjs';
-import {invalidateRoutes} from './route-cache.mjs';
+import {invalidateRoutes,routeSnapshot} from './route-cache.mjs';
 import {Registry as Core} from './registry.mjs';
 export class Registry extends DurableObject {
  constructor(ctx,env){super(ctx,env);this.core=new Core(ctx,env)}
@@ -19,10 +19,12 @@ export class Registry extends DurableObject {
 }
 /** Binding identity is set by Homie's deployer, never a request header/body. */
 export class StopControl extends WorkerEntrypoint {
- status(object){
+ async status(object,strong=false){
   const tenant=this.ctx.props?.tenant;
   if(typeof tenant!=='string'||!/^hm-test-[a-z0-9-]+$/.test(tenant))throw Error('Unauthorized');
-  return this.env.REGISTRY.getByName('routes').status(tenant,object);
+  if(object||strong)return this.env.REGISTRY.getByName('routes').status(tenant,object);
+  const snapshot=await routeSnapshot(this.env);
+  return {stopped:!snapshot.routes.some(r=>r.tenant===tenant&&!r.disabled),version:snapshot.version};
  }
 }
 export default {

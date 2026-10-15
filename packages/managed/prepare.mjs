@@ -95,6 +95,7 @@ export default {
     durable_objects:{bindings:ownBindings},
     ...(managed&&classes.length?{services:[{binding:'HOMIE_STOP',service:'hm-test-dispatch',entrypoint:'StopControl',props:{tenant:name}}]}:{}),
     migrations,
+    limits:{cpu_ms:1000},
     d1_databases:[{binding:'DB',database_name:name+'-db',database_id:databaseId,migrations_dir:migrationsDir}],
     vars:{STUDIO_NAME:source.vars?.STUDIO_NAME ?? name, HOMIE_CONCEPT:'1',
       STUDIO_FUNCTION_CRONS:source.vars?.STUDIO_FUNCTION_CRONS ?? '[]',
