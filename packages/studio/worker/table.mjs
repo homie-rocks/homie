@@ -106,6 +106,9 @@ export class Table {
         }
         return this.connect(request, transport);
       });
+      // The last socket can close while an office write is being retried. An
+      // alarm must restore that room even when there is no transport to attach.
+      if(!this.room&&this.sessionSnapshot&&this.game&&this.code)this.roomFor(this.game,this.code,this.sessionSnapshot.fields.get('seatCap')??8);
       this.restoringSockets=false;
       if(this.sessionSnapshot)this.say({ev:"sessions-restored",clients:this.room?.clients.size??0});
       this.sessionSnapshot=null;
@@ -1191,7 +1194,7 @@ export class Table {
       if(Number.isFinite(until)&&until>now){const alarm=await this.ctx.storage.getAlarm();if(alarm==null||alarm>until)await this.ctx.storage.setAlarm(until);}
       return;
     }
-    const keys=['lastReport','lastPeople','lastAgents','lastAi','lastReportAt','openCounted','launchReadFor'];
+    const keys=['game','code','lastReport','lastPeople','lastAgents','lastAi','lastReportAt','openCounted','launchReadFor'];
     this.sessionStore.write(this.room,Object.fromEntries(keys.map(key=>[key,this[key]])));
     // Edge-answered heartbeats need only a minute's liveness sweep. A legacy
     // client still keeps its original hello/heartbeat deadline.

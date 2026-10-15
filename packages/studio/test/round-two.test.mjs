@@ -314,3 +314,13 @@ test('idle controls checkpoint changes and retain failed office writes for resto
  await table.sleepRoom();assert.equal(cleared,0);assert.equal(snapshots.at(-1).dirty,true);
  await table.sleepRoom();assert.equal(cleared,1);
 });
+
+test('an alarm can restore a pending room snapshot after its final socket closes',async()=>{
+ const {Table}=await import('../worker/table.mjs');let ready,restored,started=0;
+ const rows=[{key:'version',value:'2'},{key:'table',value:encodeSession({game:'bench',code:'idle'})},{key:'room:seatCap',value:encodeSession(8)}];
+ const storage={getAlarm:async()=>null,get:async()=>null,list:async()=>new Map(),sql:{exec:query=>({toArray:()=>query==='SELECT key,value FROM room_sessions'?rows:[]})}};
+ const ctx={storage,getWebSockets:()=>[],blockConcurrencyWhile:fn=>ready=fn()};
+ const table=new Table(ctx,{});
+ table.roomFor=(...args)=>{restored=args;table.room={clients:new Map()};};table.start=()=>started++;table.say=()=>{};
+ await ready;assert.deepEqual(restored,['bench','idle',8]);assert.equal(started,1);
+});
