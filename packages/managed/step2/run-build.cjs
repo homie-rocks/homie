@@ -1,7 +1,7 @@
 // Runs ONLY inside the remote VM. This file is platform-owned, never read from the repo.
 const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),crypto=require('node:crypto'),zlib=require('node:zlib');
 const job=JSON.parse(fs.readFileSync(0,'utf8'));
-function run(bin,args,env={}){const r=cp.spawnSync(bin,args,{cwd:'/work',env:{PATH:process.env.PATH,HOME:'/root',CI:'true',...env},encoding:'utf8',maxBuffer:1024*1024,timeout:240000});if(r.status!==0)throw new Error(bin+' failed: '+(r.stderr||r.stdout||r.error).toString().slice(-4000));return r.stdout;}
+function run(bin,args,env={}){const r=cp.spawnSync(bin,args,{cwd:'/work',env:{PATH:process.env.PATH,HOME:'/root',CI:'true',...env},encoding:'utf8',maxBuffer:1024*1024,timeout:240000});if(r.status!==0)throw new Error(bin+' failed: '+String(r.stderr+'\n'+r.stdout+'\n'+(r.error??'')).slice(-8000));return r.stdout;}
 if(process.version!==job.node)throw new Error('Pinned runtime mismatch');
 fs.mkdirSync('/work');
 run('apt-get',['update','-qq']);run('apt-get',['install','-y','-qq','git','ca-certificates']);
@@ -20,8 +20,24 @@ run('npm',['run','build']);
 if(job.mode==='check'){
  if(job.previewURL!=='https://hm-s2-dispatch.ryan-d2f.workers.dev')throw new Error('Only test preview checks allowed');
  run('apt-get',['install','-y','-qq','chromium']);
- const result=run('npm',['run','check','--','--url',job.previewURL],{CHROME_PATH:'/usr/bin/chromium'});
- process.stdout.write(zlib.gzipSync(JSON.stringify({commit:job.commit,studio:true,result})).toString('base64'));process.exit(0);
+ // The toolkit's authenticated staff checks deliberately require its local test
+ // session. Run that documented dev/check pair inside this disposable VM.
+ const config=JSON.parse(fs.readFileSync('/work/studio.json'));
+ config.cloudflare={worker:'hm-s2-local-check',d1:'hm-s2-local-check-db',d1Id:'00000000-0000-0000-0000-000000000000',domain:null};
+ fs.writeFileSync('/work/studio.json',JSON.stringify(config));
+ const log=fs.openSync('/work/check-dev.log','w');
+ const dev=cp.spawn('npm',['run','dev','--','--port','8787','--no-local-ai'],{cwd:'/work',env:{PATH:process.env.PATH,HOME:'/root',CI:'true',WRANGLER_SEND_METRICS:'false'},stdio:['ignore',log,log]});
+ try {
+  let ready=false;
+  for(let n=0;n<60;n++){
+   const probe=cp.spawnSync('node',['-e',"fetch('http://127.0.0.1:8787/api/games',{signal:AbortSignal.timeout(2000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"],{timeout:3000,stdio:'ignore'});
+   if(probe.status===0){ready=true;break;}Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,1000);
+  }
+  if(!ready)throw new Error('Local VM preview did not start: '+fs.readFileSync('/work/check-dev.log','utf8').slice(-5000));
+  const result=run('npm',['run','check','--','--url','http://127.0.0.1:8787'],{CHROME_PATH:'/usr/bin/chromium'});
+  process.stdout.write(zlib.gzipSync(JSON.stringify({commit:job.commit,studio:true,location:'isolated-cloudflare-vm-local-preview',result})).toString('base64'));
+ }finally{dev.kill('SIGTERM');}
+ process.exit(0);
 }
 
 const files={};let bytes=0;

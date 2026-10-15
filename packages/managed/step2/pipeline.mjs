@@ -48,7 +48,7 @@ export class Pipeline extends WorkflowEntrypoint {
     await provider(this.env)(`d1/database/${tenant.preview.databaseId}/query`,'POST',{sql:'INSERT OR IGNORE INTO app_records(app,collection,id,value,version,updated_at) VALUES(?1,?2,?3,?4,1,0)',params:['gathering','shifts',slot,JSON.stringify({label:'Managed synthetic booking',capacity:10})]});
     return synthetic(tenant.preview.url,slot);
    });
-   const release={tenant:tenant.id,commit,toolkit:tenant.toolkit,node:tenant.node,lockDigest:tenant.lockDigest,compatibilityDate:tenant.compatibilityDate,artifactDigest:sealed.hash,migrations:sealed.migrations,stage:'verified',checks:{studio:studio.studio,synthetic:flow.synthetic,mcp:flow.mcp},previewVersion:preview.uploaded.deployment_id,previewBindings:preview.bindings,schemaEpoch:tenant.schemaEpoch};
+   const release={tenant:tenant.id,commit,toolkit:tenant.toolkit,node:tenant.node,lockDigest:tenant.lockDigest,compatibilityDate:tenant.compatibilityDate,artifactDigest:sealed.hash,migrations:sealed.migrations,stage:'verified',checks:{studio:studio.studio,synthetic:flow.synthetic,mcp:flow.mcp},previewDeploymentId:preview.uploaded.deployment_id,previewBindings:preview.bindings,schemaEpoch:tenant.schemaEpoch};
    await step.do('record verified release',()=>ledger.verified(release));return release;
   }catch(error){await step.do('record failure',()=>ledger.failed(commit,error.message));throw error;}
  }
@@ -70,7 +70,7 @@ export class Releases extends DurableObject {
    // releases must have the exact operator-approved migration manifest.
    if(!current&&!await this.ctx.storage.get('productionMigrated')){await migrateFresh(api,tenant,'production',artifact);await this.ctx.storage.put('productionMigrated',true);}
    const receipt=await upload(api,tenant,'production',artifact);
-   const manifest={...release,stage:'live',bindings:receipt.bindings,bindingManifest:receipt.manifest,workerVersionId:receipt.uploaded.deployment_id,at:Date.now(),previous:current?.commit??null};
+   const manifest={...release,stage:'live',bindings:receipt.bindings,bindingManifest:receipt.manifest,workerVersionId:null,providerDeploymentId:receipt.uploaded.deployment_id,at:Date.now(),previous:current?.commit??null};
    await this.ctx.storage.put('release:'+commit,manifest);await this.ctx.storage.put('production',manifest);await this.ctx.storage.delete('mutation');return manifest;
   }catch(error){await this.ctx.storage.put('incident',{action:'promotion',error:error.message,at:Date.now()});throw error;}
  }
@@ -81,7 +81,7 @@ export class Releases extends DurableObject {
   try{
    const receipt=await upload(provider(this.env),tenant,'production',await this.artifact(target.artifactDigest));
    if(JSON.stringify(receipt.bindings)!==JSON.stringify(target.bindings))throw new Error('Rollback identity changed');
-   const result={...target,workerVersionId:receipt.uploaded.deployment_id,rollbackOf:current.commit,restoredFromVersionId:target.workerVersionId,rollbackMode:'reupload-sealed-bundle',...policy,at:Date.now()};
+   const result={...target,workerVersionId:null,providerDeploymentId:receipt.uploaded.deployment_id,rollbackOf:current.commit,restoredFromDeploymentId:target.providerDeploymentId,rollbackMode:'reupload-sealed-bundle',...policy,at:Date.now()};
    await this.ctx.storage.put('production',result);await this.ctx.storage.put('rollback:'+Date.now(),result);await this.ctx.storage.delete('mutation');return result;
   }catch(error){await this.ctx.storage.put('incident',{action:'rollback',error:error.message,at:Date.now()});throw error;}
  }

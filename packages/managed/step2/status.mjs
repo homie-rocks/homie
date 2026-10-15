@@ -1,0 +1,3 @@
+import {readFileSync,writeFileSync} from 'node:fs';import {local,state,api} from './operator.mjs';
+const response=await fetch('https://hm-s2-pipeline.ryan-d2f.workers.dev/status',{headers:{authorization:'Bearer '+readFileSync(local+'operator-key','utf8')}});const status=await response.json();writeFileSync(local+'pipeline-status.json',JSON.stringify(status,null,2));console.log(JSON.stringify(status,null,2));
+if(process.argv.includes('--workflow'))for(const push of state.pushes??[]){const id=state.tenant.id+'-'+push.commit;console.log(JSON.stringify(await api('workflows/hm-s2-release/instances/'+id),null,2));}
