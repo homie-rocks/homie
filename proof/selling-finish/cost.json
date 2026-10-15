@@ -1,0 +1,22 @@
+{
+  "fixture": "8 fixed-price items plus menu, empty account, identical public Stripe fixture; UTF-8 JSON arguments + results, no protocol envelopes, no live calls",
+  "baseline": "b44eb52e",
+  "before": {
+    "stripeCalls": 264,
+    "stripeBytes": 298099,
+    "plannerCalls": 265,
+    "plannerBytes": 1782371,
+    "totalCalls": 529,
+    "totalBytes": 2080470,
+    "writes": 33
+  },
+  "after": {
+    "stripeCalls": 19,
+    "stripeBytes": 25956,
+    "plannerCalls": 5,
+    "plannerBytes": 84873,
+    "totalCalls": 24,
+    "totalBytes": 110829,
+    "writes": 17
+  }
+}

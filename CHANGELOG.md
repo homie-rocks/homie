@@ -17,6 +17,15 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## Unreleased
+
+### Fixed
+
+- Stripe official-plugin setup batches independent operations, retains write responses, scopes product/price searches, expands newly created links, and creates default Prices with Products. Verification saves compact public configuration; deploy installs it and checkout names the remaining private webhook step.
+- The guided webhook flow explains the one separate Stripe CLI approval and keeps endpoint secrets on the private installer-to-Wrangler path. No API key is requested and Homie handles no payments.
+- Authenticated studio MCP exposes run history, errors and next due to owners and studio-wide staff. Record calls default to the caller's highest declared role and report the selected role.
+- Deploy distinguishes claimed from listed. Needs screenshots outside the studio are copied inside before saving Codex evidence.
+
 ## [0.51.6] - 2026-10-14
 
 **Plugin 0.51.6**

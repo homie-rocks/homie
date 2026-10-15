@@ -393,6 +393,7 @@ test('a studio beneath a zone\'s wildcard Worker route: the deploy says which ex
   const fixed = await deploy(dir, { homie: 'http://127.0.0.1:9', fetchFn });
   assert.equal(fixed.ok, true, JSON.stringify(fixed));
   assert.equal(fixed.claim, true);
+  assert.equal(fixed.listing,'claimed, not listed');
   assert.equal(fixed.notes, undefined);
   assert.deepEqual(readConfig(dir).routes.map((r) => r.pattern), ['play.example.com', 'play.example.com/*']);
   // With the exact route there and the domain still answering as something else, the advice is not "add a route".

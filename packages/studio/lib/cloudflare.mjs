@@ -435,7 +435,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   if (url) {
     const read = await readLiveSite(url, fetchFn ? { fetchFn } : {});
     claim = read.claim;
-    if (claim) step('the site claimed itself in the directory');
+    if (claim) step(listedHere(root,{site:url})?'the site is listed':'the site is claimed, not listed');
     else if (read.state === 'other' && !isWorkersDev(url)) {
       // The studio's own domain answered as something else: say which route is needed (lib/routes.mjs). The deploy
       // itself went through; the zone's other routes are never touched.
@@ -486,7 +486,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
     ...(reread ? { reread } : {}),
     songs: b.songs.map((slug) => ({ slug, page: url ? `${url}/music/${slug}/` : null })),
     videos: b.videos.map((slug) => ({ slug, page: url ? `${url}/videos/${slug}/` : null })),
-    claim: Boolean(claim), directory,
+    claim: Boolean(claim), listing: listedHere(root,{site:url}) ? 'listed' : claim ? 'claimed, not listed' : 'not listed', directory,
   };
 }
 
@@ -638,7 +638,7 @@ export async function ciDeploy(root, { log = () => {} } = {}) {
   let url = null;
   try { url = siteUrl(root) ?? workersDev; } catch { url = workersDev; }
   const claim = url ? await warmClaim(url) : null;
-  step(claim ? 'the site claimed itself in the directory' : 'no directory claim yet (the site claims itself when the directory first reads it)');
+  step(claim ? (listedHere(root,{site:url})?'the site is listed':'the site is claimed, not listed') : 'no directory claim yet (the site claims itself when the directory first reads it)');
   let games = [];
   try { games = JSON.parse(readFileSync(join(root, 'site', 'dist', 'games.json'), 'utf8')).games.map((g) => g.id); } catch { games = []; }
   const hashes = builtGames(root, games);
@@ -648,7 +648,7 @@ export async function ciDeploy(root, { log = () => {} } = {}) {
     commit: process.env.WORKERS_CI_COMMIT_SHA ?? null, branch: process.env.WORKERS_CI_BRANCH ?? null,
     // A CI checkout has no earlier deploy to compare with: each game's content hash only (lib/deploy-state.mjs).
     games: games.map((id) => ({ id, page: url ? `${url}/${id}/` : null, ...experienceAddresses(root, id, url), hash: hashes[id]?.hash ?? null })), songs: [], videos: [],
-    claim: Boolean(claim),
+    claim: Boolean(claim), listing: listedHere(root,{site:url}) ? 'listed' : claim ? 'claimed, not listed' : 'not listed',
   };
 }
 

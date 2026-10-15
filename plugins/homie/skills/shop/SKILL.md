@@ -42,20 +42,30 @@ calling it; tool argument shapes can change. See https://docs.stripe.com/mcp.
    read `/v1/account` to record its account ID. Live mode only after the owner requests it.
 2. Call Homie's `stripe_shop_plan` with `account`, `mode: "test"`, `slots` and
    `observations: []`. CLI equivalent: `homie-studio shop plan --have plan-input.json`.
-   That JSON file contains the same fields. A returned `next` is the exact operation:
-   method, API path, parameters, API version and (for creates) idempotency key. Updates set desired fields; read before retrying. Metadata
-   scopes objects to this studio and origin; prices and links have content revisions.
-3. Perform each `next` through Stripe's official MCP. For GET, append
-   `{ "path": "…", "params": {…}, "body": <Stripe response> }` to `observations`
-   and plan again. Follow every pagination request. After a write, discard observations
-   and read fresh. Replanning resolves real Stripe IDs; never invent IDs or substitute
-   a different price. Reuse the supplied idempotency key where the tool supports it;
-   otherwise read before retrying and match the stable product ID/revision metadata.
-4. When no writes remain, use fresh reads with `stripe_shop_plan` `verify: true`
-   (CLI `homie-studio shop verify --have plan-input.json`). It checks the catalog,
-   actual link fields and line items, menus, slot limits and portal settings against
-   shop.json and the slot manifest. A mismatch blocks verification. It saves only public
-   configuration to `.studio/stripe-mcp.json`; local test configuration goes to `.dev.vars`.
+   That JSON file contains the same fields. `operations` contains every independent
+   operation currently ready, with method, path, parameters and create idempotency key.
+   Execute the batch through Stripe's official plugin, then replan for dependent work.
+   `next` remains the first operation for older clients.
+3. Append `{ "method": "POST", "path": "…", "params": {…}, "body": <Stripe response> }`
+   for **writes as well as reads**. Keep this setup's observations across batches.
+   Product creation includes its default Price; link creation expands line items.
+   Product and Price Search use studio/origin metadata. Existing links are fetched by
+   IDs from the verified configuration; Stripe has no Payment Link metadata search.
+   Keep `.studio/stripe-mcp.json` when moving the studio to another computer. Without
+   it, repeat creates use their idempotency keys; outside Stripe's idempotency retention
+   window, recover the studio's existing link IDs before setup to avoid duplicates.
+   Follow search `next_page` cursors. Search is eventually consistent: write responses
+   are the immediate evidence. On an uncertain write, retry its exact idempotency key;
+   never discard successful responses or invent IDs. Start a new read set when checking
+   later external edits, changing accounts, or changing mode.
+4. Call `stripe_shop_plan` with `verify: true` using those observations (CLI
+   `homie-studio shop verify --have plan-input.json`). Verification checks real fields,
+   line items, menus, slot limits and portal settings. It saves compact public Worker
+   configuration and provenance to `.studio/stripe-mcp.json`, never API response history.
+   Deploy installs those links. Checkout then reports only `webhook-secret` missing;
+   it cannot open until signed payment events can confirm orders. Changing shop.json,
+   the slot manifest or origin requires verification again. Local test configuration
+   goes to `.dev.vars`.
 5. For a deployed HTTPS studio, run `stripe_webhook` (CLI `homie-studio shop webhook`).
    Follow `studio_job`. This uses Stripe CLI only for private webhook installation,
    checks the same account as the MCP, and installs the signing secret and verified
@@ -63,7 +73,7 @@ calling it; tool argument shapes can change. See https://docs.stripe.com/mcp.
    studio profile is not already connected. MCP approval cannot be reused or exported.
    Cloudflare authorization and an existing deployment are prerequisites.
 6. After installation, perform the returned `retire` operations through Stripe MCP to
-   archive replaced catalog objects, then verify fresh reads again. Test a sandbox
+   archive replaced catalog objects. Use fresh scoped reads for later drift checks. Test a sandbox
    purchase and its signed event, order grant, booking capacity or recurring invoice;
    a browser return is never proof. Stripe CLI `trigger` can send a test event, and
    `events resend <event> --webhook-endpoint <endpoint>` retries a delivery. Check the
@@ -71,6 +81,19 @@ calling it; tool argument shapes can change. See https://docs.stripe.com/mcp.
    a page for an automated proof; use Stripe's documented test PaymentMethods/fixtures.
 
 Never create a webhook through model-visible Stripe MCP: its response exposes the signing secret.
+
+**Why the separate approval (checked 2026-10-14).** Stripe's
+[event destination API](https://docs.stripe.com/api/v2/core/event-destinations/create)
+also returns its signing secret only in the private create response when explicitly
+included. Thin events still require signature verification and authenticated retrieval
+of event details; they do not supply a secret handoff to Wrangler. The
+[official MCP](https://docs.stripe.com/mcp) documents no credential or secret transfer
+to a studio Worker. Therefore the AI starts `stripe_webhook`, the owner clicks
+Approve once in Stripe's CLI browser page if needed, and the tool completes endpoint
+creation and Wrangler secret installation privately. MCP approval and CLI approval
+are separate. No API key is requested, no secret enters chat, and Homie is never in
+the money path. A connected studio CLI profile needs no further approval.
+
 
 The owner never handles an API key or signing secret. No Homie backend handles payments.
 The Worker needs only public link configuration and the signing secret; buyers pay
