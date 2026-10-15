@@ -96,6 +96,12 @@ export default {
   try{
    if(path==='/status'&&request.method==='GET')return Response.json(await ledger.status());
    if(request.method!=='POST')return new Response('Not found',{status:404});
+   if(path==='/cleanup-artifacts'){
+    if(env.REGISTRY.tenants.some(t=>!t.id.startsWith('hm-s2-')))throw new Error('Test registry required');
+    let cursor,deleted=0;
+    do {const page=await env.ARTIFACTS.list({cursor});if(page.objects.length){await env.ARTIFACTS.delete(page.objects.map(o=>o.key));deleted+=page.objects.length;}cursor=page.truncated?page.cursor:undefined;}while(cursor);
+    const after=await env.ARTIFACTS.list();if(after.objects.length)throw new Error('Artifacts remain');return Response.json({deleted,empty:true});
+   }
    const body=await request.json();
    if(path==='/promote')return Response.json(await ledger.promote(body.commit,body.expected,'Ryan Campbell'));
    if(path==='/rollback')return Response.json(await ledger.rollback(body.commit,body.expected));
