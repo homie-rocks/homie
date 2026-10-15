@@ -1,3 +1,4 @@
+import {lobbyStore} from './lobby-store.mjs';
 import { errorLine, versionOf } from './room.mjs';
 import { ROOM_ID } from './pages.mjs';
 import { SERVER_ID, pooledRoom, roomCode, roomServer } from './servers.mjs';
@@ -16,6 +17,7 @@ export class Lobby {
   constructor(ctx, env) {
     this.ctx = ctx;
     this.env = env;
+    this.store = lobbyStore(ctx.storage);
     this.rooms = new Map();
     /** Each pool's next room number: { public: n, <server>: n } (a store from before servers is public's). */
     this.next = { public: 1 };
@@ -26,7 +28,7 @@ export class Lobby {
     this.seen = new Map();
     this.closed = new Map();
     ctx.blockConcurrencyWhile(async () => {
-      const saved = await ctx.storage.get('lobby');
+      const saved = await this.store.load();
       if (saved) {
         this.current = saved.current ?? null;
         this.next = typeof saved.next === 'number' ? { public: saved.next } : saved.next && typeof saved.next === 'object' ? { public: 1, ...saved.next } : { public: 1 };
@@ -56,7 +58,7 @@ export class Lobby {
     if (list.length) this.ctx.waitUntil(this.env.DB.batch(list).catch(() => {}));
   }
 
-  save() { this.ctx.storage.put('lobby', { current: this.current ?? null, next: this.next, rooms: [...this.rooms.values()].map(({ name, players, agents, ai, server, at, ver, host }) => ({ name, players, agents, ai, server, at, ...(host ? { host } : {}), ...(ver ? { ver } : {}) })), closed: [...this.closed] }).catch(() => {}); }
+  save() { const pending=this.store.save( { current: this.current ?? null, next: this.next, rooms: [...this.rooms.values()].map(({ name, players, agents, ai, server, at, ver, host }) => ({ name, players, agents, ai, server, at, ...(host ? { host } : {}), ...(ver ? { ver } : {}) })), closed: [...this.closed] }); if(pending)this.ctx.waitUntil(pending); }
 
   prune(now) {
     for (const [name, r] of this.rooms) {

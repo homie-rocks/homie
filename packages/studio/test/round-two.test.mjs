@@ -170,3 +170,16 @@ test('runtime index upgrade preserves 0.54.0 rows and uses indexed expiry and pr
   assert.match(plan,/SEARCH.*USING INDEX/);assert.doesNotMatch(plan,/SCAN mcp_kv/);
  }
 });
+
+test('Lobby imports the 0.54.0 snapshot once and writes only changed room rows',async t=>{
+ const {DatabaseSync}=await import('node:sqlite');const sql=new DatabaseSync(':memory:');t.after(()=>sql.close());
+ const {lobbyStore}=await import('../worker/lobby-store.mjs');
+ const old={current:{host:'server',ver:'v1'},next:{public:3},closed:[['pub-9',999]],rooms:[{name:'pub-1',players:2},{name:'pub-2',players:3}]};
+ let legacy=structuredClone(old),writes=[];
+ const storage={sql:{exec(q,...args){if(q.startsWith('INSERT'))writes.push(args);const s=sql.prepare(q);return {toArray:()=>s.all(...args),...(/^SELECT/.test(q)?{}:s.run(...args))};}},transactionSync(fn){sql.exec('BEGIN');try{const r=fn();sql.exec('COMMIT');return r;}catch(e){sql.exec('ROLLBACK');throw e;}},get:async()=>legacy,delete:async()=>{legacy=undefined;}};
+ const store=lobbyStore(storage);assert.deepEqual(await store.load(),old);assert.equal(legacy,undefined);
+ writes=[];store.save({...old,rooms:[old.rooms[0],{name:'pub-2',players:4}]});
+ assert.equal(writes.length,1);assert.equal(writes[0][0],'pub-2');
+ legacy={rooms:[]};const reopened=await lobbyStore(storage).load();
+ assert.equal(reopened.rooms.length,2);assert.equal(reopened.rooms[1].players,4);assert.deepEqual(reopened.next,old.next);
+});
