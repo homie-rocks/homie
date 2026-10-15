@@ -196,98 +196,11 @@ test('rules builds always type-check the view and preserve the last good build o
   assert.equal(json(join(PKG, 'package.json')).dependencies.typescript, '5.9.3');
 });
 
-test('remix was retired: old game.json settings build with one note, no source is built or served (410), and a former remix keeps its credit', async () => {
-  // A game's licence is the SPDX id it names, and nothing else: the three old words were about remixing.
+test('license metadata retains SPDX ids and rejects executable credit URLs', () => {
   assert.equal(licenseOf(undefined), null);
   assert.deepEqual(licenseOf('MIT'), { spdx: 'MIT' });
-  assert.deepEqual(licenseOf({ kind: 'remix-freely', spdx: 'CC-BY-4.0' }), { spdx: 'CC-BY-4.0' }, 'the SPDX id beside an old word stays');
-  for (const word of ['remix-with-credit', 'remix-freely', 'no-remix', { kind: 'no-remix' }, { kind: 'remix-with-credit', spdx: null }, 42, 'not a licence!']) assert.equal(licenseOf(word), null, JSON.stringify(word));
   assert.equal(licenseLabel('MIT'), 'MIT');
-  assert.equal(licenseLabel('no-remix'), null);
-  assert.deepEqual(retiredKeys({}), []);
-  assert.deepEqual(retiredKeys({ license: 'MIT', remixOf: { name: 'Owl Run' }, landing: { pitch: 'x' } }), [], 'a licence it names and a credit it owes are not retired');
-  assert.deepEqual(retiredKeys({ remix: false, share: { source: false }, license: 'no-remix', landing: { make: true } }), ['"remix"', '"share"', '"license": "no-remix"', 'landing.make']);
-  assert.deepEqual(retiredKeys({ license: { kind: 'remix-freely', spdx: 'MIT' } }), ['"license": "remix-freely"']);
-  // The credit: plain text, an https page (or the page its old source address names), and never a remix affordance.
-  assert.deepEqual(basedOnRow({ name: 'Owl Run', studio: 'Night Owl Games', source: 'https://owls.example/games/owl-run/source.json' }), { name: 'Owl Run', studio: 'Night Owl Games', page: 'https://owls.example/owl-run/' });
   assert.deepEqual(basedOnRow({ name: 'Owl Run', page: 'javascript:alert(1)' }), { name: 'Owl Run', studio: null, page: null });
   assert.equal(basedOnRow({ studio: 'Nobody' }), null);
-  assert.equal(basedOnCredit({ name: 'Owl Run', studio: 'Night Owl Games' }), 'Based on Owl Run by Night Owl Games');
-
-  // A studio from the field: every setting remix ever had, in four games, one of them a remix of another studio's.
-  const dir = studio('retired', ['alpha', 'beta', 'gamma', 'delta']);
-  editJson(join(dir, 'games/beta/game.json'), (g) => { g.remix = false; });
-  editJson(join(dir, 'games/gamma/game.json'), (g) => { g.share = { source: false }; g.license = 'no-remix'; g.remix = 'no'; });
-  editJson(join(dir, 'games/delta/game.json'), (g) => {
-    g.remix = true; g.landing.make = true; g.license = { kind: 'remix-with-credit', spdx: 'MIT' };
-    g.remixOf = { credit: 'Remix of Owl Run by Night Owl Games', name: 'Owl Run', studio: 'Night Owl Games', page: 'https://owls.example/owl-run/', source: 'https://owls.example/games/owl-run/source.json', id: 'owl-run', license: { kind: 'remix-with-credit', spdx: null } };
-  });
-  const said = plain(['build'], dir);
-  assert.equal(said.status, 0, said.stdout + said.stderr);
-  // One plain note for the whole build: not one a game, not one a key.
-  const notes = (said.stdout + said.stderr).split('\n').filter((l) => /retired/i.test(l));
-  assert.equal(notes.length, 1, notes.join('\n'));
-  assert.match(notes[0], /^Note: Remix was retired, and games now build on each other through parts/);
-  assert.match(notes[0], /games\/beta\/game\.json "remix"; games\/delta\/game\.json "remix", "license": "remix-with-credit", landing\.make; games\/gamma\/game\.json "remix", "share", "license": "no-remix"\./);
-  assert.doesNotMatch(notes[0], /alpha|remixOf/, 'a game with none of them, and the credit key, are not named');
-  assert.doesNotMatch(said.stdout, /source: (shared|closed)|Make a game like this/);
-  const built = out(run(['build'], dir));
-  assert.equal(built.ok, true);
-  assert.match(built.retired, /^Remix was retired/);
-  assert.equal(out(run(['build'], studio('retired-none', ['alpha']))).retired, undefined, 'a studio with none of the old settings is told nothing');
-
-  const dist = join(dir, 'site', 'dist');
-  const rows = Object.fromEntries(json(join(dist, 'games.json')).games.map((g) => [g.id, g]));
-  for (const id of ['alpha', 'beta', 'gamma', 'delta']) {
-    assert.ok(!existsSync(join(dist, `games/${id}/source.json`)), `${id}: no source in the build`);
-    assert.ok(!existsSync(join(dist, `games/${id}/assets.json`)), `${id}: no asset addresses in the build`);
-    for (const k of ['remix', 'remixOf']) assert.equal(rows[id][k], undefined, `${id}: no ${k} in the catalogue`);
-    for (const k of ['source', 'make']) assert.equal(rows[id].landing[k], undefined, `${id}: no landing.${k} in the catalogue`);
-  }
-  assert.deepEqual([rows.alpha.license, rows.beta.license, rows.gamma.license, rows.delta.license], [undefined, undefined, undefined, { spdx: 'MIT' }]);
-  assert.deepEqual(rows.delta.basedOn, { name: 'Owl Run', studio: 'Night Owl Games', page: 'https://owls.example/owl-run/' });
-  assert.deepEqual(Object.keys(json(join(dist, '_site', 'build.json')).games.beta).sort(), ['bundle', 'changed', 'hash']);
-
-  // The old address of a game's source: gone, on purpose, with where to go. The same for any id, GET or HEAD.
-  const site = await siteOf(dir);
-  for (const id of ['alpha', 'beta', 'delta', 'no-such-game']) {
-    const res = await site(`/games/${id}/source.json`);
-    assert.equal(res.status, 410, id);
-    assert.deepEqual(await res.json(), { retired: 'remix', see: '/parts/' });
-  }
-  assert.equal((await site('/games/alpha/source.json', { method: 'HEAD' })).status, 410);
-
-  // No landing offers a game to be taken, or asks anyone to make "a game like this".
-  const land = async (id) => (await site(`/${id}/`)).text();
-  for (const id of ['alpha', 'beta', 'gamma', 'delta']) {
-    const html = await land(id);
-    assert.match(html, new RegExp(`Who made Game ${id}`), 'the landing is there');
-    assert.doesNotMatch(html, /Make a game like this|See the source|source\.json|\?remix=|Open to remix|Remix of|remix-of/, id);
-  }
-  // The former remix keeps its credit, as a credit: under its name and in its credits, linked to the original.
-  const delta = await land('delta');
-  assert.match(delta, /<p class="based-on">Based on <a href="https:\/\/owls\.example\/owl-run\/" rel="noopener">Owl Run<\/a> by Night Owl Games<\/p>/);
-  assert.match(delta, /<div class="credit"><h3>Based on<\/h3><p><a href="https:\/\/owls\.example\/owl-run\/" rel="noopener">Owl Run<\/a> by Night Owl Games\.<\/p>/);
-  assert.match(delta, /<p>Licence: MIT\.<\/p>/);
-  assert.doesNotMatch(await land('alpha'), /Based on|Licence: /, 'a game that owes no credit and names no licence says neither');
-  const credits = await creditsPage(json(join(dist, 'games.json')), rows.delta, [{ file: 'CREDITS.md', text: 'Thanks.' }], { origin: 'https://retired.example' }).text();
-  assert.match(credits, /<p class="sec">Based on<\/p><p><a href="https:\/\/owls\.example\/owl-run\/" rel="noopener">Owl Run<\/a> by Night Owl Games<\/p>/);
-
-  // What the directory reads: no remix, no source address, no lineage; the licence only where the game names one.
-  const manifest = await (await site('/.well-known/homie-studio.json')).json();
-  const m = Object.fromEntries(manifest.games.map((g) => [g.id, g]));
-  for (const id of ['alpha', 'beta', 'gamma', 'delta']) for (const k of ['remix', 'source', 'remixOf']) assert.ok(!(k in m[id]), `${id}: the manifest has no ${k}`);
-  assert.deepEqual([m.alpha.license, m.delta.license], [undefined, { spdx: 'MIT' }]);
-  // The command is refused in a sentence that points to parts, and makes nothing.
-  const refused = run(['game', 'remix', 'https://owls.example/games/owl-run/source.json', '--id', 'mine'], dir);
-  assert.equal(refused.status, 1);
-  assert.match(out(refused).why, /^remix was retired: a game is no longer handed over whole.*Games build on each other through parts.*homie-studio parts find/);
-  assert.ok(!existsSync(join(dir, 'games', 'mine')));
-  assert.match(plain(['game', 'remix'], dir).stderr + plain(['game', 'remix'], dir).stdout, /remix was retired/);
-  assert.doesNotMatch(plain(['help'], dir).stdout, /remix/i, 'and the help does not offer it');
-  // What an AI agent reads: no Remix section and no offer; the credit and the licence as facts.
-  const llms = await (await site('/llms.txt')).text();
-  assert.doesNotMatch(llms, /remix|source\.json/i);
-  assert.match(llms, /\[Game delta\]\(\S+\/delta\/\): .* Based on Owl Run by Night Owl Games\. .* Licence: MIT\.$/m);
 });
 

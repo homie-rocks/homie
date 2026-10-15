@@ -3,8 +3,8 @@
 import { pathToFileURL } from 'node:url';
 export const gates = ['Packages (Node 22)', 'Packages (Node 24)', 'Plugin', 'Changelog', 'A studio on Linux, no GPU (two browsers finish a round)'];
 export function verified(run, checks, sha) {
-  return run.head_sha === sha && run.path === '.github/workflows/ci.yml' &&
-    ['push', 'pull_request'].includes(run.event) && run.status === 'completed' && run.conclusion === 'success' &&
+  return run.head_sha === sha && run.path === '.github/workflows/nightly.yml' &&
+    ['schedule', 'workflow_dispatch'].includes(run.event) && run.status === 'completed' && run.conclusion === 'success' &&
     gates.every(name => checks.some(c => c.name === name && c.head_sha === sha && c.app?.slug === 'github-actions' &&
       c.check_suite?.id === run.check_suite_id && c.status === 'completed' && c.conclusion === 'success'));
 }
@@ -23,8 +23,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     checks.push(...d.check_runs);
     if (d.check_runs.length < 100) break;
   }
-  const runs = await get(`/actions/workflows/ci.yml/runs?head_sha=${sha}&status=success&per_page=100`);
+  const runs = await get(`/actions/workflows/nightly.yml/runs?head_sha=${sha}&status=success&per_page=100`);
   const run = runs.workflow_runs.find(r => verified(r, checks, sha));
-  if (!run) throw new Error(`CI verification refused: no successful CI run with all five required Actions gates on exact commit ${sha}. Run CI on this commit first; no tests were bypassed and nothing was published.`);
+  if (!run) throw new Error(`CI verification refused: no successful full-suite run with all five required Actions gates on exact commit ${sha}. Dispatch nightly.yml on this commit first; no tests were bypassed and nothing was published.`);
   console.log(`Verified exact commit ${sha}: ${run.html_url} (all ${gates.length} CI gates successful).`);
 }

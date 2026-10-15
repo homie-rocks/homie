@@ -1,3 +1,4 @@
+import { fixtureRun } from './studio-fixture.mjs';
 import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * @homie-rocks/studio 0.32.0: a game as an app of its own (standalone/STANDALONE.md).
@@ -46,7 +47,7 @@ const CLI = join(PKG, 'bin', 'homie-studio.mjs');
 const REPO_NM = join(PKG, '..', '..', 'node_modules');
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-standalone-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
-const run = (args, cwd) => spawnSync(process.execPath, [CLI, ...args, '--json'], { cwd, encoding: 'utf8' });
+const run = (args, cwd) => fixtureRun(CLI, args, cwd);
 const read = (...p) => readFileSync(join(PKG, ...p), 'utf8');
 
 const studioJson = { name: 'Night Owls', slug: 'night-owls', cloudflare: { domain: null } };
@@ -407,13 +408,13 @@ test('a Lobby that cannot be reached, or answers with nothing usable, is offline
   // and the room that arrives late is offered, never switched to under the player.
   const slow = await shell({ lobbyMs: 1900 });
   assert.deepEqual(slow.srcs, [], 'still asking');
-  await new Promise((r) => setTimeout(r, 1600));
+  for (let i = 0; i < 150 && !slow.srcs.length; i++) await new Promise(r => setTimeout(r, 20));
   assert.deepEqual(slow.srcs, ['game/index.html'], 'the game is on the screen');
   assert.equal(slow.net().url, '');
   slow.el('[data-quick]').listeners.click[0]();
   slow.state.quick(); slow.state.go();
   assert.equal(slow.fetched.length, 1, 'a second press while one search is out asks nothing again');
-  await new Promise((r) => setTimeout(r, 450));
+  for (let i = 0; i < 150 && !slow.el('[data-toast]').onclick; i++) await new Promise(r => setTimeout(r, 20));
   assert.equal(slow.el('[data-toast]').textContent, 'Back online · Join');
   assert.deepEqual(slow.srcs, ['game/index.html'], 'nothing was switched under the player');
   slow.el('[data-toast]').onclick();

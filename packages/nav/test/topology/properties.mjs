@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { run } from './continuation.mjs';
 
-export function continuationCases(up, shard) {
-  for (let seed = shard + 1; seed <= (process.env.NAV_FULL ? 300 : 1); seed += 4) {
+export function continuationCases(up) {
+  for (let seed = 1; seed <= (process.env.NAV_FULL ? 300 : 1); seed++) {
     test(`editable restore, ${up}-up, seed ${seed}`, async () => {
       const runs = [
         run(seed, up, null),

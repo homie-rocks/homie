@@ -1,3 +1,4 @@
+import { fixtureRun } from './studio-fixture.mjs';
 import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * `homie-studio build` for server and browser games using one rules-plus-view contract
@@ -27,7 +28,7 @@ import { PKG, REPO_NM, esbuildOf } from './rules-kit.mjs';
 const CLI = join(PKG, 'bin', 'homie-studio.mjs');
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-rules-build-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
-const run = (args, cwd) => spawnSync(process.execPath, [CLI, ...args, '--json'], { cwd, encoding: 'utf8' });
+const run = (args, cwd) => fixtureRun(CLI, args, cwd);
 const out = (r) => { try { return JSON.parse(r.stdout); } catch { throw new Error(`not JSON: ${r.stdout}${r.stderr}`); } };
 const read = (dir, rel) => readFileSync(join(dir, rel), 'utf8');
 

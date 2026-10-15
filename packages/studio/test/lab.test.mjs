@@ -1,3 +1,4 @@
+import { fixtureRun } from './studio-fixture.mjs';
 import { declareRoom } from './browser-rules-game.mjs';
 /**
  * The Game Lab (lib/lab.mjs, lib/lab-check.mjs, lab/): the take format; the lab's server (New from the working tree,
@@ -25,7 +26,7 @@ const CLI = join(PKG, 'bin', 'homie-studio.mjs');
 const REPO_NM = join(PKG, '..', '..', 'node_modules');
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-lab-test-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
-const run = (args, cwd) => spawnSync(process.execPath, [CLI, ...args, '--json'], { cwd, encoding: 'utf8', env: { ...process.env, HOMIE_STUDIO_WARM: '0' }, timeout: 240_000 });
+const run = (args, cwd) => fixtureRun(CLI, args, cwd, { env: { ...process.env, HOMIE_STUDIO_WARM: '0' }, timeout: 240_000 });
 const WHO = { GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: '', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: '' };
 const git = (cwd, ...args) => { const r = spawnSync('git', ['-c', 'commit.gpgsign=false', ...args], { cwd, encoding: 'utf8', env: { ...process.env, ...WHO } }); assert.equal(r.status, 0, r.stderr); return r.stdout.trim(); };
 

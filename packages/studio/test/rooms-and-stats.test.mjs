@@ -1,3 +1,4 @@
+import { fixtureRun } from './studio-fixture.mjs';
 import { deployPlan } from '../lib/cloudflare.mjs';
 import { browserRulesGame } from './browser-rules-game.mjs';
 /**
@@ -35,7 +36,7 @@ const CLI = join(PKG, 'bin', 'homie-studio.mjs');
 const REPO_NM = join(PKG, '..', '..', 'node_modules');
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-stats-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
-const run = (args, cwd) => spawnSync(process.execPath, [CLI, ...args, '--json'], { cwd, encoding: 'utf8' });
+const run = (args, cwd) => fixtureRun(CLI, args, cwd);
 const out = (r) => JSON.parse(r.stdout);
 const sha = (s) => createHash('sha256').update(s).digest('hex');
 const BROWSER = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';

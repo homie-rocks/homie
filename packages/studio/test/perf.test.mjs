@@ -1,3 +1,4 @@
+import { fixtureRun } from './studio-fixture.mjs';
 /**
  * @homie-rocks/studio 0.19.0: `homie-studio perf` — the judgement and the bookkeeping, without a browser.
  *
@@ -33,7 +34,7 @@ const CLI = join(PKG, 'bin', 'homie-studio.mjs');
 const REPO_NM = join(PKG, '..', '..', 'node_modules');
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-perf-test-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
-const run = (args, cwd) => spawnSync(process.execPath, [CLI, ...args, '--json'], { cwd, encoding: 'utf8', env: { ...process.env, HOMIE_STUDIO_WARM: '0' } });
+const run = (args, cwd) => fixtureRun(CLI, args, cwd, { env: { ...process.env, HOMIE_STUDIO_WARM: '0' } });
 const sha = (b) => createHash('sha256').update(b).digest('hex');
 
 test('quantiles and summaries: interpolated, empty-safe, the spread as a share of the median', () => {

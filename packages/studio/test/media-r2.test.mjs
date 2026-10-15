@@ -1,3 +1,4 @@
+import { fixtureRun } from './studio-fixture.mjs';
 /**
  * @homie-rocks/studio 0.18.0: big media lives in the studio's own R2, by default, once the studio has storage.
  *   - `media move --dry-run` names what goes (over 1 MiB, or left out of git) and calls nothing;
@@ -26,7 +27,7 @@ const REPO_NM = join(PKG, '..', '..', 'node_modules');
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-media-r2-test-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 
-const run = (args, cwd, env = {}) => spawnSync(process.execPath, [CLI, ...args, '--json'], { cwd, encoding: 'utf8', env: { ...process.env, HOMIE_STUDIO_WARM: '0', ...env } });
+const run = (args, cwd, env = {}) => fixtureRun(CLI, args, cwd, { env: { ...process.env, HOMIE_STUDIO_WARM: '0', ...env } });
 const out = (r) => { try { return JSON.parse(r.stdout); } catch { throw new Error(`not JSON: ${r.stdout}${r.stderr}`); } };
 const sha = (buf) => createHash('sha256').update(buf).digest('hex');
 
