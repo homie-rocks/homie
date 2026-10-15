@@ -43,8 +43,10 @@ export async function pruneEvents(env) {
 /** A lease is for retry after a crashed Worker, not a deadline imposed on studio code. */
 export async function runFunctions(env, cat, origin, {definitions, now = Date.now, leaseMs = 60000, webhookOptions = {}} = {}) {
   if(!env.DB)return;
-  if(typeof cat==='function')cat=await cat();
-  await (await import('./app-streams.mjs')).pushAppRecords(env,cat);
+  if(env.LOBBY){
+    if(typeof cat==='function')cat=await cat();
+    await (await import('./app-streams.mjs')).pushAppRecords(env,cat);
+  }
   definitions = await syncFunctions(env,definitions,now());
   if(!definitions.length&&!env.STUDIO_EVENT_FEEDS)return;
   if(typeof cat==='function')cat=await cat();
