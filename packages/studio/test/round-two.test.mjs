@@ -297,3 +297,20 @@ test('legacy snapshot traffic stays active without writing a hibernation snapsho
  table.room.lastRound={phase:'live'};assert.equal(Boolean(table.canSleep()),false);
  table.room.lastRound=null;table.room.clients.clear();assert.ok(table.canSleep());
 });
+
+test('idle controls checkpoint changes and retain failed office writes for restoration and retry',async()=>{
+ const [{Table},{NetRoom}]=await Promise.all([import('../worker/table.mjs'),import('../worker/room.mjs')]);
+ const table=Object.create(Table.prototype),room=new NetRoom({code:'idle'}),snapshots=[];let writes=0,failures=0;
+ room.clients.set('player',{helloed:true,lastSeen:Date.now(),conn:{}});
+ Object.assign(table,{room,canSleep:()=>true,storageProblem:()=>failures++,sessionStore:{write:r=>snapshots.push({dirty:r.officeDirty,agentsOut:r.agentsOut})},ctx:{storage:{put:async()=>{if(++writes===1)throw new Error('retry');},getAlarm:async()=>null,setAlarm:async()=>{}}}});
+ table.fetchRequest=async()=>{room.agentsOut={until:Date.now()+30000};room.officeDirty=true;return new Response(null,{status:204});};
+ assert.equal((await table.fetch(new Request('https://room/__office'))).status,204);
+ assert.equal(failures,1);assert.equal(snapshots[0].dirty,true);
+ const restored=new NetRoom({code:'idle'});
+ restoreRoomFields(restored,{fields:new Map([['officeDirty',true],['rawVocab',{words:['yes']}],['endedMatch',{tokens:new Set(['token'])}],['snapAt',new Map([[1,20]])]])});
+ assert.equal(restored.officeDirty,true);assert.deepEqual(restored.rawVocab,{words:['yes']});assert.ok(restored.endedMatch.tokens.has('token'));assert.equal(restored.snapAt.get(1),20);
+ await table.sleepRoom();assert.equal(writes,2);assert.equal(snapshots[1].dirty,false);
+ let cleared=0;table.sessionStore.clear=()=>cleared++;room.clients.clear();room.officeDirty=true;writes=0;
+ await table.sleepRoom();assert.equal(cleared,0);assert.equal(snapshots.at(-1).dirty,true);
+ await table.sleepRoom();assert.equal(cleared,1);
+});

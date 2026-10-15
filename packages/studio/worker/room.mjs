@@ -53,6 +53,10 @@ export class NetRoom {
     this.agentsOut = null;
     /** Revision 7: the game's agents.json (the Table reads it once), the only words an AI here may say. */
     this.vocab = null;
+    this.rawVocab = null;
+    this.officeDirty = false;
+    this.endedMatch = null;
+    this.snapAt = new Map();
     this.code = code;
     this.rules = rules === true;
     this.tickHz = tickHz;

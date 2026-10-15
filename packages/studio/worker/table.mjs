@@ -150,7 +150,9 @@ export class Table {
     this.room.gateFacts = () => [...(this.gateMetrics?.values() ?? [])];
     if (this.saved && !hostedGame(game)) this.room.restore(this.saved);
     restoreRoomFields(this.room,this.sessionSnapshot);
-    if (this.officeSaved) this.room.restoreOffice(this.officeSaved);
+    // A failed office write remains in the session snapshot for retry. Otherwise
+    // the separate office record also covers changes made while no socket exists.
+    if (this.officeSaved && !this.room.officeDirty) this.room.restoreOffice(this.officeSaved);
     restoreIdleChat(this,this.idleChat);
     this.idleChat=null;
     this.vocabRead = this.readVocab(game).catch(() => false);
@@ -915,6 +917,10 @@ export class Table {
   }
 
   async fetch(request) {
+    try { return await this.fetchRequest(request); }
+    finally { if(this.canSleep())await this.sleepRoom(); }
+  }
+  async fetchRequest(request) {
     if (new URL(request.url).pathname === '/__character') {
       const body = await request.json();
       this.characters ??= characterStore(this.ctx.storage);
@@ -1173,7 +1179,12 @@ export class Table {
     if(!this.canSleep())return;
     clearInterval(this.timer);this.timer=null;
     const now=Date.now(),room=this.room;
-    if(!room.clients.size&&!room.watchers.size) {
+    if(room.officeDirty) {
+      room.officeDirty=false;
+      try {this.officeSaved=room.officeSaved();await this.ctx.storage.put('office',this.officeSaved);}
+      catch(error) {room.officeDirty=true;this.storageProblem(error);}
+    }
+    if(!room.clients.size&&!room.watchers.size&&!room.officeDirty) {
       this.sessionStore.clear();
       // Empty rooms get one final expiry pass, never a permanent minute alarm.
       const until=room.emptySince+room.forgetMs;
@@ -1184,7 +1195,7 @@ export class Table {
     this.sessionStore.write(this.room,Object.fromEntries(keys.map(key=>[key,this[key]])));
     // Edge-answered heartbeats need only a minute's liveness sweep. A legacy
     // client still keeps its original hello/heartbeat deadline.
-    const due=[now+60000,...[...room.clients.values()].map(c=>{const ping=c.conn.lastPing?.()??0;return c.helloed?Math.max(c.lastSeen,ping)+(ping?Math.max(room.idleMs,60000):room.idleMs):c.joinedAt+5000;})];
+    const due=[now+(room.officeDirty?1000:60000),...[...room.clients.values()].map(c=>{const ping=c.conn.lastPing?.()??0;return c.helloed?Math.max(c.lastSeen,ping)+(ping?Math.max(room.idleMs,60000):room.idleMs):c.joinedAt+5000;})];
     for(const control of [room.vote?.open?room.vote:null,room.regate,room.agentsOut])if(control?.until)due.push(control.until);
     const at=Math.max(now+1,Math.min(...due)),alarm=await this.ctx.storage.getAlarm();
     if(alarm==null||alarm>at)await this.ctx.storage.setAlarm(at);
