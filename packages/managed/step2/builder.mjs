@@ -1,3 +1,4 @@
+import {authorized} from './auth.mjs';
 import buildProgram from './run-build.cjs';
 import {DurableObject} from 'cloudflare:workers';
 
@@ -10,8 +11,8 @@ export class BuildSandbox extends DurableObject {
   try {
    c.start({image:'cloudflare/debian-trixie',entrypoint:['sleep','infinity'],enableInternet:true,instance:'standard-1'});
    const p=await c.exec(['node','-e',buildProgram],{stdin:new Blob([JSON.stringify(job)]).stream()});
-   const read=async stream=>{const reader=stream.getReader();let size=0;const chunks=[];for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>32*1024*1024){await c.destroy();throw new Error('Output limit');}chunks.push(value);}return new TextDecoder().decode(await new Blob(chunks).arrayBuffer());};
-   const [stdout,stderr,exitCode]=await Promise.all([read(p.stdout),read(p.stderr),p.exitCode]);
+   const read=async (stream,limit)=>{const reader=stream.getReader();let size=0;const chunks=[];for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>limit){await c.destroy();throw new Error('Output limit');}chunks.push(value);}return new TextDecoder().decode(await new Blob(chunks).arrayBuffer());};
+   const [stdout,stderr,exitCode]=await Promise.all([read(p.stdout,32*1024*1024),read(p.stderr,64*1024),p.exitCode]);
    if(exitCode!==0)throw new Error('Build failed: '+stderr.replaceAll(job.readToken,'[REDACTED]').slice(-5000));
    return {archive:stdout};
   } finally {await c.destroy();await this.ctx.storage.deleteAlarm();}
@@ -30,7 +31,7 @@ export class BuildSandbox extends DurableObject {
 }
 export default {
  async fetch(request,env){
-  if(request.method!=='POST'||!env.RUN_KEY||request.headers.get('authorization')!=='Bearer '+env.RUN_KEY)return new Response('Not found',{status:404});
+  if(request.method!=='POST'||!authorized(request.headers.get('authorization'),env.RUN_KEY))return new Response('Not found',{status:404});
   const stub=env.BUILDS.get(env.BUILDS.newUniqueId());
   try {return Response.json(new URL(request.url).pathname==='/build'?await stub.build(await request.json()):await stub.probe());}catch(error){return Response.json({error:error.message},{status:422});}
  }

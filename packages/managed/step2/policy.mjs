@@ -1,8 +1,9 @@
+export function canonical(value){return JSON.stringify(value,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a<b?-1:a>b?1:0)):v);}
 /** Pure policy. No repository-supplied resource identifiers enter deployment metadata. */
 export function resolvePush(event,registry){
  if(event?.type!=='cf.artifacts.repo.pushed'||event.metadata?.accountId!==registry.account)throw new Error('Untrusted push envelope');
  const tenant=registry.tenants.find(t=>t.namespace===event.source?.namespace&&t.repo===event.source?.repoName);
- if(!tenant||event.payload?.ref!=='refs/heads/main'||!event.metadata?.eventSubscriptionId)throw new Error('Unregistered push');
+ if(!tenant||event.payload?.ref!=='refs/heads/main'||!event.metadata?.eventSubscriptionId||(registry.subscriptionId&&event.metadata.eventSubscriptionId!==registry.subscriptionId))throw new Error('Unregistered push');
  const commit=event.payload.after;if(!/^[a-f0-9]{40}$/.test(commit)||/^0+$/.test(commit))throw new Error('Immutable commit required');
  return {tenant,commit};
 }
@@ -33,7 +34,7 @@ export function assertPromotion(release,current,expected){
 }
 export function assertRollback(target,current){
  if(!target||!current||target.tenant!==current.tenant)throw new Error('Known tenant release required');
- if(JSON.stringify(target.bindings)!==JSON.stringify(current.bindings))throw new Error('Rollback would change resource identities');
+ if(canonical(target.bindings)!==canonical(current.bindings))throw new Error('Rollback would change resource identities');
  if(target.schemaEpoch!==current.schemaEpoch)throw new Error('Schema compatibility review required');
  return {migrations:'remain-applied',dataRestored:false};
 }

@@ -9,7 +9,7 @@ const config={name:worker,main:here+'pipeline.mjs',account_id:account,compatibil
  services:[{binding:'BUILDER',service:'hm-s2-builder'}],r2_buckets:[{binding:'ARTIFACTS',bucket_name:bucket}],
  durable_objects:{bindings:[{name:'RELEASES',class_name:'Releases'}]},exports:{Releases:{type:'durable-object',storage:'sqlite'}},
  workflows:[{name:workflow,binding:'PIPELINE',class_name:'Pipeline'}],queues:{consumers:[{queue,max_batch_size:1,max_concurrency:1,max_retries:3}]},
- vars:{TENANT_ID:state.tenant.id,REGISTRY:{account,tenants:[state.tenant]}}};
+ vars:{TENANT_ID:state.tenant.id,REGISTRY:{account,subscriptionId:state.subscription,tenants:[state.tenant]}}};
 writeFileSync(local+'pipeline.json',JSON.stringify(config,null,2));
 if(!state.resources.some(r=>r.name===worker))intent(worker,'workers/scripts/'+worker,'workers/scripts/'+worker+'/settings');
 if(!state.resources.some(r=>r.name===workflow))intent(workflow,'workflows/'+workflow);
@@ -19,5 +19,5 @@ const key=existsSync(local+'operator-key')?readFileSync(local+'operator-key','ut
 console.log(run(['secret','bulk','--config',local+'pipeline.json'],JSON.stringify({OPERATOR_KEY:key,BUILD_KEY:readFileSync(local+'run-key','utf8'),DEPLOY_TOKEN:token()})));
 if(!state.subscription){
  intent('hm-s2-source-push','pending-subscription');const s=await api('event_subscriptions/subscriptions','POST',{name:'hm-s2-source-push',enabled:true,source:{type:'artifacts.repo',namespace:'hm-s2-source',repo_name:'hm-s2-little-inlet'},events:['pushed'],destination:{type:'queues.queue',queue_id:state.queueId}});
- state.subscription=s.id;state.resources.at(-1).path=state.resources.at(-1).readPath='event_subscriptions/subscriptions/'+s.id;state.resources.at(-1).status='created';save();console.log({subscription:s});
+ state.subscription=s.id;state.resources.at(-1).path=state.resources.at(-1).readPath='event_subscriptions/subscriptions/'+s.id;state.resources.at(-1).status='created';save();console.log({subscription:s});config.vars.REGISTRY.subscriptionId=s.id;writeFileSync(local+'pipeline.json',JSON.stringify(config,null,2));console.log(run(['deploy','--config',local+'pipeline.json']));
 }

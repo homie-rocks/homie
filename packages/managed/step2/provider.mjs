@@ -9,7 +9,7 @@ export function cloudflare(account,credential){
  };
 }
 const mime=path=>({html:'text/html',js:'application/javascript',mjs:'application/javascript',json:'application/json',css:'text/css',svg:'image/svg+xml',png:'image/png',jpg:'image/jpeg',webp:'image/webp',mp3:'audio/mpeg',mp4:'video/mp4',woff2:'font/woff2'}[path.split('.').at(-1)]??'application/octet-stream');
-export function migrationManifest(artifact){return Object.entries(artifact.files).filter(([p])=>p.startsWith('migrations/')&&p.endsWith('.sql')).sort(([a],[b])=>a.localeCompare(b)).map(([name,b])=>({name,digest:digest(Buffer.from(b,'base64'))}));}
+export function migrationManifest(artifact){return Object.entries(artifact.files).filter(([p])=>p.startsWith('migrations/')&&p.endsWith('.sql')).sort(([a],[b])=>a<b?-1:a>b?1:0).map(([name,b])=>({name,digest:digest(Buffer.from(b,'base64'))}));}
 export async function migrateFresh(api,tenant,environment,artifact){
  const db=bindingManifest(tenant,environment).bindings.find(b=>b.name==='DB').id;
  for(const m of migrationManifest(artifact)){

@@ -1,7 +1,8 @@
+import {authorized} from './auth.mjs';
 import {WorkflowEntrypoint,DurableObject} from 'cloudflare:workers';
 import {gunzipSync} from 'node:zlib';
 import {cloudflare,digest,upload,migrationManifest,migrateFresh} from './provider.mjs';
-import {resolvePush,assertArtifact,assertPromotion,assertRollback} from './policy.mjs';
+import {canonical,resolvePush,assertArtifact,assertPromotion,assertRollback} from './policy.mjs';
 import {synthetic} from './synthetic.mjs';
 const decode=archive=>JSON.parse(gunzipSync(Buffer.from(archive,'base64'),{maxOutputLength:60*1024*1024}));
 function provider(env){return cloudflare(env.REGISTRY.account,env.DEPLOY_TOKEN);}
@@ -29,7 +30,7 @@ export class Pipeline extends WorkflowEntrypoint {
     const {artifact,archive}=await remote(this.env,tenant,commit,'build');
     const hash=digest(Buffer.from(archive,'base64'));
     const migrations=migrationManifest(artifact);
-    if(JSON.stringify(migrations)!==JSON.stringify(tenant.migrations))throw new Error('Migration changes require registry review');
+    if(canonical(migrations)!==canonical(tenant.migrations))throw new Error('Migration changes require registry review');
     await this.env.ARTIFACTS.put(hash,Buffer.from(archive,'base64'));
     return {hash,migrations};
    });
@@ -62,7 +63,7 @@ export class Releases extends DurableObject {
   const tenant=this.env.REGISTRY.tenants.find(t=>t.id===this.env.TENANT_ID);if(!tenant)throw new Error('Tenant registry missing');
   const current=await this.ctx.storage.get('production'),release=await this.ctx.storage.get('run:'+commit);
   if(!release)throw new Error('Release not found');release.approvedBy=actor;assertPromotion(release,current,expected);
-  await this.lock();
+  await this.lock(expected);
   try{
    const artifact=await this.artifact(release.artifactDigest);
    const api=provider(this.env);
@@ -76,22 +77,22 @@ export class Releases extends DurableObject {
  }
  async rollback(targetCommit,expected){
   const current=await this.ctx.storage.get('production'),target=await this.ctx.storage.get('release:'+targetCommit);
-  if(current?.commit!==expected)throw new Error('Production changed');const policy=assertRollback(target,current);await this.lock();
+  if(current?.commit!==expected)throw new Error('Production changed');const policy=assertRollback(target,current);await this.lock(expected);
   const tenant=this.env.REGISTRY.tenants.find(t=>t.id===target.tenant);
   try{
    const receipt=await upload(provider(this.env),tenant,'production',await this.artifact(target.artifactDigest));
-   if(JSON.stringify(receipt.bindings)!==JSON.stringify(target.bindings))throw new Error('Rollback identity changed');
+   if(canonical(receipt.bindings)!==canonical(target.bindings))throw new Error('Rollback identity changed');
    const result={...target,workerVersionId:null,providerDeploymentId:receipt.uploaded.deployment_id,rollbackOf:current.commit,restoredFromDeploymentId:target.providerDeploymentId,rollbackMode:'reupload-sealed-bundle',...policy,at:Date.now()};
    await this.ctx.storage.put('production',result);await this.ctx.storage.put('rollback:'+Date.now(),result);await this.ctx.storage.delete('mutation');return result;
   }catch(error){await this.ctx.storage.put('incident',{action:'rollback',error:error.message,at:Date.now()});throw error;}
  }
  async artifact(hash){const o=await this.env.ARTIFACTS.get(hash);if(!o)throw new Error('Missing artifact');const b=Buffer.from(await o.arrayBuffer());if(digest(b)!==hash)throw new Error('Digest mismatch');return decode(b.toString('base64'));}
- async lock(){await this.ctx.storage.transaction(async s=>{if(await s.get('mutation'))throw new Error('Unresolved deployment: reconcile before retry');await s.put('mutation',{at:Date.now()});});}
+ async lock(expected){await this.ctx.storage.transaction(async s=>{if((await s.get('production'))?.commit!==expected)throw new Error('Production changed since review');if(await s.get('mutation'))throw new Error('Unresolved deployment: reconcile before retry');await s.put('mutation',{at:Date.now()});});}
 }
 export default {
- async queue(batch,env){for(const message of batch.messages){try{const {tenant,commit}=resolvePush(message.body,env.REGISTRY);await env.PIPELINE.create({id:tenant.id+'-'+commit,params:message.body});message.ack();}catch(error){console.error('Push rejected or workflow create failed',error.message);message.retry({delaySeconds:60});}}},
+ async queue(batch,env){for(const message of batch.messages){try{const {tenant,commit}=resolvePush(message.body,env.REGISTRY);const id=tenant.id+'-'+commit;try{await env.PIPELINE.create({id,params:message.body});}catch(error){try{await env.PIPELINE.get(id).status();}catch{throw error;}}message.ack();}catch(error){console.error('Push rejected or workflow create failed',error.message);message.retry({delaySeconds:60});}}},
  async fetch(request,env){
-  if(!env.OPERATOR_KEY||request.headers.get('authorization')!=='Bearer '+env.OPERATOR_KEY)return new Response('Not found',{status:404});
+  if(!authorized(request.headers.get('authorization'),env.OPERATOR_KEY))return new Response('Not found',{status:404});
   const ledger=env.RELEASES.getByName(env.TENANT_ID),path=new URL(request.url).pathname;
   try{
    if(path==='/status'&&request.method==='GET')return Response.json(await ledger.status());
