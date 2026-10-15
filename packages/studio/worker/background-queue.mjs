@@ -23,6 +23,6 @@ export async function consumeBackground(batch, env) {
       if(message.body?.v!==1||message.body.type!=='stripe.event')throw new Error('Unknown background message type');
       await (await import('./stripe-intake.mjs')).reconcileStripeEvent(env,message.body.id,await catalogue(env));
       message.ack();
-    } catch(error) {console.error('Background queue delivery failed',error);message.retry({delaySeconds:30});}
+    } catch(error) {console.error('Background queue delivery failed',error);message.retry({delaySeconds:error.retryAfterSeconds??30});}
   }
 }
