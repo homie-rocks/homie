@@ -202,3 +202,9 @@ test('resource booking declarations reject missing collections and anonymous res
  meta.roles.customer.can=['read:slots'];meta.records.collections.bookings.booking.resources='missing';
  assert.ok(appProblems(meta).some(p=>/resources collection/.test(p)));
 });
+
+test('writing needs evidence does not restart the app runtime while source edits still do',async()=>{
+ const root=studio('Needs evidence');await newApp(root,'welcome');const app=listApps(root)[0],before=rulesStamp(app);
+ writeFileSync(join(app.dir,'CODEX.md'),'# Needs\nA new proof result.\n');assert.equal(rulesStamp(app),before,'authoring evidence cannot interrupt a running check');
+ writeFileSync(join(app.dir,'src/changed.ts'),'export const changed=true;');assert.notEqual(rulesStamp(app),before);
+});

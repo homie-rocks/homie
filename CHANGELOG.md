@@ -22,8 +22,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 ### Fixed
 - Supporter and deposit links lock quantity to one; variable deposits carry the app reference and require the saved subtotal before fulfillment.
 - Booking SDK and customer MCP checkout carry the app reference into the saved order.
-- Private records-only app frames load through expiring asset capabilities, without exposing anonymous modules or records. Missing record IDs explain the exact URL location.
-- Needs keep wall and phone roles separate and run in fresh rooms after the baseline. MCP retries transient Cloudflare 1042 startup failures with a notice.
+- Private app frames load through expiring asset capabilities, without exposing anonymous modules or records. Missing record IDs explain the exact URL or top-level argument location.
+- Needs keep wall and phone roles separate and run in fresh rooms after the baseline. Saving Codex evidence no longer restarts dev during a check. MCP retries transient Cloudflare 1042 startup failures with a notice.
 - Keyless shop migration discovers existing billing portals when old verifications omit their IDs. Webhook installation fills missing account IDs after verifying link ownership with the saved Stripe login.
 - Stripe pairing is available as a structured MCP job event before approval completes; reused logins emit no pairing event.
 
