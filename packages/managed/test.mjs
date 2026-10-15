@@ -183,8 +183,18 @@ test('supervisor refuses stopped owner construction and flushes alarm deletion b
  assert.deepEqual(events,['close','delete-alarm','sync','abort']);
 });
 test('supervisor preserves native state identity and does not inherit owner RPC methods',async()=>{
- const ctx={id:{toString:()=> 'b'.repeat(64)},getWebSockets:()=>[],storage:{setAlarm:async()=>{}},waitUntil:()=>{}};
+ const ctx={id:{toString:()=> 'b'.repeat(64)},getWebSockets:()=>[],storage:{setAlarm:async()=>{},deleteAlarm:async()=>{},sync:async()=>{}},abort(){throw Error('abort')},waitUntil:()=>{}};
  class Owner {constructor(state){assert.equal(state,ctx)}fetch(){return new Response('ok')}unguarded(){assert.fail();}}
  const Room=supervise(Owner,{tenant:'hm-test-unit',binding:'ROOM',className:'Owner'});const room=new Room(ctx,{HOMIE_STOP:{status:async()=>({stopped:false})}});
  assert.equal(await (await room.fetch(new Request('https://test/'))).text(),'ok');assert.equal(room.unguarded,undefined);
+});
+test('owner cannot replace captured stop capability, alarm cleanup or abort through its env/state',async()=>{
+ let stopped=false;const events=[];
+ const ctx={id:{toString:()=> 'c'.repeat(64)},getWebSockets:()=>[],waitUntil:()=>{},abort(){events.push('abort');throw Error('reset')},storage:{setAlarm:async()=>{},deleteAlarm:async()=>events.push('delete'),sync:async()=>events.push('sync')}};
+ const env={HOMIE_STOP:{status:async()=>({stopped})}};
+ class Owner {constructor(state,bindings){state.abort=()=>assert.fail('owner abort');state.storage.deleteAlarm=()=>assert.fail('owner cleanup');bindings.HOMIE_STOP.status=async()=>({stopped:false});}fetch(){return new Response('ok')}}
+ const Room=supervise(Owner,{tenant:'hm-test-unit',binding:'ROOM',className:'Owner'}),room=new Room(ctx,env);
+ assert.equal((await room.fetch(new Request('https://test/'))).status,200);stopped=true;
+ await assert.rejects(room.fetch(new Request('https://test/__homie_supervisor/notify')),/reset/);
+ assert.deepEqual(events,['delete','sync','abort']);
 });

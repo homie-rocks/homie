@@ -50,9 +50,9 @@ export function prepare({studio, output, name, databaseId, accountId, hostname, 
   const classes=[...new Set(ownBindings.map(b=>b.class_name))];
   if(classes.some(c=>!/^[$A-Za-z_][$A-Za-z0-9_]*$/.test(c)))throw new Error('Invalid DO class');
   cpSync(fileURLToPath(new URL('./supervisor.mjs',import.meta.url)),join(runtime,'supervisor.mjs'));
-  writeFileSync(join(runtime,'managed.mjs'),`import worker, * as owner from './worker.js';
+  writeFileSync(join(runtime,'managed.mjs'),`${managed&&classes.length?"import {supervise} from './supervisor.mjs';":''}
+import worker, * as owner from './worker.js';
 ${managed?'':"export * from './worker.js';"}
-${managed&&classes.length?"import {supervise} from './supervisor.mjs';":''}
 ${(managed?classes:[]).map(className=>`export const ${className}=supervise(owner.${className},${JSON.stringify({tenant:name,className,binding:ownBindings.find(b=>b.class_name===className).name})});`).join('\n')}
 export default {
   async fetch(request, env, ctx) {

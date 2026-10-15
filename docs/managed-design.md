@@ -86,7 +86,7 @@ never accepts a tenant-authored replacement supervisor. The generated classes
 compose the owner's implementation rather than inheriting overridable handlers.
 They cover fetch, alarm, hibernation message/close/error and register object IDs
 before constructing owner code. A tenant-scoped stop capability supplies 3.5-second leases from strongly
-consistent reads, with a 1.5-second read deadline and background refresh after
+consistent reads, with a 2-second read deadline and background refresh after
 half the lease. A failed refresh never extends the original expiry. Active callbacks and ordinary sockets poll; idle hibernatable objects are
 reached through the registry's durable object-ID list and trusted dispatch notify.
 Kill first persists route disable, then notifies registered objects.
