@@ -110,29 +110,6 @@ jobs:
           name: timings-node${{ matrix.node }}-${{ matrix.shard }}
           path: ci-results/
 
-  chrome-diagnostic:
-    if: github.event_name == 'pull_request'
-    name: Chrome launch evidence
-    runs-on: ubuntu-latest
-    timeout-minutes: 8
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: node --import ./scripts/chrome-launch-evidence.mjs scripts/probe-chrome-launch.mjs
-        env:
-          HOMIE_CHROME_EVIDENCE: ci-results/chrome
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
-        with:
-          name: chrome-launch-comparison
-          path: ci-results/
-
   packaging:
     if: github.event_name == 'pull_request'
     name: Packaging (Node ${{ matrix.node }})

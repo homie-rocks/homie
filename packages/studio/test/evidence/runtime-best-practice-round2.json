@@ -1,0 +1,762 @@
+{
+  "measuredHead": "d91bd316",
+  "baseline": "published @homie-rocks/studio 0.54.0",
+  "complete": false,
+  "samples": {
+    "before": 48,
+    "initial": 48,
+    "fixed": 48
+  },
+  "warmComparisons": [
+    {
+      "phase": "before",
+      "kind": "mcp",
+      "colo": "YVR",
+      "ttfb": {
+        "n": 9,
+        "median": 191.416,
+        "min": 155.11700000000002,
+        "max": 390.392,
+        "p25": 166.232,
+        "p75": 266.824
+      },
+      "worker": {
+        "n": 9,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "p25": 0,
+        "p75": 0
+      },
+      "tls": {
+        "n": 9,
+        "median": 77.14999999999999,
+        "min": 68.309,
+        "max": 225.915,
+        "p25": 73.063,
+        "p75": 85.463
+      }
+    },
+    {
+      "phase": "before",
+      "kind": "mcp",
+      "colo": "PDX",
+      "ttfb": {
+        "n": 7,
+        "median": 280.466,
+        "min": 203.039,
+        "max": 504.348,
+        "p25": 210.598,
+        "p75": 323.53700000000003
+      },
+      "worker": {
+        "n": 7,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "p25": 0,
+        "p75": 0
+      },
+      "tls": {
+        "n": 7,
+        "median": 108.151,
+        "min": 101.12100000000001,
+        "max": 213.99,
+        "p25": 102.549,
+        "p75": 109.91199999999999
+      }
+    },
+    {
+      "phase": "before",
+      "kind": "seat",
+      "colo": "YVR",
+      "ttfb": {
+        "n": 9,
+        "median": 324.081,
+        "min": 176.10500000000002,
+        "max": 1015.6540000000001,
+        "p25": 231.676,
+        "p75": 348.223
+      },
+      "worker": {
+        "n": 9,
+        "median": 67,
+        "min": 53,
+        "max": 888,
+        "p25": 57,
+        "p75": 107
+      },
+      "tls": {
+        "n": 9,
+        "median": 74.835,
+        "min": 64.78299999999999,
+        "max": 223.081,
+        "p25": 71.506,
+        "p75": 218.777
+      }
+    },
+    {
+      "phase": "before",
+      "kind": "seat",
+      "colo": "PDX",
+      "ttfb": {
+        "n": 8,
+        "median": 1208.0185,
+        "min": 295.902,
+        "max": 2074.291,
+        "p25": 579.978,
+        "p75": 2038.1
+      },
+      "worker": {
+        "n": 8,
+        "median": 914,
+        "min": 76,
+        "max": 1819,
+        "p25": 368,
+        "p75": 1666
+      },
+      "tls": {
+        "n": 8,
+        "median": 109.6045,
+        "min": 95.968,
+        "max": 253.59599999999998,
+        "p25": 101.983,
+        "p75": 250.232
+      }
+    },
+    {
+      "phase": "after",
+      "kind": "mcp",
+      "colo": "YVR",
+      "ttfb": {
+        "n": 8,
+        "median": 221.56600000000003,
+        "min": 162.746,
+        "max": 502.483,
+        "p25": 185.801,
+        "p75": 337.22400000000005
+      },
+      "worker": {
+        "n": 8,
+        "median": 0,
+        "min": 0,
+        "max": 289,
+        "p25": 0,
+        "p75": 0
+      },
+      "tls": {
+        "n": 8,
+        "median": 96.38900000000001,
+        "min": 86.576,
+        "max": 244.195,
+        "p25": 94.108,
+        "p75": 239.494
+      }
+    },
+    {
+      "phase": "after",
+      "kind": "mcp",
+      "colo": "PDX",
+      "ttfb": {
+        "n": 12,
+        "median": 304.7605,
+        "min": 185.99699999999999,
+        "max": 552.501,
+        "p25": 238.77,
+        "p75": 399.98699999999997
+      },
+      "worker": {
+        "n": 12,
+        "median": 0,
+        "min": 0,
+        "max": 324,
+        "p25": 0,
+        "p75": 0
+      },
+      "tls": {
+        "n": 12,
+        "median": 125.9545,
+        "min": 102.657,
+        "max": 262.90200000000004,
+        "p25": 117.33399999999999,
+        "p75": 148.65200000000002
+      }
+    },
+    {
+      "phase": "after",
+      "kind": "seat",
+      "colo": "YVR",
+      "ttfb": {
+        "n": 15,
+        "median": 356.479,
+        "min": 255.268,
+        "max": 415.737,
+        "p25": 306.435,
+        "p75": 381.824
+      },
+      "worker": {
+        "n": 15,
+        "median": 67,
+        "min": 48,
+        "max": 155,
+        "p25": 54,
+        "p75": 94
+      },
+      "tls": {
+        "n": 15,
+        "median": 97.223,
+        "min": 74.43900000000001,
+        "max": 243.027,
+        "p25": 88.821,
+        "p75": 210.59900000000002
+      }
+    },
+    {
+      "phase": "after",
+      "kind": "seat",
+      "colo": "PDX",
+      "ttfb": {
+        "n": 5,
+        "median": 292.505,
+        "min": 261.11,
+        "max": 428.16900000000004,
+        "p25": 275.957,
+        "p75": 372.73
+      },
+      "worker": {
+        "n": 5,
+        "median": 50,
+        "min": 43,
+        "max": 55,
+        "p25": 45,
+        "p75": 52
+      },
+      "tls": {
+        "n": 5,
+        "median": 123.048,
+        "min": 110.071,
+        "max": 256.472,
+        "p25": 117.071,
+        "p75": 123.59
+      }
+    },
+    {
+      "phase": "fixed",
+      "kind": "mcp",
+      "colo": "YVR",
+      "ttfb": {
+        "n": 14,
+        "median": 159.534,
+        "min": 125.993,
+        "max": 305.584,
+        "p25": 139.956,
+        "p75": 271.322
+      },
+      "worker": {
+        "n": 14,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "p25": 0,
+        "p75": 0
+      },
+      "tls": {
+        "n": 14,
+        "median": 87.3415,
+        "min": 71.06899999999999,
+        "max": 218.64000000000001,
+        "p25": 78.329,
+        "p75": 97.361
+      }
+    },
+    {
+      "phase": "fixed",
+      "kind": "seat",
+      "colo": "YVR",
+      "ttfb": {
+        "n": 8,
+        "median": 252.44400000000002,
+        "min": 172.692,
+        "max": 376.393,
+        "p25": 195.09199999999998,
+        "p75": 322.284
+      },
+      "worker": {
+        "n": 8,
+        "median": 50.5,
+        "min": 44,
+        "max": 56,
+        "p25": 47,
+        "p75": 56
+      },
+      "tls": {
+        "n": 8,
+        "median": 98.2045,
+        "min": 65.648,
+        "max": 250.78699999999998,
+        "p25": 78.925,
+        "p75": 210.71
+      }
+    },
+    {
+      "phase": "fixed",
+      "kind": "seat",
+      "colo": "PDX",
+      "ttfb": {
+        "n": 7,
+        "median": 272.09299999999996,
+        "min": 242.507,
+        "max": 422.695,
+        "p25": 245.472,
+        "p75": 343.866
+      },
+      "worker": {
+        "n": 7,
+        "median": 54,
+        "min": 35,
+        "max": 219,
+        "p25": 39,
+        "p75": 94
+      },
+      "tls": {
+        "n": 7,
+        "median": 110.648,
+        "min": 103.816,
+        "max": 120.14800000000001,
+        "p25": 104.101,
+        "p75": 114.892
+      }
+    }
+  ],
+  "admissions": [
+    {
+      "run": 0,
+      "count": 48,
+      "concurrency": 8,
+      "elapsedMs": 8986.918334,
+      "successful": 48
+    },
+    {
+      "run": 1,
+      "count": 48,
+      "concurrency": 8,
+      "elapsedMs": 9044.381833,
+      "successful": 48
+    },
+    {
+      "run": 2,
+      "count": 48,
+      "concurrency": 8,
+      "elapsedMs": 7625.096625000002,
+      "successful": 48
+    },
+    {
+      "run": 3,
+      "count": 48,
+      "concurrency": 8,
+      "elapsedMs": 7478.473625000002,
+      "successful": 48
+    },
+    {
+      "run": 4,
+      "count": 48,
+      "concurrency": 8,
+      "elapsedMs": 7440.674291999996,
+      "successful": 48
+    }
+  ],
+  "analytics": {
+    "ingestion": [
+      {
+        "kind": "visit",
+        "status": 200,
+        "ray": "a4b28a8e4856706c-PDX"
+      },
+      {
+        "kind": "visit",
+        "status": 200,
+        "ray": "a4b28a9078202914-YVR"
+      },
+      {
+        "kind": "visit",
+        "status": 200,
+        "ray": "a4b28a91198c706c-PDX"
+      },
+      {
+        "kind": "visit",
+        "status": 200,
+        "ray": "a4b28a91ebf52914-YVR"
+      },
+      {
+        "kind": "visit",
+        "status": 200,
+        "ray": "a4b28a9358c5706c-PDX"
+      },
+      {
+        "kind": "visit",
+        "status": 200,
+        "ray": "a4b28a93d8b52914-YVR"
+      },
+      {
+        "kind": "visit",
+        "status": 200,
+        "ray": "a4b28a94acae706c-PDX"
+      },
+      {
+        "path": "/api/rbp/analytics",
+        "status": 200,
+        "ray": "a4b28a9688312914-YVR",
+        "body": "[{\"day\":\"2026-10-15\",\"metric\":\"visit\",\"n\":6,\"source\":\"via:rbp-round2\",\"subject\":\"home\"}]"
+      },
+      {
+        "path": "/api/rbp/rollup",
+        "status": 200,
+        "ray": "a4b28a984eab706c-PDX",
+        "body": "{\"ok\":true}"
+      }
+    ],
+    "owner": [
+      {
+        "label": "before",
+        "status": 200,
+        "ray": "a4b291a27ae1ef38-PDX",
+        "body": {
+          "totals": {
+            "visits": 16,
+            "plays": 0,
+            "screens": 0,
+            "watches": 0,
+            "rooms": 0,
+            "rounds": 0,
+            "roundsWithPeople": 0,
+            "peopleInRounds": 0,
+            "songPlays": 0,
+            "videoViews": 0,
+            "agentMinutes": 0,
+            "peakPlayers": 0,
+            "peakInOneRoom": 0,
+            "playingNow": 0
+          },
+          "note": "Counts, never people: a visit is a page a browser opened, a play is a Play press, a round is a finished round. Prefetches, crawlers and house QA are not counted. Times are UTC days. Page visits, plays, screens and watches show the last hourly rollup; recent activity appears after ingestion and the next rollup. These counters may be sampled at high traffic.",
+          "ok": true
+        }
+      },
+      {
+        "label": "ingested",
+        "status": 200,
+        "ray": "a4b291a76e87ef38-PDX",
+        "body": [
+          {
+            "day": "2026-10-15",
+            "metric": "visit",
+            "n": 21,
+            "source": "via:rbp-round2",
+            "subject": "home"
+          }
+        ]
+      },
+      {
+        "label": "rollup",
+        "status": 200,
+        "ray": "a4b291ab2a0def38-PDX",
+        "body": {
+          "ok": true
+        }
+      },
+      {
+        "label": "after",
+        "status": 200,
+        "ray": "a4b291aebe7aff03-PDX",
+        "body": {
+          "totals": {
+            "visits": 31,
+            "plays": 0,
+            "screens": 0,
+            "watches": 0,
+            "rooms": 0,
+            "rounds": 0,
+            "roundsWithPeople": 0,
+            "peopleInRounds": 0,
+            "songPlays": 0,
+            "videoViews": 0,
+            "agentMinutes": 0,
+            "peakPlayers": 0,
+            "peakInOneRoom": 0,
+            "playingNow": 0
+          },
+          "note": "Counts, never people: a visit is a page a browser opened, a play is a Play press, a round is a finished round. Prefetches, crawlers and house QA are not counted. Times are UTC days. Page visits, plays, screens and watches show the last hourly rollup; recent activity appears after ingestion and the next rollup. These counters may be sampled at high traffic.",
+          "ok": true
+        }
+      },
+      {
+        "label": "replay",
+        "status": 200,
+        "ray": "a4b291b13f2cef38-PDX",
+        "body": {
+          "ok": true
+        }
+      },
+      {
+        "label": "after-replay",
+        "status": 200,
+        "ray": "a4b291b94a4bff03-PDX",
+        "body": {
+          "totals": {
+            "visits": 31,
+            "plays": 0,
+            "screens": 0,
+            "watches": 0,
+            "rooms": 0,
+            "rounds": 0,
+            "roundsWithPeople": 0,
+            "peopleInRounds": 0,
+            "songPlays": 0,
+            "videoViews": 0,
+            "agentMinutes": 0,
+            "peakPlayers": 0,
+            "peakInOneRoom": 0,
+            "playingNow": 0
+          },
+          "note": "Counts, never people: a visit is a page a browser opened, a play is a Play press, a round is a finished round. Prefetches, crawlers and house QA are not counted. Times are UTC days. Page visits, plays, screens and watches show the last hourly rollup; recent activity appears after ingestion and the next rollup. These counters may be sampled at high traffic.",
+          "ok": true
+        }
+      }
+    ],
+    "retained": {
+      "checkedAt": "2026-10-15T23:26:33.135Z",
+      "status": 200,
+      "body": "{\n\t\"meta\":\n\t[\n\t\t{\n\t\t\t\"name\": \"dataset\",\n\t\t\t\"type\": \"String\"\n\t\t}\n\t],\n\n\t\"data\":\n\t[\n\t\t{\n\t\t\t\"dataset\": \"hm_rbp_proof_visits\"\n\t\t}\n\t],\n\n\t\"rows\": 1,\n\n\t\"rows_before_limit_at_least\": 19\n}\n"
+    },
+    "dashboard": {
+      "dataset": "hm_rbp_proof_visits",
+      "count": 21,
+      "actions": [
+        "Explore Data",
+        "Copy Binding",
+        "Create Alert"
+      ],
+      "deletionControl": false
+    }
+  },
+  "chrome": {
+    "run": 38823144183,
+    "job": 116724266015,
+    "samples": [
+      {
+        "n": 0,
+        "pipe": false,
+        "ok": true,
+        "launchMs": 7402.888034
+      },
+      {
+        "n": 0,
+        "pipe": true,
+        "ok": true,
+        "launchMs": 287.10462200000075
+      },
+      {
+        "n": 1,
+        "pipe": false,
+        "ok": true,
+        "launchMs": 176.37138500000037
+      },
+      {
+        "n": 1,
+        "pipe": true,
+        "ok": true,
+        "launchMs": 176.48261300000013
+      },
+      {
+        "n": 2,
+        "pipe": false,
+        "ok": true,
+        "launchMs": 177.54122800000005
+      },
+      {
+        "n": 2,
+        "pipe": true,
+        "ok": true,
+        "launchMs": 175.35584700000072
+      },
+      {
+        "n": 3,
+        "pipe": false,
+        "ok": true,
+        "launchMs": 183.08981700000004
+      },
+      {
+        "n": 3,
+        "pipe": true,
+        "ok": true,
+        "launchMs": 182.00629500000105
+      },
+      {
+        "n": 4,
+        "pipe": false,
+        "ok": true,
+        "launchMs": 191.88704300000063
+      },
+      {
+        "n": 4,
+        "pipe": true,
+        "ok": true,
+        "launchMs": 174.00962400000026
+      },
+      {
+        "n": 5,
+        "pipe": false,
+        "ok": true,
+        "launchMs": 181.97253999999884
+      },
+      {
+        "n": 5,
+        "pipe": true,
+        "ok": true,
+        "launchMs": 175.7696270000015
+      },
+      {
+        "n": 6,
+        "pipe": false,
+        "ok": true,
+        "launchMs": 187.82772900000055
+      },
+      {
+        "n": 6,
+        "pipe": true,
+        "ok": true,
+        "launchMs": 185.1291850000016
+      },
+      {
+        "n": 7,
+        "pipe": false,
+        "ok": true,
+        "launchMs": 190.68661000000066
+      },
+      {
+        "n": 7,
+        "pipe": true,
+        "ok": true,
+        "launchMs": 173.28552000000127
+      },
+      {
+        "n": 8,
+        "pipe": false,
+        "ok": true,
+        "launchMs": 187.89086699999825
+      },
+      {
+        "n": 8,
+        "pipe": true,
+        "ok": true,
+        "launchMs": 178.26528399999734
+      },
+      {
+        "n": 9,
+        "pipe": false,
+        "ok": true,
+        "launchMs": 189.76372800000172
+      },
+      {
+        "n": 9,
+        "pipe": true,
+        "ok": true,
+        "launchMs": 182.2332889999998
+      },
+      {
+        "n": 10,
+        "pipe": false,
+        "ok": true,
+        "launchMs": 181.66427399999884
+      },
+      {
+        "n": 10,
+        "pipe": true,
+        "ok": true,
+        "launchMs": 177.60653300000195
+      },
+      {
+        "n": 11,
+        "pipe": false,
+        "ok": true,
+        "launchMs": 180.80871399999887
+      },
+      {
+        "n": 11,
+        "pipe": true,
+        "ok": true,
+        "launchMs": 175.63888600000064
+      }
+    ],
+    "rootCauseEstablished": false
+  },
+  "cleanup": {
+    "checkedAt": "2026-10-15T23:26:22.204Z",
+    "prefix": "hm-rbp-",
+    "inventories": {
+      "workers": {
+        "scanned": 55,
+        "pages": 1,
+        "matches": []
+      },
+      "databases": {
+        "scanned": 42,
+        "pages": 1,
+        "matches": []
+      },
+      "queues": {
+        "scanned": 2,
+        "pages": 1,
+        "matches": []
+      },
+      "durableObjectNamespaces": {
+        "scanned": 162,
+        "pages": 1,
+        "matches": []
+      },
+      "r2": {
+        "scanned": 11,
+        "pages": 1,
+        "matches": []
+      }
+    },
+    "deletions": [
+      {
+        "path": "queues/23d9d8488f364a09a3dfcc37d6eae07e/consumers/5c2e9ddab02d480098fa3f913fe771d1",
+        "status": 200,
+        "success": true,
+        "errors": []
+      },
+      {
+        "path": "workers/scripts/hm-rbp-proof",
+        "status": 200,
+        "success": true,
+        "errors": []
+      },
+      {
+        "path": "queues/23d9d8488f364a09a3dfcc37d6eae07e",
+        "status": 200,
+        "success": true,
+        "errors": []
+      },
+      {
+        "path": "queues/5ceceea991c040078cdefa765bbd0270",
+        "status": 200,
+        "success": true,
+        "errors": []
+      },
+      {
+        "path": "d1/database/e9fe7eac-c54d-436c-ada5-e9a6ed2d016c",
+        "status": 200,
+        "success": true,
+        "errors": []
+      }
+    ]
+  },
+  "remaining": [
+    "Gate/server-hosted idle detach and restore is not implemented.",
+    "The original two admission failures cannot be attributed from the retained successful-run log; no causal admission fix is claimed.",
+    "The original Chrome timeout did not reproduce; no underlying root cause is established.",
+    "Analytics Engine retains hm_rbp_proof_visits (21 points); no deletion control was found in its API or dashboard."
+  ],
+  "rawSamples": "runtime-best-practice-round2-samples.jsonl"
+}
