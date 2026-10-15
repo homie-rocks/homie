@@ -96,7 +96,7 @@ export async function shopConnect(root, options = {}) {
       const verified=saved.result;
       if(!verified.verified || verified.local || verified.mode!==mode || verified.site!==new URL(siteUrl(root)).origin) return fail('verify','Run shop verify with fresh Stripe MCP reads for this site and mode first.');
       mcpAccount=saved.options.account;
-      if(!/^acct_[A-Za-z0-9]+$/.test(mcpAccount??''))return fail('account','Verify with the Stripe MCP account ID first.');
+      if(mcpAccount && !/^acct_[A-Za-z0-9]+$/.test(mcpAccount))return fail('account','Invalid saved Stripe account ID.');
       catalog={config:verified.config,retire:[]};
     } catch { return fail('verify','Run shop verify with fresh Stripe MCP reads for this site first.'); }
   }
@@ -126,6 +126,7 @@ export async function shopConnect(root, options = {}) {
       if (start.code !== 0 || !stripeURL(login?.browser_url) || !complete || !/^[a-zA-Z0-9 -]{1,100}$/.test(login?.verification_code ?? '')) {
         return fail('stripe-login', 'Stripe could not start browser approval. Update the official Stripe CLI and try shop connect again. An account administrator may need to enable CLI access in Stripe’s MCP and CLI access settings.' + stripeReason(start, 'login'));
       }
+      options.onEvent?.({type:'stripe.pairing',code:login.verification_code,url:login.browser_url});
       log(`Approve your studio’s Stripe account in your browser. Pairing code: ${login.verification_code}. ${login.browser_url}`);
       open(login.browser_url);
       const finished = await cli(complete);
@@ -136,7 +137,23 @@ export async function shopConnect(root, options = {}) {
     }
     if (options.webhookOnly) {
       const accountResult=await cli(['get','/v1/account',...(live?['--live']:[])]);
-      if(accountResult.code!==0 || json(accountResult.stdout)?.id!==mcpAccount) return fail('account','Stripe CLI and MCP must select the same account. Verify with the MCP account ID first.');
+      const account=json(accountResult.stdout)?.id;
+      if(accountResult.code!==0 || !/^acct_[A-Za-z0-9]+$/.test(account??'') || mcpAccount && account!==mcpAccount) return fail('account','Stripe CLI and MCP must select the same account. Verify with the MCP account ID first.');
+      if(!mcpAccount) {
+        // Old verifications predate account IDs. Establish ownership before adopting
+        // the CLI account; never silently bind a different account's catalog.
+        const links=[...(catalog.config.items??[]),...(catalog.config.menus??[]),...(catalog.config.slots??[])];
+        for(const link of links) {
+          const read=await cli(['get',`/v1/payment_links/${link.id}`,...(live?['--live']:[])]);
+          const actual=json(read.stdout);
+          if(read.code!==0 || actual?.id!==link.id || actual.url!==link.url || actual.livemode!==(mode==='live'))return fail('account','The signed-in Stripe account does not own the verified links. Select their account and retry.');
+        }
+        const file=join(root,'.studio','stripe-mcp.json');
+        const saved=JSON.parse(readFileSync(file,'utf8'));
+        saved.options={...saved.options,account};
+        writeFileSync(file,JSON.stringify(saved,null,2));
+        mcpAccount=account;
+      }
     }
     const site = siteUrl(root);
     if (!site) return fail('deploy', 'Stripe is connected on this computer. Deploy the studio with studio_deploy (Cloudflare approval first if needed), then run shop connect again.', { mode, connected: true });

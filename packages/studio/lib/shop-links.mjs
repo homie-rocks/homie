@@ -198,7 +198,7 @@ export async function reconcilePaymentLinks({ api, shop, slug, site, mode, booki
     });
   }
   if(shop.items.some(i=>i.interval)) tasks.push(async()=>{
-    const portals=scoped?(knownPortal?[await api('GET',`/v1/billing_portal/configurations/${knownPortal}`,{})]:[]):await list('/v1/billing_portal/configurations');
+    const portals=knownPortal?[await api('GET',`/v1/billing_portal/configurations/${knownPortal}`,{})]:await list('/v1/billing_portal/configurations');
     let portal=portals.find(p=>own(p));
     const params={features:{subscription_cancel:{enabled:true},payment_method_update:{enabled:true},invoice_history:{enabled:true}},login_page:{enabled:true},business_profile:{headline:'Manage your membership or giving'},default_return_url:`${site}/shop/`,metadata};
     if (!portal || !matchesFields(portal, params)) portal=await api('POST',portal?`/v1/billing_portal/configurations/${portal.id}`:'/v1/billing_portal/configurations',params, portal?undefined:`portal-${hash({slug,site,params})}`);

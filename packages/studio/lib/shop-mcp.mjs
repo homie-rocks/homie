@@ -151,3 +151,9 @@ export function publicMcpSetup(root) {
   }
   return false;
 }
+
+/** Record a batch from the official plugin and return the next dependency batch. */
+export async function recordShopObservations(root, options = {}) {
+  if(!Array.isArray(options.observations) || !options.observations.length)throw new Error('Supply observations: [{method,path,params,body}] from Stripe’s official plugin.');
+  return shopMcpPlan(root, options);
+}

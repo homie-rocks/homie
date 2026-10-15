@@ -117,3 +117,31 @@ test('a new unfinished plan also deploys closed before a verification file exist
  const vars=JSON.parse(readFileSync(join(root,'wrangler.jsonc'),'utf8').replace(/^\s*\/\/.*$/gm,'')).vars;
  assert.equal(vars.STRIPE_SHOP_LINKS_ASSET,'/_site/stripe-shop-links.json');assert.equal(vars.STRIPE_SHOP_LINKS,undefined);
 });
+
+test('pairing is a structured event before completion and saved login emits no pairing',async t=>{
+ const {shopConnect}=await import('../lib/stripe-connect.mjs');
+ for(const reused of [false,true]) {
+  const root=studio(t),saved=json(join(root,'.studio/stripe-mcp.json'));saved.result.verifiedAt=new Date().toISOString();writeFileSync(join(root,'.studio/stripe-mcp.json'),JSON.stringify(saved));
+  const events=[];let approved=reused;
+  const result=await shopConnect(root,{webhookOnly:true,storage:join(root,'private'),onEvent:e=>events.push(e),open:()=>{},exec:async args=>{
+   if(args.includes('--version'))return {code:0};
+   if(args.includes('--complete-device')){assert.deepEqual(events,[{type:'stripe.pairing',code:'sample code',url:'https://dashboard.stripe.com/stripecli/confirm_auth'}]);approved=true;return {code:0};}
+   if(args.includes('login'))return {code:0,stdout:JSON.stringify({browser_url:'https://dashboard.stripe.com/stripecli/confirm_auth',verification_code:'sample code',next_step:'stripe login --complete-device'})};
+   if(!approved)return {code:1};
+   if(args.includes('/v1/account'))return {code:0,stdout:'{"id":"acct_fixture"}'};
+   if(args.includes('/v1/webhook_endpoints')&&args.includes('post'))return {code:0,stdout:'{"id":"we_fixture","secret":"whsec_fixture"}'};
+   return {code:0,stdout:'{"data":[],"has_more":false}'};
+  },wrangler:async()=>({code:0,stdout:'[]'})});
+  assert.equal(result.ok,true,JSON.stringify(result));if(reused)assert.deepEqual(events,[]);
+ }
+});
+
+test('MCP job view exposes pairing while the CLI is still waiting',async t=>{
+ const {startJob,jobView}=await import('../lib/jobs.mjs');
+ const root=studio(t),event={type:'stripe.pairing',code:'sample code',url:'https://dashboard.stripe.com/stripecli/confirm_auth'};
+ const job=startJob({root,label:'pairing fixture',cmd:process.execPath,args:['-e',`process.stderr.write(${JSON.stringify('HOMIE_EVENT '+JSON.stringify(event)+'\n')});setInterval(()=>{},1000)`]});
+ t.after(()=>job.child?.kill());
+ await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('no pairing event')),5000);job.child.stderr.once('data',()=>{clearTimeout(timer);resolve();});});
+ assert.equal(jobView(job).state,'running');assert.deepEqual(jobView(job).events,[event]);
+ job.child.kill();await job.done;
+});

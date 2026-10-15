@@ -17,6 +17,15 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [Unreleased]
+
+### Fixed
+- Keyless shop migration discovers existing billing portals when old verifications omit their IDs. Webhook installation fills missing account IDs after verifying link ownership with the saved Stripe login.
+- Stripe pairing is available as a structured MCP job event before approval completes; reused logins emit no pairing event.
+
+### Added
+- `shop observe` records incremental public responses from Stripe's official plugin through stdin and returns the next plan, without a hand-built `--have` file.
+
 ## [0.52.0] - 2026-10-15
 
 **Plugin 0.52.0**
