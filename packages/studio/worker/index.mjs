@@ -1,11 +1,11 @@
 import {catalogue,builtPosts} from './catalogue.mjs';
-import {trackBackground,requestDatabase,databaseBinding,MUTATIONS} from './request-db.mjs';
+import {trackBackground,requestDatabase,MUTATION_VERSION} from './request-db.mjs';
 import {appGraphicsFallback} from './app-graphics.mjs';
 import {JOIN_AREA_FRAME_JS} from './join-area.mjs';
 import {loadShopLinks} from './shop-links.mjs';
 import { directoryUrl } from './directory-choice.mjs';
 import {APP_STORAGE_JS} from './app-frame.mjs';
-import {recordsPage} from './records-page.mjs';
+
 import { RULES_WIRING_MESSAGE } from './rules-wiring.mjs';
 
 export { useFunctions } from './function-registry.mjs';
@@ -100,7 +100,7 @@ import { departure, errorLine, versionOf } from './room-protocol.mjs';
 import { hostedGame } from './hosted-registry.mjs';
 
 import { appCors, isAppOrigin } from './standalone.mjs';
-import { ROOM_ID, badRoomPage, embedAncestors, embedPreview, frameAncestors, noWatchPage, playPage, shellKey, shellStandIn, watchPage } from './pages.mjs';
+import {ROOM_ID,shellKey,shellStandIn,frameAncestors,embedAncestors} from './page-policy.mjs';
 import { PUBLIC_SERVER, SERVER_ID, homeOf, memberCounts, memberOf, noteMember, policyOf, pooledRoom, roomServer, serverAccess, serverPassOf, serverView, serversOf, setMembership } from './servers.mjs';
 import { agentFacts, aiName, encodeFacts, passById, passRefusal, sitRoute } from './agents.mjs';
 
@@ -119,7 +119,7 @@ import {
   notFoundPage, postPage, postsPage, roomView, roomsPage, sectionsOf, songPage, videoPage, watchOf,
 } from './site.mjs';
 import { cookieValues, count, countVisit, isQa, onlyOf, ownerAllowed, playedByGame, playedThisWeek, rangeOf, readStats, today } from './stats.mjs';
-import { ownerRoutes } from './stats-page.mjs';
+
 import { playerRoutes, players as playerAccounts } from './players.mjs';
 import { appRoleSession, appAssetTicket, accessOf, accountSub, gatePage, holders, isOwner, joinHolders, launchOf, officeRoutes, publicCatalogue, redeemInvite, sameOrigin, seatsFor, settingsOf, ticketAllows, ticketFor, ticketSub, usePlayers } from './office.mjs';
 
@@ -637,7 +637,18 @@ export default {
     // Some routes reconcile shop state in waitUntil after returning their page.
     // Keep dispatch behind those writes too, preserving the runtime context's
     // methods and OAuth verification symbols through the proxy.
-    const background=trackBackground(ctx,()=>env.DB?.[MUTATIONS]?dispatch():undefined);
+    let delivered=0;
+    let delivery=Promise.resolve();
+    const background=trackBackground(ctx,()=>{
+      // Serialize late completions and remember the generation acknowledged by
+      // Queues. A read-only waitUntil never replays an earlier mutation.
+      delivery=delivery.catch(error=>{console.error('Background enqueue retry',error);}).then(async()=>{
+        const version=env.DB?.[MUTATION_VERSION]??0;
+        if(version===delivered)return;
+        await dispatch();delivered=version;
+      });
+      return delivery;
+    });
     const requestCtx=background.context;
     // A standalone copy's Lobby call (worker/standalone.mjs): every answer to it can be read by the app's page, an
     // unknown game's 404 and a failure included, so the app can say why it plays offline. No other address is opened.
@@ -650,14 +661,6 @@ export default {
       try { console.error(JSON.stringify({ at: new Date().toISOString(), ev: 'lobby-route-failed', path: url.pathname, error: errorLine(error) })); } catch { /* no console */ }
       res = json({ ok: false, error: 'failed' }, 500);
     } finally {
-      // Refresh after the route has populated the catalogue cache.
-      if(env.DB&&env.LOBBY&&ctx?.waitUntil) {
-        const binding=databaseBinding(env.DB),mutation=url.pathname.startsWith('/_studio/')&&env.DB[MUTATIONS];
-        if(!toolCatalogues.has(binding)||mutation) {
-          toolCatalogues.add(binding);
-          ctx.waitUntil(catalogue(env,url.origin).then(cat=>notifyTools(env,cat,url.origin)).catch(()=>toolCatalogues.delete(binding)));
-        }
-      }
       // A route can commit a write and then fail. Its outbox still needs delivery.
       if(env.DB) {
         const delivery=background.finish();
@@ -682,7 +685,6 @@ export default {
 };
 
 // Refresh once per isolate/binding, and again after studio mutations. No shared pending I/O.
-const toolCatalogues=new WeakSet();
 async function notifyTools(env,cat,origin) {
   if(!env.DB||!env.LOBBY)return;
   const [{pushToolList},{builtins}]=await Promise.all([import('./event-resources.mjs'),import('./mcp-tools.mjs')]);
@@ -726,7 +728,7 @@ async function route(request, env, ctx) {
     if (!directory || env.HOMIE_PREVIEW === '1') return json({ ok: false, error: 'no-directory', message: 'This studio is not connected to a directory.' }, 404);
     return Response.redirect(`${directory}/studio/setup/connect?site=${encodeURIComponent(url.origin)}`, 302);
   }
-  if (path.startsWith('/_studio/')) return (await officeRoutes(request, env, url, { catalogueOf: getAll })) ?? ownerRoutes(request, env, url, { catalogueOf: getAll });
+  if (path.startsWith('/_studio/')) return (await officeRoutes(request, env, url, { catalogueOf: getAll })) ?? (await import('./stats-page.mjs')).ownerRoutes(request, env, url, { catalogueOf: getAll });
   if (path === '/__homie' || path.startsWith('/__homie/')) return notAHomie(request);
   // The shop (0.24.0) before player accounts: /api/player/owns is the shop's.
   {
@@ -1003,7 +1005,7 @@ async function route(request, env, ctx) {
           if (a.status === 401) return Response.redirect(`${url.origin}/account/?next=${encodeURIComponent(url.pathname + url.search)}`, 302);
           return json({ ok: false, error: a.error }, a.status);
         }
-        if(!meta.room)return appRoleSession(recordsPage(meta,url,cat,await availableShellShop(env,cat,game),Boolean(await (await import('./local-test.mjs')).localSession(request,env)),launch!=='public'?await appAssetTicket(env,game,undefined,{request,meta,launch}):null),request,env,meta,launch);
+        if(!meta.room)return appRoleSession((await import('./records-page.mjs')).recordsPage(meta,url,cat,await availableShellShop(env,cat,game),Boolean(await (await import('./local-test.mjs')).localSession(request,env)),launch!=='public'?await appAssetTicket(env,game,undefined,{request,meta,launch}):null),request,env,meta,launch);
       }
     }
     const lobby = () => env.LOBBY.get(env.LOBBY.idFromName(game));
@@ -1097,13 +1099,13 @@ async function route(request, env, ctx) {
       if (body.join !== false && !d.ok) return json({ ok: false, error: d.why, message: 'This server\'s door does not let you in.' }, 403);
       try { return json(await setMembership(env, game, srv.id, acct.slice(2), { join: body.join !== false, home: body.home === true })); } catch { return json({ ok: false, error: 'not-migrated', message: 'This studio\'s database has no servers yet (migration 0006).' }, 503); }
     }
-    if (sub === 'play/preview' && env.HOMIE_EMBED_PREVIEW === '1' && isLocalOrigin(url.origin)) return embedPreview(cat, meta, url.origin);
+    if (sub === 'play/preview' && env.HOMIE_EMBED_PREVIEW === '1' && isLocalOrigin(url.origin)) return (await import('./pages.mjs')).embedPreview(cat, meta, url.origin);
     if (sub === 'tv' || sub === 'play' || sub === 'play/embed') {
       const embed = sub === 'play/embed';
       if (embed && (!playerEnabled(cat, meta) || launch !== 'public')) return notFoundPage(meta.kind === 'app' ? 'This app does not open inside a post. Open its studio page.' : 'This game does not play inside a post. Open its studio page to play.', cat);
       const screen = !embed && (sub === 'tv' || url.searchParams.get('screen') === '1');
       const asked = embed ? null : askedRoom;
-      if (asked !== null && !ROOM_ID.test(asked)) return badRoomPage(cat, meta, asked, { screen });
+      if (asked !== null && !ROOM_ID.test(asked)) return (await import('./pages.mjs')).badRoomPage(cat, meta, asked, { screen });
       if (!door.ok) return shut();
       // Which server: the path's, the room's, else (Play) the player's home server, else public.
       let srv = pathServer ? serverById(pathServer[1]) : asked !== null ? serverById(roomServer(asked)) : null;
@@ -1148,20 +1150,20 @@ async function route(request, env, ctx) {
         const sh = await availableShellShop(env, cat, game, { kids: pol.kids });
         let shopQr = null;
         if (sh && !local) try { shopQr = qrSvg(`${url.origin}/shop/?game=${encodeURIComponent(game)}`, { title: `Shop: ${meta.name ?? game}` }); } catch { shopQr = null; }
-        return appRoleSession(playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, screen: true, joinUrl, qr, local, room, ticket, owner: d.owner, launch, server, shop: sh ? { ...sh, qr: shopQr, url: `${url.origin}/shop/?game=${game}` } : null }),request,env,meta,launch);
+        return appRoleSession((await import('./pages.mjs')).playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, screen: true, joinUrl, qr, local, room, ticket, owner: d.owner, launch, server, shop: sh ? { ...sh, qr: shopQr, url: `${url.origin}/shop/?game=${game}` } : null }),request,env,meta,launch);
       }
       await countVisit(request, env, ctx, game, 'play');
       shareDaily(cat, url, ctx);
-      const page=await appRoleSession(playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, embed, preview: env.HOMIE_EMBED_PREVIEW === '1', ticket: embed ? null : ticket, owner: !embed && d.owner, launch, server, ...(embed ? {} : await chatWho(env, game, srv, d.acct)), shop: await availableShellShop(env, cat, game, { kids: pol.kids }) }),request,env,meta,launch);
+      const page=await appRoleSession((await import('./pages.mjs')).playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, embed, preview: env.HOMIE_EMBED_PREVIEW === '1', ticket: embed ? null : ticket, owner: !embed && d.owner, launch, server, ...(embed ? {} : await chatWho(env, game, srv, d.acct)), shop: await availableShellShop(env, cat, game, { kids: pol.kids }) }),request,env,meta,launch);
       for(const cookie of recordsGuest?.cookies??[])page.headers.append('set-cookie',cookie);return page;
     }
     if (sub === 'watch') {
       // The same door as Play: a game that is private or an invite-only beta is watched only by whoever may play it.
       const asked = askedRoom;
-      if (asked !== null && !ROOM_ID.test(asked)) return badRoomPage(cat, meta, asked, { watch: true });
+      if (asked !== null && !ROOM_ID.test(asked)) return (await import('./pages.mjs')).badRoomPage(cat, meta, asked, { watch: true });
       if (!door.ok) return shut();
       const policy = watchOf(meta);
-      if (policy === 'off') return noWatchPage(cat, meta);
+      if (policy === 'off') return (await import('./pages.mjs')).noWatchPage(cat, meta);
       // A server's door is its watch door too (an invite or an account); a beginner server is watched by anyone.
       const srv = asked !== null ? serverById(roomServer(asked)) : serverById('public') ?? PUBLIC_SERVER;
       if (!srv) return notFoundPage(`${meta.name} has no server for the room "${asked}".`, cat);
@@ -1170,7 +1172,7 @@ async function route(request, env, ctx) {
       const ticket = d.holder ? await ticketFor(env, game, d.holder) : null;
       await countVisit(request, env, ctx, game, 'watch');
       shareDaily(cat, url, ctx);
-      return watchPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, room: asked, ticket, policy, owner: d.owner, ...(await chatWho(env, game, srv, d.acct)) });
+      return (await import('./pages.mjs')).watchPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, room: asked, ticket, policy, owner: d.owner, ...(await chatWho(env, game, srv, d.acct)) });
     }
     if (sub === 'api/watch') {
       if (!door.ok || watchOf(meta) === 'off') return json({ ok: false, error: 'not-found' }, 404);
@@ -1376,6 +1378,7 @@ async function fallback(request, env, url, getCat) {
 
 export {Table} from './table.mjs';
 export {roomEndAt} from './room-lifecycle.mjs';
-export {Lobby, LOBBY_APP_VERSIONS, LOBBY_ROOMS_MAX} from './lobby.mjs';
+export {Lobby} from './lobby.mjs';
+export {LOBBY_APP_VERSIONS, LOBBY_ROOMS_MAX} from './lobby-limits.mjs';
 
 export {AppRecordHub, EventHub} from './stream-objects.mjs';

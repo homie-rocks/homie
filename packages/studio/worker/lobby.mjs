@@ -1,6 +1,6 @@
 import {lobbyStore} from './lobby-store.mjs';
 import { errorLine, versionOf } from './room-protocol.mjs';
-import { ROOM_ID } from './pages.mjs';
+import { ROOM_ID } from './page-policy.mjs';
 import { SERVER_ID, pooledRoom, roomCode, roomServer } from './servers.mjs';
 import { seatCount } from './seats.mjs';
 import { counter, today } from './stats.mjs';
@@ -9,9 +9,8 @@ const json = (body, status = 200, extra = {}) => new Response(`${JSON.stringify(
   status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...extra },
 });
 
-export const LOBBY_APP_VERSIONS = 8;
-
-export const LOBBY_ROOMS_MAX = 512;
+import {LOBBY_APP_VERSIONS, LOBBY_ROOMS_MAX} from './lobby-limits.mjs';
+export {LOBBY_APP_VERSIONS, LOBBY_ROOMS_MAX} from './lobby-limits.mjs';
 
 export class Lobby {
   constructor(ctx, env) {

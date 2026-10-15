@@ -30,7 +30,7 @@ import { isAiName } from './agents.mjs';
 import { cookieValue } from './stats.mjs';
 import { adoptGuest, bumpPlayerStats, dropPlayerData, fall, fallenList, getSave, listSaves, playerData, readPlayerStats, SAVE_LIMITS, savesSummary, wipeSaves, writeSaves } from './saves.mjs';
 import { bytesToB64url, randomToken, sha256Hex, verifyAssertion, verifyRegistration } from './webauthn.mjs';
-import { ACCOUNT_JS, accountPage } from './account-page.mjs';
+
 import { adoptShopStatements, migrated as shopMigrated, forgetPlayerShop, livePurchases, shopDataOf } from './shop-store.mjs';
 import { forgetPlayerHistory, playerHistory } from './lounge-store.mjs';
 
@@ -472,12 +472,12 @@ async function gameOf(catalogueOf, id) {
 export async function playerRoutes(request, env, ctx, url, { catalogueOf }) {
   const path = url.pathname;
   const read = request.method === 'GET' || request.method === 'HEAD';
-  if (path === '/_homie/account.js') return new Response(ACCOUNT_JS, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=300', 'x-content-type-options': 'nosniff' } });
+  if (path === '/_homie/account.js') return new Response((await import('./account-page.mjs')).ACCOUNT_JS, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=300', 'x-content-type-options': 'nosniff' } });
   if (path === '/account') return Response.redirect(`${url.origin}/account/${url.search}`, 301);
   if (path === '/account/') {
     if (!read) return fail(405, 'method', 'GET only');
     const cat = await catalogueOf();
-    return accountPage(cat, { origin: url.origin, next: nextOf(url.searchParams.get('next')), owner: OWNER_KEY.test(url.searchParams.get('owner') ?? '') ? url.searchParams.get('owner') : null, link: LINK.test(url.searchParams.get('k') ?? '') ? url.searchParams.get('k') : null, mode: ['verify', 'recover'].includes(url.searchParams.get('do')) ? url.searchParams.get('do') : null, features: features(env) });
+    return (await import('./account-page.mjs')).accountPage(cat, { origin: url.origin, next: nextOf(url.searchParams.get('next')), owner: OWNER_KEY.test(url.searchParams.get('owner') ?? '') ? url.searchParams.get('owner') : null, link: LINK.test(url.searchParams.get('k') ?? '') ? url.searchParams.get('k') : null, mode: ['verify', 'recover'].includes(url.searchParams.get('do')) ? url.searchParams.get('do') : null, features: features(env) });
   }
   if (!path.startsWith('/api/player/')) return null;
   const f = features(env);

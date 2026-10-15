@@ -1,3 +1,5 @@
+import {ROOM_ID,shellKey,shellStandIn,frameAncestors,embedAncestors} from './page-policy.mjs';
+export {ROOM_ID,shellKey,shellStandIn,frameAncestors,embedAncestors} from './page-policy.mjs';
 import {JOIN_AREA_SHELL_JS} from './join-area.mjs';
 import { appWords, openPath } from './app-format.mjs';
 import { APP_SHELL_JS } from './app-shell.mjs';
@@ -19,26 +21,14 @@ import { STUDIO_VERSION_TAG } from './version.mjs';
  * instead of hosting a newer game inside a page that lacks what that game needs (a player ticket, for one).
  * It does not change when only the game's code or art does: that is still a reload of the frame alone.
  */
-export function shellKey(g) {
-  // Never what names a build (the rules' build and state hashes, the bundle's version): those change with every
-  // edit, and a newer build of the same game inside the same page is exactly what the frame's own reload is for.
-  const { build: _build, stateHash: _state, ...room } = g?.room ?? {};
-  const { version: _version, ...netplay } = g?.netplay ?? {};
-  const text = JSON.stringify([g?.kind ?? null, g?.players ?? null, room, g?.saves ?? null, g?.agents ?? null, g?.screen ?? null, netplay, g?.launch ?? null]);
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i += 1) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
-  return `${STUDIO_VERSION_TAG}-${(h >>> 0).toString(36)}`;
-}
+
 /**
  * The frame's stand-in when its page is older than the game it would host. It tells the page, and loads no game.
  * `key`: the page understands the handshake and reloads itself once. No key: a page from before the handshake, whose
  * only way to load a whole new page is the one it has for leaving a finished room; it is used only when the game cannot
  * work inside that page at all.
  */
-export function shellStandIn(room, key) {
-  const message = key ? { t: 'homie-net', what: 'shell', key } : { t: 'homie-net', what: 'rematch', room };
-  return `<!doctype html><meta charset="utf-8"><title>Updating</title><body style="margin:0;background:#0b0d14;color:#cfd6e6;font:15px system-ui;display:grid;place-items:center;height:100vh"><p>This game was updated. Loading it again…</p><script>try{parent.postMessage(${JSON.stringify(message).replace(/</g, '\\u003c')},'*');}catch(e){}</script>`;
-}
+
 import { SKILLS } from './agents.mjs';
 import { KIDS_LINE, POLICY_WORDS } from './servers.mjs';
 import { SAVES_SHELL_CSS, SAVES_SHELL_JS } from './saves-shell.mjs';
@@ -49,18 +39,13 @@ import { ARRIVAL_JS, arrivalCard } from './arrival.mjs';
 export { homePage, mediaIndexPage, notFoundPage, songPage, videoPage } from './site.mjs';
 
 /** A room code: 1 to 32 letters, digits, - or _. */
-export const ROOM_ID = /^[A-Za-z0-9_-]{1,32}$/;
+
 
 /**
  * Who may put the play page (and so the game) inside a frame: this site, plus the https origins studio.json
  * `site.frameAncestors` names (for example a hub that embeds the game). Anything else is refused by the browser.
  */
-export function frameAncestors(cat) {
-  const extra = (Array.isArray(cat?.studio?.site?.frameAncestors) ? cat.studio.site.frameAncestors : [])
-    .map((o) => { try { const u = new URL(String(o)); return u.protocol === 'https:' && u.origin === String(o).replace(/\/+$/, '') ? u.origin : null; } catch { return null; } })
-    .filter(Boolean).slice(0, 8);
-  return ["'self'", ...extra].join(' ');
-}
+
 
 /** What a play, big-screen or watch page answers to a room code it cannot use: said on the page, never a silent public room. */
 export function badRoomPage(cat, g, raw, { screen = false, watch = false } = {}) {
@@ -1596,12 +1581,7 @@ const WATCH_JS = String.raw`${BUILD_RETRY_JS}(function () {
   }
 }());`;
 
-export function embedAncestors(cat, origin, preview = false) {
-  const normal = playerAncestors(cat);
-  if (!preview || !/^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin)) return normal;
-  const port = new URL(origin).port;
-  return `${normal === "'none'" ? '' : normal} http://localhost${port ? ':' + port : ''} http://127.0.0.1${port ? ':' + port : ''}`.trim();
-}
+
 
 export function embedPreview(cat, g, origin) {
   const frameOrigin = new URL(origin); frameOrigin.hostname = frameOrigin.hostname === 'localhost' ? '127.0.0.1' : 'localhost';
