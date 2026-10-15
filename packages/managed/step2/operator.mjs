@@ -15,8 +15,8 @@ if(!readOnly)process.once('exit',acquireStateLock(local));
 
 export const state=existsSync(local+'resources.json')?JSON.parse(readFileSync(local+'resources.json')):{account,resources:[],receipts:[]};
 export const save=()=>{if(readOnly)throw new Error('Read-only operator command');atomicState(local+'resources.json',state);};
-let credential;
-export function token(){return credential??=JSON.parse(execFileSync(wrangler,['auth','token','--json'],{encoding:'utf8'})).token;}
+let credential,credentialAt=0;
+export function token(){if(!credential||Date.now()-credentialAt>300000){execFileSync(wrangler,['whoami'],{stdio:'ignore'});credential=JSON.parse(execFileSync(wrangler,['auth','token','--json'],{encoding:'utf8'})).token;credentialAt=Date.now();}return credential;}
 export async function api(path,method='GET',body){
  const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/${path}`,{method,headers:{authorization:'Bearer '+token(),...(!(body instanceof FormData)?{'content-type':'application/json'}:{})},...(body===undefined?{}:{body:body instanceof FormData?body:JSON.stringify(body)}),signal:AbortSignal.timeout(60000)});
  if(r.status===404)return null;

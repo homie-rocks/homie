@@ -10,6 +10,7 @@ async function remote(env,tenant,commit,mode){
  const api=provider(env),base=`artifacts/namespaces/${tenant.namespace}`;
  const repo=await api(base+'/repos/'+tenant.repo);
  const t=await api(base+'/tokens','POST',{repo:tenant.repo,scope:'read',ttl:900});
+ let primary;
  try{
   const job={remote:repo.remote,readToken:t.plaintext,commit,toolkit:tenant.toolkit,node:tenant.node,lockDigest:tenant.lockDigest,...(mode==='check'?{mode,previewURL:tenant.preview.url}:{})};
   const r=await env.BUILDER.fetch('https://builder/build',{method:'POST',headers:{authorization:'Bearer '+env.BUILD_KEY,'content-type':'application/json'},body:JSON.stringify(job)});
@@ -18,7 +19,7 @@ async function remote(env,tenant,commit,mode){
   if(mode!=='check')assertArtifact(artifact,job);
   else if(!artifact.studio||artifact.commit!==commit)throw new Error('Studio checks failed');
   return {artifact,archive:result.archive};
- }finally{await api(base+'/tokens/'+t.id,'DELETE');}
+ }catch(error){primary=error;throw error;}finally{try{await api(base+'/tokens/'+t.id,'DELETE');}catch(error){throw new Error((primary?primary.message+'; ':'')+'Read-token revocation failed (TTL 900s): '+error.message);}}
 }
 export class Pipeline extends WorkflowEntrypoint {
  async run(event,step){

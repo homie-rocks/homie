@@ -114,3 +114,15 @@ the artifact bucket, deletes only the recorded resources and verifies absence.
 Run `node --test packages/managed/test/step2.test.mjs` from the repository root.
 The wrapper includes these tests in the existing CI shard inventory without
 changing step 1's modules or the toolkit version.
+
+The live experiment uses the operator's short-lived Wrangler OAuth bearer only in
+the trusted deployment Worker. This is deliberately temporary test credential
+provisioning, not unattended production credential management. Before onboarding,
+replace it with a dedicated least-privilege service token and rotation procedure.
+Neither that bearer nor the operator/builder invocation keys enter a container.
+
+The harness holds an exclusive local state lock across mutations and publishes
+complete snapshots by atomic rename. Resources are keyed by provider path, since
+D1 and a Worker may legitimately have the same name. Known creation receipts were
+used to recover an early concurrent-save error; final cleanup inventories the
+actual bindings before any cascading deletion.
