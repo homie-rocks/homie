@@ -1,20 +1,22 @@
 /** Only the operator registry grants a script capability. Headers carry no authority. */
+import {routeSnapshot,resolveRoute} from './route-cache.mjs';
 export const HTTP_LIMITS = {cpuMs:100, subRequests:32};
 export const TICK_LIMITS = {cpuMs:1000, subRequests:128};
 const registry=env=>env.REGISTRY.getByName('routes');
-function worker(env, script, tick=false) {
+function worker(env, script, tick=false, limits) {
   return env.STUDIOS.get(script, tick ? {props:{managedTick:true}} : {}, {
-    limits:tick ? TICK_LIMITS : HTTP_LIMITS, outbound:{tenant:script}
+    limits:limits ?? (tick ? TICK_LIMITS : HTTP_LIMITS), outbound:{tenant:script}
   });
 }
 export default {
   async fetch(request, env) {
     const url=new URL(request.url);
     if(url.pathname.startsWith('/__managed/'))return new Response('Not found',{status:404});
-    const route=await registry(env).resolve(url.hostname,url.pathname);
+    let snapshot;try{snapshot=await routeSnapshot(env);}catch{return new Response('Routing unavailable',{status:503});}
+    const route=resolveRoute(snapshot,url.hostname,url.pathname);
     if(!route)return new Response('Not found',{status:404});
     if(route.prefix!=='/')url.pathname=url.pathname.slice(route.prefix.length)||'/';
-    return worker(env,route.script).fetch(new Request(url,request));
+    return worker(env,route.script,false,route.limits).fetch(new Request(url,request));
   },
   async scheduled(event,env) {
     const scripts=await registry(env).scheduled();

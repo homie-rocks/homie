@@ -19,7 +19,7 @@ export function tickRequired(studio) {
     (existsSync(definitions)&&read(definitions).length) ||
     (existsSync(metadata)&&Object.keys(read(metadata).mcp?.events??{}).length));
 }
-export function prepare({studio, output, name, databaseId, accountId, hostname, controlHosts, deployed=null}) {
+export function prepare({studio, output, name, databaseId, accountId, hostname, controlHosts, deployed=null, managed=true}) {
   if (!/^hm-test-[a-z0-9-]+$/.test(name)) throw new Error('Step 1 only accepts hm-test- resource names');
   if (!/^[0-9a-f-]{36}$/.test(databaseId) || !/^[0-9a-f]{32}$/.test(accountId)) throw new Error('Explicit database/account IDs required');
   if (!hostname || new URL('https://' + hostname).hostname !== hostname) throw new Error('Exact hostname required');
@@ -45,12 +45,25 @@ export function prepare({studio, output, name, databaseId, accountId, hostname, 
   catalogue.studio={...catalogue.studio,canonical:'https://'+hostname,directory:false,concept:true,rooms:{share:false},stats:{share:false}};
   writeFileSync(join(assets,'games.json'),JSON.stringify(catalogue));
   cpSync(dirname(current.main),runtime,{recursive:true});
-  writeFileSync(join(runtime,'managed.mjs'),`import worker from './worker.js';
-export * from './worker.js';
+  // Deliberate allowlist: no source routes, secrets, remote bindings, AI, R2 or production IDs.
+  const ownBindings=(source.durable_objects?.bindings??[]).filter(b=>!b.script_name).map(({name,class_name})=>({name,class_name}));
+  const classes=[...new Set(ownBindings.map(b=>b.class_name))];
+  if(classes.some(c=>!/^[$A-Za-z_][$A-Za-z0-9_]*$/.test(c)))throw new Error('Invalid DO class');
+  cpSync(fileURLToPath(new URL('./supervisor.mjs',import.meta.url)),join(runtime,'supervisor.mjs'));
+  writeFileSync(join(runtime,'managed.mjs'),`import worker, * as owner from './worker.js';
+${managed?'':"export * from './worker.js';"}
+${managed&&classes.length?"import {supervise} from './supervisor.mjs';":''}
+${(managed?classes:[]).map(className=>`export const ${className}=supervise(owner.${className},${JSON.stringify({tenant:name,className,binding:ownBindings.find(b=>b.class_name===className).name})});`).join('\n')}
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname.startsWith('/__managed/')) {
+      if (url.pathname === '/__managed/notify' && request.method === 'POST' && ctx.props?.managedNotify === true) {
+        const objects=await request.json();
+        const results=[];
+        for(let i=0;i<objects.length;i+=20)results.push(...await Promise.allSettled(objects.slice(i,i+20).map(o=>env[o.binding].get(env[o.binding].idFromString(o.id)).fetch('https://managed.invalid/__homie_supervisor/notify'))));
+        return Response.json({notified:results.length});
+      }
       if (url.pathname !== '/__managed/tick' || request.method !== 'POST' || ctx.props?.managedTick !== true)
         return new Response('Not found', {status:404});
       const tick = await request.json();
@@ -61,10 +74,6 @@ export default {
   }
 };
 `);
-  // Deliberate allowlist: no source routes, secrets, remote bindings, AI, R2 or production IDs.
-  const ownBindings=(source.durable_objects?.bindings??[]).filter(b=>!b.script_name).map(({name,class_name})=>({name,class_name}));
-  const classes=[...new Set(ownBindings.map(b=>b.class_name))];
-  if(classes.some(c=>!/^[$A-Za-z_][$A-Za-z0-9_]*$/.test(c)))throw new Error('Invalid DO class');
   // Provider settings, never the local output directory, are migration authority.
   const known=[...new Set((deployed?.bindings??[]).filter(b=>b.type==='durable_object_namespace'&&!b.script_name).map(b=>b.class_name))];
   if(known.some(c=>!classes.includes(c)))throw new Error('Removing DO classes requires an explicit storage migration');
@@ -84,6 +93,7 @@ export default {
     rules:[{type:'ESModule',globs:['**/*.js','**/*.mjs'],fallthrough:true}],
     assets:{directory:assets,binding:'ASSETS',run_worker_first:true},
     durable_objects:{bindings:ownBindings},
+    ...(managed&&classes.length?{services:[{binding:'HOMIE_STOP',service:'hm-test-dispatch',entrypoint:'StopControl',props:{tenant:name}}]}:{}),
     migrations,
     d1_databases:[{binding:'DB',database_name:name+'-db',database_id:databaseId,migrations_dir:migrationsDir}],
     vars:{STUDIO_NAME:source.vars?.STUDIO_NAME ?? name, HOMIE_CONCEPT:'1',
@@ -94,7 +104,7 @@ export default {
   const here=dirname(fileURLToPath(import.meta.url));
   writeFileSync(join(output,'outbound.json'),JSON.stringify({name:'hm-test-outbound',account_id:accountId,main:join(here,'outbound.mjs'),compatibility_date:'2026-10-01',compatibility_flags:['global_fetch_strictly_public'],workers_dev:false,observability:{enabled:true},vars:{CONTROL_HOSTS:controlHosts??[hostname]}},null,2));
   writeFileSync(join(output,'dispatch.json'),JSON.stringify({name:'hm-test-dispatch',account_id:accountId,main:join(here,'dispatch-entry.mjs'),compatibility_date:'2026-10-01',workers_dev:true,
-    dispatch_namespaces:[{binding:'STUDIOS',namespace:'homie-managed-test',outbound:{service:'hm-test-outbound',parameters:['tenant']}}],
+    dispatch_namespaces:[{binding:'STUDIOS',namespace:'homie-managed-test'}],
     queues:{producers:[{binding:'TICKS',queue:'hm-test-ticks'}],consumers:[{queue:'hm-test-ticks',max_batch_size:1,max_retries:3,dead_letter_queue:'hm-test-ticks-dlq'},{queue:'hm-test-ticks-dlq',max_batch_size:1,max_retries:3}]},
     durable_objects:{bindings:[{name:'REGISTRY',class_name:'Registry'}]},migrations:[{tag:'v1',new_sqlite_classes:['Registry']}],triggers:{crons:['* * * * *']},observability:{enabled:true}},null,2));
   return config;

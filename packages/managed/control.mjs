@@ -91,7 +91,7 @@ if(command==='init') {
     const metadata=await api(command==='deploy-plain'?`workers/services/${name}`:`workers/dispatch/namespaces/${state.namespace}/scripts/${name}`);
     deployed.migration_tag=(command==='deploy-plain'?metadata?.default_environment?.script:metadata?.script)?.migration_tag;
   }
-  prepare({studio,output,name,databaseId:db.id,accountId:state.accountId,hostname,deployed});
+  prepare({studio,output,name,databaseId:db.id,accountId:state.accountId,hostname,deployed,managed:command!=='deploy-plain'});
   run(['d1','migrations','apply','DB','--remote','--config',join(output,'user.json')]);
   // Same deploy-time reconciliation as self-hosted, including removed/changed declarations.
   await api(`d1/database/${db.id}/query`,'POST',{sql:functionDeploymentSQL(resolve(studio))});
@@ -109,10 +109,6 @@ if(command==='init') {
     state.workers.push('hm-test-outbound');save();
     run(['deploy','--config',join(output,'outbound.json')]);
   }
-  state.users??=[];if(!state.users.includes(name))state.users.push(name);save();
-  run(['deploy','--config',join(output,'user.json'),'--dispatch-namespace',state.namespace]);
-  await inventoryUsers();
-  await api(`workers/dispatch/namespaces/${state.namespace}/scripts/${name}/tags`,'PUT',['hm-test','step-1',name]);
   if(!state.workers.includes('hm-test-dispatch')) {
     state.workers.push('hm-test-dispatch');save();
     const secretPath=join(stateDir,'operator-token');
@@ -126,6 +122,10 @@ if(command==='init') {
     for(const b of settings.bindings.filter(b=>b.type==='durable_object_namespace'))state.durableObjects.push({name:'hm-test-dispatch_'+b.class_name,id:b.namespace_id});
     save();
   }
+  state.users??=[];if(!state.users.includes(name))state.users.push(name);save();
+  run(['deploy','--config',join(output,'user.json'),'--dispatch-namespace',state.namespace]);
+  await inventoryUsers();
+  await api(`workers/dispatch/namespaces/${state.namespace}/scripts/${name}/tags`,'PUT',['hm-test','step-1',name]);
   const ticks=tickRequired(resolve(studio));
   await operator('route',{tenant:name,routes:[{hostname,prefix}],ticks});
   save();

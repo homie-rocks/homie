@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import dispatch from './dispatch.mjs';
-function registryEnv(env){env.REGISTRY={getByName(){return {resolve:async(h,p)=>(env.ROUTES??[]).filter(r=>!r.disabled&&r.hostname===h&&(r.prefix==='/'||p===r.prefix||p.startsWith(r.prefix+'/'))).sort((a,b)=>b.prefix.length-a.prefix.length)[0],scheduled:async()=>env.ROUTES.filter(r=>r.ticks).map(r=>r.script),claim:async script=>env.ROUTES.some(r=>r.script===script)?'run':'skip',finish:async()=>{}}}};return env;}
+import {invalidateRoutes} from './route-cache.mjs';
+function registryEnv(env){env.REGISTRY={getByName(){return {snapshot:async()=>({version:1,routes:(env.ROUTES??[]).map(r=>({tenant:r.script,disabled:r.disabled,limits:r.limits,routes:[r]}))}),resolve:async(h,p)=>(env.ROUTES??[]).filter(r=>!r.disabled&&r.hostname===h&&(r.prefix==='/'||p===r.prefix||p.startsWith(r.prefix+'/'))).sort((a,b)=>b.prefix.length-a.prefix.length)[0],scheduled:async()=>env.ROUTES.filter(r=>r.ticks).map(r=>r.script),claim:async script=>env.ROUTES.some(r=>r.script===script)?'run':'skip',finish:async()=>{}}}};return env;}
 const routes=[{hostname:'studio.test',prefix:'/',script:'hm-test-studio',ticks:true}];
 test('unknown hosts and public tick never acquire dispatch capabilities',async()=>{
   const env={ROUTES:routes,STUDIOS:{get(){throw new Error('must not dispatch')}}};
@@ -29,7 +30,7 @@ test('queue retries failing tenants independently; killed tenants never dispatch
   const outcomes=[];
   await dispatch.queue({messages:messages.map(m=>({...m,ack(){outcomes.push('ack')},retry(){outcomes.push('retry')}}))},env);
   assert.deepEqual(outcomes,['ack','retry']);
-  env.ROUTES=[];calls=[];
+  env.ROUTES=[];calls=[];invalidateRoutes(env);
   await dispatch.queue({messages:[{body:messages[0].body,ack(){},retry(){throw Error('no retry')}}]},env);
   assert.deepEqual(calls,[]);
   assert.equal((await dispatch.fetch(new Request('https://studio.test/'),env)).status,404);
@@ -156,4 +157,18 @@ test('ticks enroll explicit crons, functions and event feeds, excluding static s
   writeFileSync(config,'{}');writeFileSync(join(dir,'studio.json'),JSON.stringify({mcp:{events:{changed:{event:'record.changed'}}}}));assert.equal(tickRequired(dir),true);
   writeFileSync(join(dir,'studio.json'),'{}');mkdirSync(join(dir,'site/src/functions'),{recursive:true});writeFileSync(join(dir,'site/src/functions/declarations.json'),'[{"name":"notify","event":"changed"}]');assert.equal(tickRequired(dir),true);
  }finally{rmSync(dir,{recursive:true,force:true})}
+});
+
+import {routeSnapshot,resolveRoute} from './route-cache.mjs';
+test('snapshot expiry is bounded from read start, versioned, coalesced and fails closed',async()=>{
+ let clock=0,reads=0,fail=false;const r=memoryRegistry();await r.put('one',[{hostname:'test',prefix:'/'}]);
+ const env={REGISTRY:{getByName:()=>({async snapshot(){reads++;if(fail)throw Error('offline');return r.snapshot();}})}};
+ const [a,b]=await Promise.all([routeSnapshot(env,()=>clock),routeSnapshot(env,()=>clock)]);assert.equal(reads,1);assert.equal(a.version,b.version);
+ await r.kill('one');clock=1999;assert.ok(resolveRoute(await routeSnapshot(env,()=>clock),'test','/'));
+ clock=2000;assert.equal(resolveRoute(await routeSnapshot(env,()=>clock),'test','/'),null);assert.equal(reads,2);
+ clock=4000;fail=true;await assert.rejects(routeSnapshot(env,()=>clock),/offline/);
+});
+test('disabled longest route never falls through to another tenant',async()=>{
+ const r=memoryRegistry();await r.put('one',[{hostname:'test',prefix:'/'}]);await r.put('two',[{hostname:'test',prefix:'/nested'}]);await r.kill('two');
+ assert.equal(resolveRoute(await r.snapshot(),'test','/nested/a'),null);
 });
