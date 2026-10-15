@@ -1,3 +1,4 @@
+import {staticWorkerRoutes} from './static-assets.mjs';
 import {verifiedMcpConfig,publicMcpSetup} from './shop-mcp.mjs';
 import {readFileSync,writeFileSync,existsSync,renameSync} from 'node:fs';
 import {join} from 'node:path';
@@ -48,5 +49,5 @@ export function refreshWorkerConfig(root,overrides={}) {
   const tools=read(join(root,'site/src/tools/declarations.json'));
   const ai=cf.ai??listExperiences(root).some(g=>g.decide===true || g.chat!==false && (g.chat?.mode??'text')==='text' && g.chat?.ai!==false);
   const paid=paidReleases(root).length>0||existsSync(join(root,'shop.json'))||tools.paid===true;
-  updateWorkerConfig(root,wranglerConfig({worker:cf.worker,name:studio.name,d1:cf.d1,d1Id:cf.d1Id,r2:cf.r2,layout:layoutOf(root),ai,paidParts:paid,partsRateLimit:cf.purchaseRateLimit??null,routes:cf.routes??null,eventFeeds:studio.mcp?.events,triggers:{crons:[scheduleTrigger(functions,{eventFeeds:Object.keys(studio.mcp?.events??{}).length>0})].filter(Boolean)},...overrides}));
+  updateWorkerConfig(root,wranglerConfig({workerRoutes:staticWorkerRoutes(read(join(root,'site/dist/games.json'))),worker:cf.worker,name:studio.name,d1:cf.d1,d1Id:cf.d1Id,r2:cf.r2,layout:layoutOf(root),ai,paidParts:paid,partsRateLimit:cf.purchaseRateLimit??null,routes:cf.routes??null,eventFeeds:studio.mcp?.events,triggers:{crons:[scheduleTrigger(functions,{eventFeeds:Object.keys(studio.mcp?.events??{}).length>0})].filter(Boolean)},...overrides}));
 }

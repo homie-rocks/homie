@@ -18,7 +18,7 @@ export async function buildWorker(root,esbuild,metadata=null) {
   if(paidReleases(root).length || existsSync(join(root,'shop.json')) || pricedTools)alias['@homie-rocks/studio/worker']='@homie-rocks/studio/worker/selling';
   // Older studio entries export only Table and Lobby. Supply the new toolkit-owned
   // classes in the generated bundle without rewriting the studio's source/customizations.
-  const contents=`export * from ${JSON.stringify(source)};\nexport { default } from ${JSON.stringify(source)};\nexport { Gate, Concentrator } from ${JSON.stringify(join(PACKAGE_ROOT,'worker/gate.mjs'))};\n`;
+  const contents=`export * from ${JSON.stringify(source)};\nexport { default } from ${JSON.stringify(source)};\nexport { Gate, Concentrator } from ${JSON.stringify(join(PACKAGE_ROOT,'worker/gate.mjs'))};\nexport {AppRecordHub, EventHub} from ${JSON.stringify(join(PACKAGE_ROOT,'worker/stream-objects.mjs'))};\n`;
   const result=await esbuild.build({stdin:{contents,resolveDir:root,sourcefile:'worker.mjs'},entryNames:'worker',absWorkingDir:root,alias,outdir:out,bundle:true,splitting:true,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*'],target:'es2022',write:false,minify:true,metafile:true,logLevel:'silent',plugins:metadata?[{name:'studio-metadata',setup(build){build.onLoad({filter:/[/\\]worker[/\\]built-metadata\.mjs$/},()=>({contents:'export default '+JSON.stringify(metadata),loader:'js'}));}}]:[]});
   // A watcher may already have read the previous entry while this build is
   // publishing. Keep its entire graph available. Publish immutable modules first,

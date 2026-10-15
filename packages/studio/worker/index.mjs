@@ -1368,3 +1368,5 @@ async function fallback(request, env, url, getCat) {
 
 export {Table, roomEndAt} from './table.mjs';
 export {Lobby, LOBBY_APP_VERSIONS, LOBBY_ROOMS_MAX} from './lobby.mjs';
+
+export {AppRecordHub, EventHub} from './stream-objects.mjs';

@@ -10,11 +10,11 @@ ${['INSERT','UPDATE','DELETE'].map(op=>{const row=op==='DELETE'?'OLD':'NEW';retu
 END;`;}).join('\n')}
 `;
 const frame=value=>new TextEncoder().encode('data: '+JSON.stringify(value)+'\n\n');
-export const appHub=(env,app)=>env.LOBBY.get(env.LOBBY.idFromName('@app-records/'+app));
+export const appHub=(env,app)=>{const ns=env.APP_RECORDS??env.LOBBY;return ns.get(ns.idFromName('@app-records/'+app));};
 const pushedRevisions=new WeakMap();
 export async function pushAppRecords(env,cat){
  const apps=(cat.games??[]).filter(g=>g.kind==='app');
- if(!env.LOBBY||!env.DB||!apps.length)return;
+ if(!(env.APP_RECORDS??env.LOBBY)||!env.DB||!apps.length)return;
  const rows=(await env.DB.prepare(`SELECT app,collection,revision FROM app_record_revisions
  UNION ALL SELECT a.app,'*',SUM(COALESCE(r.revision,0)) FROM app_tool_namespaces a LEFT JOIN tool_data_revisions r ON r.namespace=a.namespace GROUP BY a.app`).all()).results;
  const signatures=new Map();for(const row of rows){const app=row.app.split(':check:')[0];signatures.set(app,(signatures.get(app)??'')+JSON.stringify(row));}

@@ -50,9 +50,9 @@ export async function subscribeFeed(env,cat,caller,uri,remove=false) {
     await env.DB.prepare('INSERT OR IGNORE INTO mcp_kv(key,value,expires) VALUES(?1,?2,NULL)').bind(key(caller.connection,name),JSON.stringify({connection:caller.connection,name,after:seq})).run();
   }
 }
-export function eventHub(env,connection) {return env.LOBBY.get(env.LOBBY.idFromName('@studio-events/'+connection));}
+export function eventHub(env,connection) {const ns=env.EVENTS??env.LOBBY;return ns.get(ns.idFromName('@studio-events/'+connection));}
 export async function pushEvents(env,cat,origin) {
-  if(!env.LOBBY||!Object.keys(eventFeeds(env)).length)return;
+  if(!(env.EVENTS??env.LOBBY)||!Object.keys(eventFeeds(env)).length)return;
   // Page subscriptions, without a studio-wide subscription or delivery cap.
   await env.DB.prepare("DELETE FROM mcp_kv WHERE (key >= 'mcp-event-stream:' AND key < 'mcp-event-stream;') AND expires<?1").bind(Date.now()).run();
   let after='';const seen=new Set();
