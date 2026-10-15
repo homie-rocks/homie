@@ -1713,6 +1713,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   const peers = new Map<string, Peer>();
   let heldPeers: Peer[] = [];
   let roundInfo: RoundInfo | null = null;
+  let idlePing = false, lastClockPing = -Infinity;
   let slots: Slot[] | null = null;
   let lastCkpt: Checkpoint<C> | null = null;
 
@@ -2583,6 +2584,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   }
 
   function onWelcome(m: Record<string, unknown>): void {
+    idlePing = m.idlePing === true; lastClockPing = -Infinity;
     post?.({ what: 'build', ver: version });
     clearTimeout(connectTimer);
     const next = m['role'] as Role;
@@ -2891,6 +2893,13 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       // still dropped, two beats from now.
       lastMsgAt = wall() - staleMs + 2500;
     }
+    // An idle hibernatable room can answer this at the edge. Keep a regular
+    // clock/visibility sample every 30 s, and every heartbeat during play.
+    if (idlePing && roundInfo?.phase !== 'live' && !hidden() && wall() - lastClockPing < 30_000) {
+      try { ws?.send('homie-ping'); } catch { if(ws)lost(ws,'send'); }
+      return;
+    }
+    lastClockPing = wall();
     const c = Date.now();
     pingsOut.set(c, c);
     if (pingsOut.size > 16) { const first = pingsOut.keys().next().value; if (first !== undefined) pingsOut.delete(first); }

@@ -15,6 +15,7 @@ export class WatchSockets {
     this.listeners.set(socket, listeners);
     return {
       accept() {},
+      lastPing: () => this.ctx.getWebSocketAutoResponseTimestamp?.(socket)?.getTime?.() ?? 0,
       remember: clientId => socket.serializeAttachment({...socket.deserializeAttachment(),clientId}),
       send: text => socket.send(text),
       close: (code, reason) => socket.close(code, reason),

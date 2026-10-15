@@ -273,3 +273,9 @@ test('room session snapshots retain identity and rates without serializing callb
  assert.equal(saved.clients.get('client').caps.has('chat'),true);assert.equal(saved.clients.get('client').rates.get('say').at,1);assert.equal(saved.clients.get('client').conn,undefined);
  assert.equal(saved.fields.has('watchers'),false);assert.equal(typeof restored.now,'function');
 });
+
+import {encodeSession,decodeSession} from '../worker/session-codec.mjs';
+test('session encoding preserves arbitrary checkpoint keys without mistaking them for type markers',()=>{
+ const value={__roomMap:[['not','a map']],array:['m',[]],nested:new Map([[{__roomNumber:1},new Set([undefined,Infinity,-Infinity,NaN])]])};
+ assert.deepEqual(decodeSession(encodeSession(value)),value);
+});

@@ -80,6 +80,7 @@ export class Table {
       catch (error) { this.storageProblem(error); }
       this.sessionStore=roomSessions(ctx.storage);
       this.sessionSnapshot=this.sessionStore.read();
+      if(this.sessionSnapshot)Object.assign(this,this.sessionSnapshot.table);
       this.saved = (await ctx.storage.get('net')) ?? null;
       if (this.saved?.retired === true) this.cleanupPending = true;
       this.recorded = (await ctx.storage.get('recorded')) ?? 0;
@@ -139,8 +140,8 @@ export class Table {
     this.room.waitUntil=work=>this.ctx.waitUntil(Promise.resolve(work).finally(()=>this.keepIdleChat()));
     this.room.gateFacts = () => [...(this.gateMetrics?.values() ?? [])];
     if (this.saved && !hostedGame(game)) this.room.restore(this.saved);
-    if (this.officeSaved) this.room.restoreOffice(this.officeSaved);
     restoreRoomFields(this.room,this.sessionSnapshot);
+    if (this.officeSaved) this.room.restoreOffice(this.officeSaved);
     restoreIdleChat(this,this.idleChat);
     this.idleChat=null;
     this.vocabRead = this.readVocab(game).catch(() => false);
@@ -367,7 +368,7 @@ export class Table {
     if (this.isPersistent()) throw new Error('A lasting world cannot be cleared by match cleanup');
     this.cleanupGeneration = (this.cleanupGeneration ?? 0) + 1;
     this.roomSave = null; this.saved = null; this.pendingBoot = null;
-    try { this.durable?.retire(); this.durable?.clear(); this.cleanupPending = false; clearTimeout(this.cleanupRetry); this.cleanupRetry = null; }
+    try { this.sessionStore?.clear(); this.durable?.retire(); this.durable?.clear(); this.cleanupPending = false; clearTimeout(this.cleanupRetry); this.cleanupRetry = null; }
     catch (error) { this.retryCleanup(error); }
     this.queueNetCleanup(this.cleanupPending);
   }
@@ -844,7 +845,7 @@ export class Table {
 
   /** The alarm: the house guides' brains decide (worker/agents.mjs), then the day's usage is written. */
   async alarm() {
-    if (this.room && (!this.room.clients.size || this.canSleep())) { this.room.tick(); this.room.tellWatchers(); this.report(); }
+    if (this.room && (!this.room.clients.size || this.canSleep())) { this.room.tick(Boolean(this.canSleep())); this.room.tellWatchers(); this.report(); }
     await this.flushRoundRecords();
     await this.flushFunctionEvents();
     // A brain that throws never takes the room with it: the alarm is not retried, the guides answer from the floor.
@@ -1071,6 +1072,8 @@ export class Table {
       send: (text) => { try { server.send(text); } catch { /* closed */ } },
       close: (c, r) => { try { server.close(c, r); } catch { /* closed */ } },
       buffered: () => server.buffered?.() ?? 0,
+      lastPing: () => server.lastPing?.() ?? 0,
+      idlePing: Boolean(server.remember && this.ctx.setWebSocketAutoResponse),
       ...(server.snapshotGroup ? { snapshotGroup: server.snapshotGroup, subscribe: seat => server.subscribe(seat) } : {}),
       ...(server.snapshot ? { snapshot: (...args) => server.snapshot(...args), transportFacts: server.transportFacts } : {}),
     };
@@ -1156,9 +1159,12 @@ export class Table {
   async sleepRoom() {
     if(!this.canSleep())return;
     clearInterval(this.timer);this.timer=null;
-    this.sessionStore.write(this.room);
+    const keys=['lastReport','lastPeople','lastAgents','lastAi','lastReportAt','openCounted','launchReadFor'];
+    this.sessionStore.write(this.room,Object.fromEntries(keys.map(key=>[key,this[key]])));
     const now=Date.now(),room=this.room;
-    const due=[now+60000,...[...room.clients.values()].map(c=>c.helloed?c.lastSeen+room.idleMs:c.joinedAt+5000)];
+    // Edge-answered heartbeats need only a minute's liveness sweep. A legacy
+    // client still keeps its original hello/heartbeat deadline.
+    const due=[now+60000,...[...room.clients.values()].map(c=>{const ping=c.conn.lastPing?.()??0;return c.helloed?Math.max(c.lastSeen,ping)+(ping?Math.max(room.idleMs,60000):room.idleMs):c.joinedAt+5000;})];
     for(const control of [room.vote?.open?room.vote:null,room.regate,room.agentsOut])if(control?.until)due.push(control.until);
     const at=Math.max(now+1,Math.min(...due)),alarm=await this.ctx.storage.getAlarm();
     if(alarm==null||alarm>at)await this.ctx.storage.setAlarm(at);
