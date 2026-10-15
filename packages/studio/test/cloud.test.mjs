@@ -132,6 +132,7 @@ function workersBuilds(dir, { firstDeploy = true } = {}) {
 S=${state}
 echo "$*" >> $S/calls
 case "$1" in
+  queues) if [ "$2" = info ]; then exit 1; fi; echo "Created queue";;
   d1) if [ "$2" = migrations ] && [ ! -f $S/deployed ] && [ "${firstDeploy ? 1 : 0}" = 1 ]; then echo "Couldn't find a D1 DB with the name or binding 'DB' in your wrangler.jsonc file." >&2; exit 1; fi
       if [ "$2" = execute ]; then if [ -f $S/ai ]; then echo '[{"results":[{"n":1}],"success":true}]'; else echo '[{"results":[{"n":0}],"success":true}]'; fi; exit 0; fi
       echo 'Migrations applied';;
@@ -165,12 +166,12 @@ test('Workers Builds: `npm run deploy` only migrates and deploys (by binding nam
   assert.equal(done.ci, true);
   assert.equal(done.url, 'https://test-studio.acct.workers.dev');
   const registration=`d1 execute DB --remote --command ${functionDeploymentSQL(dir)}`;
-  assert.deepEqual(cf.calls(), ['d1 migrations apply DB --remote', `deploy ${workerEntry(dir)}`, 'd1 migrations apply DB --remote',registration], 'no whoami, no create, no refusals: the Deploy flow made the resources');
-  assert.equal(readFileSync(join(dir, 'studio.json'), 'utf8'), before, 'a CI checkout is thrown away: nothing is written back');
+  assert.deepEqual(cf.calls(), ['queues info test-studio-background-dlq','queues create test-studio-background-dlq','queues info test-studio-background','queues create test-studio-background','d1 migrations apply DB --remote', `deploy ${workerEntry(dir)}`, 'd1 migrations apply DB --remote',registration], 'no whoami, no create, no refusals: the Deploy flow made the resources');
+  assert.deepEqual(JSON.parse(readFileSync(join(dir,'studio.json'),'utf8')).cloudflare.created,['queue:test-studio-background','queue:test-studio-background-dlq']);
   const again = out(run(['deploy'], dir, env));
   assert.equal(again.ok, true);
   const brains = "d1 execute DB --remote --json --command SELECT COUNT(*) AS n FROM servers WHERE brain = 'workers-ai' AND state = 'open'";
-  assert.deepEqual(cf.calls().slice(4), ['d1 migrations apply DB --remote', registration, brains, `deploy ${workerEntry(dir)}`], 'later deploys: migrations first, whether a server thinks with Workers AI, then the Worker');
+  assert.deepEqual(cf.calls().slice(8), ['d1 migrations apply DB --remote', registration, brains, `deploy ${workerEntry(dir)}`], 'later deploys: migrations first, whether a server thinks with Workers AI, then the Worker');
   assert.ok(!/"ai"/.test(readFileSync(join(dir, 'wrangler.jsonc'), 'utf8')), 'no server thinks with Workers AI: no AI binding');
   // A server whose AI guides think with Workers AI (agents_brain workers-ai): the deploy binds AI (0.17.0).
   writeFileSync(join(dir, '.fake-cf', 'ai'), '1');

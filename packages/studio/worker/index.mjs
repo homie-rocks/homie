@@ -1,6 +1,6 @@
 /** Studio Worker event boundaries and public toolkit exports. */
 import { catalogue } from './catalogue.mjs';
-import {trackBackground,requestDatabase,MUTATIONS} from './request-db.mjs';
+import {trackBackground,requestDatabase,MUTATION_VERSION} from './request-db.mjs';
 
 import {loadShopLinks} from './shop-links.mjs';
 
@@ -28,6 +28,7 @@ export {AppRecordHub, EventHub} from './stream-objects.mjs';
 export {directoryOf,useTools,getStudioTools} from './tool-registry.mjs';
 const route = async (...args) => (await import('./routes.mjs')).default(...args);
 export default {
+  async queue(batch,env) {return (await import('./background-queue.mjs')).consumeBackground(batch,await loadShopLinks(env));},
   async scheduled(event, env, ctx) {
     env=await loadShopLinks(env);
     const maintenance=(async () => {
@@ -35,6 +36,7 @@ export default {
       const cat = await catalogue(env, 'https://studio.invalid');
       await notifyTools(env,cat,cat.studio?.url??'https://studio.invalid').catch(error=>console.warn('Tool catalogue refresh:',error.message));
       await reconcileOrders(env, shopOf(cat));
+      if(env.DB)await (await import('./stripe-intake.mjs')).pruneStripeEvents(env);
       await (await import('./event-resources.mjs')).pruneMcpKeys(env);
       if(event.cron === '17 * * * *') await (await import('./players.mjs')).pruneGuests(env);
 
@@ -51,8 +53,22 @@ export default {
     const url = new URL(request.url);
     if(env.HOMIE_CONCEPT==='1' && url.pathname==='/robots.txt')return new Response('User-agent: *\nDisallow: /\n',{headers:{'content-type':'text/plain','x-robots-tag':'noindex, nofollow'}});
     if(env.HOMIE_CONCEPT==='1' && url.pathname==='/.well-known/homie-studio.json')return json({ok:false,error:'concept-unlisted'},404,{'x-robots-tag':'noindex, nofollow'});
-    const dispatch=()=>import('./functions.mjs').then(m=>m.runFunctions(env,()=>catalogue(env,url.origin),url.origin));
-    const background=trackBackground(ctx,()=>env.DB?.[MUTATIONS]?dispatch():undefined);
+    const dispatch=()=>import('./background-queue.mjs').then(m=>m.enqueueChanges(env,url.origin));
+    // Some routes reconcile shop state in waitUntil after returning their page.
+    // Keep dispatch behind those writes too, preserving the runtime context's
+    // methods and OAuth verification symbols through the proxy.
+    let delivered=0;
+    let delivery=Promise.resolve();
+    const background=trackBackground(ctx,()=>{
+      // Serialize late completions and remember the generation acknowledged by
+      // Queues. A read-only waitUntil never replays an earlier mutation.
+      delivery=delivery.catch(error=>{console.error('Background enqueue retry',error);}).then(async()=>{
+        const version=env.DB?.[MUTATION_VERSION]??0;
+        if(version===delivered)return;
+        await dispatch();delivered=version;
+      });
+      return delivery;
+    });
     const requestCtx=background.context;
     // A standalone copy's Lobby call (worker/standalone.mjs): every answer to it can be read by the app's page, an
     // unknown game's 404 and a failure included, so the app can say why it plays offline. No other address is opened.

@@ -60,6 +60,27 @@
       "/llms-full.txt"
     ]
   },
+  "queues": {
+    "producers": [
+      {
+        "binding": "BACKGROUND",
+        "queue": "my-studio-background"
+      },
+      {
+        "binding": "BACKGROUND_DLQ",
+        "queue": "my-studio-background-dlq"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "my-studio-background",
+        "max_batch_size": 100,
+        "max_batch_timeout": 1,
+        "max_retries": 5,
+        "dead_letter_queue": "my-studio-background-dlq"
+      }
+    ]
+  },
   "durable_objects": {
     "bindings": [
       {
