@@ -1,9 +1,630 @@
 {
-  "active": "70df4012af58963debb82ced04bf80bc47d5e95d",
+  "production": {
+    "tenant": "hm-s2-little-inlet",
+    "commit": "eea92f991d8d412d6faf9482a70dfd7649ba0f2b",
+    "toolkit": "0.51.8",
+    "node": "v24.20.0",
+    "lockDigest": "ef0c62ce56b5ce6f48c980077e111a1681e8047d5f6aae3118609be37c096712",
+    "compatibilityDate": "2026-10-01",
+    "artifactDigest": "be2f1556021423ea72137b499e06ea1d0d74851c912b5a3a186864f4c531c235",
+    "migrations": [
+      {
+        "name": "migrations/0001_studio.sql",
+        "digest": "1482441a97dfa368f9f2729d81265ce4ee8652fee6152cb6e5797255cc9f3089"
+      },
+      {
+        "name": "migrations/0002_studio_stats.sql",
+        "digest": "73937dd11c3b6364ba4fd8451ef0c9ed78957d9d2503d0591fea95c967f8bd14"
+      },
+      {
+        "name": "migrations/0004_players.sql",
+        "digest": "44c1ced35c86a6c3983dc6e1c509af2ed6251d48d48550aa9b740bc485dd1235"
+      },
+      {
+        "name": "migrations/0005_studio_office.sql",
+        "digest": "15b7ade3ecf7611fd447ee11faec74dc39eb354eb68158fdf0f136c0b89ac53e"
+      },
+      {
+        "name": "migrations/0006_studio_servers.sql",
+        "digest": "57f901c565d13dfb9202a3b7e2874339bee1367aecafb1aba4bb9d136eb0f4d5"
+      },
+      {
+        "name": "migrations/0007_studio_chat.sql",
+        "digest": "c019115275b51a18e431e6b69ec31bbeeef5b80d9f266120b8821db94ad00dcb"
+      },
+      {
+        "name": "migrations/0008_studio_shop.sql",
+        "digest": "8fc5b35eb6bff2c031eb4a567467cb5b8f653f088a84c5e5d02a5b964d5310c0"
+      },
+      {
+        "name": "migrations/0009_studio_lounge.sql",
+        "digest": "9af6bf236869d71cd86c58abe6d77c35c21c56c1824c325831ce1c2707b8339b"
+      },
+      {
+        "name": "migrations/0010_shop_reservations.sql",
+        "digest": "5f6f409050fe7eb766e74f56b5081b4b603aef8b6925e9937fc751692f4724ce"
+      },
+      {
+        "name": "migrations/0011_shop_statements.sql",
+        "digest": "edb230e2c5b25acaf15a61fb3214b28535af23a8946eca50abacda560691c01b"
+      },
+      {
+        "name": "migrations/0012_shop_lines.sql",
+        "digest": "01959daa3afd0225359f84e30783d0fc9118356cab9e7a2eb0f5e750d8f4d990"
+      },
+      {
+        "name": "migrations/0014_studio_apps.sql",
+        "digest": "feb956ce8595f224891c7112ce2e5990932af7ccaadc2497a0e5af2f9e8a5355"
+      },
+      {
+        "name": "migrations/0015_example_demo.sql",
+        "digest": "8f4f12dde01d78942f51d19d801f6bc30f41d2852abdedc36390deabe89e037c"
+      },
+      {
+        "name": "migrations/0015_purchases.sql",
+        "digest": "ebecd9c734321a05f452372546d837eced3cfbbaa0d37833a7f14a30bab4ee10"
+      },
+      {
+        "name": "migrations/0016_purchase_facts.sql",
+        "digest": "9a8227a5e1a811c7ade145cf32fd1bcc771637dc7ae2d0497df59af32fe514a9"
+      },
+      {
+        "name": "migrations/0017_studio_mcp.sql",
+        "digest": "c3da9510298d0b9402cd3c36bcf39397a933c94ad1e44903ea7aced83782326d"
+      },
+      {
+        "name": "migrations/0018_studio_functions.sql",
+        "digest": "e0e4164af714563f4a6b049f4fb03e7b3898d0684257fc26e30de24925c6426d"
+      },
+      {
+        "name": "migrations/0019_function_cursors.sql",
+        "digest": "8d0e83d335f61c75a846d01ab008fdefa23a13f84ce3de92fdaa36f9e3233a6a"
+      },
+      {
+        "name": "migrations/0020_function_meta.sql",
+        "digest": "642ddb8ab6b421c4c2d17a91d43b7a5b9bc9290ff17fde8eeff8d8855938cca4"
+      },
+      {
+        "name": "migrations/0021_app_payment_reference.sql",
+        "digest": "1d52958600e2aa66bbf515ded164be2de7ac9319ba583b42da68ba45eed0b68d"
+      },
+      {
+        "name": "migrations/0022_remove_referrals.sql",
+        "digest": "7a043ffe62853764351081e4629878db6e5578424f29fa8c7d7c45b7ea3d4819"
+      },
+      {
+        "name": "migrations/0023_function_runs.sql",
+        "digest": "ac831b6bd9f0e96e795a62ee2c7a89e903b3f2d738115312541dd8b39d7844f9"
+      },
+      {
+        "name": "migrations/0024_tool_data_versions.sql",
+        "digest": "77ec770b39f7ad13b7ce458f9a5a44c558515409ec1ba730b4ec54030ca0614c"
+      },
+      {
+        "name": "migrations/0025_bookings.sql",
+        "digest": "a3cfe2ab1913438a43bb84f659535661b5b7a6a8f995f7120cb3a80191fdda54"
+      },
+      {
+        "name": "migrations/0026_shop_subscriptions.sql",
+        "digest": "7df1b2e174eb23506d1717d052c5fdf0441e9a08e87ca0fa4663d83be84730fc"
+      },
+      {
+        "name": "migrations/0027_example_slots.sql",
+        "digest": "502f9a767200b676ae7c785792e24311494a211486af77af2ee1f10d5b70ad7d"
+      },
+      {
+        "name": "migrations/0028_shift_labels.sql",
+        "digest": "101ef356c42bf98d3a3930382fb70b481a2bb12f4b23aa3a04de83eefd5ca2e5"
+      }
+    ],
+    "stage": "live",
+    "checks": {
+      "studio": true,
+      "synthetic": true,
+      "mcp": true,
+      "credentialProbe": {
+        "forbiddenEnv": [],
+        "operatorCredentialFiles": [],
+        "controlWithoutCredential": 404
+      }
+    },
+    "previewDeploymentId": "d7dc9e4b580d48ed9496167af18e0a0f",
+    "previewBindings": [
+      {
+        "name": "ASSETS",
+        "type": "assets"
+      },
+      {
+        "class_name": "Concentrator",
+        "name": "CONCENTRATOR",
+        "namespace_id": "9fc9d6a6e0d84e38a374862ac9ca9d0f",
+        "type": "durable_object_namespace"
+      },
+      {
+        "database_id": "2fa8176d-3110-4880-b749-02c79b0fd39a",
+        "id": "2fa8176d-3110-4880-b749-02c79b0fd39a",
+        "name": "DB",
+        "type": "d1"
+      },
+      {
+        "class_name": "Gate",
+        "name": "GATE",
+        "namespace_id": "74ad47e331134bb79900aec86148d535",
+        "type": "durable_object_namespace"
+      },
+      {
+        "name": "HOMIE_CONCEPT",
+        "text": "1",
+        "type": "plain_text"
+      },
+      {
+        "class_name": "Lobby",
+        "name": "LOBBY",
+        "namespace_id": "1da31e5d9e69432c8a6db6b99531af28",
+        "type": "durable_object_namespace"
+      },
+      {
+        "name": "STUDIO_NAME",
+        "text": "Little Inlet — managed step 2 test",
+        "type": "plain_text"
+      },
+      {
+        "class_name": "Table",
+        "name": "TABLE",
+        "namespace_id": "60901c48eaf240f382153c836c308016",
+        "type": "durable_object_namespace"
+      }
+    ],
+    "schemaEpoch": 1,
+    "approvedBy": "Ryan Campbell",
+    "health": {
+      "ok": true,
+      "commit": "eea92f991d8d412d6faf9482a70dfd7649ba0f2b",
+      "at": 1792104290536
+    },
+    "bindings": [
+      {
+        "name": "ASSETS",
+        "type": "assets"
+      },
+      {
+        "class_name": "Concentrator",
+        "name": "CONCENTRATOR",
+        "namespace_id": "232e85b1c7774832adf8c1be095a9192",
+        "type": "durable_object_namespace"
+      },
+      {
+        "database_id": "fb977142-73cb-487d-96bb-ea6c99980211",
+        "id": "fb977142-73cb-487d-96bb-ea6c99980211",
+        "name": "DB",
+        "type": "d1"
+      },
+      {
+        "class_name": "Gate",
+        "name": "GATE",
+        "namespace_id": "ce5a61fa205f4d51a580120e92968c1e",
+        "type": "durable_object_namespace"
+      },
+      {
+        "name": "HOMIE_CONCEPT",
+        "text": "1",
+        "type": "plain_text"
+      },
+      {
+        "class_name": "Lobby",
+        "name": "LOBBY",
+        "namespace_id": "f3b719dd3fd24a509f34106a8d3acd18",
+        "type": "durable_object_namespace"
+      },
+      {
+        "name": "STUDIO_NAME",
+        "text": "Little Inlet — managed step 2 test",
+        "type": "plain_text"
+      },
+      {
+        "class_name": "Table",
+        "name": "TABLE",
+        "namespace_id": "101fb860ef2c429ab38bd374e8c0ca2d",
+        "type": "durable_object_namespace"
+      }
+    ],
+    "bindingManifest": {
+      "script": "hm-s2-inlet-production",
+      "namespace": "homie-managed-s2",
+      "compatibility_date": "2026-10-01",
+      "compatibility_flags": [
+        "nodejs_compat"
+      ],
+      "bindings": [
+        {
+          "name": "DB",
+          "type": "d1",
+          "id": "fb977142-73cb-487d-96bb-ea6c99980211"
+        },
+        {
+          "name": "ASSETS",
+          "type": "assets"
+        },
+        {
+          "name": "TABLE",
+          "type": "durable_object_namespace",
+          "class_name": "Table"
+        },
+        {
+          "name": "LOBBY",
+          "type": "durable_object_namespace",
+          "class_name": "Lobby"
+        },
+        {
+          "name": "GATE",
+          "type": "durable_object_namespace",
+          "class_name": "Gate"
+        },
+        {
+          "name": "CONCENTRATOR",
+          "type": "durable_object_namespace",
+          "class_name": "Concentrator"
+        },
+        {
+          "name": "HOMIE_CONCEPT",
+          "type": "plain_text",
+          "text": "1"
+        },
+        {
+          "name": "STUDIO_NAME",
+          "type": "plain_text",
+          "text": "Little Inlet — managed step 2 test"
+        }
+      ],
+      "exports": {
+        "Table": {
+          "type": "durable-object",
+          "storage": "sqlite"
+        },
+        "Lobby": {
+          "type": "durable-object",
+          "storage": "sqlite"
+        },
+        "Gate": {
+          "type": "durable-object",
+          "storage": "sqlite"
+        },
+        "Concentrator": {
+          "type": "durable-object",
+          "storage": "sqlite"
+        }
+      }
+    },
+    "workerVersionId": null,
+    "providerDeploymentId": "8e4044a8bb8149839e514b9213f41c35",
+    "at": 1792104290536,
+    "previous": null
+  },
+  "productionMigrated": true,
+  "release:eea92f991d8d412d6faf9482a70dfd7649ba0f2b": {
+    "tenant": "hm-s2-little-inlet",
+    "commit": "eea92f991d8d412d6faf9482a70dfd7649ba0f2b",
+    "toolkit": "0.51.8",
+    "node": "v24.20.0",
+    "lockDigest": "ef0c62ce56b5ce6f48c980077e111a1681e8047d5f6aae3118609be37c096712",
+    "compatibilityDate": "2026-10-01",
+    "artifactDigest": "be2f1556021423ea72137b499e06ea1d0d74851c912b5a3a186864f4c531c235",
+    "migrations": [
+      {
+        "name": "migrations/0001_studio.sql",
+        "digest": "1482441a97dfa368f9f2729d81265ce4ee8652fee6152cb6e5797255cc9f3089"
+      },
+      {
+        "name": "migrations/0002_studio_stats.sql",
+        "digest": "73937dd11c3b6364ba4fd8451ef0c9ed78957d9d2503d0591fea95c967f8bd14"
+      },
+      {
+        "name": "migrations/0004_players.sql",
+        "digest": "44c1ced35c86a6c3983dc6e1c509af2ed6251d48d48550aa9b740bc485dd1235"
+      },
+      {
+        "name": "migrations/0005_studio_office.sql",
+        "digest": "15b7ade3ecf7611fd447ee11faec74dc39eb354eb68158fdf0f136c0b89ac53e"
+      },
+      {
+        "name": "migrations/0006_studio_servers.sql",
+        "digest": "57f901c565d13dfb9202a3b7e2874339bee1367aecafb1aba4bb9d136eb0f4d5"
+      },
+      {
+        "name": "migrations/0007_studio_chat.sql",
+        "digest": "c019115275b51a18e431e6b69ec31bbeeef5b80d9f266120b8821db94ad00dcb"
+      },
+      {
+        "name": "migrations/0008_studio_shop.sql",
+        "digest": "8fc5b35eb6bff2c031eb4a567467cb5b8f653f088a84c5e5d02a5b964d5310c0"
+      },
+      {
+        "name": "migrations/0009_studio_lounge.sql",
+        "digest": "9af6bf236869d71cd86c58abe6d77c35c21c56c1824c325831ce1c2707b8339b"
+      },
+      {
+        "name": "migrations/0010_shop_reservations.sql",
+        "digest": "5f6f409050fe7eb766e74f56b5081b4b603aef8b6925e9937fc751692f4724ce"
+      },
+      {
+        "name": "migrations/0011_shop_statements.sql",
+        "digest": "edb230e2c5b25acaf15a61fb3214b28535af23a8946eca50abacda560691c01b"
+      },
+      {
+        "name": "migrations/0012_shop_lines.sql",
+        "digest": "01959daa3afd0225359f84e30783d0fc9118356cab9e7a2eb0f5e750d8f4d990"
+      },
+      {
+        "name": "migrations/0014_studio_apps.sql",
+        "digest": "feb956ce8595f224891c7112ce2e5990932af7ccaadc2497a0e5af2f9e8a5355"
+      },
+      {
+        "name": "migrations/0015_example_demo.sql",
+        "digest": "8f4f12dde01d78942f51d19d801f6bc30f41d2852abdedc36390deabe89e037c"
+      },
+      {
+        "name": "migrations/0015_purchases.sql",
+        "digest": "ebecd9c734321a05f452372546d837eced3cfbbaa0d37833a7f14a30bab4ee10"
+      },
+      {
+        "name": "migrations/0016_purchase_facts.sql",
+        "digest": "9a8227a5e1a811c7ade145cf32fd1bcc771637dc7ae2d0497df59af32fe514a9"
+      },
+      {
+        "name": "migrations/0017_studio_mcp.sql",
+        "digest": "c3da9510298d0b9402cd3c36bcf39397a933c94ad1e44903ea7aced83782326d"
+      },
+      {
+        "name": "migrations/0018_studio_functions.sql",
+        "digest": "e0e4164af714563f4a6b049f4fb03e7b3898d0684257fc26e30de24925c6426d"
+      },
+      {
+        "name": "migrations/0019_function_cursors.sql",
+        "digest": "8d0e83d335f61c75a846d01ab008fdefa23a13f84ce3de92fdaa36f9e3233a6a"
+      },
+      {
+        "name": "migrations/0020_function_meta.sql",
+        "digest": "642ddb8ab6b421c4c2d17a91d43b7a5b9bc9290ff17fde8eeff8d8855938cca4"
+      },
+      {
+        "name": "migrations/0021_app_payment_reference.sql",
+        "digest": "1d52958600e2aa66bbf515ded164be2de7ac9319ba583b42da68ba45eed0b68d"
+      },
+      {
+        "name": "migrations/0022_remove_referrals.sql",
+        "digest": "7a043ffe62853764351081e4629878db6e5578424f29fa8c7d7c45b7ea3d4819"
+      },
+      {
+        "name": "migrations/0023_function_runs.sql",
+        "digest": "ac831b6bd9f0e96e795a62ee2c7a89e903b3f2d738115312541dd8b39d7844f9"
+      },
+      {
+        "name": "migrations/0024_tool_data_versions.sql",
+        "digest": "77ec770b39f7ad13b7ce458f9a5a44c558515409ec1ba730b4ec54030ca0614c"
+      },
+      {
+        "name": "migrations/0025_bookings.sql",
+        "digest": "a3cfe2ab1913438a43bb84f659535661b5b7a6a8f995f7120cb3a80191fdda54"
+      },
+      {
+        "name": "migrations/0026_shop_subscriptions.sql",
+        "digest": "7df1b2e174eb23506d1717d052c5fdf0441e9a08e87ca0fa4663d83be84730fc"
+      },
+      {
+        "name": "migrations/0027_example_slots.sql",
+        "digest": "502f9a767200b676ae7c785792e24311494a211486af77af2ee1f10d5b70ad7d"
+      },
+      {
+        "name": "migrations/0028_shift_labels.sql",
+        "digest": "101ef356c42bf98d3a3930382fb70b481a2bb12f4b23aa3a04de83eefd5ca2e5"
+      }
+    ],
+    "stage": "live",
+    "checks": {
+      "studio": true,
+      "synthetic": true,
+      "mcp": true,
+      "credentialProbe": {
+        "forbiddenEnv": [],
+        "operatorCredentialFiles": [],
+        "controlWithoutCredential": 404
+      }
+    },
+    "previewDeploymentId": "d7dc9e4b580d48ed9496167af18e0a0f",
+    "previewBindings": [
+      {
+        "name": "ASSETS",
+        "type": "assets"
+      },
+      {
+        "class_name": "Concentrator",
+        "name": "CONCENTRATOR",
+        "namespace_id": "9fc9d6a6e0d84e38a374862ac9ca9d0f",
+        "type": "durable_object_namespace"
+      },
+      {
+        "database_id": "2fa8176d-3110-4880-b749-02c79b0fd39a",
+        "id": "2fa8176d-3110-4880-b749-02c79b0fd39a",
+        "name": "DB",
+        "type": "d1"
+      },
+      {
+        "class_name": "Gate",
+        "name": "GATE",
+        "namespace_id": "74ad47e331134bb79900aec86148d535",
+        "type": "durable_object_namespace"
+      },
+      {
+        "name": "HOMIE_CONCEPT",
+        "text": "1",
+        "type": "plain_text"
+      },
+      {
+        "class_name": "Lobby",
+        "name": "LOBBY",
+        "namespace_id": "1da31e5d9e69432c8a6db6b99531af28",
+        "type": "durable_object_namespace"
+      },
+      {
+        "name": "STUDIO_NAME",
+        "text": "Little Inlet — managed step 2 test",
+        "type": "plain_text"
+      },
+      {
+        "class_name": "Table",
+        "name": "TABLE",
+        "namespace_id": "60901c48eaf240f382153c836c308016",
+        "type": "durable_object_namespace"
+      }
+    ],
+    "schemaEpoch": 1,
+    "approvedBy": "Ryan Campbell",
+    "health": {
+      "ok": true,
+      "commit": "eea92f991d8d412d6faf9482a70dfd7649ba0f2b",
+      "at": 1792104290536
+    },
+    "bindings": [
+      {
+        "name": "ASSETS",
+        "type": "assets"
+      },
+      {
+        "class_name": "Concentrator",
+        "name": "CONCENTRATOR",
+        "namespace_id": "232e85b1c7774832adf8c1be095a9192",
+        "type": "durable_object_namespace"
+      },
+      {
+        "database_id": "fb977142-73cb-487d-96bb-ea6c99980211",
+        "id": "fb977142-73cb-487d-96bb-ea6c99980211",
+        "name": "DB",
+        "type": "d1"
+      },
+      {
+        "class_name": "Gate",
+        "name": "GATE",
+        "namespace_id": "ce5a61fa205f4d51a580120e92968c1e",
+        "type": "durable_object_namespace"
+      },
+      {
+        "name": "HOMIE_CONCEPT",
+        "text": "1",
+        "type": "plain_text"
+      },
+      {
+        "class_name": "Lobby",
+        "name": "LOBBY",
+        "namespace_id": "f3b719dd3fd24a509f34106a8d3acd18",
+        "type": "durable_object_namespace"
+      },
+      {
+        "name": "STUDIO_NAME",
+        "text": "Little Inlet — managed step 2 test",
+        "type": "plain_text"
+      },
+      {
+        "class_name": "Table",
+        "name": "TABLE",
+        "namespace_id": "101fb860ef2c429ab38bd374e8c0ca2d",
+        "type": "durable_object_namespace"
+      }
+    ],
+    "bindingManifest": {
+      "script": "hm-s2-inlet-production",
+      "namespace": "homie-managed-s2",
+      "compatibility_date": "2026-10-01",
+      "compatibility_flags": [
+        "nodejs_compat"
+      ],
+      "bindings": [
+        {
+          "name": "DB",
+          "type": "d1",
+          "id": "fb977142-73cb-487d-96bb-ea6c99980211"
+        },
+        {
+          "name": "ASSETS",
+          "type": "assets"
+        },
+        {
+          "name": "TABLE",
+          "type": "durable_object_namespace",
+          "class_name": "Table"
+        },
+        {
+          "name": "LOBBY",
+          "type": "durable_object_namespace",
+          "class_name": "Lobby"
+        },
+        {
+          "name": "GATE",
+          "type": "durable_object_namespace",
+          "class_name": "Gate"
+        },
+        {
+          "name": "CONCENTRATOR",
+          "type": "durable_object_namespace",
+          "class_name": "Concentrator"
+        },
+        {
+          "name": "HOMIE_CONCEPT",
+          "type": "plain_text",
+          "text": "1"
+        },
+        {
+          "name": "STUDIO_NAME",
+          "type": "plain_text",
+          "text": "Little Inlet — managed step 2 test"
+        }
+      ],
+      "exports": {
+        "Table": {
+          "type": "durable-object",
+          "storage": "sqlite"
+        },
+        "Lobby": {
+          "type": "durable-object",
+          "storage": "sqlite"
+        },
+        "Gate": {
+          "type": "durable-object",
+          "storage": "sqlite"
+        },
+        "Concentrator": {
+          "type": "durable-object",
+          "storage": "sqlite"
+        }
+      }
+    },
+    "workerVersionId": null,
+    "providerDeploymentId": "8e4044a8bb8149839e514b9213f41c35",
+    "at": 1792104290536,
+    "previous": null
+  },
+  "run:3097b503737b038bc84c744731118760434763c4": {
+    "stage": "failed",
+    "commit": "3097b503737b038bc84c744731118760434763c4",
+    "error": "Invalid redirect value, must be one of \"follow\" or \"manual\" (\"error\" won't be implemented since it does not make sense at the edge; use \"manual\" and check the response status code).",
+    "at": 1792103770739
+  },
+  "run:31a8d8a9bb911f302e2fecde4cd1aa4abe3d3590": {
+    "stage": "failed",
+    "commit": "31a8d8a9bb911f302e2fecde4cd1aa4abe3d3590",
+    "error": "Build failed: stage apt-get update -qq\nfinished apt-get 1860\nstage apt-get install -y\nfinished apt-get 11066\nstage git init \nfinished git 5\nstage git fetch --depth=1\nfinished git 2928\nstage git checkout --detach\nfinished git 99\nstage git rev-parse HEAD\nfinished git 3\nstage npm ci --no-audit\nfinished npm 34168\nstage apt-get install -y\nfinished apt-get 34664\nstage npm run check\nError: npm failed: Author against toolkit 0.51.8: node_modules/@homie-rocks/studio/guides/app/SKILL.md\n\n\n> check\n> homie-studio check gathering --json --url http://127.0.0.1:8787\n\n{\n  \"ok\": false,\n  \"needs\": [\n    {\n      \"id\": \"check-in\",\n      \"statement\": \"Staff can welcome a volunteer and retain their check-in after reload\",\n      \"status\": \"met\",\n      \"captures\": [],\n      \"why\": \"Assertions passed; staff capture not requested: rerun check with --shots .checks and inspect the scene\"\n    },\n    {\n      \"id\": \"real-giving\",\n      \"statement\": \"Visitors choose one-time or monthly gifts and can reach their Stripe portal\",\n      \"status\": \"met\",\n      \"captures\": [],\n      \"why\": \"Assertions passed; phone capture not requested: rerun check with --shots .checks and inspect the scene; wall capture not requested: rerun check with --shots .checks and inspect the scene\"\n    },\n    {\n      \"id\": \"volunteer-shifts\",\n      \"statement\": \"Phone and wall show capacity-limited volunteer shifts\",\n      \"status\": \"not\",\n      \"captures\": [],\n      \"why\": \"Waiting for phone: .shift-rail containing \\\"places filled\\\": phone: waiting for phone: .shift-rail containing \\\"places filled\\\": Waiting failed: 10000ms exceeded; phone capture not requested: rerun check with --shots .checks and inspect the scene; wall capture not requested: rerun check with --shots .checks and inspect the scene\"\n    }\n  ],\n  \"why\": \"Some needs from the person’s Codex are not yet met; see needs and captures\",\n  \"command\": \"check\",\n  \"kind\": \"app\",\n  \"webglFailure\": false,\n  \"isolatedRecords\": true,\n  \"captureWarnings\": [],\n  \"dialogs\": [],\n  \"room\": \"check-8d4847a76d1ffa7112a2\",\n  \"surfaces\": [\n    \"staff\",\n    \"phone\",\n    \"wall\"\n  ],\n  \"before\": null,\n  \"after\": null,\n  \"reconnect\": false,\n  \"game\": \"gathering\",\n  \"site\": \"http://127.0.0.1:8787\",\n  \"local\": true\n}\n\n\n    at run ([eval]:5:279)\n    at [eval]:39:16\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n",
+    "at": 1792102833191
+  },
+  "run:6152714c57054b331be074359690dca8cafec2a7": {
+    "stage": "failed",
+    "commit": "6152714c57054b331be074359690dca8cafec2a7",
+    "error": "Build failed: stage apt-get update -qq\nfinished apt-get 2792\nstage apt-get install -y\nfinished apt-get 38266\nstage git init \nfinished git 11\nstage git fetch --depth=1\nfinished git 2368\nstage git checkout --detach\nfinished git 493\nstage git rev-parse HEAD\nfinished git 5\nstage npm ci --no-audit\nfinished npm 158397\nstage npm run build\nfinished npm 29026\nstage apt-get install -y\nfinished apt-get 113297\n[eval]:36\n  if(!ready)throw new Error('Local VM preview did not start: '+fs.readFileSync('/work/check-dev.log','utf8').slice(-5000));\n            ^\n\nError: Local VM preview did not start: \n> dev\n> homie-studio dev --port 8787 --no-local-ai\n\nBuilding studio…\nFunction rolling-slots: 0 8 * * * UTC; Configured; awaiting scheduled delivery; next due 2026-10-16T08:00:00.000Z\nFunction cron triggers to install on deploy: * * * * *; */5 * * * *\nBuilding gathering…\nbuilt gathering (bundle, 813 KB)\nhosted by a player's browser, as before (no room object; nothing to do): gathering\nmusic: tide-of-good\nvideos: living-inlet\nshared part gift-ripples (1.0.1)\nshared part giving-panel (1.0.0, 2.1.0, 2.1.1)\nshared part live-goal (1.0.0, 2.0.0)\nshared part volunteer-shifts (1.0.2, 1.0.3, 1.1.0, 1.1.1)\nBuilding site Worker…\n\n    at [eval]:36:19\n    at [eval]:51:4\n    at runScriptInThisContext (node:internal/vm:219:10)\n    at node:internal/process/execution:451:12\n    at [eval]-wrapper:6:24\n    at runScriptInContext (node:internal/process/execution:449:60)\n    at evalFunction (node:internal/process/execution:283:30)\n    at evalTypeScript (node:internal/process/execution:295:3)\n    at node:internal/main/eval_string:71:3\n\nNode.js v24.20.0\n",
+    "at": 1792102486404
+  },
   "run:70df4012af58963debb82ced04bf80bc47d5e95d": {
-    "stage": "building",
+    "stage": "failed",
     "commit": "70df4012af58963debb82ced04bf80bc47d5e95d",
-    "at": 1792100203104
+    "error": "Provider DELETE artifacts/namespaces/hm-s2-source/tokens/1347tpbnzxsa8xbo: 401 [{\"code\":10000,\"message\":\"Authentication error\"}]",
+    "at": 1792100816799
   },
   "run:a23af7c39ff4a2d46279b5f7ad831c62eca8125f": {
     "stage": "failed",
@@ -11,10 +632,194 @@
     "error": "Migration changes require registry review",
     "at": 1792099171614
   },
+  "run:b900055ace9db11a52371d20bfcdf8bfcea6d7a1": {
+    "stage": "failed",
+    "commit": "b900055ace9db11a52371d20bfcdf8bfcea6d7a1",
+    "error": "Build failed: stage apt-get update -qq\nfinished apt-get 2021\nstage apt-get install -y\nfinished apt-get 10363\nstage git init \nfinished git 4\nstage git fetch --depth=1\nfinished git 2598\nstage git checkout --detach\nfinished git 75\nstage git rev-parse HEAD\nfinished git 3\nstage npm ci --no-audit\nfinished npm 26497\nstage apt-get install -y\nfinished apt-get 28826\nstage npm run check\nError: npm failed: Author against toolkit 0.51.8: node_modules/@homie-rocks/studio/guides/app/SKILL.md\n\n\n> check\n> homie-studio check gathering --json --url http://127.0.0.1:8787\n\n{\n  \"ok\": false,\n  \"needs\": [\n    {\n      \"id\": \"check-in\",\n      \"statement\": \"Staff can welcome a volunteer and retain their check-in after reload\",\n      \"status\": \"met\",\n      \"captures\": [],\n      \"why\": \"Assertions passed; staff capture not requested: rerun check with --shots .checks and inspect the scene\"\n    },\n    {\n      \"id\": \"real-giving\",\n      \"statement\": \"Visitors choose one-time or monthly gifts and can reach their Stripe portal\",\n      \"status\": \"met\",\n      \"captures\": [],\n      \"why\": \"Assertions passed; phone capture not requested: rerun check with --shots .checks and inspect the scene; wall capture not requested: rerun check with --shots .checks and inspect the scene\"\n    },\n    {\n      \"id\": \"volunteer-shifts\",\n      \"statement\": \"Phone and wall show capacity-limited volunteer shifts\",\n      \"status\": \"not\",\n      \"captures\": [],\n      \"why\": \"Waiting for wall: reload and arrival readiness: Navigation timeout of 30000 ms exceeded; phone capture not requested: rerun check with --shots .checks and inspect the scene; wall capture not requested: rerun check with --shots .checks and inspect the scene\"\n    }\n  ],\n  \"why\": \"Some needs from the person’s Codex are not yet met; see needs and captures\",\n  \"command\": \"check\",\n  \"kind\": \"app\",\n  \"webglFailure\": false,\n  \"isolatedRecords\": true,\n  \"captureWarnings\": [],\n  \"dialogs\": [],\n  \"room\": \"check-f4eaf8783f5224937358\",\n  \"surfaces\": [\n    \"staff\",\n    \"phone\",\n    \"wall\"\n  ],\n  \"before\": null,\n  \"after\": null,\n  \"reconnect\": false,\n  \"game\": \"gathering\",\n  \"site\": \"http://127.0.0.1:8787\",\n  \"local\": true\n}\n\n\n    at run ([eval]:5:279)\n    at [eval]:39:16\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n",
+    "at": 1792103311045
+  },
   "run:da8ed8971a4fb98dc50ca187a71409895123c147": {
     "stage": "failed",
     "commit": "da8ed8971a4fb98dc50ca187a71409895123c147",
     "error": "Build failed: [eval]:21\n if(job.previewURL!=='https://hm-s2-dispatch.ryan-d2f.workers.dev')throw new Error('Only test preview checks allowed');\n                                                                   ^\n\nError: Only test preview checks allowed\n    at [eval]:21:74\n    at [eval]:50:4\n    at runScriptInThisContext (node:internal/vm:219:10)\n    at node:internal/process/execution:451:12\n    at [eval]-wrapper:6:24\n    at runScriptInContext (node:internal/process/execution:449:60)\n    at evalFunction (node:internal/process/execution:283:30)\n    at evalTypeScript (node:internal/process/execution:295:3)\n    at node:internal/main/eval_string:71:3\n\nNode.js v24.20.0\n",
     "at": 1792100084666
+  },
+  "run:eea92f991d8d412d6faf9482a70dfd7649ba0f2b": {
+    "tenant": "hm-s2-little-inlet",
+    "commit": "eea92f991d8d412d6faf9482a70dfd7649ba0f2b",
+    "toolkit": "0.51.8",
+    "node": "v24.20.0",
+    "lockDigest": "ef0c62ce56b5ce6f48c980077e111a1681e8047d5f6aae3118609be37c096712",
+    "compatibilityDate": "2026-10-01",
+    "artifactDigest": "be2f1556021423ea72137b499e06ea1d0d74851c912b5a3a186864f4c531c235",
+    "migrations": [
+      {
+        "name": "migrations/0001_studio.sql",
+        "digest": "1482441a97dfa368f9f2729d81265ce4ee8652fee6152cb6e5797255cc9f3089"
+      },
+      {
+        "name": "migrations/0002_studio_stats.sql",
+        "digest": "73937dd11c3b6364ba4fd8451ef0c9ed78957d9d2503d0591fea95c967f8bd14"
+      },
+      {
+        "name": "migrations/0004_players.sql",
+        "digest": "44c1ced35c86a6c3983dc6e1c509af2ed6251d48d48550aa9b740bc485dd1235"
+      },
+      {
+        "name": "migrations/0005_studio_office.sql",
+        "digest": "15b7ade3ecf7611fd447ee11faec74dc39eb354eb68158fdf0f136c0b89ac53e"
+      },
+      {
+        "name": "migrations/0006_studio_servers.sql",
+        "digest": "57f901c565d13dfb9202a3b7e2874339bee1367aecafb1aba4bb9d136eb0f4d5"
+      },
+      {
+        "name": "migrations/0007_studio_chat.sql",
+        "digest": "c019115275b51a18e431e6b69ec31bbeeef5b80d9f266120b8821db94ad00dcb"
+      },
+      {
+        "name": "migrations/0008_studio_shop.sql",
+        "digest": "8fc5b35eb6bff2c031eb4a567467cb5b8f653f088a84c5e5d02a5b964d5310c0"
+      },
+      {
+        "name": "migrations/0009_studio_lounge.sql",
+        "digest": "9af6bf236869d71cd86c58abe6d77c35c21c56c1824c325831ce1c2707b8339b"
+      },
+      {
+        "name": "migrations/0010_shop_reservations.sql",
+        "digest": "5f6f409050fe7eb766e74f56b5081b4b603aef8b6925e9937fc751692f4724ce"
+      },
+      {
+        "name": "migrations/0011_shop_statements.sql",
+        "digest": "edb230e2c5b25acaf15a61fb3214b28535af23a8946eca50abacda560691c01b"
+      },
+      {
+        "name": "migrations/0012_shop_lines.sql",
+        "digest": "01959daa3afd0225359f84e30783d0fc9118356cab9e7a2eb0f5e750d8f4d990"
+      },
+      {
+        "name": "migrations/0014_studio_apps.sql",
+        "digest": "feb956ce8595f224891c7112ce2e5990932af7ccaadc2497a0e5af2f9e8a5355"
+      },
+      {
+        "name": "migrations/0015_example_demo.sql",
+        "digest": "8f4f12dde01d78942f51d19d801f6bc30f41d2852abdedc36390deabe89e037c"
+      },
+      {
+        "name": "migrations/0015_purchases.sql",
+        "digest": "ebecd9c734321a05f452372546d837eced3cfbbaa0d37833a7f14a30bab4ee10"
+      },
+      {
+        "name": "migrations/0016_purchase_facts.sql",
+        "digest": "9a8227a5e1a811c7ade145cf32fd1bcc771637dc7ae2d0497df59af32fe514a9"
+      },
+      {
+        "name": "migrations/0017_studio_mcp.sql",
+        "digest": "c3da9510298d0b9402cd3c36bcf39397a933c94ad1e44903ea7aced83782326d"
+      },
+      {
+        "name": "migrations/0018_studio_functions.sql",
+        "digest": "e0e4164af714563f4a6b049f4fb03e7b3898d0684257fc26e30de24925c6426d"
+      },
+      {
+        "name": "migrations/0019_function_cursors.sql",
+        "digest": "8d0e83d335f61c75a846d01ab008fdefa23a13f84ce3de92fdaa36f9e3233a6a"
+      },
+      {
+        "name": "migrations/0020_function_meta.sql",
+        "digest": "642ddb8ab6b421c4c2d17a91d43b7a5b9bc9290ff17fde8eeff8d8855938cca4"
+      },
+      {
+        "name": "migrations/0021_app_payment_reference.sql",
+        "digest": "1d52958600e2aa66bbf515ded164be2de7ac9319ba583b42da68ba45eed0b68d"
+      },
+      {
+        "name": "migrations/0022_remove_referrals.sql",
+        "digest": "7a043ffe62853764351081e4629878db6e5578424f29fa8c7d7c45b7ea3d4819"
+      },
+      {
+        "name": "migrations/0023_function_runs.sql",
+        "digest": "ac831b6bd9f0e96e795a62ee2c7a89e903b3f2d738115312541dd8b39d7844f9"
+      },
+      {
+        "name": "migrations/0024_tool_data_versions.sql",
+        "digest": "77ec770b39f7ad13b7ce458f9a5a44c558515409ec1ba730b4ec54030ca0614c"
+      },
+      {
+        "name": "migrations/0025_bookings.sql",
+        "digest": "a3cfe2ab1913438a43bb84f659535661b5b7a6a8f995f7120cb3a80191fdda54"
+      },
+      {
+        "name": "migrations/0026_shop_subscriptions.sql",
+        "digest": "7df1b2e174eb23506d1717d052c5fdf0441e9a08e87ca0fa4663d83be84730fc"
+      },
+      {
+        "name": "migrations/0027_example_slots.sql",
+        "digest": "502f9a767200b676ae7c785792e24311494a211486af77af2ee1f10d5b70ad7d"
+      },
+      {
+        "name": "migrations/0028_shift_labels.sql",
+        "digest": "101ef356c42bf98d3a3930382fb70b481a2bb12f4b23aa3a04de83eefd5ca2e5"
+      }
+    ],
+    "stage": "verified",
+    "checks": {
+      "studio": true,
+      "synthetic": true,
+      "mcp": true,
+      "credentialProbe": {
+        "forbiddenEnv": [],
+        "operatorCredentialFiles": [],
+        "controlWithoutCredential": 404
+      }
+    },
+    "previewDeploymentId": "d7dc9e4b580d48ed9496167af18e0a0f",
+    "previewBindings": [
+      {
+        "name": "ASSETS",
+        "type": "assets"
+      },
+      {
+        "class_name": "Concentrator",
+        "name": "CONCENTRATOR",
+        "namespace_id": "9fc9d6a6e0d84e38a374862ac9ca9d0f",
+        "type": "durable_object_namespace"
+      },
+      {
+        "database_id": "2fa8176d-3110-4880-b749-02c79b0fd39a",
+        "id": "2fa8176d-3110-4880-b749-02c79b0fd39a",
+        "name": "DB",
+        "type": "d1"
+      },
+      {
+        "class_name": "Gate",
+        "name": "GATE",
+        "namespace_id": "74ad47e331134bb79900aec86148d535",
+        "type": "durable_object_namespace"
+      },
+      {
+        "name": "HOMIE_CONCEPT",
+        "text": "1",
+        "type": "plain_text"
+      },
+      {
+        "class_name": "Lobby",
+        "name": "LOBBY",
+        "namespace_id": "1da31e5d9e69432c8a6db6b99531af28",
+        "type": "durable_object_namespace"
+      },
+      {
+        "name": "STUDIO_NAME",
+        "text": "Little Inlet — managed step 2 test",
+        "type": "plain_text"
+      },
+      {
+        "class_name": "Table",
+        "name": "TABLE",
+        "namespace_id": "60901c48eaf240f382153c836c308016",
+        "type": "durable_object_namespace"
+      }
+    ],
+    "schemaEpoch": 1
   }
 }

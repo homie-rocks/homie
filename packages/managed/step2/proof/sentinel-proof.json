@@ -1,0 +1,18 @@
+{
+  "unchanged": true,
+  "deploymentId": "0a283c2332cd4a95af62ba7bdc933861",
+  "etag": "a005cf5a406ba39a44068968a0fade97dd719c96a9f9c9daebe8e7c178121b3b",
+  "listDeploymentId": null,
+  "contentEtagMatches": true,
+  "settings": {
+    "placement": {},
+    "compatibility_date": "2026-10-15",
+    "compatibility_flags": [],
+    "usage_model": "standard",
+    "tags": [],
+    "tail_consumers": [],
+    "logpush": false,
+    "bindings": []
+  },
+  "modifiedOn": "2026-10-15T21:27:59.284883Z"
+}

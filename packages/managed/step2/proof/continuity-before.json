@@ -1,0 +1,49 @@
+{
+  "db": "fb977142-73cb-487d-96bb-ea6c99980211",
+  "bindings": [
+    {
+      "name": "ASSETS",
+      "type": "assets"
+    },
+    {
+      "class_name": "Concentrator",
+      "name": "CONCENTRATOR",
+      "namespace_id": "232e85b1c7774832adf8c1be095a9192",
+      "type": "durable_object_namespace"
+    },
+    {
+      "database_id": "fb977142-73cb-487d-96bb-ea6c99980211",
+      "id": "fb977142-73cb-487d-96bb-ea6c99980211",
+      "name": "DB",
+      "type": "d1"
+    },
+    {
+      "class_name": "Gate",
+      "name": "GATE",
+      "namespace_id": "ce5a61fa205f4d51a580120e92968c1e",
+      "type": "durable_object_namespace"
+    },
+    {
+      "name": "HOMIE_CONCEPT",
+      "text": "1",
+      "type": "plain_text"
+    },
+    {
+      "class_name": "Lobby",
+      "name": "LOBBY",
+      "namespace_id": "f3b719dd3fd24a509f34106a8d3acd18",
+      "type": "durable_object_namespace"
+    },
+    {
+      "name": "STUDIO_NAME",
+      "text": "Little Inlet — managed step 2 test",
+      "type": "plain_text"
+    },
+    {
+      "class_name": "Table",
+      "name": "TABLE",
+      "namespace_id": "101fb860ef2c429ab38bd374e8c0ca2d",
+      "type": "durable_object_namespace"
+    }
+  ]
+}

@@ -98,6 +98,12 @@
       "readPath": "workers/dispatch/namespaces/homie-managed-s2/scripts/hm-s2-inlet-preview/settings",
       "status": "created",
       "recoveredFrom": "Recorded creation output; concurrent harness snapshot overwritten"
+    },
+    {
+      "name": "hm-s2-inlet-production",
+      "path": "workers/dispatch/namespaces/homie-managed-s2/scripts/hm-s2-inlet-production",
+      "readPath": "workers/dispatch/namespaces/homie-managed-s2/scripts/hm-s2-inlet-production/settings",
+      "status": "created"
     }
   ],
   "receipts": [],
@@ -118,6 +124,16 @@
       "id": "ggcvzmx320uy9bch",
       "scope": "read",
       "expiresAt": "2026-10-15T21:15:57.667Z"
+    },
+    {
+      "id": "oj6ize3r5moa2ec8",
+      "scope": "read",
+      "expiresAt": "2026-10-15T22:49:34.487Z"
+    },
+    {
+      "id": "djxnooldy90pq133",
+      "scope": "read",
+      "expiresAt": "2026-10-15T22:55:55.653Z"
     }
   ],
   "tenant": {
@@ -268,6 +284,31 @@
       "variant": "three",
       "commit": "70df4012af58963debb82ced04bf80bc47d5e95d",
       "at": "2026-10-15T21:36:38.988Z"
+    },
+    {
+      "variant": "one",
+      "commit": "6152714c57054b331be074359690dca8cafec2a7",
+      "at": "2026-10-15T22:02:38.281Z"
+    },
+    {
+      "variant": "two",
+      "commit": "31a8d8a9bb911f302e2fecde4cd1aa4abe3d3590",
+      "at": "2026-10-15T22:16:09.498Z"
+    },
+    {
+      "variant": "fixture",
+      "commit": "b900055ace9db11a52371d20bfcdf8bfcea6d7a1",
+      "at": "2026-10-15T22:22:44.712Z"
+    },
+    {
+      "variant": "one",
+      "commit": "3097b503737b038bc84c744731118760434763c4",
+      "at": "2026-10-15T22:30:34.881Z"
+    },
+    {
+      "variant": "two",
+      "commit": "eea92f991d8d412d6faf9482a70dfd7649ba0f2b",
+      "at": "2026-10-15T22:38:46.770Z"
     }
   ],
   "sentinel": {
