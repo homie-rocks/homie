@@ -1,8 +1,25 @@
 # Owner runner performance round — 14 October 2026
 
-**NOT READY: validation blocked by the quiet-machine requirement.** Toolkit base / PR #116 head is `28a561ac`; studio base is `1d62525`. Changes remain uncommitted in both worktrees. No version bump, merge, real-studio deployment, or publication occurred.
+**NOT READY: validation blocked by the quiet-machine requirement.** Toolkit base / PR #116 head is `28a561ac`; studio base is `1d62525`. Toolkit changes were subsequently committed as `a04784b9` (WIP, unverified); studio changes remain uncommitted. No version bump, merge, real-studio deployment, or publication occurred.
 
 The final browser batch waited from approximately 20:44 to 21:04 America/Vancouver. Every recorded check exceeded load 8; the gate exited after 20 minutes, at load 60.04. Preparation temporarily paused the gate during tests/builds so it could not start a measurement alongside them. The wait limit was not reset. The request to pause other jobs received no reply. Only this task's processes were stopped.
+
+## Continuation at 22:00–22:21
+
+**Still blocked; no post-change performance claim.** Rechecked PR #116 at `a04784b9` and detached live control at `75b280c`. The first `uptime` was 33.74, despite the expected quiet window. The original 20-minute gate ran from 22:00:52; every check remained above 8. The measurement gate's minimum was **9.33**, and its final reading **10.34**. Its last check was 11 seconds after the deadline because it polls every 30 seconds; no batch started. Raw receipts are [the initial gate](resume-initial-quiet.log) and [the measurement gate](resume-quiet.jsonl), with the summary in [resume.json](resume.json).
+
+Synchronized the final WIP host/view sources into the isolated branch build. Toolkit build and strict Tiny Platformer build passed; the studio suite passed **40/40**. A broad toolkit regression run reported 111 passing cases and no failures before being stopped at about 22:06 to remove its contribution to machine load. This is an interrupted suite, not a pass. Other browser jobs, an npm install, and the macOS file-watching daemon were observed running; none were stopped. The task's two local servers were stopped after the gate expired.
+
+No temporary Worker was redeployed, so there was no new Cloudflare resource to delete. The ten-minute eight-player Cloudflare experiment **did not run**. Previous deletion receipts remain in scratch. No real studio deployment, version bump, merge, or new gameplay change occurred in this continuation.
+
+| Requested item | Last available branch vs control | Continuation outcome |
+| --- | --- | --- |
+| Phone >33 ms frames | 22 vs 10 over approximately 10.8k frames (earlier build) | No post-WIP pair; unresolved |
+| Contact CPU per 64 reports | 0.706 vs 0.816 ms median (prior WIP fixture, older contact rules on same core, not live browser-host CPU) | Not remeasured; sustained-load/Cloudflare result unavailable |
+| Zero-delay jump p90 | 30.7 vs 24.8 ms (earlier build) | Not remeasured; unresolved |
+| Catches without nearby monster | 17 vs 12 over five earlier trials | Not remeasured; unresolved |
+
+The per-batch load limit was honored; the old numbers are not presented as validation of `a04784b9`. The prepared Cloudflare runner is `/tmp/owner-perf-round/resume-plan.py`; its original deadline has expired and must not be reused as a new window without updating it. The refreshed branch runtime is `85d170189ef09ed4b4899aae` and its client is `main-TTKOG2AC.js`.
 
 ## Completed evidence
 
