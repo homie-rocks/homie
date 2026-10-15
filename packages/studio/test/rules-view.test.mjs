@@ -2729,3 +2729,17 @@ for (const delay of [0, 300]) test(`future input recovers after host clock pause
   assert.ok(saved[8][0] < 0, `server ignored reversal: velocity ${saved[8][0]}`);
   assert.equal(r.host.core.stats.errors,0);
 });
+
+test('wrapped circle reconciliation spends a bounded correction per drawn frame', async t => {
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'wrap2');
+ const clock=virtualTime(t),r=rig(L,compiled,false,150,150);
+ const a=openRoom({net:{config:cfg('Circle correction'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(2500);a.input({ax:1});await clock.wait(1200);
+ const socket=r.sockets[0],receive=socket.onmessage;
+ let changed=false;
+ socket.onmessage=event=>{const f=JSON.parse(event.data);if(f.t==='snap') {const own=f.d[1].find(e=>e[9]===a.seat);if(own){own[3][0]=((own[3][0]+12)%20)-10;changed=true;}}receive.call(socket,{data:JSON.stringify(f)});};
+ let previous=a.me.pos,worst=0;
+ for(let i=0;i<240;i++){await clock.wait(16);const p=a.me.pos;worst=Math.max(worst,Math.hypot(((p.x-previous.x+30)%20)-10,p.y-previous.y));previous=p;}
+ t.diagnostic(JSON.stringify({worst}));assert.ok(changed);
+ assert.ok(worst<.1,`a correction accelerated a wrapped circle by ${worst} metres in one frame`);
+});

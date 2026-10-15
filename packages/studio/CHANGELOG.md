@@ -19,6 +19,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## Unreleased
 
+- Bound wrapped-circle reconciliation travel per rendered frame, using periodic distance, so residual corrections cannot double a moving ship’s visible speed.
+
 ### Added
 
 - `room.ownTick` exposes the fractional own prediction/catch-up clock for deterministic projectile and obstacle presentation in wrapped games. No authority or hit-policy change.

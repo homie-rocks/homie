@@ -1162,6 +1162,23 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       if (!presented || presented.id !== mine.id || presented.r !== mine.r) { routing=null;route=[]; }
       presented = {id:mine.id,r:mine.r,pos,vel:velocity,at:now};
     }
+    // Free wrapped circles need the same time-bounded correction guarantee as
+    // boxes. Their two axes are symmetric: use radial travel, preserving real
+    // acceleration while limiting the extra speed spent settling reconciliation.
+    if (present && dims === 2 && kind && kind.shape !== 'box' && !kind.owner && (map.wrap?.x || map.wrap?.y)) {
+      const now = clock();
+      if (presented && presented.id === mine.id && presented.r === mine.r) {
+        const from = presented.pos, elapsed = Math.max(0, now - presented.at) / 1000;
+        const travel = Math.max(Math.hypot(velocity.x, velocity.y), Math.hypot(presented.vel.x, presented.vel.y));
+        const blend = kind.radius / Math.max(.1, predict.blendMs / 1000);
+        const length = distance(from, pos), allowance = (travel + blend) * elapsed;
+        if (length > allowance && length > 0) {
+          const fraction = allowance / length;
+          pos = constrain(from, wrapPoint({x:from.x+periodicDelta(from.x,pos.x,map.wrap?.x)*fraction,y:from.y+periodicDelta(from.y,pos.y,map.wrap?.y)*fraction,z:0}, map.wrap));
+        }
+      }
+      presented = {id:mine.id,r:mine.r,pos,vel:velocity,at:now};
+    }
     if (headingBlend) {
       const t = predict.blendMs > 0 ? Math.min(1, (clock() - headingBlend.at) / predict.blendMs) : 1;
       heading = blendHeading(headingBlend.from, heading, t, dims);
