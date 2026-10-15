@@ -1,0 +1,20 @@
+{
+  "active": "70df4012af58963debb82ced04bf80bc47d5e95d",
+  "run:70df4012af58963debb82ced04bf80bc47d5e95d": {
+    "stage": "building",
+    "commit": "70df4012af58963debb82ced04bf80bc47d5e95d",
+    "at": 1792100203104
+  },
+  "run:a23af7c39ff4a2d46279b5f7ad831c62eca8125f": {
+    "stage": "failed",
+    "commit": "a23af7c39ff4a2d46279b5f7ad831c62eca8125f",
+    "error": "Migration changes require registry review",
+    "at": 1792099171614
+  },
+  "run:da8ed8971a4fb98dc50ca187a71409895123c147": {
+    "stage": "failed",
+    "commit": "da8ed8971a4fb98dc50ca187a71409895123c147",
+    "error": "Build failed: [eval]:21\n if(job.previewURL!=='https://hm-s2-dispatch.ryan-d2f.workers.dev')throw new Error('Only test preview checks allowed');\n                                                                   ^\n\nError: Only test preview checks allowed\n    at [eval]:21:74\n    at [eval]:50:4\n    at runScriptInThisContext (node:internal/vm:219:10)\n    at node:internal/process/execution:451:12\n    at [eval]-wrapper:6:24\n    at runScriptInContext (node:internal/process/execution:449:60)\n    at evalFunction (node:internal/process/execution:283:30)\n    at evalTypeScript (node:internal/process/execution:295:3)\n    at node:internal/main/eval_string:71:3\n\nNode.js v24.20.0\n",
+    "at": 1792100084666
+  }
+}

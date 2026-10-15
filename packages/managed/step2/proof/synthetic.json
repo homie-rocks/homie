@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "mcp": true,
+  "booking": {
+    "status": 200,
+    "order": "ord_QJdhVnFBo1SxFpIc4s70",
+    "booking": "ord_QJdhVnFBo1SxFpIc4s70"
+  },
+  "moneyMoved": false
+}

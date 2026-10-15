@@ -1,0 +1,429 @@
+[
+  {
+    "variant": "one",
+    "commit": "a23af7c39ff4a2d46279b5f7ad831c62eca8125f",
+    "params": {
+      "type": "cf.artifacts.repo.pushed",
+      "source": {
+        "namespace": "hm-s2-source",
+        "repoName": "hm-s2-little-inlet",
+        "type": "artifacts.repo"
+      },
+      "metadata": {
+        "accountId": "d2f6f976cecad2fe130976fe36916cdb",
+        "eventSubscriptionId": "d235afe225a54a74b1283a59910dd883",
+        "eventSchemaVersion": 1,
+        "eventTimestamp": "2026-10-15T21:15:18.173Z"
+      },
+      "payload": {
+        "ref": "refs/heads/main",
+        "before": "91a675eb1477b0c25de7d134311c349c58e8121a",
+        "after": "a23af7c39ff4a2d46279b5f7ad831c62eca8125f",
+        "commits": [
+          {
+            "id": "a23af7c39ff4a2d46279b5f7ad831c62eca8125f",
+            "message": "Managed step 2 proof: one\n\nSigned-off-by: Ryan Campbell <ryan@ryancampbell.com>",
+            "messageTruncated": false,
+            "timestamp": "2026-10-15T21:15:15.000Z",
+            "author": {
+              "name": "Ryan Campbell",
+              "email": "ryan@ryancampbell.com"
+            },
+            "committer": {
+              "name": "Ryan Campbell",
+              "email": "ryan@ryancampbell.com"
+            },
+            "parents": [
+              "91a675eb1477b0c25de7d134311c349c58e8121a"
+            ]
+          }
+        ],
+        "totalCommitsCount": 1,
+        "commitsTruncated": false
+      }
+    },
+    "trigger": {
+      "source": "binding"
+    },
+    "versionId": "e41d1846-2c09-4cbf-8ea4-574bfcf85594",
+    "queued": "2026-10-15T21:15:24.198Z",
+    "start": "2026-10-15T21:15:28.745Z",
+    "end": "2026-10-15T21:19:31.332Z",
+    "success": false,
+    "error": {
+      "message": "Migration changes require registry review",
+      "name": "Error"
+    },
+    "rollback": null,
+    "status": "errored",
+    "step_count": 3,
+    "steps": [
+      {
+        "name": "claim tenant preview-1",
+        "start": "2026-10-15T21:15:28.789Z",
+        "end": "2026-10-15T21:15:29.251Z",
+        "attempts": [
+          {
+            "start": "2026-10-15T21:15:28.789Z",
+            "end": "2026-10-15T21:15:29.251Z",
+            "success": true,
+            "error": null
+          }
+        ],
+        "config": {
+          "retries": {
+            "limit": 5,
+            "delay": 10000,
+            "backoff": "exponential"
+          },
+          "timeout": "10 minutes"
+        },
+        "output": null,
+        "success": true,
+        "type": "step"
+      },
+      {
+        "name": "immutable remote build-1",
+        "start": "2026-10-15T21:15:29.361Z",
+        "end": "2026-10-15T21:19:31.214Z",
+        "attempts": [
+          {
+            "start": "2026-10-15T21:15:29.361Z",
+            "end": "2026-10-15T21:19:31.214Z",
+            "success": false,
+            "error": {
+              "name": "Error",
+              "message": "Migration changes require registry review"
+            }
+          }
+        ],
+        "config": {
+          "retries": {
+            "limit": 0,
+            "delay": "1 second",
+            "backoff": "exponential"
+          },
+          "timeout": "12 minutes"
+        },
+        "output": null,
+        "success": false,
+        "type": "step"
+      },
+      {
+        "name": "record failure-1",
+        "start": "2026-10-15T21:19:31.214Z",
+        "end": "2026-10-15T21:19:31.300Z",
+        "attempts": [
+          {
+            "start": "2026-10-15T21:19:31.214Z",
+            "end": "2026-10-15T21:19:31.300Z",
+            "success": true,
+            "error": null
+          }
+        ],
+        "config": {
+          "retries": {
+            "limit": 5,
+            "delay": 10000,
+            "backoff": "exponential"
+          },
+          "timeout": "10 minutes"
+        },
+        "output": null,
+        "success": true,
+        "type": "step"
+      }
+    ]
+  },
+  {
+    "variant": "two",
+    "commit": "da8ed8971a4fb98dc50ca187a71409895123c147",
+    "params": {
+      "type": "cf.artifacts.repo.pushed",
+      "source": {
+        "namespace": "hm-s2-source",
+        "repoName": "hm-s2-little-inlet",
+        "type": "artifacts.repo"
+      },
+      "metadata": {
+        "accountId": "d2f6f976cecad2fe130976fe36916cdb",
+        "eventSubscriptionId": "d235afe225a54a74b1283a59910dd883",
+        "eventSchemaVersion": 1,
+        "eventTimestamp": "2026-10-15T21:26:07.960Z"
+      },
+      "payload": {
+        "ref": "refs/heads/main",
+        "before": "a23af7c39ff4a2d46279b5f7ad831c62eca8125f",
+        "after": "da8ed8971a4fb98dc50ca187a71409895123c147",
+        "commits": [
+          {
+            "id": "da8ed8971a4fb98dc50ca187a71409895123c147",
+            "message": "Managed step 2 proof: two\n\nSigned-off-by: Ryan Campbell <ryan@ryancampbell.com>",
+            "messageTruncated": false,
+            "timestamp": "2026-10-15T21:26:04.000Z",
+            "author": {
+              "name": "Ryan Campbell",
+              "email": "ryan@ryancampbell.com"
+            },
+            "committer": {
+              "name": "Ryan Campbell",
+              "email": "ryan@ryancampbell.com"
+            },
+            "parents": [
+              "a23af7c39ff4a2d46279b5f7ad831c62eca8125f"
+            ]
+          }
+        ],
+        "totalCommitsCount": 1,
+        "commitsTruncated": false
+      }
+    },
+    "trigger": {
+      "source": "binding"
+    },
+    "versionId": "8a56c187-56b8-4ed4-a10b-ad71b9d92419",
+    "queued": "2026-10-15T21:26:09.641Z",
+    "start": "2026-10-15T21:26:13.415Z",
+    "end": "2026-10-15T21:34:44.746Z",
+    "success": false,
+    "error": {
+      "message": "Build failed: [eval]:21\n if(job.previewURL!=='https://hm-s2-dispatch.ryan-d2f.workers.dev')throw new Error('Only test preview checks allowed');\n                                                                   ^\n\nError: Only test preview checks allowed\n    at [eval]:21:74\n    at [eval]:50:4\n    at runScriptInThisContext (node:internal/vm:219:10)\n    at node:internal/process/execution:451:12\n    at [eval]-wrapper:6:24\n    at runScriptInContext (node:internal/process/execution:449:60)\n    at evalFunction (node:internal/process/execution:283:30)\n    at evalTypeScript (node:internal/process/execution:295:3)\n    at node:internal/main/eval_string:71:3\n\nNode.js v24.20.0\n",
+      "name": "Error"
+    },
+    "rollback": null,
+    "status": "errored",
+    "step_count": 5,
+    "steps": [
+      {
+        "name": "claim tenant preview-1",
+        "start": "2026-10-15T21:26:13.649Z",
+        "end": "2026-10-15T21:26:13.868Z",
+        "attempts": [
+          {
+            "start": "2026-10-15T21:26:13.649Z",
+            "end": "2026-10-15T21:26:13.868Z",
+            "success": true,
+            "error": null
+          }
+        ],
+        "config": {
+          "retries": {
+            "limit": 5,
+            "delay": 10000,
+            "backoff": "exponential"
+          },
+          "timeout": "10 minutes"
+        },
+        "output": null,
+        "success": true,
+        "type": "step"
+      },
+      {
+        "name": "immutable remote build-1",
+        "start": "2026-10-15T21:26:13.902Z",
+        "end": "2026-10-15T21:31:09.124Z",
+        "attempts": [
+          {
+            "start": "2026-10-15T21:26:13.902Z",
+            "end": "2026-10-15T21:31:09.124Z",
+            "success": true,
+            "error": null
+          }
+        ],
+        "config": {
+          "retries": {
+            "limit": 0,
+            "delay": "1 second",
+            "backoff": "exponential"
+          },
+          "timeout": "12 minutes"
+        },
+        "output": "{\"hash\":\"5899e45e5fe519d440ffb30db8289099dadac4df9982172a7ef4b8ad902ff35c\",\"migrations\":[{\"name\":\"migrations/0001_studio.sql\",\"digest\":\"1482441a97dfa368f9f2729d81265ce4ee8652fee6152cb6e5797255cc9f3089\"},{\"name\":\"migrations/0002_studio_stats.sql\",\"digest\":\"73937dd11c3b6364ba4fd8451ef0c9ed78957d9d2503d0591fea95c967f8bd14\"},{\"name\":\"migrations/0004_players.sql\",\"digest\":\"44c1ced35c86a6c3983dc6e1c509af2ed6251d48d48550aa9b740bc485dd1235\"},{\"name\":\"migrations/0005_studio_office.sql\",\"digest\":\"15b7ade3ecf7611fd447ee11faec74dc39eb354eb68158fdf0f136c0b89ac53e\"},{\"name\":\"migrations/0006_studio_servers.sql\",\"digest\":\"57f901c565d13dfb9202a3b7e2874339bee1367aecafb1aba4bb9d136eb0f4d5\"},{\"name\":\"migrations/0007_studio_chat.sql\",\"digest\":\"c019115275b51a18e431e6b69ec31bbeeef5b80d9f266120b8821db94ad00dcb\"},{\"name\":\"migrations/0008_studio_shop.sql\",\"digest\":\"8fc5b35eb6bff2c031eb4a567467cb5b8f653f088a84c5e5d02a5b964d5310c0\"},{\"name\":\"migrations/0009_studio_lounge.sql\",\"digest\":\"9af6bf236869d71cd86c58abe6d77c35c21c56c1824c325831c[truncated output]",
+        "success": true,
+        "type": "step"
+      },
+      {
+        "name": "deploy isolated preview-1",
+        "start": "2026-10-15T21:31:09.164Z",
+        "end": "2026-10-15T21:31:16.099Z",
+        "attempts": [
+          {
+            "start": "2026-10-15T21:31:09.164Z",
+            "end": "2026-10-15T21:31:16.099Z",
+            "success": true,
+            "error": null
+          }
+        ],
+        "config": {
+          "retries": {
+            "limit": 0,
+            "delay": "1 second",
+            "backoff": "exponential"
+          },
+          "timeout": "5 minutes"
+        },
+        "output": "{\"uploaded\":{\"created_on\":\"2026-10-15T21:10:45.007057Z\",\"modified_on\":\"2026-10-15T21:31:15.216699Z\",\"id\":\"hm-s2-inlet-preview\",\"tag\":\"6acf355129c149ad9c62a3cab8eca268\",\"entry_point\":\"worker.js\",\"tags\":[\"hm-s2\",\"hm-s2-little-inlet\",\"preview\"],\"deployment_id\":\"9adc5737ecf24356a512714a12690e8a\",\"tail_consumers\":null,\"logpush\":false,\"observability\":{\"enabled\":true,\"head_sampling_rate\":null},\"has_assets\":true,\"has_modules\":true,\"etag\":\"c0e72429a7335a878efe88df6def64f542845a8185bd0ebe30c123b351121f04\",\"handlers\":[\"fetch\",\"scheduled\"],\"named_handlers\":[{\"name\":\"Concentrator\",\"handlers\":[\"class\"]},{\"name\":\"Gate\",\"handlers\":[\"class\"]},{\"name\":\"Lobby\",\"handlers\":[\"class\"]},{\"name\":\"Table\",\"handlers\":[\"class\"]}],\"last_deployed_from\":\"api\",\"exports\":{\"Concentrator\":{\"type\":\"durable-object\",\"storage\":\"sqlite\"},\"Gate\":{\"type\":\"durable-object\",\"storage\":\"sqlite\"},\"Lobby\":{\"type\":\"durable-object\",\"storage\":\"sqlite\"},\"Table\":{\"type\":\"durable-object\",\"storage\":\"sqlite\"}},\"compatibility_date\":\"2026-10-01\",\"compatibility_flags\":[truncated output]",
+        "success": true,
+        "type": "step"
+      },
+      {
+        "name": "studio checks in fresh remote VM-1",
+        "start": "2026-10-15T21:31:16.140Z",
+        "end": "2026-10-15T21:34:44.565Z",
+        "attempts": [
+          {
+            "start": "2026-10-15T21:31:16.140Z",
+            "end": "2026-10-15T21:34:44.565Z",
+            "success": false,
+            "error": {
+              "name": "Error",
+              "message": "Build failed: [eval]:21\n if(job.previewURL!=='https://hm-s2-dispatch.ryan-d2f.workers.dev')throw new Error('Only test preview checks allowed');\n                                                                   ^\n\nError: Only test preview checks allowed\n    at [eval]:21:74\n    at [eval]:50:4\n    at runScriptInThisContext (node:internal/vm:219:10)\n    at node:internal/process/execution:451:12\n    at [eval]-wrapper:6:24\n    at runScriptInContext (node:internal/process/execution:449:60)\n    at evalFunction (node:internal/process/execution:283:30)\n    at evalTypeScript (node:internal/process/execution:295:3)\n    at node:internal/main/eval_string:71:3\n\nNode.js v24.20.0\n"
+            }
+          }
+        ],
+        "config": {
+          "retries": {
+            "limit": 0,
+            "delay": "1 second",
+            "backoff": "exponential"
+          },
+          "timeout": "12 minutes"
+        },
+        "output": null,
+        "success": false,
+        "type": "step"
+      },
+      {
+        "name": "record failure-1",
+        "start": "2026-10-15T21:34:44.565Z",
+        "end": "2026-10-15T21:34:44.712Z",
+        "attempts": [
+          {
+            "start": "2026-10-15T21:34:44.565Z",
+            "end": "2026-10-15T21:34:44.712Z",
+            "success": true,
+            "error": null
+          }
+        ],
+        "config": {
+          "retries": {
+            "limit": 5,
+            "delay": 10000,
+            "backoff": "exponential"
+          },
+          "timeout": "10 minutes"
+        },
+        "output": null,
+        "success": true,
+        "type": "step"
+      }
+    ]
+  },
+  {
+    "variant": "three",
+    "commit": "70df4012af58963debb82ced04bf80bc47d5e95d",
+    "params": {
+      "type": "cf.artifacts.repo.pushed",
+      "source": {
+        "namespace": "hm-s2-source",
+        "repoName": "hm-s2-little-inlet",
+        "type": "artifacts.repo"
+      },
+      "metadata": {
+        "accountId": "d2f6f976cecad2fe130976fe36916cdb",
+        "eventSubscriptionId": "d235afe225a54a74b1283a59910dd883",
+        "eventSchemaVersion": 1,
+        "eventTimestamp": "2026-10-15T21:36:38.579Z"
+      },
+      "payload": {
+        "ref": "refs/heads/main",
+        "before": "da8ed8971a4fb98dc50ca187a71409895123c147",
+        "after": "70df4012af58963debb82ced04bf80bc47d5e95d",
+        "commits": [
+          {
+            "id": "70df4012af58963debb82ced04bf80bc47d5e95d",
+            "message": "Managed step 2 proof: three\n\nSigned-off-by: Ryan Campbell <ryan@ryancampbell.com>",
+            "messageTruncated": false,
+            "timestamp": "2026-10-15T21:36:35.000Z",
+            "author": {
+              "name": "Ryan Campbell",
+              "email": "ryan@ryancampbell.com"
+            },
+            "committer": {
+              "name": "Ryan Campbell",
+              "email": "ryan@ryancampbell.com"
+            },
+            "parents": [
+              "da8ed8971a4fb98dc50ca187a71409895123c147"
+            ]
+          }
+        ],
+        "totalCommitsCount": 1,
+        "commitsTruncated": false
+      }
+    },
+    "trigger": {
+      "source": "binding"
+    },
+    "versionId": "30619eef-578e-4213-821d-e754aa754ea8",
+    "queued": "2026-10-15T21:36:39.828Z",
+    "start": "2026-10-15T21:36:42.841Z",
+    "end": null,
+    "success": null,
+    "error": null,
+    "output": null,
+    "rollback": null,
+    "status": "running",
+    "step_count": 2,
+    "steps": [
+      {
+        "name": "claim tenant preview-1",
+        "start": "2026-10-15T21:36:42.874Z",
+        "end": "2026-10-15T21:36:43.186Z",
+        "attempts": [
+          {
+            "start": "2026-10-15T21:36:42.874Z",
+            "end": "2026-10-15T21:36:43.186Z",
+            "success": true,
+            "error": null
+          }
+        ],
+        "config": {
+          "retries": {
+            "limit": 60,
+            "delay": "30 seconds",
+            "backoff": "constant"
+          },
+          "timeout": "1 minute"
+        },
+        "output": null,
+        "success": true,
+        "type": "step"
+      },
+      {
+        "name": "immutable remote build-1",
+        "start": "2026-10-15T21:36:43.220Z",
+        "end": null,
+        "attempts": [
+          {
+            "start": "2026-10-15T21:36:43.220Z",
+            "end": null,
+            "success": null,
+            "error": null
+          }
+        ],
+        "config": {
+          "retries": {
+            "limit": 0,
+            "delay": "1 second",
+            "backoff": "exponential"
+          },
+          "timeout": "12 minutes"
+        },
+        "output": null,
+        "success": null,
+        "type": "step"
+      }
+    ]
+  }
+]
