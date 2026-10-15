@@ -139,3 +139,11 @@ test('background work registered after response delivery gets its own delivery p
  await tracker.finish();tracker.context.waitUntil(Promise.resolve().then(()=>writes++));
  await Promise.all(waited);assert.deepEqual(deliveries,[0,1]);
 });
+test('an expired player cookie does not hide a live invite pass',async t=>{
+ const DB=database(t),env={DB},token='f'.repeat(48);
+ DB.sql.exec("INSERT INTO office_invites(id,game,code,created_at) VALUES('abcdef1234','cafe','ABCD',0)");
+ DB.sql.prepare("INSERT INTO office_passes VALUES(?,'cafe','abcdef1234',?)").run(hash(token),Date.now()+60000);
+ const request=new Request('https://place.test/cafe/open',{headers:{cookie:'studio_player=expired; studio_pass_cafe='+token}});
+ const ticket=await appAssetTicket(env,'cafe',undefined,{request,meta,launch:'invite'});assert.ok(ticket);
+ assert.equal(await appAssetTicket(env,'cafe',ticket,{meta,launch:'invite'}),true);
+});

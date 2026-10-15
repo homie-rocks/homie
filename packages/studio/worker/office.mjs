@@ -1426,6 +1426,7 @@ export async function appAssetTicket(env, app, ticket, {request,meta,launch=meta
     EXISTS(SELECT 1 FROM app_roles WHERE app IN (?1,'*') AND role=?2 AND player IN (?6,(SELECT player FROM player_sessions WHERE hash=?3 AND kind='session' AND expires_at>?4))) granted,
     EXISTS(SELECT 1 FROM mcp_connections WHERE id=?7 AND person=?6 AND revoked=0) connected
   `).bind(app,data.role,data.hash??null,Date.now(),data.pass??null,data.person??null,data.connection??null).first();
+  if(issuing&&purpose==='asset'&&launch==='invite'&&!meta.roles[data.role].signIn&&state.pass)data.kind='pass';
   const gate=state.owner||state.playerOwner||launch==='public'||launch==='invite'&&state.pass;
   const roleAllowed=!meta.roles[data.role].signIn||state.owner||state.playerOwner||state.granted;
   const authorized=data.kind==='owner'?state.owner:data.kind==='pass'?launch==='invite'&&!meta.roles[data.role].signIn&&state.pass:data.kind==='player'?state.player&&gate&&roleAllowed:data.kind==='tool'?state.connected&&gate&&roleAllowed:data.kind==='test'?data.testApp===app:false;
