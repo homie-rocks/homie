@@ -1,0 +1,641 @@
+{
+  "recordWrite": {
+    "ok": true,
+    "id": "hm-test-record",
+    "version": 1
+  },
+  "recordRead": {
+    "ok": true,
+    "records": [
+      {
+        "id": "hm-test-record",
+        "data": {
+          "name": "Managed test",
+          "x": 1,
+          "z": 2
+        },
+        "version": 1,
+        "updatedAt": 1792076843461
+      }
+    ]
+  },
+  "previewRead": {
+    "ok": true,
+    "records": []
+  },
+  "inletBindings": [
+    {
+      "name": "ASSETS",
+      "type": "assets"
+    },
+    {
+      "class_name": "Concentrator",
+      "name": "CONCENTRATOR",
+      "namespace_id": "73d35544e14547998561763c901dd7ae",
+      "type": "durable_object_namespace"
+    },
+    {
+      "database_id": "e6e9f37b-1b79-4b35-aac0-025c42af93a5",
+      "id": "e6e9f37b-1b79-4b35-aac0-025c42af93a5",
+      "name": "DB",
+      "type": "d1"
+    },
+    {
+      "class_name": "Gate",
+      "name": "GATE",
+      "namespace_id": "a4a2660f53604ee684a012d7af01ca87",
+      "type": "durable_object_namespace"
+    },
+    {
+      "name": "HOMIE_CONCEPT",
+      "text": "1",
+      "type": "plain_text"
+    },
+    {
+      "class_name": "Lobby",
+      "name": "LOBBY",
+      "namespace_id": "77f95b9943b3411398a29ac2f2f24f89",
+      "type": "durable_object_namespace"
+    },
+    {
+      "name": "STUDIO_FUNCTION_CRONS",
+      "text": "[\"* * * * *\",\"*/5 * * * *\"]",
+      "type": "plain_text"
+    },
+    {
+      "name": "STUDIO_FUNCTION_MANAGED_CRONS",
+      "text": "[\"* * * * *\",\"*/5 * * * *\"]",
+      "type": "plain_text"
+    },
+    {
+      "name": "STUDIO_NAME",
+      "text": "Little Inlet",
+      "type": "plain_text"
+    },
+    {
+      "class_name": "Table",
+      "name": "TABLE",
+      "namespace_id": "264dbd0574754c58933a431f993c3749",
+      "type": "durable_object_namespace"
+    }
+  ],
+  "previewBindings": [
+    {
+      "name": "ASSETS",
+      "type": "assets"
+    },
+    {
+      "class_name": "Concentrator",
+      "name": "CONCENTRATOR",
+      "namespace_id": "33c57a77f8b349c0ba4253a1ae718ba0",
+      "type": "durable_object_namespace"
+    },
+    {
+      "database_id": "329881a8-179b-4fbb-8a3a-0098eabcbb4f",
+      "id": "329881a8-179b-4fbb-8a3a-0098eabcbb4f",
+      "name": "DB",
+      "type": "d1"
+    },
+    {
+      "class_name": "Gate",
+      "name": "GATE",
+      "namespace_id": "0a6efdc2ca754a3089098b2f75c88583",
+      "type": "durable_object_namespace"
+    },
+    {
+      "name": "HOMIE_CONCEPT",
+      "text": "1",
+      "type": "plain_text"
+    },
+    {
+      "class_name": "Lobby",
+      "name": "LOBBY",
+      "namespace_id": "666d54daa1bd45e8b8890c74cfbcf071",
+      "type": "durable_object_namespace"
+    },
+    {
+      "name": "STUDIO_FUNCTION_CRONS",
+      "text": "[\"* * * * *\",\"*/5 * * * *\"]",
+      "type": "plain_text"
+    },
+    {
+      "name": "STUDIO_FUNCTION_MANAGED_CRONS",
+      "text": "[\"* * * * *\",\"*/5 * * * *\"]",
+      "type": "plain_text"
+    },
+    {
+      "name": "STUDIO_NAME",
+      "text": "Little Inlet",
+      "type": "plain_text"
+    },
+    {
+      "class_name": "Table",
+      "name": "TABLE",
+      "namespace_id": "9e9e6fc871e24615b778c6e5c414a591",
+      "type": "durable_object_namespace"
+    }
+  ],
+  "inlet-finalBindings": [
+    {
+      "name": "ASSETS",
+      "type": "assets"
+    },
+    {
+      "class_name": "Concentrator",
+      "name": "CONCENTRATOR",
+      "namespace_id": "73d35544e14547998561763c901dd7ae",
+      "type": "durable_object_namespace"
+    },
+    {
+      "database_id": "e6e9f37b-1b79-4b35-aac0-025c42af93a5",
+      "id": "e6e9f37b-1b79-4b35-aac0-025c42af93a5",
+      "name": "DB",
+      "type": "d1"
+    },
+    {
+      "class_name": "Gate",
+      "name": "GATE",
+      "namespace_id": "a4a2660f53604ee684a012d7af01ca87",
+      "type": "durable_object_namespace"
+    },
+    {
+      "name": "HOMIE_CONCEPT",
+      "text": "1",
+      "type": "plain_text"
+    },
+    {
+      "class_name": "Lobby",
+      "name": "LOBBY",
+      "namespace_id": "77f95b9943b3411398a29ac2f2f24f89",
+      "type": "durable_object_namespace"
+    },
+    {
+      "name": "STUDIO_FUNCTION_CRONS",
+      "text": "[\"* * * * *\",\"*/5 * * * *\"]",
+      "type": "plain_text"
+    },
+    {
+      "name": "STUDIO_FUNCTION_MANAGED_CRONS",
+      "text": "[\"* * * * *\",\"*/5 * * * *\"]",
+      "type": "plain_text"
+    },
+    {
+      "name": "STUDIO_NAME",
+      "text": "Little Inlet",
+      "type": "plain_text"
+    },
+    {
+      "class_name": "Table",
+      "name": "TABLE",
+      "namespace_id": "264dbd0574754c58933a431f993c3749",
+      "type": "durable_object_namespace"
+    }
+  ],
+  "initialize": {
+    "result": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {
+        "tools": {
+          "listChanged": true
+        },
+        "experimental": {
+          "payment": {
+            "methods": {}
+          }
+        },
+        "resources": {
+          "listChanged": true
+        }
+      },
+      "serverInfo": {
+        "name": "Little Inlet",
+        "version": "1.0.0"
+      }
+    },
+    "jsonrpc": "2.0",
+    "id": 1
+  },
+  "tools": {
+    "result": {
+      "tools": [
+        {
+          "name": "studio_info",
+          "description": "The public studio, apps, games and posts.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "studio_posts",
+          "description": "Published posts.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "studio_parts",
+          "description": "Parts this studio has chosen to share.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "app_schema",
+          "description": "Discover an app\u2019s record fields, valid values and the roles available to this caller before reading or changing records.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "app": {
+                "type": "string",
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "app"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "studio_book",
+          "description": "Reserve a declared booking slot. Accepts slot/time, resource/preferredResource, and addons/addOns as an array or quantity object. Supply a stable id, future expiresAt and a private token for an anonymous booking. Payment is separate.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "app": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "collection": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "slot": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "time": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "option": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "resource": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "preferredResource": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "preferred_resource": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "addons": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {
+                      "type": "string",
+                      "maxLength": 64
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100
+                    }
+                  }
+                ]
+              },
+              "addOns": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {
+                      "type": "string",
+                      "maxLength": 64
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100
+                    }
+                  }
+                ]
+              },
+              "add-ons": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {
+                      "type": "string",
+                      "maxLength": 64
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100
+                    }
+                  }
+                ]
+              },
+              "quantity": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "id": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "token": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{32,128}$"
+              },
+              "expiresAt": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "app",
+              "collection",
+              "id",
+              "expiresAt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "app_records",
+          "description": "List, read, create, update or delete app records with the app role and record version.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "app": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "role": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "collection": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,39}$"
+              },
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,64}$",
+                "description": "1\u201364 letters, digits, underscore or hyphen"
+              },
+              "operation": {
+                "enum": [
+                  "read",
+                  "create",
+                  "update",
+                  "delete"
+                ]
+              },
+              "data": {
+                "type": "object",
+                "propertyNames": {
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "description": "Field names start with a lowercase letter and use lowercase letters, digits and underscore; discover fields with app_schema."
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "app",
+              "collection"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "studio_catalogue",
+          "description": "Browse the public shop, paid parts and app goods. Prices use the studio\u2019s currency minor units.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "studio_cart",
+          "description": "Quote a cart for agent payment. Retain the returned private account cookies to use guest purchases. Approve this immutable offerVersion before purchase.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "lines": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "item": {
+                      "type": "string"
+                    },
+                    "quantity": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "amount": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "item"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "game": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "lines"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "studio_checkout",
+          "description": "Open the studio\u2019s Stripe checkout for a person to approve. Uses the same cart, account, order and refund as the website.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "lines": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "item": {
+                      "type": "string"
+                    },
+                    "quantity": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "amount": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "item"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "game": {
+                "type": "string"
+              },
+              "reference": {
+                "type": "string"
+              },
+              "booking": {
+                "type": "object",
+                "properties": {
+                  "collection": {
+                    "type": "string"
+                  },
+                  "slot": {
+                    "type": "string"
+                  },
+                  "hold": {
+                    "type": "string"
+                  },
+                  "token": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "collection",
+                  "slot"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "lines"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "studio_purchase",
+          "description": "Buy an approved offer with the MCP payment binding. Generate private random 32-byte hex buyer and claim values; retain the claim for retries. For x402 use the returned HTTP resource address.",
+          "inputSchema": {
+            "type": "object",
+            "required": [
+              "kind",
+              "resource",
+              "version",
+              "buyer",
+              "claim",
+              "offerVersion"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "resource": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "buyer": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$",
+                "description": "A random private buyer identifier."
+              },
+              "claim": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$",
+                "description": "A new private random 32-byte hex secret for this purchase. Keep it to retrieve this order."
+              },
+              "offerVersion": {
+                "type": "string",
+                "description": "The published immutable offer version."
+              },
+              "quantity": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 1
+              },
+              "game": {
+                "type": "string"
+              },
+              "checkout": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        {
+          "name": "studio_purchase_refund",
+          "description": "Request a resource or service refund with the original private purchase claim.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "claim": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "required": [
+              "claim"
+            ],
+            "additionalProperties": false
+          }
+        }
+      ]
+    },
+    "jsonrpc": "2.0",
+    "id": 2
+  },
+  "call": {
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"kind\":\"untrusted-tool-data\",\"tool\":\"studio_info\",\"data\":{\"studio\":\"Little Inlet\",\"games\":[{\"id\":\"coin-dash\",\"name\":\"Coin Dash\",\"kind\":\"game\"},{\"id\":\"gathering\",\"name\":\"A Tide of Good\",\"kind\":\"app\"}],\"posts\":[{\"slug\":\"an-evening-for-the-inlet\",\"title\":\"An evening for the inlet\",\"date\":\"2026-10-08T00:00:00.000Z\",\"updated\":null,\"summary\":\"Celebrating small acts and imagining next season\u2019s shoreline.\",\"image\":null,\"author\":null,\"links\":{\"game\":\"gathering\"}},{\"slug\":\"the-things-we-leave-behind\",\"title\":\"The things we leave behind\",\"date\":\"2026-10-03T00:00:00.000Z\",\"updated\":null,\"summary\":\"A field note about caring for the shore without tidying away its life.\",\"image\":null,\"author\":null,\"links\":{}}]}}"
+        }
+      ]
+    },
+    "jsonrpc": "2.0",
+    "id": 3
+  }
+}

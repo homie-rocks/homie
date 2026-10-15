@@ -1,0 +1,46 @@
+[
+  {
+    "wallTime": 20400,
+    "cpuTime": 1,
+    "outcome": "ok",
+    "eventTimestamp": 1792077533198,
+    "event": {
+      "cron": "* * * * *",
+      "scheduledTime": 1792077532000
+    },
+    "exceptions": []
+  },
+  {
+    "wallTime": 24603,
+    "cpuTime": 1,
+    "outcome": "ok",
+    "eventTimestamp": 1792077592936,
+    "event": {
+      "cron": "* * * * *",
+      "scheduledTime": 1792077592000
+    },
+    "exceptions": []
+  },
+  {
+    "wallTime": 32482,
+    "cpuTime": 1,
+    "outcome": "ok",
+    "eventTimestamp": 1792077652963,
+    "event": {
+      "cron": "* * * * *",
+      "scheduledTime": 1792077652000
+    },
+    "exceptions": []
+  },
+  {
+    "wallTime": 44266,
+    "cpuTime": 0,
+    "outcome": "ok",
+    "eventTimestamp": 1792077712925,
+    "event": {
+      "cron": "* * * * *",
+      "scheduledTime": 1792077712000
+    },
+    "exceptions": []
+  }
+]

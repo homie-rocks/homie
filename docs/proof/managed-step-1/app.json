@@ -1,0 +1,16 @@
+{
+  "errors": [],
+  "status": 200,
+  "frames": [
+    {
+      "url": "https://hm-test-dispatch.ryan-d2f.workers.dev/gathering/open?room=hm-test-app",
+      "text": "TEST / CONCEPT",
+      "canvas": 0
+    },
+    {
+      "url": "https://hm-test-dispatch.ryan-d2f.workers.dev/gathering/__game/?room=hm-test-app&pf=1&role=supporter&surface=phone",
+      "text": "TEST / CONCEPT\nlittle inlet ≈\nTogether, live\nMake your own with your AI ↗\n\nTHE INLET GATHERING\n\nA little from you.\nA living shoreline.\n\nMake room for roots. Bring life back to the water’s edge.\n\nOpening the giving ledger…\n\nOne-time\nMonthly\n$10\n$25\n$50\n$100\n\nRestore native shoreline plants.\n\nName on your lantern optional · public\nGive on Stripe · $25\n\nPayments are not connected yet.\n\nFictional non-profit · test payments only. Stripe records your test payment receipt; this demo does not issue charitable tax receipts.\n\nManage my gifts & receipts on Stripe ↗\n\nMANY HANDS · VOLUNTEER SHIFTS\n\n0 volunteers booked\n\nFirst name public on the welcome list\n\nNew shifts are being prepared.\n\nSound on\nReduce motion\nFictional non-profit · Stripe test payments only. · Made with Homie",
+      "canvas": 1
+    }
+  ]
+}

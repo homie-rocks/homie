@@ -1,0 +1,75 @@
+{
+  "accountId": "d2f6f976cecad2fe130976fe36916cdb",
+  "namespace": "homie-managed-test",
+  "namespaceCreated": true,
+  "namespaceId": "854b5b6f-dbdc-4b91-b5e1-2ef9b1cad9bb",
+  "databases": [
+    {
+      "name": "hm-test-inlet-db",
+      "id": "e6e9f37b-1b79-4b35-aac0-025c42af93a5"
+    },
+    {
+      "name": "hm-test-preview-db",
+      "id": "329881a8-179b-4fbb-8a3a-0098eabcbb4f"
+    }
+  ],
+  "workers": [
+    "hm-test-outbound",
+    "hm-test-dispatch"
+  ],
+  "users": [
+    "hm-test-inlet",
+    "hm-test-preview"
+  ],
+  "deleted": [
+    "hm-test-dispatch",
+    "hm-test-outbound",
+    "homie-managed-test",
+    "hm-test-inlet-db",
+    "hm-test-preview-db",
+    "hm-test-inlet_Table",
+    "hm-test-inlet_Concentrator",
+    "hm-test-inlet_Gate",
+    "hm-test-inlet_Lobby",
+    "hm-test-preview_Concentrator",
+    "hm-test-preview_Gate",
+    "hm-test-preview_Lobby",
+    "hm-test-preview_Table",
+    "hm-test-inlet",
+    "hm-test-preview"
+  ],
+  "durableObjects": [
+    {
+      "name": "hm-test-inlet_Concentrator",
+      "id": "73d35544e14547998561763c901dd7ae"
+    },
+    {
+      "name": "hm-test-inlet_Gate",
+      "id": "a4a2660f53604ee684a012d7af01ca87"
+    },
+    {
+      "name": "hm-test-inlet_Lobby",
+      "id": "77f95b9943b3411398a29ac2f2f24f89"
+    },
+    {
+      "name": "hm-test-inlet_Table",
+      "id": "264dbd0574754c58933a431f993c3749"
+    },
+    {
+      "name": "hm-test-preview_Concentrator",
+      "id": "33c57a77f8b349c0ba4253a1ae718ba0"
+    },
+    {
+      "name": "hm-test-preview_Gate",
+      "id": "0a6efdc2ca754a3089098b2f75c88583"
+    },
+    {
+      "name": "hm-test-preview_Lobby",
+      "id": "666d54daa1bd45e8b8890c74cfbcf071"
+    },
+    {
+      "name": "hm-test-preview_Table",
+      "id": "9e9e6fc871e24615b778c6e5c414a591"
+    }
+  ]
+}

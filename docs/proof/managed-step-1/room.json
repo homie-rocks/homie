@@ -1,0 +1,113 @@
+{
+  "ok": true,
+  "command": "check",
+  "play": "https://hm-test-dispatch.ryan-d2f.workers.dev/coin-dash/play",
+  "room": "pub-1",
+  "seats": [
+    {
+      "browser": "computer",
+      "seat": 0,
+      "role": "replica",
+      "seatedMs": 61963
+    },
+    {
+      "browser": "phone",
+      "seat": 1,
+      "role": "replica",
+      "seatedMs": 59198
+    }
+  ],
+  "round": {
+    "n": 1,
+    "humans": 2,
+    "bots": 2,
+    "results": [
+      {
+        "slot": 5,
+        "seat": null,
+        "name": "Dash",
+        "score": 6,
+        "bot": true,
+        "place": 1
+      },
+      {
+        "slot": 1,
+        "seat": 1,
+        "name": "Static Badger",
+        "score": 5,
+        "bot": false,
+        "place": 2
+      },
+      {
+        "slot": 6,
+        "seat": null,
+        "name": "Echo",
+        "score": 5,
+        "bot": true,
+        "place": 2
+      },
+      {
+        "slot": 0,
+        "seat": 0,
+        "name": "Solar Pilot",
+        "score": 0,
+        "bot": false,
+        "place": 4
+      }
+    ],
+    "overMs": [
+      122314,
+      105057
+    ]
+  },
+  "readiness": [
+    {
+      "browser": "computer",
+      "ready": true,
+      "by": "timeout",
+      "liftedMs": 46258,
+      "waitedMs": 7
+    },
+    {
+      "browser": "phone",
+      "ready": true,
+      "by": "timeout",
+      "liftedMs": 46059,
+      "waitedMs": 1
+    }
+  ],
+  "connection": [
+    {
+      "browser": "computer",
+      "seats": [
+        0
+      ],
+      "reconnects": 0,
+      "closed": null
+    },
+    {
+      "browser": "phone",
+      "seats": [
+        1
+      ],
+      "reconnects": 0,
+      "closed": null
+    }
+  ],
+  "reconnects": 0,
+  "uninterrupted": true,
+  "note": "no reconnects: both connections held from the seat to the results",
+  "frames": [
+    {
+      "browser": "computer",
+      "fps": 61,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)"
+    },
+    {
+      "browser": "phone",
+      "fps": 61,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)"
+    }
+  ],
+  "totalMs": 128122
+}

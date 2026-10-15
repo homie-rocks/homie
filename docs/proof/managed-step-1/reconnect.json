@@ -1,0 +1,18 @@
+{
+  "before": {
+    "room": "hm-reconnect",
+    "seat": 0
+  },
+  "closed": 2,
+  "after": {
+    "room": "hm-reconnect",
+    "seat": 0,
+    "link": {
+      "state": "online",
+      "why": "welcome",
+      "hosting": false,
+      "at": 1792077470857
+    }
+  },
+  "ok": true
+}
