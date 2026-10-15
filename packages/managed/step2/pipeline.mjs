@@ -32,7 +32,7 @@ export class Pipeline extends WorkflowEntrypoint {
     const migrations=migrationManifest(artifact);
     if(canonical(migrations)!==canonical(tenant.migrations))throw new Error('Migration changes require registry review');
     await this.env.ARTIFACTS.put(hash,Buffer.from(archive,'base64'));
-    return {hash,migrations};
+    return {hash,migrations,credentialProbe:artifact.credentialProbe??null};
    });
    const preview=await step.do('deploy isolated preview',{retries:{limit:0,delay:'1 second'},timeout:'5 minutes'},async()=>{
     const object=await this.env.ARTIFACTS.get(sealed.hash);if(!object)throw new Error('Missing sealed artifact');
@@ -49,7 +49,7 @@ export class Pipeline extends WorkflowEntrypoint {
     await provider(this.env)(`d1/database/${tenant.preview.databaseId}/query`,'POST',{sql:'INSERT OR IGNORE INTO app_records(app,collection,id,value,version,updated_at) VALUES(?1,?2,?3,?4,1,0)',params:['gathering','shifts',slot,JSON.stringify({label:'Managed synthetic booking',capacity:10})]});
     return synthetic(tenant.preview.url,slot);
    });
-   const release={tenant:tenant.id,commit,toolkit:tenant.toolkit,node:tenant.node,lockDigest:tenant.lockDigest,compatibilityDate:tenant.compatibilityDate,artifactDigest:sealed.hash,migrations:sealed.migrations,stage:'verified',checks:{studio:studio.studio,synthetic:flow.synthetic,mcp:flow.mcp},previewDeploymentId:preview.uploaded.deployment_id,previewBindings:preview.bindings,schemaEpoch:tenant.schemaEpoch};
+   const release={tenant:tenant.id,commit,toolkit:tenant.toolkit,node:tenant.node,lockDigest:tenant.lockDigest,compatibilityDate:tenant.compatibilityDate,artifactDigest:sealed.hash,migrations:sealed.migrations,stage:'verified',checks:{studio:studio.studio,synthetic:flow.synthetic,mcp:flow.mcp,credentialProbe:sealed.credentialProbe??null},previewDeploymentId:preview.uploaded.deployment_id,previewBindings:preview.bindings,schemaEpoch:tenant.schemaEpoch};
    await step.do('record verified release',()=>ledger.verified(release));return release;
   }catch(error){await step.do('record failure',()=>ledger.failed(commit,error.message));throw error;}
  }

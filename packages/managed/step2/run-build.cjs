@@ -45,5 +45,6 @@ function collect(dir,prefix){for(const name of fs.readdirSync(dir)){const file=p
 const current=JSON.parse(fs.readFileSync('/work/site/src/runtime/current.json'));
 const runtime=path.dirname(path.resolve(current.main));if(!runtime.startsWith('/work/site/src/runtime/'))throw new Error('Runtime outside build');
 collect(runtime,'modules/');collect('/work/site/dist','assets/');collect('/work/site/migrations','migrations/');
-const output={files,commit:job.commit,node:process.version,toolkit:job.toolkit,lockDigest:job.lockDigest,checks:{build:true},credentialKeys:Object.keys(process.env)};
+const credentialProbe=fs.existsSync('/work/hm-s2-credential-proof.json')?JSON.parse(fs.readFileSync('/work/hm-s2-credential-proof.json')):null;
+const output={credentialProbe,files,commit:job.commit,node:process.version,toolkit:job.toolkit,lockDigest:job.lockDigest,checks:{build:true},credentialKeys:Object.keys(process.env)};
 process.stdout.write(zlib.gzipSync(JSON.stringify(output)).toString('base64'));
