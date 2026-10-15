@@ -1,7 +1,7 @@
 // Runs ONLY inside the remote VM. This file is platform-owned, never read from the repo.
 const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),crypto=require('node:crypto'),zlib=require('node:zlib');
 const job=JSON.parse(fs.readFileSync(0,'utf8'));
-function run(bin,args,env={}){const r=cp.spawnSync(bin,args,{cwd:'/work',env:{PATH:process.env.PATH,HOME:'/root',CI:'true',...env},encoding:'utf8',maxBuffer:1024*1024,timeout:240000});if(r.status!==0)throw new Error(bin+' failed: '+String(r.stderr+'\n'+r.stdout+'\n'+(r.error??'')).slice(-8000));return r.stdout;}
+function run(bin,args,env={}){const started=Date.now();console.error('stage',bin,args[0],args[1]??'');const r=cp.spawnSync(bin,args,{cwd:'/work',env:{PATH:process.env.PATH,HOME:'/root',CI:'true',...env},encoding:'utf8',maxBuffer:1024*1024,timeout:240000});if(r.status!==0)throw new Error(bin+' failed: '+String(r.stderr+'\n'+r.stdout+'\n'+(r.error??'')).slice(-8000));console.error('finished',bin,Date.now()-started);return r.stdout;}
 if(job.mode==='check'&&job.previewURL!=='https://hm-s2-dispatch.ryan-d2f.workers.dev')throw new Error('Only test preview checks allowed');
 if(process.version!==job.node)throw new Error('Pinned runtime mismatch');
 fs.mkdirSync('/work');
