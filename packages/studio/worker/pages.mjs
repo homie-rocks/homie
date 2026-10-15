@@ -498,7 +498,7 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
     tv.searchParams.set('room', room);
     if (boot.kind === 'app') {
       var context = new URLSearchParams(location.search);
-      ['role', 'access'].forEach(function (key) { if (context.has(key)) tv.searchParams.set(key, context.get(key)); });
+      ['role'].forEach(function (key) { if (context.has(key)) tv.searchParams.set(key, context.get(key)); });
     }
     ui.querySelector('[data-bigscreen]').href = tv.pathname + tv.search;
     toggle.addEventListener('click', function (e) { e.stopPropagation(); open(sheet.hidden); });

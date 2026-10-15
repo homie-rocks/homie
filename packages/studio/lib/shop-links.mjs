@@ -88,7 +88,7 @@ export async function reconcilePaymentLinks({ api, shop, slug, site, mode, booki
     catalogPrices.set(item.id, price.id);
     if ((product.default_price?.id ?? product.default_price) !== price.id) await api('POST', `/v1/products/${id}`, { default_price: price.id });
     if (item.price === 0) return; // Free orders never leave the studio.
-    const params = { ...customText, line_items: [{ price: price.id, quantity: 1, ...(item.price !== 'choose' && !['supporter','deposit'].includes(item.kind) ? { adjustable_quantity: { enabled: shop.policy.repeatPurchases, minimum: 1, maximum: 999999 } } : {}) }],
+    const params = { ...customText, line_items: [{ price: price.id, quantity: 1, ...(item.price !== 'choose' && !['supporter','deposit'].includes(item.kind) ? { adjustable_quantity: { enabled: shop.policy.repeatPurchases, minimum: 1, maximum: item.maxQuantity??999999 } } : {}) }],
       after_completion: { type: 'redirect', redirect: { url: `${site}/shop/thanks?session_id={CHECKOUT_SESSION_ID}` } },
       ...(shop.till === 'stripe-managed' ? { managed_payments: { enabled: true } } : { automatic_tax: { enabled: shop.automaticTax } }),
       ...(item.interval ? { subscription_data: { metadata } } : { payment_intent_data: { metadata } }),
@@ -100,7 +100,7 @@ export async function reconcilePaymentLinks({ api, shop, slug, site, mode, booki
     if (!link.active) await api('POST', `/v1/payment_links/${link.id}`, { active: true });
     if (!paymentLinkURL(link.url) || !/^plink_\w+$/.test(link.id)) throw new Error('Invalid Payment Link');
     keepLinks.add(link.id);
-    config.items.push({ item: item.id, id: link.id, url: link.url, price: price.id, revision: linkRevision });
+    config.items.push({ item: item.id, id: link.id, url: link.url, price: price.id, maxQuantity: shop.policy.repeatPurchases?(item.maxQuantity??999999):1, revision: linkRevision });
   }));
   // Menus use paid invoice snapshots: Checkout events omit their line items.
   // Stripe allows 20 Payment Link lines; invoice snapshots include only the first
@@ -124,7 +124,7 @@ export async function reconcilePaymentLinks({ api, shop, slug, site, mode, booki
     await verifyLink(link,params);
     if(!link.active)await api('POST',`/v1/payment_links/${link.id}`,{active:true});
     keepLinks.add(link.id);
-    config.menus.push({id:link.id,url:link.url,revision,items:items.map(i=>({item:i.id,price:catalogPrices.get(i.id)}))});
+    config.menus.push({id:link.id,url:link.url,revision,items:items.map(i=>({item:i.id,price:catalogPrices.get(i.id),maxQuantity:shop.policy.repeatPurchases?(i.maxQuantity??99):1}))});
   });}
   // One aggregate payment represents a frozen local basket, including one-item baskets.
   // Runtime uses prefilled_amount, never a shared Price mutation: concurrent
@@ -155,7 +155,7 @@ export async function reconcilePaymentLinks({ api, shop, slug, site, mode, booki
     await verifyLink(link,params);
     if(!paymentLinkURL(link.url))throw new Error('Invalid basket Payment Link');
     keepLinks.add(link.id);
-    config.menus.push({id:link.id,url:link.url,revision,price:price.id,basket:true,items:items.map(i=>({item:i.id,price:catalogPrices.get(i.id)}))});
+    config.menus.push({id:link.id,url:link.url,revision,price:price.id,basket:true,items:items.map(i=>({item:i.id,price:catalogPrices.get(i.id),maxQuantity:shop.policy.repeatPurchases?(i.maxQuantity??99):1}))});
   });}
   config.slots=[];
   const pause=async link=>{

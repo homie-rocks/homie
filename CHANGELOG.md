@@ -25,17 +25,19 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ### Fixed
 
-- **Request path:** remove referral cleanup and function registration from startup; clean retired referral keys in migration 0031. Reuse the deployment catalogue, batch current settings, servers, chat and record reads, avoid repeat tool-catalogue notifications, and dispatch background work after actual writes. Public static assets require no D1 reads; private app assets retain live authorization.
+- **Request path:** remove referral cleanup and function registration from startup; clean retired referral keys in migration 0031. Reuse the deployment catalogue, reuse stable-binding metadata caches guarded by a trigger-maintained revision, avoid repeat tool-catalogue notifications, and dispatch background work after actual writes. Public static assets require no D1 reads; private app assets retain live authorization.
 - **Payment Links:** menu items support `maxQuantity` (default 99), slot links accept groups within published remaining capacity, and confirmation uses the paid seat quantity atomically. Payments that cannot be fulfilled remain visible as review orders with a durable staff event and customer notice. Full connect saves public JSON link assets, retaining replaced links until deployment.
 - **Stripe setup:** observe deterministic product IDs before creating missing search results; keep public checkout mode out of secret uploads and report Wrangler's redacted error text.
-- **App checks:** needs without assertions are pending placeholders, rather than failed checks. They remain unproven.
-- **App navigation:** Big screen keeps same-origin role/access context; app context URLs include only a validated public room ID.
-- **App subscriptions and privacy:** custom tool-data mutations invalidate record subscriptions. Private asset capabilities are bound to live sessions and role declarations, and revoked by logout or role changes.
+- **Payment review:** single-item links enforce quantity caps at Stripe and fulfillment; old menu snapshots retain their published maximum. Signed payments with missing/unknown references or a currency mismatch remain visible for staff review without granting entitlements.
+- **Background delivery:** include nested background work, preserve D1 sessions and raw-write tracking, and refresh connected AIs’ tool lists on the first ordinary request after deployment.
+- **App checks:** needs without assertions are pending placeholders, rather than failed checks. They remain unproven: check reports not done with a pending label while preserving a nonfailing exit for placeholders.
+- **App navigation:** Big screen uses a five-minute HttpOnly same-origin role session instead of copying the shared access secret; app context URLs include only a validated public room ID.
+- **App subscriptions and privacy:** tool-data revisions and app wakes are scoped to the namespaces each app uses. Private asset capabilities support invite passes, signed-in sessions and tool/test identities, conceal session hashes with encryption plus HMAC, and recheck revocation and grants in one statement.
 - **Prediction:** synchronous `room.me` readers share a presentation even when CPU work crosses a simulation tick; the next microtask refreshes it. Fixes the 60 Hz browser prediction smoke flake without relaxing thresholds.
 
 ### Upgrade notes
 
-- Apply migration 0031 with the normal studio deploy. Rebuild/deploy after full `shop connect` to publish its public link configuration. Review group availability and resync slot manifests after confirmations, moves or refunds; a Payment Link is not an exclusive unpaid hold.
+- Apply migrations 0031–0033 with the normal studio deploy. Rebuild/deploy after full `shop connect` to publish its public link configuration. Review group availability and resync slot manifests after confirmations, moves or refunds; a Payment Link is not an exclusive unpaid hold.
 
 ## [0.53.0] - 2026-10-15
 

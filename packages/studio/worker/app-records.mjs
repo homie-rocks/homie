@@ -4,9 +4,9 @@ import { moveBooking } from './booking-store.mjs';
 import { toolIdentity } from './tool-identity.mjs';
 /** Lasting app records in the studio's own D1. Room hosts never authorize writes. */
 import { appRole, recordProblem } from './app-format.mjs';
-import { isOwner, sameOrigin } from './office.mjs';
+import { appAssetTicket, isOwner, sameOrigin, launchOf, settingsOf } from './office.mjs';
 import { players } from './players.mjs';
-import { ownerAllowed } from './stats.mjs';
+import { cookieValues, ownerAllowed } from './stats.mjs';
 import { appOriginOf } from './standalone.mjs';
 export const APPS_MIGRATION_FILE = '0014_studio_apps.sql';
 export const APPS_MIGRATION = `CREATE TABLE IF NOT EXISTS app_records (
@@ -52,6 +52,8 @@ export async function appAccess(request, env, meta, url) {
     const grant = await env.DB.prepare("SELECT player FROM app_roles WHERE app IN (?1, '*') AND role = ?2 AND player = ?3").bind(meta.id, role, caller.id).first();
     return grant ? { ok: true, role, can: declared.can } : { ok: false, status: 403, error: 'this account has no role grant' };
   }
+  const handoff=cookieValues(request,`studio_app_${meta.id}_${role}`)[0];
+  if(handoff&&await appAssetTicket(env,meta.id,handoff,{meta,purpose:'handoff',expectedRole:role,launch:launchOf(meta,await settingsOf(env),env)}))return {ok:true,role,can:declared.can};
   const link = await env.DB.prepare('SELECT token FROM app_role_links WHERE app = ?1 AND role = ?2').bind(meta.id, role).first();
   if (!link || link.token !== url.searchParams.get('access')) return { ok: false, status: 404, error: 'private role link required' };
   if (await isOwner(request, env)) return { ok: true, role, can: declared.can };

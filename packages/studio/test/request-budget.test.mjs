@@ -25,3 +25,8 @@ for(const [label,path,max] of [['static file','/test.js',0],['asset','/_homie/si
  assert.ok(calls.filter(q=>!q.startsWith('LOBBY ')&&!q.startsWith('TABLE ')).length<=max+1,`background budget: ${calls.join('\n')}`);
  assert.ok(calls.filter(q=>q.startsWith('LOBBY ')||q.startsWith('TABLE ')).length <= (['seat','socket'].includes(label)?1:0),calls.join('\n'));
 });
+test('first ordinary GET announces the deployed tool catalogue without cron or office writes',async t=>{
+ const {env,sql}=requestFixture(t),pending=[];
+ await worker.fetch(new Request('https://speed.example/cafe/open'),env,{waitUntil:p=>pending.push(p)});await Promise.all(pending);
+ assert.ok(sql.prepare("SELECT value FROM mcp_kv WHERE key='tools-catalogue'").get());
+});

@@ -1,4 +1,4 @@
-import {databaseBinding} from './request-db.mjs';
+import {databaseBinding, ORIGINAL_DB} from './request-db.mjs';
 import { selling } from './extensions.mjs';
 import { purchaseOrderIfPresent } from './shop.mjs';
 import { toolIdentity } from './tool-identity.mjs';
@@ -171,6 +171,7 @@ export async function accountSub(request, env) {
 
 /** The owner: the signed-in owner's browser session, or (with player accounts) the owner's own account. */
 export async function isOwner(request, env) {
+  if(toolIdentity(request)?.owner)return true;
   if ((await ownerAllowed(request, env, { kinds: ['session'] })) === 'session') return true;
   try { return players?.isOwner ? (await players.isOwner(request, env)) === true : false; } catch { return false; }
 }
@@ -182,17 +183,17 @@ const settingsCache = new WeakMap();
 /** Every game's live settings (D1 office_games), read at most every 5 s per Worker instance. Empty before migration 0005. */
 export async function settingsOf(env, { fresh = false } = {}) {
   if (!env?.DB || env.HOMIE_PREVIEW === '1') return new Map();
-  const hit = settingsCache.get(env.DB);
-  if (!fresh && hit && Date.now() - hit.at < 5000) return hit.map;
+  const hit = settingsCache.get(databaseBinding(env.DB));
+  if (!env.DB[ORIGINAL_DB] && !fresh && hit && Date.now() - hit.at < 5000) return hit.map;
   let map = new Map();
   try {
     const { results } = await env.DB.prepare('SELECT game, launch, max_players, updated_at FROM office_games LIMIT 500').all();
     map = new Map((results ?? []).map((r) => [r.game, r]));
   } catch { map = new Map(); }
-  settingsCache.set(env.DB, { at: Date.now(), map });
+  settingsCache.set(databaseBinding(env.DB), { at: Date.now(), map });
   return map;
 }
-const forgetSettings = (env) => { if (env?.DB) settingsCache.delete(env.DB); };
+const forgetSettings = (env) => { if (env?.DB) settingsCache.delete(databaseBinding(env.DB)); };
 
 /** A game's launch state: the owner's (D1), else its game.json `launch`, else public. A Preview enforces none. */
 export function launchOf(meta, settings, env) {
@@ -331,6 +332,8 @@ async function inviteOpen(env, id) {
  */
 export async function accessOf(request, env, game, launch) {
   if (launch === 'public') return { ok: true, sub: null, owner: false };
+  const caller=toolIdentity(request);
+  if(caller?.localTest&&(env.HOMIE_LOCAL_TEST_SECRET||caller.remoteTest)&&caller.testApp===game)return {ok:true,sub:null,owner:false};
   if (await isOwner(request, env)) return { ok: true, sub: 'o', owner: true };
   if (launch === 'invite') {
     const pass = await passOf(request, env, game);
@@ -1379,44 +1382,60 @@ export async function officeRoutes(request, env, url, { catalogueOf }) {
   return null;
 }
 
-/** Asset-only capability bound to a revocable session and the exact role declaration.
- * Sandboxed module requests do not reliably carry cookies. The signed capability
- * carries a session hash, never a credential; every use checks that session in D1.
+/** Encrypted, HMAC-authenticated asset capability. Session hashes never enter URLs in plaintext.
+ * Every use checks revocation, grants and role-link rotation in one D1 statement.
  */
-export async function appAssetTicket(env, app, ticket, {request,meta,launch=meta?.launch??'public'}={}) {
-  const key=await officeKey(env);if(!key||!meta)return ticket===undefined?null:false;
+export async function appAssetTicket(env, app, ticket, {request,meta,launch=meta?.launch??'public',expectedRole,purpose='asset'}={}) {
+  const key=await officeKey(env),issuing=ticket===undefined,denied=issuing?null:false;
+  if(!key||!meta)return denied;
+  const decode=text=>Uint8Array.from(atob(text.replaceAll('-','+').replaceAll('_','/')),c=>c.charCodeAt(0));
+  const cipher=await crypto.subtle.importKey('raw',decode(await mac(key,'app-assets-encryption-v1')),'AES-GCM',false,['encrypt','decrypt']);
   let data;
-  if(ticket===undefined) {
+  if(issuing) {
     if(!request)return null;
     const url=new URL(request.url),{appRole}=await import('./app-format.mjs');
     const role=appRole(meta,url),rights=meta.roles?.[role];if(!rights)return null;
-    const owner=cookieValues(request,OWNER_COOKIE)[0],player=cookieValues(request,'studio_player')[0];
-    const token=owner??player;if(!token)return null;
-    data={exp:Date.now()+5*60_000,kind:owner?'owner':'player',hash:await sha256(token),role,rights:await sha256(JSON.stringify(rights))};
-    const link=await env.DB.prepare('SELECT token FROM app_role_links WHERE app=?1 AND role=?2').bind(app,role).first();
-    data.link=link?await sha256(link.token):null;
-    const pass=cookieValues(request,passCookie(app))[0];if(pass)data.pass=await sha256(pass);
+    const owner=cookieValues(request,OWNER_COOKIE)[0],player=cookieValues(request,'studio_player')[0],pass=cookieValues(request,passCookie(app))[0],caller=toolIdentity(request);
+    data={purpose,exp:Date.now()+5*60_000,role,rights:await sha256(JSON.stringify(rights)),hash:null,pass:pass?await sha256(pass):null,connection:null,person:null};
+    if(owner||player){data.kind=owner?'owner':'player';data.hash=await sha256(owner??player);}
+    else if(caller){
+      if(caller.localTest&&(env.HOMIE_LOCAL_TEST_SECRET||caller.remoteTest)&&caller.roles?.[app]?.includes(role)){data.kind='test';data.testApp=caller.testApp??app;}
+      else {data.kind='tool';data.connection=caller.connection??null;data.person=caller.id??null;if(data.person?.startsWith('office-'))data.hash=data.person.slice(7);}
+    } else if(launch==='invite'&&!rights.signIn&&pass){data.kind='pass';}
+    else {
+      const session=await (await import('./local-test.mjs')).localSession(request,env);
+      if(session?.app!==app||session.role!==role)return null;
+      data.kind='test';data.testApp=app;data.exp=Math.min(data.exp,session.expires??data.exp);
+    }
   } else {
     try {
-      const [payload,signature,...extra]=ticket.split('.');
-      if(extra.length||!signature||!same((await mac(key,`app-assets|${app}|${payload}`)).slice(0,32),signature))return false;
-      data=JSON.parse(atob(payload.replaceAll('-','+').replaceAll('_','/')));
+      const [iv,payload,signature,...extra]=ticket.split('.');
+      if(extra.length||!signature||!same(await mac(key,`app-assets|${app}|${iv}|${payload}`),signature))return false;
+      data=JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:decode(iv)},cipher,decode(payload))));
     }catch{return false;}
   }
-  if(!Number.isSafeInteger(data.exp)||data.exp<=Date.now()||data.exp>Date.now()+5*60_000||!meta.roles?.[data.role]||data.rights!==await sha256(JSON.stringify(meta.roles[data.role])))return false;
-  let authorized=false;
-  if(data.kind==='owner')authorized=Boolean(await env.DB.prepare("SELECT 1 FROM stats_keys WHERE hash=?1 AND kind='session' AND expires_at>?2").bind(data.hash,Date.now()).first());
-  else if(data.kind==='player') {
-    const person=await env.DB.prepare("SELECT p.id,p.owner FROM player_sessions s JOIN players p ON p.id=s.player WHERE s.hash=?1 AND s.kind='session' AND s.expires_at>?2").bind(data.hash,Date.now()).first();
-    const gate=person?.owner || launch==='public' || launch==='invite'&&data.pass&&await env.DB.prepare('SELECT 1 FROM office_passes p JOIN office_invites i ON i.id=p.invite WHERE p.hash=?1 AND p.game=?2 AND p.expires_at>?3 AND i.revoked=0').bind(data.pass,app,Date.now()).first();
-    authorized=Boolean(gate && person && (person.owner || !meta.roles[data.role].signIn || await env.DB.prepare("SELECT 1 FROM app_roles WHERE app IN (?1,'*') AND role=?2 AND player=?3").bind(app,data.role,person.id).first()));
-  }
-  if(!authorized)return ticket===undefined?null:false;
-  const currentLink=await env.DB.prepare('SELECT token FROM app_role_links WHERE app=?1 AND role=?2').bind(app,data.role).first();
-  if(data.link!==(currentLink?await sha256(currentLink.token):null))return ticket===undefined?null:false;
-  if(ticket!==undefined)return true;
-  const payload=b64url(new TextEncoder().encode(JSON.stringify(data)));
-  return `${payload}.${(await mac(key,`app-assets|${app}|${payload}`)).slice(0,32)}`;
+  if(data.purpose!==purpose||(purpose==='handoff'&&!['owner','player'].includes(data.kind)))return denied;
+  if(expectedRole&&data.role!==expectedRole)return denied;
+  if(!Number.isSafeInteger(data.exp)||data.exp<=Date.now()||data.exp>Date.now()+5*60_000||!meta.roles?.[data.role]||data.rights!==await sha256(JSON.stringify(meta.roles[data.role])))return denied;
+  const state=await env.DB.prepare(`SELECT
+    (SELECT token FROM app_role_links WHERE app=?1 AND role=?2) link,
+    EXISTS(SELECT 1 FROM stats_keys WHERE hash=?3 AND kind='session' AND expires_at>?4) owner,
+    EXISTS(SELECT 1 FROM office_passes p JOIN office_invites i ON i.id=p.invite WHERE p.hash=?5 AND p.game=?1 AND p.expires_at>?4 AND i.revoked=0) pass,
+    (SELECT p.id FROM players p WHERE p.id=(SELECT player FROM player_sessions WHERE hash=?3 AND kind='session' AND expires_at>?4)) player,
+    EXISTS(SELECT 1 FROM players p WHERE p.owner=1 AND (p.id=(SELECT player FROM player_sessions WHERE hash=?3 AND kind='session' AND expires_at>?4) OR p.id=?6)) playerOwner,
+    EXISTS(SELECT 1 FROM app_roles WHERE app IN (?1,'*') AND role=?2 AND player IN (?6,(SELECT player FROM player_sessions WHERE hash=?3 AND kind='session' AND expires_at>?4))) granted,
+    EXISTS(SELECT 1 FROM mcp_connections WHERE id=?7 AND person=?6 AND revoked=0) connected
+  `).bind(app,data.role,data.hash??null,Date.now(),data.pass??null,data.person??null,data.connection??null).first();
+  const gate=state.owner||state.playerOwner||launch==='public'||launch==='invite'&&state.pass;
+  const roleAllowed=!meta.roles[data.role].signIn||state.owner||state.playerOwner||state.granted;
+  const authorized=data.kind==='owner'?state.owner:data.kind==='pass'?launch==='invite'&&!meta.roles[data.role].signIn&&state.pass:data.kind==='player'?state.player&&gate&&roleAllowed:data.kind==='tool'?state.connected&&gate&&roleAllowed:data.kind==='test'?data.testApp===app:false;
+  if(!authorized)return denied;
+  const link=state.link?await sha256(state.link):null;
+  if(!issuing)return data.link===link;
+  data.link=link;
+  const iv=crypto.getRandomValues(new Uint8Array(12)),ivText=b64url(iv);
+  const payload=b64url(new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},cipher,new TextEncoder().encode(JSON.stringify(data)))));
+  return `${ivText}.${payload}.${await mac(key,`app-assets|${app}|${ivText}|${payload}`)}`;
 }
 
 /** Owner-issued test role, scoped to one app/record namespace; never an owner credential. */
@@ -1433,4 +1452,14 @@ export async function checkSessionTicket(env, data, token) {
   if(session.expires<=Date.now()||!Number.isSafeInteger(session.expires)||!/^check-[a-zA-Z0-9-]{1,64}$/.test(session.scope)||!GAME_ID.test(session.app)||!/^[a-z][a-z0-9-]{0,39}$/.test(session.role))return null;
   return session;
  }catch{return null;}
+}
+
+/** Same-origin role handoff for opening another screen, never the long-lived role URL secret. */
+export async function appRoleSession(response,request,env,meta,launch) {
+ if(meta.kind!=='app')return response;
+ const {appRole}=await import('./app-format.mjs'),role=appRole(meta,new URL(request.url));
+ if(!meta.roles?.[role]?.signIn)return response;
+ const ticket=await appAssetTicket(env,meta.id,undefined,{request,meta,launch,purpose:'handoff'});
+ if(ticket)response.headers.append('set-cookie',`studio_app_${meta.id}_${role}=${ticket}; Path=/${meta.id}/; Max-Age=300; HttpOnly; Secure; SameSite=Strict`);
+ return response;
 }

@@ -7,3 +7,24 @@ ${['INSERT','UPDATE','DELETE'].map(op=>`CREATE TRIGGER tool_data_live_${op.toLow
  UPDATE meta SET value=CAST(value AS INTEGER)+1 WHERE key='tool-data-revision';
 END;`).join('\n')}
 `;
+
+export const CACHE_MIGRATION_FILE='0032_metadata_revisions.sql';
+export const CACHE_MIGRATION=`
+INSERT OR IGNORE INTO meta(key,value) VALUES('metadata-revision','0');
+${['office_games','servers','chat_rules'].flatMap(table=>['INSERT','UPDATE','DELETE'].map(op=>`CREATE TRIGGER ${table}_revision_${op.toLowerCase()} AFTER ${op} ON ${table} BEGIN
+ UPDATE meta SET value=CAST(value AS INTEGER)+1 WHERE key='metadata-revision';
+END;`)).join('\n')}
+`;
+export const TOOL_NAMESPACE_MIGRATION_FILE='0033_tool_namespace_revisions.sql';
+export const TOOL_NAMESPACE_MIGRATION=`
+DROP TRIGGER tool_data_live_insert;
+DROP TRIGGER tool_data_live_update;
+DROP TRIGGER tool_data_live_delete;
+DELETE FROM meta WHERE key='tool-data-revision';
+CREATE TABLE tool_data_revisions(namespace TEXT PRIMARY KEY,revision INTEGER NOT NULL);
+CREATE TABLE app_tool_namespaces(app TEXT NOT NULL,namespace TEXT NOT NULL,PRIMARY KEY(app,namespace));
+${['INSERT','UPDATE','DELETE'].map(op=>{const row=op==='DELETE'?'OLD':'NEW';return `CREATE TRIGGER tool_data_namespace_${op.toLowerCase()} AFTER ${op} ON tool_data BEGIN
+ INSERT INTO tool_data_revisions VALUES(${row}.namespace,1) ON CONFLICT(namespace) DO UPDATE SET revision=revision+1;
+ ${op==='UPDATE'?`INSERT INTO tool_data_revisions SELECT OLD.namespace,1 WHERE OLD.namespace!=NEW.namespace ON CONFLICT(namespace) DO UPDATE SET revision=revision+1;`:''}
+END;`;}).join('\n')}
+`;

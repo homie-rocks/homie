@@ -278,3 +278,10 @@ test('menu quantities honor the studio item maximum and slots allow remaining gr
  assert.equal(menu.line_items[0].adjustable_quantity.maximum,8);assert.equal(menu.line_items[1].adjustable_quantity.maximum,99);
  const slot=f.rows.payment_links.find(l=>l.id===p.config.slots[0].id);assert.equal(slot.line_items[0].adjustable_quantity.maximum,5);
 });
+
+test('single item payment link advertises the configured maximum',async t=>{
+ const root=studio(t),file=join(root,'shop.json'),shop=JSON.parse(readFileSync(file));shop.items[0].maxQuantity=3;writeFileSync(file,JSON.stringify(shop));
+ const f=fixture(),{writes}=await reconcile(root,f);
+ const link=writes.find(o=>o.path==='/v1/payment_links'&&o.params.line_items?.length===1&&o.params.line_items[0].adjustable_quantity);
+ assert.equal(link.params.line_items[0].adjustable_quantity.maximum,3);
+});

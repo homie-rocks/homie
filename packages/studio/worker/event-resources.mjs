@@ -64,7 +64,6 @@ export async function pushEvents(env,cat,origin) {
     }
     if(rows.length<100)break;after=rows.at(-1).key;
   }
-  toolCatalogues.set(binding,signature);
 }
 
 /** One existing Lobby object per OAuth connection: streams never live in a Worker isolate. */

@@ -1394,7 +1394,7 @@ try {
   // A shared progress feed sends its last word before the command exits.
   await flushProgress();
   if (result && result.command !== 'help') print(result);
-  if (result?.ok === false) process.exitCode = 1;
+  if (result?.ok === false) process.exitCode = result.command==='check' && result.pending===true && result.exitCode===0 ? 0 : 1;
   // Chrome's pipes can outlive browser.close(); a finished check must not hang its caller.
   if (['check', 'port check', 'look', 'perf', 'shoot', 'lab check'].includes(result?.command)) process.exit(process.exitCode ?? 0);
 } catch (error) {

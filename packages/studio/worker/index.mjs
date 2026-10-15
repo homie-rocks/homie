@@ -1,4 +1,4 @@
-import {requestDatabase,MUTATIONS} from './request-db.mjs';
+import {trackBackground,requestDatabase,MUTATIONS} from './request-db.mjs';
 import {appGraphicsFallback} from './app-graphics.mjs';
 import {JOIN_AREA_FRAME_JS} from './join-area.mjs';
 import {loadShopLinks} from './shop-links.mjs';
@@ -124,7 +124,7 @@ import { cookieValues, count, countVisit, counter, isQa, onlyOf, ownerAllowed, p
 import { ownerRoutes } from './stats-page.mjs';
 import { playerRoutes, players as playerAccounts } from './players.mjs';
 import {
-  appAssetTicket, accessOf, accountSub, gatePage, holders, isOwner, joinHolders, launchOf, regateArgs, officeRoutes, publicCatalogue, redeemInvite, sameOrigin, seatsFor, settingsOf, ticketAllows,
+  appRoleSession, appAssetTicket, accessOf, accountSub, gatePage, holders, isOwner, joinHolders, launchOf, regateArgs, officeRoutes, publicCatalogue, redeemInvite, sameOrigin, seatsFor, settingsOf, ticketAllows,
   ticketFor, ticketSub, usePlayers, verifyControl,
 } from './office.mjs';
 
@@ -543,8 +543,9 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
   let html = await res.text();
   const fallback = meta?.kind === 'app' ? `<script>addEventListener('DOMContentLoaded',()=>(${appGraphicsFallback.toString()})(${JSON.stringify(meta.words?.fallback ?? 'This device cannot display the 3D scene. Use the text controls to continue.').replace(/</g, '\\u003c')}));</script>` : '';
   let assetBase='';
-  if(meta.kind==='app'&&!url.pathname.includes('/__assets/')&&launchOf(meta,await settingsOf(env,{fresh:true}),env)!=='public') {
-    const ticket=await appAssetTicket(env,game,undefined,{request,meta});
+  const assetLaunch=meta.kind==='app'?launchOf(meta,await settingsOf(env,{fresh:true}),env):'public';
+  if(meta.kind==='app'&&!url.pathname.includes('/__assets/')&&assetLaunch!=='public') {
+    const ticket=await appAssetTicket(env,game,undefined,{request,meta,launch:assetLaunch});
     if(!ticket)return new Response('Sign in again to load this private app.',{status:403,headers:{'cache-control':'no-store'}});
     assetBase=`<base href="/${game}/__assets/${ticket}/">`;
   }
@@ -644,16 +645,12 @@ export default {
     const url = new URL(request.url);
     if(env.HOMIE_CONCEPT==='1' && url.pathname==='/robots.txt')return new Response('User-agent: *\nDisallow: /\n',{headers:{'content-type':'text/plain','x-robots-tag':'noindex, nofollow'}});
     if(env.HOMIE_CONCEPT==='1' && url.pathname==='/.well-known/homie-studio.json')return json({ok:false,error:'concept-unlisted'},404,{'x-robots-tag':'noindex, nofollow'});
-    const mutation=!['GET','HEAD','OPTIONS'].includes(request.method);
     const dispatch=()=>import('./functions.mjs').then(m=>m.runFunctions(env,()=>catalogue(env,url.origin),url.origin));
     // Some routes reconcile shop state in waitUntil after returning their page.
     // Keep dispatch behind those writes too, preserving the runtime context's
     // methods and OAuth verification symbols through the proxy.
-    const pending=[];
-    const requestCtx=ctx?.waitUntil?new Proxy(ctx,{get(target,key){
-      if(key==='waitUntil')return work=>{pending.push(Promise.resolve(work));ctx.waitUntil(work);};
-      const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
-    }}):ctx;
+    const background=trackBackground(ctx,()=>env.DB?.[MUTATIONS]?dispatch():undefined);
+    const requestCtx=background.context;
     // A standalone copy's Lobby call (worker/standalone.mjs): every answer to it can be read by the app's page, an
     // unknown game's 404 and a failure included, so the app can say why it plays offline. No other address is opened.
     const appRecords = isAppOrigin(request) && /^\/[^/]+\/api\/app\/records\//.test(url.pathname);
@@ -666,10 +663,10 @@ export default {
       res = json({ ok: false, error: 'failed' }, 500);
     } finally {
       // Refresh after the route has populated the catalogue cache.
-      if(mutation&&url.pathname.startsWith('/_studio/')&&env.DB&&env.LOBBY&&ctx?.waitUntil)ctx.waitUntil(catalogue(env,url.origin).then(cat=>notifyTools(env,cat,url.origin)).catch(()=>{}));
+      if(env.DB&&env.LOBBY&&ctx?.waitUntil)ctx.waitUntil(catalogue(env,url.origin).then(cat=>notifyTools(env,cat,url.origin)).catch(()=>{}));
       // A route can commit a write and then fail. Its outbox still needs delivery.
       if(env.DB) {
-        const delivery=Promise.allSettled(pending).then(()=>env.DB[MUTATIONS]?dispatch():undefined);
+        const delivery=background.finish();
         if(ctx?.waitUntil)ctx.waitUntil(delivery);else await delivery;
       }
     }
@@ -1003,7 +1000,7 @@ async function route(request, env, ctx) {
           if (a.status === 401) return Response.redirect(`${url.origin}/account/?next=${encodeURIComponent(url.pathname + url.search)}`, 302);
           return json({ ok: false, error: a.error }, a.status);
         }
-        if(!meta.room)return recordsPage(meta,url,cat,await availableShellShop(env,cat,game),Boolean(await (await import('./local-test.mjs')).localSession(request,env)),launch!=='public'?await appAssetTicket(env,game,undefined,{request,meta}):null);
+        if(!meta.room)return recordsPage(meta,url,cat,await availableShellShop(env,cat,game),Boolean(await (await import('./local-test.mjs')).localSession(request,env)),launch!=='public'?await appAssetTicket(env,game,undefined,{request,meta,launch}):null);
       }
     }
     const lobby = () => env.LOBBY.get(env.LOBBY.idFromName(game));
@@ -1148,11 +1145,11 @@ async function route(request, env, ctx) {
         const sh = await availableShellShop(env, cat, game, { kids: pol.kids });
         let shopQr = null;
         if (sh && !local) try { shopQr = qrSvg(`${url.origin}/shop/?game=${encodeURIComponent(game)}`, { title: `Shop: ${meta.name ?? game}` }); } catch { shopQr = null; }
-        return playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, screen: true, joinUrl, qr, local, room, ticket, owner: d.owner, launch, server, shop: sh ? { ...sh, qr: shopQr, url: `${url.origin}/shop/?game=${game}` } : null });
+        return appRoleSession(playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, screen: true, joinUrl, qr, local, room, ticket, owner: d.owner, launch, server, shop: sh ? { ...sh, qr: shopQr, url: `${url.origin}/shop/?game=${game}` } : null }),request,env,meta,launch);
       }
       await countVisit(request, env, ctx, game, 'play');
       shareDaily(cat, url, ctx);
-      const page=playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, embed, preview: env.HOMIE_EMBED_PREVIEW === '1', ticket: embed ? null : ticket, owner: !embed && d.owner, launch, server, ...(embed ? {} : await chatWho(env, game, srv, d.acct)), shop: await availableShellShop(env, cat, game, { kids: pol.kids }) });
+      const page=await appRoleSession(playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, embed, preview: env.HOMIE_EMBED_PREVIEW === '1', ticket: embed ? null : ticket, owner: !embed && d.owner, launch, server, ...(embed ? {} : await chatWho(env, game, srv, d.acct)), shop: await availableShellShop(env, cat, game, { kids: pol.kids }) }),request,env,meta,launch);
       for(const cookie of recordsGuest?.cookies??[])page.headers.append('set-cookie',cookie);return page;
     }
     if (sub === 'watch') {

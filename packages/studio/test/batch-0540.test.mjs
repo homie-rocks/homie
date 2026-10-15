@@ -17,26 +17,23 @@ test('app context shares a validated room, without role or credentials',()=>{
  }
 });
 
-test('Big screen navigation retains same-origin app role context but share URLs do not',async()=>{
- const {readFileSync}=await import('node:fs');
- const source=readFileSync(new URL('../worker/pages.mjs',import.meta.url),'utf8');
- const body=source.slice(source.indexOf('  function shareReady(room) {'),source.indexOf("    toggle.addEventListener('click'",source.indexOf('  function shareReady(room) {')));
- const nodes=new Map();const ui={querySelector:s=>{if(!nodes.has(s))nodes.set(s,{});return nodes.get(s);}};
- const context={ui,boot:{game:'cafe',kind:'app'},state:{},location:{origin:'https://studio.example',search:'?role=staff&access=private&ticket=never'},URL,URLSearchParams,encodeURIComponent,labelOf:x=>x,LOCAL:false};
- vm.runInNewContext(body+'\n}\nshareReady("pub-2");',context);
- const link=new URL(nodes.get('[data-bigscreen]').href,context.location.origin);
- assert.equal(link.searchParams.get('role'),'staff');assert.equal(link.searchParams.get('access'),'private');assert.equal(link.searchParams.get('ticket'),null);
- assert.equal(context.state.link,'https://studio.example/cafe/open?room=pub-2');
+test('Big screen uses the same-origin session without copying the role-link secret',async()=>{
+ const {shell}=await import('./fixtures/page-shell.mjs');
+ const page=await shell('?role=staff&access=private&ticket=never',{g:{id:'cafe',name:'Cafe',kind:'app',players:{max:4}}});
+ const link=new URL(page.el('[data-bigscreen]').href,'https://owls.example');
+ assert.equal(link.searchParams.get('role'),'staff');assert.equal(link.searchParams.get('access'),null);assert.equal(link.searchParams.get('ticket'),null);
+ assert.equal(page.ctx.__shell.link,'https://owls.example/cafe/open?room=pub-3');
 });
 
 test('custom tool data mutations notify record subscribers, but conflicting writes do not',async t=>{
  const {database}=await import('./place-database.mjs');const {toolDatabase}=await import('../worker/tool-database.mjs');const {AppRecordStreams}=await import('../worker/app-streams.mjs');
  const DB=database(t),streams=new AppRecordStreams({DB},{}),data=toolDatabase(DB,'custom');
  const s={app:'cafe',collections:['notes'],seen:new Map(),controller:{desiredSize:1,enqueue:chunk=>events.push(JSON.parse(new TextDecoder().decode(chunk).slice(6)))}};
+ DB.sql.exec("INSERT INTO app_tool_namespaces VALUES('cafe','custom')");
  const events=[];streams.streams.add(s);streams.authorized=async()=>true;
  for(const row of await streams.revisions(s))s.seen.set(row.collection,row.revision);
  await data.put('key',{ok:true});await streams.pump(s);assert.deepEqual(events.at(-1).collections,['notes']);
- await data.put('key',{ok:false},{version:99});await streams.pump(s);assert.deepEqual(events.at(-1).collections,[]);
+ const count=events.length;await data.put('key',{ok:false},{version:99});await streams.pump(s);assert.equal(events.length,count);
  await data.increment('count');await streams.pump(s);assert.deepEqual(events.at(-1).collections,['notes']);
  await data.append('log','hello');await streams.pump(s);assert.deepEqual(events.at(-1).collections,['notes']);
 });

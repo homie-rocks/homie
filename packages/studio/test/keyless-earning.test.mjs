@@ -122,7 +122,7 @@ for (const amount of [13000]) test(`saved basket preserves exact lines at paymen
  const cart=await f.buy({lines:[{item:'tune',quantity:2},{item:'wax',quantity:3}],reference:'table-7'});
  assert.equal(cart.ok,true);assert.equal(new URL(cart.url).searchParams.get('prefilled_amount'),'13000');assert.deepEqual(f.sql.prepare('SELECT item,quantity FROM shop_order_lines WHERE order_id=? ORDER BY position').all(cart.order).map(r=>[r.item,r.quantity]),[['tune',2],['wax',3]]);
  const s=f.session(cart,'menu',{amount_subtotal:amount,amount_total:amount});
- for(const forged of [{currency:'usd'},{payment_link:'plink_wrong'},{metadata:{revision:'wrong'}},{client_reference_id:'ord_missing'}]){await f.hook('checkout.session.completed',{...s,...forged});assert.equal(f.sql.prepare('SELECT paid_at FROM shop_orders WHERE id=?').get(cart.order).paid_at,null);}
+ for(const forged of [{currency:'usd'},{payment_link:'plink_wrong'},{metadata:{revision:'wrong'}},{client_reference_id:'ord_missing'}]){await f.hook('checkout.session.completed',{...s,...forged,id:s.id+'_invalid_'+Object.keys(forged)[0]});assert.equal(f.sql.prepare('SELECT paid_at FROM shop_orders WHERE id=?').get(cart.order).paid_at,null);}
  assert.equal((await f.hook('checkout.session.completed',s)).status,200);
  await f.hook('checkout.session.completed',s);
  const events=f.sql.prepare("SELECT data FROM studio_events WHERE type='order.paid'").all().map(r=>JSON.parse(r.data));assert.equal(events.length,1);
@@ -191,4 +191,26 @@ for(const amount of [12000,14000])test(`basket mismatch ${amount} creates review
  await f.hook('checkout.session.completed',{...s,id:s.id+'again',payment_intent:s.payment_intent+'again'});
  assert.equal(f.sql.prepare("SELECT count(*) n FROM studio_events WHERE type='payment.review'").get().n,2);
  const sibling=f.sql.prepare('SELECT id FROM shop_orders WHERE session=?').get(s.id+'again');assert.equal(f.sql.prepare('SELECT value FROM meta WHERE key=?').get('shop-reference:'+sibling.id).value,'table-7');
+});
+
+for(const reference of ['missing','unknown','currency'])test('signed owned-link payment remains visible for '+reference,async t=>{
+ const f=fixture(t),order=await f.buy({item:'tune'});
+ const session=f.session(order,'tune',{id:'cs_review_'+reference,...(reference==='missing'?{client_reference_id:undefined}:reference==='unknown'?{client_reference_id:'ord_'+'x'.repeat(20)}:{currency:'usd'})});
+ const result=await f.hook('checkout.session.completed',session);assert.equal(result.did,'review');
+ assert.ok(f.sql.prepare('SELECT value FROM meta WHERE key=?').get('payment-review:'+session.id));
+ assert.equal(f.sql.prepare('SELECT attention FROM shop_orders WHERE session=?').get(session.id).attention,1);
+ assert.equal(f.sql.prepare("SELECT count(*) n FROM studio_events WHERE type='order.paid'").get().n,0);
+});
+test('single-item signed link sessions enforce the saved quantity cap',async t=>{
+ const f=fixture(t);shopOf(f.cat).items[0].maxQuantity=3;f.config.settings=linkSettings(shopOf(f.cat));f.env.STRIPE_SHOP_LINKS=JSON.stringify(f.config);
+ const order=await f.buy({item:'tune'}),session=f.session(order,'tune',{amount_subtotal:20000,amount_total:20000});
+ assert.equal((await f.hook('checkout.session.completed',session)).did,'review');
+});
+test('legacy menu snapshots use the published link maximum above 99',async t=>{
+ const f=fixture(t);f.config.menus[0].items[0].maxQuantity=200;f.env.STRIPE_SHOP_LINKS=JSON.stringify(f.config);
+ const order=await f.buy({lines:[{item:'tune'},{item:'wax'}]});
+ const invoice={id:'in_legacy',status:'paid',livemode:false,currency:'cad',total:500000,metadata:{homie:'shop-links-v1'},lines:{has_more:false,data:[{price:{id:'price_tune'},quantity:100,amount:500000}]}};
+ await f.hook('invoice.paid',invoice);
+ const result=await f.hook('checkout.session.completed',f.session(order,'menu',{invoice:'in_legacy',amount_total:500000,amount_subtotal:500000}));
+ assert.equal(result.did,'paid');
 });

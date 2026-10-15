@@ -3097,7 +3097,7 @@ test('removal migration preserves paid and pending orders, grants and refund fac
       for (const file of readdirSync(migrations).sort().filter(f => f > '0022_remove_referrals.sql')) db.exec(readFileSync(join(migrations, file), 'utf8'));
       for (const [table, rows] of Object.entries(snapshots)) assert.deepEqual(db.prepare('SELECT * FROM ' + table).all().map((row) => ({ ...row })), rows);
       for (const table of ['referral_lines', 'referral_statements', 'referral_editions', 'referral_edition_lines']) assert.equal(db.prepare('SELECT name FROM sqlite_master WHERE name = ?').get(table), undefined);
-      assert.deepEqual(db.prepare('SELECT key FROM meta').all().map((r) => r.key).filter(k=>k!=='tool-data-revision'), ['shop-reference:paid']);
+      assert.deepEqual(db.prepare('SELECT key FROM meta').all().map((r) => r.key).filter(k=>!['tool-data-revision','metadata-revision'].includes(k)), ['shop-reference:paid']);
       assert.deepEqual(JSON.parse(db.prepare('SELECT cart FROM shop_parent_links').get().cart), [{ item: 'hat' }]);
       db.exec("INSERT INTO function_subscriptions(name,type,started) VALUES ('paid','order.paid',0),('refunded','order.refunded',0); UPDATE shop_orders SET paid_at = 4, status = 'paid' WHERE id = 'pending'; UPDATE shop_orders SET status = 'refunded' WHERE id = 'paid';");
       assert.deepEqual(db.prepare('SELECT type FROM studio_events ORDER BY seq').all().map(r => r.type), ['order.paid', 'order.refunded']);

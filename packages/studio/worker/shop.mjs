@@ -967,9 +967,22 @@ async function hook(request, env, cat, shop, ready) {
 /** Retain a verified payment even when its frozen order cannot be fulfilled. No grants. */
 async function reviewLinkPayment(env,session,mode,reason='The paid amount differs from the order. Staff will reconcile the payment or refund it.') {
  if(session.payment_status!=='paid'||!/^cs_[A-Za-z0-9_]+$/.test(session.id??'')||!Number.isSafeInteger(session.amount_total)||session.amount_total<0)return false;
- const source=await orderById(env,session.client_reference_id);if(!source||source.mode!==mode||session.currency!==source.currency)return false;
- const lines=await orderLines(env,source.id),link=lines[0]?.snapshot&&JSON.parse(lines[0].snapshot).paymentLink;
- if(!link||(session.payment_link?.id??session.payment_link)!==link.id||session.metadata?.revision!==link.revision)return false;
+ if((await orderBySession(env,session.id))?.status==='review')return true;
+ const source=await orderById(env,session.client_reference_id);
+ const lines=source?await orderLines(env,source.id):[],link=lines[0]?.snapshot&&JSON.parse(lines[0].snapshot).paymentLink;
+ const linkId=session.payment_link?.id??session.payment_link,config=linkConfig(env);
+ const owned=[...(config?.items??[]),...(config?.menus??[]),...(config?.slots??[])].some(l=>l.id===linkId) || Boolean(await env.DB.prepare("SELECT 1 FROM shop_order_lines WHERE json_extract(snapshot,'$.paymentLink.id')=?1 LIMIT 1").bind(linkId).first());
+ if(!owned)return false;
+ if(!source||source.mode!==mode||session.currency!==source.currency||!link||link.id!==linkId||session.metadata?.revision!==link.revision){
+  const now=Date.now(),id=`ord_${(await sha256Hex(session.id)).slice(0,20)}`,payment=typeof session.payment_intent==='string'?session.payment_intent:session.payment_intent?.id;
+  const note='Payment received; missing or mismatched order context. Staff must reconcile or refund it.';
+  await env.DB.batch([
+   env.DB.prepare("INSERT OR IGNORE INTO shop_orders(id,item,amount,total,currency,till,mode,status,session,payment,created_at,updated_at,attention,note) VALUES(?1,'payment-review',?2,?2,?3,'stripe',?4,'review',?5,?6,?7,?7,1,?8)").bind(id,session.amount_total,session.currency,mode,session.id,payment??null,now,note),
+   env.DB.prepare('INSERT OR IGNORE INTO meta(key,value) VALUES(?1,?2)').bind('payment-review:'+session.id,JSON.stringify({session:session.id,receivedAt:now,payment,amount:session.amount_total,currency:session.currency,reference:session.client_reference_id,link:linkId,reason:note})),
+   env.DB.prepare("INSERT OR IGNORE INTO studio_events(id,type,data,at) VALUES(?1,'payment.review',?2,?3)").bind('payment-review:'+session.id,JSON.stringify({order:id,payment,amount:session.amount_total,currency:session.currency,note}),now),
+  ]);
+  return true;
+ }
  await env.DB.prepare('UPDATE shop_orders SET session=?2 WHERE id=?1 AND session IS NULL').bind(source.id,session.id).run();
  let order=await orderBySession(env,session.id);
  if(!order) {
@@ -995,6 +1008,7 @@ async function reviewLinkPayment(env,session,mode,reason='The paid amount differ
 /** Payment Links can be reopened. Each signed Session becomes its own order; the URL reference
  * selects a frozen local intent, never an entitlement or a buyer-supplied price. */
 async function bindLinkSession(env, session, mode) {
+  if(session.id&&(await orderBySession(env,session.id))?.status==='review')return false;
   if (!/^ord_[A-Za-z0-9]{20}$/.test(session.client_reference_id ?? '') || !/^cs_[A-Za-z0-9_]+$/.test(session.id ?? '')) return false;
   const source = await orderById(env, session.client_reference_id);
   if (!source || source.mode !== mode) return false;
@@ -1013,7 +1027,7 @@ async function bindLinkSession(env, session, mode) {
   if(item.kind==='deposit' && amount!==source.amount)return false;
   const quantity = item.price === 'choose' ? 1 : amount / item.price;
   if(['supporter','deposit'].includes(item.kind) && quantity!==1)return false;
-  if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 999999) return false;
+  if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > (item.maxQuantity??link.maxQuantity??999999)) return false;
   if (item.price === 'choose' && (amount < item.min || item.max !== null && amount > item.max)) return false;
   // Claim the first session atomically. A repeated URL creates a separate paid order, never loses a payment.
   await env.DB.prepare('UPDATE shop_orders SET session = ?2 WHERE id = ?1 AND session IS NULL').bind(source.id, session.id).run();
@@ -1097,7 +1111,7 @@ async function bindMenuSession(env,session,source,lines) {
   for(const l of invoice.lines?.data??[]) {
     const line=lines.find(x=>JSON.parse(x.snapshot).stripePrice===(l.price?.id??l.pricing?.price_details?.price));
     if(!line || !Number.isSafeInteger(l.quantity) || l.quantity<1 || l.amount!==JSON.parse(line.snapshot).price*l.quantity)throw new Error('Unknown invoice line');
-    if(l.quantity>(JSON.parse(line.snapshot).maxQuantity??99))return false;
+    if(l.quantity>(JSON.parse(line.snapshot).maxQuantity??link.items?.find(i=>i.item===line.item)?.maxQuantity??999999))return false;
     paidLines.push({...line,quantity:l.quantity,amount:l.amount});
   }
   if(!paidLines.length || paidLines.reduce((n,l)=>n+l.amount,0)!==session.amount_subtotal)throw new Error('Invoice subtotal mismatch');
