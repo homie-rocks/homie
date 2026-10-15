@@ -19,6 +19,9 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## Unreleased
 
+- Split routing, room chat and owner controls into focused modules. Retain pending chat and agent counters after failed writes.
+- Save PaymentIntent ids before follow-up calls; recover lost create responses with the original idempotency key, retaining uncertain orders for review.
+
 - Live room lists read queued Lobby snapshots in the startup D1 batch. Reads no longer wake each game, and expired MCP stream cleanup runs in cron.
 
 - Idle room watch sockets can hibernate and restore their authorized context. A watch-only room no longer keeps a quarter-second timer running.

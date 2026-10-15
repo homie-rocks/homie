@@ -822,3 +822,23 @@ test('server rules ignore a first visitor capacity and keep build seat allocatio
   const ai = await s.socket(room, await rulesPass(s, room)); assert.ok(ai.sent.find(m => m.t === 'welcome').seat >= 2);
   table.hostRt.tickNow(); assert.equal(table.hostRt.core.bodies().filter(b => b.driver === 'ai').length, 2);
 });
+
+test('failed chat and brain counter batches retain pending usage for the next flush', async () => {
+  const {Table}=await import('../worker/table.mjs');
+  const table=Object.create(Table.prototype);
+  let fail=true, batches=0;
+  table.env={DB:{prepare:()=>({bind(){return this;}}),batch:async()=>{batches++;if(fail)throw new Error('unavailable');}}};
+  table.say=()=>{};table.game='test';table.readBrainDay=async()=>{};
+  table.room={stats:{chatLines:3,chatReacts:1,chatHeld:{spam:2}}};
+  table.chatSent={held:{}};table.chatPend={neurons:2.5,ok:1,held:2,error:0};
+  table.brainPending={calls:{script:2},neurons:4.5,micros:7.5};
+  await assert.rejects(table.flushChat(),/unavailable/);
+  assert.deepEqual(table.chatSent,{held:{}});assert.equal(table.chatPend.neurons,2.5);
+  await assert.rejects(table.flushBrain(true),/unavailable/);
+  assert.deepEqual(table.brainPending,{calls:{script:2},neurons:4.5,micros:7.5});
+  fail=false;
+  await Promise.all([table.flushChat(),table.flushChat(),table.flushBrain(true),table.flushBrain(true)]);
+  assert.equal(batches,4);assert.equal(table.chatSent.chatLines,3);
+  assert.deepEqual(table.chatPend,{neurons:0.5,ok:0,held:0,error:0});
+  assert.deepEqual(table.brainPending,{calls:{},neurons:0.5,micros:0.5});
+});

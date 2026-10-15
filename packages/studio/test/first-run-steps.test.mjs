@@ -181,6 +181,7 @@ switch (args[0]) {
  case 'whoami': console.log(JSON.stringify({loggedIn:true,accounts:[{id:'stand-in-account',name:'Pub'}]})); break;
  case 'versions': console.log('This Worker does not exist [code: 10007]'); process.exitCode=1; break;
  case 'auth': console.log(JSON.stringify({token:'stand-in-only'})); break;
+ case 'queues': if(args[1]==='info'){console.log('Queue not found');process.exitCode=1;}else console.log('Created');break;
  case 'd1': console.log(args[1] === 'create' ? '\"database_id\": \"22222222-2222-2222-2222-222222222222\"' : '[]'); break;
  case 'deploy': if (!existsSync(${JSON.stringify(marker)})) { writeFileSync(${JSON.stringify(marker)}, '1'); console.log('register a workers.dev subdomain'); process.exitCode=1; }
  else console.log('https://pub-night.stand-in.workers.dev'); break;

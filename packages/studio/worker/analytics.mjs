@@ -6,11 +6,15 @@ export const PAGE_METRICS = new Set(['visit', 'play', 'screen', 'watch']);
 export function writePageMetric(env, row) {
   if (!env.STUDIO_ANALYTICS || !env.STUDIO_ANALYTICS_DATASET || !PAGE_METRICS.has(row.metric)) return false;
   const day = row.day ?? new Date().toISOString().slice(0, 10);
-  env.STUDIO_ANALYTICS.writeDataPoint({
+  try { env.STUDIO_ANALYTICS.writeDataPoint({
     indexes: [String(row.subject ?? '').slice(0, 80) || 'studio'],
     blobs: [day, row.metric, String(row.subject ?? '').slice(0, 80), String(row.source ?? '').slice(0, 80)],
     doubles: [Math.max(0, Math.floor(Number(row.n ?? 1) || 0))],
-  });
+  }); } catch (error) {
+    // Analytics is sampled telemetry. A binding failure must not fail a page or
+    // amplify the outage into a D1 write on every visit.
+    console.warn('Studio analytics point dropped:', error.message);
+  }
   return true;
 }
 export async function analyticsTotals(env, now = Date.now()) {

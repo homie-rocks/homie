@@ -689,10 +689,17 @@ export class Table {
   }
 
   /** Chat's counts into D1 (stats_daily): lines, reactions, held by why, reviews and neurons. Never a message or a sender. */
-  async flushChat() {
+  flushChat() {
+    if (this.chatFlush) return this.chatFlush;
+    this.chatFlush = this.flushChatPending().finally(() => { this.chatFlush = null; });
+    return this.chatFlush;
+  }
+
+  async flushChatPending() {
     const s = this.room?.stats;
     if (!s || !this.env.DB) return;
     const game = this.game ?? '';
+    const sent = structuredClone(this.chatSent);
     const rows = [];
     for (const [k, metric] of [['chatLines', 'chat-lines'], ['chatReacts', 'chat-reacts']]) {
       const d = (s[k] ?? 0) - (this.chatSent[k] ?? 0);
@@ -708,7 +715,14 @@ export class Table {
     if (neurons) rows.push(counter(this.env, { metric: 'chat-neurons', subject: game, n: neurons }));
     this.chatPend = { neurons: p.neurons - neurons, ok: 0, held: 0, error: 0 };
     const list = rows.filter(Boolean);
-    if (list.length) await this.env.DB.batch(list).catch(() => {});
+    try { if (list.length) await this.env.DB.batch(list); }
+    catch (error) {
+      this.chatSent = sent;
+      this.chatPend.neurons += neurons;
+      for (const k of ['ok', 'held', 'error']) this.chatPend[k] += p[k];
+      this.say({ev: 'chat-counter-retry', error: errorLine(error)});
+      throw error;
+    }
   }
 
   /** The game's agents.json from the build (the only words an AI in this room may say), once. */
@@ -778,7 +792,13 @@ export class Table {
    * The day's brain counters into D1 (stats_daily: brain-calls by provider, brain-neurons, brain-microdollars), and the
    * day's budget and usage read again (an owner's new budget, other rooms' use): at most once a minute, on the alarm.
    */
-  async flushBrain(force = false) {
+  flushBrain(force = false) {
+    if (this.brainFlush) return this.brainFlush;
+    this.brainFlush = this.flushBrainPending(force).finally(() => { this.brainFlush = null; });
+    return this.brainFlush;
+  }
+
+  async flushBrainPending(force = false) {
     const p = this.brainPending;
     if (!this.env.DB || (!force && Date.now() - this.brainReadAt < 60_000)) return;
     if (!Object.keys(p.calls).length && p.neurons < 1 && p.micros < 1) { await this.readBrainDay(); return; }
@@ -790,7 +810,14 @@ export class Table {
       micros ? counter(this.env, { metric: 'brain-microdollars', subject: this.game ?? '', n: micros }) : null,
     ].filter(Boolean);
     this.brainPending = { calls: {}, neurons: p.neurons - neurons, micros: p.micros - micros };
-    if (rows.length) await this.env.DB.batch(rows).catch(() => {});
+    try { if (rows.length) await this.env.DB.batch(rows); }
+    catch (error) {
+      this.brainPending.neurons += neurons;
+      this.brainPending.micros += micros;
+      for (const [source, n] of Object.entries(p.calls)) this.brainPending.calls[source] = (this.brainPending.calls[source] ?? 0) + n;
+      this.say({ev: 'brain-counter-retry', error: errorLine(error)});
+      throw error;
+    }
     await this.readBrainDay();
   }
 
