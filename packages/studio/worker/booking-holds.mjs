@@ -63,8 +63,8 @@ export function bookingHolds(env,caller,cat){
    const scope=caller.testScope?`${app}:check:${caller.testScope}`:app;
    id=await hash(JSON.stringify([scope,collection,id]));
    const secret=token?await hash(token):null;
-   await env.DB.prepare(`INSERT INTO shop_bookings(id,app,collection,slots,slot,quantity,order_id,state,updated_at,actor,token_hash,hold_until)
-    SELECT ?1,?2,?3,?4,?5,?6,'hold:'||?1,'held',?7,?8,?9,?10 WHERE NOT EXISTS(SELECT 1 FROM shop_bookings WHERE id=?1)`).bind(id,scope,collection,spec.slots,slot,quantity,Date.now(),caller.id??null,secret,expiresAt).run().catch(error=>{if(/booking capacity unavailable/.test(error.message))throw refusal('That slot is full. No place has been taken.',409);throw error;});
+   try {await env.DB.prepare(`INSERT INTO shop_bookings(id,app,collection,slots,slot,quantity,order_id,state,updated_at,actor,token_hash,hold_until)
+    SELECT ?1,?2,?3,?4,?5,?6,'hold:'||?1,'held',?7,?8,?9,?10 WHERE NOT EXISTS(SELECT 1 FROM shop_bookings WHERE id=?1)`).bind(id,scope,collection,spec.slots,slot,quantity,Date.now(),caller.id??null,secret,expiresAt).run();}catch(error){if(/booking capacity unavailable/.test(error.message))throw refusal('That slot is full. No place has been taken.',409);throw error;}
    const row=await ownedHold(env,caller,{id,token});
    if(row.app!==scope||row.collection!==collection||row.slot!==slot||row.quantity!==quantity)throw refusal('Booking id reused with different request',409);
    return result(row);
