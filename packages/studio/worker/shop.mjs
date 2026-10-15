@@ -347,7 +347,7 @@ async function orderRoute(request, env, url, shop) {
     } catch (error) { logOrderError(env, o.id, error); }
   }
   const reference = await env.DB.prepare('SELECT value FROM meta WHERE key=?1').bind(`shop-reference:${o.id}`).first();
-  return json({ ok: true, order: o.id, simulated: apiBase(env) !== STRIPE_API, status: playerOrderStatus(o), note:o.note??null, item: o.item, game: o.game ?? null, reference: reference?.value ?? null });
+  return json({ ok: true, order: o.id, simulated: apiBase(env) !== STRIPE_API, status: playerOrderStatus(o), ...(o.status==='review'?{note:'Payment received. Staff will reconcile the payment or refund it.'}:{}), item: o.item, game: o.game ?? null, reference: reference?.value ?? null });
 }
 
 /** The neutral age question: a year of birth, once. Nothing hints which answer opens anything; no default. */
@@ -979,12 +979,13 @@ async function reviewLinkPayment(env,session,mode,reason='The paid amount differ
    ...lines.map((l,i)=>env.DB.prepare('INSERT OR IGNORE INTO shop_order_lines(id,order_id,position,item,quantity,unit_amount,amount,snapshot) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)').bind(`${id}_${i}`,id,i,l.item,l.quantity,l.unit_amount,l.amount,l.snapshot)),
   ]);order=await orderBySession(env,session.id);
  }
- if(order.paid_at!==null)return order.status==='review';
+ if(order.status==='review')return true;
+ if(order.paid_at!==null)return false;
  const payment=typeof session.payment_intent==='string'?session.payment_intent:session.payment_intent?.id;
  const note='Payment received. '+reason,now=Date.now();
  await env.DB.batch([
-  env.DB.prepare("UPDATE shop_orders SET status='review',payment=?2,total=?3,paid_at=?4,updated_at=?4,attention=1,note=?5 WHERE id=?1 AND paid_at IS NULL").bind(order.id,payment??null,session.amount_total,now,note),
-  env.DB.prepare("INSERT OR IGNORE INTO meta(key,value) VALUES(?1,?2)").bind('payment-review:'+session.id,JSON.stringify({session:session.id,payment,amount:session.amount_total,currency:session.currency,expected:source.amount,reason})),
+  env.DB.prepare("UPDATE shop_orders SET status='review',payment=?2,total=?3,updated_at=?4,attention=1,note=?5 WHERE id=?1 AND paid_at IS NULL").bind(order.id,payment??null,session.amount_total,now,note),
+  env.DB.prepare("INSERT OR IGNORE INTO meta(key,value) VALUES(?1,?2)").bind('payment-review:'+session.id,JSON.stringify({session:session.id,receivedAt:now,payment,amount:session.amount_total,currency:session.currency,expected:source.amount,reason})),
   env.DB.prepare("INSERT OR IGNORE INTO studio_events(id,type,data,at) VALUES(?1,'payment.review',?2,?3)").bind('payment-review:'+session.id,JSON.stringify({order:order.id,payment,amount:session.amount_total,currency:session.currency,note}),now),
  ]);
  return true;
@@ -1120,6 +1121,7 @@ async function bindMenuSession(env,session,source,lines) {
 export async function paid(env, shop, session, paidAt = Date.now()) {
   const o = await orderBySession(env, session.id);
   if (!o) return 'unknown-order';
+  if(o.status==='review')return 'review';
   // The session must be the one this order opened, for this player and this price.
   const savedLines=await orderLines(env,o.id);
   if(savedLines[0]?.snapshot && JSON.parse(savedLines[0].snapshot).paymentLink?.basket)return paidBasket(env,shop,o,savedLines,session,paidAt);
@@ -1225,6 +1227,11 @@ export async function syncRefunds(env, payment, freeOrder = null, freeLines = []
   }
   const gross = Number(o.total ?? o.amount);
   if (!Number.isSafeInteger(amount) || amount > gross) throw new Error('Stripe refund total exceeds payment');
+  if(o.status==='review') {
+    // Review never grants anything, even when a later refund is reversed.
+    await env.DB.prepare("UPDATE shop_orders SET refunded_amount=?2,refunded_net=?2,updated_at=?3,note=?4 WHERE id=?1 AND status='review'").bind(o.id,amount,Date.now(),`Payment received; staff review required. Refunded ${amount} of ${gross} ${o.currency} minor units.`).run();
+    return 'review';
+  }
   const moneyFull = amount === gross && gross > 0;
   const whole = moneyFull && [...refunds.values()].some((r) => r.status === 'succeeded' && !r.metadata?.line);
   const taggedGross = [...totals.values()].reduce((n, value) => n + value, 0);
@@ -1263,6 +1270,7 @@ export async function syncRefunds(env, payment, freeOrder = null, freeLines = []
 async function disputed(env, payment, disputeId) {
   const o = payment ? await orderByPayment(env, payment) : null;
   if (!o) return 'unknown-order';
+  if(o.status==='review'){await env.DB.prepare("UPDATE shop_orders SET dispute=?2,note='Payment received; disputed payment requires staff review.',updated_at=?3 WHERE id=?1").bind(o.id,disputeId,Date.now()).run();return 'review';}
   await env.DB.prepare("UPDATE shop_orders SET status = 'disputed', dispute = ?2, updated_at = ?3 WHERE id = ?1 AND status = 'paid'").bind(o.id, disputeId, Date.now()).run();
   return 'disputed';
 }
@@ -1271,6 +1279,7 @@ async function disputed(env, payment, disputeId) {
 async function disputeClosed(env, payment, status) {
   const o = payment ? await orderByPayment(env, payment) : null;
   if (!o) return 'unknown-order';
+  if(o.status==='review'){await env.DB.prepare("UPDATE shop_orders SET note=?2,updated_at=?3 WHERE id=?1").bind(o.id,`Payment received; dispute ${status}. Staff review required.`,Date.now()).run();return 'review';}
   const now = Date.now();
   if (!['paid', 'disputed'].includes(o.status)) return 'already';
   if (status === 'lost') {

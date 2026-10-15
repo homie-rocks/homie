@@ -830,6 +830,7 @@ export { default, Table, Lobby, Gate, Concentrator } from '@homie-rocks/studio/w
     [`site/migrations/${APPS_MIGRATION_FILE}`]: APPS_MIGRATION,
     [`site/migrations/${BUSINESS_EVENTS_MIGRATION_FILE}`]: BUSINESS_EVENTS_MIGRATION,
     [`site/migrations/${BOOKING_RESOURCES_MIGRATION_FILE}`]: BOOKING_RESOURCES_MIGRATION,
+    [`site/migrations/${OPERATIONAL_MIGRATION_FILE}`]: OPERATIONAL_MIGRATION,
     [`site/migrations/${BOOKING_HOLDS_MIGRATION_FILE}`]: BOOKING_HOLDS_MIGRATION,
     [`site/migrations/${APP_LIVE_MIGRATION_FILE}`]: APP_LIVE_MIGRATION,
     [`site/migrations/${TOOL_DATABASE_MIGRATION_FILE}`]: TOOL_DATABASE_MIGRATION,

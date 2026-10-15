@@ -182,15 +182,15 @@ function studio(name) {
 
 function fakeD1(dir) {
   const sql = new DatabaseSync(':memory:');
-  for (const f of ['0001_studio.sql', '0002_studio_stats.sql', '0004_players.sql', '0005_studio_office.sql', '0006_studio_servers.sql', SHOP_MIGRATION_FILE, SHOP_RESERVATIONS_FILE, SHOP_LINES_FILE]) sql.exec(readFileSync(join(dir, 'site', 'migrations', f), 'utf8'));
+  for (const f of ['0001_studio.sql', '0002_studio_stats.sql', '0004_players.sql', '0005_studio_office.sql', '0006_studio_servers.sql', '0007_studio_chat.sql', SHOP_MIGRATION_FILE, SHOP_RESERVATIONS_FILE, SHOP_LINES_FILE]) sql.exec(readFileSync(join(dir, 'site', 'migrations', f), 'utf8'));
   const stmt = (query, args = []) => ({
-    bind: (...a) => stmt(query, a),
+    query, bind: (...a) => stmt(query, a),
     first: async () => sql.prepare(query).get(...args) ?? null,
     all: async () => ({ results: sql.prepare(query).all(...args) }),
     runSync: () => { const r = sql.prepare(query).run(...args); return { success: true, meta: { changes: r.changes } }; },
     run: async () => { const r = sql.prepare(query).run(...args); return { success: true, meta: { changes: r.changes } }; },
   });
-  return { sql, prepare: (q) => stmt(q), batch: async (list) => { sql.exec('BEGIN'); try { const results = []; for (const s of list) results.push(s.runSync()); sql.exec('COMMIT'); return results; } catch (error) { sql.exec('ROLLBACK'); throw error; } } };
+  return { sql, prepare: (q) => stmt(q), batch: async (list) => { sql.exec('BEGIN'); try { const results = []; for (const s of list) results.push(/^SELECT/i.test(s.query) ? await s.all() : s.runSync()); sql.exec('COMMIT'); return results; } catch (error) { sql.exec('ROLLBACK'); throw error; } } };
 }
 
 function assetsOf(dir) {
@@ -366,7 +366,7 @@ async function site({ key = true, managed = false, catalog = null, settings = nu
   const base = assetsOf(dir);
   const managedAssets = variant ? assetsOf(mdir) : null;
   const ASSETS = variant ? { fetch: async (req) => (new URL(req.url).pathname === '/games.json' ? managedAssets.fetch(req) : base.fetch(req)) } : base;
-  const env = { ASSETS, DB, STUDIO_NAME: 'Shop Owls', STRIPE_API_BASE: stripe.base, ...(key ? { STRIPE_CHECKOUT_MODE: 'sessions', STRIPE_KEY: TEST_KEY, STRIPE_WEBHOOK_SECRET: HOOK_SECRET } : {}) };
+  const env = { HOMIE_DEV: '1', ASSETS, DB, STUDIO_NAME: 'Shop Owls', STRIPE_API_BASE: stripe.base, ...(key ? { STRIPE_CHECKOUT_MODE: 'sessions', STRIPE_KEY: TEST_KEY, STRIPE_WEBHOOK_SECRET: HOOK_SECRET } : {}) };
   ref.env = env;
   env.TABLE = namespace(Table, ref, waits);
   env.LOBBY = namespace(Lobby, ref, waits);
@@ -2771,7 +2771,8 @@ test('keyless: setup, changed catalog, purchase, tips, reordered refund/dispute,
   assert.equal(h.stripe.catalog.products.length, 3);
   raw.till = 'stripe-managed'; writeFileSync(file, JSON.stringify(raw));
   assert.equal((await shopConnect(h.dir, h.opts)).ok, true);
-  const managedLink = h.stripe.catalog.payment_links.find((p) => p.active);
+  const installed=JSON.parse(readFileSync(join(h.dir,'.studio','stripe-mcp.json'))).result.config;
+  const managedLink = h.stripe.catalog.payment_links.find((p) => p.id===installed.items[0].id);
   assert.equal(managedLink.managed_payments.enabled, true);
   assert.equal(managedLink.automatic_tax, undefined);
 });

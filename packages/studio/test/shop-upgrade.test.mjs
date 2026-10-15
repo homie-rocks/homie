@@ -50,8 +50,8 @@ test('100+ links ship as an asset, never a text binding, and load at runtime',as
  const {loadShopLinks,linkConfig}=await import('../worker/shop-links.mjs');
  const env=await loadShopLinks({...vars,ASSETS:{fetch:async()=>new Response(asset)}});assert.equal(linkConfig(env).slots.length,120);
 });
-test('golf replanning reuses 0.51.6 observations and refresh batches link reads',async t=>{
- const root=studio(t);const p=await shopMcpPlan(root);assert.equal(p.verified,true,JSON.stringify(p.operations));
+test('golf replanning reuses products but replaces uncapped legacy menu links; refresh batches reads',async t=>{
+ const root=studio(t);const p=await shopMcpPlan(root);assert.equal(p.verified,false);assert.ok(p.operations.some(o=>o.path==='/v1/payment_links'&&o.params.line_items?.every(l=>l.adjustable_quantity?.maximum===99)));assert.ok(p.operations.every(o=>!o.path.startsWith('/v1/products')));
  const fresh=await shopMcpPlan(root,{refresh:true});
  assert.ok(fresh.operations.some(o=>o.path==='/v1/payment_links'&&o.params.expand.includes('data.line_items')));
  assert.equal(fresh.operations.some(o=>/^\/v1\/payment_links\//.test(o.path)),false);

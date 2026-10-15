@@ -245,7 +245,7 @@ export const orderByPayment = (env, payment) => env.DB.prepare('SELECT * FROM sh
 export function orderView(r) {
   return {
     id: r.id, refundedAmount: Number(r.refunded_amount ?? 0), item: r.item, game: r.game ?? null, amount: Number(r.amount), currency: r.currency, tax: r.tax === null ? null : Number(r.tax), total: r.total === null ? null : Number(r.total),
-    status: r.status, note:r.note??null, till: r.till, mode: r.mode, parent: Number(r.parent) === 1,
+    status: r.status, ...(r.status==='review'?{note:'Payment received. Staff will reconcile the payment or refund it.'}:{}), till: r.till, mode: r.mode, parent: Number(r.parent) === 1,
     createdAt: Number(r.created_at), paidAt: r.paid_at === null ? null : Number(r.paid_at), refundedAt: r.refunded_at === null ? null : Number(r.refunded_at),
   };
 }

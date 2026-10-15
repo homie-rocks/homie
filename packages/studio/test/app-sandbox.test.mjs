@@ -110,7 +110,7 @@ test('supported app context returns a public self address without access tokens'
  parent.postMessage({type:'homie-app-context'},'*');</script>`);
  await page.goto(origin+'/form/open?room=main');const frame=page.frames().find(f=>f.url().includes('/__game/'));
  await frame.waitForFunction(()=>document.querySelector('output').textContent,{timeout:2000});
- const context=JSON.parse(await frame.$eval('output',e=>e.textContent));assert.equal(context.app,'form');assert.equal(context.url,origin+'/form/open');assert.equal(context.origin,origin);
+ const context=JSON.parse(await frame.$eval('output',e=>e.textContent));assert.equal(context.app,'form');assert.equal(context.url,origin+'/form/open?room=main');assert.equal(context.origin,origin);
 });
 
 test('phone booking choices return the same option and resource fields as the AI tool',{timeout:15000},async t=>{

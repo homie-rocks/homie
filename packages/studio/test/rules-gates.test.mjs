@@ -164,6 +164,8 @@ test('the public Worker authorizes the door and routes the chosen 300/1000 capac
     assert.equal(routed[0].url.searchParams.get('host'),'server');
     assert.equal(routed[0].url.searchParams.get('gates'),String(roomLayout(seats).gates));
     cat.games[0].launch='private';
+    // A deployment changes the ASSETS binding and therefore the isolate catalogue.
+    env.ASSETS={fetch:async()=>Response.json(cat)};
     const refused=await worker.fetch(new Request(url,{headers:{upgrade:'websocket'}}),env,{waitUntil(){}});
     assert.equal(refused.status,403);assert.equal(routed.length,1);
   }

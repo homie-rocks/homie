@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {writeFileSync} from 'node:fs';
+import {writeFileSync,readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {world} from './paid-parts-review4-harness.mjs';
 import {syncPaymentLinks} from '../lib/shop-links.mjs';
@@ -15,11 +15,12 @@ test('keyless connection syncs frozen offers, signs proofs, retries, edits and r
   const api=async(method,path,params={})=>{calls.push({method,path,params});if(method==='POST')stripeValidation(path,formEncode(params),objects);const [,kind,id]=/^\/v1\/([^/]+)(?:\/(.+))?$/.exec(path);const rows=objects[kind];assert.ok(rows,path);if(method==='GET')return{data:rows,has_more:false};if(id){const row=rows.find(r=>r.id===id);assert.ok(row);Object.assign(row,params);return row;}
    const row={...params,id:params.id??`${{products:'prod',prices:'price',payment_links:'plink',webhook_endpoints:'we'}[kind]}_${++n}`,active:true};if(kind==='payment_links')row.url=`https://buy.stripe.com/test_${n}`;if(kind==='webhook_endpoints'){row.secret='whsec_'+'T'.repeat(32);row.status='enabled';}rows.push(row);return row;};
   const shop=checkShop({items:[]}).shop;
+  const links=()=>JSON.parse(readFileSync(join(w.root,'.studio/stripe-purchase-links.json'),'utf8'));
   const connect=()=>syncPaymentLinks({root:w.root,api,shop,slug:'seller',site:'https://seller.example',mode:'test',w:async(args,opts)=>{if(args[1]==='list')return{code:0,stdout:JSON.stringify(Object.keys(secrets).map(name=>({name})))};assert.deepEqual(args,['secret','bulk']);secrets={...secrets,...JSON.parse(opts.input)};return{code:0};},receipt,saveReceipt:r=>receipt=r});
-  assert.equal((await connect()).ok,true);assert.equal(secrets.STRIPE_KEY,undefined);assert.equal(JSON.parse(secrets.PURCHASE_SIGNING_KEYS)[0].crv,'Ed25519');assert.equal(JSON.parse(secrets.PURCHASE_LINKS).offers.length,1);assert.ok(objects.webhook_endpoints[0].enabled_events.includes('invoice_payment.paid'));
+  assert.equal((await connect()).ok,true);assert.equal(secrets.STRIPE_KEY,undefined);assert.equal(secrets.PURCHASE_LINKS,undefined);assert.equal(secrets.STRIPE_SHOP_LINKS,undefined);assert.equal(JSON.parse(secrets.PURCHASE_SIGNING_KEYS)[0].crv,'Ed25519');assert.equal(links().offers.length,1);assert.ok(objects.webhook_endpoints[0].enabled_events.includes('invoice_payment.paid'));
   const writes=calls.filter(c=>c.method==='POST').length;assert.equal((await connect()).alreadyConnected,true);assert.equal(calls.filter(c=>c.method==='POST').length,writes);
-  writeFileSync(join(w.root,'parts/offers.json'),JSON.stringify({camera:{price:{amount:1700},quantities:[1,5]}}));assert.equal((await connect()).ok,true);assert.equal(objects.payment_links.filter(l=>l.active).length,2);assert.deepEqual(JSON.parse(secrets.PURCHASE_LINKS).offers.map(l=>l.quantity),[1,5]);assert.equal(JSON.parse(JSON.parse(secrets.PURCHASE_LINKS).offers[0].offer).amount,1700);
-  writeFileSync(join(w.root,'parts/offers.json'),JSON.stringify({camera:{active:false}}));assert.equal((await connect()).ok,true);assert.equal(JSON.parse(secrets.PURCHASE_LINKS).offers.length,0);assert.equal(objects.payment_links.filter(l=>l.active).length,0);
+  writeFileSync(join(w.root,'parts/offers.json'),JSON.stringify({camera:{price:{amount:1700},quantities:[1,5]}}));assert.equal((await connect()).ok,true);assert.equal(objects.payment_links.filter(l=>l.active).length,3);assert.deepEqual(links().offers.map(l=>l.quantity),[1,5]);assert.equal(JSON.parse(links().offers[0].offer).amount,1700);
+  writeFileSync(join(w.root,'parts/offers.json'),JSON.stringify({camera:{active:false}}));assert.equal((await connect()).ok,true);assert.equal(links().offers.length,0);assert.equal(objects.payment_links.filter(l=>l.active).length,3);
  }finally{await w.close();}
 });
 

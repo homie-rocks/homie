@@ -170,7 +170,7 @@ const catalogueCache = new WeakMap();
 async function catalogue(env, origin) {
   try {
     const cached=catalogueCache.get(env.ASSETS);
-    if(cached?.origin===origin && env.HOMIE_PREVIEW!=='1')return cached.value;
+    if(cached?.origin===origin && env.HOMIE_PREVIEW!=='1' && env.HOMIE_DEV!=='1')return cached.value;
     const res = await env.ASSETS.fetch(new Request(`${origin}/games.json`));
     if (!res.ok) return { studio: { name: env.STUDIO_NAME || 'Studio' }, games: [] };
     const tag = res.headers.get('etag');

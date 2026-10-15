@@ -200,6 +200,7 @@ export function devConfig(root, remoteAi) {
   // Always retain the exact local binding configuration for CLI commands after a deploy.
   const abs = (p) => (p && !p.startsWith('/') ? join(base, p) : p);
   delete json.$schema;
+  json.vars={...json.vars,HOMIE_DEV:'1'};
   json.main = entry ?? abs(json.main);
   if (json.assets?.directory) json.assets.directory = abs(json.assets.directory);
   json.d1_databases = (json.d1_databases ?? []).map((d) => ({ ...d, ...(d.migrations_dir ? { migrations_dir: abs(d.migrations_dir) } : {}) }));
@@ -351,6 +352,12 @@ export async function dev(root, { lan = false, port: askedPort = 8787, remoteAi 
     m.on('close', done);
     m.on('error', done);
   });
+  const {functionDeploymentSQL}=await import('./functions-build.mjs');
+  const registerFunctions=()=>new Promise(resolve=>{
+    const child=spawn(bin,['d1','execute','DB','--local','--command',functionDeploymentSQL(root)],{cwd:workerDir(root),env,stdio:['ignore','ignore','inherit']});
+    child.on('close',code=>resolve(code===0));child.on('error',()=>resolve(false));
+  });
+  if(!await registerFunctions())return {ok:false,command:'dev',why:'Local function registration failed; fix the D1 error above before serving requests.'};
   const origin = `http://127.0.0.1:${port}`;
   const printedOrigin = `http://localhost:${port}`;
   log(`Local site: ${printedOrigin}/  (each game: ${printedOrigin}/<id>/play — open it in two browsers)`);
@@ -480,7 +487,7 @@ export async function dev(root, { lan = false, port: askedPort = 8787, remoteAi 
     if (rebuilding || ending) return;
     const stamp = toolsStamp(); if (stamp === lastTools) return;
     lastTools = stamp; rebuilding = true;
-    try { log('Studio tools changed: type-checking and rebuilding…'); await build(root, { log }); }
+    try { log('Studio tools changed: type-checking and rebuilding…'); await build(root, { log }); if(!await registerFunctions())throw new Error('Local function registration failed'); }
     catch (error) { log(`Studio tools did not build: ${error.message}`); }
     finally { rebuilding = false; }
   };

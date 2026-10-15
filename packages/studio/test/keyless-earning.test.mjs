@@ -163,7 +163,11 @@ test('paid deposit amount mismatch is retained for staff and the customer, idemp
  const order=f.sql.prepare('SELECT * FROM shop_orders WHERE session=?').get(payment.id);
  assert.ok(order);assert.equal(order.status,'review');assert.equal(order.total,7000);assert.equal(order.payment,payment.payment_intent);assert.equal(order.attention,1);assert.match(order.note,/payment.*received/i);
  assert.equal(f.sql.prepare("SELECT count(*) n FROM studio_events WHERE type='payment.review'").get().n,1);
+ assert.equal(f.sql.prepare("SELECT count(*) n FROM studio_events WHERE type='order.paid'").get().n,0,'review cannot trigger automatic fulfillment');
  assert.equal(f.sql.prepare('SELECT count(*) n FROM entitlements').get().n,0);
+ await f.hook('refund.created',{id:'re_review',payment_intent:payment.payment_intent,currency:'cad',amount:7000,status:'succeeded'});
+ const refunded=f.sql.prepare('SELECT * FROM shop_orders WHERE id=?').get(order.id);assert.equal(refunded.refunded_amount,7000);assert.equal(refunded.status,'review');assert.match(refunded.note,/refund/i);
+ await f.hook('checkout.session.completed',payment);assert.equal(f.sql.prepare("SELECT count(*) n FROM studio_events WHERE type='order.paid'").get().n,0);
 });
 
 test('a slot payment books the paid group quantity and retains an over-capacity payment for review',async t=>{

@@ -55,3 +55,20 @@ test('private asset capabilities expire with session logout and role downgrade, 
  meta.roles.staff.can=[];
  assert.equal(await appAssetTicket(env,'cafe',ticket,{meta}),false,'a deployed role downgrade revokes old links');
 });
+
+test('player asset capability rechecks role grants, role-link rotation and session expiry',async t=>{
+ const {database}=await import('./place-database.mjs');const {appAssetTicket}=await import('../worker/office.mjs');const {createHash}=await import('node:crypto');
+ const DB=database(t),env={DB},token='b'.repeat(48),hash=createHash('sha256').update(token).digest('hex');
+ DB.sql.prepare("INSERT INTO players(id,name,created_at,seen_at) VALUES('p','Staff',0,0)").run();
+ DB.sql.prepare("INSERT INTO player_sessions(hash,player,expires_at) VALUES(?,'p',?)").run(hash,Date.now()+60000);
+ DB.sql.prepare("INSERT INTO app_roles VALUES('cafe','staff','p')").run();
+ DB.sql.prepare("INSERT INTO app_role_links VALUES('cafe','staff','original')").run();
+ const meta={id:'cafe',roles:{staff:{signIn:true,can:['read:notes']}},surfaces:{phone:'staff'}},request=new Request('https://place.test/cafe/open?role=staff',{headers:{cookie:'studio_player='+token}});
+ const ticket=await appAssetTicket(env,'cafe',undefined,{request,meta});assert.ok(ticket);assert.equal(await appAssetTicket(env,'cafe',ticket,{meta}),true);
+ DB.sql.prepare("DELETE FROM app_roles WHERE player='p'").run();assert.equal(await appAssetTicket(env,'cafe',ticket,{meta}),false);
+ DB.sql.prepare("INSERT INTO app_roles VALUES('cafe','staff','p')").run();assert.equal(await appAssetTicket(env,'cafe',ticket,{meta}),true);
+ DB.sql.prepare("UPDATE app_role_links SET token='rotated'").run();assert.equal(await appAssetTicket(env,'cafe',ticket,{meta}),false);
+ const next=await appAssetTicket(env,'cafe',undefined,{request,meta});assert.ok(next);
+ DB.sql.prepare('UPDATE player_sessions SET expires_at=0').run();assert.equal(await appAssetTicket(env,'cafe',next,{meta}),false);
+ DB.sql.prepare('DELETE FROM player_sessions').run();assert.equal(await appAssetTicket(env,'cafe',next,{meta}),false);
+});

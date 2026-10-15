@@ -54,14 +54,14 @@ function studio(name) {
 /** Enough of D1: prepare/bind/first/all/run and batch, on node:sqlite with the studio's migrations. */
 function fakeD1(dir) {
   const sql = new DatabaseSync(':memory:');
-  for (const f of ['0001_studio.sql', STATS_MIGRATION_FILE]) sql.exec(readFileSync(join(dir, 'site', 'migrations', f), 'utf8'));
+  for (const f of ['0001_studio.sql', STATS_MIGRATION_FILE, '0004_players.sql', '0005_studio_office.sql', '0006_studio_servers.sql', '0007_studio_chat.sql']) sql.exec(readFileSync(join(dir, 'site', 'migrations', f), 'utf8'));
   const stmt = (query, args = []) => ({
-    bind: (...a) => stmt(query, a),
+    query, bind: (...a) => stmt(query, a),
     first: async () => sql.prepare(query).get(...args) ?? null,
     all: async () => ({ results: sql.prepare(query).all(...args) }),
     run: async () => { sql.prepare(query).run(...args); return { success: true }; },
   });
-  return { sql, prepare: (q) => stmt(q), batch: async (list) => { for (const s of list) await s.run(); return []; } };
+  return { sql, prepare: (q) => stmt(q), batch: async (list) => { return Promise.all(list.map(s => /^SELECT/i.test(s.query) ? s.all() : s.run())); } };
 }
 
 function assetsOf(dir) {
@@ -221,7 +221,7 @@ test('stats: the site counts, only the owner reads, and a one-time link signs th
   const DB = fakeD1(dir);
   const lobbyNow = { players: 3, rooms: 1 };
   const LOBBY = { idFromName: () => 'x', get: () => ({ fetch: async (u) => new Response(JSON.stringify(String(u).endsWith('/now') ? lobbyNow : { rooms: [] })) }) };
-  const env = { ASSETS: assetsOf(dir), LOBBY, DB, STUDIO_NAME: 'Stat Owls' };
+  const env = { HOMIE_DEV: '1', ASSETS: assetsOf(dir), LOBBY, DB, STUDIO_NAME: 'Stat Owls' };
   const waits = [];
   const ctx = { waitUntil: (p) => waits.push(p) };
   const site = async (path, init = {}) => { const r = await worker.fetch(new Request(`https://owls.example${path}`, init), env, ctx); await Promise.all(waits.splice(0)); return r; };

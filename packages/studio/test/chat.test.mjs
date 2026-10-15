@@ -455,12 +455,12 @@ function fakeD1(dir) {
   const sql = new DatabaseSync(':memory:');
   for (const f of ['0001_studio.sql', STATS_MIGRATION_FILE, '0004_players.sql', OFFICE_MIGRATION_FILE, SERVERS_MIGRATION_FILE, CHAT_MIGRATION_FILE]) sql.exec(readFileSync(join(dir, 'site', 'migrations', f), 'utf8'));
   const stmt = (query, args = []) => ({
-    bind: (...a) => stmt(query, a),
+    query, bind: (...a) => stmt(query, a),
     first: async () => sql.prepare(query).get(...args) ?? null,
     all: async () => ({ results: sql.prepare(query).all(...args) }),
     run: async () => { const r = sql.prepare(query).run(...args); return { success: true, meta: { changes: r.changes } }; },
   });
-  return { sql, prepare: (q) => stmt(q), batch: async (list) => { for (const s of list) await s.run(); return []; } };
+  return { sql, prepare: (q) => stmt(q), batch: async (list) => { return Promise.all(list.map(s => /^SELECT/i.test(s.query) ? s.all() : s.run())); } };
 }
 function assetsOf(dir) {
   const dist = join(dir, 'site', 'dist');
