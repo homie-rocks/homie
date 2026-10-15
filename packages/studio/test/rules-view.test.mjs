@@ -2966,3 +2966,32 @@ test('a stalled scene reaches fresh movement without replaying a long stationary
  assert.ok(first!==null&&first<700,`observer kept replaying stationary history for ${first} ms after resume`);
  t.diagnostic({firstMotionAfterResumeMs:first});
 });
+
+test('an idle remote source cannot pin a moving runner and its patrol',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-scene');
+ const clock=virtualTime(t);let delay=0;
+ const r=rig(L,compiled,false,0,(message,link)=>link===0&&message.t==='in'?delay:0);
+ const idle=openRoom({net:{config:cfg('Idle source'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const owner=openRoom({net:{config:cfg('Moving source'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const viewer=openRoom({net:{config:cfg('Third seat watcher'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{idle.close();owner.close();viewer.close();r.stop();});
+ await clock.wait(1000);owner.input({ax:1});
+ for(let i=0;i<90;i++){await clock.wait(16);viewer.viewTick;}
+ let monster;viewer.each('monster',e=>{monster=e.id;});const id=owner.me.id;
+ const start=viewer.get(id).pos.x,offset=start-viewer.get(monster).pos.x;delay=3000;
+ let previous=start;
+ for(let i=0;i<180;i++){
+  await clock.wait(16);const x=viewer.get(id).pos.x;
+  assert.ok(Math.abs(x-previous)<1.4,`moving source jumped ${previous} -> ${x}`);
+  assert.ok(Math.abs(x-viewer.get(monster).pos.x-offset)<.002,'the runner and patrol must retain one clock');previous=x;
+ }
+ assert.ok(previous-start>9,`idle source held fresh movement to ${previous-start} tiles in 2.88 seconds`);
+ delay=0;idle.input({ax:1});
+ const resumed=previous;let idlePrevious=viewer.get(idle.me.id).pos.x;
+ for(let i=0;i<90;i++){
+  await clock.wait(16);const x=viewer.get(id).pos.x,idleX=viewer.get(idle.me.id).pos.x;
+  assert.ok(Math.abs(x-previous)<1.4);assert.ok(Math.abs(idleX-idlePrevious)<1.4,'the returning source must also remain bounded');
+  previous=x;idlePrevious=idleX;
+ }
+ assert.ok(previous-resumed>4,'resuming the idle source cannot freeze the other runner');
+});

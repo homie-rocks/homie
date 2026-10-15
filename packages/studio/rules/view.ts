@@ -1307,6 +1307,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     for (const [id, q] of ownerHistory) {
       const u = q.samples.at(-1)!.u;
       if (id === mine?.id || u.away || latest?.ents.get(id)?.driver !== 'person') continue;
+      const previous = q.samples.at(-2)?.u;
+      // A stationary path is still known after its last report. An idle tab's
+      // delayed heartbeat must not stop every moving runner and patrol.
+      if (previous && !u.vel.x && !u.vel.y && !u.vel.z &&
+        u.pos.x === previous.pos.x && u.pos.y === previous.pos.y && u.pos.z === previous.pos.z) continue;
       // One source cannot supply an interpolated pose beyond its newest report.
       // Hold the scene there instead of advancing only the monsters.
       newestOwner = Math.min(newestOwner, q.samples.at(-1)!.t);
