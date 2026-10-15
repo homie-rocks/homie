@@ -1178,7 +1178,7 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'stripe_login', title: 'Connect the studio to Stripe',
-      description: 'Connect the studio through the official Homie Stripe App install and Copy on its API key settings page. The local clipboard watcher installs the restricted key privately into the studio Worker. Never paste keys into chat. Follow studio_job. live only when the owner says go live.',
+      description: 'Connect the studio in two resumable steps: approve the Stripe CLI link for webhook setup if this account is not already approved, then install the official Homie Stripe App → Generate → Copy on its API key settings page. The CLI installs the webhook signing secret over private Wrangler stdin; the clipboard watcher installs the restricted app key and clears the clipboard. Renewal reuses the working webhook and CLI login. Never paste keys into chat. Follow studio_job. live only when the owner says go live.',
       inputSchema: { type: 'object', properties: { ...STUDIO_ARG, live: { type: 'boolean' }, renew: { type: 'boolean' }, finish: { type: 'boolean' } } },
       annotations: { title: 'Connect Stripe', readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       run: async (a) => {

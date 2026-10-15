@@ -2,6 +2,8 @@
 name: shop
 description: Sell goods, bookings, deposits, donations and subscriptions from a studio's own Stripe account and Worker.
 compatibility: Official Homie Stripe App, the existing stripe_login tool, and Wrangler.
+metadata:
+  providers: stripe
 ---
 
 # The studio's shop

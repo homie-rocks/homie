@@ -368,10 +368,10 @@ export async function setupStatus({
     rows.push({
       id: 'stripe', label: 'Stripe', need: 'for selling', state: 'act',
       detail: [version ? `Stripe CLI ${version} is installed` : 'Stripe CLI is not installed', mcp ? `official MCP is set up for ${mcp}` : 'official MCP is not set up', 'Provider sign-in is not proof that the shop and signed events work'].join('; '),
-      unlocks: 'Approve the Homie Stripe App once. Verify a signed sandbox purchase before calling the shop ready.',
+      unlocks: 'Approve the Stripe CLI link if needed, then install Homie → Generate → Copy. Verify a signed sandbox purchase before calling the shop ready.',
       fix: {
         who: 'ai', run: 'npx --no-install homie-studio shop connect',
-        say: 'Use stripe_login to open the Homie Stripe App approval. The tool installs credentials privately; never ask for a key.',
+        say: 'Use stripe_login: approve the Stripe CLI link for webhooks if needed, then install Homie → Generate → Copy. The tool installs both secrets privately; never ask for a key in chat.',
         open: 'https://dashboard.stripe.com/register',
       },
     });

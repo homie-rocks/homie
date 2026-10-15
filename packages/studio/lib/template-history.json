@@ -3947,7 +3947,10 @@
      "## Art direction and models": "a48fff7bf0a5f2fc",
      "## Running live games (the back office)": "51ebf2ab756f6e4d",
      "## Servers and AI seats": "1ccfd549d2369a60",
-     "## Selling things (the shop)": "0df5a5fe1833c624",
+     "## Selling things (the shop)": [
+      "0df5a5fe1833c624",
+      "5ef9f082874c5c1f"
+     ],
      "## Continuing a build from the Claude app": "0d68081e924ca419",
      "## Rules": "b2234d80f6cbe71d",
      "## Telling Homie": "80b46fdd9e578db8",

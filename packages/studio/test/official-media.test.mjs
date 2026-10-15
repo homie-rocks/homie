@@ -96,12 +96,12 @@ test('shop setup uses official Stripe tooling without treating connection as pay
   assert.equal((await setupStatus(options)).rows.find(x=>x.id==='stripe'),undefined);
   writeFileSync(join(root,'shop.json'),JSON.stringify({till:'stripe',items:[]}));
   let stripe=(await setupStatus(options)).rows.find(x=>x.id==='stripe');
-  assert.equal(stripe.state,'act');assert.equal(stripe.fix.run,'stripe agent setup');
+  assert.equal(stripe.state,'act');assert.equal(stripe.fix.run,'npx --no-install homie-studio shop connect');
   assert.match(stripe.detail,/Stripe CLI 1\.45\.0/);
   writeFileSync(join(home,'.claude.json'),JSON.stringify({mcpServers:{stripe:{type:'http',url:'https://mcp.stripe.com/'}}}));
   stripe=(await setupStatus(options)).rows.find(x=>x.id==='stripe');
   assert.equal(stripe.state,'act','MCP configuration alone does not prove payment readiness');
-  assert.equal(stripe.fix.run,'npx --no-install homie-studio shop plan');
+  assert.equal(stripe.fix.run,'npx --no-install homie-studio shop connect');
   assert.match(stripe.detail,/set up for Claude Code/);
   rmSync(join(home,'.claude.json'));mkdirSync(join(home,'.codex'));
   writeFileSync(join(home,'.codex/config.toml'),'[mcp_servers.stripe]\nurl = "https://mcp.stripe.com"\n');
