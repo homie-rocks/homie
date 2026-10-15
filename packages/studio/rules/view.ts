@@ -292,7 +292,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let pressed = new Map<string, number | boolean>();
   let lastSent = '';
   let lastSendAt = 0;
-  interface OutgoingEntry { t: number; row: number[]; compactBytes?: number; extraBytes?: number }
+  interface OutgoingEntry { t: number; row: number[]; compactBytes?: number; extraBytes?: number; expanded?: boolean }
   let entries: OutgoingEntry[] = [];
   let inputSequence = 0;
   let controlChanges: number[][] = [];
@@ -688,7 +688,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const recoveryTicks = missing ? t - missing.t + 2 * sendEvery : 0;
     const historyCap = myKind()?.validatedOwner ? 256 : 64;
     const windowTicks = Math.min(historyCap, Math.max(4, recoveryTicks, Math.ceil((2 * authorityRtt() + 250) / period + targetLead())));
-    sentHistory = sentHistory.filter(e => e.t >= t - windowTicks).slice(-historyCap);
+    let kept = 0;
+    for (const e of sentHistory) if (e.t >= t - windowTicks) sentHistory[kept++] = e;
+    sentHistory.length = kept;
+    if (kept > historyCap) sentHistory.splice(0, kept - historyCap);
     const first = Math.min(k, sentHistory[0]?.t ?? k);
     // Repeated history must fit the relay's existing byte cap, including its
     // envelope and snapshot acknowledgement. Always carry the newest controls;
@@ -696,34 +699,37 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // Sub-tick samples are optional metadata: the row already contains the held
     // duration integrated by heldMean. Never truncate its values or sequence.
     const budget = LIMITS.in - 128;
-    const selected = new Map<number, StepEntry>();
+    const selected: OutgoingEntry[] = [];
     let bytes = 2;
     const newest = sentHistory.at(-1);
-    const candidates = [...(newest ? [newest] : []),
-      ...sentHistory.filter(e => e !== newest && !applications.has(e.row[marker + 1])),
-      ...sentHistory.filter(e => e !== newest && applications.has(e.row[marker + 1])).reverse()];
-    for (const e of candidates) {
-      const row = [e.t - first, ...e.row.slice(0, marker + 2), 0];
-      // A report is immutable after queuing; redundancy changes only its tick
-      // offset. Measure its payload once, not on every retransmission.
+    const select = (e: OutgoingEntry): void => {
+      // Do not allocate rows for reports the byte budget will discard. The
+      // old path built both compact and expanded copies on every resend.
       if (e.compactBytes === undefined) {
         const prefixBytes = JSON.stringify(e.row.slice(0, marker + 2)).length;
         e.compactBytes = prefixBytes + 3;
         e.extraBytes = JSON.stringify(e.row).length - prefixBytes - 2;
       }
-      const size = e.compactBytes + String(e.t - first).length + (selected.size ? 1 : 0);
-      if (bytes + size > budget) continue;
-      selected.set(e.t, row); bytes += size;
+      const size = e.compactBytes + String(e.t - first).length + (selected.length ? 1 : 0);
+      if (bytes + size > budget) return;
+      e.expanded = false; selected.push(e); bytes += size;
+    };
+    if (newest) select(newest);
+    for (const e of sentHistory) if (e !== newest && !applications.has(e.row[marker + 1])) select(e);
+    for (let i = sentHistory.length - 1; i >= 0; i--) {
+      const e = sentHistory[i];
+      if (e !== newest && applications.has(e.row[marker + 1])) select(e);
     }
-    // Use spare bytes for sample metadata only after reserving control history.
-    for (const e of candidates) {
-      const compact = selected.get(e.t);
-      if (!compact) continue;
-      const row = [e.t - first, ...e.row];
-      const extra = e.extraBytes!;
-      if (bytes + extra <= budget) { selected.set(e.t, row); bytes += extra; }
-    }
-    const rows = [...selected].sort((a, b) => a[0] - b[0]).map(([, row]) => row);
+    // Preserve the same priority for optional sub-tick metadata.
+    for (const e of selected) if (bytes + e.extraBytes! <= budget) { e.expanded = true; bytes += e.extraBytes!; }
+    selected.sort((a, b) => a.t - b.t);
+    const rows: StepEntry[] = selected.map(e => {
+      const length = e.expanded ? e.row.length : marker + 3;
+      const row: StepEntry = new Array(length + 1);
+      row[0] = e.t - first;
+      for (let i = 0; i < length; i++) row[i + 1] = !e.expanded && i === marker + 2 ? 0 : e.row[i];
+      return row;
+    });
     entries = [];
     if (net.steps(epoch, first, rows, mine.r)) lastSendAt = now;
   }
@@ -789,7 +795,25 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const before = latest;
     if (before && before.e === f.e && f.k <= before.k) return;
     latest = f;
-    for (const [id, buffered] of remoteOwners) if (buffered.epoch !== f.e || !f.ents.has(id)) remoteOwners.delete(id);
+    if (before && before.e !== f.e) { sceneHistory.length = 0; sceneCursor = null; }
+    for (const [id, q] of ownerHistory) if (q.epoch !== f.e || !f.ents.has(id)) ownerHistory.delete(id);
+    for (const [id, u] of f.ents) {
+      if (!kindOf.get(u.kind)?.validatedOwner || u.driver !== 'person' || u.ownerTick === undefined || u.ownerTick < 0) continue;
+      let q = ownerHistory.get(id);
+      if (!q || q.epoch !== f.e || q.r !== u.r) { q={epoch:f.e,r:u.r,placedAt:f.k,samples:[],...(q?.epoch===f.e?{previous:q}:{})};ownerHistory.set(id,q); }
+      if (sceneCursor !== null && sceneCursor >= q.placedAt) q.previous = undefined;
+      // Retain no more placement history than the bounded scene history can use.
+      let oldestRevision = q;
+      const oldestTick = sceneHistory[0]?.k ?? f.k;
+      while (oldestRevision.previous && oldestRevision.placedAt > oldestTick) oldestRevision = oldestRevision.previous;
+      oldestRevision.previous = undefined;
+      if (!q.samples.length || u.ownerTick > q.samples.at(-1)!.t) q.samples.push({t:u.ownerTick,u});
+      while (q.samples.length > 2 && sceneCursor !== null && q.samples[1].t < sceneCursor - 2) q.samples.shift();
+      if (q.samples.length > 512) q.samples.shift();
+    }
+    sceneHistory.push(s);
+    if (sceneHistory.length > 512) sceneHistory.shift();
+    sceneCached = null;
     if (before && before.e !== f.e) held2.length = 0;
     held2.push(f); if (held2.length > 2 * tickHz) held2.shift();
     if (!before || before.e !== f.e) collisionHistory = [];
@@ -979,7 +1003,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   /** Effects wait for their authoritative snapshot and the body's drawn tick, including its catch-up path. */
   function fire(): void {
     if (!fxQueue.length) return;
-    const s = net.sample();
+    const s = sceneSample();
     const drawn = s ? lerp(s.a.k, s.b.k, s.alpha) : latest ? latest.k : 0;
     for (let i = 0; i < fxQueue.length;) {
       const x = fxQueue[i];
@@ -1259,49 +1283,64 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     }
     return result;
   }
-  // Owner reports have their own clock. Keep their cadence when several arrive
-  // together, rather than interpreting a delivery burst as one server tick.
-  const remoteOwners = new Map<string, {epoch:number; r:number; last:number; offset:number; delay:number; arrival:number; samples:{t:number; u:Unpacked}[]; shown:Vec3; at:number}>();
-  function ownerRemote(u: Unpacked, f: Frame): Entity {
-    // This stream has its own jitter buffer. Feeding it the shared scene's
-    // delayed sample would buffer twice and put runners behind moving hazards.
-    // A placement still waits for the shared scene's revision boundary.
-    const fresh = latest?.ents.get(u.id);
-    if (latest && latest.e === f.e && fresh?.r === u.r && (fresh.ownerTick ?? -1) >= (u.ownerTick ?? -1)) { u = fresh; f = latest; }
-    const now = clock(), stamp = u.ownerTick ?? f.k;
-    let q = remoteOwners.get(u.id);
-    if (!q || q.r !== u.r || q.epoch !== f.e) {
-      q = {epoch:f.e,r:u.r,last:stamp,offset:f.at-stamp*period,delay:period,arrival:f.at,samples:[{t:stamp,u}],shown:u.pos,at:now};
-      remoteOwners.set(u.id,q);
-    } else if (stamp > q.last) {
-      const gap = f.at-q.arrival;
-      q.delay += (Math.max(period,Math.min(250,gap))-q.delay)*.1;
-      // The snapshot receipt maps its server-clock sample and owner tick to
-      // this clock. Do not add time spent waiting in the shared render buffer.
-      // The minimum observed offset removes transport jitter. Clock drift moves
-      // it slowly; an outage cannot move the playback cursor by seconds.
-      const offset = f.at-stamp*period;
-      q.offset = offset < q.offset ? offset : q.offset + Math.min(1,offset-q.offset)*.01;
-      q.samples.push({t:stamp,u}); q.last=stamp; q.arrival=f.at;
-      if(q.samples.length>64)q.samples.shift();
+  // Accepted owner ticks and server ticks describe the same simulation clock.
+  // Receipt time only decides how much history is available, never where one
+  // body stands relative to another body's hazards.
+  const sceneHistory: Snapshot<unknown>[] = [];
+  interface OwnerHistory { epoch:number; r:number; placedAt:number; samples:{t:number; u:Unpacked}[]; previous?:OwnerHistory }
+  const ownerHistory = new Map<string, OwnerHistory>();
+  let sceneCursor: number | null = null, sceneAt = 0, sceneFrame: number | null = null;
+  let sceneCached: ReturnType<typeof net.sample> = null;
+  function sceneSample(raw = net.sample()): ReturnType<typeof net.sample> {
+    if (!raw || raw.renderT === undefined || !schema.kinds.some(k => k.validatedOwner)) return raw;
+    const now = clock();
+    const frame = typeof document === 'undefined' ? now : Number(document.timeline?.currentTime ?? now);
+    if (sceneCached && sceneFrame === frame) return sceneCached;
+    sceneFrame = frame;
+    let target = raw.a.k + (raw.b.k - raw.a.k) * raw.alpha;
+    let maxStep = Infinity, newestOwner = Infinity;
+    for (const [id, q] of ownerHistory) {
+      const u = q.samples.at(-1)!.u, kind = kindOf.get(u.kind)!;
+      if (id === mine?.id || u.away || latest?.ents.get(id)?.driver !== 'person') continue;
+      // One source cannot supply an interpolated pose beyond its newest report.
+      // Hold the scene there instead of advancing only the monsters.
+      newestOwner = Math.min(newestOwner, q.samples.at(-1)!.t);
+      maxStep = Math.min(maxStep, kind.radius * 2.8 / Math.max(kind.maxSpeed, kind.radius * 4) * tickHz);
     }
-    const at = (now-q.offset-q.delay)/period;
-    while(q.samples.length>2 && q.samples[1].t<=at)q.samples.shift();
-    const a=q.samples[0], b=q.samples[1] ?? a;
-    const alpha=b.t>a.t?Math.max(0,Math.min(1,(at-a.t)/(b.t-a.t))):1;
-    const target=vec3(blendPosition(a.u.pos,b.u.pos,alpha,map.wrap),dims);
-    const dt=Math.max(0,Math.min(.05,(now-q.at)/1000));
-    const d=distance(q.shown,target), kind=kindOf.get(u.kind)!;
-    const speed=Math.max(Math.hypot(a.u.vel.x,a.u.vel.y,a.u.vel.z),Math.hypot(b.u.vel.x,b.u.vel.y,b.u.vel.z),kind.radius*4);
-    const limit=Math.min(kind.radius*2.8,speed*dt*1.5);
-    const pos=d>limit && d>0?vec3(blendPosition(q.shown,target,limit/d,map.wrap),dims):target;
-    q.shown=pos; q.at=now;
-    return Object.freeze({...entityOf(u),pos,vel:alpha<1?a.u.vel:b.u.vel,heading:blendHeading(a.u.heading,b.u.heading,alpha,dims)});
+    // The shared buffer supplies an age, while accepted input ticks supply the
+    // simulation time. Server callbacks may pause without pausing owner input.
+    if (Number.isFinite(newestOwner) && latest) target = newestOwner - Math.max(0, latest.k - target);
+    if (sceneCursor === null || !sceneHistory.length || raw.b.e !== sceneHistory[0].e) sceneCursor = target;
+    else {
+      const ticks = Math.max(0, Math.min(.05, (now - sceneAt) / 1000)) * tickHz * 1.5;
+      sceneCursor = Math.max(sceneCursor, Math.min(target, sceneCursor + Math.min(ticks, maxStep)));
+    }
+    sceneAt = now;
+    while (sceneHistory.length > 2 && sceneHistory[1].k <= sceneCursor) sceneHistory.shift();
+    const a = sceneHistory[0] ?? raw.a, b = sceneHistory[1] ?? a;
+    const alpha = b.k > a.k ? Math.max(0, Math.min(1, (sceneCursor - a.k) / (b.k - a.k))) : 1;
+    return sceneCached = {...raw, a, b, alpha, renderT:a.st+(b.st-a.st)*alpha};
+  }
+  function sceneTick(s: ReturnType<typeof net.sample>): number {
+    return s === sceneCached && sceneCursor !== null ? sceneCursor : s ? s.a.k + (s.b.k-s.a.k)*s.alpha : latest?.k ?? 0;
+  }
+  function ownerDrawn(u: Unpacked, epoch: number, tick: number): Entity {
+    let q = ownerHistory.get(u.id);
+    // A future placement must not discard the reports still being drawn from
+    // the old revision. Switch histories at the scene boundary, not receipt.
+    while (q && q.epoch === epoch && q.r !== u.r) q = q.previous;
+    if (!q || q.epoch !== epoch || q.r !== u.r) return entityOf(u);
+    // Read report time, not the server tick at which that report arrived.
+    let a=q.samples[0], b=a;
+    for (const sample of q.samples) { b=sample; if (sample.t>=tick) break; a=sample; }
+    const alpha=b.t>a.t?Math.max(0,Math.min(1,(tick-a.t)/(b.t-a.t))):1;
+    return Object.freeze({...entityOf(u),pos:vec3(blendPosition(a.u.pos,b.u.pos,alpha,map.wrap),dims),
+      vel:alpha<1?a.u.vel:b.u.vel,heading:blendHeading(a.u.heading,b.u.heading,alpha,dims)});
   }
   const drawnFrame = new Map<string, Entity | null>();
   let drawnAt: number | null = null;
   let drawnA: unknown = null, drawnB: unknown = null;
-  function drawn(id: string, s = net.sample()): Entity | null {
+  function drawn(id: string, s = sceneSample()): Entity | null {
     if (solo) return solo.get(id);
     if (mine && id === mine.id) return meNow(true);
     const at = typeof document === 'undefined' ? null : document.timeline?.currentTime;
@@ -1323,12 +1362,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // body must reach that snapshot's time before showing its new revision;
     // otherwise the respawn precedes the encounter in the interpolated scene.
     if (ea.r !== eb.r || a?.e !== b?.e || !s) {
-      if (kind?.validatedOwner && s && s.alpha < 1 && a && a.e === b?.e && ea.driver === 'person') return ownerRemote(ea,a);
-      remoteOwners.delete(id);
+      if (kind?.validatedOwner && s && s.alpha < 1 && a && a.e === b?.e && ea.driver === 'person') return ownerDrawn(ea,a.e,sceneTick(s));
       return entityOf(eb);
     }
-    if (kind?.validatedOwner && b && eb.driver === 'person') return ownerRemote(eb,b);
     const t = s.alpha;
+    if (kind?.validatedOwner && eb.driver === 'person' && a && b) return ownerDrawn(t < 1 ? ea : eb, b.e, sceneTick(s));
     // Static pickups and scenery need no new vectors or wrappers for every HUD,
     // scene and probe traversal. Fields still follow the sampled snapshot.
     if (ea.grounded === eb.grounded && ['pos','vel','heading'].every(key => {
@@ -1342,7 +1380,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   function each(kind: string, fn: (e: Entity) => void): void {
     pump();
     if (solo) { solo.each(kind, fn); return; }
-    const s = net.sample();
+    const s = sceneSample();
     const a = s ? frameOf(s.a) : latest;
     const b = s ? frameOf(s.b) : latest;
     const ids = new Set<string>();
@@ -1414,7 +1452,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const onShow = (): void => { if (typeof document !== 'undefined' && !document.hidden) { if(myKind()?.validatedOwner) { base={tick:stepped,at:clock()}; heldTrack.clear(); } else { base = null; if (latest) rebase(latest.k); } } };
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onShow);
 
-  function viewTickNow(): number { const s=net.sample();const a=s?frameOf(s.a):latest,b=s?frameOf(s.b):latest;return a&&b?a.k+(b.k-a.k)*(s?.alpha??0):latest?.k??0; }
+  function viewTickNow(): number { return sceneTick(sceneSample()); }
   /*
    * WHERE A BODY WAS, OR WILL BE JUDGED TO BE (0.46.5). The server judges a rewound ray against poses it kept by
    * tick. A browser holds the snapshots it has received: a pose at a tick between two of them is the point between;
@@ -1454,7 +1492,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const viewRay = (from: unknown, direction: unknown, max: number, options?: RayOptions, all=false) => rayQuery(mapAt(latest?.k??0),viewTargets(atTickOf(options)),dims,from,direction,max,options,mine?.id,all);
   return {
     get confirmedTick() {
-      const s=net.sample(), f=s?frameOf(s.alpha>=1?s.b:s.a):latest;
+      const raw=net.sample(), source=raw?frameOf(raw.alpha>=1?raw.b:raw.a):latest;
+      const sourceOwn=mine&&source?.ents.get(mine.id);
+      if (!sourceOwn || sourceOwn.r!==mine!.r || source?.e!==epoch) return -1;
+      const s=sceneSample(raw), f=s?frameOf(s.alpha>=1?s.b:s.a):latest;
       const own = mine && f?.ents.get(mine.id);
       return own && own.r === mine!.r && f?.e === epoch ? own.ownerTick ?? -1 : -1;
     },

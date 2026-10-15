@@ -42,11 +42,15 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-10,-10],max:[10,10]},boxes:[{min:[0,1],max:[1,2]}]}));
       writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';export default defineRules({contract:2,space:{dims:2},move,map:'./map',entities:{runner:{player:true,input:{ax:f.held()},body:{shape:'box',radius:.5,maxSpeed:60,move:'validated-owner'}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:1.6,y:1.2,z:0}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){c.substeps(b,60,()=>{if(i.ax){b.pos={x:1.35,y:.5,z:0};b.grounded=true;}});}});`);
-    } else if (runaway === 'validated-owner' || runaway === 'validated-owner-substeps') {
+    } else if (runaway === 'validated-owner' || runaway === 'validated-owner-substeps' || runaway === 'validated-scene') {
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-100,-100],max:[100,100]},boxes:[{min:[-100,1],max:[100,3]}]}));
       writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
 export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{respawn:{},knock:{},point:{}}},entities:{runner:{player:true,input:{ax:f.held()},fields:{score:f.u16({score:true})},motion:{push:f.u8()},body:{shape:'box',radius:.5,maxSpeed:10,move:'validated-owner'},commands:{respawn(w,s){w.place(s,{x:0,y:.5},{vel:{x:0,y:0}});},knock(w,s){s.motion.push=4;},point(w,s){s.score++;}}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:0,y:.5,z:0}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:b.motion.push?8:i.ax*4,y:0,z:0};if(b.motion.push)b.motion.push--;c.map.sweep(b,{x:b.vel.x*c.dt,y:0,z:0});}});`);
+      if (runaway === 'validated-scene') {
+        writeFileSync(file,readFileSync(file,'utf8').replace('entities:{runner:',"entities:{monster:{body:{shape:'box',radius:.5,maxSpeed:10}},runner:").replace('room:{bots:',"room:{start(w){w.spawn('monster',{x:0,y:-5,z:0});},bots:"));
+        const m=join(dir,'src/move.ts');writeFileSync(m,readFileSync(m,'utf8').replace('defineMove({runner',"defineMove({monster(b,i,c){b.vel={x:4,y:0,z:0};b.pos={x:b.pos.x+4*c.dt,y:-5,z:0};},runner"));
+      }
       if (runaway === 'validated-owner-substeps') writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax*4,y:0,z:0};c.substeps(b,60,s=>c.map.sweep(b,{x:b.vel.x*s.dt,y:0,z:0}));}});`);
     } else if (runaway === 'substeps') {
       writeFileSync(join(dir,'src/view.ts'), "import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.input({ax:1});");
@@ -2873,7 +2877,7 @@ test('committing a forecast preserves physics across control changes and isolate
  assert.ok(Math.abs(a.me.pos.x-r.host.core.listeners()[0].pos.x)<.01,'committed forecasts agree with separately validated server physics');
  });
 
-test('remote owner buffering consumes fresh reports without waiting in the shared scene buffer twice',async t=>{
+test('remote owners stay on the shared scene timeline when newer reports arrive',async t=>{
  const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
  const clock=virtualTime(t),r=rig(L,compiled),viewer=openRoom({net:{config:cfg('One buffer'),WebSocketImpl:r.socket(),post:null}});
  await clock.wait(300);const owner=openRoom({net:{config:cfg('Fresh reports'),WebSocketImpl:r.socket(),post:null}});
@@ -2881,7 +2885,7 @@ test('remote owner buffering consumes fresh reports without waiting in the share
  const id=owner.me.id,scene=viewer.net.sample();viewer.net.sample=()=>scene;
  const start=viewer.get(id).pos.x;owner.input({ax:1});
  for(let i=0;i<90;i++){await clock.wait(16);viewer.get(id);}
- assert.ok(viewer.get(id).pos.x>start+3,'owner reports use their own buffer, even while the shared sample lags');
+ assert.equal(viewer.get(id).pos.x,start,'new reports cannot advance the runner beyond the scene containing its hazards');
 });
 
 test('owner confirmations ignore a sampled scene from before the current placement',async t=>{
@@ -2889,7 +2893,54 @@ test('owner confirmations ignore a sampled scene from before the current placeme
  const clock=virtualTime(t),r=rig(L,compiled),a=openRoom({net:{config:cfg('Current acknowledgement'),WebSocketImpl:r.socket(),post:null}});
  t.after(()=>{a.close();r.stop();});await clock.wait(1500);
  assert.ok(a.confirmedTick>0);const sample=a.net.sample.bind(a.net),before=sample();
- a.command('respawn');await clock.wait(300);a.net.sample=()=>before;
+ a.command('respawn');for(let i=0;i<20;i++){await clock.wait(16);a.viewTick;}a.net.sample=()=>before;
  assert.equal(a.confirmedTick,-1,'the old revision cannot acknowledge a new provisional contact');
  a.net.sample=sample;assert.ok(a.confirmedTick>0);
+});
+
+
+test('runner and monster interpolation use one fraction through a burst of reports',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-scene');
+ const clock=virtualTime(t),r=rig(L,compiled),viewer=openRoom({net:{config:cfg('Scene viewer'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const owner=openRoom({net:{config:cfg('Scene owner'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{viewer.close();owner.close();r.stop();});await clock.wait(1000);owner.input({ax:1});await clock.wait(300);
+ let monster;viewer.each('monster',e=>{monster=e.id;});assert.ok(monster);
+ const id=owner.me.id,sample=viewer.net.sample.bind(viewer.net);
+ const a=viewer.net.latest();await clock.wait(300);const b=viewer.net.latest();await clock.wait(200);
+ const poses=alpha=>{viewer.net.sample=()=>({a,b,alpha});return [viewer.get(id).pos.x,viewer.get(monster).pos.x];};
+ const lo=poses(0),hi=poses(1);assert.ok(hi[0]>lo[0]&&hi[1]>lo[1]);
+ // Fresh reports keep arriving while the chosen scene stays between a and b.
+ for(const alpha of [.1,.3,.7,.9]) {await clock.wait(100);const p=poses(alpha);for(let i=0;i<2;i++)assert.ok(Math.abs(p[i]-(lo[i]+(hi[i]-lo[i])*alpha))<1e-5,`body ${i} at ${alpha}: ${p[i]} expected ${lo[i]+(hi[i]-lo[i])*alpha}`);}
+ viewer.net.sample=sample;
+});
+
+test('accepted runner ticks stay aligned with a patrol when uplink delay changes',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-scene');
+ const clock=virtualTime(t);let delay=0;
+ const r=rig(L,compiled,false,0,(message,link)=>link===1&&message.t==='in'?delay:0);
+ const viewer=openRoom({net:{config:cfg('Shared clock viewer'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const owner=openRoom({net:{config:cfg('Delayed source'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{viewer.close();owner.close();r.stop();});await clock.wait(1000);owner.input({ax:1});
+ let monster;viewer.each('monster',e=>{monster=e.id;});const id=owner.me.id;
+ for(let i=0;i<120;i++){await clock.wait(16);viewer.get(id);viewer.get(monster);}
+ const offset=viewer.get(id).pos.x-viewer.get(monster).pos.x;
+ for(const ms of [80,150,300,0]){delay=ms;for(let i=0;i<120;i++){
+  await clock.wait(16);const x=viewer.get(id).pos.x,m=viewer.get(monster).pos.x;
+  assert.ok(Math.abs(x-m-offset)<.002,`delay ${ms}: runner/patrol separation changed from ${offset} to ${x-m}`);
+ }}
+});
+
+
+test('receiving a placement preserves the moving runner history before its scene boundary',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),r=rig(L,compiled),viewer=openRoom({net:{config:cfg('Old revision viewer'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const owner=openRoom({net:{config:cfg('Moving placement'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{viewer.close();owner.close();r.stop();});await clock.wait(1000);owner.input({ax:1});await clock.wait(300);
+ const a=viewer.net.latest();await clock.wait(100);const b=viewer.net.latest();await clock.wait(100);
+ viewer.net.sample=()=>({a,b,alpha:.37});const id=owner.me.id,x=viewer.get(id).pos.x;
+ owner.command('respawn');await clock.wait(300);
+ assert.equal(viewer.get(id).pos.x,x,'a newer placement cannot replace the older trajectory with a snapshot endpoint');
+ const c=viewer.net.latest(),tick=b.k+(c.k-b.k)*.05,oldTick=a.k+(b.k-a.k)*.37;
+ viewer.net.sample=()=>({a:b,b:c,alpha:.05});
+ assert.ok(Math.abs(viewer.get(id).pos.x-(x+(tick-oldTick)*.2))<.002,'the last interval before the cut still samples the old input trajectory');
 });
