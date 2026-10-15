@@ -143,6 +143,7 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
 .card { position: fixed; right: 12px; bottom: 12px; z-index: 4; max-width: 300px; padding: 10px 12px; border-radius: 12px; background: rgba(8,12,22,.82); border: 1px solid rgba(255,255,255,.14); color: #e8ecf5; font: 13px/1.35 ui-sans-serif, system-ui, sans-serif; }
 .card h2 { margin: 0 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--hot); }
 .card ol { margin: 0; padding-left: 18px; }
+:root{--homie-join-inset-top:0px;--homie-join-inset-right:0px;--homie-join-inset-bottom:0px;--homie-join-inset-left:0px;--homie-join-x:0px;--homie-join-y:0px;--homie-join-width:0px;--homie-join-height:0px}
 .join { box-sizing:border-box;width:480px;max-width:calc(100vw - 32px);max-height:280px;overflow:hidden; position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 6; display: flex; gap: 14px; align-items: center; padding: 12px 14px; border-radius: 16px; background: rgba(8,12,22,.78); border: 1px solid rgba(255,255,255,.14); color: #eef1f8; font: 600 clamp(14px, 1.6vmin, 22px)/1.3 ui-sans-serif, system-ui, sans-serif; pointer-events: none; }
 .join[hidden]{display:none}
 .join.join-top-left { top: max(16px, env(safe-area-inset-top)); left: max(16px, env(safe-area-inset-left)); right: auto; bottom: auto; }
@@ -250,7 +251,7 @@ ${arrive.html}
 <div class="vote" data-vote role="dialog" aria-label="How strong should the AI be?" data-keep-focus hidden></div>
 <div class="card" data-results hidden></div>
 <div class="card" data-screen hidden></div>
-${joinCard}<script>${JOIN_AREA_SHELL_JS}</script>${share}${shopControl ? '<div class="shop-control"><button class="pill" type="button" data-shop-open data-shop-control>Shop</button></div>' : ''}
+${joinCard}${joinCard ? `<script>${JOIN_AREA_SHELL_JS}</script>` : ''}${share}${shopControl ? '<div class="shop-control"><button class="pill" type="button" data-shop-open data-shop-control>Shop</button></div>' : ''}
 <script>window.__HOMIE_PLAY=${JSON.stringify(boot).replace(/</g, '\\u003c')};</script>
 <script>window.__HOMIE_CHAT=${JSON.stringify(chatBoot(g, { surface: screen ? 'tv' : 'play', owner, acct, member })).replace(/</g, '\\u003c')};</script>
 <script>${CHAT_JS}</script>
