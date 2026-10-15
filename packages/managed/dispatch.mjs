@@ -9,14 +9,18 @@ function worker(env, script, tick=false, limits) {
   });
 }
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url=new URL(request.url);
     if(url.pathname.startsWith('/__managed/'))return new Response('Not found',{status:404});
-    let snapshot;try{snapshot=await routeSnapshot(env);}catch{return new Response('Routing unavailable',{status:503});}
+    const routeStart=performance.now();let snapshot;try{snapshot=await routeSnapshot(env,Date.now,ctx);}catch{return new Response('Routing unavailable',{status:503});}
     const route=resolveRoute(snapshot,url.hostname,url.pathname);
     if(!route)return new Response('Not found',{status:404});
     if(route.prefix!=='/')url.pathname=url.pathname.slice(route.prefix.length)||'/';
-    return worker(env,route.script,false,route.limits).fetch(new Request(url,request));
+    const routeMs=performance.now()-routeStart;
+    const response=await worker(env,route.script,false,route.limits).fetch(new Request(url,request));
+    if(response.status===101)return response;
+    const headers=new Headers(response.headers);headers.set('x-hm-route-version',String(snapshot.version));headers.set('x-hm-route-ms',routeMs.toFixed(2));
+    return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
   },
   async scheduled(event,env) {
     const scripts=await registry(env).scheduled();

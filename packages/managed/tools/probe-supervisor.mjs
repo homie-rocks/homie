@@ -1,13 +1,16 @@
 import {readFileSync,writeFileSync} from 'node:fs';
 import WebSocket from 'ws';
 const [dir,out]=process.argv.slice(2),base='https://hm-test-dispatch.ryan-d2f.workers.dev';
+const runId=Date.now().toString(36);
 const secret=readFileSync(dir+'/operator-token','utf8');
 const evidence={started:new Date().toISOString(),sockets:[]},sockets=[];
 const save=()=>writeFileSync(out,JSON.stringify(evidence,null,2)+'\n');
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-async function get(path){const at=Date.now();try{const r=await fetch(base+path,{signal:AbortSignal.timeout(40000)});return {at,done:Date.now(),status:r.status,body:await r.text(),ray:r.headers.get('cf-ray')};}catch(e){return {at,done:Date.now(),error:String(e)}}}
+async function get(path){if(path.startsWith('/probe/owner/')&&!path.includes('object='))path+='?object='+runId;const at=Date.now();try{const r=await fetch(base+path,{signal:AbortSignal.timeout(40000)});return {at,done:Date.now(),status:r.status,body:r.status>=500?'Upstream error (body omitted)':await r.text(),ray:r.headers.get('cf-ray')};}catch(e){return {at,done:Date.now(),error:String(e)}}}
 async function operator(path,body){const at=Date.now();const r=await fetch(base+'/__operator/'+path,{method:path==='route'?'PUT':'POST',headers:{authorization:'Bearer '+secret,'content-type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw Error('Operator '+r.status);return {at,done:Date.now(),status:r.status};}
 async function socket(path,message){
+ if(path.startsWith('/probe/owner/')&&!path.includes('object='))path+='?object='+runId;
+ if(path.startsWith('/other/probe/owner/'))path+='?object='+runId;
  const row={path};evidence.sockets.push(row);const ws=new WebSocket(base.replace('https:','wss:')+path);sockets.push(ws);
  ws.on('close',code=>{row.closed=Date.now();row.code=code;save()});ws.on('error',e=>{row.error=String(e);save()});
  await new Promise((yes,no)=>{const timer=setTimeout(()=>no(Error('Socket open timeout')),10000);ws.once('open',()=>{row.opened=Date.now();clearTimeout(timer);yes()});ws.once('error',no)});
@@ -15,9 +18,16 @@ async function socket(path,message){
  return ws;
 }
 try{
+ await operator('kill',{tenant:'hm-test-inlet'});await operator('kill',{tenant:'hm-test-other'});await sleep(2500);
+ await operator('route',{tenant:'hm-test-other',routes:[{hostname:new URL(base).hostname,prefix:'/other'}]});
  await operator('route',{tenant:'hm-test-inlet',routes:[{hostname:new URL(base).hostname,prefix:'/'}]});await sleep(2200);
  const hello=JSON.stringify({t:'hello',v:1,rev:8,name:'Supervisor probe',want:'play',device:'desk',canHost:true});
- await socket('/probe/owner/ws','stored-counter');await socket('/probe/owner/ordinary','ordinary-echo');
+ await socket('/probe/owner/ws','stored-counter');
+ const hib=await socket('/probe/owner/ws?object=idle-'+runId,'idle-counter');
+ evidence.idleBefore=await get('/probe/owner/status?object=idle-'+runId);
+ await sleep(16000);
+ evidence.idleAfter=await get('/probe/owner/status?object=idle-'+runId);
+ evidence.idleEcho=await new Promise(resolve=>{const t=setTimeout(()=>resolve(false),2000);hib.once('message',()=>{clearTimeout(t);resolve(true)});hib.send('after-idle')});await socket('/probe/owner/ordinary','ordinary-echo');
  await socket('/race/__net?room=kill-r4',hello);
  const other=await socket('/other/probe/owner/ws','other-kept');
  evidence.toolkit=[];for(const p of ['/race/api/lobby','/probe/gate/status','/probe/concentrator/status'])evidence.toolkit.push(await get(p));
@@ -27,7 +37,7 @@ try{
  evidence.route=[];
  for(let i=0;i<30;i++){const r=await get('/probe/echo');evidence.route.push(r);save();if(r.status===404)break;await sleep(100)}
  await sleep(5500);
- evidence.other=await get('/other/probe/owner/status');
+ evidence.other=await get('/other/probe/owner/status?object='+runId);
  evidence.otherEcho=await new Promise(resolve=>{const t=setTimeout(()=>resolve(false),2000);other.once('message',()=>{clearTimeout(t);resolve(true)});other.send('still-alive')});
  evidence.closedWithinWindow=evidence.sockets.map(r=>({path:r.path,ms:r.closed?r.closed-evidence.kill.at:null}));
  await operator('route',{tenant:'hm-test-inlet',routes:[{hostname:new URL(base).hostname,prefix:'/'}]});await sleep(2200);

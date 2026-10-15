@@ -10,12 +10,12 @@ let raw='';tail.stdout.on('data',b=>raw+=b);tail.stderr.on('data',()=>{});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 try{
  await sleep(4000);
- for(const kind of ['worker-fetch','owner/fetch'])for(const path of ['/__operator/routes','/__operator/alerts','/__operator/route','/__operator/kill']){
-  const target=base+path;const at=Date.now();const r=await fetch(base+'/probe/'+kind+'?target='+encodeURIComponent(target));
-  evidence.probes.push({kind,target:path,status:r.status,body:await r.text(),ms:Date.now()-at,ray:r.headers.get('cf-ray')});
+ for(const kind of ['worker-fetch','owner/fetch'])for(const [method,path] of [['GET','/__operator/routes'],['GET','/__operator/alerts'],['PUT','/__operator/route'],['POST','/__operator/kill']]){
+  const target=base+path;const at=Date.now();const r=await fetch(base+'/probe/'+kind+'?target='+encodeURIComponent(target),{method,...(method!=='GET'?{body:JSON.stringify({tenant:'hm-test-other',routes:[]})}:{})});
+  evidence.probes.push({kind,method,target:path,status:r.status,body:await r.text(),ms:Date.now()-at,ray:r.headers.get('cf-ray')});
  }
  for(const kind of ['worker-fetch','owner/fetch']){
-  const r=await fetch(base+'/probe/'+kind+'?target='+encodeURIComponent(base+'/other/probe/echo'));
+  const r=await fetch(base+'/probe/'+kind+'?target='+encodeURIComponent(base+'/other/probe/echo'),{method:'POST',body:'x'.repeat(1024)});
   evidence.probes.push({kind,target:'other-tenant-echo',status:r.status,body:await r.text()});
  }
  await sleep(5000);

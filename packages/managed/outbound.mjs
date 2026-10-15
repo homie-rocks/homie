@@ -18,7 +18,8 @@ export default {
     // Do not copy URLs, headers, console payloads or exceptions (may contain secrets).
     for(const event of events)console.log(JSON.stringify({tenant:event.scriptName,event:'tenant-trace',outcome:event.outcome,
       entrypoint:event.entrypoint??null,eventType:event.event?.type??(event.event?.request?'fetch':event.event?.scheduledTime?'scheduled':'other'),
-      logs:event.logs?.length??0,exceptions:event.exceptions?.length??0}));
+      logs:event.logs?.length??0,exceptions:event.exceptions?.length??0,exceptionNames:(event.exceptions??[]).map(e=>e.name),
+      supervisorError:(event.exceptions??[]).map(e=>e.message).filter(m=>/DurableObjectState|Illegal invocation|Stop |Proxy|proxy|parameter 1/.test(m)).map(m=>m.slice(0,240))}));
   },
   async fetch(request,env) {
     if(typeof env.tenant!=='string'||!env.tenant||env.tenant.length>255)return new Response('Missing tenant',{status:403});

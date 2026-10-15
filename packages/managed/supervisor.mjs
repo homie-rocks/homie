@@ -6,7 +6,7 @@ const TTL=1000;
 async function allowed(control,force=false,strong=false){
  const start=Date.now(),cached=leases.get(control);
  if(!force&&cached&&start<cached.expires)return !cached.stopped;
- const state=await control.status(undefined,strong);
+ let timer;let state;try{state=await Promise.race([control.status(undefined,strong),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Stop read timed out')),TTL);})]);}finally{clearTimeout(timer);}
  if(Date.now()>=start+TTL)throw Error('Stop lease expired in transit');
  leases.set(control,{...state,expires:start+TTL});return !state.stopped;
 }
@@ -34,22 +34,17 @@ export function supervise(Owner,{tenant,binding,className}){
   async #call(method,args){
    // Registration is durable before any owner constructor or callback executes.
    if(!this.#registered){
-    const state=await this.#env.HOMIE_STOP.status({binding,id:this.#ctx.id.toString()});
+    let state;try{state=await this.#env.HOMIE_STOP.status({binding,id:this.#ctx.id.toString()});}catch{await this.#stop();throw Error('Stop registration failed');}
     if(state.stopped){await this.#stop();throw Error('Tenant stopped');}
     this.#registered=true;
    }
    await this.#check();this.#active++;this.#watch();
    try{
     if(!this.#owner){
-     const storage=new Proxy(this.#ctx.storage,{get:(target,key)=>{
-      if(key==='setAlarm')return (...args)=>{if(this.#stopped)throw Error('Tenant stopped');return target.setAlarm(...args);};
-      const value=target[key];return typeof value==='function'?value.bind(target):value;
-     }});
-     const state=new Proxy(this.#ctx,{get:(target,key)=>{
-      if(key==='storage')return storage;
-      const value=target[key];return typeof value==='function'?value.bind(target):value;
-     }});
-     this.#owner=new Owner(state,this.#env);
+     // Keep the native DurableObjectState brand required by cloudflare:workers.
+     const setAlarm=this.#ctx.storage.setAlarm.bind(this.#ctx.storage);
+     this.#ctx.storage.setAlarm=(...args)=>{if(this.#stopped)throw Error('Tenant stopped');return setAlarm(...args);};
+     this.#owner=new Owner(this.#ctx,this.#env);
     }
     const result=await this.#owner[method]?.(...args);
     await this.#check();

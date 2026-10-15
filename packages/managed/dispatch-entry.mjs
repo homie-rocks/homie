@@ -23,7 +23,7 @@ export class StopControl extends WorkerEntrypoint {
   const tenant=this.ctx.props?.tenant;
   if(typeof tenant!=='string'||!/^hm-test-[a-z0-9-]+$/.test(tenant))throw Error('Unauthorized');
   if(object||strong)return this.env.REGISTRY.getByName('routes').status(tenant,object);
-  const snapshot=await routeSnapshot(this.env);
+  const snapshot=await routeSnapshot(this.env,Date.now,this.ctx);
   return {stopped:!snapshot.routes.some(r=>r.tenant===tenant&&!r.disabled),version:snapshot.version};
  }
 }
@@ -47,6 +47,6 @@ export default {
    if(request.method==='GET'&&url.pathname==='/__operator/routes')return Response.json(await registry.routes());
    return new Response('Not found',{status:404});
   }
-  return dispatch.fetch(request,env);
+  return dispatch.fetch(request,env,ctx);
  }
 };
