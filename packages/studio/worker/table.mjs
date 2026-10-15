@@ -1168,9 +1168,16 @@ export class Table {
   async sleepRoom() {
     if(!this.canSleep())return;
     clearInterval(this.timer);this.timer=null;
+    const now=Date.now(),room=this.room;
+    if(!room.clients.size&&!room.watchers.size) {
+      this.sessionStore.clear();
+      // Empty rooms get one final expiry pass, never a permanent minute alarm.
+      const until=room.emptySince+room.forgetMs;
+      if(Number.isFinite(until)&&until>now){const alarm=await this.ctx.storage.getAlarm();if(alarm==null||alarm>until)await this.ctx.storage.setAlarm(until);}
+      return;
+    }
     const keys=['lastReport','lastPeople','lastAgents','lastAi','lastReportAt','openCounted','launchReadFor'];
     this.sessionStore.write(this.room,Object.fromEntries(keys.map(key=>[key,this[key]])));
-    const now=Date.now(),room=this.room;
     // Edge-answered heartbeats need only a minute's liveness sweep. A legacy
     // client still keeps its original hello/heartbeat deadline.
     const due=[now+60000,...[...room.clients.values()].map(c=>{const ping=c.conn.lastPing?.()??0;return c.helloed?Math.max(c.lastSeen,ping)+(ping?Math.max(room.idleMs,60000):room.idleMs):c.joinedAt+5000;})];

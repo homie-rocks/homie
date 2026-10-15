@@ -1,7 +1,7 @@
 /** Hibernation keeps transports outside JavaScript. Only data crosses this
  * boundary; callbacks, bindings and sockets are reconstructed by the Table.
  */
-const transient=new Set(['chatOps','controls','store','now','log','clients','watchers','watchIds','review','onPublished','onUnsaid','decider','server','onForget','gateFacts','waitUntil']);
+const transient=new Set(['chatOps','controls','store','now','log','clients','watchers','watchIds','review','onPublished','onUnsaid','decider','server','onForget','gateFacts','waitUntil','chatLog','chatBuckets','chatAddress','chatReacts']);
 import {encodeSession as encode,decodeSession as decode} from './session-codec.mjs';
 const legacyDecode=value=>JSON.parse(value,(_key,item)=>item?.__roomMap?new Map(item.__roomMap):item?.__roomSet?new Set(item.__roomSet):item?.__roomNumber?item.__roomNumber*Infinity:item);
 export function roomSessions(storage) {

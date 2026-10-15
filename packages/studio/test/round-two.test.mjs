@@ -279,3 +279,11 @@ test('session encoding preserves arbitrary checkpoint keys without mistaking the
  const value={__roomMap:[['not','a map']],array:['m',[]],nested:new Map([[{__roomNumber:1},new Set([undefined,Infinity,-Infinity,NaN])]])};
  assert.deepEqual(decodeSession(encodeSession(value)),value);
 });
+
+test('an expired empty room does not keep a recurring hibernation alarm',async()=>{
+ const {Table}=await import('../worker/table.mjs');let alarms=0,clears=0;
+ const table=Object.create(Table.prototype);table.canSleep=()=>true;
+ table.room={clients:new Map(),watchers:new Set(),emptySince:Date.now()-2000,forgetMs:1000};
+ table.sessionStore={clear:()=>clears++};table.ctx={storage:{getAlarm:async()=>null,setAlarm:async()=>alarms++}};
+ await table.sleepRoom();assert.equal(clears,1);assert.equal(alarms,0);
+});
