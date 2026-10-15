@@ -19,7 +19,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [Unreleased]
 
-- Long-frame prediction clock resets preserve the last painted wrapped position instead of cutting back to a stale snapshot; authoritative placements remain immediate.
+- Long-frame prediction clock resets preserve the last painted wrapped position instead of cutting back to a stale snapshot; authoritative placements remain immediate, including a delayed first frame after respawn.
 
 ### Changed
 

@@ -50,12 +50,12 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
 function level(w){const data=[];for(let y=0;y<25;y++){for(let x=0;x<25;x++){data.push(y===12?0:x===0||x===24||y===0||y===24||x===w.shared.wall?1:0);}}w.map.replace({bounds:{min:[0,0],max:[25,25]},wrap:{x:true},tiles:{width:25,height:25,size:1,data,flows:{home:[301]}}});}
 export default defineRules({contract:2,space:{dims:2},move,map:'./map',shared:{wall:f.u8({init:5})},shapes:{commands:{regenerate:{}},events:{regenerate:{}}},entities:{runner:{player:true,input:{ax:f.i8()},motion:{tile:f.u16(),distance:f.i16()},body:{shape:'circle',radius:.2,maxSpeed:4},commands:{regenerate(w){w.sendRoom('regenerate');}}}},room:{bots:{keep:0},start(w){level(w);},on:{regenerate(w){w.shared.wall=8;level(w);}},join(c,p){return{kind:'runner',at:{x:2,y:10+p.seat,z:0}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.motion.tile=c.map.tile(5,10);b.motion.distance=c.map.distance('home',Math.floor(b.pos.x),Math.floor(b.pos.y));c.world.sweep(b,{x:i.ax*4*c.dt,y:0,z:0});}});`);
-    } else if (runaway === 'wrap2' || runaway === 'wrap3') {
-      const dims=runaway==='wrap2'?2:3;
+    } else if (runaway === 'wrap2' || runaway === 'wrap3' || runaway === 'wrap2-place') {
+      const dims=runaway==='wrap3'?3:2;
       writeFileSync(join(dir,'src/view.ts'),`import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.input({ax:1});`);
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[0,0,0],max:[20,20,20]},wrap:{x:true,y:true,...(dims===3?{z:true}:{})}}));
       writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
-export default defineRules({contract:2,space:{dims:${dims}},move,map:'./map',entities:{runner:{player:true,input:{ax:f.i8()},body:{shape:'${dims===2?'circle':'sphere'}',radius:.2,maxSpeed:4},fields:{neighbours:f.u8()},tick(w,s){s.neighbours=w.near(s.pos,3,'runner').length;}}},room:{bots:{keep:0},join(c,p){return {kind:'runner',at:{x:p.seat===0?19:1,y:10,z:${dims===2?0:10}}};}}});`);
+export default defineRules({contract:2,space:{dims:${dims}},move,map:'./map',shapes:{commands:{respawn:{}}},entities:{runner:{player:true,input:{ax:f.i8()},commands:{respawn(w,s){w.place(s,{x:10,y:10,z:0});}},body:{shape:'${dims===2?'circle':'sphere'}',radius:.2,maxSpeed:4},fields:{neighbours:f.u8()},tick(w,s){s.neighbours=w.near(s.pos,3,'runner').length;}}},room:{bots:{keep:0},join(c,p){return {kind:'runner',at:{x:p.seat===0?19:1,y:10,z:${dims===2?0:10}}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax*4,y:0,z:0};c.world.sweep(b,c.math.scale(b.vel,c.dt));}});`);
     } else if ((runaway === 'solid-ground' || runaway === 'solid-ground-box')) {
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-20,-20],max:[20,20]},boxes:[{min:[-8,0],max:[0,5]},{min:[-20,12],max:[20,15]}]}));
@@ -2818,3 +2818,13 @@ for(const delay of [0,300])test(`long frame clock reset preserves the painted wr
  assert.ok(worst<.12,`post-reset correction jumped ${worst} metres`);
  assert.equal(r.host.core.stats.errors,0);
 });
+
+ test('long frame after a wrapped placement does not restore the old life position',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'wrap2-place');
+ const clock=virtualTime(t),r=rig(L,compiled,false,0,0);let offset=0;
+ const a=openRoom({timers:false,now:()=>performance.now()+offset,net:{config:cfg('Placed frame'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(3000);const before=a.me.pos;
+ a.command('respawn');await clock.wait(100);r.host.pause();offset+=700;await Promise.resolve();
+ const after=a.me.pos;
+ assert.ok(Math.abs(after.x-10)<.01,`a real placement was hidden by frame reset: ${before.x} -> ${after.x}`);
+ });

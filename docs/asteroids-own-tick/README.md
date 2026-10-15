@@ -60,3 +60,7 @@ The fbe020e4 packed phone-zero-delay trace exposed two stale-snapshot cuts after
 Two deterministic regressions hold the host while the view continues, then advance the view clock through a 700 ms callback gap. Before the fix they cut 2.790 m and 1.370 m at 0/300 ms. Frame recalibration now carries the last painted origin across the reset, permitting its one normal 50 ms movement tick (0.200 m) and then bounded frame corrections. Genuine authoritative placements remain immediate. Both regressions and 11 related clock/wrap/input tests pass. Packed game validation is repeated; the preceding 22 accepted configurations remain regression evidence.
 
 Post-fix validation: 13 focused virtual-time regressions, all 70 broader movement/input tests, and all five real-Chrome prediction smoke tests pass. The red test uses the same 0.201 m one-tick bound as the green test.
+
+A follow-up placement regression caught an edge case before acceptance: if the first frame after a new authoritative revision was delayed, reset could carry the previous life’s painted position. The failing test stayed at x=19 instead of the declared x=10. Carry now requires the same entity and placement revision; the test and 13 related cases pass.
+
+Validation after the placement-revision guard: all 14 focused regressions, 70 broader movement/input tests and five Chrome prediction checks pass. Packed game acceptance restarts with the guarded runtime.
