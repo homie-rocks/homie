@@ -10,6 +10,12 @@ test('every Worker Stripe resource is classified; unknown and optional calls can
   const ast=parse(readFileSync(new URL(file,dir),'utf8'),{sourceType:'module'});
   const visit=n=>{
    if(!n||typeof n!=='object')return;
+   if(n.type==='CallExpression' && n.callee?.name==='stripeCall') {
+    const method=n.arguments[1]?.value,path=n.arguments[2];
+    const route=path?.type==='StringLiteral'?path.value:path?.type==='TemplateLiteral'?path.quasis.map(q=>q.value.cooked).join('OBJECT'):null;
+    if(method && route && !OPTIONAL_STRIPE_RESOURCES.includes(route))assert.ok(workerPermission(method,route),file+': '+method+' '+route);
+   }
+
    const value=n.type==='StringLiteral'?n.value:n.type==='TemplateLiteral'?n.quasis.map(q=>q.value.cooked).join('OBJECT'):null;
    if(value && /^\/v[12]\//.test(value)) {
     // Event retrieval's resource variable is an explicit finite mapping in stripe.mjs.

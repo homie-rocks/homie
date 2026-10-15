@@ -20,16 +20,19 @@ delivery, the customer portal and refunds work with homie.rocks unreachable.
    deployed HTTPS Worker and Cloudflare authorization.
 2. Call the existing `stripe_login` tool (`homie-studio shop connect`). Follow
    `studio_job`. The tool opens the official **Homie** Stripe App approval page.
-3. The owner approves Homie once. The tool generates its RSA keypair locally,
-   receives encrypted credentials, decrypts locally, and installs the restricted
-   Worker key and webhook secret through Wrangler stdin. Never ask for, display,
-   copy, paste, or put a key in tool arguments, chat, logs or a public file.
+3. The owner installs Homie, then chooses **View API keys → Generate new key**
+   (**Reveal key** in a sandbox) **→ Copy**. The local tool watches for a new
+   restricted key in the expected mode, checks it against Stripe, installs it via
+   Wrangler stdin and clears the clipboard. Never request a key in chat, tool
+   arguments, logs or files. Tool success says only `connected to <account name>`.
 
 Test mode is the default. Select live only on the owner's explicit instruction.
-The managed-key API requires Stripe preview access and App review. Until granted,
-use the fake integration for development and report real minting as unverified.
-Do not replace App approval with manual key entry or CLI credentials exported to
-the Worker.
+Until review passes, configure the uploaded App's External test link in
+`HOMIE_STRIPE_INSTALL_URL`. External testing is limited to 25 testers and is not
+production distribution. No Homie service participates in setup or payments.
+If clipboard capture fails, the tool offers `npx wrangler secret put STRIPE_KEY`
+in the owner's own terminal, followed by `homie-studio shop connect --finish`.
+`--renew` opens the same App page; the owner chooses **Roll key → Copy**.
 
 `stripe_shop_plan`, `stripe_webhook`, slot-link synchronization, Payment Links,
 basket links and their public JSON configuration have been removed. There is no
@@ -61,23 +64,25 @@ local fakes must be identified as simulations.
 
 ## Existing studios
 
-Run `homie-studio upgrade`. The owner's payment setup action is one App approval
-through `stripe_login`. Keep the old deployment until cutover completes. The
-setup job stops new link sessions, waits for in-flight sessions and signed D1
-receipts, deploys the upgraded Worker, installs credentials and retires the old
-webhook and link configuration. Orders, bookings and subscription ownership stay
-in the same database. Never delete financial rows to make an upgrade pass.
+Run `homie-studio upgrade`, then `stripe_login`. The owner installs and copies
+once. The tool installs the RAK, deploys Checkout and bootstraps the new webhook
+before retiring links. Deactivating old links needs the owner's existing local
+Stripe CLI authorization, matched to the RAK account: the Worker deliberately
+has no Payment Links permission. Missing CLI authorization stops retirement.
+Open link sessions expire; cursor-based receipt checks run at least 30 seconds
+apart before old webhooks/configuration are removed. Pending asynchronous
+payments retain the old configuration. Retry with `shop connect --finish`.
+Never delete financial rows to make an upgrade pass.
 
-A revoked or expired Worker key closes checkout and asks for reconnection.
-Uninstall may revoke managed keys; Stripe also permits the owner to keep them.
-The App records lifecycle events without receiving purchase traffic.
+Only an authentication failure (401) requires reconnect; 403 is a permission
+failure. Disconnect removes the webhook before the Worker key. Tell the owner
+to roll/expire the key on Stripe's App settings page; do not assume uninstall
+revokes it. If it already revoked the key, remove the endpoint in Workbench.
 
 ## Verification
 
-Run the shop, booking, functions and MCP tests. Use the faithful local fake for
-App approval and managed-key minting until preview access arrives. For real
-sandbox acceptance, use only the explicitly authorised CLI profile and inject
-the test restricted key privately via stdin into the test harness. Use Stripe's
-published CLI fixture/API test token; never type card numbers. A sandbox fixture
-proves sandbox payments, not App preview access. Never use live credentials in
-acceptance tests.
+Run the small shop, migration, permissions and connection tests. Use only the
+explicitly authorized sandbox CLI profile for real tests. The owner-generated
+RAK, uninstall behavior and cross-account developer-key isolation require a
+real App installation. Do not label CLI-authenticated tests as RAK proof.
+See [owner and release guide](../../../../docs/stripe-rak-owner-guide.md).
