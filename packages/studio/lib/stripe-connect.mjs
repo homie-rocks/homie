@@ -1,41 +1,34 @@
+import { needsStripeMigration, stripeSessionsDrained, finishStripeMigration } from './stripe-migration.mjs';
+import { compactDecrypt, importPKCS8 } from 'jose';
+import { KEY_SHAPE, WEBHOOK_SECRET_SHAPE, modeOf } from '../worker/stripe.mjs';
 /** Stripe owns browser authorization. This module owns only secret transport and a non-secret receipt.
  * See docs/stripe-connect-research.md: current CLI OAuth is NOT a Worker credential issuer. */
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, generateKeyPairSync, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { runner } from './cloudflare.mjs';
 import { lockDeploy } from './deploy-state.mjs';
 import { readStudio, siteUrl } from './studio.mjs';
-import { hookUrlOf, readShop, shopConnectManual } from './shop.mjs';
-import { syncPaymentLinks } from './shop-links.mjs';
-import { LINKS_STRIPE_VERSION, fullerReason } from '../worker/shop-links.mjs';
-import { formEncode, redactStripe } from '../worker/stripe.mjs';
+import { hookUrlOf, readShop } from './shop.mjs';
+import { redactStripe } from '../worker/stripe.mjs';
 
 const hash = (s) => createHash('sha256').update(s).digest('hex');
 const failure = (needs, why, extra = {}) => ({ ok: false, command: 'shop connect', needs, why, ...extra });
 const receiptHome = () => join(homedir(), '.config', 'homie', 'stripe');
 const receiptDir = (root, storage) => join(storage, hash(realpathSync(root)).slice(0, 24));
 
-/** Local expiry evidence only; no account query and no credentials in the result. */
-export function stripeConnectionInfo(root, { storage = receiptHome(), now = Date.now } = {}) {
+/** Local non-secret receipt. Runtime checks determine whether the key still works. */
+export function stripeConnectionInfo(root, { storage = receiptHome() } = {}) {
   try {
     const r = JSON.parse(readFileSync(join(receiptDir(root, storage), 'test.json'), 'utf8'));
-    if (r.url !== hookUrlOf(siteUrl(root)) || !Number.isFinite(Date.parse(r.expiresAt))) return null;
-    return { mode: 'test', expiresAt: r.expiresAt, expired: Date.parse(r.expiresAt) <= now(), renew: 'homie-studio shop connect --renew' };
+    if (r.url !== hookUrlOf(siteUrl(root)) || !r.keyId) return null;
+    return { mode: 'test', connectedAt: r.connectedAt, renew: 'homie-studio shop connect --renew' };
   } catch { return null; }
 }
 
 const json = (s) => { try { return JSON.parse(s); } catch { return null; } };
-// Stripe CLI also prints login failures on stderr (stripe/stripe-cli pkg/cmd/root.go).
-// Never fall back to stdout: successful login output can contain credentials.
-const stripeReason = (result, call) => {
-  const message = (json(result?.stdout)?.error ?? json(result?.stderr)?.error)?.message
-    ?? (result?.code !== 0 ? result?.stderr?.trim() : null);
-  return typeof message === 'string' ? ` Stripe said: “${redactStripe(message).slice(0, 400)}” (${call}).` : '';
-};
-
 // This output stays private, including CLI config, completion, errors and API responses.
 export function stripeProcess(args, { cwd, env = process.env, command = 'stripe' } = {}) {
   const childEnv = { ...env, CI: '1', NO_COLOR: '1' };
@@ -60,7 +53,7 @@ function openBrowser(url) {
 }
 
 const stripeURL = (s) => {
-  try { const u = new URL(s); return u.protocol === 'https:' && ['dashboard.stripe.com', 'access.stripe.com'].includes(u.hostname) && !u.username && !u.password && !u.port; } catch { return false; }
+  try { const u = new URL(s); return u.protocol === 'https:' && ['dashboard.stripe.com', 'access.stripe.com', 'marketplace.stripe.com'].includes(u.hostname) && !u.username && !u.password && !u.port; } catch { return false; }
 };
 /** Accept only Stripe's known login continuations. Never execute next_step as shell text. */
 export function completionArgs(step) {
@@ -71,138 +64,94 @@ export function completionArgs(step) {
   return stripeURL(url) ? ['login', '--complete', url] : null;
 }
 
+/** One approval; ciphertext is the only credential representation crossing Homie. */
 export async function shopConnect(root, options = {}) {
-  const fail=(...args)=>{
-    const result=failure(...args);
-    return options.webhookOnly?{...result,command:'shop webhook',why:result.why.replaceAll('shop connect','shop webhook')}:result;
-  };
-  if (options.manual || options.fromClipboard) {
-    const result = await shopConnectManual(root, options);
-    if (result.ok) rmSync(join(receiptDir(root, options.storage ?? receiptHome()), 'test.json'), { force: true });
-    return result;
-  }
-  const { live = false, renew = false, log = () => {}, exec = stripeProcess, open = openBrowser,
-    storage = receiptHome(), wrangler = null } = options;
+  if (options.manual || options.fromClipboard) return failure('app-approval', 'Approve the Homie Stripe App; key entry is not supported.');
+  const { live = false, log = () => {}, open = openBrowser, fetcher = fetch,
+    storage = receiptHome(), wait = ms => new Promise(resolve => setTimeout(resolve, ms)), timeout = 10 * 60_000 } = options;
   const mode = live ? 'live' : 'test';
   const checked = readShop(root);
-  if (!checked.ok || checked.absent) return fail('shop', 'Create and check shop.json first: homie-studio shop init, then shop check.');
-  if (options.managed === true && checked.shop.till !== 'stripe-managed') return fail('shop-settings', 'For Managed Payments, set shop.json till to stripe-managed and deploy that choice before connecting. Stripe’s own eligibility and terms still apply.');
-  let catalog, mcpAccount;
-  if (options.webhookOnly) {
-    try {
-      const {verifiedMcpConfig} = await import('./shop-mcp.mjs');
-      const saved=verifiedMcpConfig(root);
-      if(!saved?.result?.verifiedAt || Date.now()-Date.parse(saved.result.verifiedAt)>15*60_000) return fail('verify','Run shop verify with fresh Stripe MCP reads before installing the webhook (verification is valid for 15 minutes).');
-      const verified=saved.result;
-      if(!verified.verified || verified.local || verified.mode!==mode || verified.site!==new URL(siteUrl(root)).origin) return fail('verify','Run shop verify with fresh Stripe MCP reads for this site and mode first.');
-      mcpAccount=saved.options.account;
-      if(mcpAccount && !/^acct_[A-Za-z0-9]+$/.test(mcpAccount))return fail('account','Invalid saved Stripe account ID.');
-      catalog={config:verified.config,retire:[]};
-    } catch { return fail('verify','Run shop verify with fresh Stripe MCP reads for this site first.'); }
-  }
-  const id = hash(realpathSync(root)).slice(0, 24);
-  const profile = options.profile ?? `homie-${id}`;
-  const dir = join(storage, id);
+  if (!checked.ok || checked.absent) return failure('shop', 'Create and check shop.json first.');
+  let site;
+  try { site = new URL(siteUrl(root)); } catch { return failure('deploy', 'Deploy the studio to its HTTPS address first.'); }
+  if (site.protocol !== 'https:' || site.username || site.password || site.port) return failure('deploy', 'The studio needs a public HTTPS address.');
+  const dir = receiptDir(root, storage);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
-  // Reuse the toolkit’s process-aware lock, in the private receipt folder. Dead processes do not strand setup.
   const lock = lockDeploy(dir);
-  if (!lock.ok) return fail('busy', 'Stripe connection is already running for this studio. Wait for that command to finish.');
+  if (!lock.ok) return failure('busy', 'Stripe setup is already running for this studio.');
   try {
-    const cli = (args) => exec(['--project-name', profile, ...args], { cwd: root });
-    const installed = await cli(['--version']);
-    if (installed.code !== 0) {
-      log('Installing Stripe’s official CLI with npm…');
-      const install=options.installExec??((command,args)=>stripeProcess(args,{cwd:root,command}));
-      const result=await install(process.platform==='win32'?'npm.cmd':'npm',['install','--global','@stripe/cli@latest']);
-      if(result.code!==0 || (await cli(['--version'])).code!==0)return fail('stripe-cli','Automatic Stripe CLI installation failed. Check npm install permissions and PATH, then run shop connect again.',{next:['npm install --global @stripe/cli@latest']});
-    }
-
-    // A read both checks existing credentials and lets Stripe refresh its OAuth session itself.
-    let probe = renew ? { code: 1 } : await cli(['get', '/v1/products', '-d', 'limit=1', ...(live ? ['--live'] : [])]);
-    if (probe.code !== 0 || !Array.isArray(json(probe.stdout)?.data)) {
-      const start = await cli(['login', '--non-interactive', ...(renew ? ['--new-session'] : [])]);
-      const login = json(start.stdout);
-      const complete = completionArgs(login?.next_step);
-      if (start.code !== 0 || !stripeURL(login?.browser_url) || !complete || !/^[a-zA-Z0-9 -]{1,100}$/.test(login?.verification_code ?? '')) {
-        return fail('stripe-login', 'Stripe could not start browser approval. Update the official Stripe CLI and try shop connect again. An account administrator may need to enable CLI access in Stripe’s MCP and CLI access settings.' + stripeReason(start, 'login'));
-      }
-      options.onEvent?.({type:'stripe.pairing',code:login.verification_code,url:login.browser_url});
-      log(`Approve your studio’s Stripe account in your browser. Pairing code: ${login.verification_code}. ${login.browser_url}`);
-      open(login.browser_url);
-      const finished = await cli(complete);
-      if (finished.code !== 0) return fail('stripe-login', 'Stripe approval did not finish. Run shop connect again when ready.' + stripeReason(finished, 'login completion'));
-
-      probe = await cli(['get', '/v1/products', '-d', 'limit=1', ...(live ? ['--live'] : [])]);
-      if (probe.code !== 0 || !Array.isArray(json(probe.stdout)?.data)) return fail('stripe-access', 'Stripe is signed in but cannot read Products in the requested mode. Review the account, sandbox and permissions in Stripe, then run shop connect --renew again.' + stripeReason(probe, 'GET /v1/products'));
-    }
-    if (options.webhookOnly) {
-      const accountResult=await cli(['get','/v1/account',...(live?['--live']:[])]);
-      const account=json(accountResult.stdout)?.id;
-      if(accountResult.code!==0 || !/^acct_[A-Za-z0-9]+$/.test(account??'') || mcpAccount && account!==mcpAccount) return fail('account','Stripe CLI and MCP must select the same account. Verify with the MCP account ID first.');
-      if(!mcpAccount) {
-        // Old verifications predate account IDs. Establish ownership before adopting
-        // the CLI account; never silently bind a different account's catalog.
-        const links=[...(catalog.config.items??[]),...(catalog.config.menus??[]),...(catalog.config.slots??[])];
-        for(const link of links) {
-          const read=await cli(['get',`/v1/payment_links/${link.id}`,...(live?['--live']:[])]);
-          const actual=json(read.stdout);
-          if(read.code!==0 || actual?.id!==link.id || actual.url!==link.url || actual.livemode!==(mode==='live'))return fail('account','The signed-in Stripe account does not own the verified links. Select their account and retry.');
-        }
-        const file=join(root,'.studio','stripe-mcp.json');
-        const saved=JSON.parse(readFileSync(file,'utf8'));
-        saved.options={...saved.options,account};
-        writeFileSync(file,JSON.stringify(saved,null,2));
-        mcpAccount=account;
-      }
-    }
-    const site = siteUrl(root);
-    if (!site) return fail('deploy', 'Stripe is connected on this computer. Deploy the studio with studio_deploy (Cloudflare approval first if needed), then run shop connect again.', { mode, connected: true });
-    let target;
-    try { target = new URL(site); } catch { return fail('deploy', 'Deploy the studio to a public HTTPS address, then run shop connect again.'); }
-    if (target.protocol !== 'https:' || target.username || target.password || /^(localhost|127\.|\[::1\])/.test(target.hostname)) return fail('deploy', 'Deploy the studio to a public HTTPS address, then run shop connect again.');
-    const api = async (method, path, params, idempotency) => {
-      const args = [method.toLowerCase(), path, '--stripe-version', LINKS_STRIPE_VERSION, ...(live ? ['--live'] : []), ...(idempotency ? ['--idempotency', idempotency] : [])];
-      for (const [k, v] of formEncode(params)) args.push('-d', `${k}=${v}`);
-      const r = await cli(args);
-      const body = json(r.stdout);
-      if (r.code !== 0 || !body || body.error) {
-        throw Object.assign(new Error('Stripe API operation failed'), { stripeReason: stripeReason(r, `${method} ${path.replace(/\/[^/]*_[A-Za-z0-9]+$/, '/…')}`) });
-      }
-      return body;
-    };
-    const reason = fullerReason(checked.shop);
-    if (reason) return fail('fuller-checkout', reason, { mode, connected: true });
     const studio = readStudio(root);
-    if(options.webhookOnly && catalog.config.portal && !catalog.config.portalId) {
-      // 0.51.6 saved the login URL alone. Discover its identity without creating
-      // a second portal or making webhook installation depend on this new field.
-      try {
-        let after;
-        for(let page=0;page<100;page++) {
-          const found=await api('GET','/v1/billing_portal/configurations',{limit:100,...(after?{starting_after:after}:{})});
-          const portal=found.data?.find(p=>p.login_page?.url===catalog.config.portal && p.metadata?.homie==='shop-links-v1' && p.metadata?.studio===studio.slug && p.metadata?.origin===target.origin);
-          if(portal) {
-            catalog.config.portalId=portal.id;
-            const file=join(root,'.studio','stripe-mcp.json'),saved=JSON.parse(readFileSync(file,'utf8'));
-            saved.result.config.portalId=portal.id;writeFileSync(file,JSON.stringify(saved,null,2));break;
-          }
-          if(!found.has_more||!found.data?.length)break;
-          after=found.data.at(-1).id;
-        }
-      } catch { log('The existing billing portal URL is retained. The next Stripe plugin observation can fill its portal ID.'); }
+    const receiptFile = join(dir, mode + '.json');
+    const prior = existsSync(receiptFile) ? json(readFileSync(receiptFile, 'utf8')) : null;
+    const migration = needsStripeMigration(root, prior, mode);
+    const w = options.wrangler ?? runner(root, studio.cloudflare?.accountId ? { CLOUDFLARE_ACCOUNT_ID: studio.cloudflare.accountId } : {});
+    const service = options.service ?? 'https://homie.rocks/api/stripe-app';
+    const endpoint = new URL(service);
+    if (endpoint.origin !== 'https://homie.rocks' && !(endpoint.protocol === 'http:' && ['localhost','127.0.0.1'].includes(endpoint.hostname))) throw new Error('Invalid setup service');
+    const pendingFile = join(dir, mode + '-pending.json');
+    let pending = existsSync(pendingFile) ? json(readFileSync(pendingFile, 'utf8')) : null;
+    if (!pending || pending.origin !== site.origin || pending.expires < Date.now()) pending = null;
+    const savePending = () => { writeFileSync(pendingFile + '.tmp', JSON.stringify(pending), { mode: 0o600 }); renameSync(pendingFile + '.tmp', pendingFile); };
+    const call = async (path, body) => {
+      const response = await fetcher(service + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), redirect: 'error', signal: AbortSignal.timeout(30_000) });
+      if (!response.ok) throw new Error('Setup service refused request');
+      return response.json();
+    };
+    if (!pending) {
+      const keys = generateKeyPairSync('rsa', { modulusLength: 2048,
+        publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' } });
+      const nonce = randomBytes(32).toString('hex'), collectToken = randomBytes(32).toString('hex');
+      if ((await w(['secret', 'put', 'STRIPE_SETUP_CHALLENGE'], { input: hash(nonce) })).code !== 0) return failure('cloudflare', 'Cloudflare could not prepare Stripe setup. Retry shop connect.');
+      const started = await call('/start', { nonce, collectToken, publicKey: keys.publicKey, origin: site.origin, mode, migration, expectedAccount: prior?.account });
+      if (!stripeURL(started.url) || typeof started.id !== 'string') throw new Error('Invalid approval response');
+      pending = { ...keys, collectToken, started, origin: site.origin, expires: Date.now() + (migration ? 48 * 60 * 60_000 : timeout) };
+      savePending();
+      log('Approve Homie in Stripe. Your studio will receive its Checkout connection automatically.');
+      options.onEvent?.({ type: 'stripe.approval', url: started.url });
+      open(started.url);
     }
-    const w = wrangler ?? runner(root, studio.cloudflare?.accountId ? { CLOUDFLARE_ACCOUNT_ID: studio.cloudflare.accountId } : {});
-    const receiptFile = join(dir, `${mode}.json`);
-    const receipt = existsSync(receiptFile) ? json(readFileSync(receiptFile, 'utf8')) : null;
-    const result = await syncPaymentLinks({ catalog, root, api, shop: checked.shop, slug: studio.slug, site: target.origin, mode, w, receipt,
-      bookingSlots: options.bookingSlots ?? (existsSync(join(root,'.studio','booking-slots.json')) ? JSON.parse(readFileSync(join(root,'.studio','booking-slots.json'),'utf8')) : []),
-      saveReceipt: (record) => {
-        writeFileSync(`${receiptFile}.tmp`, JSON.stringify(record), { mode: 0o600 });
-        renameSync(`${receiptFile}.tmp`, receiptFile);
-      } });
-    return { ...result, command:options.webhookOnly?'shop webhook':result.command, profile };
-  } catch (e) {
-    const said = e?.stripeReason ?? '';
-    return fail('stripe-setup', 'Stripe setup could not finish. Check the studio’s Stripe session and Products, Prices, Payment Links and Webhook Endpoints write permissions, and the Cloudflare login, then run shop connect again. No credentials were printed.' + said);
-  } finally { lock.release(); }
+    const { started, collectToken, privateKey } = pending;
+    const deadline = pending.expires;
+    let result;
+    while (Date.now() < deadline) {
+      result = await call('/collect', { id: started.id, collectToken });
+      if (result.status === 'ready') break;
+      if (result.status === 'draining' && result.open === 0 && await stripeSessionsDrained(w, studio.cloudflare.d1, result.complete)) {
+        await call('/drained', { id: started.id, collectToken });
+      }
+      if (result.status === 'failed') { rmSync(pendingFile, { force: true }); return failure('app-approval', 'Stripe setup could not finish. Retry shop connect after the Homie app is approved for managed keys.'); }
+      await wait(2000);
+    }
+    if (result?.status !== 'ready') return failure('app-approval', 'Approval timed out. Run shop connect again.');
+    if (result.mode !== mode || result.origin !== site.origin || !/^acct_[A-Za-z0-9]+$/.test(result.account)) throw new Error('Setup binding mismatch');
+    const decryptKey = await importPKCS8(privateKey, 'RSA-OAEP-256');
+    const decrypt = async value => new TextDecoder().decode((await compactDecrypt(value, decryptKey, { keyManagementAlgorithms: ['RSA-OAEP-256'], contentEncryptionAlgorithms: ['A256GCM'] })).plaintext);
+    const key = await decrypt(result.key), secret = await decrypt(result.webhookSecret);
+    if (!KEY_SHAPE.test(key) || modeOf(key) !== mode || !WEBHOOK_SECRET_SHAPE.test(secret)) throw new Error('Invalid credential envelope');
+    if (migration) {
+      const deployStudio = options.deploy ?? ((root) => import('./cloudflare.mjs').then(m => m.deploy(root)));
+      const deployed = await deployStudio(root);
+      if (!deployed.ok) return failure('migration', 'The old payment sessions have drained. Studio upgrade deployment could not finish; retry shop connect.');
+    }
+    // Capture and discard all Wrangler output, including failures. Never return provider error text.
+    for (const [name, value] of [['STRIPE_KEY', key], ['STRIPE_WEBHOOK_SECRET', secret]]) {
+      if ((await w(['secret', 'put', name], { input: value })).code !== 0) return failure('cloudflare', 'Cloudflare could not finish installing Stripe. Run shop connect again.');
+    }
+    if (migration) {
+      const listed = await w(['secret', 'list']);
+      const names = json(listed.stdout ?? listed.out);
+      if (listed.code !== 0 || !Array.isArray(names)) return failure('cloudflare', 'Stripe is installed; retry shop connect to finish removing the retired configuration.');
+      for (const name of ['STRIPE_SHOP_LINKS', 'PURCHASE_LINKS', 'STRIPE_CHECKOUT_MODE']) {
+        if (names.some(entry => entry.name === name) && (await w(['secret', 'delete', name], { input: 'y\n' })).code !== 0) return failure('cloudflare', 'Stripe is installed; retry shop connect to finish removing the retired configuration.');
+      }
+    }
+    await call('/ack', { id: started.id, collectToken });
+    rmSync(pendingFile, { force: true });
+    if (migration) finishStripeMigration(root);
+    const receipt = { mode, account: result.account, keyId: result.keyId, webhookId: result.webhookId, url: hookUrlOf(site.origin), connectedAt: new Date().toISOString() };
+    writeFileSync(join(dir, mode + '.json.tmp'), JSON.stringify(receipt), { mode: 0o600 });
+    renameSync(join(dir, mode + '.json.tmp'), join(dir, mode + '.json'));
+    return { ok: true, command: 'shop connect', mode, account: result.account, message: 'Stripe connected. Purchases and signed fulfilment run on your studio.' };
+  } catch { return failure('stripe-setup', 'Stripe setup could not finish. Retry shop connect. No credentials were printed.'); }
+  finally { lock.release(); }
 }

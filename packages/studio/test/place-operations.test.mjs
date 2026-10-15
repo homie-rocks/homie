@@ -108,13 +108,13 @@ test('dated calendars use place-local dates across daylight saving and multi-day
  assert.throws(()=>calendarSlots({startDate:'2026-03-08',endDate:'2026-03-08',timeZone:'America/Los_Angeles',time:'02:30',days:1,capacity:1}),/does not exist|ambiguous/);
 });
 
-test('rolling slot record creation atomically emits the declared payment-link work item',async t=>{
+test('rolling slot creation needs no Stripe link setup',async t=>{
  const DB=database(t);await syncFunctions({DB},[{name:'links',event:'booking.slots_need_payment_links'}]);
  const meta={id:'place',kind:'app',roles:{staff:{signIn:true,can:['create:slots','read:slots']}},surfaces:{phone:'staff'},records:{persist:true,collections:{slots:{fields:{capacity:{type:'number'},start:{type:'string'},end:{type:'string'}}},bookings:{fields:{},booking:{slots:'slots',item:'entry'}}}}};
  const ctx=services({DB},{games:[meta],shop:{items:[{id:'entry',price:100}]}},'https://place.test',{id:'owner',owner:true},'test');
  await ctx.records({app:'place',collection:'slots',id:'day-two',operation:'create',data:{capacity:2,start:'2026-11-02T09:00:00Z',end:'2026-11-02T10:00:00Z'}});
- const rows=DB.sql.prepare("SELECT data FROM studio_events WHERE type='booking.slots_need_payment_links'").all();assert.equal(rows.length,1);
- const data=JSON.parse(rows[0].data);assert.equal(data.slots[0].slot,'day-two');assert.equal(data.slots[0].item,'entry');assert.equal(data.slots[0].capacity,2);
+ const rows=DB.sql.prepare("SELECT data FROM studio_events WHERE type='booking.slots_need_payment_links'").all();assert.equal(rows.length,0);
+ assert.ok(DB.sql.prepare("SELECT 1 FROM app_records WHERE id='day-two'").get());
 });
 
 test('customer booking tool validates and accepts aliases through its public schema',async t=>{

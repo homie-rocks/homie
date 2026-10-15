@@ -1,3 +1,5 @@
+> Historical release evidence. Current Stripe setup and payment behavior are documented in [Studio Checkout](../packages/studio/shop/SHOP.md); the former Payment Link mode is removed.
+
 # Earning acceptance work
 
 Target: 0.51.0, one owner-owned Stripe checkout for carts, capacity bookings,

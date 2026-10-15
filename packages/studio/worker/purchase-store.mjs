@@ -90,16 +90,9 @@ export async function coveredPurchase(env, origin, order, wanted) {
 }
 
 export async function recurringReady(env) {
-  try {
-    const c = JSON.parse(env.PURCHASE_PAYMENT_CAPABILITIES ?? "{}");
-    return (
-      c.recurring === true &&
-      c.mode === shopMode(env) &&
-      c.key === (await digest(env.STRIPE_KEY))
-    );
-  } catch {
-    return false;
-  }
+  // App-issued keys carry the declared subscription/invoice permissions. Any
+  // revocation is detected by the provider and closes checkout for reconnection.
+  return hasStripeKey(env);
 }
 
 export async function deliveryAllowed(env, o) {

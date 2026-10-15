@@ -78,6 +78,7 @@ export async function stripe({ live = false } = {}) {
     if (u.pathname === '/v1/disputes') return send({ data: S.disputes.filter((d) => d.payment_intent === u.searchParams.get('payment_intent')) });
     if (u.pathname === '/v1/refunds' && req.method === 'GET') { const pi = S.pis.get(u.searchParams.get('payment_intent')); const c = pi && S.charges.get(pi.charge); return send({data:(c?.amount_refunded || c?.refunded) ? [{id:'re_'+c.id,payment_intent:pi.id,amount:c.refunded ? c.amount : c.amount_refunded,currency:pi.currency,status:'succeeded'}]:[],has_more:false}); }
     if (u.pathname === '/v1/refunds' && req.method === 'POST') { const p = S.pis.get(form.get('payment_intent')); const c = S.charges.get(p.charge); if (S.strict && c.refunded) return send({ error: { type: 'invalid_request_error', code: 'charge_already_refunded', message: 'Charge has already been refunded.' } }, 400); if (S.refundStatus === 'succeeded') { c.refunded = true; c.amount_refunded = c.amount; } S.refunds.push({ pi: p.id, idem: req.headers['idempotency-key'] }); return send({ id: id('re'), status: S.refundStatus, payment_intent: p.id, charge: c.id }); }
+    if (u.pathname === '/v1/billing_portal/configurations') return send({id:'bpc_fixture'});
     if (u.pathname === '/v1/billing_portal/sessions') return send({ url: 'https://billing.stripe.com/p/session/x' });
     if (u.pathname === '/v1/webhook_endpoints') return send({ data: [] });
     return send({ error: { message: 'stand-in: unknown ' + u.pathname } }, 404);

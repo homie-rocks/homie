@@ -73,6 +73,7 @@ async function fixture(name, options = {}) {
     else if (req.url.startsWith('/v1/charges/')) res.end(JSON.stringify(charge));
     else if (req.url.startsWith('/v1/refunds?') && req.method === 'GET') res.end(JSON.stringify({data:charge?.amount_refunded ? [{id:`re_${name}`,amount:charge.amount_refunded,currency:'usd',status:'succeeded'}]:[],has_more:false}));
     else if (req.url === '/v1/refunds') { if (refundStatus === 'succeeded') { charge.refunded = true; charge.amount_refunded = charge.amount; } res.end(JSON.stringify({ id: `re_${name}`, status: refundStatus })); }
+    else if (req.url === '/v1/billing_portal/configurations') res.end(JSON.stringify({id:'bpc_fixture'}));
     else if (req.url === '/v1/billing_portal/sessions') res.end(JSON.stringify({ url: 'https://billing.stripe.com/test' }));
     else { res.statusCode = 404; res.end('{}'); }
   });

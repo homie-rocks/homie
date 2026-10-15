@@ -207,14 +207,6 @@ export const SHOP_JS = String.raw`(function () {
         age.appendChild(sel); age.appendChild(ok);
       }
     }
-    (s.menus || []).forEach(function (menu, index) {
-      var button = el('button', {type:'button',class:'buy'}, s.menus.length > 1 ? 'Choose items on Stripe · Menu ' + (index+1) : 'Choose several items on Stripe');
-      button.onclick = function () {
-        button.disabled=true;
-        api('POST','/api/shop/buy',{lines:menu.items.map(function(item){return {item:item,quantity:1};}),game:boot.game||undefined}).then(function(r){if(!r.ok||!r.url)throw new Error(r.message||'Could not open menu');location.href=r.url;}).catch(function(e){button.disabled=false;say(e.message,true);});
-      };
-      list.appendChild(button);
-    });
     s.items.forEach(function (i) {
       var card = el('article', { class: 'item', id: 'item-' + i.id });
       card.appendChild(el('h2', null, i.name));
@@ -226,7 +218,7 @@ export const SHOP_JS = String.raw`(function () {
       if (i.way === 'cap' && i.retryWay) { act.appendChild(el('span', { class: 'why' }, WAY.cap)); i.way = i.retryWay; }
       if (i.way === 'checkout') {
         var amount = null;
-        if (i.price === 'choose' && !s.keyless) {
+        if (i.price === 'choose') {
           amount = el('input', { type: 'number', 'aria-label': 'How much in ' + s.currency.toUpperCase(), min: String(i.min / s.currencyScale), step: String(s.amountStep / s.currencyScale), value: String(i.min / s.currencyScale) });
           if (i.max !== null) amount.setAttribute('max', String(i.max / s.currencyScale));
           act.appendChild(amount);
@@ -241,10 +233,10 @@ export const SHOP_JS = String.raw`(function () {
         });
         act.appendChild(b);
         var quantity = el('input', { type: 'number', min: '1', step: '1', value: '1', 'aria-label': 'Quantity' });
+        if (i.maxQuantity != null) quantity.max = String(i.maxQuantity);
         var add = el('button', { type: 'button', class: 'plain' }, 'Add to cart');
         add.onclick = function () { cart.push({ item: i.id, name: i.name, quantity: Number(quantity.value), amount: amount ? units(amount.value, s.currencyScale) : undefined }); drawCart(); };
-        if (!s.keyless) { act.appendChild(quantity); act.appendChild(add); }
-        else if (i.price !== 0) act.appendChild(el('p', { class: 'note' }, i.price === 'choose' ? 'Choose your amount on Stripe.' : boot.giving ? 'Confirm your gift on Stripe.' : 'Confirm quantity on Stripe, or use a menu above for several items.'));
+        act.appendChild(quantity); act.appendChild(add);
       } else if (i.way === 'owned') {
         act.appendChild(el('span', { class: 'owned' }, 'Yours ✓'));
       } else if (i.way === 'make-an-account') {
@@ -269,8 +261,7 @@ export const SHOP_JS = String.raw`(function () {
       list.appendChild(card);
     });
     if (s.nextCursor) { var next = el('button', { type: 'button' }, 'Next items'); next.onclick = function () { load(s.nextCursor); }; list.appendChild(next); }
-    if(s.portalLogin)list.appendChild(el('a',{href:s.portalLogin,target:'_blank',rel:'noopener',class:'plain'},'Manage monthly giving or membership on Stripe'));
-    if (!s.portalLogin && s.items.some(function(i) { return i.interval; })) api('GET', '/api/shop/subscriptions').then(function(r) {
+    if (s.items.some(function(i) { return i.interval; })) api('GET', '/api/shop/subscriptions').then(function(r) {
       (r.subscriptions || []).forEach(function(sub) {
         var manage = el('button', { type: 'button', class: 'plain' }, 'Manage subscription on Stripe');
         manage.onclick = function() { var tab = window.open('', '_blank'); api('POST', '/api/shop/portal', { subscription: sub.id }).then(function(result) { if (!result.ok || !result.url) throw new Error(result.message || 'Portal unavailable'); if (tab) tab.location.href = result.url; else location.href = result.url; }).catch(function(e) { if (tab) tab.close(); say(e.message, true); }); };
@@ -555,7 +546,6 @@ export const OFFICE_SHOP_SCRIPT = String.raw`(function () {
       [['Payments', s.stripe.payments], ['Refunds', s.stripe.refunds], ['Disputes', s.stripe.disputes], ['Payouts', s.stripe.payouts], ['Balance', s.stripe.balance], ['Tax', s.stripe.tax]].concat(s.stripe.managedPayments ? [['Managed Payments', s.stripe.managedPayments]] : []).forEach(function (l) { links.appendChild(link(l[1], l[0])); });
       links.appendChild(link('/_studio/api/shop/orders.csv', 'CSV for your accountant'));
       top.appendChild(links);
-      if (s.keyless) top.appendChild(el('p', { class: 'note' }, 'Refund in Stripe or ask your AI connected to Stripe. If a payment is missing here, ask your AI to resend its Stripe webhook.'));
       for (const total of s.totalsByCurrency ?? (s.totals ? [s.totals] : [])) top.appendChild(el('p', { class: 'dim' }, 'Orders in the last 30 days: ' + total.sales + ' paid orders, ' + cents(total.paid, total.currency) + ' before tax and fees (subscription renewals are in Stripe); ' + total.refunds + ' refunded (' + cents(total.refunded, total.currency) + '); ' + total.disputes + ' disputed now, ' + total.lost + ' lost.'));
       /* purchase-office */
       var ord = $('#orders'); ord.textContent = '';

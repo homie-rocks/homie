@@ -400,9 +400,9 @@ where it sells and for Stripe's terms. Homie takes no cut.
   player refund window covers items; a tip is never taken back by the player.
 - Flood settings are configurable: buyer attempts 6/minute, address attempts 600/minute,
   new guest buyers 600/hour. Stripe constraints, integer arithmetic, ownership and signatures protect payments.
-- `shop check` validates settings; `stripe_shop_plan` plans and verifies Stripe official MCP operations; `stripe_webhook` installs the signing secret privately.
+- `shop check` validates settings; `stripe_login` connects the studio through one Homie Stripe App approval.
   Never ask a person for a key. Follow the result's next step: deploy first if needed, then rerun connect.
-  The default syncs Products, Prices, Payment Links and the webhook through the approved Stripe CLI.
+  The studio Worker creates Checkout Sessions and fulfils only signed payment events.
   The Worker stores only links and a signing secret; buying needs no API key or running AI.
   Rerun `shop connect` after shop.json changes; use `shop connect --renew` if approval needs renewal.
   Verify a test purchase, signed webhook, item grant, and a refund in Stripe or through the connected AI.

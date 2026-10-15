@@ -211,12 +211,10 @@ export async function expirePurchaseCheckouts(env, kind = null, resource = null)
         canonicalJson(listed.offer) === canonicalJson(JSON.parse(o.offer))
       )
         continue;
-      // A keyless completion can precede its invoice. Wait for signed facts; no provider read.
+      // A Checkout completion can precede its invoice. Wait for signed facts; no provider read.
       if (row.session && !hasStripeKey(env)) continue;
       const session = row.session ? await closeCheckoutSession(env, row.session) : { status: "expired" };
-      if (session.status === "complete")
-        await reconcilePurchaseSession(env, session);
-      else {
+      if (session.status !== "complete") {
         await orderFact(env, o.id, 'expired', {})
           .run();
 

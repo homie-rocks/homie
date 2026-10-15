@@ -186,10 +186,7 @@
  *   homie-studio shop init [--supporter|--giving] [--currency <code>] [--price 500] [--managed]   shop.json and SELLING.md
  *   homie-studio shop check               shop.json against studio settings and provider requirements
  *   homie-studio shop listen --profile <sandbox> [--port 8787]   private local webhook forwarding
- *   homie-studio shop plan --have <file>    exact next operation for Stripe's official MCP (public reads only)
- *   homie-studio shop verify --have <file>  verify fresh MCP reads and save the public link configuration
- *   homie-studio shop webhook [--live] [--renew]   privately install webhook using one Stripe CLI browser approval
- *   homie-studio shop connect [--live] [--renew]   alternative: full sync through Stripe CLI approval
+ *   homie-studio shop connect [--live] [--renew]   one Homie Stripe App approval installs the private Worker connection
  *   homie-studio shop catalog [--have <file>|-] [--mode test|live]   the items as Products in the studio's Stripe,
  *                                         made by the AI through Stripe's own MCP: the read first, then (with what it
  *                                         answered) the exact writes; in sync, shop.json "catalog" records the mode
@@ -725,6 +722,7 @@ function print(result) {
       lines.push(`${result.ok ? 'Looks right' : 'Look again'}: ${result.rows.length} views of ${result.url}`, ...result.rows.map((r) => `  ${r.ok ? 'ok  ' : 'FIX '} ${r.path} on ${({ computer: 'a computer', phone: 'a phone', sideways: 'a phone turned sideways' })[r.device] ?? r.device}${r.problems.length ? `: ${r.problems.join('; ')}` : ''}`), '', `Pictures (open them and look): ${result.shots}`);
       break;
     case 'upgrade': {
+      if (result.stripe) lines.push(result.stripe, '');
       const show = (text, n = 14) => { const l = String(text ?? '').replace(/\n+$/, '').split('\n'); return [...l.slice(0, n).map((x) => `      ${x}`), ...(l.length > n ? [`      … (${l.length - n} more lines; --json has all of it)`] : [])]; };
       const mark = { 'add-file': '+', 'add-section': '+', 'add-lines': '+', scripts: '+', 'update-file': '~', 'update-section': '~', pin: '~', version: '~' };
       const list = result.applied ? result.done : result.changes;
@@ -844,8 +842,7 @@ const OUTWARD_FLAGS = {
   'servers close': ['url', 'reopen'], 'servers level': ['url'], 'servers member': ['url', 'role', 'remove'],
   'parts reissue': ['claim-hash', 'receipt-verified', 'buyer'], 'parts retire': [], 'parts keys': [], 'parts refund': ['game'],
   'shop listen': ['profile','port'],
-  'shop webhook': ['live','renew','profile'],
-  'shop connect': ['local', 'profile', 'url', 'managed', 'live', 'manual', 'renew', 'from-clipboard'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note', 'manual-transaction'],
+  'shop connect': ['live', 'renew'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note', 'manual-transaction'],
   'agents pass': ['url', 'label', 'server', 'hands', 'role', 'days'], 'agents revoke': ['url'], 'agents brain': ['url', 'budget', 'remove'],
   'agents sit': ['url', 'server', 'pass', 'label', 'brain'],
   'events webhook': ['url','after'],
@@ -1112,23 +1109,7 @@ async function main() {
     if (sub === 'init') return shopInit(root, { supporter: flags.has('supporter'), giving: flags.has('giving'), currency: flags.get('currency') ?? null, price: flags.get('price') ?? 500, managed: flags.has('managed') });
     if(sub==='listen')return (await import('../lib/shop-listen.mjs')).shopListen(root,{profile:flags.get('profile'),port:flags.get('port')??8787,log});
     if (sub === 'check') return shopCheck(root);
-    if(sub==='observe') {
-      const {recordShopObservations}=await import('../lib/shop-mcp.mjs');
-      const input=JSON.parse(readFileSync(0,'utf8'));
-      return recordShopObservations(root,Array.isArray(input)?{observations:input}:input);
-    }
-    if (sub === 'plan' || sub === 'verify') {
-      const {shopMcpPlan,saveMcpVerification}=await import('../lib/shop-mcp.mjs');
-      const file=flags.get('have');
-      const input=file?JSON.parse(readFileSync(file==='-'?0:file,'utf8')):{};
-      return (sub==='verify'?saveMcpVerification:shopMcpPlan)(root,input);
-    }
-    if (sub === 'webhook') return shopConnect(root,{onEvent:event=>process.stderr.write('HOMIE_EVENT '+JSON.stringify(event)+'\n'),webhookOnly:true,live:flags.has('live'),renew:flags.has('renew'),profile:flags.get('profile'),log:line=>process.stderr.write(`${line}\n`)});
-    if (sub === 'connect' && flags.has('local')) {
-      if(flags.has('live'))throw new Error('Local checkout requires test mode');
-      return (await import('../lib/shop-local.mjs')).shopConnectLocal(root,{url:flags.get('url'),profile:flags.get('profile')});
-    }
-    if (sub === 'connect') return shopConnect(root, { onEvent:event=>process.stderr.write('HOMIE_EVENT '+JSON.stringify(event)+'\n'), managed: flags.has('managed') ? true : null, live: flags.has('live'), manual: flags.has('manual'), fromClipboard: flags.has('from-clipboard'), renew: flags.has('renew'), log: (line) => process.stderr.write(`${line}\n`) });
+    if (sub === 'connect') return shopConnect(root, { onEvent:event=>process.stderr.write('HOMIE_EVENT '+JSON.stringify(event)+'\n'), managed: flags.has('managed') ? true : null, live: flags.has('live'), renew: flags.has('renew'), log: (line) => process.stderr.write(`${line}\n`) });
     if (sub === 'disconnect') return shopDisconnect(root);
     if (sub === 'catalog') {
       const from = flags.get('have');

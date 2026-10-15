@@ -420,14 +420,11 @@ async function site({ key = true, managed = false, catalog = null, settings = nu
     const j = await r.json();
     assert.equal(r.status, 200, JSON.stringify(j));
     const call = stripe.calls.filter((c) => c.path === '/v1/checkout/sessions' && c.method === 'POST').pop();
-    if (j.url.includes('cs_free_')) {
-      const row = DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(j.order);
-      return { order: j.order, session: row.session, payment: null, hook: { did: 'paid' }, call: null };
-    }
     const sid = /\/pay\/(cs_test_\w+)/.exec(j.url)[1];
-    const pi = `pi_test_${sid.slice(8, 20)}`;
+    let pi = `pi_test_${sid.slice(8, 20)}`;
     const amount = Number(call.form.get('line_items[0][price_data][unit_amount]'));
-    const h = await hook('checkout.session.completed', { id: sid, object: 'checkout.session', payment_status: 'paid', payment_intent: pi, client_reference_id: p.id, metadata: { order: j.order, item }, currency: call.form.get('line_items[0][price_data][currency]'), amount_subtotal: amount, amount_total: amount + (amount ? 40 : 0), total_details: { amount_tax: amount ? 40 : 0 } });
+    if (!amount) pi = null;
+    const h = await hook('checkout.session.completed', { id: sid, object: 'checkout.session', payment_status: amount ? 'paid' : 'no_payment_required', payment_intent: pi, client_reference_id: call.form.get('client_reference_id'), metadata: { order: j.order, item }, currency: call.form.get('line_items[0][price_data][currency]'), amount_subtotal: amount, amount_total: amount + (amount ? 40 : 0), total_details: { amount_tax: amount ? 40 : 0 } });
     assert.equal(h.status, 200);
     return { order: j.order, session: sid, payment: pi, hook: await h.json(), call };
   };
@@ -438,7 +435,7 @@ test('closed until the key and the webhook secret are in; a Preview and a missin
   const s = await site({ key: false });
   const j = await (await s.fetchSite('/api/shop?game=owl-run')).json();
   assert.equal(j.open, false);
-  assert.deepEqual(j.missing, ['fuller-checkout', 'webhook-secret']);
+  assert.deepEqual(j.missing, ['stripe-key', 'webhook-secret']);
   const p = s.player(400, { band: 'adult' });
   const r = await s.post('/api/shop/buy', { item: 'supporter' }, s.as(p));
   assert.equal(r.status, 503);
@@ -970,138 +967,13 @@ if [ "$1" = secret ]; then wc -c | tr -d ' ' >> ${state}/stdin-bytes; echo "Succ
   return { dir, state };
 }
 
-async function openConnect(dir, opts = {}) {
-  const { shopConnect } = await import('../lib/shop.mjs');
-  const said = [];
-  const done = shopConnect(dir, { manual: true, log: (line) => said.push(line), wait: 20_000, ...opts });
-  for (let i = 0; i < 50 && !said.length; i += 1) await new Promise((r) => setTimeout(r, 50));
-  const link = /http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]{32}/.exec(said.join(' '))?.[0];
-  assert.ok(link, said.join(' '));
-  const page = await (await fetch(link)).text();
-  const n = /name="n" value="([a-f0-9]{32})"/.exec(page)[1];
-  const origin = new URL(link).origin;
-  const postKey = (body) => fetch(`${origin}/key`, { method: 'POST', body: new URLSearchParams({ n, ...body }) });
-  return { done, said, page, n, postKey };
-}
 
-test('shop connect: the owner pastes the key on this computer; it goes to the Worker secret and is never printed', async () => {
-  const { shopConnect } = await import('../lib/shop.mjs');
-  const bare = studio('connect-undeployed');
-  const none = await shopConnect(bare, { manual: true, wait: 1000 });
-  assert.equal(none.needs, 'deploy', 'no live address yet: Stripe has nowhere to send payments');
-  const { dir, state } = connectStudio('connect');
-  writeFileSync(join(dir, 'shop.json'), JSON.stringify({ till: 'stripe', items: [SUPPORTER] }));
-  const said = [];
-  const done = shopConnect(dir, { manual: true, log: (line) => said.push(line), wait: 20_000, verify: false });
-  for (let i = 0; i < 50 && !said.length; i += 1) await new Promise((r) => setTimeout(r, 50));
-  const link = /http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]{32}/.exec(said.join(' '))?.[0];
-  assert.ok(link, said.join(' '));
-  const page = await (await fetch(link)).text();
-  assert.match(page, /type="password"/g);
-  assert.match(page, /https:\/\/owls\.example\/api\/shop\/hook/);
-  assert.match(page, /Webhook Endpoints<\/b>: Write/);
-  assert.match(page, /not<\/b> "Authorizing agent access"/, 'the shop\'s key is a plain restricted key, never an Agent key');
-  assert.match(page, /Checkout Sessions<\/b>: Write/);
-  assert.match(page, /\/api\/shop\/hook/);
-  assert.match(page, /3\.5% more/, 'Managed Payments offered, with what it costs');
-  assert.match(page, /seller of record/);
-  assert.match(page, /not to the chat, not to a file/);
-  const n = /name="n" value="([a-f0-9]{32})"/.exec(page)[1];
-  const origin = new URL(link).origin;
-  const postKey = (body) => fetch(`${origin}/key`, { method: 'POST', body: new URLSearchParams(body) });
-  assert.equal((await postKey({ n: 'f'.repeat(32), key: TEST_KEY, hook: HOOK_SECRET })).status, 403);
-  assert.match(await (await postKey({ n, key: `sk_live_${'x'.repeat(30)}`, hook: HOOK_SECRET })).text(), /TEST mode/);
-  assert.match(await (await postKey({ n, key: `rk_live_${'x'.repeat(30)}`, hook: HOOK_SECRET })).text(), /TEST mode/, 'a live key on the test page');
-  assert.equal((await postKey({ n, key: TEST_KEY, hook: 'nope' })).status, 400);
-  const ok = await postKey({ n, key: TEST_KEY, hook: HOOK_SECRET, till: 'stripe-managed' });
-  assert.equal(ok.status, 200);
-  const r = await done;
-  assert.equal(r.ok, true, JSON.stringify(r));
-  assert.equal(r.mode, 'test');
-  const calls = readFileSync(join(state, 'calls'), 'utf8');
-  assert.match(calls, /^secret put STRIPE_KEY$/m);
-  assert.match(calls, /^secret put STRIPE_WEBHOOK_SECRET$/m);
-  assert.match(calls, /^secret put PURCHASE_PAYMENT_CAPABILITIES$/m);
-  assert.match(calls, /^secret put PURCHASE_MACHINE_PAYMENTS$/m);
-  assert.deepEqual(readFileSync(join(state, 'stdin-bytes'), 'utf8').trim().split('\n').map(Number).slice(0,3), [TEST_KEY.length + 1, 9, HOOK_SECRET.length + 1], 'both on Wrangler\'s standard input');
-  assert.doesNotMatch(JSON.stringify(r) + said.join(' ') + calls, /rk_test_A1b2|whsec_test/, 'never printed, returned or put in an argument');
-  assert.equal(JSON.parse(readFileSync(join(dir, 'shop.json'), 'utf8')).till, 'stripe-managed', 'the seller the owner picked');
-  assert.equal(r.webhook.made, false, 'the owner made the webhook and pasted its secret');
-});
 
-test('shop connect: with the key alone the page makes the webhook; its secret goes straight to the Worker, an older one is turned off', async () => {
-  const { dir, state } = connectStudio('connect-auto');
-  writeFileSync(join(dir, 'shop.json'), JSON.stringify({ till: 'stripe', items: [SUPPORTER] }));
-  const stripe = await fakeStripe();
-  stripe.behave.endpoints = [
-    { id: 'we_test_older', object: 'webhook_endpoint', url: 'https://owls.example/api/shop/hook', metadata: { homie: 'shop-v1' }, status: 'enabled' },
-    { id: 'we_test_theirs', object: 'webhook_endpoint', url: 'https://owls.example/api/shop/hook', metadata: {}, status: 'enabled' },
-  ];
-  const before = process.env.STRIPE_API_BASE;
-  process.env.STRIPE_API_BASE = stripe.base;
-  try {
-    const c = await openConnect(dir);
-    const ok = await c.postKey({ key: TEST_KEY, till: 'stripe-managed' });
-    const words = await ok.text();
-    assert.equal(ok.status, 200, words);
-    assert.match(words, /Stripe made the webhook/);
-    assert.match(words, /Managed Payments: it is on/);
-    assert.match(words, /Webhook Endpoints back to None/);
-    const r = await c.done;
-    assert.equal(r.ok, true, JSON.stringify(r));
-    assert.equal(r.webhook.made, true);
-    assert.equal(r.webhook.id, stripe.behave.made[0].id);
-    assert.equal(r.webhook.turnedOff, 1);
-    assert.equal(r.managedPayments.ok, true);
-    const made = stripe.behave.made[0];
-    assert.equal(made.url, 'https://owls.example/api/shop/hook');
-    assert.deepEqual(made.enabled_events, ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired', 'payment_intent.succeeded', 'invoice.paid', 'invoice_payment.paid', 'invoice.payment_failed', 'customer.subscription.updated', 'customer.subscription.deleted', 'charge.refunded', 'refund.created', 'refund.updated', 'refund.failed', 'charge.dispute.created', 'charge.dispute.closed']);
-    assert.equal(made.api_version, '2025-03-31.basil', 'events rendered in the version the kit reads');
-    assert.equal(made.metadata.homie, 'shop-v1');
-    assert.deepEqual(stripe.behave.updated, [{ id: 'we_test_older', disabled: 'true' }], 'only the kit\'s own older endpoint, turned off, never deleted');
-    assert.ok(!stripe.calls.some((c2) => c2.method === 'DELETE'));
-    // Managed Payments tried once in test mode: a test checkout with it, expired at once.
-    const probe = stripe.calls.find((c2) => c2.path === '/v1/checkout/sessions' && c2.method === 'POST');
-    assert.equal(probe.form.get('managed_payments[enabled]'), 'true');
-    assert.ok(stripe.calls.some((c2) => /\/expire$/.test(c2.path)));
-    const calls = readFileSync(join(state, 'calls'), 'utf8');
-    assert.match(calls, /^secret put STRIPE_KEY$/m);
-    assert.match(calls, /^secret put STRIPE_WEBHOOK_SECRET$/m);
-    assert.deepEqual(readFileSync(join(state, 'stdin-bytes'), 'utf8').trim().split('\n').map(Number).slice(0,3), [TEST_KEY.length + 1, 9, made.secret.length + 1], 'Stripe\'s secret went to Wrangler\'s standard input');
-    assert.doesNotMatch(JSON.stringify(r) + c.said.join(' ') + calls + words, /Q7Q7|rk_test_A1b2/, 'the webhook\'s secret and the key are never printed or returned');
-  } finally {
-    if (before === undefined) delete process.env.STRIPE_API_BASE; else process.env.STRIPE_API_BASE = before;
-    stripe.close();
-  }
-});
 
-test('shop connect: a key without Webhook Endpoints says how to fix it; the page then takes the owner\'s own webhook secret', async () => {
-  const { dir, state } = connectStudio('connect-denied');
-  writeFileSync(join(dir, 'shop.json'), JSON.stringify({ till: 'stripe', items: [SUPPORTER] }));
-  const stripe = await fakeStripe();
-  stripe.behave.webhookDenied = true;
-  stripe.behave.managedRefused = true;
-  const before = process.env.STRIPE_API_BASE;
-  process.env.STRIPE_API_BASE = stripe.base;
-  try {
-    const c = await openConnect(dir);
-    const no = await c.postKey({ key: TEST_KEY });
-    assert.equal(no.status, 400);
-    assert.match(await no.text(), /needs Webhook Endpoints: Write/);
-    assert.equal(existsSync(join(state, 'calls')), false, 'nothing saved');
-    const yes = await c.postKey({ key: TEST_KEY, hook: HOOK_SECRET, till: 'stripe-managed' });
-    const words = await yes.text();
-    assert.equal(yes.status, 200, words);
-    assert.match(words, /refused a test checkout with Managed Payments/);
-    const r = await c.done;
-    assert.equal(r.webhook.made, false);
-    assert.equal(r.managedPayments.ok, false);
-    assert.deepEqual(readFileSync(join(state, 'stdin-bytes'), 'utf8').trim().split('\n').map(Number).slice(0,3), [TEST_KEY.length + 1, 9, HOOK_SECRET.length + 1]);
-  } finally {
-    if (before === undefined) delete process.env.STRIPE_API_BASE; else process.env.STRIPE_API_BASE = before;
-    stripe.close();
-  }
-});
+
+
+
+
 
 /* ------------------------------------------------------------------ in a game */
 
@@ -1426,7 +1298,8 @@ test('pruning progresses past 25 owners and removes the other 500 idle guests', 
 });
 
 
-test('address churn cannot reset an account, and new guest rates are configurable and positive', async () => {
+test('address churn cannot reset an account, and new guest rates are configurable and positive', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
   for (const value of [0, -1, false, '', '0x10', 1.5]) assert.equal(checkShop({ guestBuyersPerAddressPerHour: value }).ok, false);
   const s = await site({ settings: { capPerPlayerMonth: null, purchaseAttemptsPerMinute: 6 } });
   const p = s.player(400, { band: 'adult' });
@@ -1683,6 +1556,8 @@ test('resource_missing releases a session, other errors retain it, and late paid
   const [row] = unresolved(s, p, 1, { amount: 500, age: 41 * DAY });
   const paidTime = Math.floor((Date.now() - 40 * DAY) / 1000);
   Object.assign(row.truth, { payment_status: 'paid', payment_intent: { id: 'pi_old', status: 'succeeded', latest_charge: { created: paidTime } } });
+  assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 500 }, s.as(p))).status, 403);
+  await s.hook('checkout.session.completed', row.truth, { created: paidTime });
   assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 500 }, s.as(p))).status, 200);
   assert.equal(s.DB.sql.prepare('SELECT paid_at FROM shop_orders WHERE id = ?').get(row.id).paid_at, paidTime * 1000);
   assert.equal(await spentThisMonth(s.env, p.id), 500, 'only the new checkout counts this month');
@@ -1823,7 +1698,7 @@ test('verified late payments grant once after missing, release, expiry or failur
       assert.equal(office.orders[0].status, state);
       assert.ok(office.orders[0].note);
     }
-    const paid = { ...row.truth, payment_intent: 'pi_late', ...(type.endsWith('completed') ? { payment_status: 'paid' } : {}) };
+    const paid = { ...row.truth, payment_intent: 'pi_late', payment_status: 'paid' };
     const event = { id: 'evt_late_payment' };
     assert.equal((await (await s.hook(type, paid, event)).json()).did, 'paid');
     const before = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(row.id);
@@ -1901,6 +1776,8 @@ test('open default: only items and working payment setup sell a three-line cart 
     assert.doesNotMatch(form.get('custom_text[submit][message]'), /ends the 14-day/);
     const truth = s.stripe.behave.sessions.get(row.session);
     Object.assign(truth, { payment_status: 'paid', amount_total: 1305, payment_intent: 'pi_' + order, created: Math.floor(Date.now() / 1000) });
+    assert.equal((await (await s.fetchSite('/api/shop/order?session=' + row.session, { headers: { cookie } })).json()).status, 'started');
+    await s.hook('checkout.session.completed', truth);
     const paid = await (await s.fetchSite('/api/shop/order?session=' + row.session, { headers: { cookie } })).json();
     assert.equal(paid.status, 'paid');
     assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM shop_order_lines WHERE order_id = ? AND status = ?').get(order, 'paid').n, 3);
@@ -2108,6 +1985,8 @@ test('working setup, unseen paid orders, cancellation, free carts and redacted S
   Object.assign(s.stripe.behave.sessions.get(row.session), { status: 'complete', payment_status: 'paid', payment_intent: 'pi_unseen', created: Math.floor(Date.now() / 1000) - 120 });
   s.DB.sql.prepare('UPDATE shop_orders SET created_at = ?, updated_at = 1 WHERE id = ?').run(Date.now() - 120000, row.id);
   await s.fetchSite('/api/player/owns', { headers: s.as(p) });
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(row.id).status, 'started');
+  await s.hook('checkout.session.completed', s.stripe.behave.sessions.get(row.session));
   assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(row.id).status, 'paid');
   assert.equal((await (await s.fetchSite('/api/player/owns', { headers: s.as(p) })).json()).detail[0].quantity, 1);
   const abandoned = await (await s.post('/api/shop/buy', { item: 'supporter' }, s.as(p))).json();
@@ -2120,11 +1999,16 @@ test('working setup, unseen paid orders, cancellation, free carts and redacted S
   const scheduled = [];
   await s.worker.scheduled({}, s.env, { waitUntil: (p) => scheduled.push(p) });
   await Promise.all(scheduled);
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(pending.order).status, 'started');
+  await s.hook('checkout.session.completed', s.stripe.behave.sessions.get(pendingRow.session));
   assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(pending.order).status, 'paid');
   const calls = s.stripe.calls.length;
   const free = await (await s.post('/api/shop/buy', { lines: [{ item: 'free', quantity: 4 }] }, s.as(p))).json();
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(free.order).status, 'started');
+  const freeSession = s.stripe.behave.sessions.get(free.session ?? s.DB.sql.prepare('SELECT session FROM shop_orders WHERE id=?').get(free.order).session);
+  await s.hook('checkout.session.completed', {...freeSession, payment_status:'no_payment_required', payment_intent:null});
   assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(free.order).status, 'paid');
-  assert.equal(s.stripe.calls.length, calls);
+  assert.equal(s.stripe.calls.length, calls + 1);
   const { StripeError, redactStripe } = await import('../worker/stripe.mjs');
   const secret = ['cs', 'test', 'example', 'secret', 'sensitive'].join('_');
   const error = new StripeError(502, { error: { message: `${TEST_KEY} ${HOOK_SECRET} ${secret}`, code: secret, param: TEST_KEY } });
@@ -2257,7 +2141,9 @@ test('cancel owns its aged session, foreign events are ignored, and release gran
   const row = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(bought.order);
   Object.assign(s.stripe.behave.sessions.get(row.session), { payment_status: 'paid', payment_intent: 'pi_release', amount_total: 500 });
   const release = await s.post('/_studio/api/shop/release', { order: row.id }, s.owner);
-  assert.equal(release.status, 200, await release.clone().text());
+  assert.equal(release.status, 400, await release.clone().text());
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(row.id).status, 'started');
+  await s.hook('checkout.session.completed', s.stripe.behave.sessions.get(row.session));
   assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(row.id).status, 'paid');
   await s.hook('charge.dispute.closed', { payment_intent: 'pi_release', status: 'lost' });
   assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(row.id).status, 'lost');
@@ -2394,12 +2280,15 @@ test('refunding one free cart line keeps its sibling and a later full refund clo
   ] } });
   const p = s.player();
   const { order } = await (await s.post('/api/shop/buy', { lines: [{ item: 'a' }, { item: 'b' }] }, s.as(p))).json();
+  const zero = s.stripe.behave.sessions.get(s.DB.sql.prepare('SELECT session FROM shop_orders WHERE id=?').get(order).session);
+  await s.hook('checkout.session.completed', {...zero, payment_status:'no_payment_required', payment_intent:null});
+  const callsBeforeRefund = s.stripe.calls.length;
   assert.equal((await s.post('/_studio/api/shop/refund', { order, line: order + '_0' }, s.owner)).status, 200);
   assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: s.as(p) })).json()).owns, ['b']);
   assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(order).status, 'paid');
   assert.equal((await s.post('/_studio/api/shop/refund', { order }, s.owner)).status, 200);
   assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: s.as(p) })).json()).owns, []);
-  assert.equal(s.stripe.calls.length, 0);
+  assert.equal(s.stripe.calls.length, callsBeforeRefund);
   s.stripe.close();
 });
 
@@ -2440,6 +2329,10 @@ test('unrecorded payments recover Stripe refunds and lost disputes through every
         assert.equal(s.DB.sql.prepare("SELECT COUNT(*) n FROM entitlements WHERE order_id = ? AND state = 'active'").get(o.id).n, 0);
         if (lost) assert.equal(s.DB.sql.prepare('SELECT COUNT(*) n FROM entitlements WHERE order_id = ?').get(o.id).n, 0, 'lost charges never grant');
       };
+      if (['buyer','thanks','scheduled','office','release'].includes(route)) {
+        assert.equal(s.DB.sql.prepare('SELECT paid_at FROM shop_orders WHERE id=?').get(o.id).paid_at, null);
+        await s.hook('checkout.session.completed', { ...session, payment_intent: pi });
+      }
       check();
       assert.equal(await spentThisMonth(s.env, p.id), 0);
       await event(); check();
@@ -2459,12 +2352,13 @@ test('eligible work bypasses processing backoff and legacy paid repairs', async 
     Object.assign(rows[3].truth, { payment_status: 'paid', amount_total: rows[3].truth.amount_subtotal, created: Math.floor(Date.now() / 1000) - 120 });
     const shop = shopOf({ shop: { items: [{ id: 'tip', kind: 'tip', name: 'Tip' }] } });
     await reconcileOrders(s.env, shop, p.id);
-    assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(rows[3].id).status, 'paid');
+    assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(rows[3].id).status, 'processing');
     assert.equal(stripeReads(s).length, 1);
+    await s.hook('checkout.session.completed', rows[3].truth);
     for (const r of rows.slice(0, 3)) s.DB.sql.prepare("UPDATE shop_orders SET status = 'paid', updated_at = 1 WHERE id = ?").run(r.id);
     s.DB.sql.prepare("UPDATE shop_orders SET status = 'started', paid_at = NULL, attention = 1, updated_at = 1 WHERE id = ?").run(rows[3].id);
     await reconcileOrders(s.env, shop);
-    assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(rows[3].id).status, 'paid');
+    assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(rows[3].id).status, 'started');
   } finally { s.stripe.close(); }
 });
 
@@ -2509,359 +2403,30 @@ test('foreign events need no PaymentIntent read without an unrecorded order or w
 });
 
 /** CLI stand-in uses the same HTTP-boundary Stripe as the Worker tests above. No account or network login. */
-async function pairingHarness(name) {
-  const { dir } = connectStudio(name);
-  const { shopInit } = await import('../lib/shop.mjs');
-  shopInit(dir, { supporter: true });
-  const stripe = await fakeStripe();
-  const state = { connected: false, oauth: false, expired: false, saveFails: false, cliCalls: [], approvals: [], logs: [], saved: null, writes: 0 };
-  const key = `rk_test_${'B8'.repeat(20)}`;
-  const exec = async (argv) => {
-    const args = argv.slice(2); state.cliCalls.push(args);
-    const okay = (body) => ({ code: 0, stdout: typeof body === 'string' ? body : JSON.stringify(body) });
-    if (args[0] === '--version') return okay('stripe version 1.53.1');
-    if (args[0] === 'config') return okay(state.connected && !state.oauth ? `account_id=acct_owls\ntest_mode_api_key=${key}\ntest_mode_key_expires_at=${state.expired ? '2020-01-01' : '2099-01-01'}\n` : '');
-    if (args[0] === 'login' && args[1] === '--non-interactive') return okay({ browser_url: 'https://dashboard.stripe.com/stripecli/confirm?test=1', verification_code: 'owl-owl', next_step: 'stripe login --complete-device' });
-    if (args[0] === 'login' && args[1] === '--complete-device') { state.connected = true; state.expired = false; return okay(`Logged in ${key}`); }
-    if (!state.connected || state.expired) return { code: 1, stderr: `expired ${key}` };
-    const method = args[0].toUpperCase(); const path = args[1]; const body = new URLSearchParams();
-    for (let i = 2; i < args.length; i++) if (args[i] === '-d') { const data = args[++i]; const at = data.indexOf('='); body.append(data.slice(0, at), data.slice(at + 1)); }
-    const r = await fetch(`${stripe.base}${path}${method === 'GET' ? `?${body}` : ''}`, { method, headers: { authorization: `Bearer ${key}`, 'content-type': 'application/x-www-form-urlencoded', ...(args.includes('--idempotency') ? { 'idempotency-key': args[args.indexOf('--idempotency') + 1] } : {}) }, ...(method === 'GET' ? {} : { body }) });
-    const data = await r.json();
-    if (method === 'POST' && path === '/v1/webhook_endpoints' && r.ok && !stripe.behave.endpoints.some((e) => e.id === data.id)) stripe.behave.endpoints.push({ ...data, secret: undefined });
-    if (method === 'POST' && path.startsWith('/v1/webhook_endpoints/')) { const old = stripe.behave.endpoints.find((e) => e.id === data.id); if (old) old.status = data.status; }
-    return { code: r.ok ? 0 : 1, stdout: JSON.stringify(data) };
-  };
-  const wrangler = (args, opts) => {
-    if (args[1] === 'list') return { code: 0, stdout: JSON.stringify(state.saved ? Object.keys(state.saved).map((name) => ({ name })) : []) };
-    if (args[1] === 'delete') { delete state.saved[args[2]]; return { code: 0 }; }
-    assert.deepEqual(args, ['secret', 'bulk']); state.writes++;
-    if (state.saveFails) return { code: 1, out: 'private failure' };
-    state.saved = { ...state.saved, ...JSON.parse(opts.input) }; return { code: 0 };
-  };
-  return { dir, stripe, state, opts: { storage: join(scratch, 'pairing-receipts'), exec, wrangler, open: (url) => state.approvals.push(url), log: (line) => state.logs.push(line) } };
-}
-
-test('browser pairing: first connect, existing endpoint, repeat, expiry, renewal and test then live', async () => {
-  const { shopConnect } = await import('../lib/stripe-connect.mjs');
-  const h = await pairingHarness('pairing-first');
-  h.stripe.behave.endpoints.push({ id: 'we_old', url: 'https://owls.example/api/shop/hook', metadata: { homie: 'shop-v1' }, status: 'enabled' }, { id: 'we_foreign', url: 'https://other.example/api/shop/hook', metadata: { homie: 'shop-v1' }, status: 'enabled' });
-  const first = await shopConnect(h.dir, h.opts);
-  assert.equal(first.ok, true, JSON.stringify(first)); assert.equal(first.verifiedPurchase, false);
-  assert.equal(h.state.approvals.length, 1); assert.equal(h.state.writes, 1);
-  assert.deepEqual(Object.keys(h.state.saved).sort(), ['STRIPE_CHECKOUT_MODE', 'STRIPE_SHOP_LINKS', 'STRIPE_WEBHOOK_SECRET']);
-  assert.deepEqual(h.stripe.behave.updated.map((e) => e.id), ['we_old']);
-  assert.doesNotMatch(JSON.stringify([first, h.state.logs]), /rk_test_|whsec_/);
-  const second = await shopConnect(h.dir, h.opts);
-  assert.equal(second.alreadyConnected, true); assert.equal(h.state.writes, 1); assert.equal(h.state.approvals.length, 1);
-  h.state.expired = true;
-  const renewed = await shopConnect(h.dir, h.opts);
-  assert.equal(renewed.ok, true); assert.equal(h.state.approvals.length, 2);
-  const live = await shopConnect(h.dir, { ...h.opts, live: true });
-  assert.equal(live.ok, true, JSON.stringify(live));
-  assert.equal(JSON.parse(h.state.saved.STRIPE_SHOP_LINKS).mode, 'live');
-  assert.equal(h.state.saved.STRIPE_KEY, undefined);
-});
-
-test('browser pairing: connect before deploy retains approval; OAuth needs no exported credential', async () => {
-  const { shopConnect } = await import('../lib/stripe-connect.mjs');
-  const h = await pairingHarness('pairing-before-deploy');
-  const file = join(h.dir, 'studio.json'); const studio = JSON.parse(readFileSync(file));
-  const bare = { ...studio, cloudflare: {} }; writeFileSync(file, JSON.stringify(bare));
-  const first = await shopConnect(h.dir, h.opts);
-  assert.equal(first.needs, 'deploy'); assert.equal(h.state.approvals.length, 1); assert.equal(h.state.writes, 0);
-  writeFileSync(file, JSON.stringify(studio));
-  assert.equal((await shopConnect(h.dir, h.opts)).ok, true); assert.equal(h.state.approvals.length, 1);
-  h.state.oauth = true;
-  const oauth = await shopConnect(h.dir, h.opts);
-  assert.equal(oauth.ok, true); assert.equal(h.state.writes, 1);
-  assert.ok(!h.state.cliCalls.some((args) => args[0] === 'config'), 'never reads a CLI credential');
-});
-
-test('browser pairing: failed storage leaves old hook active; retry recovers without another approval', async () => {
-  const { shopConnect } = await import('../lib/stripe-connect.mjs');
-  const h = await pairingHarness('pairing-save-failure');
-  h.state.saveFails = true;
-  const failed = await shopConnect(h.dir, h.opts);
-  assert.equal(failed.needs, 'cloudflare'); assert.equal(h.stripe.behave.updated.length, 0);
-  h.state.saveFails = false;
-  assert.equal((await shopConnect(h.dir, h.opts)).ok, true);
-  assert.equal(h.state.approvals.length, 1); assert.equal(h.stripe.behave.made.length, 1, 'retry reuses the private creation response');
-  // Deleted Worker secrets invalidate the receipt even though the CLI session still works.
-  h.state.saved = null;
-  assert.equal((await shopConnect(h.dir, h.opts)).saved, true);
-});
-
-test('browser pairing: missing CLI, permission failure, and hostile continuation fail without exposing output', async () => {
-  const { shopConnect, completionArgs, stripeProcess } = await import('../lib/stripe-connect.mjs');
-  const h = await pairingHarness('pairing-errors');
-  const managed = await shopConnect(h.dir, { ...h.opts, managed: true });
-  assert.equal(managed.needs, 'shop-settings', 'a seller flag is not silently ignored');
-  const missing = await shopConnect(h.dir, { ...h.opts, installExec: async () => ({code:1}), exec: async () => ({ code: 1, missing: true }) });
-  assert.equal(missing.needs, 'stripe-cli'); assert.deepEqual(missing.next, ['npm install --global @stripe/cli@latest']);
-  assert.equal(completionArgs("stripe login --complete 'https://evil.example/x'"), null);
-  assert.equal(completionArgs('stripe login --complete-device; echo token'), null);
-  assert.deepEqual(completionArgs("stripe login --complete 'https://dashboard.stripe.com/stripecli/auth/a'"), ['login', '--complete', 'https://dashboard.stripe.com/stripecli/auth/a']);
-  h.stripe.behave.webhookDenied = true;
-  const denied = await shopConnect(h.dir, h.opts);
-  assert.equal(denied.needs, 'stripe-setup'); assert.equal(h.state.writes, 0);
-  // Exercise real child-process transport with a fake CLI: inherited keys are never used or printed.
-  const bin = join(h.dir, 'node_modules', '.bin');
-  writeFileSync(join(bin, 'stripe'), '#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({key:!!process.env.STRIPE_API_KEY,args:process.argv.slice(2)}));\n');
-  chmodSync(join(bin, 'stripe'), 0o755);
-  const result = await stripeProcess(['--version'], { cwd: h.dir, env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, STRIPE_API_KEY: 'must-not-use' } });
-  assert.deepEqual(JSON.parse(result.stdout), { key: false, args: ['--version'] });
-});
-
-test('real browser: the explicitly chosen manual fallback submits locally and automatically installs its webhook', { skip: !process.env.CHROME_PATH && 'Set CHROME_PATH for real-browser proof' }, async () => {
-  const { shopConnect } = await import('../lib/stripe-connect.mjs');
-  const { default: puppeteer } = await import('puppeteer-core');
-  const { dir } = connectStudio('pairing-manual-browser');
-  const stripe = await fakeStripe();
-  const logs = [];
-  const done = shopConnect(dir, { manual: true, log: (line) => logs.push(line), wait: 20_000, fetcher: (url, options) => fetch(String(url).replace('https://api.stripe.com', stripe.base), options) });
-  for (let i = 0; i < 100 && !logs.length; i++) await new Promise((r) => setTimeout(r, 10));
-  const url = /http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]+/.exec(logs.join(' '))[0];
-  const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, headless: true });
-  try {
-    const page = await browser.newPage(); await page.goto(url);
-    assert.match(await page.title(), /Connect.*Stripe/);
-    await page.type('#key', `rk_test_${'T6'.repeat(20)}`);
-    await Promise.all([page.waitForNavigation(), page.click('button')]);
-    assert.match(await page.$eval('body', (el) => el.textContent), /Saved to your Worker/);
-    assert.equal((await done).ok, true); assert.equal(stripe.behave.made.length, 1);
-    assert.doesNotMatch(logs.join(' '), /T6T6|whsec_/);
-  } finally { await browser.close(); }
-});
-
-test('real browser: Stripe pairing shows the code and one approval, with no credential field', { skip: !process.env.CHROME_PATH && 'Set CHROME_PATH for real-browser proof' }, async () => {
-  const { shopConnect } = await import('../lib/stripe-connect.mjs');
-  const { default: puppeteer } = await import('puppeteer-core');
-  const h = await pairingHarness('pairing-browser');
-  const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, headless: true });
-  let approve; const approved = new Promise((resolve) => { approve = resolve; });
-  let opened; const ready = new Promise((resolve) => { opened = resolve; });
-  try {
-    const page = await browser.newPage();
-    await page.exposeFunction('approvedByOwner', approve);
-    await page.setRequestInterception(true);
-    page.on('request', (request) => request.respond({ status: 200, contentType: 'text/html', body: '<h1>Stripe pairing stand-in</h1><p>owl-owl</p><button onclick="approvedByOwner();this.textContent=\'Approved\'">Approve studio sandbox</button>' }));
-    const done = shopConnect(h.dir, { ...h.opts, open: (url) => { page.goto(url).then(opened); }, exec: async (args, opts) => { if (args.includes('--complete-device')) await approved; return h.opts.exec(args, opts); } });
-    await ready;
-    assert.match(await page.$eval('body', (el) => el.textContent), /owl-owl/);
-    assert.equal(await page.$$eval('input', (all) => all.length), 0);
-    await page.click('button');
-    const result = await done;
-    assert.equal(result.saved, true); assert.equal(h.state.writes, 1);
-    assert.doesNotMatch(JSON.stringify([result, h.state.logs]), /rk_test_|whsec_/);
-  } finally { approve(); await browser.close(); }
-});
-
-test('keyless: setup, changed catalog, purchase, tips, reordered refund/dispute, lost and forged events, and switching', async () => {
-  const { shopConnect } = await import('../lib/stripe-connect.mjs');
-  const { readShop } = await import('../lib/shop.mjs');
-  const h = await pairingHarness('pairing-purchase');
-  const file = join(h.dir, 'shop.json');
-  const raw = JSON.parse(readFileSync(file));
-  raw.items[0].kind='item'; // Ordinary items retain adjustable quantity; supporters are fixed at one.
-  raw.items.push({ id: 'tip', kind: 'tip', name: 'A tip', price: 'choose', min: 200, max: 1000 }, { id: 'free', name: 'Free badge', price: 0, gives: ['badge:free'] });
-  writeFileSync(file, JSON.stringify(raw));
-  assert.equal((await shopConnect(h.dir, h.opts)).ok, true);
-  assert.equal(h.state.saved.STRIPE_KEY, undefined);
-  assert.equal(h.stripe.catalog.products.length, 3);
-  assert.equal(h.stripe.catalog.prices.length, 3);
-  assert.equal(h.stripe.catalog.payment_links.length, 2);
-  const before = h.stripe.calls.length;
-  assert.equal((await shopConnect(h.dir, h.opts)).alreadyConnected, true);
-  assert.equal(h.stripe.calls.slice(before).filter((c) => c.method === 'POST').length, 0);
-  raw.items[0].price = 700;
-  raw.items[0].name = 'Supporter again';
-  writeFileSync(file, JSON.stringify(raw));
-  assert.equal((await shopConnect(h.dir, h.opts)).ok, true);
-  assert.equal(h.stripe.catalog.products.length, 3);
-  assert.equal(h.stripe.catalog.prices.filter((p) => p.active).length, 3);
-  assert.equal(h.stripe.catalog.payment_links.filter((p) => p.active).length, 2);
-  const settings = readShop(h.dir).shop;
-  const s = await site({ key: false, settings }); Object.assign(s.env, h.state.saved);
-  const p = s.player(30, { band: 'adult' });
-  const config = JSON.parse(s.env.STRIPE_SHOP_LINKS), secret = s.env.STRIPE_WEBHOOK_SECRET;
-  subscribeAppPayments(s);
-  const purchase = async (item, amount, reference) => {
-    const r = await s.post('/api/shop/buy', { item, amount, reference }, s.as(p));
-    const body = await r.json(); assert.equal(r.status, 200, JSON.stringify(body)); return body;
-  };
-  const eventFor = (order, item, amount, suffix = '') => {
-    const link = config.items.find((l) => l.item === item);
-    return { id: `cs_test_${order.order}${suffix}`, payment_link: link.id, client_reference_id: order.order, metadata: { revision: link.revision },
-      currency: 'usd', amount_subtotal: amount, amount_total: amount, payment_status: 'paid', payment_intent: `pi_${order.order}${suffix}` };
-  };
-  const order = await purchase('supporter', undefined, 'ticket:keyless-42');
-  assert.equal(new URL(order.url).searchParams.get('client_reference_id'), order.order);
-  assert.equal(new URL(order.url).hostname, 'buy.stripe.com');
-  const session = eventFor(order, 'supporter', 1400); // Buyer changes quantity on Stripe.
-  const delivered = await s.hook('checkout.session.completed', session, { secret });
-  assert.equal(delivered.status, 200, await delivered.text());
-  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(order.order).status, 'paid');
-  assert.equal(s.DB.sql.prepare('SELECT quantity FROM shop_order_lines WHERE order_id = ?').get(order.order).quantity, 2);
-  await s.hook('checkout.session.completed', session, { secret });
-  assert.equal(s.DB.sql.prepare('SELECT count(*) AS n FROM shop_orders WHERE payment = ?').get(session.payment_intent).n, 1);
-  await s.hook('checkout.session.completed', eventFor(order, 'supporter', 700, 'again'), { secret });
-  assert.equal(s.DB.sql.prepare("SELECT count(*) AS n FROM shop_orders WHERE status = 'paid'").get().n, 2);
-  const paidEvents = s.DB.sql.prepare("SELECT data FROM studio_events WHERE type='order.paid'").all().map(r=>JSON.parse(r.data));
-  assert.equal(paidEvents.length,2,'duplicate deliveries emit once; reopened links create a second order');
-  assert.deepEqual(paidEvents.map(e=>e.reference),['ticket:keyless-42','ticket:keyless-42']);
-  assert.equal(new Set(paidEvents.map(e=>e.order)).size,2);
-  const refund = { id: 're_one', payment_intent: session.payment_intent, currency: 'usd', amount: 1400, status: 'succeeded' };
-  await s.hook('refund.updated', refund, { secret });
-  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(order.order).status, 'refunded');
-  await s.hook('refund.created', { ...refund, status: 'pending' }, { secret, created: 1 });
-  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(order.order).status, 'refunded');
-  const tip = await purchase('tip', 250);
-  const tipSession = eventFor(tip, 'tip', 850); // Stripe's chosen amount wins over the initial suggestion.
-  await s.hook('checkout.session.completed', tipSession, { secret });
-  assert.equal(s.DB.sql.prepare('SELECT amount FROM shop_orders WHERE id = ?').get(tip.order).amount, 850);
-  const late = await purchase('supporter');
-  const lateSession = eventFor(late, 'supporter', 700);
-  // A lost payment webhook leaves the purchase pending. No unauthenticated provider reads.
-  await s.fetchSite('/api/shop', { headers: s.as(p) });
-  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(late.order).status, 'started');
-  const forged = await s.hook('checkout.session.completed', lateSession);
-  assert.equal(forged.status, 400);
-  await s.hook('charge.dispute.closed', { id: 'dp_late', payment_intent: lateSession.payment_intent, status: 'lost' }, { secret });
-  await s.hook('charge.dispute.created', { id: 'dp_late', payment_intent: lateSession.payment_intent, status: 'needs_response' }, { secret, created: 1 });
-  await s.hook('checkout.session.completed', lateSession, { secret }); // AI/Stripe resends it.
-  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(late.order).status, 'lost');
-  const early = await purchase('supporter'); const earlySession = eventFor(early, 'supporter', 700);
-  await s.hook('refund.created', { ...refund, id: 're_early', payment_intent: earlySession.payment_intent, amount: 700 }, { secret });
-  await s.hook('checkout.session.completed', earlySession, { secret });
-  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(early.order).status, 'refunded');
-  await s.hook('refund.failed', { ...refund, id: 're_early', payment_intent: earlySession.payment_intent, amount: 700, status: 'failed' }, { secret });
-  await s.hook('refund.created', { ...refund, id: 're_early', payment_intent: earlySession.payment_intent, amount: 700 }, { secret, created: 1 });
-  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(early.order).status, 'paid');
-  const mismatched = await s.hook('checkout.session.completed', { ...earlySession, id: 'cs_wrong_link', payment_link: 'plink_foreign' }, { secret });
-  assert.equal((await mismatched.json()).did, 'mismatch');
-  const office = await (await s.fetchSite('/_studio/api/shop', { headers: s.owner })).json();
-  assert.equal(office.keyless, true);
-  assert.equal(office.orders.find((o) => o.id === tip.order).refundable, false);
-  assert.equal(s.stripe.calls.length, 0, 'no Stripe API call at purchase, delivery, refund, dispute or lost webhook');
-  resetShopLimits();
-  const cart = await s.post('/api/shop/buy', { lines: [{ item: 'supporter' }, { item: 'tip', amount: 500 }] }, s.as(p));
-  assert.equal(cart.status, 409);
-  s.env.STRIPE_CHECKOUT_MODE = 'sessions'; s.env.STRIPE_KEY = TEST_KEY;
-  const keyed = await purchase('supporter'); assert.match(keyed.url, /checkout.stripe.com/);
-  delete s.env.STRIPE_KEY;
-  resetShopLimits();
-  const again = await purchase('supporter'); assert.match(again.url, /buy.stripe.com/);
-  delete s.env.STRIPE_WEBHOOK_SECRET; delete s.env.STRIPE_SHOP_LINKS;
-  const free = await s.post('/api/shop/buy', { item: 'free' }, s.as(p));
-  // Mixed shops still need connection readiness; a free-only shop is independently usable.
-  assert.equal(free.status, 200, await free.text());
-  const freeSite = await site({ key: false, settings: { ...settings, items: [settings.items.find((i) => i.id === 'free')] } });
-  const fp = freeSite.player();
-  const freeBuy = await freeSite.post('/api/shop/buy', { item: 'free' }, freeSite.as(fp));
-  assert.equal(freeBuy.status, 200, await freeBuy.text());
-  // Remove and re-sync: archive, never delete or duplicate. Return to a previous price reactivates it.
-  h.state.saved.STRIPE_KEY = TEST_KEY;
-  raw.items = raw.items.filter((i) => i.id !== 'tip'); raw.items[0].price = 500; raw.items[0].name = 'Supporter';
-  writeFileSync(file, JSON.stringify(raw));
-  assert.equal((await shopConnect(h.dir, h.opts)).ok, true);
-  assert.equal(h.state.saved.STRIPE_KEY, undefined);
-  assert.equal(h.stripe.catalog.products.filter((p) => p.active).length, 2);
-  assert.equal(h.stripe.catalog.payment_links.filter((p) => p.active).length, 1);
-  assert.equal(h.stripe.catalog.products.length, 3);
-  raw.till = 'stripe-managed'; writeFileSync(file, JSON.stringify(raw));
-  assert.equal((await shopConnect(h.dir, h.opts)).ok, true);
-  const managedLink = h.stripe.catalog.payment_links.find((p) => p.active);
-  assert.equal(managedLink.managed_payments.enabled, true);
-  assert.equal(managedLink.automatic_tax, undefined);
-});
 
 
-test('browser pairing: an owner can choose the live fallback after test; no second webhook secret is requested', async () => {
-  const { shopConnect, stripeConnectionInfo } = await import('../lib/stripe-connect.mjs');
-  const h = await pairingHarness('pairing-live-choice');
-  assert.equal((await shopConnect(h.dir, h.opts)).saved, true);
-  const c = await openConnect(h.dir, { live: true, storage: h.opts.storage, fetcher: (url, options) => fetch(String(url).replace('https://api.stripe.com', h.stripe.base), options) });
-  assert.match(c.page, /Live mode/);
-  const saved = await c.postKey({ key: `rk_live_${'L7'.repeat(20)}`, till: 'stripe' });
-  assert.equal(saved.status, 200, await saved.text());
-  const result = await c.done;
-  assert.equal(result.mode, 'live'); assert.equal(result.webhook.made, true);
-  assert.equal(stripeConnectionInfo(h.dir, h.opts), null, 'manual replacement clears the old test receipt');
-});
 
-test('shop connect --json keeps the local approval link on stderr while waiting for the owner', async () => {
-  const { dir } = connectStudio('pairing-json-link');
-  const child = spawn(process.execPath, [CLI, 'shop', 'connect', '--manual', '--json'], { cwd: dir, env: { ...process.env, HOMIE_STUDIO_WARM: '0' }, stdio: ['ignore', 'pipe', 'pipe'] });
-  let output = '', errors = '';
-  child.stdout.on('data', (b) => { output += b; }); child.stderr.on('data', (b) => { errors += b; });
-  const closed = new Promise((resolve) => child.once('close', resolve));
-  try {
-    for (let i = 0; i < 200 && !errors.includes('http://127.0.0.1:'); i++) await new Promise((r) => setTimeout(r, 20));
-    const link = /http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]+/.exec(errors)?.[0];
-    assert.ok(link, errors); assert.equal(output, '');
-    assert.match(await (await fetch(link)).text(), /Connect.*shop to your Stripe/);
-  } finally { child.kill(); await closed; }
-});
 
-test('real Chrome: keyless buyer sees one-item checkout, chooses a tip on Stripe, and receives the item after webhook', { skip: !process.env.CHROME_PATH && 'Set CHROME_PATH for real-browser proof' }, async () => {
-  const { default: puppeteer } = await import('puppeteer-core');
-  const { shopConnect } = await import('../lib/stripe-connect.mjs');
-  const { readShop } = await import('../lib/shop.mjs');
-  const h = await pairingHarness('keyless-browser');
-  const file = join(h.dir, 'shop.json'), raw = JSON.parse(readFileSync(file));
-  raw.items.push({ id: 'tip', kind: 'tip', name: 'A tip', price: 'choose', min: 200, max: 1000 });
-  writeFileSync(file, JSON.stringify(raw));
-  assert.equal((await shopConnect(h.dir, h.opts)).ok, true);
-  const s = await site({ key: false, settings: readShop(h.dir).shop }); Object.assign(s.env, h.state.saved);
-  const p = s.player();
-  const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, headless: true });
-  try {
-    const page = await browser.newPage();
-    await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
-    await page.setCookie({ name: 'studio_player', value: p.cookie.split('=')[1], domain: 'owls.example', secure: true });
-    const errors = []; page.on('pageerror', (e) => errors.push(e.message));
-    await page.setRequestInterception(true);
-    page.on('request', async (req) => {
-      const url = new URL(req.url());
-      if (url.hostname === 'buy.stripe.com') return req.respond({ status: 200, contentType: 'text/html', body: '<h1>Stripe Payment Link stand-in</h1><label>Tip amount <input id="amount" value="2.00"></label><button id="pay">Pay</button>' });
-      const r = await s.fetchSite(url.pathname + url.search, { method: req.method(), headers: { ...req.headers(), ...s.as(p) }, ...(req.postData() ? { body: req.postData() } : {}) });
-      return req.respond({ status: r.status, headers: Object.fromEntries(r.headers), body: await r.text() });
-    });
-    await page.goto('https://owls.example/shop/');
-    await page.waitForSelector('#item-tip .buy');
-    assert.match(await page.$eval('#item-tip', (el) => el.textContent), /Choose your amount on Stripe/);
-    assert.equal(await page.$$eval('#item-tip input', (all) => all.length), 0);
-    assert.doesNotMatch(await page.$eval('body', (el) => el.textContent), /Add to cart/);
-    await page.click('#item-tip .buy');
-    await page.waitForFunction(() => location.hostname === 'buy.stripe.com');
-    const reference = new URL(page.url()).searchParams.get('client_reference_id');
-    await page.$eval('#amount', (el) => { el.value = '7.50'; });
-    assert.equal(await page.$eval('#amount', (el) => el.value), '7.50');
-    await page.click('#pay');
-    const link = JSON.parse(s.env.STRIPE_SHOP_LINKS).items.find((i) => i.item === 'tip');
-    await s.hook('checkout.session.completed', { id: 'cs_browser_tip', payment_link: link.id, metadata: { revision: link.revision }, client_reference_id: reference,
-      payment_intent: 'pi_browser_tip', payment_status: 'paid', currency: 'usd', amount_subtotal: 750, amount_total: 750 }, { secret: s.env.STRIPE_WEBHOOK_SECRET });
-    await page.goto('https://owls.example/shop/thanks?session_id=cs_browser_tip');
-    await page.waitForFunction(() => document.querySelector('[data-thanks-title]')?.textContent === 'Simulation confirmed');
-    assert.match(await page.$eval('[data-thanks-line]', el => el.textContent), /No money moved and no Stripe receipt was sent/);
-    assert.equal(s.DB.sql.prepare('SELECT amount FROM shop_orders WHERE id = ?').get(reference).amount, 750);
-    assert.deepEqual(errors, []); assert.equal(s.stripe.calls.length, 0);
-  } finally { await browser.close(); }
-});
 
-test('chosen-amount links omit an unset minimum and preserve a studio minimum and maximum', async () => {
-  const { shopConnect } = await import('../lib/stripe-connect.mjs');
-  for (const minimum of [undefined, 0, 100]) {
-    const h = await pairingHarness(`tip-minimum-${minimum}`);
-    writeFileSync(join(h.dir, 'shop.json'), JSON.stringify({ till: 'stripe', currency: 'usd', items: [{ id: 'tip', name: 'Tip', price: 'choose', ...(minimum === undefined ? {} : { min: minimum }), max: 1000 }] }));
-    const result = await shopConnect(h.dir, h.opts);
-    assert.equal(result.ok, true, JSON.stringify(result));
-    const form = h.stripe.calls.find((c) => c.method === 'POST' && c.path === '/v1/prices').form;
-    assert.equal(form.get('custom_unit_amount[minimum]'), minimum === 100 ? '100' : null);
-    assert.equal(form.get('custom_unit_amount[maximum]'), '1000');
-  }
-});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 test('stand-in refuses invalid Stripe objects at the HTTP boundary', async () => {
   const stripe = await fakeStripe();
@@ -2898,53 +2463,9 @@ test('stand-in refuses invalid Stripe objects at the HTTP boundary', async () =>
   assert.equal((await post('/v1/prices', { product: product.id, currency: 'usd', unit_amount: 0 })).status, 200);
 });
 
-test('Stripe refusals survive setup, renew and catalog parsing with secrets masked before truncation', async () => {
-  const { shopConnect } = await import('../lib/stripe-connect.mjs');
-  const { catalogPlan } = await import('../lib/shop-catalog.mjs');
-  const h = await pairingHarness('stripe-reasons');
-  const message = 'Stripe refuses this value: sk_test_fake rk_live_fake pk_test_fake oak_fake whsec_abc+/=_- cs_test_fake_secret_abc ' + 'x'.repeat(500);
-  h.stripe.behave.refusePath = '/v1/prices'; h.stripe.behave.refuseMessage = message;
-  const result = await shopConnect(h.dir, h.opts);
-  assert.equal(result.ok, false); assert.match(result.why, /Stripe refuses this value/); assert.match(result.why, /POST \/v1\/prices/);
-  assert.doesNotMatch(result.why, /sk_test|rk_live|pk_test|oak_|whsec_|_secret_|abc/);
-  assert.ok(result.why.length < 800);
-  const exec = async (args) => args.includes('login') ? { code: 1, stdout: 'private completion output', stderr: message } : h.opts.exec(args);
-  const renewed = await shopConnect(h.dir, { ...h.opts, renew: true, exec });
-  assert.match(renewed.why, /Stripe refuses this value/); assert.doesNotMatch(renewed.why, /sk_test|rk_live|pk_test|oak_|whsec_|_secret_/);
-  const catalog = await catalogPlan(h.dir, { have: { content: [{ type: 'text', text: JSON.stringify({ error: { message } }) }] } });
-  assert.equal(catalog.ok, false); assert.match(catalog.why, /Stripe refuses this value/); assert.doesNotMatch(catalog.why, /sk_test|rk_live|pk_test|oak_|whsec_|_secret_/);
-});
 
-test('CLI and MCP Stripe setup results carry the refusal without a key', async () => {
-  const { StudioContext, toolDefs } = await import('../lib/mcp-tools.mjs');
-  const { shopInit } = await import('../lib/shop.mjs');
-  const { dir } = connectStudio('stripe-cli-reason');
-  shopInit(dir, { supporter: true });
-  const bin = join(dir, 'node_modules', '.bin');
-  const script = `#!/usr/bin/env node
-const args = process.argv.slice(4);
-if (args[0] === '--version') console.log('stripe stand-in');
-else if (args[0] === 'get') console.log(JSON.stringify({data:[],has_more:false}));
-else { console.log(JSON.stringify({error:{type:'invalid_request_error',message:'Stripe says this product is refused sk_test_FAKE rk_test_FAKE pk_live_FAKE whsec_FAKE+/='}})); process.exitCode = 1; }
-`;
-  writeFileSync(join(bin, 'stripe'), script); chmodSync(join(bin, 'stripe'), 0o755);
-  writeFileSync(join(bin, 'wrangler'), '#!/bin/sh\necho "[]"\n');
-  const oldPath = process.env.PATH, oldHome = process.env.HOME;
-  process.env.HOME = join(dir, 'test-home');
-  mkdirSync(process.env.HOME, { recursive: true });
-  process.env.PATH = `${bin}:${oldPath}`;
-  try {
-    const cli = run(['shop', 'connect'], dir);
-    assert.notEqual(cli.status, 0);
-    assert.match(cli.stdout, /Stripe says this product is refused/);
-    assert.doesNotMatch(cli.stdout + cli.stderr, /sk_test_|rk_test_|pk_live_|whsec_/);
-    const tools = toolDefs(new StudioContext({ cwd: dir, waitMs: 20000, install: false }));
-    let mcp = await tools.find((t) => t.name === 'stripe_login').run({});
-    if (mcp.structuredContent.state === 'running') mcp = await tools.find((t) => t.name === 'studio_job').run({ job: mcp.structuredContent.job });
-    assert.match(JSON.stringify(mcp), /Stripe says this product is refused/);
-    assert.doesNotMatch(JSON.stringify(mcp), /sk_test_|rk_test_|pk_live_|whsec_/);
-  } finally { process.env.PATH = oldPath; if (oldHome === undefined) delete process.env.HOME; else process.env.HOME = oldHome; }
-});
+
+
 
 
 test('keyed chosen amounts use the selected unit amount, with zero allowed for a free line', async () => {
@@ -2959,17 +2480,12 @@ test('keyed chosen amounts use the selected unit amount, with zero allowed for a
   }
 });
 
-for (const keyless of [false, true]) test(`real Chrome: visible Shop and app/game buttons start ${keyless ? 'Payment Links' : 'keyed Checkout'} at every embed size`, { skip: !process.env.CHROME_PATH && 'Set CHROME_PATH', timeout: 120000 }, async () => {
+test('real Chrome: visible Shop and app/game buttons start Checkout at every embed size', { skip: !process.env.CHROME_PATH && 'Set CHROME_PATH', timeout: 120000 }, async () => {
   const { default: puppeteer } = await import('puppeteer-core');
   const { build } = await import('esbuild');
   const { shopConnect } = await import('../lib/stripe-connect.mjs');
   const { readShop } = await import('../lib/shop.mjs');
-  let s;
-  if (keyless) {
-    const h = await pairingHarness('visible-shop');
-    assert.equal((await shopConnect(h.dir, h.opts)).ok, true);
-    s = await site({ key: false, settings: readShop(h.dir).shop }); Object.assign(s.env, h.state.saved);
-  } else s = await site();
+  const s = await site();
   const originalAssets = s.env.ASSETS;
   const cat = await (await originalAssets.fetch(new Request('https://owls.example/games.json'))).json();
   const meta = cat.games.find(g => g.id === 'owl-run');
@@ -3017,9 +2533,9 @@ for (const keyless of [false, true]) test(`real Chrome: visible Shop and app/gam
       assert.deepEqual(errors, []);
       await page.close();
     }
-    assert.equal(s.stripe.calls.filter(c => c.path === '/v1/checkout/sessions' && c.method === 'POST').length, keyless ? 0 : 6);
+    assert.equal(s.stripe.calls.filter(c => c.path === '/v1/checkout/sessions' && c.method === 'POST').length, 6);
     const originalShop = structuredClone(cat.shop), originalScreen = structuredClone(meta.screen ?? {});
-    for (const change of [() => { meta.screen.shop = false; }, () => { cat.shop.items = cat.shop.items.map(i => ({ ...i, game: 'another-game' })); }, () => { cat.shop.till = 'off'; }, () => { delete s.env.STRIPE_KEY; delete s.env.STRIPE_SHOP_LINKS; }]) {
+    for (const change of [() => { meta.screen.shop = false; }, () => { cat.shop.items = cat.shop.items.map(i => ({ ...i, game: 'another-game' })); }, () => { cat.shop.till = 'off'; }, () => { delete s.env.STRIPE_KEY; }]) {
       cat.shop = structuredClone(originalShop); meta.screen = structuredClone(originalScreen); change();
       assert.doesNotMatch(await (await s.fetchSite('/owl-run/open')).text(), /data-shop-control/);
     }
@@ -3027,13 +2543,7 @@ for (const keyless of [false, true]) test(`real Chrome: visible Shop and app/gam
   s.stripe.close();
 });
 
-test('agent clipboard transfer installs the provider key privately with no paste step',async()=>{
- const {shopConnect}=await import('../lib/stripe-connect.mjs');const {dir,state}=connectStudio('agent-clipboard');const stripe=await fakeStripe();const logs=[];
- try { const result=await shopConnect(dir,{fromClipboard:true,clipboard:async()=>`rk_test_${'A9'.repeat(20)}`,log:s=>logs.push(s),wait:5000,fetcher:(url,options)=>fetch(String(url).replace('https://api.stripe.com',stripe.base),options)});assert.equal(result.ok,true,JSON.stringify(result));assert.equal(stripe.behave.made.length,1);assert.doesNotMatch(JSON.stringify([result,logs]),/A9A9|whsec_/);
- stripe.behave.refusePath='/v1/webhook_endpoints';stripe.behave.refuseMessage='Stripe refuses webhook access sk_test_PRIVATE';
- const refused=await shopConnect(dir,{fromClipboard:true,clipboard:async()=>`rk_test_${'A9'.repeat(20)}`,log:s=>logs.push(s),wait:5000,fetcher:(url,options)=>fetch(String(url).replace('https://api.stripe.com',stripe.base),options)});assert.equal(refused.ok,false);assert.match(refused.why,/Stripe refuses webhook access/);assert.doesNotMatch(JSON.stringify([refused,logs]),/sk_test_PRIVATE|A9A9|whsec_/); }
- finally {stripe.close();}
-});
+
 
 test('customer purchase rates are opt-in with no implicit shop limits',()=>{
  const {shop}=checkShop({items:[]});
@@ -3130,24 +2640,7 @@ test('a free item keeps the shell checkout bridge available without Stripe', asy
  }finally{s.stripe.close()}
 });
 
-test('keyless variable deposit retains the app reference and only fulfills the saved amount',async()=>{
- const {shopConnect}=await import('../lib/stripe-connect.mjs');const {readShop}=await import('../lib/shop.mjs');const h=await pairingHarness('variable-deposit');
- const file=join(h.dir,'shop.json'),raw=JSON.parse(readFileSync(file));raw.items=[{id:'deposit',kind:'deposit',name:'Deposit',price:'choose',min:50,gives:['reserved']}];writeFileSync(file,JSON.stringify(raw));
- assert.equal((await shopConnect(h.dir,h.opts)).ok,true);
- const s=await site({key:false,settings:readShop(h.dir).shop});Object.assign(s.env,h.state.saved);
- try {
-  const person=s.player(30,{band:'adult'});subscribeAppPayments(s);
-  const response=await s.post('/api/shop/buy',{item:'deposit',amount:1250,reference:'reservation-42'},s.as(person));const order=await response.json();assert.equal(response.status,200,JSON.stringify(order));
-  assert.equal(new URL(order.url).searchParams.get('prefilled_amount'),'1250');
-  const link=JSON.parse(s.env.STRIPE_SHOP_LINKS).items[0];
-  const event=amount=>({id:'cs_test_deposit'+amount,payment_link:link.id,client_reference_id:order.order,metadata:{revision:link.revision},currency:'usd',amount_subtotal:amount,amount_total:amount,payment_status:'paid',payment_intent:'pi_deposit'+amount});
-  for(const amount of [500,1500])await s.hook('checkout.session.completed',event(amount),{secret:s.env.STRIPE_WEBHOOK_SECRET});
-  assert.equal(s.DB.sql.prepare("SELECT count(*) n FROM shop_orders WHERE status='paid'").get().n,0);
-  await s.hook('checkout.session.completed',event(1250),{secret:s.env.STRIPE_WEBHOOK_SECRET});
-  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id=?').get(order.order).status,'paid');
-  assert.equal(JSON.parse(s.DB.sql.prepare("SELECT data FROM studio_events WHERE type='order.paid'").get().data).reference,'reservation-42');
- }finally{s.stripe.close();h.stripe.close();}
-});
+
 
 test('resource checkout refuses a raw slot without its allocated hold',async()=>{
  const {shopRoutes}=await import('../worker/shop.mjs');const s=await site();
@@ -3161,4 +2654,31 @@ test('resource checkout refuses a raw slot without its allocated hold',async()=>
   const response=await shopRoutes(new Request(url,{method:'POST',headers:{...s.as(person),'content-type':'application/json',origin:url.origin},body:JSON.stringify({item:'supporter',game:'place',booking:{collection:'bookings',slot:'morning'}})}),s.env,{waitUntil:()=>{}},url,{catalogueOf:async()=>cat});
   const body=await response.json();assert.equal(response.status,409,JSON.stringify(body));assert.match(body.message,/resource.*hold|hold.*resource/i);
  }finally{s.stripe.close();}
+});
+
+test('exact deposit and giver-chosen Checkout preserve references and enforce combined item quantities', async () => {
+  const s = await site({settings:{policy:undefined,capPerPlayerMonth:null,items:[
+    {id:'deposit',kind:'deposit',name:'Deposit',price:'choose',min:100},
+    {id:'gift',kind:'donation',name:'Gift',price:'choose',min:100,max:5000,maxQuantity:1},
+    {id:'wax',name:'Wax',price:250,maxQuantity:3},
+  ]}});
+  try {
+    const p=s.player();
+    assert.equal((await s.post('/api/shop/buy',{item:'deposit',amount:1250,quantity:2,reference:'booking-1'},s.as(p))).status,400);
+    assert.equal((await s.post('/api/shop/buy',{lines:[{item:'wax',quantity:2},{item:'wax',quantity:2}]},s.as(p))).status,400);
+    for(const [item,amount] of [['deposit',1250],['gift',2300]]) {
+      const purchase=await(await s.post('/api/shop/buy',{item,amount,reference:'booking-'+item},s.as(p))).json();
+      assert.equal(purchase.ok,true);
+      const row=s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id=?').get(purchase.order);
+      const session=s.stripe.behave.sessions.get(row.session);
+      assert.equal(session.client_reference_id,'booking-'+item);
+      assert.equal(session.metadata.reference,'booking-'+item);
+      assert.equal(session.amount_subtotal,amount);
+      assert.equal(row.paid_at,null);
+      await s.hook('checkout.session.completed',{...session,payment_status:'paid',payment_intent:'pi_'+item,amount_subtotal:amount-1});
+      assert.equal(s.DB.sql.prepare('SELECT paid_at FROM shop_orders WHERE id=?').get(row.id).paid_at,null);
+      await s.hook('checkout.session.completed',{...session,payment_status:'paid',payment_intent:'pi_'+item,amount_subtotal:amount});
+      assert.ok(s.DB.sql.prepare('SELECT paid_at FROM shop_orders WHERE id=?').get(row.id).paid_at);
+    }
+  } finally { s.stripe.close(); }
 });

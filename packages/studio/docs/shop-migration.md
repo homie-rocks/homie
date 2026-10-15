@@ -1,9 +1,9 @@
-# Keyless shop setup and migration
+# Checkout migration
 
-Use `stripe_shop_plan` with Stripe's official plugin to perform the returned operations. Supply each new response as `{method,path,params,body}` in `observations`; earlier responses are saved automatically. Product and price discovery uses metadata searches. Payment Links use Stripe's paginated list API with expanded line items, then match studio, origin and revision metadata locally (Stripe has no Payment Link search endpoint). No creation is planned before discovery completes.
+Run `homie-studio upgrade`, then `homie-studio shop connect`. The owner approves the official Homie Stripe App once. Do not manually deploy over the old payment handler during the drain.
 
-For CLI workflows, pipe an array of these responses, or `{observations:[...]}`, into `homie-studio shop observe`. It saves the responses and returns the next dependency batch. `shop plan` resumes without `--have`. Never include credentials or webhook creation responses.
+The App matches existing links and webhook endpoints to this studio origin in the installing account, stops new link sessions, and waits for in-flight payments. The local tool reads D1 to confirm every completed Session already has a receipt committed by the old signed webhook. It never grants from an API read.
 
-Old verifications without a billing portal ID discover and reuse the existing portal before planning creation. Old verifications without an account ID adopt the official CLI's signed-in account only after reading and matching their saved Payment Links. A known different account is still refused. Verification freshness and configuration checks still apply.
+After the drain, the tool deploys the upgraded Worker, installs the encrypted managed key and webhook secret privately, disables old endpoints, and removes retired bindings and public link configuration. Orders, bookings and subscription ownership stay in the existing database.
 
-`stripe_webhook` returns a job. Read `studio_job`: while browser approval is pending, `events` contains `{type:"stripe.pairing",code,url}`. Show that code and URL to the owner. A saved valid Stripe login emits no pairing event and needs no new approval. Secrets never enter the event.
+Only Checkout Sessions remain. Missing, revoked or expired credentials ask for reconnection; there is no manual-key or Payment Link fallback. Managed-key preview access and App review are prerequisites for real minting.

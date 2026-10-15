@@ -14,15 +14,14 @@ import { world, LIVE_KEY, configureMachine, addPart } from './paid-parts-review4
 import { signPayload } from '../worker/stripe.mjs';
 const origin = 'https://seller.example';
 const secret = () => randomBytes(32).toString('hex');
-async function runtime(w,{keyless=false,quantity=1,handlers=new Map()}={}) {
+async function runtime(w,{handlers=new Map()}={}) {
   let mf;try {
   const bundled=await build({bundle:true,write:false,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*'],stdin:{resolveDir:new URL('../worker/',import.meta.url).pathname,contents:`import worker, { useTools, useFunctions } from './selling/index.mjs';
     useTools(async()=>[{name:'translate',description:'Translate a word',audience:'public',price:{amount:250,currency:'usd'},inputSchema:{type:'object',properties:{word:{type:'string'}},required:['word'],additionalProperties:false},handler:async({word},ctx)=>{if(word==='fail')throw Error('private failure');await ctx.database.put('last',ctx.purchase.id);return {word:word.toUpperCase()};}}]);
     useFunctions(async()=>[{name:'paid-order',event:'order.paid',handler:async(event,ctx)=>ctx.database.put(event.id,event.data)}]);
     export default {async fetch(request,env,ctx){env.ASSETS={fetch:async(request)=>{const object=await env.STATIC.get(new URL(request.url).pathname);return object?new Response(object.body):new Response('',{status:404});}};if(new URL(request.url).pathname==='/__functions'){await (await import('./functions.mjs')).runFunctions(env,{games:[]},'https://seller.example');return Response.json({ok:true});}return worker.fetch(request,env,ctx);}};`}});
   const bindings={DB:{type:'d1',id:'purchases'},PURCHASE_MEDIA:{type:'r2',name:'paid'},STATIC:{type:'r2',name:'static'},PURCHASE_RATE_LIMITER:{type:'rate-limit',namespace:'purchases',simple:{limit:1000,period:60}}};
-  for(const [key,value] of Object.entries(w.env))if(typeof value==='string' && (!keyless || !['STRIPE_KEY','TURNSTILE_SECRET','TURNSTILE_SITE_KEY'].includes(key))) bindings[key]={type:'json',value};
-  if(keyless){bindings.STRIPE_SHOP_LINKS={type:'json',value:JSON.stringify({v:1,mode:'live',items:[]})};const p=JSON.parse(readFileSync(join(w.dist,'parts/index.json'))).parts[0];bindings.PURCHASE_LINKS={type:'json',value:JSON.stringify({v:1,mode:'live',offers:[{quantity,kind:'part',resource:p.id,version:p.version,offer:(await import('../worker/canonical-json.mjs')).canonicalJson(p.sale),id:'plink_test',url:'https://buy.stripe.com/test',revision:'release1'}]})};}
+  for(const [key,value] of Object.entries(w.env))if(typeof value==='string') bindings[key]={type:'json',value};
   const hosts=[];
   mf=new Miniflare({telemetry:{enabled:false},workers:[{config:{name:'seller',compatibilityDate:'2026-06-01',compatibilityFlags:['nodejs_compat','global_fetch_strictly_public','disallow_eval_during_startup'],manifest:{mainModule:'worker.mjs',modules:{'worker.mjs':{type:'esm',contents:bundled.outputFiles[0].text}}},env:bindings},dev:{outboundService:{type:'fetcher',handler:async(req)=>{const url=new URL(req.url);hosts.push(url.hostname);if(handlers.has(url.hostname)) return handlers.get(url.hostname)(req);assert.equal(url.host,new URL(w.st.base).host,'only the seller provider may be contacted');return fetch(req.url,{method:req.method,headers:Object.fromEntries(req.headers),...(req.body?{body:await req.arrayBuffer()}:{} )});}}}}]});
   const db=await mf.getD1Database('DB');
@@ -132,7 +131,7 @@ test('hosted cart checkout binds the account from the quote and returns grants t
  }finally{await client.close();await r.mf.dispose();await w.close();}
 });
 
-test('shop reconciliation in a GET background task dispatches without a subsequent request',{timeout:30000},async()=>{
+test('only a signed shop webhook dispatches the paid function without a subsequent request',{timeout:30000},async()=>{
  const w=await world('quiet-shop-reconcile',{key:LIVE_KEY,shop:{v:1,till:'stripe',currency:'usd',items:[{id:'coffee',name:'Coffee',kind:'supporter',price:400,gives:['coffee']}]}});
  const r=await runtime(w,{handlers:new Map([[new URL(w.st.base).hostname,async req=>{if(req.method==='GET'&&new URL(req.url).pathname.includes('/checkout/sessions/'))await new Promise(resolve=>setTimeout(resolve,150));return fetch(req.url,{method:req.method,headers:Object.fromEntries(req.headers),...(req.body?{body:await req.arrayBuffer()}: {})});}]])});
  try{
@@ -142,6 +141,8 @@ test('shop reconciliation in a GET background task dispatches without a subseque
   const session=[...w.st.sessions.values()].at(-1);assert.ok(session);session.created=Math.floor(Date.now()/1000)-120;w.st.complete(session.id);
   await r.db.prepare('UPDATE shop_orders SET created_at=?1,updated_at=?1 WHERE id=?2').bind(Date.now()-120000,data.order).run();
   const page=await r.fetcher(origin+'/api/shop/mine',{headers:{cookie}});assert.equal(page.status,200);await page.text();
+  assert.equal((await r.db.prepare('SELECT paid_at FROM shop_orders WHERE id=?1').bind(data.order).first()).paid_at,null);
+  assert.equal((await r.event('checkout.session.completed',session)).status,200);
   let delivered;
   for(let i=0;i<30;i++){
     delivered=await r.db.prepare("SELECT value FROM tool_data WHERE namespace='function:paid-order' AND key=?1").bind('shop_orders:'+data.order+':paid').first();

@@ -1,4 +1,3 @@
-import {verifiedMcpConfig,publicMcpSetup} from './shop-mcp.mjs';
 import {readFileSync,writeFileSync,existsSync,renameSync} from 'node:fs';
 import {join} from 'node:path';
 import {configPath,readStudio,layoutOf,listExperiences} from './studio.mjs';
@@ -28,11 +27,7 @@ export function updateWorkerConfig(root,generated) {
   }
   const next=merge(base,custom);
   next.vars={...next.vars,HOMIE_CONCEPT:readStudio(root).concept===true?'1':'0'};
-  verifiedMcpConfig(root);
-  if(publicMcpSetup(root)) {
-    next.vars={...next.vars,STRIPE_CHECKOUT_MODE:'links',STRIPE_SHOP_LINKS_ASSET:'/_site/stripe-shop-links.json'};
-    delete next.vars.STRIPE_SHOP_LINKS;
-  }
+  for (const name of ['STRIPE_CHECKOUT_MODE', 'STRIPE_SHOP_LINKS', 'STRIPE_SHOP_LINKS_ASSET', 'PURCHASE_LINKS']) delete next.vars[name];
   // Crons are additive: studio-owned entries cannot erase required toolkit ticks.
   const crons=[...new Set([...(base.triggers?.crons??[]),...(custom.triggers?.crons??[])])].sort();
   next.triggers={...next.triggers,crons}; // [] explicitly removes old generated triggers in Wrangler.

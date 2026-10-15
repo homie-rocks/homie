@@ -1,3 +1,4 @@
+import { needsStripeMigration } from './stripe-migration.mjs';
 import {placeUpgradeChanges} from './upgrade-places.mjs';
 import { upgradeMediaGuidance } from './upgrade-media.mjs';
 import {appPresetChanges} from './upgrade-app-presets.mjs';
@@ -273,6 +274,7 @@ export function upgradePlan(root, { history = readHistory() } = {}) {
     ...(media ? { media } : {}),
     ...(dirty ? { uncommitted: dirty } : {}),
     // A plan that moves the pin is this (newer) toolkit's to apply: the studio's own older copy knows nothing newer.
+    ...(needsStripeMigration(root) ? { stripe: 'Approve the Homie Stripe App once: homie-studio shop connect. Keep the current deployment until the tool drains its signed payments and completes cutover.' } : {}),
     next: changes.length ? [`${changes.some((c) => c.kind === 'pin') ? `npx -y @homie-rocks/studio@${STUDIO_VERSION} upgrade --apply` : 'npx --no-install homie-studio upgrade --apply'}   (after the person agrees)`] : [],
   };
 }
@@ -363,6 +365,7 @@ export function upgradeApply(root, plan) {
   const pinned = done.some((c) => c.kind === 'pin');
   return {
     ...plan, applied: true, done, skipped,
-    next: [...(pinned ? [`npm install   (fetches @homie-rocks/studio ${STUDIO_VERSION})`] : []), 'npm run build, then look at the site (npm run dev) before the next deploy', 'git diff, then commit the upgrade on its own'],
+    ...(needsStripeMigration(root) ? { ownerStep: 'Approve the Homie Stripe App once: homie-studio shop connect.' } : {}),
+    next: needsStripeMigration(root) ? ['homie-studio shop connect'] : [...(pinned ? [`npm install   (fetches @homie-rocks/studio ${STUDIO_VERSION})`] : []), 'npm run build, then look at the site (npm run dev) before the next deploy', 'git diff, then commit the upgrade on its own'],
   };
 }

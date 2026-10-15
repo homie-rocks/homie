@@ -48,7 +48,7 @@ export interface ShopCatalog {
   open: boolean;
   currency: string;
   currencyScale: number;
-  items: Array<{ id: string; kind: string; name: string; interval?: 'month'; price: number | 'choose'; min?: number; max?: number | null; shown: string; way: string }>;
+  items: Array<{ id: string; kind: string; name: string; interval?: 'month'; price: number | 'choose'; min?: number; max?: number | null; maxQuantity?: number; shown: string; way: string }>;
 }
 
 export interface Shop {
@@ -70,7 +70,7 @@ export interface Shop {
   add(item: string, quantity?: number, amount?: number): void;
   cart(): CartLine[];
   clear(): void;
-  /** Opens Checkout: keyless bookings are pending until paid; explicit session checkout holds capacity. The returned ID tracks the public booking record. */
+  /** Opens Checkout: session checkout holds capacity until payment or expiry. The returned ID tracks the public booking record. */
   book(item: string, booking: { collection: string; slot: string; hold?: string; token?: string }, quantity?: number, options?: { reference?: string }): Promise<{ ok: boolean; booking?: string; error?: string }>;
   checkout(options?: { reference?: string }): Promise<boolean>;
   buy(item: string, quantity?: number, amount?: number, options?: { reference?: string }): Promise<boolean>;

@@ -1,6 +1,5 @@
 import {appGraphicsFallback} from './app-graphics.mjs';
 import {JOIN_AREA_FRAME_JS} from './join-area.mjs';
-import {loadShopLinks} from './shop-links.mjs';
 import { directoryUrl } from './directory-choice.mjs';
 import {APP_STORAGE_JS} from './app-frame.mjs';
 import {recordsPage} from './records-page.mjs';
@@ -623,7 +622,6 @@ async function removeReferralLeftovers(env) {
 
 export default {
   async scheduled(event, env, ctx) {
-    env=await loadShopLinks(env);
     const maintenance=(async () => {
       await removeReferralLeftovers(env);
       const cat = await catalogue(env, 'https://studio.invalid');
@@ -635,7 +633,7 @@ export default {
     await maintenance;
   },
   async fetch(request, env, ctx) {
-    env=await loadShopLinks(env,new URL(request.url).origin);
+    if (request.method === 'GET' && new URL(request.url).pathname === '/.well-known/homie-stripe-setup') return Response.json({ challenge: env.STRIPE_SETUP_CHALLENGE ?? null }, { headers: { 'cache-control': 'no-store' } });
     await removeReferralLeftovers(env);
     const url = new URL(request.url);
     if(env.HOMIE_CONCEPT==='1' && url.pathname==='/robots.txt')return new Response('User-agent: *\nDisallow: /\n',{headers:{'content-type':'text/plain','x-robots-tag':'noindex, nofollow'}});

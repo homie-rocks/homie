@@ -1,34 +1,6 @@
 import {givingItems} from './giving-preset.mjs';
 import { paidReleases } from './parts-upload.mjs';
-/**
- * `homie-studio shop` — a studio's shop from the studio folder (@homie-rocks/studio 0.24.0; worker/shop.mjs has the
- * rules, shop/SHOP.md the guide, shop/SELLING.md the owner's plain words).
- *
- *   homie-studio shop                       is it selling, and if not, what is missing (the live site's office view)
- *   homie-studio shop init [--supporter] [--currency usd] [--price 500] [--managed]
- *                                           writes shop.json (a $5 Supporter pack with --supporter) and SELLING.md
- *   homie-studio shop check                 shop.json against the studio settings and provider requirements
- *   homie-studio shop connect             sync Payment Links and webhook with the approved Stripe CLI; no Worker API key
- *   homie-studio shop connect --manual [--managed] [--live]   a fallback page on THIS computer (127.0.0.1, one use, ten minutes) where the owner
- *                                           pastes the studio's restricted Stripe key (the one thing only they can make);
- *                                           with it this process makes the webhook (0.24.3), and the key and the
- *                                           webhook's signing secret go straight to the Worker secrets STRIPE_KEY and
- *                                           STRIPE_WEBHOOK_SECRET on Wrangler's standard input: never a chat, a file,
- *                                           an argument or a log. The page also offers Stripe Managed Payments in plain
- *                                           words (and in test mode tries one test checkout with it). Test keys only,
- *                                           unless --live (then live keys only).
- *   homie-studio shop catalog [--have <file>|-] [--mode test|live]   the items as Products in Stripe, made through
- *                                           Stripe's own MCP (lib/shop-catalog.mjs): the read to make, then the writes
- *   homie-studio shop disconnect            removes both secrets (the shop closes at once)
- *   homie-studio shop orders                the latest orders (never a card or an email)
- *   homie-studio shop refund <order> [--reason requested_by_customer|duplicate|fraudulent] [--note "<why>"]
- *                                           ASKS the owner (a one-tap link): the AI never refunds by itself
- *
- * The proof of ownership is the studio's own Cloudflare login, as for the office.
- */
-import { execFileSync } from 'node:child_process';
-import { createServer } from 'node:http';
-import { randomBytes, createHash } from 'node:crypto';
+/** Shop authoring and owner operations. Stripe setup uses one App approval; credentials travel only over private stdin. */
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,8 +9,7 @@ import { runner } from './cloudflare.mjs';
 import { listExperiences as listGames, readStudio, siteUrl } from './studio.mjs';
 import { SHOP_FILE, audienceOf, checkShop, defaultTaxCode, money } from '../worker/shop-rules.mjs';
 import {
-  KEY_SHAPE, STRIPE_VERSION, StripeError, WEBHOOK_SECRET_SHAPE, createWebhookEndpoint, expireCheckoutSession, isPermissionError, listWebhookEndpoints, modeOf,
-  stripeCall, updateWebhookEndpoint, redactStripe,
+  redactStripe,
 } from '../worker/stripe.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -48,35 +19,11 @@ export const HOOK_EVENTS = Object.freeze([
   'checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired',
   'payment_intent.succeeded', 'invoice.paid', 'invoice_payment.paid', 'invoice.payment_failed', 'customer.subscription.updated', 'customer.subscription.deleted', 'charge.refunded', 'refund.created', 'refund.updated', 'refund.failed', 'charge.dispute.created', 'charge.dispute.closed',
 ]);
-/** The restricted key's permissions, as Stripe's key page names them. Nothing else. */
-export const KEY_PERMISSIONS = Object.freeze([
-  ['Checkout Sessions', 'Write', 'open Stripe\'s checkout page for one item'],
-  ['Charges', 'Write', 'refunds (Stripe keeps refunds under Charges)'],
-  ['PaymentIntents', 'Write', 'verify, create and cancel machine payments as well as read purchase receipts'],
-  ['Business Profiles', 'Read', 'discover the Stripe profile used by shared payment tokens'],
-  ['Payment method configurations', 'Read', 'check whether Stripe has enabled crypto payments'],
-  ['Crypto Deposit Addresses', 'Read', 'read this account’s existing stablecoin deposit addresses'],
-  ['Subscriptions', 'Write', 'verify paid periods and cancel part subscriptions when the studio retires a part or its refund policy requires cancellation'],
-  ['Invoices', 'Read', 'verify part renewal payments'],
-  ['Customer portal', 'Write', 'let part buyers manage or cancel their subscription'],
-  ['Disputes', 'Read', 'see a dispute; you answer it in Stripe'],
-  ['Webhook Endpoints', 'Write', 'only so this page makes the webhook for you; you can set it back to None afterwards'],
-]);
-
 export const SHOP_HOOK_EVENTS = Object.freeze([
-  'payment_link.updated', 'invoice.paid', 'invoice.payment_failed', 'customer.subscription.updated', 'customer.subscription.deleted',
+  'invoice.paid', 'invoice.payment_failed', 'customer.subscription.updated', 'customer.subscription.deleted',
   'checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired',
   'charge.refunded', 'refund.created', 'refund.updated', 'refund.failed', 'charge.dispute.created', 'charge.dispute.closed',
 ]);
-/** The restricted key's permissions, as Stripe's key page names them. Nothing else. */
-export const SHOP_KEY_PERMISSIONS = Object.freeze([
-  ['Checkout Sessions', 'Write', 'open Stripe\'s checkout page for one item'],
-  ['Charges', 'Write', 'refunds (Stripe keeps refunds under Charges)'],
-  ['PaymentIntents', 'Read', 'which payment an order was'],
-  ['Disputes', 'Read', 'see a dispute; you answer it in Stripe'],
-  ['Webhook Endpoints', 'Write', 'only so this page makes the webhook for you; you can set it back to None afterwards'],
-]);
-
 /** shop.json read and checked with the studio's games and audience: { ok, shop, errors, warnings, file }. */
 export function readShop(root) {
   const file = join(root, SHOP_FILE);
@@ -150,262 +97,16 @@ export async function shopRefund(root, order, { url, reason, note, manualTransac
   return askedFor(root, url, r, 'shop refund');
 }
 
-/* ------------------------------------------------------------------ the key, from a page on this computer */
-
-const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-
 /** Where Stripe sends the shop's events, on the studio's live site. */
 export const hookUrlOf = (site) => `${String(site).replace(/\/+$/, '')}/api/shop/hook`;
-const HOOK_MARK = 'shop-v1';
 
-/** The one page the owner uses: what to make in Stripe, what Managed Payments costs and does, one field, one button. */
-export function connectPage({ nonce, site, studio, till = 'stripe', test = true, paidParts = false }) {
-  const dash = `https://dashboard.stripe.com${test ? '/test' : ''}`;
-  const perms = (paidParts ? KEY_PERMISSIONS : SHOP_KEY_PERMISSIONS).map(([n, level, why]) => `<li><b>${esc(n)}</b>: ${esc(level)} <small>(${esc(why)})</small></li>`).join('');
-  const events = (paidParts ? HOOK_EVENTS : SHOP_HOOK_EVENTS).map((e) => `<code>${esc(e)}</code>`).join(', ');
-  return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Connect your shop to Stripe</title>
-<style>body{font:16px/1.5 system-ui,sans-serif;max-width:40rem;margin:2.5rem auto;padding:0 1rem;color:#1b1b1b}h1{font-size:1.6rem}h2{font-size:1.1rem;margin-top:1.8rem}input[type=password]{width:100%;box-sizing:border-box;font:inherit;padding:.6rem;border:1px solid #999;border-radius:8px}label{display:block;margin:.8rem 0 .3rem;font-weight:600}fieldset{border:1px solid #ccc;border-radius:10px;padding:.6rem 1rem}fieldset label{font-weight:400;display:flex;gap:.6rem;align-items:flex-start}button{margin-top:1.2rem;font:inherit;font-weight:700;padding:.7rem 1.3rem;border:0;border-radius:8px;background:#1b1b1b;color:#fff}small{color:#555}code{font-size:.85em;background:#f2f2f2;padding:0 .25em;border-radius:4px}ol li,ul li{margin:.25rem 0}.box{background:#f6f6f2;border-radius:10px;padding:.8rem 1rem}details{margin-top:1rem}summary{cursor:pointer}</style>
-<h1>Connect ${esc(studio)}'s shop to your Stripe</h1>
-<p>Money goes straight from players to <b>your own Stripe account</b>. Homie never sees it and takes no cut. What you paste here goes from this page to Stripe (one check) and to your studio's Worker as a secret, and nowhere else: not to the chat, not to a file, not to a log.</p>
-<p class="box">${test ? '<b>Test mode first.</b> Use your Stripe sandbox or test mode (the key starts with <code>rk_test_</code> or <code>sk_test_</code>): nothing real is charged, and test cards work. Live keys only when you say the shop is ready to sell.' : '<b>Live mode.</b> Real cards, real money.'}</p>
-<h2>1. In Stripe: a key for this shop</h2>
-<p>You can use a restricted (<code>rk_</code>) or full secret (<code>sk_</code>) key. To choose a restricted key with just the permissions this shop uses:</p>
-<ol><li>Open <a href="${dash}/apikeys" target="_blank" rel="noopener">Developers → API keys</a> and press <b>Create restricted key</b>. If Stripe asks what the key is for, choose your own integration, <b>not</b> "Authorizing agent access" (Stripe holds an agent key's refunds for a second approval).</li>
-<li>Name it "${esc(studio)} shop" and give it exactly these permissions (leave everything else at None):<ul>${perms}</ul></li>
-<li>Create it and copy the key (it starts with <code>rk_</code>).</li></ol>
-<h2>2. The webhook: this page makes it</h2>
-<p>With your key, this page makes the endpoint where Stripe tells your shop about payments (<code>${esc(hookUrlOf(site))}</code>, for ${(paidParts ? HOOK_EVENTS : SHOP_HOOK_EVENTS).length} events), and its signing secret goes straight to your Worker. Nobody sees it. An older one this page made for the same address is turned off, never deleted.</p>
-<form method="post" action="/key"><input type="hidden" name="n" value="${esc(nonce)}">
-<h2>3. Paste the key here</h2>
-<label for="key">Stripe key</label><input id="key" name="key" type="password" autocomplete="off" placeholder="rk_test_…" required>
-<details><summary>I made the webhook myself (or my key has no Webhook Endpoints permission)</summary>
-<ol><li>Open <a href="${dash}/workbench/webhooks" target="_blank" rel="noopener">Webhooks</a> and press <b>Create an event destination</b> (Your account, a Webhook endpoint).</li>
-<li>Endpoint URL: <code>${esc(hookUrlOf(site))}</code></li><li>Events: ${events}</li>
-<li>Create it, press <b>Reveal</b> on the signing secret, and paste it here (it starts with <code>whsec_</code>).</li></ol>
-<label for="hook">Webhook signing secret</label><input id="hook" name="hook" type="password" autocomplete="off" placeholder="whsec_…"></details>
-<h2>4. Who is the seller?</h2>
-<fieldset>
-<label><input type="radio" name="till" value="stripe"${till !== 'stripe-managed' ? ' checked' : ''}> <span><b>You are</b> (standard Stripe). Stripe takes its usual card fee (in the US 2.9% + 30¢ a sale; in Canada 2.9% + CA$0.30). Set automaticTax: true in shop.json to enable Stripe Tax: it works out and collects sales tax and VAT where you have told Stripe you are registered (0.5% a sale there). Registering and filing are yours, and some countries (the EU, the UK) expect a foreign seller to register from the first sale.</span></label>
-<label><input type="radio" name="till" value="stripe-managed"${till === 'stripe-managed' ? ' checked' : ''}> <span><b>Stripe is</b> (Stripe Managed Payments). <b>3.5% more</b> a sale, on top of the card fee. Stripe becomes the seller of record: it registers for, collects, files and pays sales tax and VAT in 80+ countries, runs fraud checks, answers card disputes for you and handles buyers' payment questions. Statements read <code>LINK.COM*</code>. You still cover the money of a lost dispute, and Stripe may refund a buyer within 60 days. Turn it on in Stripe first (<a href="${dash}/settings/managed-payments" target="_blank" rel="noopener">Managed Payments</a>, after Stripe's eligibility review; Canada and the US are among the countries it serves).${test ? ' In test mode this page tries one test checkout with Managed Payments (expired at once) and says whether Stripe takes it.' : ''}</span></label>
-</fieldset>
-${paidParts ? `<h2>5. Paid resource checkout and optional Base payments</h2>
-<p>For hosted Checkout, create a Turnstile widget for this studio hostname and enter both keys. Blank fields preserve existing secrets.</p>
-<label>TURNSTILE_SITE_KEY<input name="TURNSTILE_SITE_KEY" autocomplete="off"></label>
-<label>TURNSTILE_SECRET<input name="TURNSTILE_SECRET" type="password" autocomplete="off"></label>
-<p>Live Base payments also require a Coinbase CDP API key.</p>
-<label>CDP_API_KEY_ID<input name="CDP_API_KEY_ID" type="password" autocomplete="off"></label>
-<label>CDP_API_KEY_SECRET<input name="CDP_API_KEY_SECRET" type="password" autocomplete="off"></label>
-<label><input type="checkbox" name="base" value="yes"> Enable Base stablecoin payments. I can refund the original payer directly on Base if Stripe cannot record a settled transfer; I accept this refund responsibility. Live mode requires both CDP keys here.</label>` : ''}
-<p>Tempo is unavailable until complete payment tests pass in both modes.</p>
-<button>Save to my Worker</button></form>
-<p><small>This page works once and closes in ten minutes. You can change the seller later in shop.json ("till"). This is not legal or tax advice: an accountant can tell you where you must register.</small></p>`;
-}
-
-const said = (status, text) => ({ status, text });
-
-/**
- * The webhook, made on the owner's computer with the key they just pasted: Stripe answers the new endpoint's signing
- * secret once, and it goes straight to the Worker secret. Never printed, never returned. Older endpoints this kit made
- * for the same address are turned off (not deleted) once the new secret is saved. { ok, id, secret, older } or
- * { ok: false, page } (what the page tells the owner).
- */
-async function makeWebhook(env, site, { fetcher, paidParts = false }) {
-  const url = hookUrlOf(site);
-  let older = [];
-  try {
-    const list = await listWebhookEndpoints(env, { fetcher });
-    older = (list?.data ?? []).filter((e) => e?.url === url && e?.metadata?.homie === HOOK_MARK && e?.status !== 'disabled').map((e) => e.id).filter((id) => typeof id === 'string');
-  } catch (error) {
-    if (isPermissionError(error)) return { ok: false, page: said(400, 'This key cannot make webhooks: it needs Webhook Endpoints: Write. In Stripe, open the key (… → Edit key), set Webhook Endpoints to Write and save, then go back and press Save again. Or make the webhook yourself and paste its signing secret under "I made the webhook myself".' + ` Stripe said: ${error.message}`) };
-    return { ok: false, page: said(502, `Stripe did not answer the webhook list (${error instanceof StripeError ? error.message : 'no answer'}). Nothing was saved. Go back and try again.`) };
-  }
-  let made = null;
-  try {
-    made = await createWebhookEndpoint(env, {
-      url, enabled_events: [...(paidParts ? HOOK_EVENTS : SHOP_HOOK_EVENTS)], api_version: STRIPE_VERSION,
-      description: 'Homie shop (made by homie-studio shop connect)', metadata: { homie: HOOK_MARK },
-    }, { fetcher });
-  } catch (error) {
-    if (isPermissionError(error)) return { ok: false, page: said(400, 'This key cannot make webhooks: it needs Webhook Endpoints: Write. In Stripe, open the key (… → Edit key), set Webhook Endpoints to Write and save, then go back and press Save again. Or make the webhook yourself and paste its signing secret under "I made the webhook myself".' + ` Stripe said: ${error.message}`) };
-    return { ok: false, page: said(502, `Stripe did not make the webhook (${error instanceof StripeError ? error.message : 'no answer'}). Nothing was saved. Go back and try again.`) };
-  }
-  const secret = typeof made?.secret === 'string' ? made.secret : '';
-  if (!WEBHOOK_SECRET_SHAPE.test(secret) || typeof made?.id !== 'string') return { ok: false, page: said(502, 'Stripe made a webhook but did not hand back its signing secret. Nothing was saved. Make the webhook yourself and paste its secret under "I made the webhook myself".') };
-  return { ok: true, id: made.id, secret, older };
-}
-
-/**
- * Managed Payments, tried once in TEST mode before the first buyer: a test Checkout Session with
- * `managed_payments[enabled]`, expired at once. Stripe's answer says whether Managed Payments is on for this account
- * (there is no API to read it). Never in live mode.
- */
-async function probeManaged(env, shop, { fetcher }) {
-  const item = shop?.items?.find((i) => i.price !== 'choose') ?? null;
-  try {
-    const s = await stripeCall(env, 'POST', '/v1/checkout/sessions', {
-      mode: 'payment', success_url: 'https://example.com/homie-shop-check', cancel_url: 'https://example.com/homie-shop-check',
-      line_items: [{ quantity: 1, price_data: { currency: shop?.currency ?? 'usd', unit_amount: item?.price ?? 500, tax_behavior: 'exclusive', product_data: { name: 'Homie shop check (test, expired at once)', tax_code: defaultTaxCode(item ?? {}) } } }],
-      managed_payments: { enabled: true }, metadata: { homie: 'shop-check' },
-    }, { fetcher, idempotencyKey: `homie-check-${randomBytes(8).toString('hex')}` });
-    if (typeof s?.id === 'string') { try { await expireCheckoutSession(env, s.id, { fetcher }); } catch (error) { return { ok: false, words: `Stripe took the test checkout but could not expire it (${error instanceof StripeError ? error.message : 'no answer'}). It will expire by itself.` }; } }
-    return { ok: true, words: 'Stripe took a test checkout with Managed Payments: it is on for this account (test mode).' };
-  } catch (error) {
-    return { ok: false, words: `Stripe refused a test checkout with Managed Payments (${error instanceof StripeError ? error.message : 'no answer'}). Finish Managed Payments in Stripe (Settings → Managed Payments: accept the terms, pass the eligibility review), or pick "You are" the seller.` };
-  }
-}
-
-/**
- * `homie-studio shop connect --manual`: the fallback page above on 127.0.0.1 (one use, ten minutes). The key goes to Stripe once (a
- * read, then the webhook), and to `wrangler secret put` on its standard input; so does the webhook's signing secret,
- * which Stripe hands this process when it makes the endpoint. Nothing is printed or returned but ids and words.
- */
-export async function shopConnectManual(root, { fromClipboard = false, clipboard = null, managed = null, live = false, log = () => {}, port = 0, wait = 10 * 60_000, verify = true, fetcher = fetch } = {}) {
-  const studio = readStudio(root);
-  const site = siteUrl(root);
-  if (!site) return { ok: false, command: 'shop connect', needs: 'deploy', why: 'the studio has no live address yet, and Stripe needs one to send payments to (the webhook): run npm run deploy first, then this' };
-  const env = studio.cloudflare?.accountId ? { CLOUDFLARE_ACCOUNT_ID: studio.cloudflare.accountId } : {};
-  const w = runner(root, env);
-  const shopNow = readShop(root);
-  const till = managed === true ? 'stripe-managed' : managed === false ? 'stripe' : shopNow.shop?.till ?? 'stripe';
-  const nonce = randomBytes(16).toString('hex');
-  const paidParts = paidReleases(root).length > 0 || (shopNow.shop?.items?.length??0)>0 || (await import('./tools-build.mjs')).toolFiles(root).length>0;
-  const page = connectPage({ paidParts, nonce, site, studio: studio.name ?? 'Your studio', till, test: !live });
-  return await new Promise((done) => {
-    let finished = false;
-    let busy = false;
-    const server = createServer((req, res) => {
-      if (req.method === 'GET' && req.url === `/${nonce}`) { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' }); res.end(page); return; }
-      if (req.method === 'POST' && req.url === '/key') {
-        let body = '';
-        req.on('data', (c) => { body += c; if (body.length > 8192) req.destroy(); });
-        req.on('end', async () => {
-          const form = new URLSearchParams(body);
-          const key = String(form.get('key') ?? '').trim();
-          let hook = String(form.get('hook') ?? '').trim();
-          const chosen = form.get('till') === 'stripe-managed' ? 'stripe-managed' : 'stripe';
-          const say = ({ status, text }) => { res.writeHead(status, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); res.end(text); };
-          if (form.get('n') !== nonce || finished) { say(said(403, 'This page was used already.')); return; }
-          if (busy) { say(said(409, 'Still saving the last press. Wait a moment.')); return; }
-          if (!KEY_SHAPE.test(key)) { say(said(400, 'That does not look like a Stripe key (rk_test_…, rk_live_…, sk_test_… or sk_live_…). Go back and try again.')); return; }
-          // Test mode unless the owner's AI ran it with --live on purpose: a live key on the test page is refused.
-          if (modeOf(key) !== (live ? 'live' : 'test')) { say(said(400, live ? 'This page takes a LIVE Stripe key (rk_live_… or sk_live_…).' : 'This page is for TEST mode: paste a test key (rk_test_… or sk_test_…). Live keys go in only when the shop is ready to sell for real (shop connect --manual --live).')); return; }
-          if (hook && !WEBHOOK_SECRET_SHAPE.test(hook)) { say(said(400, 'That does not look like a webhook signing secret (whsec_…). Go back and try again, or leave it empty and this page makes the webhook.')); return; }
-          if (Boolean(form.get('TURNSTILE_SITE_KEY')) !== Boolean(form.get('TURNSTILE_SECRET')) || Boolean(form.get('CDP_API_KEY_ID')) !== Boolean(form.get('CDP_API_KEY_SECRET'))) { say(said(400, 'Supply both keys in each pair.')); return; }
-          if (live && form.get('base') === 'yes' && !form.get('CDP_API_KEY_SECRET')) { say(said(400, 'Enabling live Base requires both CDP keys.')); return; }
-          busy = true;
-          try {
-            const sk = { STRIPE_KEY: key, STRIPE_API_BASE: process.env.STRIPE_API_BASE };
-            // One read with the key, so a typo is caught here and not at the first sale. It never leaves this computer
-            // except to Stripe itself.
-            if (verify) {
-              try { await stripeCall(sk, 'GET', '/v1/checkout/sessions', { limit: 1 }, { fetcher }); } catch (error) {
-                const reason = error instanceof StripeError ? ` Stripe said: ${error.message}` : '';
-                log(`Stripe could not read checkouts.${reason}`);
-                say(said(400, 'Stripe did not accept that key for reading checkouts. Check its permissions (Checkout Sessions: Write) and that it is the account you mean, then go back and paste it again.' + reason)); return;
-              }
-            }
-            let webhook = { made: false };
-            if (!hook) {
-              const m = await makeWebhook(sk, site, { fetcher, paidParts });
-              if (!m.ok) { log(m.page.text); say(m.page); return; }
-              hook = m.secret;
-              webhook = { made: true, id: m.id, older: m.older };
-            }
-            let recurringReady = false;
-            try {
-              if (paidParts) {
-              await stripeCall(sk, 'GET', '/v1/subscriptions', { limit: 1 }, { fetcher });
-              await stripeCall(sk, 'GET', '/v1/invoices', { limit: 1 }, { fetcher });
-              await stripeCall(sk, 'GET', '/v1/invoice_payments', { limit: 1 }, { fetcher });
-              const endpoints = webhook.made ? null : await listWebhookEndpoints(sk, { fetcher });
-              recurringReady = webhook.made || endpoints?.data?.some((e) => e.url === hookUrlOf(site) && e.status === 'enabled' && HOOK_EVENTS.every((event) => e.enabled_events.includes(event) || e.enabled_events.includes('*')));
-              }
-            } catch { recurringReady = false; }
-            const machine = paidParts ? await (await import('../worker/payment-capabilities.mjs')).probeMachinePayments(sk, { fetcher }) : { machine: {}, configuration: {}, reasons: {} };
-            const machineNote = ` Machine payments: ${Object.entries(machine.machine).map(([name, enabled]) => `${name}: ${enabled ? 'permission check passed' : machine.reasons[name] ?? 'unavailable'}`).join('; ')}.`;
-            finished = true;
-            const a = w(['secret', 'put', 'STRIPE_KEY'], { input: `${key}\n` });
-            const selected = a.code === 0 ? w(['secret','put','STRIPE_CHECKOUT_MODE'],{input:'sessions\n'}) : {code:1};
-            const b = selected.code === 0 ? w(['secret', 'put', 'STRIPE_WEBHOOK_SECRET'], { input: `${hook}\n` }) : { code: 1 };
-            hook = '';
-            const readiness = { ...machine, key: createHash('sha256').update(key).digest('hex'), mode: modeOf(key), recurring: recurringReady };
-            const c = !paidParts ? b : b.code === 0 ? w(['secret', 'put', 'PURCHASE_PAYMENT_CAPABILITIES'], { input: JSON.stringify(readiness) }) : { code: 1 };
-            const settingsPath = join(root, '.homie', 'purchase-settings.json');
-            const prior = existsSync(settingsPath) ? JSON.parse(readFileSync(settingsPath, 'utf8')) : {};
-            const next = { ...prior, [modeOf(key)]: { ...prior[modeOf(key)], ...machine.configuration } };
-            delete next[modeOf(key)].tempo;
-            if (form.get('base') === 'yes' && machine.machine.base) next[modeOf(key)].manualRefunds = true;
-            else { delete next[modeOf(key)].base; next[modeOf(key)].manualRefunds = false; }
-            const extras = ['TURNSTILE_SITE_KEY','TURNSTILE_SECRET','CDP_API_KEY_ID','CDP_API_KEY_SECRET'];
-            let settingsOkay = c.code === 0;
-            for (const setting of extras) if (paidParts && settingsOkay && form.get(setting)) settingsOkay = w(['secret','put',setting], { input: form.get(setting).trim() }).code === 0;
-            const d = !paidParts ? c : settingsOkay ? w(['secret', 'put', 'PURCHASE_MACHINE_PAYMENTS'], { input: JSON.stringify(next) }) : { code: 1 };
-            if (paidParts && d.code === 0) { mkdirSync(dirname(settingsPath), { recursive: true }); writeFileSync(settingsPath, JSON.stringify(next, null, 2) + '\n'); }
-            const okay = a.code === 0 && b.code === 0 && c.code === 0 && d.code === 0;
-            // The new secret is saved: the older endpoints this kit made for the same address stop sending (turned off,
-            // not deleted: the owner can turn one back on in Stripe).
-            let disabled = 0;
-            const warnings = [];
-            if (okay && webhook.made) {
-              for (const id of webhook.older) { try { await updateWebhookEndpoint(sk, id, { disabled: true }, { fetcher }); disabled += 1; } catch (error) { warnings.push(`Stripe could not turn off webhook ${id}: ${error instanceof StripeError ? error.message : 'no answer'}`); } }
-            }
-            const check = okay && !live && chosen === 'stripe-managed' ? await probeManaged(sk, shopNow.shop, { fetcher }) : null;
-            if (check && !check.ok) warnings.push(check.words);
-            for (const warning of warnings) log(warning);
-            let tillNote = '';
-            if (okay && shopNow.shop && !shopNow.absent && chosen !== shopNow.shop.till) {
-              try {
-                const raw = JSON.parse(readFileSync(shopNow.file, 'utf8'));
-                raw.till = chosen;
-                writeFileSync(shopNow.file, `${JSON.stringify(raw, null, 2)}\n`);
-                tillNote = ` shop.json now says "till": "${chosen}" (deploy to use it).`;
-              } catch { tillNote = ''; }
-            }
-            const narrow = webhook.made ? ' Recommended, 20 seconds: in Stripe, open this key (… → Edit key) and set Webhook Endpoints back to None. The shop never needs it again.' : '';
-            say(said(okay ? 200 : 500, okay ? `Saved to your Worker (${modeOf(key)} mode).${webhook.made ? ' Stripe made the webhook; its secret went straight to your Worker.' : ''}${check?.ok ? ` ${check.words}` : ''}${warnings.length ? ` ${warnings.join(' ')}` : ''}${narrow}${machineNote} You can close this page.` : 'Wrangler could not save it (is this computer signed in to Cloudflare? npx wrangler login). Nothing was kept.'));
-            server.close();
-            done(okay
-              ? {
-                ok: true, command: 'shop connect', saved: true, mode: modeOf(key), till: chosen,
-                webhook: webhook.made ? { made: true, id: webhook.id, url: hookUrlOf(site), turnedOff: disabled } : { made: false, url: hookUrlOf(site) },
-                machinePayments: { methods: machine.machine, reasons: machine.reasons },
-                ...(check ? { managedPayments: check } : {}),
-                ...(warnings.length ? { warnings } : {}),
-                message: `Saved as the Worker secrets STRIPE_KEY and STRIPE_WEBHOOK_SECRET (never shown), ${modeOf(key)} mode, seller: ${chosen === 'stripe-managed' ? 'Stripe (Managed Payments)' : 'the studio'}.${webhook.made ? ` Stripe made the webhook ${webhook.id} for ${hookUrlOf(site)}${disabled ? ` and ${disabled} older one(s) were turned off` : ''}.` : ''}${tillNote}${narrow} homie-studio shop says whether anything else is missing.`,
-              }
-              : { ok: false, command: 'shop connect', why: 'wrangler secret put failed (sign in with npx wrangler login, then run this again)' });
-          } finally { busy = false; }
-        });
-        return;
-      }
-      res.writeHead(404); res.end();
-    });
-    server.listen(port, '127.0.0.1', async () => {
-      const link = `http://127.0.0.1:${server.address().port}/${nonce}`;
-      if (fromClipboard) {
-        try {
-          // The owner's agent clicks Copy in Stripe. The key never enters a tool response or argv.
-          let key = clipboard ? await clipboard() : process.platform === 'darwin' ? execFileSync('pbpaste', {encoding:'utf8'}).trim() : process.platform === 'win32' ? execFileSync('powershell',['-NoProfile','-Command','Get-Clipboard'],{encoding:'utf8'}).trim() : execFileSync('wl-paste',['--no-newline'],{encoding:'utf8'}).trim();
-          if (!KEY_SHAPE.test(key)) throw new Error('Clipboard does not contain a Stripe credential');
-          const result = await fetch(`http://127.0.0.1:${server.address().port}/key`, {method:'POST',body:new URLSearchParams({key,n:nonce,till})});
-          key = '';
-          if (!result.ok) { finished=true;server.close();done({ok:false,command:'shop connect',why:redactStripe(await result.text()).slice(0,800) || 'Credential setup failed. Check the provider permissions and payment mode; no credential was printed.'}); }
-        } catch { finished=true;server.close();done({ok:false,command:'shop connect',why:'The agent must copy the approved Stripe key in the browser first. macOS, Windows or Wayland clipboard tooling is required; no credential was printed.'}); } finally {
-          if (!clipboard) { try { if(process.platform==='darwin') execFileSync('pbcopy',[],{input:''}); else if(process.platform==='win32') execFileSync('powershell',['-NoProfile','-Command','Set-Clipboard -Value ""']); else execFileSync('wl-copy',['--clear']); } catch {} }
-        }
-      } else log(`Open this page on this computer; the owner pastes the key there (never in a chat): ${link}`);
-    });
-    setTimeout(() => { if (!finished) { finished = true; server.close(); done({ ok: false, command: 'shop connect', why: 'nothing was saved in ten minutes; run it again when ready' }); } }, wait).unref?.();
-  });
-}
-
+/** Stop new purchases while keeping signed in-flight fulfilment available. */
 export function shopDisconnect(root) {
   const studio = readStudio(root);
   const w = runner(root, studio.cloudflare?.accountId ? { CLOUDFLARE_ACCOUNT_ID: studio.cloudflare.accountId } : {});
-  const a = w(['secret', 'delete', 'STRIPE_KEY'], { input: 'y\n' });
-  const b = w(['secret', 'delete', 'STRIPE_WEBHOOK_SECRET'], { input: 'y\n' });
-  const c = w(['secret', 'delete', 'STRIPE_SHOP_LINKS'], { input: 'y\n' });
-  return a.code === 0 || b.code === 0 || c.code === 0 ? { ok: true, command: 'shop disconnect', message: 'The Worker payment connection was removed. Ask your connected AI to deactivate existing Payment Links in Stripe too; already opened Stripe checkouts can still complete.' } : { ok: false, command: 'shop disconnect', why: a.out.trim().split('\n').slice(-2).join(' ') };
+  const result = w(['secret', 'delete', 'STRIPE_KEY'], { input: 'y\n' });
+  return result.code === 0 ? { ok: true, command: 'shop disconnect', message: 'New checkout is closed. Reconnect by approving the Homie Stripe App.' }
+    : { ok: false, command: 'shop disconnect', why: 'Cloudflare could not disconnect Stripe. No credentials were printed.' };
 }
 
 /** Lines for a person (the CLI's print). */
@@ -414,7 +115,7 @@ export function shopLines(r) {
   if (r.command === 'shop') {
     lines.push(r.ready ? `The shop is open${r.mode === 'test' ? ' in TEST MODE (no real money)' : ', live'} (till: ${r.till}).` : 'The shop is not selling yet:');
     for (const m of r.missing ?? []) lines.push(`  - ${m.words}`);
-    if (r.connection) lines.push(`Stripe test credentials expire ${r.connection.expiresAt}. Renew: ${r.connection.renew}`);
+    if (r.connection) lines.push(`Stripe connected ${r.connection.connectedAt}. Reconnect: ${r.connection.renew}`);
     if (r.totals) lines.push(`Last 30 days: ${r.totals.sales} sales, ${money(r.totals.paid, r.totals.currency)} before tax and fees; ${r.totals.refunds} refunded; ${r.totals.disputes} disputed.`);
     lines.push(`Webhook endpoint for Stripe: ${r.hook}`, `Payouts: ${r.stripe?.payouts}`);
     if (r.local && !r.local.ok) lines.push(`shop.json here: ${r.local.errors.map((e) => e.message).join('; ')}`);

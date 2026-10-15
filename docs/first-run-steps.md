@@ -1,3 +1,5 @@
+> Historical release evidence. Current Stripe setup and payment behavior are documented in [Studio Checkout](../packages/studio/shop/SHOP.md); the former Payment Link mode is removed.
+
 # Human steps from nothing to a live studio
 
 Audited against `origin/main` at `daab673` (2026-10-09), then exercised in scratch folders with
