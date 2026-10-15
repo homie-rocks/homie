@@ -41,9 +41,9 @@ export async function pollEvents(env,cat,caller,params,now=Date.now()){
   const rows=(await env.DB.prepare(`SELECT seq,id,type,data,at FROM studio_events
     WHERE type=?1 AND seq>?2 AND seq<=?3 AND scope IS ?7
       AND (?4 IS NULL OR (json_extract(data,'$.app')=?4 AND json_extract(data,'$.collection')=?5))
-    ORDER BY seq LIMIT ?6`).bind(feed.event,start.after,start.through,feed.event==='record.changed'?(env.HOMIE_LOCAL_TEST_SECRET&&caller.localTest&&caller.testScope?`${feed.app}:check:${caller.testScope}`:feed.app):null,feed.collection??null,max+1,feed.event==='record.changed'?null:caller.testScope??null).all()).results;
+    ORDER BY seq LIMIT ?6`).bind(feed.event,start.after,start.through,feed.event==='record.changed'?((env.HOMIE_LOCAL_TEST_SECRET||caller.remoteTest)&&caller.localTest&&caller.testScope?`${feed.app}:check:${caller.testScope}`:feed.app):null,feed.collection??null,max+1,feed.event==='record.changed'?null:caller.testScope??null).all()).results;
   const hasMore=rows.length>max,page=rows.slice(0,max);
-  const events=page.map(row=>{const data=JSON.parse(row.data);if(env.HOMIE_LOCAL_TEST_SECRET&&caller.localTest&&caller.testScope&&feed.event==='record.changed')data.app=feed.app;return occurrence(params.name,{...row,data},cursorOf(params.name,row.seq));});
+  const events=page.map(row=>{const data=JSON.parse(row.data);if((env.HOMIE_LOCAL_TEST_SECRET||caller.remoteTest)&&caller.localTest&&caller.testScope&&feed.event==='record.changed')data.app=feed.app;return occurrence(params.name,{...row,data},cursorOf(params.name,row.seq));});
   const after=hasMore?page.at(-1).seq:start.through;
   return {events,cursor:cursorOf(params.name,after),truncated:start.truncated,hasMore,nextPollMs:5000};
 }

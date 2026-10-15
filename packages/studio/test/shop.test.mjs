@@ -3181,3 +3181,17 @@ test('keyless variable deposit retains the app reference and only fulfills the s
   assert.equal(JSON.parse(s.DB.sql.prepare("SELECT data FROM studio_events WHERE type='order.paid'").get().data).reference,'reservation-42');
  }finally{s.stripe.close();h.stripe.close();}
 });
+
+test('resource checkout refuses a raw slot without its allocated hold',async()=>{
+ const {shopRoutes}=await import('../worker/shop.mjs');const s=await site();
+ try {
+  subscribeAppPayments(s);
+  for(const file of readdirSync(join(s.dir,'site/migrations')).sort().filter(f=>f>'0022_remove_referrals.sql'))s.DB.sql.exec(readFileSync(join(s.dir,'site/migrations',file),'utf8'));
+  s.DB.sql.exec(`INSERT INTO app_records VALUES('place','slots','morning','{"capacity":1}',1,1)`);
+  const cat=await (await s.env.ASSETS.fetch(new Request('https://owls.example/games.json'))).json();
+  cat.games.push({id:'place',kind:'app',records:{collections:{bookings:{booking:{slots:'slots',resources:'resources',item:'supporter'}}}}});
+  const person=s.player(30,{band:'adult'}),url=new URL('https://owls.example/api/shop/buy');
+  const response=await shopRoutes(new Request(url,{method:'POST',headers:{...s.as(person),'content-type':'application/json',origin:url.origin},body:JSON.stringify({item:'supporter',game:'place',booking:{collection:'bookings',slot:'morning'}})}),s.env,{waitUntil:()=>{}},url,{catalogueOf:async()=>cat});
+  const body=await response.json();assert.equal(response.status,409,JSON.stringify(body));assert.match(body.message,/resource.*hold|hold.*resource/i);
+ }finally{s.stripe.close();}
+});

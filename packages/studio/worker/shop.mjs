@@ -681,6 +681,7 @@ async function buyRoute(request, env, url, cat, shop, ready, ctx, requestAt) {
     const collection = requestedBooking?.collection;
     const spec = app?.records?.collections?.[collection]?.booking;
     if (!spec || !/^[A-Za-z0-9_-]{1,64}$/.test(requestedBooking?.slot ?? '') || lines.length !== 1 || item.id !== spec.item || item.interval) return fail(400, 'booking', 'Choose a declared booking slot and its service item.');
+    if(spec.resources&&requestedBooking.hold===undefined)return fail(409,'booking','Reserve the resource through the booking tool and pass its hold before checkout.');
     const local = await localSession(request, env);
     booking = { app: local?.app === game && local.scope ? `${game}:check:${local.scope}` : game, collection, slots: spec.slots, slot: requestedBooking.slot, quantity: lines[0].quantity };
     if(requestedBooking.hold!==undefined){

@@ -10,7 +10,7 @@ const capacityCheck=`
 export const BOOKING_RESOURCES_MIGRATION=`ALTER TABLE shop_bookings ADD COLUMN allocation TEXT NOT NULL DEFAULT '[]';
 ALTER TABLE shop_bookings ADD COLUMN choices TEXT NOT NULL DEFAULT '{}';
 ${['INSERT','UPDATE OF state,allocation'].map((op,i)=>`CREATE TRIGGER booking_resource_${i} BEFORE ${op} ON shop_bookings WHEN NEW.state IN ('held','confirmed') BEGIN ${capacityCheck} END;`).join('\n')}
-CREATE TRIGGER booking_resource_move BEFORE UPDATE OF slot ON shop_bookings WHEN OLD.slot!=NEW.slot AND OLD.allocation!='[]' AND OLD.state IN ('held','confirmed') BEGIN SELECT RAISE(ABORT,'resource booking move requires release and a new allocation'); END;
+CREATE TRIGGER booking_resource_move BEFORE UPDATE OF slot,quantity ON shop_bookings WHEN (OLD.slot!=NEW.slot OR OLD.quantity!=NEW.quantity) AND OLD.allocation!='[]' AND OLD.state IN ('held','confirmed') BEGIN SELECT RAISE(ABORT,'resource booking move requires release and a new allocation'); END;
 CREATE TRIGGER booking_resource_edit BEFORE UPDATE OF value ON app_records WHEN EXISTS(SELECT 1 FROM shop_bookings b,json_each(b.allocation) a WHERE b.app=OLD.app AND b.state IN ('held','confirmed') AND json_extract(a.value,'$.resource')=OLD.id AND json_extract(a.value,'$.collection')=OLD.collection) AND NEW.value!=OLD.value BEGIN SELECT RAISE(ABORT,'resource has active bookings; release or finish them before editing'); END;
 CREATE TRIGGER booking_resource_delete BEFORE DELETE ON app_records WHEN EXISTS(SELECT 1 FROM shop_bookings b,json_each(b.allocation) a WHERE b.app=OLD.app AND b.state IN ('held','confirmed') AND json_extract(a.value,'$.resource')=OLD.id AND json_extract(a.value,'$.collection')=OLD.collection) BEGIN SELECT RAISE(ABORT,'resource has active bookings'); END;
 `;

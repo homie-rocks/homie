@@ -150,3 +150,13 @@ test('MCP record creation explains the top-level id and public holds have a boun
  const book=builtins(env,cat,'https://place.test').find(t=>t.name==='studio_book');
  await assert.rejects(()=>book.handler({app:'place',collection:'bookings',slot:'one',id:'a',expiresAt:Date.now()+86400000},ctx),/expiry.*15|15.*minutes/i);
 });
+
+test('resource capacity remains atomic across simultaneous requests and quantity edits',async t=>{
+ const {bookingHolds}=await import('../worker/booking-holds.mjs');const DB=database(t),env={DB};
+ DB.sql.exec(`INSERT INTO app_records VALUES('place','resources','one','{"capacity":1}',1,1);INSERT INTO app_records VALUES('place','slots','a','{"capacity":10,"start":"2026-11-01T09:00:00Z","end":"2026-11-01T10:00:00Z","resources":["one"]}',1,1);`);
+ const api=bookingHolds(env,{id:'alice'},{games:[{id:'place',kind:'app',records:{collections:{bookings:{booking:{slots:'slots',resources:'resources',item:'ticket'}}}}}]});
+ const results=await Promise.allSettled(['a','b'].map(id=>api.hold({app:'place',collection:'bookings',slot:'a',id,expiresAt:Date.now()+60000})));
+ assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+ assert.throws(()=>DB.sql.exec("UPDATE shop_bookings SET quantity=2 WHERE state='held'"),/resource.*release/);
+ assert.equal(DB.sql.prepare("SELECT quantity FROM shop_bookings WHERE state='held'").get().quantity,1);
+});
