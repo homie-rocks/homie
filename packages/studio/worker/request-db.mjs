@@ -9,6 +9,10 @@ const metadataQueries=new Set(['SELECT game, launch, max_players, updated_at FRO
  */
 export function requestDatabase(DB, request, state={mutated:false}, binding=databaseBinding(DB)) {
  if(!DB)return DB;
+ // Start at the primary so launch/role revocations are current. Later reads in
+ // this session may use replicas at or beyond that bookmark. This also meets
+ // any bookmark returned by an earlier request without trusting stale auth.
+ if(DB===binding&&typeof DB.withSession==='function')DB=DB.withSession('first-primary');
  let revision,records,rows;
  const url=new URL(request.url),match=request.method==='GET'&&/^\/([a-z0-9][a-z0-9-]{0,39})\/api\/app\/records\/([a-z][a-z0-9-]{0,39})(?:\/([A-Za-z0-9_-]{1,64}))?$/.exec(url.pathname);
  const recordQuery=match&&(match[3]?'SELECT id, value, version, updated_at FROM app_records WHERE app = ?1 AND collection = ?2 AND id = ?3':'SELECT id, value, version, updated_at FROM app_records WHERE app = ?1 AND collection = ?2 ORDER BY updated_at, id');
@@ -45,7 +49,7 @@ export function requestDatabase(DB, request, state={mutated:false}, binding=data
   };
   return {bind:(...args)=>prepare(sql,args),first:async column=>{writing(sql);if(!metadataQueries.has(sql)&&sql!==recordQuery)return original().first(column);const row=(await read()).results?.[0]??null;return column&&row?row[column]:row;},all:()=>{writing(sql);return read();},run:()=>{writing(sql);return original().run();},raw:(...args)=>{writing(sql);return original().raw(...args);},_original:original,_sql:sql};
  };
- const methods={[METADATA_REVISION]:stamp,[ORIGINAL_DB]:binding,get [MUTATIONS](){return state.mutated;},prepare,batch:statements=>{for(const s of statements)writing(s._sql??'UPDATE');return DB.batch(statements.map(s=>s._original?.()??s));},exec:(sql,...args)=>{writing(sql);return DB.exec(sql,...args);},withSession:(...args)=>requestDatabase(DB.withSession(...args),request,state,binding)};
+ const methods={[METADATA_REVISION]:stamp,[ORIGINAL_DB]:binding,get [MUTATIONS](){return state.mutated;},prepare,batch:statements=>{for(const s of statements)writing(s._sql??'UPDATE');return DB.batch(statements.map(s=>s._original?.()??s));},exec:(sql,...args)=>{writing(sql);return binding.exec(sql,...args);},withSession:(...args)=>requestDatabase(binding.withSession(...args),request,state,binding)};
  return new Proxy(methods,{get(target,key){if(key in target)return target[key];const value=DB[key];return typeof value==='function'?value.bind(DB):value;}});
 }
 

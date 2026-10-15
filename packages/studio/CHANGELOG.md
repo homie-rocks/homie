@@ -17,6 +17,13 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## Unreleased
+
+- Batch cold runtime metadata and bake the catalogue into build modules. Serve public assets before invoking the Worker.
+- Queue mutation notifications and verified Stripe events with retries and a dead-letter queue; cache room listings by metadata revision.
+- Separate stream Durable Objects from matchmaking, migrate Lobby snapshots to SQLite rows, and index MCP prefix/expiry access.
+- Use Chrome debugging pipes for shared test-launch flags.
+
 ## [0.54.0] - 2026-10-15
 
 **Plugin 0.54.0**

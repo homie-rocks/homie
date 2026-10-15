@@ -671,6 +671,8 @@ export default {
       }
       res=new Response(body,{status:res.status,headers});
     }
+    const bookmark=env.DB?.getBookmark?.();
+    if(bookmark&&res.status!==101){const headers=new Headers(res.headers);headers.set('x-studio-bookmark',bookmark);res=new Response(res.body,{status:res.status,statusText:res.statusText,headers});}
     if (appLobby || appRecords) return appCors(request, res);
     return res;
   },
