@@ -246,9 +246,9 @@ V1/V2 and A2 are verification tasks with decided engineering responses, not arch
 
 Decided by Homie's owner on 2026-10-15:
 
-1. **Pilot and market:** a venue already on Enjoy (enjoyhere.ca), in Canada, in Canadian dollars. Which venue, its starting event and its agreement to the bounded pilot are still to be named.
+1. **Operator and market:** Homie is operated by 1243116 B.C. Ltd. (British Columbia), which also runs Enjoy. In Stripe it is one organization with separate Homie and Enjoy accounts; the Connect platform and the Homie Stripe App are the Homie account, branded Homie. The pilot is a venue already on Enjoy (enjoyhere.ca), in Canada, in Canadian dollars, chosen by the Enjoy team.
 2. **Offer:** 3% of the pre-tax sale via the Connect application fee, no monthly fee or minimum, proportional fee refunds; donations never charged.
 3. **No sponsored plans.** Free means self-hosted.
 4. **Support:** Homie's AI first; the Homie Team as the human backup, replying within one business day. No round-the-clock human promise is advertised.
 
-Still open, before live money (step 12): the legal Homie entity, and counsel/accountant review for Canada of the service terms, privacy, retention/deletion and exit grace period (proposed 30 days), subprocessors and tax responsibilities. Engineering implements those approved values; it does not choose the legal obligations.
+Before live money (step 12), the operator's counsel/accountant review for Canada approves the service terms, privacy, retention/deletion and exit grace period (proposed 30 days), subprocessors and tax responsibilities. Engineering implements those approved values; it does not choose the legal obligations.
