@@ -9,6 +9,7 @@ if(!state.resources.some(r=>r.name===dlq)){
  if((await api('queues')).some(q=>q.queue_name===dlq))throw new Error('DLQ exists');
  intent(dlq,'pending-dlq');const q=await api('queues','POST',{queue_name:dlq});const r=state.resources.at(-1);r.path=r.readPath='queues/'+q.queue_id;r.status='created';save();
 }
+if(!state.tenant.preview.url||!state.tenant.production.url)throw new Error('Registry origins missing; finish dispatch provisioning');
 state.tenant.migrations=migrationManifest(JSON.parse(readFileSync(local+'artifact.json')));state.tenant.schemaEpoch=1;save();
 const config={name:worker,main:here+'pipeline.mjs',account_id:account,compatibility_date:'2026-10-15',compatibility_flags:['nodejs_compat'],workers_dev:true,observability:{enabled:true},limits:{cpu_ms:300000},
  services:[{binding:'BUILDER',service:'hm-s2-builder'}],r2_buckets:[{binding:'ARTIFACTS',bucket_name:bucket}],

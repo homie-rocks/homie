@@ -102,6 +102,11 @@ export default {
   const ledger=env.RELEASES.getByName(env.TENANT_ID),path=new URL(request.url).pathname;
   try{
    if(path==='/status'&&request.method==='GET')return Response.json(await ledger.status());
+   if(path==='/evidence'&&request.method==='GET'){
+    const status=await ledger.status(),checks={};
+    for(const release of Object.values(status))if(release?.artifactDigest&&!checks[release.commit]){const o=await env.ARTIFACTS.get(release.artifactDigest+'.checks');if(o){if(o.size>256*1024)throw new Error('Oversized check receipt');checks[release.commit]=await o.json();}}
+    return Response.json(checks);
+   }
    if(request.method!=='POST')return new Response('Not found',{status:404});
    if(path==='/cleanup-artifacts'){
     if(env.REGISTRY.tenants.some(t=>!t.id.startsWith('hm-s2-')))throw new Error('Test registry required');

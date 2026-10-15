@@ -1,14 +1,24 @@
 /** Trusted test-resource operator. Never imports or executes studio code. */
 import {execFileSync} from 'node:child_process';
-import {readFileSync,writeFileSync,mkdirSync,existsSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync,existsSync,openSync,closeSync,unlinkSync,renameSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 export const here=fileURLToPath(new URL('.',import.meta.url));
 export const local=here+'.local/';
 export const account='d2f6f976cecad2fe130976fe36916cdb';
 export const wrangler=here+'node_modules/.bin/wrangler';
 mkdirSync(local,{recursive:true});
+// Serialize stateful harness commands. Read-only status/proof collection can run
+// while a remote build is pending; mutations may not overwrite another snapshot.
+const readOnly=/\/(status|collect-proof)\.mjs$/.test(process.argv[1]??'')||process.argv[1]==='-';
+if(!readOnly){
+ const lock=local+'operator.lock';
+ if(existsSync(lock)){const pid=Number(readFileSync(lock,'utf8'));try{process.kill(pid,0);throw new Error('Another step 2 operator command is active');}catch(e){if(e.code!=='ESRCH')throw e;unlinkSync(lock);}}
+ const fd=openSync(lock,'wx');writeFileSync(fd,String(process.pid));
+ process.once('exit',()=>{closeSync(fd);unlinkSync(lock);});
+}
+
 export const state=existsSync(local+'resources.json')?JSON.parse(readFileSync(local+'resources.json')):{account,resources:[],receipts:[]};
-export const save=()=>writeFileSync(local+'resources.json',JSON.stringify(state,null,2)+'\n');
+export const save=()=>{writeFileSync(local+'resources.pending.json',JSON.stringify(state,null,2)+'\n');renameSync(local+'resources.pending.json',local+'resources.json');};
 let credential;
 export function token(){return credential??=JSON.parse(execFileSync(wrangler,['auth','token','--json'],{encoding:'utf8'})).token;}
 export async function api(path,method='GET',body){

@@ -5,6 +5,7 @@ export function resolvePush(event,registry){
  const tenant=registry.tenants.find(t=>t.namespace===event.source?.namespace&&t.repo===event.source?.repoName);
  if(!tenant||event.payload?.ref!=='refs/heads/main'||!event.metadata?.eventSubscriptionId||(registry.subscriptionId&&event.metadata.eventSubscriptionId!==registry.subscriptionId))throw new Error('Unregistered push');
  const commit=event.payload.after;if(!/^[a-f0-9]{40}$/.test(commit)||/^0+$/.test(commit))throw new Error('Immutable commit required');
+ if(tenant.preview?.url!=='https://hm-s2-dispatch.ryan-d2f.workers.dev'||tenant.production?.url!=='https://hm-s2-live.ryan-d2f.workers.dev')throw new Error('Registered test origins required');
  return {tenant,commit};
 }
 export function bindingManifest(tenant,environment){
