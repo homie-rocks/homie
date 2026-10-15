@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Records-only apps now persist `net.prefs` through their owning shell, so device settings and saved references survive reload without weakening the iframe sandbox.
+
 - App screens share simultaneous record reads across tabs, queue bursts, and back off after connection failures. Writes remain separate and invalidate cached reads. App reconnect notices use plain wording.
 
 What changed in each release of Homie's open parts, newest first:

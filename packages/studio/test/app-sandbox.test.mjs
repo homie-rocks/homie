@@ -89,3 +89,17 @@ test('a decorative app hero lets the containing page scroll',{timeout:15000},asy
  await page.waitForFunction(()=>window.scrollY>100,{timeout:1500});
  assert.ok(await page.evaluate(()=>window.scrollY)>100);
 });
+
+test('records-only preferences survive reload and stay scoped to the app frame',{timeout:15000},async t=>{
+ const {page,origin}=await fixture(t,`<!doctype html><button>Keep team</button><output></output><script>
+ addEventListener('message',e=>{if(e.data?.t==='homie-prefs')document.querySelector('output').textContent=JSON.stringify(e.data);});
+ document.querySelector('button').onclick=()=>parent.postMessage({t:'homie-net',what:'prefs',n:1,op:'set',k:'team',v:'Saltwater Otters'},'*');
+ parent.postMessage({t:'homie-net',what:'prefs',n:2,op:'all'},'*');
+ </script>`);
+ await page.goto(origin+'/form/open');let frame=page.frames().find(f=>f.url().includes('/__game/'));
+ assert.equal(await frame.evaluate(()=>window.HOMIE_NET.prefs),true);assert.equal(await frame.evaluate(()=>window.HOMIE_NET.kind),'app');
+ await frame.click('button');await frame.waitForFunction(()=>document.querySelector('output').textContent.includes('kept'));
+ await page.reload();frame=page.frames().find(f=>f.url().includes('/__game/'));await frame.waitForFunction(()=>document.querySelector('output').textContent.includes('Saltwater Otters'));
+ await page.evaluate(()=>window.postMessage({t:'homie-net',what:'prefs',n:3,op:'set',k:'team',v:'forged'},'*'));
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('homie-prefs.form')).team),'Saltwater Otters');
+});

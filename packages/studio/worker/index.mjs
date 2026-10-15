@@ -506,6 +506,7 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
   const params = paramsFrom(url.searchParams, meta);
   if (meta.kind === 'app' && !params.role) params.role = appRole(meta, url);
   const cfg = {
+    ...(meta.kind === 'app' ? {kind: 'app'} : {}),
     v: 1,
     url: `${wsBase}/${game}/__net?room=${encodeURIComponent(room)}${b ? `&b=${b}` : ''}${t ? `&t=${encodeURIComponent(t)}` : ''}${watching ? '&w=1' : ''}${ver ? `&gv=${encodeURIComponent(ver)}` : ''}`,
     room,
