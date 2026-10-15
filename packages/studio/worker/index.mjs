@@ -123,7 +123,7 @@ import { cookieValues, count, countVisit, counter, isQa, onlyOf, ownerAllowed, p
 import { ownerRoutes } from './stats-page.mjs';
 import { playerRoutes, players as playerAccounts } from './players.mjs';
 import {
-  accessOf, accountSub, gatePage, holders, isOwner, joinHolders, launchOf, regateArgs, officeRoutes, publicCatalogue, redeemInvite, sameOrigin, seatsFor, settingsOf, ticketAllows,
+  appAssetTicket, accessOf, accountSub, gatePage, holders, isOwner, joinHolders, launchOf, regateArgs, officeRoutes, publicCatalogue, redeemInvite, sameOrigin, seatsFor, settingsOf, ticketAllows,
   ticketFor, ticketSub, usePlayers, verifyControl,
 } from './office.mjs';
 
@@ -154,7 +154,7 @@ export { mergeSaves } from './saves.mjs';
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const POST_SLUG = /^[a-z0-9][a-z0-9-]{0,79}$/;
 /** A game's own files, framed by its play page: never x-frame-options DENY. */
-const GAME_FILES = /^\/[a-z0-9][a-z0-9-]{0,39}\/__game(?:\/|$)/;
+const GAME_FILES = /^\/[a-z0-9][a-z0-9-]{0,39}\/(?:__game|__assets)(?:\/|$)/;
 const MEDIA_FILE = /\.(mp4|webm|m4v|mov|mp3|m4a|aac|ogg|opus|wav|flac)$/i;
 /** A browser's room key (random, kept in the play page's own storage) and a play ticket, as they may appear in an address. */
 const BROWSER_KEY = /^[A-Za-z0-9_-]{16,43}$/;
@@ -539,7 +539,8 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
   };
   let html = await res.text();
   const fallback = meta?.kind === 'app' ? `<script>addEventListener('DOMContentLoaded',()=>(${appGraphicsFallback.toString()})(${JSON.stringify(meta.words?.fallback ?? 'This device cannot display the 3D scene. Use the text controls to continue.').replace(/</g, '\\u003c')}));</script>` : '';
-  const head = `<script>${JOIN_AREA_FRAME_JS}</script>` + (meta.kind==='app'?`<script>${APP_STORAGE_JS}</script>`:'') + fallback + `${embedded ? `<script>${EMBED_GAME_JS}</script>` : ''}<script>window.HOMIE_NET=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script>`;
+  const assetBase = meta.kind === 'app' && !url.pathname.includes('/__assets/') && launchOf(meta, await settingsOf(env, {fresh:true}), env) !== 'public' ? `<base href="/${game}/__assets/${await appAssetTicket(env,game)}/">` : '';
+  const head = assetBase + `<script>${JOIN_AREA_FRAME_JS}</script>` + (meta.kind==='app'?`<script>${APP_STORAGE_JS}</script>`:'') + fallback + `${embedded ? `<script>${EMBED_GAME_JS}</script>` : ''}<script>window.HOMIE_NET=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script>`;
   html = /<head[^>]*>/i.test(html) ? html.replace(/<head([^>]*)>/i, `<head$1>${head}`) : head + html;
   return new Response(html, {
     headers: {
@@ -637,6 +638,8 @@ export default {
     env=await loadShopLinks(env,new URL(request.url).origin);
     await removeReferralLeftovers(env);
     const url = new URL(request.url);
+    if(env.HOMIE_CONCEPT==='1' && url.pathname==='/robots.txt')return new Response('User-agent: *\nDisallow: /\n',{headers:{'content-type':'text/plain','x-robots-tag':'noindex, nofollow'}});
+    if(env.HOMIE_CONCEPT==='1' && url.pathname==='/.well-known/homie-studio.json')return json({ok:false,error:'concept-unlisted'},404,{'x-robots-tag':'noindex, nofollow'});
     await (await import('./functions.mjs')).syncFunctions(env);
     const dispatch=()=>import('./functions.mjs').then(m=>m.runFunctions(env,()=>catalogue(env,url.origin),url.origin));
     // Some routes reconcile shop state in waitUntil after returning their page.
@@ -664,6 +667,16 @@ export default {
         const delivery=dispatch();
         if(ctx?.waitUntil)ctx.waitUntil(delivery);else await delivery;
       }
+    }
+    if(env.HOMIE_CONCEPT==='1' && res.status!==101) {
+      const headers=new Headers(res.headers);headers.set('x-robots-tag','noindex, nofollow');
+      let body=res.body;
+      if(/text\/html/i.test(headers.get('content-type')??'')) {
+        const html=await res.text(),banner='<aside role="status" style="position:fixed;z-index:2147483647;top:0;left:0;right:0;text-align:center;background:#ffda44;color:#171717;padding:6px;font:bold 14px system-ui;pointer-events:none">TEST / CONCEPT</aside>';
+        body=/<body[^>]*>/i.test(html)?html.replace(/<body[^>]*>/i,m=>m+banner):banner+html;
+        headers.delete('content-length');
+      }
+      res=new Response(body,{status:res.status,headers});
     }
     if (appLobby || appRecords) return appCors(request, res);
     return res;
@@ -842,7 +855,7 @@ async function route(request, env, ctx) {
     if (own.ok) return own;
     const cat = await getCat();
     const method = request.method;
-    if (path === '/robots.txt') return discoveryResponse(robotsTxt(cat, url.origin, { preview: env.HOMIE_PREVIEW === '1' }), 'text/plain', { method });
+    if (path === '/robots.txt') return discoveryResponse(robotsTxt(cat, url.origin, { preview: env.HOMIE_PREVIEW === '1' || env.HOMIE_CONCEPT === '1' }), 'text/plain', { method });
     const all = await getAll();
     if (path === '/sitemap.xml') return discoveryResponse(sitemapXml(cat, url.origin, { all }), 'application/xml', { method });
     const full = path === '/llms-full.txt';
@@ -927,6 +940,10 @@ async function route(request, env, ctx) {
     return postPage(cat, post, { origin: url.origin });
   }
 
+  if(parts[0]==='games' && parts.length>2) {
+    const all=await getAll(),app=(all.games??[]).find(g=>g.id===parts[1]&&g.kind==='app');
+    if(app && launchOf(app,await settingsOf(env,{fresh:true}),env)!=='public')return json({ok:false,error:'not-found'},404);
+  }
   const game = parts[0];
   if (game && GAME_ID.test(game)) {
     const all = await getAll();
@@ -949,7 +966,20 @@ async function route(request, env, ctx) {
     const launch = launchOf(meta, settings, env);
     const max = seatsFor(meta, settings);
     if (meta.kind === 'app') {
-      if (launch !== 'public' && !(await accessOf(request, env, game, launch)).ok) return json({ ok: false, error: 'not-found' }, 404);
+      const asset=/^__assets\/([^/]+)\/(.+)$/.exec(sub);
+      if(asset) {
+        if(!(await appAssetTicket(env,game,asset[1])))return json({ok:false,error:'not-found'},404);
+        const response=asset[2]==='index.html'?await gameDocument(request,env,url,game,meta,cat):await gameAsset(request,env,url,game,asset[2]);
+        response.headers.set('cache-control','private, no-store');
+        response.headers.set('referrer-policy','no-referrer');
+        return response;
+      }
+      const frameTicket = ['__game','__game/','__game/index.html'].includes(sub) && await ticketAllows(env, await ticketSub(env,game,url.searchParams.get('t')), launch);
+      if (launch !== 'public' && !frameTicket && !(await accessOf(request, env, game, launch)).ok && (await (await import('./local-test.mjs')).localSession(request,env))?.app!==game) return json({ ok: false, error: 'not-found' }, 404);
+      if(launch==='public') {
+        const web=await (await import('./app-web.mjs')).appWeb(request,env,meta,url,sub,()=>gameDocument(request,env,url,game,meta,cat));
+        if(web)return web;
+      }
       if(sub==='api/app/live') {
         if(request.method!=='GET')return new Response('GET required',{status:405});
         const {appHub}=await import('./app-streams.mjs');
@@ -965,7 +995,7 @@ async function route(request, env, ctx) {
           if (a.status === 401) return Response.redirect(`${url.origin}/account/?next=${encodeURIComponent(url.pathname + url.search)}`, 302);
           return json({ ok: false, error: a.error }, a.status);
         }
-        if(!meta.room)return recordsPage(meta,url,cat,await availableShellShop(env,cat,game),Boolean(await (await import('./local-test.mjs')).localSession(request,env)));
+        if(!meta.room)return recordsPage(meta,url,cat,await availableShellShop(env,cat,game),Boolean(await (await import('./local-test.mjs')).localSession(request,env)),launch!=='public'?await appAssetTicket(env,game):null);
       }
     }
     const lobby = () => env.LOBBY.get(env.LOBBY.idFromName(game));

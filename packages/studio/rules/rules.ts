@@ -607,7 +607,7 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
       if (dims === 3 && b.height !== undefined && (!Number.isFinite(b.height) || b.height <= 0 || b.shape === 'capsule' && b.height < b.radius * 2)) throw new Error(`${at}.body.height must be finite, positive and at least twice the radius for a capsule`);
       body = { shape: b.shape, radius: b.radius, height: dims === 3 && b.shape === 'sphere' ? 2 * b.radius : typeof b.height === 'number' && b.height > 0 ? b.height : 0, maxSpeed: b.maxSpeed, sweep: b.sweep === true, owner: b.move === 'owner', ...(b.terrain === 'exact' ? {terrain: 'exact' as const} : {}) };
     }
-    if (player && !body) throw new Error(`${at}: a player's kind needs a body`);
+    // Turn-based participants may own fields and commands without physics.
     const moveFn = move && typeof move[name] === 'function' ? move[name] as MoveFn : null;
     if (body && player && !moveFn) throw new Error(`${at}: a player's body moves with move.${name}(body, input, ctx) in move.ts`);
     const scores = fields.filter(([, fd]) => fd.score);

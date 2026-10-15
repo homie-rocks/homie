@@ -359,7 +359,7 @@ export async function checkApp({ webglFailure = false, isolate = true, root = nu
   let plan;
   try { plan = readAppNeeds(root, game); } catch (error) { return { ok: false, command: 'check', kind: 'app', why: error.message }; }
   const secret=localCredential(root,url);
-  if(isolate && !secret)return {ok:false,command:'check',why:'Fresh isolated records are on by default. Run dev in this studio and check its localhost URL, or explicitly use --no-isolate.'};
+
   log(isolate ? 'Fresh isolated records: on (this check only).' : 'Fresh isolated records: off; using existing records.');
   const dialogs=[];
   const proof = meta.check??{};
@@ -368,19 +368,34 @@ export async function checkApp({ webglFailure = false, isolate = true, root = nu
   if(webglFailure&&!baseline&&!plan?.needs.some(n=>[...needSteps(n.steps),...(n.assertions??[])].some(i=>i.surface)))return {ok:false,command:'check',why:'--webgl-failure requires UI steps or assertions'};
   const captureWarnings=[];
   const profile = mkdtempSync(join(tmpdir(), 'homie-app-check-'));
-  let browser;
+  let browser, ownerClient;
   const surfaces = [];
-  const room = `check-${randomBytes(10).toString('hex')}`;
+  let room = `check-${randomBytes(10).toString('hex')}`;
   try {
+    const remoteCookies=new Map();
+    const sessionFor=async role=>{
+      if(secret)return {name:'homie_test',value:localCookie(secret,{app:game,role,scope:isolate?room:null})};
+      if(!isolate)return null;
+      ownerClient??=await (await import('./tools-cli.mjs')).connectToolClient(root,url,{log});
+      const key=room+':'+role;
+      if(!remoteCookies.has(key)) {
+        const result=await ownerClient.callTool({name:'studio_check_session',arguments:{app:game,role,scope:room}});
+        if(result.isError)throw new Error(result.content?.[0]?.text??'Cannot create isolated check session');
+        const parsed=result.structuredContent??JSON.parse(result.content.find(c=>c.type==='text').text),data=parsed.data??parsed;
+        if(!data.token)throw new Error('Studio did not return its test-session token');
+        remoteCookies.set(key,{name:'homie_check',value:data.token});
+      }
+      return remoteCookies.get(key);
+    };
     if(baseline || plan?.needs.some(n=>[...needSteps(n.steps),...(n.assertions??[])].some(i=>i.surface))) browser = await puppeteer.launch({ executablePath: chrome, headless: true, userDataDir: profile, timeout: LAUNCH_TIMEOUT_MS, args: chromeArgs() });
     const openSurface = async (name, role) => {
       const dimensions={wall:[1280,720],phone:[390,844],'phone-two':[390,844],tablet:[1024,768],staff:[1024,768],kiosk:[1080,1920]};
       if(!dimensions[name])throw new Error(`Unknown needs surface ${name}`);
       role ??= meta.surfaces?.[name==='phone-two'?'phone':name] ?? (name==='staff'?'staff':undefined);
       if(!meta.roles?.[role])throw new Error(`${name}: unknown role ${role}`);
-      if(meta.roles[role].signIn && !secret)throw new Error(`${name}: local staff proof needs dev's test session`);
+      if(meta.roles[role].signIn && !secret && !isolate)throw new Error(`${name}: local staff proof needs dev's test session`);
       const context=await browser.createBrowserContext();
-      if(secret)await context.setCookie({name:'homie_test',value:localCookie(secret,{app:game,role,scope:isolate?room:null}),url,httpOnly:true,sameSite:'Strict'});
+      const cookie=await sessionFor(role);if(cookie)await context.setCookie({...cookie,url,httpOnly:true,sameSite:'Strict',secure:new URL(url).protocol==='https:'});
       const page=await context.newPage();
       answerDialogs(page,name,dialogs,report);
       await page.evaluateOnNewDocument(observeEffects);
@@ -417,16 +432,24 @@ export async function checkApp({ webglFailure = false, isolate = true, root = nu
     }
     report?.check?.('app-action', 'pass', { note: 'action reached wall and both phones; reconnect retained it' });
     }
-    for(const need of plan?.needs??[])for(const item of [...needSteps(need.steps),...(need.assertions??[])]) {
-      if(!item.surface)continue;
-      if(plan.needs.some(n=>(n.steps??[]).some(s=>s.popup===item.surface)))continue;
-      const role=item.role??need.role??meta.surfaces?.[item.surface]??(item.surface==='staff'?'staff':undefined);
-      if(!surfaces.some(s=>s.name===item.surface&&s.role===role))await openSurface(item.surface,role);
+    const needs=plan?[]:null;
+    for(const need of plan?.needs??[]) {
+      // Baseline and every need get separate contexts, rooms and record namespaces.
+      for(const context of new Set(surfaces.map(surface=>surface.page.browserContext())))await context.close();
+      surfaces.length=0;
+      room=`check-${randomBytes(10).toString('hex')}`;
+      const primary=need.surface??needSteps(need.steps).find(s=>s.surface)?.surface??need.assertions?.find(s=>s.surface)?.surface;
+      log(`Need ${need.id}: fresh room ${room}; records ${isolate?'isolated':'shared (--no-isolate)'}.`);
+      for(const item of [...needSteps(need.steps),...(need.assertions??[])]) {
+        if(!item.surface || (need.steps??[]).some(s=>s.popup===item.surface))continue;
+        const role=item.role??(item.surface===primary?need.role:undefined)??meta.surfaces?.[item.surface]??(item.surface==='staff'?'staff':undefined);
+        if(!surfaces.some(s=>s.name===item.surface&&s.role===role))await openSurface(item.surface,role);
+      }
+      needs.push(...await proveAppNeeds({plan:{...plan,needs:[need]},surfaces,shots,report,ready:appReady,root,restart:()=>import('./dev-restart.mjs').then(m=>m.requestDevRestart(root,url)),headless:needsHeadless({url,secret,app:game,meta,scope:isolate?room:null,sessionFor})}));
     }
-    const needs = plan ? await proveAppNeeds({ plan, surfaces, shots, report, ready:appReady, root, restart:()=>import('./dev-restart.mjs').then(m=>m.requestDevRestart(root,url)), headless:needsHeadless({url,secret,app:game,meta,scope:isolate?room:null}) }) : null;
     if (plan) { saveAppNeeds(root, game, plan, needs); const { refreshCodexFile } = await import('./codex.mjs'); refreshCodexFile(root, game); }
     const ok = !needs || needs.every(n => n.status === 'met');
     return { ok, ...(needs ? { needs, why: ok ? undefined : 'Some needs from the person’s Codex are not yet met; see needs and captures' } : {}), command: 'check', kind: 'app', webglFailure, isolatedRecords:isolate, captureWarnings, dialogs, room, surfaces: surfaces.map((s) => s.name), action: proof.action, before, after, reconnect: baseline };
   } catch (error) { return { ok: false, command: 'check', kind: 'app', dialogs, why: error.message }; }
-  finally { await browser?.close().catch(() => {}); rmSync(profile, { recursive: true, force: true }); }
+  finally { await ownerClient?.close().catch(()=>{}); await browser?.close().catch(() => {}); rmSync(profile, { recursive: true, force: true }); }
 }

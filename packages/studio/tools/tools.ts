@@ -7,7 +7,8 @@ export interface ToolContext {
   office(path: string, body?: Record<string, unknown>, query?: Record<string, string>): Promise<unknown>;
   shop(): Promise<unknown>;
   bookings: {
-    hold(args: {app: string; collection: string; slot: string; quantity?: number; id: string; token?: string; expiresAt: number}): Promise<BookingHold>;
+    calendar(args: {app:string;startDate:string;endDate:string;timeZone?:string;time?:string;days?:number;durationMinutes?:number;capacity?:number;weekdays?:number[];resources?:string[];options?:unknown[];prefix?:string}): Array<{id:string;start:string;end:string;capacity:number;date:string;timeZone:string}>;
+    hold(args: {app: string; collection: string; slot?: string; time?: string; option?: string; resource?: string; preferredResource?: string; addons?: string[] | Record<string,number>; addOns?: string[] | Record<string,number>; quantity?: number; id: string; token?: string; expiresAt: number}): Promise<BookingHold>;
     get(args: {id: string; token?: string}): Promise<BookingHold>;
     confirm(args: {id: string; token?: string; version: number}): Promise<BookingHold>;
     release(args: {id: string; token?: string; version: number}): Promise<BookingHold>;
@@ -47,4 +48,4 @@ export interface StudioTool<Input = Record<string, unknown>> {
 }
 export function defineTool<Input = Record<string, unknown>>(tool: StudioTool<Input>): StudioTool<Input> { return tool; }
 
-export interface BookingHold { id: string; slot: string; quantity: number; state: string; version: number; expiresAt: number | null; paid: boolean }
+export interface BookingHold { allocations?: Array<{resource:string;collection:string;start:number;end:number;units:number}>; choices?: {option:string|null;resource:string|null;addons:Record<string,number>}; id: string; slot: string; quantity: number; state: string; version: number; expiresAt: number | null; paid: boolean }

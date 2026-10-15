@@ -577,7 +577,7 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
   }
   if (keyless) {
     const checkout = new URL(link.url); checkout.searchParams.set('client_reference_id', order.id);
-    if(menu?.basket)checkout.searchParams.set('prefilled_amount',String(amount));
+    if(menu?.basket || item.kind==='deposit')checkout.searchParams.set('prefilled_amount',String(amount));
     return { order, url: checkout.href, reconciled };
   }
   let session = null;
@@ -650,6 +650,8 @@ async function buyRoute(request, env, url, cat, shop, ready, ctx, requestAt) {
     if (!item) return fail(404, 'item', 'no such item here');
     const quantity = entry.quantity ?? 1;
     if (!Number.isSafeInteger(quantity) || quantity < 1) return fail(400, 'arithmetic', 'Quantity is a positive safe integer.');
+    if(!hasStripeKey(env) && ['supporter','deposit'].includes(item.kind) && quantity!==1)return fail(400,'quantity','This payment link has quantity fixed at one.');
+    if(item.kind==='deposit' && (!reference || !Number.isSafeInteger(entry.amount??item.price) || (entry.amount??item.price)<=0))return fail(400,'deposit','A deposit requires the app reference and its saved positive amount.');
     if (!shop.policy.repeatPurchases && (quantity > 1 || seen.has(item.id))) return fail(403, 'owned', 'The studio has disabled repeat purchases.');
     seen.add(item.id);
     const v = await itemsView(env, shop, { game, ...facts, player, open: true, item, purchasing: true });
@@ -976,7 +978,9 @@ async function bindLinkSession(env, session, mode) {
   if (!link || (session.payment_link?.id ?? session.payment_link) !== link.id || session.metadata?.revision !== link.revision || session.currency !== source.currency) return false;
   const amount = session.amount_subtotal;
   if (!Number.isSafeInteger(amount) || amount <= 0) return false;
+  if(item.kind==='deposit' && amount!==source.amount)return false;
   const quantity = item.price === 'choose' ? 1 : amount / item.price;
+  if(['supporter','deposit'].includes(item.kind) && quantity!==1)return false;
   if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 999999) return false;
   if (item.price === 'choose' && (amount < item.min || item.max !== null && amount > item.max)) return false;
   // Claim the first session atomically. A repeated URL creates a separate paid order, never loses a payment.

@@ -121,3 +121,26 @@ Document the exact commands and results; an empty assertion list is not proof.
   and verify a clean checkout can build it. Declare only packages actually used.
 - No invented reviews, impact figures or verification. Label estimates and test
   payments honestly; remove stale workaround claims when upgrading.
+
+## Booking toolkit and customer-AI arguments
+
+Use declared booking slots and resources instead of duplicating capacity logic.
+`studio_book` accepts `slot` or `time`, `resource`, `preferredResource` or
+`preferred_resource`, and `addons`, `addOns` or `add-ons` as an array of IDs or an
+object of quantities. Contradictory aliases are refused. Use the same option and
+resource IDs in `createBookingChoices` on the phone. A booking may allocate
+multiple resource components, with skills, attributes and capacity checked by
+the server. Use the app's IANA `timeZone` and `ctx.bookings.calendar` for dated or
+multi-day seasons. Public holds need a stable ID, bounded expiry and a private
+management token for anonymous customers.
+
+Pass the app's booking reference to `shop.book` or MCP `studio_checkout`. For
+variable deposits use an amount-based link and validate the paid amount against
+the saved booking. Declare `booking.slots_need_payment_links` so the owner's AI
+can prepare links for newly rolled dates through Stripe's official plugin.
+Use `shop observe` to record plugin responses, then verify and build.
+
+The toolkit's `docs/toolkit-batch.md` documents resource declarations, install
+surfaces, private frames, concept previews, example forks and isolated live-site
+checks. Record IDs belong at the top level of `ctx.records`/`app_records`
+arguments, alongside `app` and `collection`.

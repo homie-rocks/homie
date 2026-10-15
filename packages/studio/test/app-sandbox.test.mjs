@@ -112,3 +112,11 @@ test('supported app context returns a public self address without access tokens'
  await frame.waitForFunction(()=>document.querySelector('output').textContent,{timeout:2000});
  const context=JSON.parse(await frame.$eval('output',e=>e.textContent));assert.equal(context.app,'form');assert.equal(context.url,origin+'/form/open');assert.equal(context.origin,origin);
 });
+
+test('phone booking choices return the same option and resource fields as the AI tool',{timeout:15000},async t=>{
+ const {build}=await import('esbuild');const bundled=await build({entryPoints:[new URL('../apps/apps.ts',import.meta.url).pathname],bundle:true,write:false,format:'iife',globalName:'BookingUI'});
+ const {page,origin}=await fixture(t,`<!doctype html><div id="choices"></div><button id="continue">Continue</button><output></output><script>${bundled.outputFiles[0].text}</script><script>const choices=BookingUI.createBookingChoices({container:document.querySelector('#choices'),options:[{id:'short',name:'Short'},{id:'long',name:'Long'}],resources:[{id:'one',name:'One'},{id:'two',name:'Two'}]});document.querySelector('button').onclick=()=>document.querySelector('output').textContent=JSON.stringify(choices.value());</script>`);
+ await page.goto(origin+'/frame');const frame=page.frames().find(f=>f.url().includes('/__game/'));
+ await frame.waitForSelector('select[name="option"]',{timeout:1000});await frame.select('select[name="option"]','long');await frame.select('select[name="resource"]','two');await frame.click('#continue');
+ assert.deepEqual(JSON.parse(await frame.$eval('output',el=>el.textContent)),{option:'long',resource:'two'});
+});

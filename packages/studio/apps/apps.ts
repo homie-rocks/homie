@@ -76,3 +76,20 @@ export function createAppContext() {
     dispose() {removeEventListener('message',receive);listeners.clear();}
   };
 }
+
+/** Native accessible choices; submit value() to the same booking tool used by an AI. */
+export function createBookingChoices({container,options=[],resources=[]}:{container:HTMLElement;options?:Array<{id:string;name:string}>;resources?:Array<{id:string;name:string}>}) {
+  const fields=new Map<string,HTMLSelectElement>();
+  const group=document.createElement('fieldset');
+  const legend=document.createElement('legend');legend.textContent='Choose an option';group.append(legend);
+  for(const [name,choices] of [['option',options],['resource',resources]] as const) {
+    if(!choices.length)continue;
+    const label=document.createElement('label');label.textContent=name==='option'?'Option':'Resource';
+    const select=document.createElement('select');select.name=name;
+    const empty=document.createElement('option');empty.value='';empty.textContent=name==='option'?'Choose an option':'Any available resource';select.append(empty);
+    for(const choice of choices){const option=document.createElement('option');option.value=choice.id;option.textContent=choice.name;select.append(option);}
+    label.append(select);group.append(label);fields.set(name,select);
+  }
+  container.append(group);
+  return {value:():{option?:string;resource?:string}=>Object.fromEntries([...fields].filter(([,select])=>select.value).map(([name,select])=>[name,select.value])),dispose:()=>group.remove()};
+}

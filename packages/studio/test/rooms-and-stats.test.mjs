@@ -361,3 +361,12 @@ test('server rules round results reach Table stats once with reserved companions
   const rows = DB.sql.prepare('SELECT humans, bots, results FROM rounds').all(); assert.equal(rows.length, 1); assert.equal(rows[0].humans, 1); assert.equal(rows[0].bots, 2);
   assert.equal(JSON.parse(rows[0].results).filter(x => x.agent).length, 2); r.host.stop();
 });
+
+test('records-only apps do not inherit a game player estimate from an unused rules file',async()=>{
+ const {newApp}=await import('../lib/studio.mjs');
+ const dir=studio('records-cost');await newApp(dir,'calendar');
+ const file=join(dir,'apps/calendar/app.json'),meta=JSON.parse(readFileSync(file));
+ delete meta.room;meta.players={max:300};writeFileSync(file,JSON.stringify(meta));
+ writeFileSync(join(dir,'apps/calendar/src/rules.ts'),'export default {};');
+ assert.deepEqual(deployPlan(dir).hosted??[],[]);
+});

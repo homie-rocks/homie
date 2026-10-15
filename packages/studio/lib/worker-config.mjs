@@ -27,6 +27,7 @@ export function updateWorkerConfig(root,generated) {
     writeFileSync(join(root,'wrangler.custom.json'),JSON.stringify(custom,null,2)+'\n');
   }
   const next=merge(base,custom);
+  next.vars={...next.vars,HOMIE_CONCEPT:readStudio(root).concept===true?'1':'0'};
   verifiedMcpConfig(root);
   if(publicMcpSetup(root)) {
     next.vars={...next.vars,STRIPE_CHECKOUT_MODE:'links',STRIPE_SHOP_LINKS_ASSET:'/_site/stripe-shop-links.json'};

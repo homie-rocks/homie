@@ -118,3 +118,11 @@ test('studio staff can inspect scheduled attempts through MCP and revoked staff 
  const report=await tool.handler({},{caller});assert.ok(Array.isArray(report.runs));assert.ok(Array.isArray(report.schedules));
  DB.sql.exec('DELETE FROM app_roles');assert.equal(await allowed(tool.audience,caller,env),false);await assert.rejects(()=>tool.handler({},{caller}));
 });
+
+test('function handlers can call ctx.records to create and read declared app records',async t=>{
+ const DB=database();t.after(()=>DB.sql.close());const env={DB};
+ const cat={games:[{id:'calendar',kind:'app',roles:{staff:{signIn:true,can:['create:notes','read:notes']}},surfaces:{phone:'staff'},records:{persist:true,collections:{notes:{fields:{message:{type:'string'}}}}}}]};
+ const definitions=[{name:'record-note',event:'note.requested',async handler(event,ctx){await ctx.records({app:'calendar',collection:'notes',id:event.id,operation:'create',data:{message:'Ready'}});const saved=await ctx.records({app:'calendar',collection:'notes',id:event.id});assert.equal(saved.records[0].data.message,'Ready');}}];
+ await syncFunctions(env,definitions);await emitEvent(env,'note.requested',{}, {id:'note-one'});await runFunctions(env,cat,'https://place.example',{definitions});
+ assert.equal(JSON.parse(DB.sql.prepare("SELECT value FROM app_records WHERE id='note-one'").get().value).message,'Ready');
+});

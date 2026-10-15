@@ -235,3 +235,10 @@ test('observation helper accumulates incremental official-plugin responses and r
  assert.equal(plan.verified,true);assert.deepEqual(writes,[]);
  assert.deepEqual(plan.config.items.map(i=>i.id).sort(),first.p.config.items.map(i=>i.id).sort());
 });
+
+test('supporter and deposit Payment Links lock quantity while ordinary items remain adjustable',async t=>{
+ const root=studio(t);writeFileSync(join(root,'shop.json'),JSON.stringify({till:'stripe',currency:'usd',items:[{id:'support',kind:'supporter',name:'Support',price:500},{id:'deposit',kind:'deposit',name:'Deposit',price:'choose'},{id:'item',name:'Item',price:300}]}));
+ const f=fixture();const {p}=await reconcile(root,f);
+ for(const id of ['support','deposit']) {const link=f.rows.payment_links.find(l=>l.id===p.config.items.find(i=>i.item===id).id);assert.equal(link.line_items[0].quantity,1);assert.equal(link.line_items[0].adjustable_quantity?.enabled??false,false);}
+ assert.equal(f.rows.payment_links.find(l=>l.id===p.config.items.find(i=>i.item==='item').id).line_items[0].adjustable_quantity.enabled,true);
+});

@@ -14,7 +14,7 @@ export async function appCaller(request,env,meta,url){
  const access=await appAccess(request,env,meta,url);
  if(!access.ok)throw Object.assign(new Error(access.error),{status:access.status});
  const session=await localSession(request,env);
- if(session?.app===meta.id)return {id:`local-test-${session.app}-${session.role}`,owner:session.role==='owner',client:null,localTest:true,roles:{[meta.id]:[session.role]},testApp:meta.id,testScope:session.scope};
+ if(session?.app===meta.id)return {id:`local-test-${session.app}-${session.role}`,owner:!session.remoteTest&&session.role==='owner',client:null,localTest:true,...(session.remoteTest?{remoteTest:true}:{}),roles:{[meta.id]:[session.role]},testApp:meta.id,testScope:session.scope};
  const person=await players.of(request,env);
  const owner=await isOwner(request,env);
  const roles={};

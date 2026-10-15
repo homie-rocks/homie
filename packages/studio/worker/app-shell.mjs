@@ -2,7 +2,7 @@
 export const APP_SHELL_JS = String.raw`(function () {
   var boot = window.__HOMIE_PLAY || window.__HOMIE_APP || window.__HOMIE_WATCH;
   if (!boot || boot.kind !== 'app') return;
-  var frame = document.querySelector('iframe.game') || document.querySelector('iframe');
+  var frame = boot.direct ? {contentWindow:window} : document.querySelector('iframe.game') || document.querySelector('iframe');
   var params = new URLSearchParams(location.search);
   // Share short-lived reads across same-origin screens with the exact same role/access.
   // No records are persisted. Writes always reach the Worker and invalidate all views.

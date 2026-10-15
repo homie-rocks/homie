@@ -52,3 +52,11 @@ test('Codex needs run real flow operations, retain failures, capture both surfac
   assert.equal(result[0].captures.length,2);assert.equal(result[1].captures.length,2);
   assert.equal(result[1].statement,'Follow my own gear');
 });
+
+test('a need customer role applies to its phone while the wall retains its own role; passing needs save shots',async t=>{
+ const root=mkdtempSync(join(tmpdir(),'needs-roles-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const captures=[];
+ const surfaces=[['phone','customer'],['wall','display']].map(([name,role])=>({name,role,frame:{waitForSelector:async()=>{}},page:{screenshot:async({path})=>{writeFileSync(path,'capture');captures.push(path);}}}));
+ const results=await proveAppNeeds({plan:{needs:[{id:'visible',statement:'Both views work',role:'customer',assertions:[{surface:'phone',selector:'#ready'},{surface:'wall',selector:'#ready'}]}]},surfaces,shots:root});
+ assert.equal(results[0].status,'met',results[0].why);assert.equal(captures.length,2);assert.ok(captures.every(existsSync));
+});

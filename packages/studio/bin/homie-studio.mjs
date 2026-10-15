@@ -911,6 +911,7 @@ async function main() {
   }
   // The starter library and the optimiser work anywhere; the rest of style and assets inside a studio (lib/art-cli.mjs).
   if (cmd === 'assets' && ['find', 'optimise', 'optimize'].includes(sub)) return assetsCommand(null, sub, positional, flags, { log });
+  if(cmd==='fork')return (await import('../lib/fork.mjs')).forkStudio(positional[1],positional[2],{name:flags.get('name'),slug:flags.get('slug'),ids:flags.get('ids')?JSON.parse(flags.get('ids')):{}});
   const root = requireStudio();
   // Keep guidance visible to AI callers using --json as well as human output.
   if (['build', 'check', 'upgrade'].includes(cmd)) {

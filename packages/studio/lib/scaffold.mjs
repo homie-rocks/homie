@@ -1,3 +1,4 @@
+import {BOOKING_RESOURCES_MIGRATION,BOOKING_RESOURCES_MIGRATION_FILE} from '../worker/booking-resources.mjs';
 import {BOOKING_HOLDS_MIGRATION,BOOKING_HOLDS_MIGRATION_FILE} from '../worker/booking-holds.mjs';
 import {BUSINESS_EVENTS_MIGRATION,BUSINESS_EVENTS_MIGRATION_FILE} from '../worker/business-events.mjs';
 import {APP_LIVE_MIGRATION,APP_LIVE_MIGRATION_FILE} from '../worker/app-streams.mjs';
@@ -827,6 +828,7 @@ export { default, Table, Lobby, Gate, Concentrator } from '@homie-rocks/studio/w
     [`site/migrations/${SHOP_REMOVE_REFERRALS_FILE}`]: SHOP_REMOVE_REFERRALS,
     [`site/migrations/${APPS_MIGRATION_FILE}`]: APPS_MIGRATION,
     [`site/migrations/${BUSINESS_EVENTS_MIGRATION_FILE}`]: BUSINESS_EVENTS_MIGRATION,
+    [`site/migrations/${BOOKING_RESOURCES_MIGRATION_FILE}`]: BOOKING_RESOURCES_MIGRATION,
     [`site/migrations/${BOOKING_HOLDS_MIGRATION_FILE}`]: BOOKING_HOLDS_MIGRATION,
     [`site/migrations/${APP_LIVE_MIGRATION_FILE}`]: APP_LIVE_MIGRATION,
     [`site/migrations/${TOOL_DATABASE_MIGRATION_FILE}`]: TOOL_DATABASE_MIGRATION,
@@ -1069,8 +1071,13 @@ function ensureBookingHolds(root) {
   if(existsSync(file))return null;
   mkdirSync(dirname(file),{recursive:true});writeFileSync(file,BOOKING_HOLDS_MIGRATION);return `site/migrations/${BOOKING_HOLDS_MIGRATION_FILE}`;
 }
+function ensureBookingResources(root) {
+  const file=join(root,'site','migrations',BOOKING_RESOURCES_MIGRATION_FILE);
+  if(existsSync(file))return null;
+  mkdirSync(dirname(file),{recursive:true});writeFileSync(file,BOOKING_RESOURCES_MIGRATION);return `site/migrations/${BOOKING_RESOURCES_MIGRATION_FILE}`;
+}
 export function ensureMigrations(root) {
-  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root), ensureFunctionReference(root), ensureShopRemoveReferrals(root), ensureFunctionRuns(root), ensureToolDatabase(root), ensureBookings(root), ensureSubscriptions(root), ensureAppLive(root), ensureBusinessEvents(root), ensureBookingHolds(root)].filter(Boolean);
+  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root), ensureFunctionReference(root), ensureShopRemoveReferrals(root), ensureFunctionRuns(root), ensureToolDatabase(root), ensureBookings(root), ensureSubscriptions(root), ensureAppLive(root), ensureBusinessEvents(root), ensureBookingHolds(root),ensureBookingResources(root)].filter(Boolean);
 }
 
 /** What a migration file the template added is for, in a few words (deploy and dev say it). */

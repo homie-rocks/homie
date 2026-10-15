@@ -13,3 +13,11 @@ test('functions runs reads the deployed owner connection, forwards filters, and 
  assert.equal(result.ok,true);assert.equal(site,'https://cleanup.example');assert.equal(request.name,'studio_function_runs');assert.deepEqual(request.arguments,{name:'cleanup',errors:true,before:101});assert.equal(closed,1);
  await assert.rejects(functionCommand(root,'runs',['functions','runs'],new Map(),{connect:async()=>({callTool:async()=>{throw new Error('connection revoked');},close:async()=>closed++})}),/revoked/);assert.equal(closed,2);
 });
+
+test('MCP startup fetch retries a brief Cloudflare 1042 with notice and preserves the request body',async()=>{
+ const {startupFetch}=await import('../lib/tools-cli.mjs');const messages=[],bodies=[];let calls=0;
+ const call=startupFetch({log:line=>messages.push(line),sleep:async()=>{},fetch:async req=>{bodies.push(await req.text());return ++calls<3?new Response('error code: 1042',{status:500}):Response.json({ok:true});}});
+ const response=await call(new Request('https://place.example/mcp',{method:'POST',body:'{"method":"initialize"}'}));
+ assert.equal(response.status,200);assert.equal(calls,3);assert.deepEqual(bodies,Array(3).fill('{"method":"initialize"}'));assert.equal(messages.length,2);
+ let ordinary=0;assert.equal((await startupFetch({sleep:async()=>assert.fail('no retry'),fetch:async()=>{ordinary++;return new Response('bad arguments',{status:400});}})('https://place.example/mcp')).status,400);assert.equal(ordinary,1);
+});

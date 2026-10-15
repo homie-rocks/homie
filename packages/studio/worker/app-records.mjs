@@ -47,7 +47,7 @@ export async function appAccess(request, env, meta, url) {
   const caller = toolIdentity(request);
   if (caller) {
     if (caller.owner) return { ok: true, role, can: declared.can };
-    if(env.HOMIE_LOCAL_TEST_SECRET && caller.localTest && caller.roles?.[meta.id]?.includes(role))return {ok:true,role,can:declared.can};
+    if((env.HOMIE_LOCAL_TEST_SECRET || caller.remoteTest) && caller.localTest && caller.roles?.[meta.id]?.includes(role))return {ok:true,role,can:declared.can};
     if (!caller.id) return { ok: false, status: 401, error: 'sign in to this studio' };
     const grant = await env.DB.prepare("SELECT player FROM app_roles WHERE app IN (?1, '*') AND role = ?2 AND player = ?3").bind(meta.id, role, caller.id).first();
     return grant ? { ok: true, role, can: declared.can } : { ok: false, status: 403, error: 'this account has no role grant' };
@@ -91,7 +91,7 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
     if (!access.ok) return fail(access.status, access.error);
     const [, collection, id] = match;
     const session = await localSession(request, env);
-    const testScope = (session?.app === meta.id ? session.scope : null) ?? (env.HOMIE_LOCAL_TEST_SECRET ? toolIdentity(request)?.testScope : null);
+    const testScope = (session?.app === meta.id ? session.scope : null) ?? (env.HOMIE_LOCAL_TEST_SECRET || toolIdentity(request)?.remoteTest ? toolIdentity(request)?.testScope : null);
     const recordApp = testScope ? `${meta.id}:check:${testScope}` : meta.id;
     const op = ({ GET: 'read', POST: 'create', PUT: 'update', DELETE: 'delete' })[request.method];
     if (!op || !access.can.includes(`${op}:${collection}`)) return fail(403, 'role cannot perform this operation');
@@ -118,7 +118,7 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
       }
       return json({ok:true,records});
     }
-    if (!id) return fail(400, 'record id required');
+    if (!id) return fail(400, `Put the record id in the URL: /${meta.id}/api/app/records/${collection}/<id> (1–64 letters, digits, underscore or hyphen).`);
     const body = await bodyOf(request);
     if (meta.records.collections[collection].booking) {
       if (op !== 'update' || !meta.roles[access.role].signIn) return fail(403, 'bookings are created and released through checkout');
@@ -132,7 +132,19 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
       ? env.DB.prepare('INSERT OR IGNORE INTO app_records (app, collection, id, value, version, updated_at) VALUES (?1, ?2, ?3, ?4, 1, ?5)').bind(recordApp, collection, id, JSON.stringify(body.data), Date.now())
       : op === 'update' ? env.DB.prepare('UPDATE app_records SET value = ?4, version = version + 1, updated_at = ?5 WHERE app = ?1 AND collection = ?2 AND id = ?3 AND version = ?6').bind(recordApp, collection, id, JSON.stringify(body.data), Date.now(), body.version)
       : env.DB.prepare('DELETE FROM app_records WHERE app = ?1 AND collection = ?2 AND id = ?3 AND version = ?4').bind(recordApp, collection, id, body.version);
-    const result = await stmt.run();
+    const bookingCollections=Object.entries(meta.records.collections).filter(([,c])=>c.booking?.slots===collection);
+    const writes=[stmt];
+    if(!testScope&&op!=='delete')for(const [bookings,c] of bookingCollections) {
+      const link=linkConfig(env)?.slots?.find(l=>l.app===meta.id&&l.slots===collection&&l.slot===id);
+      if(link&&link.capacity===body.data?.capacity)continue;
+      const expected=op==='create'?1:body.version+1;
+      writes.push(env.DB.prepare(`INSERT OR IGNORE INTO studio_events(id,type,data,at)
+        SELECT ?1,'booking.slots_need_payment_links',json_object('app',?2,'slots',json_array(json_object('app',?2,'collection',?3,'slots',?4,'slot',?5,'item',?6,'capacity',json_extract(value,'$.capacity')))),?7
+        FROM app_records WHERE app=?8 AND collection=?4 AND id=?5 AND version=?9
+        AND EXISTS(SELECT 1 FROM function_subscriptions WHERE type='booking.slots_need_payment_links')`)
+        .bind(`slot-links:${recordApp}:${collection}:${id}:${expected}`,meta.id,bookings,collection,id,c.booking.item,Date.now(),recordApp,expected));
+    }
+    const result=writes.length>1?(await env.DB.batch(writes))[0]:await stmt.run();
     return result.meta.changes ? json({ ok: true, id, version: op === 'create' ? 1 : body.version + 1 }) : fail(409, 'record changed or already exists; reload');
   } catch (error) {
     if (/booking capacity|capacity below|slot has active/.test(error.message)) return fail(409, error.message);

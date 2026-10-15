@@ -85,7 +85,7 @@ export async function reconcilePaymentLinks({ api, shop, slug, site, mode, booki
     catalogPrices.set(item.id, price.id);
     if ((product.default_price?.id ?? product.default_price) !== price.id) await api('POST', `/v1/products/${id}`, { default_price: price.id });
     if (item.price === 0) return; // Free orders never leave the studio.
-    const params = { ...customText, line_items: [{ price: price.id, quantity: 1, ...(item.price !== 'choose' ? { adjustable_quantity: { enabled: shop.policy.repeatPurchases, minimum: 1, maximum: 999999 } } : {}) }],
+    const params = { ...customText, line_items: [{ price: price.id, quantity: 1, ...(item.price !== 'choose' && !['supporter','deposit'].includes(item.kind) ? { adjustable_quantity: { enabled: shop.policy.repeatPurchases, minimum: 1, maximum: 999999 } } : {}) }],
       after_completion: { type: 'redirect', redirect: { url: `${site}/shop/thanks?session_id={CHECKOUT_SESSION_ID}` } },
       ...(shop.till === 'stripe-managed' ? { managed_payments: { enabled: true } } : { automatic_tax: { enabled: shop.automaticTax } }),
       ...(item.interval ? { subscription_data: { metadata } } : { payment_intent_data: { metadata } }),
@@ -103,7 +103,7 @@ export async function reconcilePaymentLinks({ api, shop, slug, site, mode, booki
   // Stripe allows 20 Payment Link lines; invoice snapshots include only the first
   // 10. Split catalogues so keyless fulfillment needs no authenticated pagination.
   config.menus = [];
-  const menuItems = shop.items.filter(i => typeof i.price === 'number' && i.price > 0 && !i.interval);
+  const menuItems = shop.items.filter(i => !['supporter','deposit'].includes(i.kind) && typeof i.price === 'number' && i.price > 0 && !i.interval);
   const metadata = { homie: 'shop-links-v1', studio: slug, origin: site };
   const tasks=[];
   const groups=Map.groupBy(menuItems,i=>i.game??'');

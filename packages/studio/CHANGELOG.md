@@ -20,10 +20,18 @@ file) and what the upgrade would change, and changes nothing until you agree.
 ## [Unreleased]
 
 ### Fixed
+- Supporter and deposit links lock quantity to one; variable deposits carry the app reference and require the saved subtotal before fulfillment.
+- Booking SDK and customer MCP checkout carry the app reference into the saved order.
+- Private records-only app frames load through expiring asset capabilities, without exposing anonymous modules or records. Missing record IDs explain the exact URL location.
+- Needs keep wall and phone roles separate and run in fresh rooms after the baseline. MCP retries transient Cloudflare 1042 startup failures with a notice.
 - Keyless shop migration discovers existing billing portals when old verifications omit their IDs. Webhook installation fills missing account IDs after verifying link ownership with the saved Stripe login.
 - Stripe pairing is available as a structured MCP job event before approval completes; reused logins emit no pairing event.
 
 ### Added
+- Resource-aware booking holds, package allocations, place-time-zone season calendars, common booking argument aliases, and shared phone option/resource controls.
+- Declared `booking.slots_need_payment_links` events for rolling slot inventory.
+- Direct installable public app surfaces with optional web manifests and service workers; one-flag concept mode; example source forking with renamed identities and clean deployment state.
+- Turn participants without physics bodies, retaining owner-only private fields and room phase timers.
 - `shop observe` records incremental public responses from Stripe's official plugin through stdin and returns the next plan, without a hand-built `--have` file.
 
 ## [0.52.0] - 2026-10-15

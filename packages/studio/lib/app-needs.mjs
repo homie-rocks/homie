@@ -27,10 +27,11 @@ export async function proveAppNeeds({ plan, surfaces, shots, report, ready = asy
   const results = [];
   const appBarrier=ready;
   ready=async (s,options)=>{await s.page.bringToFront?.();if(s.external){s.frame=s.page.mainFrame();return;}await appBarrier(s,options);};
-  let activeRole;
-  const surface = name => { const s = surfaces.find(s => s.name === name && (!activeRole || s.role === activeRole)) ?? surfaces.find(s => s.name === name); if (!s) throw new Error(`unknown surface ${name}`); return s; };
+  let activeRole, primarySurface;
+  const surface = name => { const s = surfaces.find(s => s.name === name && (name!==primarySurface || !activeRole || s.role === activeRole)) ?? surfaces.find(s => s.name === name); if (!s) throw new Error(`unknown surface ${name}`); return s; };
   for (const need of plan.needs) {
     activeRole = need.role;
+    primarySurface = need.surface ?? needSteps(need.steps).find(s=>s.surface)?.surface ?? need.assertions?.find(s=>s.surface)?.surface;
     const names = [...new Set([...needSteps(need.steps), ...(need.assertions ?? [])].map(s => s.surface).filter(Boolean))];
     const saved = new Map();
     const run = async item => { if (!headless) throw new Error('headless MCP proof requires local dev and its test credential'); return headless(item,item.role ?? need.role); };
@@ -39,7 +40,7 @@ export async function proveAppNeeds({ plan, surfaces, shots, report, ready = asy
     try {
       if (!Array.isArray(need.assertions) || !need.assertions.length) throw new Error('need requires at least one assertion (UI, result, records or file)');
       const popupNames=new Set((need.steps??[]).map(s=>s.popup).filter(Boolean));
-      for (const name of names) { if(popupNames.has(name))continue; const s = surface(name); if (need.role && s.role !== need.role) throw new Error(`${name} requires role ${need.role}, got ${s.role ?? 'unspecified'}`); }
+      for (const name of names) { if(popupNames.has(name))continue; const s = surface(name); if (name===primarySurface && need.role && s.role !== need.role) throw new Error(`${name} requires role ${need.role}, got ${s.role ?? 'unspecified'}`); }
       for (const name of new Set(need.assertions.filter(a => a.effect).map(a => a.surface))) await surface(name).frame.evaluate(() => { window.__homieNeedsEffects = []; });
       const perform = async rawStep => {
         const step=resolveNeedResults(rawStep,saved);
