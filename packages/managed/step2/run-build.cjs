@@ -17,6 +17,13 @@ const pkg=JSON.parse(fs.readFileSync('/work/package.json'));if(pkg.devDependenci
 run('npm',['ci','--no-audit','--no-fund']);
 if(JSON.parse(fs.readFileSync('/work/node_modules/@homie-rocks/studio/package.json')).version!==job.toolkit)throw new Error('Installed toolkit mismatch');
 run('npm',['run','build']);
+if(job.mode==='check'){
+ if(job.previewURL!=='https://hm-s2-dispatch.ryan-d2f.workers.dev')throw new Error('Only test preview checks allowed');
+ run('apt-get',['install','-y','-qq','chromium']);
+ const result=run('npm',['run','check','--','--url',job.previewURL],{CHROME_PATH:'/usr/bin/chromium'});
+ process.stdout.write(zlib.gzipSync(JSON.stringify({commit:job.commit,studio:true,result})).toString('base64'));process.exit(0);
+}
+
 const files={};let bytes=0;
 function collect(dir,prefix){for(const name of fs.readdirSync(dir)){const file=path.join(dir,name),stat=fs.lstatSync(file);if(stat.isSymbolicLink())throw new Error('Symlink output rejected');if(stat.isDirectory())collect(file,prefix+name+'/');else{const b=fs.readFileSync(file);bytes+=b.length;if(bytes>40*1024*1024)throw new Error('Artifact limit');files[prefix+name]=b.toString('base64');}}}
 const current=JSON.parse(fs.readFileSync('/work/site/src/runtime/current.json'));
