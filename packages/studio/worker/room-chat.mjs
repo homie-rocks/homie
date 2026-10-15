@@ -130,7 +130,7 @@ onChat({ client = null, conn = null }, m) {
       if (this.room.chatPending >= CHAT_LIMITS.pending) return reply('busy');
       this.room.chatPending += 1;
       const t0 = now;
-      Promise.resolve()
+      const reviewing=Promise.resolve()
         .then(() => this.room.review(rec.text, { room: this.room.code, links: rules.links }))
         .then((v) => v, (error) => ({ ok: true, by: 'error', error: String(error?.message ?? error).slice(0, 120) }))
         .then((v) => {
@@ -150,6 +150,7 @@ onChat({ client = null, conn = null }, m) {
           if (this.room.muteOf({ token: who.token, browser: who.browser, player: who.player })) { reply('muted'); return; }
           this.room.publishChat(rec, who.conn, n);
         });
+      this.room.waitUntil?.(reviewing);
       return { ok: true, pending: true };
     }
     return this.room.publishChat(rec, who.conn, n);

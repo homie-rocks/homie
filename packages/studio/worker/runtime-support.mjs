@@ -1,6 +1,7 @@
 import {studioTools,directoryOf} from './tool-registry.mjs';
 export {useTools,getStudioTools} from './tool-registry.mjs';
 import {json,finish} from './responses.mjs';
+import {liveRoomSummaries} from './lobby-summary.mjs';
 /** Shared catalogue, assets, and room presentation helpers. */
 import {catalogue,builtPosts} from './catalogue.mjs';
 
@@ -138,7 +139,7 @@ async function roomsOf(env, games, { servers = null } = {}) {
   const live = {};
   // Room chat (section 19): whether each room's chat is on and may show on homie.rocks's page for it.
   const chatRows = await chatRowsOf(env);
-  const summaries=null;
+  const summaries=await liveRoomSummaries(env);
   await Promise.all(games.map(async (g) => {
     let list = [];
     if(summaries)list=summaries.get(g.id)??[];

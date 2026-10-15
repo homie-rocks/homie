@@ -26,6 +26,8 @@ Studios start faster and serve files straight from Cloudflare, background work a
 ### Changed
 
 - Deploy with D1 primary fallback when replication is unavailable; only install needed schedules, explain account cron limits, and preserve retired-source, HEAD and concept-page protections.
+- Store Lobby rooms as SQLite rows and deliver room summaries through Queues. Hibernate direct player and watch sockets between browser-hosted rounds, retaining session and moderation state; Gate and server-room hibernation remains draft work.
+
 - Deliver mutations and verified Stripe webhooks through retryable Queues. Store PaymentIntent ids before follow-up, recover lost responses using the original idempotency key, and retain uncertain payments for review.
 - Batch cold metadata, use causally consistent D1 sessions, bake catalogues, route public assets first, isolate subscription objects and load rendering modules at their entry points. Index MCP expiry and deliver catalogue notifications in background work.
 - Split request routing, runtime helpers, Table, Lobby, room chat, controls and wire validation into modules without changing behavior.

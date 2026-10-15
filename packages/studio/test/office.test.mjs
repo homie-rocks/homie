@@ -580,7 +580,7 @@ test('invite-only: an invite code lets a browser in with a pass for that game; a
   assert.match((await sw.json()).message, /remix was retired: a game is no longer handed over whole.*parts \(\/parts\/\)/);
   const office = await (await fetchSite('/_studio/api/office', { headers: owner })).json();
   for (const k of ['remix', 'remixBuilt', 'remixOff', 'license']) assert.ok(!(k in office.games.find((g) => g.id === 'owl-run')), `the office has no ${k}`);
-  assert.equal((await fetchSite('/games/owl-run/source.json')).status, 410);
+  assert.equal((await fetchSite('/games/owl-run/source.json')).status, 404);
 });
 
 test('a room that opens just as its game narrows reads the launch state on its first heartbeat and re-gates', async () => {
