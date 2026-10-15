@@ -2840,7 +2840,8 @@ test('real Chrome: keyless buyer sees one-item checkout, chooses a tip on Stripe
     await s.hook('checkout.session.completed', { id: 'cs_browser_tip', payment_link: link.id, metadata: { revision: link.revision }, client_reference_id: reference,
       payment_intent: 'pi_browser_tip', payment_status: 'paid', currency: 'usd', amount_subtotal: 750, amount_total: 750 }, { secret: s.env.STRIPE_WEBHOOK_SECRET });
     await page.goto('https://owls.example/shop/thanks?session_id=cs_browser_tip');
-    await page.waitForFunction(() => /yours/i.test(document.querySelector('[data-thanks-title]')?.textContent ?? ''));
+    await page.waitForFunction(() => document.querySelector('[data-thanks-title]')?.textContent === 'Simulation confirmed');
+    assert.match(await page.$eval('[data-thanks-line]', el => el.textContent), /No money moved and no Stripe receipt was sent/);
     assert.equal(s.DB.sql.prepare('SELECT amount FROM shop_orders WHERE id = ?').get(reference).amount, 750);
     assert.deepEqual(errors, []); assert.equal(s.stripe.calls.length, 0);
   } finally { await browser.close(); }
