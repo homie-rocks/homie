@@ -56,7 +56,8 @@ export function bookingHolds(env,caller,cat){
    const meta=cat.games.find(g=>g.id===app&&g.kind==='app'),spec=meta?.records?.collections?.[collection]?.booking;
    if(!spec||!valid(id)||!valid(slot)||!Number.isSafeInteger(quantity)||quantity<1)throw new Error('Choose a declared slot, positive quantity and stable booking id');
    if(!Number.isSafeInteger(expiresAt)||expiresAt<=Date.now())throw new Error('Hold needs a future expiry');
-   if(!caller.id&&!(typeof token==='string'&&/^[a-f0-9]{32,128}$/.test(token)))throw new Error('Booking owner or private token required');
+   if(token!==undefined&&!(typeof token==='string'&&/^[a-f0-9]{32,128}$/.test(token)))throw new Error('Invalid private booking token');
+   if(!caller.id&&!token)throw new Error('Booking owner or private token required');
    if(!hasStripeKey(env)&&linkConfig(env)?.slots?.some(l=>l.app===app&&l.slots===spec.slots&&l.slot===slot))throw new Error('Keyless Stripe inventory cannot share local holds; configure session checkout first');
    const scope=caller.testScope?`${app}:check:${caller.testScope}`:app;
    id=await hash(JSON.stringify([scope,collection,id]));
@@ -64,7 +65,7 @@ export function bookingHolds(env,caller,cat){
    await env.DB.prepare(`INSERT INTO shop_bookings(id,app,collection,slots,slot,quantity,order_id,state,updated_at,actor,token_hash,hold_until)
     SELECT ?1,?2,?3,?4,?5,?6,'hold:'||?1,'held',?7,?8,?9,?10 WHERE NOT EXISTS(SELECT 1 FROM shop_bookings WHERE id=?1)`).bind(id,scope,collection,spec.slots,slot,quantity,Date.now(),caller.id??null,secret,expiresAt).run();
    const row=await ownedHold(env,caller,{id,token});
-   if(row.app!==scope||row.collection!==collection||row.slot!==slot||row.quantity!==quantity||row.hold_until!==expiresAt)throw new Error('Booking id reused with different request');
+   if(row.app!==scope||row.collection!==collection||row.slot!==slot||row.quantity!==quantity)throw new Error('Booking id reused with different request');
    return result(row);
   },
   async get(args){return result(await ownedHold(env,caller,args));},

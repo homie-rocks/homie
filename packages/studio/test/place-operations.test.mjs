@@ -46,6 +46,7 @@ test('checkout claims the original hold once; payment and expiry share its state
  const api=bookingHolds(env,{id:'alice'},cat),expiry=Date.now()+60000;
  const request={app:'place',collection:'bookings',slot:'morning',id:'request',expiresAt:expiry};
  const held=await api.hold(request);assert.equal((await api.hold(request)).id,held.id);
+ assert.equal((await api.hold({...request,expiresAt:expiry+60000})).expiresAt,expiry,'retries never extend a hold');
  await assert.rejects(()=>api.hold({...request,quantity:2}),/different/);
  const order=id=>DB.prepare("INSERT INTO shop_orders(id,item,amount,currency,till,mode,status,created_at,updated_at) VALUES(?1,'ticket',100,'cad','test','test','started',1,1)").bind(id);
  const claim=id=>claimHoldStatement(env,{hold:held.id,app:'place',collection:'bookings',slots:'slots',slot:'morning',quantity:1,order:id});

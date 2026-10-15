@@ -268,12 +268,12 @@ A collection with `booking: {slots:'slots', item:'ticket'}` uses the same
 ```ts
 const held = await context.bookings.hold({
   app: 'place', collection: 'bookings', slot: 'morning', quantity: 2,
-  id: input.request, expiresAt: input.expiresAt
+  id: input.request, expiresAt: Date.now() + 60_000 // choose the hold window on the server
 });
 ```
 
 Require a signed-in caller, or pass a private, random 32–128 hex-character `token`
-for a guest. Keep request ID and expiry stable on retries. The returned `id` is
+for a guest. Keep the request ID stable on retries; a retry returns the original expiry and never extends it. The returned `id` is
 scoped by app/collection/proof; it is public identification, never authorization.
 Only the owner (or holder of that private token) can `get`, `confirm` or `release`.
 Confirm/release take `{id, version, token?}`. Another owner's ID is not permission.
