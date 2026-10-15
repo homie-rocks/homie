@@ -1,4 +1,4 @@
-import {idleChatSnapshot,restoreIdleChat} from './idle-chat.mjs';
+import {idleChatSnapshot,restoreIdleChat,readIdleChat,writeIdleChat,expireIdleChat} from './idle-chat.mjs';
 import {WatchSockets} from './watch-sockets.mjs';
 import { catalogue } from './catalogue.mjs';
 import { RULES_WIRING_MESSAGE } from './rules-wiring.mjs';
@@ -81,7 +81,7 @@ export class Table {
       if (this.saved?.retired === true) this.cleanupPending = true;
       this.recorded = (await ctx.storage.get('recorded')) ?? 0;
       this.officeSaved = (await ctx.storage.get('office')) ?? null;
-      this.idleChat = (await ctx.storage.get('watch-chat')) ?? null;
+      this.idleChat = (await readIdleChat(ctx.storage)) ?? null;
       // A big match room's last unconfirmed checkpoint (worker/room-store.mjs), read once as the object wakes.
       try { this.looseSave = (await ctx.storage.list?.({ prefix: LOOSE_SAVE })) ?? null; }
       catch (error) { this.looseSave = null; this.storageProblem(error); }
@@ -835,6 +835,7 @@ export class Table {
     try { if (this.house) await this.house.onAlarm(); } catch (error) { try { console.log(JSON.stringify({ ev: 'brain-alarm-failed', room: this.code, error: String(error?.stack ?? error).slice(0, 400) })); } catch { /* no console */ } }
     try { await this.flushBrain(); } catch { /* counted next time */ }
     try { await this.roomAlarm(); } catch (error) { this.say({ ev: 'failed', op: 'room-alarm', error: errorLine(error) }); }
+    await expireIdleChat(this.ctx.storage);
   }
 
   async flushCharacters() {
@@ -1120,7 +1121,7 @@ export class Table {
   async keepIdleChat() {
     if(!this.room)return;
     try { await this.flushChat(); }
-    finally { await this.ctx.storage.put('watch-chat',idleChatSnapshot(this)); }
+    finally { await writeIdleChat(this.ctx.storage,idleChatSnapshot(this)); }
   }
   async webSocketMessage(socket, message) {
     this.watchSockets.message(socket, message);

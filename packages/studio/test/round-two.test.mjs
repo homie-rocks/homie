@@ -243,7 +243,7 @@ test('lobby snapshots reject queue reordering and share the initial metadata bat
  assert.deepEqual((await liveRoomSummaries({BACKGROUND:{},DB})).get('cafe'),[]);
 });
 
-import {idleChatSnapshot,restoreIdleChat} from '../worker/idle-chat.mjs';
+import {idleChatSnapshot,restoreIdleChat,readIdleChat,writeIdleChat,expireIdleChat} from '../worker/idle-chat.mjs';
 test('hibernation retains the chat window, moderation buckets and acknowledged usage',()=>{
  const original={room:{chatLog:[{id:'one',text:'hello'}],chatBuckets:new Map([['sender',{lastSayAt:-Infinity,tokens:0}]]),chatAddress:new Map([['address',{tokens:1}]]),chatReacts:[1],stats:{chatLines:1,chatHeld:{slow:2},bytesOut:50}},chatSent:{chatLines:1,held:{slow:2}},chatPend:{neurons:0.5,ok:0,held:0,error:0}};
  const saved=idleChatSnapshot(original),restored={room:{stats:{bytesOut:0}},chatSent:{},chatPend:{}};
@@ -251,4 +251,13 @@ test('hibernation retains the chat window, moderation buckets and acknowledged u
  assert.equal(restored.room.chatLog[0].text,'hello');assert.equal(restored.room.chatBuckets.get('sender').lastSayAt,-Infinity);
  assert.equal(restored.room.chatAddress.get('address').tokens,1);assert.equal(restored.chatSent.chatLines,1);
  assert.equal(restored.chatPend.neurons,0.5);assert.equal(restored.room.stats.bytesOut,0);
+});
+
+test('SQLite idle chat survives wake, keeps large moderation buckets and expires without readers',async t=>{
+ const {DatabaseSync}=await import('node:sqlite'),db=new DatabaseSync(':memory:');t.after(()=>db.close());
+ let alarm=null;const storage={sql:{exec:(query,...args)=>{const stmt=db.prepare(query);return {toArray:()=>stmt.all(...args),...(!/^SELECT/.test(query)?{done:stmt.run(...args)}:{})};}},getAlarm:async()=>alarm,setAlarm:async at=>{alarm=at;}};
+ const at=Date.now(),snapshot={at,buckets:new Map(Array.from({length:512},(_,i)=>[String(i),{lastText:'界'.repeat(280),lastSayAt:-Infinity}]))};
+ await writeIdleChat(storage,snapshot);const restored=await readIdleChat(storage);
+ assert.equal(restored.buckets.size,512);assert.equal(restored.buckets.get('1').lastSayAt,-Infinity);assert.equal(alarm,at+900000);
+ t.mock.timers.enable({apis:['Date'],now:at+900001});await expireIdleChat(storage);assert.equal(await readIdleChat(storage),null);
 });
