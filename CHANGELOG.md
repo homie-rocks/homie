@@ -19,6 +19,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## Unreleased
 
+- Prediction recognizes host-clock shifts from snapshot tick/stamp differences, so repeated small scheduling stalls do not accumulate as network jitter and leave own ships a second ahead.
+
 - Keep synchronous own-body readers and `ownTick` on one presentation when work crosses a simulation tick; changed input still catches up immediately.
 
 - Bound wrapped-circle reconciliation travel per rendered frame, using periodic distance, so residual corrections cannot double a moving ship’s visible speed.

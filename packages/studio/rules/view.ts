@@ -183,7 +183,7 @@ export interface Room<R = unknown> extends RayQueries {
   readonly __rules?: R;
 }
 
-interface Frame { k: number; e: number; at: number; round: [number, number, number]; ents: Map<string, Unpacked>; rows: number[][]; collision?: CollisionRevision }
+interface Frame { k: number; e: number; at: number; st: number; round: [number, number, number]; ents: Map<string, Unpacked>; rows: number[][]; collision?: CollisionRevision }
 const frames = new WeakMap<object, Frame | null>();
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
@@ -262,7 +262,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         if (e) { nextRows.set(e.id, prior?.value === e ? prior : {wire:w,value:e}); ents.set(e.id, e); }
       }
       unpackedRows = nextRows;
-      f = { collision: d[2], k: s.k, e: Number(s.e) || 0, at: clock(), round: [Number(d[0][0]) || 0, Number(d[0][1]) || 0, Number(d[0][2]) || 0], ents, rows: (Array.isArray(s.c) ? s.c : []) as unknown as number[][] };
+      f = { collision: d[2], k: s.k, e: Number(s.e) || 0, at: clock(), st: s.st, round: [Number(d[0][0]) || 0, Number(d[0][1]) || 0, Number(d[0][2]) || 0], ents, rows: (Array.isArray(s.c) ? s.c : []) as unknown as number[][] };
     }
     frames.set(s, f);
     return f;
@@ -889,6 +889,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
           }
         }
       }
+      // The host stamps snapshots at their due time. A shift relative to tick
+      // count is an explicit host-clock slip, not delivery jitter; waiting for
+      // lead quantiles lets repeated small slips inflate the jitter reserve.
+      if (before && before.e === f.e && f.st - before.st - (f.k - before.k) * period > period) rebase(f.k, 'lead');
       if (!latencyCalibrated && authorityRtt() > calibratedRtt + period && !Object.values(sample).some(Boolean) && !pending.some(e=>Object.values(e.input).some(Boolean))) { rebase(f.k, 'lead'); latencyCalibrated = true; }
       if (row && row[3] !== -128 && base && clock() >= leadAfter) {
         const now = clock(), rtt = authorityRtt();

@@ -2759,3 +2759,20 @@ test('synchronous browser readers keep one pose when execution crosses a tick', 
  await Promise.resolve();const next=a.me;assert.notStrictEqual(next,first,'the next callback advances');assert.notEqual(next.pos.x,first.pos.x);
  a.input({ax:-1});assert.notStrictEqual(a.me,next,'an explicit changed input still invalidates presentation');
 });
+
+for(const delay of [0,300])test(`small repeated host clock slips do not accumulate as input jitter at ${delay} ms`, async t => {
+  const {L, compiled, openRoom} = await coinDashKit('server', false, 20, 'wrap2');
+  const clock = virtualTime(t), r = rig(L, compiled, false, delay, delay);
+  const a = openRoom({net:{config:cfg('Clock slips'),WebSocketImpl:r.socket(),post:null}});
+  t.after(()=>{a.close();r.stop();}); await clock.wait(2500);
+  a.input({ax:1}); await clock.wait(1500);
+  const gaps=[];
+  for(let i=0;i<15;i++){
+    r.host.pause();await clock.wait(150);r.host.resume();
+    await clock.wait(850);
+    gaps.push(a.ownTick-r.host.core.tick);
+  }
+  t.diagnostic(JSON.stringify({gaps}));
+  assert.ok(Math.max(...gaps)<6+2*delay/50, `low-latency host slips accumulated ${Math.max(...gaps)} ticks of prediction lead`);
+  assert.equal(r.host.core.stats.errors,0);
+});
