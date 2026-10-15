@@ -7,7 +7,7 @@ import { HOOK_EVENTS, SHOP_HOOK_EVENTS } from './shop.mjs';
 const hash = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const same = (a, b) => Object.keys(a ?? {}).length === Object.keys(b).length && Object.entries(b).every(([k, v]) => a?.[k] === v);
 export const matchesFields = (actual, expected) => Array.isArray(expected) ? Array.isArray(actual) && actual.length === expected.length && expected.every((v,i)=>matchesFields(actual[i],v)) : expected && typeof expected === 'object' ? Object.entries(expected).every(([k,v]) => matchesFields(actual?.[k],v)) : actual === expected;
-export async function reconcilePaymentLinks({ api, shop, slug, site, mode, bookingSlots = [], verifyObjects = false, scoped = false, knownLinks = [], knownPortal }) {
+export async function reconcilePaymentLinks({ api, shop, slug, site, mode, bookingSlots = [], verifyObjects = false, scoped = false, knownPortal }) {
   if(scoped) {
     const transport=api;
     api=(method,path,params={},idempotency)=>transport(method,path,method==='POST'&&path.startsWith('/v1/payment_links/')?{...params,expand:['line_items']}:params,idempotency);
@@ -44,7 +44,7 @@ export async function reconcilePaymentLinks({ api, shop, slug, site, mode, booki
   const [products,prices,links]=await parallel([
     ()=>scoped?search('products'):list('/v1/products'),
     ()=>scoped?search('prices'):list('/v1/prices'),
-    ()=>scoped?parallel([...new Set(knownLinks)].map(id=>()=>api('GET',`/v1/payment_links/${id}`,{expand:['line_items']}))):list('/v1/payment_links'),
+    ()=>list('/v1/payment_links',scoped?{expand:['data.line_items']}:{}),
   ]);
   const own = (o) => o.metadata?.homie === 'shop-links-v1' && o.metadata?.studio === slug && o.metadata?.origin === site;
   const verifyLink = async (link, params) => {
@@ -258,9 +258,9 @@ export async function syncPaymentLinks(options) {
     secret = endpoint.secret;
   }
   const fingerprint = hash({config, purchases:purchases?.config});
-  const unchanged = current && !secret && receipt?.fingerprint === fingerprint && has('STRIPE_SHOP_LINKS') && !has('STRIPE_KEY');
+  const unchanged = current && !secret && receipt?.fingerprint === fingerprint && (options.catalog || has('STRIPE_SHOP_LINKS')) && !has('STRIPE_KEY');
   if (!unchanged) {
-    const saved = await w(['secret', 'bulk'], { input: JSON.stringify({ STRIPE_CHECKOUT_MODE: 'links', STRIPE_SHOP_LINKS: JSON.stringify(config), ...purchaseSecrets, ...(purchases && (purchases.config.offers.length || has('PURCHASE_LINKS')) ? { PURCHASE_LINKS: JSON.stringify(purchases.config) } : {}), ...(secret ? { STRIPE_WEBHOOK_SECRET: secret } : {}) }) });
+    const saved = await w(['secret', 'bulk'], { input: JSON.stringify({ STRIPE_CHECKOUT_MODE: 'links', ...(options.catalog ? {} : {STRIPE_SHOP_LINKS: JSON.stringify(config)}), ...purchaseSecrets, ...(purchases && (purchases.config.offers.length || has('PURCHASE_LINKS')) ? { PURCHASE_LINKS: JSON.stringify(purchases.config) } : {}), ...(secret ? { STRIPE_WEBHOOK_SECRET: secret } : {}) }) });
     if (saved.code !== 0) return { ok: false, needs: 'cloudflare', why: 'Cloudflare could not save the shop connection. Run shop connect again; existing webhooks remain active.' };
     // Explicitly running connect selects keyless; manual selects the existing keyed checkout.
     if (has('STRIPE_KEY') && (await w(['secret', 'delete', 'STRIPE_KEY'], { input: 'y\n' })).code !== 0) return { ok: false, needs: 'cloudflare', why: 'The links are ready; run shop connect again to finish removing the old checkout credential.' };

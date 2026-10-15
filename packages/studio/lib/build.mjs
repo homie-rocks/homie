@@ -1,3 +1,4 @@
+import {verifiedMcpConfig,publicMcpSetup} from './shop-mcp.mjs';
 import { directoryUrl } from '../worker/directory-choice.mjs';
 import { domainOrigin } from './studio.mjs';
 import { appProblems } from '../worker/app-format.mjs';
@@ -686,6 +687,10 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
   // GAME PARTS: every packed version of every SHARED part into dist/parts/, and its index; a private part is never copied.
   const partsBuilt = buildParts(root, dist, { studio, log });
   mkdirSync(join(dist, '_site'), { recursive: true });
+  if(publicMcpSetup(root)) {
+    const verified=verifiedMcpConfig(root);
+    writeFileSync(join(dist,'_site','stripe-shop-links.json'),JSON.stringify({config:verified?.result.config??null,next:verified?null:'Ask your AI to finish stripe_shop_plan with verify:true.'}));
+  }
   writeFileSync(join(dist, '_site', 'posts.json'), `${JSON.stringify({ v: 1, posts })}\n`);
   const studioExtras = schemaExtras(s.schema, { where: 'studio.json site', types: 'Organization', log });
   // The Lounge (0.29.0): studio.json "lounge", checked; off when a game already has /lounge/.
