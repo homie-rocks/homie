@@ -29,7 +29,7 @@ export async function reconcileStripeEvent(env,id,cat) {
 export async function pruneStripeEvents(env) {
   const cutoff=Date.now()-60*86400000;
   await env.DB.batch([
-    env.DB.prepare('DELETE FROM stripe_intake WHERE id IN (SELECT id FROM stripe_intake WHERE done<?1 ORDER BY done LIMIT 1000)').bind(cutoff),
+    ...(env.BACKGROUND?[env.DB.prepare('DELETE FROM stripe_intake WHERE id IN (SELECT id FROM stripe_intake WHERE done<?1 ORDER BY done LIMIT 1000)').bind(cutoff)]:[]),
     env.DB.prepare('DELETE FROM shop_events WHERE id IN (SELECT id FROM shop_events WHERE at<?1 ORDER BY at LIMIT 1000)').bind(cutoff),
   ]);
 }
