@@ -1,0 +1,22 @@
+c-bg-1-lag80-loss0.01-jitter0 pops 0 perMin 0
+c-cpu4-1-lag60-loss0.01-jitter20 pops 0 perMin 0
+c-crowd8-1-lag60-loss0.01-jitter20 pops 0 perMin 0
+c-jit150-1-lag150-loss0-jitter100 pops 0 perMin 0
+c-jit150-2-lag150-loss0-jitter100 pops 0 perMin 0
+c-jit150-3-lag150-loss0-jitter100 pops 0 perMin 0
+c-jit30-1-lag30-loss0-jitter30 pops 0 perMin 0
+c-jit30-2-lag30-loss0-jitter30 pops 0 perMin 0
+c-jl-1-lag100-loss0.03-jitter80 pops 0 perMin 0
+c-jl-2-lag100-loss0.03-jitter80 pops 0 perMin 0
+c-l0-1-lag0-loss0-jitter0 pops 0 perMin 0
+c-l0-2-lag0-loss0-jitter0 pops 0 perMin 0
+c-l0-3-lag0-loss0-jitter0 pops 0 perMin 0
+c-l300-1-lag300-loss0.05-jitter0 pops 0 perMin 0
+c-l300-2-lag300-loss0.05-jitter0 pops 0 perMin 0
+c-l300-3-lag300-loss0.05-jitter0 pops 0 perMin 0
+c-l80-1-lag80-loss0.02-jitter0 pops 0 perMin 0
+c-l80-2-lag80-loss0.02-jitter0 pops 0 perMin 0
+c-long-1-lag100-loss0.02-jitter40 pops 0 perMin 0
+c-rc2-1-lag80-loss0.01-jitter0 pops 0 perMin 0
+c-rc6-1-lag80-loss0.01-jitter0 pops 0 perMin 0
+TOTAL {"runs":21,"frames":78442,"pops":0,"popMax":0,"s":1313,"perMin":0}

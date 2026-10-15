@@ -50,9 +50,33 @@ Declare `players.max` in game.json (a positive integer, including hundreds); use
 For example, `homie-studio servers new keepers "Practice" --policy beginner --guides 1` creates a beginner server with one guide. Use `homie-studio servers set keepers <server> --policy hybrid --ai 1` to change an existing server through its owner controls.
 
 Server movement is the default and predicts immediately in the local browser using
-its guarded `move`. Bots, AI and away people are always moved on the server.
+its guarded `move`. Bots and AI move on the server. Away people normally do too;
+validated owners retain their accepted state through a transient absence.
 `body.move: 'owner'` is an existing compatibility option that accepts bounded position
 claims and cannot enforce walls against a modified browser; do not use it for new games.
+For opt-in owner simulation, use `body.move: 'validated-owner'`. The browser
+runs and draws its own move, reporting its input tick, baseline tick, position,
+velocity and heading. The server runs the same move from its last accepted state,
+including gravity and game collisions. Numerical tolerance is 0.002 per axis;
+the canonical result remains the next validation baseline, so tolerance cannot
+accumulate into extra movement. Ordinary snapshots update fields, not the owner's
+pose or motion. Other bodies retain normal interpolation.
+
+Reports are ordered, deduplicated and bounded by elapsed server ticks. Missing
+reports wait for redundant delivery; the server never invents missing controls.
+The browser retains up to 256 input ticks for recovery across an outage.
+An impossible report increments the body's revision: the browser cuts to that
+state. `world.place`, server velocity/motion changes and round starts also cut.
+A transient disconnect/reconnect does not replace an owner’s motion. Scores and other rule decisions remain server-owned. Restores
+establish a fresh epoch without changing durable entity row formats.
+
+Use this for deterministic movement against static geometry, with sampled or held
+inputs (`f.held` for jumps/taps). Discrete server actions use commands; press/pulse
+fields are rejected for this mode. Existing restrictions
+on owner bodies and live colliders still apply. The direct, trusted `core.step`
+input API remains available to offline rule tests; network hosts always require
+validated reports for opted-in human bodies. No report grants score or events.
+
 A non-player entity may use `world.sweep(self, delta)` instead of a move function.
 Bodies require radius and maxSpeed. In 2D use circle or box (radius is its half-width); in 3D use sphere, capsule or
 axis-aligned box, with full height for capsule/box. `sweep: true` adds automatic map
@@ -1398,9 +1422,9 @@ against the geometry of those ticks. It never repeats commands or effects. An
 external body/motion write or placement fences that history. Beyond a fence or
 the retained history, input applies on the next tick instead. Entries carrying
 press handlers also apply next tick: world actions are never rerun as movement. Snapshot control
-rows report the application tick and the view uses it for replay. Two-dimensional prediction adopts each snapshot and replays pending inputs immediately;
-only the visual error is blended. Three-dimensional views retain the existing
-application-receipt guard. An explicit placement always replaces prediction. Legacy wire
+rows report the application tick and the view uses it for replay. Within the
+replay window a snapshot still missing a predicted input does not replace live
+movement; an explicit placement always does. Legacy wire
 entries retain their old compensation; current views do not receive negative
 held values to repay late releases.
 
@@ -1425,35 +1449,18 @@ changes authoritative movement. Use `ctx.substeps` for custom integration so
 the toolkit draws the same path, without a second view-side displacement.
 Substep previews include the remaining duration of controls currently held.
 
-For 2D runners, `room.predict.blendMs` sets exponential visual-error decay (100 ms
-by default, about 99% removed in that time). Reconciliation immediately adopts the
-server state and replays pending inputs; drawing adds the remaining offset.
-Held direction never blocks a correction. Collision shortens the offset or routes
-its drawing around the obstacle. `room.predict.maxFrameM` optionally sets the
-maximum correction-frame travel (default 2.8 times the body radius). Large errors
-fast-blend under that cap instead of becoming slow run-speed slides. A browser
-frame has one shared presentation for the renderer, HUD and probes; fresh input
-invalidates a pose sampled before that input. A moving target cannot cancel an
-unfinished collision route, and clear line-of-sight shortcuts spend the blend on
-travel rather than on one search-grid edge per frame.
-
-`room.predict.renderAheadMs` optionally anticipates the display interval on the
-own runner's predicted movement path (default 0; between 0 and one simulation
-tick). A fixed 60 Hz substep game can use 16 ms to reduce the wait for the first
-displacement substep plus a display interval. Forecasts cross tick boundaries continuously, use the same movement
-and collision code, and never advance simulation, authoritative actions, or input
-timestamps. It affects 2D drawing only. Keep this small: it is visual prediction,
-not a way to compensate a network round trip.
-
-A server placement carries its original position even in later snapshots. A
-respawn first draws that exact position, then blends toward current prediction.
-During a server outage the view keeps predicting local input and retains the last
-server score and round; it does not start a separate solo room. Initial offline
-practice and browser hosting retain their existing behaviour. Reconnects resume
-server reconciliation. These settings change presentation, never server physics.
-
-Three-dimensional corrections retain their existing catch-up and blend behaviour.
-`correctionDirection` is deprecated and ignored; remove it from 2D views.
+Residual drawing corrections use `room.predict.blendMs` (100 ms by default),
+slowed on each moving axis to avoid reversing movement (jumping cannot spend
+horizontal correction faster), with a one-second maximum
+(or the explicitly longer blendMs). Any remainder drains over the final 250 ms
+rather than disappearing on the deadline. `snapM` selects the large-error threshold;
+placements still snap. A placement keeps the established clock phase and
+projects the new body from the snapshot tick to the own tick; it never labels an
+old pose as a future one. Projection is bounded to one second and sends the
+controls it used. Queued held state from an earlier placement cannot later
+change the new body. Newly received discrete presses still belong to the player
+when the browser has not yet learned of that placement. `idleHold` no longer keeps a stopped body displaced
+indefinitely. These drawing settings never alter server truth.
 
 A fresh discrete movement action (press or pulse) exits the own body's historical
 catch-up path. It resumes live prediction at once and carries the drawn pose into
@@ -1461,13 +1468,24 @@ the normal correction blend, so a counter-dash or jump does not wait for the
 unseen impulse's history to finish. This changes drawing only; authority, input
 timestamps, cooldowns and replay rules are unchanged.
 
-Own 2D presentation sweeps from its last displayed position and routes around
-solid obstacles when necessary. The frame cap bounds fast correction travel;
-it is not a run-speed limit and it does not depend on held input. Collision-safe
-routing can take longer than `blendMs` for large errors or a long detour. Those
-positions never feed movement, hits, scoring, input timestamps, or authority.
-A real placement cuts immediately. An authority epoch change also cuts unless
-`respawned` identifies the same living body; that handoff retains its visual error.
+Own box-bodied 2D presentation also sweeps from its last displayed position. Reconciliation
+cannot switch sides of a solid merely because the new predicted origin is on
+the other side. Travel is limited by elapsed time plus a body-sized blend. Horizontal travel uses the adjacent
+actual velocities; vertical travel uses the recorded substeps with interpolation headroom, so an apex or landing is not trimmed.
+A stationary correction spends only blend speed, not the declared terminal falling speed.
+A large falling-speed limit cannot accelerate a horizontal correction. If sliding cannot reach a correction, a bounded
+incremental route searches collision-tested edges around the obstruction. No
+route means holding the last valid position, never crossing a solid. Explicit
+placements and epoch changes reset presentation immediately. These positions
+never feed movement, hits, scoring, input timestamps, or authority.
+
+A platformer can supply `openRoom({ correctionDirection: input => Number(input.r || 0) - Number(input.l || 0) })`
+for box-bodied 2D presentation. This is horizontal control intent (-1, 0, +1), not authority or a second movement loop.
+It prevents a visual correction from reversing held controls even when contact sets velocity to zero; neutral input
+allows convergence in either direction. Actual predicted braking against a newly reversed control remains allowed.
+
+After a delayed render, box-bodied 2D presentation spends at most 1.4 body widths per drawn frame,
+then continues toward prediction. This affects drawing only; an explicit placement remains immediate.
 
 When a player's connection comes back, the server hands the body back where it has it, with a new placement
 revision. Within three seconds of the link coming back online, box-bodied 2D presentation treats that revision as the

@@ -19,23 +19,14 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [Unreleased]
 
-### Changed
+### Added
 
-- Effect-read cache invalidation preserves a runner already drawn in the current browser frame.
-
-- Moving 2D correction targets no longer restart unfinished collision routes; visible waypoints are skipped only after a body sweep confirms the shortcut. Route nodes retain the sweep’s actual safe endpoint, including its collision skin, so near-contact grid points cannot strand the drawing and valid touching poses remain reachable. Fresh input invalidates an earlier frame read. Optional `room.predict.renderAheadMs` anticipates a small display interval on the predicted path without advancing simulation or input timestamps.
-
-- 2D own-runner reconciliation adopts server state immediately and replays pending input. Visual error decays exponentially with `room.predict.blendMs`; held direction no longer gates corrections. `room.predict.maxFrameM` bounds fast blends, collision-safe routing keeps box runners outside terrain, and all readers share one browser-frame presentation.
-- Square runners can leave an exact terrain corner without a false zero-time collision. Correction routes finish a rounded-off turn before advancing, and shortcuts require a clear sweep from the actual drawing.
-- A 2D reconnect keeps its handoff context until the first authoritative snapshot, even when that snapshot arrives more than three seconds after transport reconnects. A new authoritative round still draws its exact spawn.
-- Server-game outages retain local prediction and server scores instead of starting a visible solo game. Reconnect attempts remain prompt.
-- Returning ownership carries a still-valid physical spawn origin into the new revision, so a respawn missed during an outage is first drawn at its spawn rather than its later moving position.
-- Placement snapshots retain the original server spawn position so delayed or lost snapshots cannot make the first respawn drawing start several tiles into a run.
-- Circle sweeps starting inside an expanded box still test its rounded corner, preventing a correction from entering that corner.
-
-### Upgrade notes
-
-- Remove deprecated `openRoom({ correctionDirection })` callbacks. No package version bump in this change; renumber at release.
+- Opt-in `body.move: 'validated-owner'`: the owning browser keeps its local
+  movement, while the server validates ordered state reports with the same move
+  function. Invalid reports and server-owned movement events cut to authority.
+  Other games retain their existing prediction and reconciliation behavior.
+- Owner-moved server games keep prediction and authoritative score through a
+  temporary outage. Shared collision and durable entity rows are unchanged.
 
 ## [0.57.0] - 2026-10-16
 

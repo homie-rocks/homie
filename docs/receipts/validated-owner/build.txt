@@ -1,0 +1,38 @@
+
+> build
+> homie-studio build
+
+Author against toolkit 0.51.1: node_modules/@homie-rocks/studio/guides/game/{SKILL,RULES,REWRITE}.md
+Homie Claude Code plugin 0.25.2 is older than toolkit 0.51.1. Its guidance may be stale. Read node_modules/@homie-rocks/studio/guides/game/{SKILL,RULES,REWRITE}.md. claude plugin update homie@homie.
+types: games/2048-race: rules, move and view checked with the toolkit's strict compiler
+info: games/2048-race/src/rules.ts:42: the generated play covered 18000 ticks (900 seconds of the room's clock), 8 rounds finished, the room rebuilt from its save and compared 813 times, stopped at its allowance of 18000 ticks; it ended holding 8 entities and 0 waiting events in a save of 2932 bytes. `homie-studio build --long-check` plays eight times as much. Play it did not reach is not checked.
+info: rules runtime reference trial: hero-rush-3d, 32 players at 30 Hz for 20 minutes on Node (macOS arm64). Cloudflare capacity and billing are unmeasured.
+built 2048-race (bundle, 64 KB + 2 additional chunks, 236 KB)
+2048-race: this game's rules and tunables are sent to players' devices so it can be played offline
+  2048-race: its rules run on the server (checked and guarded, 19 KB, build 0106e3bc79fc79e210bd9005033da0e3; 18000 ticks played, the room rebuilt from its save 813 times: the busiest tick used 8681 of 500000 budget units, 2668 of them in one handler; the largest save was 3128 bytes)
+  2048-race: smoke-run largest snapshot 514 B / 16384 B browser cap; checkpoint 1112 B / 65536 B browser cap (measured, not an upper bound)
+built asteroids-arena (static, 1162 KB)
+built bone-burglar (static, 1589 KB)
+built octree-arena (static, 3267 KB)
+types: games/tiny-platformer: rules, move and view checked with the toolkit's strict compiler
+info: games/tiny-platformer/src/rules.ts:44: the generated play covered 18000 ticks (900 seconds of the room's clock), 8 rounds finished, the room rebuilt from its save and compared 813 times, stopped at its allowance of 18000 ticks; it ended holding 24 entities and 0 waiting events in a save of 5534 bytes. `homie-studio build --long-check` plays eight times as much. Play it did not reach is not checked.
+info: rules runtime reference trial: hero-rush-3d, 32 players at 30 Hz for 20 minutes on Node (macOS arm64). Cloudflare capacity and billing are unmeasured.
+built tiny-platformer (bundle, 92 KB + 2 additional chunks, 425 KB)
+tiny-platformer: this game's rules and tunables are sent to players' devices so it can be played offline
+  tiny-platformer: its rules run on the server (checked and guarded, 232 KB, build f31f521c131e0acfb673f9fd21503a4d; 18000 ticks played, the room rebuilt from its save 813 times: the busiest tick used 17959 of 500000 budget units, 1315 of them in one handler; the largest save was 6033 bytes)
+  tiny-platformer: smoke-run largest snapshot 2041 B / 16384 B browser cap; checkpoint 3409 B / 65536 B browser cap (measured, not an upper bound)
+hosted by a player's browser, as before (no room object; nothing to do): asteroids-arena, bone-burglar, octree-arena
+Built 2048-race (64 KB), asteroids-arena (1162 KB), bone-burglar (1589 KB), octree-arena (3267 KB), tiny-platformer (92 KB) into site/dist
+  2048-race: changed, build 740d58c98ab80aa2 (assets/main-SVYFE56Q.js + 2 additional chunks)
+  asteroids-arena: changed, build 82adac572ea66cb1
+  bone-burglar: changed, build b6d039bd6751ee8c
+  octree-arena: changed, build 71471b29ae52d4d4
+  tiny-platformer: changed, build 36597460105ffeb0 (assets/main-FTCQMV3V.js + 2 additional chunks)
+Note: Remix was retired, and games now build on each other through parts (pieces a studio shares; ask for a part, or see parts/PARTS.md). These settings no longer do anything and can be deleted: games/bone-burglar/game.json "share". No game's source is served whole; a game made from another keeps its credit.
+Landing /2048-race/: hero from its footage, credits
+Landing /asteroids-arena/: hero from its footage, credits
+Landing /bone-burglar/: hero from its footage, credits
+Landing /octree-arena/: hero from its footage, credits
+Landing /tiny-platformer/: hero from its footage, credits
+Posts: /posts/old-games-new-friends/ (feeds: /posts/feed.xml, /posts/feed.json)
+Game Codex (the owner's private pages; codex link <id> opens one): /_studio/codex/tiny-platformer/

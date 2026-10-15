@@ -1,0 +1,4 @@
+b-stopturn0 {"stops":24,"stopBack":0,"stopBackMax":0,"turns":12,"turnBounce":0,"turnBounceMax":0,"wobble":0}
+b-stopturn150 {"stops":23,"stopBack":0,"stopBackMax":0,"turns":11,"turnBounce":0,"turnBounceMax":0,"wobble":0}
+b-stopturn300 {"stops":23,"stopBack":0,"stopBackMax":0,"turns":12,"turnBounce":0,"turnBounceMax":0,"wobble":0}
+TOTAL {"stops":70,"stopBack":0,"stopBackMax":0,"turns":35,"turnBounce":0,"turnBounceMax":0,"wobble":0}

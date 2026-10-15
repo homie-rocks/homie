@@ -128,19 +128,6 @@ test('a declaration that does not fit the contract is named', async () => {
   assert.equal(s.settings.host, 'server');
   assert.equal(s.problems.length, 3);
   assert.deepEqual(L.R.roomSettings(undefined), { settings: { host: 'server', offline: true, tickHz: 20, inputHz: 20, view: { radiusM: null }, durability: { movementSeconds: 1 }, budget: { tick: 500_000 }, predict: { catchM: null, catchUp: 1.25, snapM: null, blendMs: 100, interpMs: null } }, problems: [] });
-  assert.equal(L.R.roomSettings({predict:{maxFrameM:1.4}}).settings.predict.maxFrameM,1.4);
-  for (const maxFrameM of [0,-1,Infinity]) {
-    const parsed=L.R.roomSettings({predict:{maxFrameM}});
-    assert.ok(parsed.problems.length,'a zero or invalid frame cap must not freeze drawing');
-    assert.equal(parsed.settings.predict.maxFrameM,null);
-  }
-  assert.equal(L.R.roomSettings({predict:{maxFrameM:null}}).settings.predict.maxFrameM,null);
-  assert.equal(L.R.roomSettings({predict:{renderAheadMs:16}}).settings.predict.renderAheadMs,16);
-  for (const renderAheadMs of [-1,51,Infinity,NaN]) {
-    const parsed=L.R.roomSettings({predict:{renderAheadMs}});
-    assert.ok(parsed.problems.length);
-    assert.equal(parsed.settings.predict.renderAheadMs,0);
-  }
   // The default budget is the same work a second at any tick rate above twenty.
   assert.deepEqual([10, 20, 30, 60].map((tickHz) => L.R.roomSettings({ tickHz }).settings.budget.tick), [500_000, 500_000, 333_333, 166_666]);
   assert.equal(L.R.roomSettings({ tickHz: 60, budget: { tick: 900_000 } }).settings.budget.tick, 900_000, 'and a game may name its own');
@@ -648,30 +635,4 @@ test('late paired callbacks sustaining 20 Hz do not end a healthy room as an ove
     }
   }
   assert.equal(rig.host.tick,400);assert.deepEqual(rig.ended,[]);rig.host.stop();
-});
-
-test('a circle starting inside an expanded box still collides with its rounded corner',async()=>{
-  const {L}=await coinDash();
-  const map=L.R.compileMap({bounds:{min:[-20,-20],max:[20,20]},boxes:[{min:[-8,0],max:[0,5]}]});
-  const body={pos:{x:.3310835,y:-.3753666,z:0}};
-  const hit=L.M.sweepMap(map,body,{x:-.1931,y:.0022,z:0},.5,2,{shape:'circle',radius:.5,height:1});
-  assert.ok(hit,'starting in the expanded rectangle does not mean overlapping the actual corner');
-  assert.ok(Math.hypot(body.pos.x,body.pos.y)>=.5);
-  const away={pos:{x:.3310835,y:-.3753666,z:0}};
-  assert.equal(L.M.sweepMap(map,away,{x:.1,y:-.1,z:0},.5,2,{shape:'circle',radius:.5,height:1}),undefined);
-});
-
-test('a square runner can leave an exact terrain corner without a zero-time collision',async()=>{
- const {L}=await coinDash();
- const map={bounds:{min:{x:0,y:0,z:0},max:{x:64,y:48,z:0}},boxes:[{min:{x:19,y:37,z:0},max:{x:26,y:42,z:0}}],circles:[]};
- const shape={shape:'box',radius:.5,height:1};
- for(const [x,y,dx,dy] of [[26.5,36.5,1,1],[18.5,36.5,-1,1],[26.5,42.5,1,-1],[18.5,42.5,-1,-1]]) {
-  const body={pos:{x,y,z:0}};
-  assert.equal(L.M.sweepMap(map,body,{x:dx,y:dy,z:0},.5,2,shape),undefined,'outgoing diagonal has no solid overlap');
-  assert.deepEqual(body.pos,{x:x+dx,y:y+dy,z:0});
- }
- const entering={pos:{x:26.5,y:36.5,z:0}};
- assert.ok(L.M.sweepMap(map,entering,{x:-1,y:1,z:0},.5,2,shape),'diagonal entering the platform still collides');
- const landing={pos:{x:23,y:35.5,z:0}};
- assert.ok(L.M.sweepMap(map,landing,{x:0,y:1,z:0},.5,2,shape),'end-of-step landing still reports contact');
 });

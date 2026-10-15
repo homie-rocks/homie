@@ -90,7 +90,8 @@ export const ANSWER_MAX = 256;
 export type Driver = 'person' | 'bot' | 'ai';
 export interface SeatInfo { seat: number; driver: Driver; owner: string; character?: import('./rules.ts').Character | null }
 /** One seat's step for a tick: its input values (already held to their types) and, for an owner-moved body, its claim. */
-export interface StepInput { values: Record<string, unknown>; claim?: { pos: Vec3; vel: Vec3; heading: Vec3; r: number } | null }
+export interface OwnerReport { tick: number; base: number; values: Record<string, unknown>; pos: Vec3; vel: Vec3; heading: Vec3; r: number }
+export interface StepInput { reports?: OwnerReport[]; values: Record<string, unknown>; claim?: { pos: Vec3; vel: Vec3; heading: Vec3; r: number } | null }
 export interface ResultRow { seat: number; id: string; driver: Driver; score: number; place: number }
 export type CoreOut =
   | { t: 'round'; n: number; phase: 'live' | 'over'; endsAt: number; startedAt: number; results?: ResultRow[] }
@@ -106,9 +107,7 @@ export interface Body { seat: number; id: string; kind: string; driver: Driver; 
 
 interface Ent {
   id: string; n: number; kind: KindTable; pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean;
-  /** The exact origin of a handler placement, retained for delayed snapshots. */
-  placement?: {r:number;pos:Vec3};
-  /** Raised whenever the runtime or a handler puts the body somewhere at once. */
+  /** The placement counter: raised whenever the runtime or a handler puts the body somewhere at once. */
   r: number; born: number; arrived: boolean; why: 'join' | 'spawn'; dead: boolean;
   f: Record<string, unknown>; m: Record<string, unknown>;
   seat: number; owner: string; driver: Driver; away: boolean; goal: unknown;
@@ -203,7 +202,7 @@ export interface Core {
  * `noted`: told, as it happens, of a value the rules wrote that the runtime changed to make it fit, or dropped (pack.ts
  * `Adjusted`; also `effect`, `think` and `decision`): the handler, what was done, the field's name and what was written.
  */
-export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number) => import('./rules.ts').Character | null | undefined; characterSaved?: (seat: number, character: import('./rules.ts').Character) => void; rewindTicks?: (seat: number)=>number; label?: (seat:number,driver:Driver)=>string; moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes, id: string) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
+export function createCore(c: Compiled, opts: { validateOwners?: boolean; characterForSeat?: (seat: number) => import('./rules.ts').Character | null | undefined; characterSaved?: (seat: number, character: import('./rules.ts').Character) => void; rewindTicks?: (seat: number)=>number; label?: (seat:number,driver:Driver)=>string; moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes, id: string) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
   if (opts.restore && (c.map.physics !== undefined) !== (opts.restore.physics !== undefined)) throw new Error('physics: save and game differ');
   const physics = physicsWorld(c.map.physics, opts.restore?.physics);
   let currentMap=c.map;
@@ -691,7 +690,6 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       if (heading !== undefined) e.heading = dir(heading, dims);
       e.grounded = dims === 2 || restsOnMap(currentMap, e.pos, e.kind.body ?? { shape: 'sphere', radius: 0, height: 0 });
       e.r = (e.r + 1) & 0xffff;
-      e.placement = {r:e.r,pos:e.pos};
       e.allow = 0;
     },
     near: (pos: unknown, r: unknown, kind?: unknown): readonly unknown[] => {
@@ -954,14 +952,9 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
         const e = s?.id ? ents.get(s.id) : null;
         if (!s || !e || s.driver === 'bot' || s.away === op.away) continue;
         s.away = op.away; e.away = op.away;
-        // Back at the wheel: the browser starts from where the server has the body.
-        if (!op.away) {
-          const revision = (e.r + 1) & 0xffff;
-          // Returning ownership is not a new physical placement. Keep an
-          // unseen respawn's origin available through the handoff revision.
-          if (e.placement?.r === e.r) e.placement = {r:revision,pos:e.placement.pos};
-          e.r = revision; e.allow = 0;
-        }
+        // Legacy return hands back the server body. Validated owners keep their
+        // report baseline through a transient absence; only game events fence it.
+        if (!op.away && !e.kind.body?.validatedOwner) { e.r = (e.r + 1) & 0xffff; e.allow = 0; }
         out.push({ t: 'seats' });
         roomEvent('seatAway', Object.freeze({ seat: s.seat, id: e.id, away: op.away }));
       } else if (op.op === 'leave') {
@@ -1113,9 +1106,60 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     e.pos=b.pos;e.vel=b.vel;e.heading=b.heading;e.grounded=b.grounded;
     Object.assign(e.m,b.motion);
   }
+  // Validation state is transient. A restored epoch establishes a new baseline;
+  // durable entity rows keep their existing format.
+  const owners = new Map<string, {r:number; last:number|null; since:number; used:number; pending:Map<number,OwnerReport>}>();
+  function validateOwner(e: Ent, reports: OwnerReport[]): void {
+    const body = e.kind.body!;
+    let state = owners.get(e.id);
+    if (!state || state.r !== e.r) {
+      state = {r:e.r,last:null,since:tick,used:0,pending:new Map()}; owners.set(e.id,state);
+    }
+    const reject = () => { stats.held++; e.r = (e.r+1)&0xffff; owners.delete(e.id); };
+    for (const report of reports.slice(0,64)) {
+      if (report.r !== e.r) continue;
+      if (!Number.isSafeInteger(report.tick) || !Number.isSafeInteger(report.base) || report.base < state.since-1 || report.base > tick || report.tick <= report.base || report.tick > tick + tickHz ||
+          ![report.pos,report.vel,report.heading].every(v => v && [v.x,v.y,v.z].every(Number.isFinite))) { reject(); return; }
+      // A fresh snapshot baseline can restart the input clock after a pause.
+      // It grants no travel: the next report must still be exactly one move
+      // from the accepted body, and remains bounded by elapsed server time.
+      if (state.last === null || report.base > state.last) {
+        state.last = report.base;
+        for (const t of state.pending.keys()) if (t <= report.base) state.pending.delete(t);
+      }
+      if (report.tick <= state.last) continue;
+      if (state.pending.size >= 256) { reject(); return; }
+      state.pending.set(report.tick,report);
+    }
+    // Missing reports wait for redundant delivery. Never infer omitted controls.
+    for (let count=0; count<8 && state.last !== null; count++) {
+      const report = state.pending.get(state.last+1);
+      if (!report) break;
+      if (state.used >= tick-state.since+1) break;
+      const before = movementState(e), serverTick = tick;
+      const input = Object.freeze(coerceFields(e.kind.input,report.values,dims));
+      const b = {pos:e.pos,vel:e.vel,heading:e.heading,grounded:e.grounded,motion:e.mself};
+      moveShape = body;
+      tick = report.tick;
+      let ok = false;
+      try { ok = run(e.kind.name,'move',e,'move',()=>e.kind.move!(b,input,moveCtx),'body'); }
+      finally { tick = serverTick; }
+      const expectedPos = clampIn(V(b.pos),body.radius,body.height || 2*body.radius), expectedVel = V(b.vel);
+      // Float packing tolerance is numerical, not a per-report movement allowance.
+      // Keep the canonical result as the next validation baseline so a client
+      // cannot accumulate the tolerance into speed or wall penetration.
+      const close = (a:Vec3,b:Vec3) => Math.abs(a.x-b.x)<=0.002 && Math.abs(a.y-b.y)<=0.002 && Math.abs(a.z-b.z)<=0.002;
+      if (!ok || !close(expectedPos,report.pos) || !close(expectedVel,report.vel) || !close(dir(b.heading,dims),dir(report.heading,dims))) {
+        putMovement(e,before); reject(); return;
+      }
+      e.pos=expectedPos; e.vel=expectedVel; e.heading=dir(b.heading,dims); e.grounded=b.grounded; e.input=input;
+      state.pending.delete(report.tick); state.last=report.tick; state.used++;
+    }
+    if (state.pending.size && Math.max(...state.pending.keys())-(state.last ?? 0)>256) reject();
+  }
   function reviseMovement(seat: number, at: number, values: Record<string, unknown>): boolean {
     const id=seats.get(seat)?.id, e=id?ents.get(id):null;
-    if(!e || !e.kind.move || e.kind.body?.owner || e.away || e.driver!=='person') return false;
+    if(!e || !e.kind.move || (e.kind.body?.owner && !e.kind.body?.validatedOwner || owners.has(e.id)) || e.away || e.driver!=='person') return false;
     const frames=movementHistory.get(e.id), start=frames?.findIndex(f=>f.tick===at)??-1;
     if(!frames || start<0 || frames.at(-1)!.tick!==tick || frames[start].r!==e.r || !sameMovement(frames.at(-1)!.after,movementState(e)))return false;
     const control=e.kind.player?.control;
@@ -1142,6 +1186,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     finally {tick=savedTick;moveGeometry=geometry;currentMap=map;}
   }
   function step(inputs: ReadonlyMap<number, StepInput> = new Map(), guides?: () => void): void {
+    for(const id of owners.keys())if(!ents.has(id))owners.delete(id);
     for(const id of movementHistory.keys())if(!ents.has(id))movementHistory.delete(id);
     tick = (tick + 1) >>> 0;
     if(pendingMap&&pendingMap[0]<=tick){currentMap=pendingGeometry!;mapRevision=pendingMap;currentMapCells=pendingMapCells;mapCells=currentMapCells;pendingMapCells=0;pendingMap=null;pendingGeometry=null;moveGeometry=currentMap;}
@@ -1212,7 +1257,8 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
         let claim: StepInput['claim'] = null;
         if (k.player) {
           const permitted = !k.player.control || Boolean(e.m[k.player.control]);
-          const driven = permitted && (e.driver === 'person' || (e.driver === 'ai' && inputs.has(e.seat))) && !e.away;
+          const validatingOwner = body.validatedOwner && (opts.validateOwners || inputs.get(e.seat)?.reports !== undefined);
+          const driven = permitted && (e.driver === 'person' || (e.driver === 'ai' && inputs.has(e.seat))) && (!e.away || validatingOwner && e.driver === 'person');
           if (driven) {
             const s = inputs.get(e.seat);
             e.input = Object.freeze(s ? coerceFields(k.input, s.values, dims) : initFields(k.input, dims));
@@ -1232,7 +1278,11 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
             }, 'body');
             e.input = Object.freeze(stepIn ?? initFields(k.input, dims));
           } else e.input = Object.freeze(initFields(k.input, dims));
-          if (driven && body.owner) {
+          if (driven && validatingOwner) {
+            validateOwner(e, inputs.get(e.seat)?.reports ?? []);
+            continue;
+          }
+          if (driven && body.owner && !body.validatedOwner) {
             // Owner movement: the browser says where its body is, and the server holds the claim to maxSpeed.
             e.allow = Math.min(e.allow + body.maxSpeed * dt * 1.02, body.maxSpeed * 0.25 + 0.05);
             if (claim && claim.r === e.r) {
@@ -1254,6 +1304,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
             continue;
           }
         }
+        owners.delete(e.id);
         if (!k.move) continue;
         const b = { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: e.mself };
         const rewindBefore = k.player && e.driver === 'person' && !e.away ? movementState(e) : null;
@@ -1274,6 +1325,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
         }
         if (beforeMove) opts.moved!(k.name, tick, e.input, beforeMove, { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: { ...e.m } }, moveGeometry, e.id);
       }
+      const ownerBefore = new Map([...ents.values()].filter(e=>e.kind.body?.validatedOwner && owners.has(e.id)).map(e=>[e.id,{r:e.r,state:movementState(e)}]));
       // Phase 2: for every entity, its commands and then its tick, starting from a different entity each tick.
       const list = [...ents.values()];
       for (let i = 0; i < list.length; i += 1) {
@@ -1312,6 +1364,10 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       for (const a of areas) for (const e of ents.values()) if (inArea(a.shape, e.pos)) { if (queue.length >= QUEUE_MAX) stats.lost += 1; else queue.push({ due: tick + 1, from: a.from, fromId: a.fromId, seq: a.seq, to: e.id, kind: 'ev', ev: a.ev, data: a.data, at: tick }); }
       areas = [];
       if (finishing) finishMatch();
+      for (const [id,before] of ownerBefore) {
+        const e=ents.get(id);
+        if(e && e.r===before.r && !sameMovement(before.state,movementState(e))) { e.r=(e.r+1)&0xffff; owners.delete(id); }
+      }
     }
     if(historyTicks){const rows:[string,number,number,number,number][]=[];for(const e of ents.values())if(e.kind.body&&!e.kind.collider&&!e.dead)rows.push([e.id,e.pos.x,e.pos.y,e.pos.z,e.r]);left-=16*rows.length;poseHistory.push([tick,rows]);while(poseHistory.length>historyTicks+1)poseHistory.shift();}
     if (fx.length) { out.push({ t: 'fx', tick, list: fx }); fx = []; }
@@ -1332,7 +1388,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
   /* ---------------------------------------------------------------- the save */
 
   const saveEnt = (e: Ent): unknown[] => [e.id, e.n, e.kind.index, e.r, e.born, e.arrived ? 1 : 0, e.why, packVec(e.pos, 3), packVec(e.vel, 3), packVec(e.heading, 3), e.grounded ? 1 : 0, e.seat, e.driver, e.owner, e.away ? 1 : 0, e.goal ?? (e.driver === 'ai' ? restoredGoals.get(e.seat) : null) ?? null, e.allow,
-    packFields(e.kind.fields, e.f, dims), packFields(e.kind.motion, e.m, dims), packFields(e.kind.input, e.input as Record<string, unknown>, dims), e.cmds, ...(e.placement?.r===e.r ? [[e.placement.r,packVec(e.placement.pos,3)]] : [])];
+    packFields(e.kind.fields, e.f, dims), packFields(e.kind.motion, e.m, dims), packFields(e.kind.input, e.input as Record<string, unknown>, dims), e.cmds];
   function loadEnt(w: any[]): Ent {
     const kind = c.kinds[w[2]];
     const e: Ent = {
@@ -1340,7 +1396,6 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       seat: w[11], driver: w[12], owner: w[13], away: w[14] === 1, goal: null, allow: w[16],
       f: unpackFields(kind.fields, w[17], dims), m: unpackFields(kind.motion, w[18], dims), input: Object.freeze(unpackFields(kind.input, w[19], dims)), cmds: (w[20] as { name: string; data: unknown }[]).map((x) => ({ name: x.name, data: deepFreeze(coerceFields(c.commands[x.name] ?? [], x.data, dims)) })), self: {}, mself: {},
     };
-    if(w[21])e.placement={r:w[21][0],pos:unpackVec(w[21][1],3)};
     if (kind.player) restoredGoals.set(e.seat, w[15]);
     makeSelf(e);
     return e;
@@ -1409,8 +1464,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     const ids = new Set();
     const bodySeats = new Set();
     for (const w of [...r.ents, ...r.spawns]) {
-      check(Array.isArray(w) && (w.length === 21 || w.length === 22));
-      if(w.length===22) { const p=w[21] as unknown[]; check(Array.isArray(p) && p.length===2 && p[0]===w[3]); check(Array.isArray(p[1]) && p[1].length===3 && p[1].every(v=>typeof v==='number' && Number.isFinite(v))); }
+      check(Array.isArray(w) && w.length === 21);
       const k = c.kinds[w[2] as number];
       check(k && uint(w[2]) && typeof w[0] === 'string' && !ids.has(w[0])); ids.add(w[0]);
       for (const i of [1, 3, 4]) check(uint(w[i]));

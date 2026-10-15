@@ -232,13 +232,3 @@ test('wrapped coast decodes canonically and cell candidates do not depend on the
   assert.deepEqual(interestSnapshot(s,seat,3).d[1].map(e=>e[0]),expected);
  }
 });
-
-test('placement metadata can be added and removed without dropping a delta snapshot',()=>{
- const encoder=snapshotEncoder(Infinity,true),decoder=snapshotDecoder();
- const row=entity('runner',0,0);let k=1;
- for(const metadata of [[],[[3,4]],[],[[7,8]]]){
-  const frame=snapshot(k++,[ [...row,...metadata] ]);
-  const decoded=decoder.decode(JSON.parse(JSON.stringify(encoder.encode(frame))));
-  assert.deepEqual(decoded,frame,'a row shape change must replace its previous wire row');
- }
-});

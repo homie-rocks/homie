@@ -309,7 +309,7 @@ export function createHost(o: HostOptions): Host {
     const need = Math.ceil(((measuredRtt.get(seat) ?? 0) + 150) / period) + waited;
     return rewindCap === null ? need : Math.min(rewindCap, need);
   };
-  const core = createCore(c, { ...characterOptions, rewindTicks, label: (seat,driver)=>nameOf(seat,driver), moved: o.moved, observe: o.observe, noted: o.noted, seed: Math.floor(random() * 4294967296) >>> 0, epoch: saved ? undefined : (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
+  const core = createCore(c, { validateOwners:true, ...characterOptions, rewindTicks, label: (seat,driver)=>nameOf(seat,driver), moved: o.moved, observe: o.observe, noted: o.noted, seed: Math.floor(random() * 4294967296) >>> 0, epoch: saved ? undefined : (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
   let epoch = core.epoch;
   if (saved && (o.startPaused ?? o.restoreEpoch !== undefined)) for (const body of core.bodies()) if (body.driver !== 'bot' && body.owner !== 'reserved') core.seatAway(body.seat, true);
   let lastSaveAt = o.clock.now();
@@ -473,6 +473,7 @@ export function createHost(o: HostOptions): Host {
 
   /* ---------------------------------------------------------------- frames in */
 
+  const ownerReports = new Map<number, NonNullable<StepInput['reports']>>();
   function onIn(m: Record<string, unknown>): void {
     const seat = m.from;
     if (!Number.isInteger(seat) || m.e !== epoch || !Array.isArray(m.s)) { stats.dropped += 1; return; }
@@ -496,7 +497,7 @@ export function createHost(o: HostOptions): Host {
       before = off;
       const j = (k + off) >>> 0;
       // A duplicate: not above the newest stamp this seat has sent. It still counted as the player being there.
-      const marker = 1 + kind.input.length + (kind.body?.owner ? 9 : 0);
+      const marker = 1 + kind.input.length + (kind.body?.validatedOwner ? 10 : kind.body?.owner ? 9 : 0);
       const seq = raw[marker] === -471 && Number.isSafeInteger(raw[marker+1]) && raw[marker+1] > 0 ? raw[marker+1] as number : 0;
       // A discrete action sent before the client learns of a placement still
       // belongs to its player. Held state from that old placement does not.
@@ -517,6 +518,15 @@ export function createHost(o: HostOptions): Host {
         i += 1;
       }
       const claim = kind.body?.owner && raw.length >= i + 9 ? { pos: unpackVec([raw[i], raw[i + 1], raw[i + 2]], c.dims), vel: unpackVec([raw[i + 3], raw[i + 4], raw[i + 5]], c.dims), heading: unpackVec([raw[i + 6], raw[i + 7], raw[i + 8]], c.dims), r } : null;
+      if (kind.body?.validatedOwner) {
+        if (!claim || !raw.slice(i,i+10).every(v=>typeof v==='number' && Number.isFinite(v))) continue;
+        const reports = ownerReports.get(seat as number) ?? [];
+        if (reports.length < 128) reports.push({...claim,tick:j,base:raw[i+9],values:{...values,...Object.fromEntries(presses.filter(p=>typeof p==='string').map(p=>[p,true]))}});
+        ownerReports.set(seat as number,reports);
+        q.receipts??=[]; if(seq)q.receipts.push([seq,j]); if(q.receipts.length>64)q.receipts.splice(0,q.receipts.length-64);
+        q.ack=Math.max(q.ack,j);
+        continue;
+      }
       q.stamps.push(j);
       if(seq){q.receipts??=[];q.receipts.push([seq,j>K?j:K+1]);if(q.receipts.length>64)q.receipts.shift();}
       if (j > K) { q.entries.push({ ...(seq ? { placement: body.r } : {}), source: j, at: j, values, presses, claim, early: Math.min(lateTicks, j - K) }); continue; }
@@ -733,6 +743,10 @@ export function createHost(o: HostOptions): Host {
     for (const [seat, q] of queues) {
       const body = core.bodyOf(seat);
       if (!body) continue;
+      if (body.kind.body?.validatedOwner) {
+        inputs.set(seat,{values:neutral(body.kind),reports:ownerReports.get(seat) ?? []});
+        ownerReports.delete(seat); continue;
+      }
       const presses: (string | [string, number])[] = [];
       while (q.entries.length && q.entries[0].at <= t) {
         const e = q.entries.shift() as Entry;

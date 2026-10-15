@@ -140,7 +140,7 @@ export type MoveFn = (body: any, input: any, ctx: any) => void;
 export type ColliderDef = true | { size?: string; enabled?: string; fields?: readonly string[] };
 export interface HitRegion { shape: 'sphere' | 'capsule' | 'box'; radius: number; height?: number; offset?: Vec3 }
 export interface QueryDef { layer?: string; tags?: readonly string[]; parts?: Record<string, HitRegion>; profiles?: Record<string, Record<string, HitRegion>> }
-export interface BodyDef { shape: 'circle' | 'sphere' | 'capsule' | 'box'; radius: number; height?: number; maxSpeed: number; sweep?: boolean; move?: 'owner'; terrain?: 'exact' }
+export interface BodyDef { shape: 'circle' | 'sphere' | 'capsule' | 'box'; radius: number; height?: number; maxSpeed: number; sweep?: boolean; move?: 'owner' | 'validated-owner'; terrain?: 'exact' }
 export interface GuideDef { view: (world: RuntimeWorld, self: RuntimeSelf) => unknown; floor?: (world: RuntimeWorld, self: RuntimeSelf, view: any) => unknown }
 export interface RoundRecords {key:string; identity:string; eligible?:string; fields:Readonly<Record<string,string>>}
 export interface EntityDef {
@@ -211,7 +211,7 @@ export interface RoomSettings {
   view: { radiusM: number | null; precisionM?: number; nearM?: number | null; farHz?: number | null };
   durability: { movementSeconds: number };
   budget: { tick: number };
-  predict: { renderAheadMs?: number; maxFrameM?: number | null; idleHold?: boolean; catchM: number | null; catchUp: number; snapM: number | null; blendMs: number; interpMs: number | null };
+  predict: { idleHold?: boolean; catchM: number | null; catchUp: number; snapM: number | null; blendMs: number; interpMs: number | null };
   /** The studio's own pace on what one player sends, messages a second by frame kind (`in`, `ev`, ...). Absent: none. */
   rates?: Record<string, number>;
 }
@@ -273,24 +273,13 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
     else for (const key of Object.keys(r.view)) if (!['radiusM', 'precisionM', 'nearM', 'farHz'].includes(key)) problems.push(`"room.view.${key}" is not a setting; use radiusM, precisionM, nearM or farHz`);
   }
   const p = r.predict && typeof r.predict === 'object' ? r.predict : {};
-  let renderAheadMs = 0;
-  if (p.renderAheadMs !== undefined) {
-    if (typeof p.renderAheadMs === 'number' && Number.isFinite(p.renderAheadMs) && p.renderAheadMs >= 0 && p.renderAheadMs <= 1000 / tickHz) renderAheadMs = p.renderAheadMs;
-    else problems.push('"room.predict.renderAheadMs" is between zero and one simulation tick; using zero');
-  }
-  let maxFrameM: number | null = null;
-  if (p.maxFrameM !== undefined && p.maxFrameM !== null) {
-    const value = Number(p.maxFrameM);
-    if (Number.isFinite(value) && value > 0) maxFrameM = value;
-    else problems.push('"room.predict.maxFrameM" is a positive number or null; using its default');
-  }
   return {
     settings: {
       host, offline, tickHz, inputHz, ...(rates ? { rates } : {}), ...(r.lifetime === 'persistent' ? { lifetime: 'persistent' as const } : {}), ...(r.characters === true ? { characters: true } : {}),
       view: { radiusM: r.view?.radiusM === null ? null : num('view.radiusM', r.view?.radiusM, null), ...(r.view?.precisionM !== undefined ? { precisionM: num('view.precisionM', r.view.precisionM, 0) as number } : {}), ...(r.view?.nearM !== undefined ? { nearM: num('view.nearM', r.view.nearM, null) } : {}), ...(r.view?.farHz !== undefined ? { farHz: whole('view.farHz', r.view.farHz, 1, tickHz, tickHz) } : {}) },
       durability: { movementSeconds: whole('durability.movementSeconds', r.durability?.movementSeconds, 1, 60, r.lifetime === 'persistent' ? 30 : 1) },
       budget: { tick: Math.max(1, Math.floor(num('budget.tick', r.budget?.tick, budgetFor(tickHz)) as number)) },
-      predict: { ...(p.renderAheadMs !== undefined ? {renderAheadMs} : {}), ...(p.maxFrameM !== undefined ? {maxFrameM} : {}), ...(p.idleHold === true ? {idleHold:true} : {}), catchM: num('predict.catchM', p.catchM, null), catchUp: num('predict.catchUp', p.catchUp, 1.25) as number, snapM: num('predict.snapM', p.snapM, null), blendMs: num('predict.blendMs', p.blendMs, 100) as number, interpMs: num('predict.interpMs', p.interpMs, null) },
+      predict: { ...(p.idleHold === true ? {idleHold:true} : {}), catchM: num('predict.catchM', p.catchM, null), catchUp: num('predict.catchUp', p.catchUp, 1.25) as number, snapM: num('predict.snapM', p.snapM, null), blendMs: num('predict.blendMs', p.blendMs, 100) as number, interpMs: num('predict.interpMs', p.interpMs, null) },
     },
     problems,
   };
@@ -405,7 +394,7 @@ export interface KindTable {
   input: FieldList;
   collider?: ColliderDef;
   query?: QueryDef;
-  body: null | { shape: string; radius: number; height: number; maxSpeed: number; sweep: boolean; owner: boolean; terrain?: 'exact' };
+  body: null | { shape: string; radius: number; height: number; maxSpeed: number; sweep: boolean; owner: boolean; validatedOwner?: boolean; terrain?: 'exact' };
   score: string | null;
   tick: Handler | null;
   think: EntityDef['think'] | null;
@@ -614,11 +603,13 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
       if (!b || !shapes.includes(b.shape)) throw new Error(`${at}.body.shape is ${shapes.map((s) => `'${s}'`).join(' or ')} when space.dims is ${dims}`);
       if (typeof b.radius !== 'number' || typeof b.maxSpeed !== 'number' || !Number.isFinite(b.radius) || !Number.isFinite(b.maxSpeed) || !(b.radius > 0) || !(b.maxSpeed >= 0)) throw new Error(`${at}.body needs radius (metres) and maxSpeed (metres a second)`);
       if (b.terrain !== undefined && b.terrain !== 'exact') throw new Error(`${at}.body.terrain is 'exact', or omitted for legacy casts`);
-      if (b.move !== undefined && b.move !== 'owner') throw new Error(`${at}.body.move is 'owner', or left out`);
+      if (b.move !== undefined && b.move !== 'owner' && b.move !== 'validated-owner') throw new Error(`${at}.body.move is 'owner', 'validated-owner', or left out`);
       if (dims === 3 && b.height !== undefined && (!Number.isFinite(b.height) || b.height <= 0 || b.shape === 'capsule' && b.height < b.radius * 2)) throw new Error(`${at}.body.height must be finite, positive and at least twice the radius for a capsule`);
-      body = { shape: b.shape, radius: b.radius, height: dims === 3 && b.shape === 'sphere' ? 2 * b.radius : typeof b.height === 'number' && b.height > 0 ? b.height : 0, maxSpeed: b.maxSpeed, sweep: b.sweep === true, owner: b.move === 'owner', ...(b.terrain === 'exact' ? {terrain: 'exact' as const} : {}) };
+      body = { shape: b.shape, radius: b.radius, height: dims === 3 && b.shape === 'sphere' ? 2 * b.radius : typeof b.height === 'number' && b.height > 0 ? b.height : 0, maxSpeed: b.maxSpeed, sweep: b.sweep === true, owner: b.move === 'owner' || b.move === 'validated-owner', ...(b.move === 'validated-owner' ? {validatedOwner:true} : {}), ...(b.terrain === 'exact' ? {terrain: 'exact' as const} : {}) };
     }
     // Turn-based participants may own fields and commands without physics.
+    if (body?.validatedOwner && input.some(([,fd])=>fd.t==='press' || fd.t==='pulse')) throw new Error(`${at}: validated-owner uses sampled or held inputs; use commands for discrete server actions`);
+
     const moveFn = move && typeof move[name] === 'function' ? move[name] as MoveFn : null;
     if (body && player && !moveFn) throw new Error(`${at}: a player's body moves with move.${name}(body, input, ctx) in move.ts`);
     const scores = fields.filter(([, fd]) => fd.score);
@@ -722,7 +713,7 @@ export interface Schema {
   contract: 2;
   dims: 2 | 3;
   seats: number;
-  kinds: { query?: QueryDef; collider?: ColliderDef; name: string; player: boolean; control?: string; owner: boolean; radius: number; shape?: string; height?: number; terrain?: 'exact'; maxSpeed: number; score: string | null; fields: FieldList; motion: FieldList; input: FieldList }[];
+  kinds: { query?: QueryDef; collider?: ColliderDef; name: string; player: boolean; control?: string; owner: boolean; validatedOwner?: boolean; radius: number; shape?: string; height?: number; terrain?: 'exact'; maxSpeed: number; score: string | null; fields: FieldList; motion: FieldList; input: FieldList }[];
   effects: Record<string, FieldList>;
   effectNames: string[];
   commands: Record<string, FieldList>;
@@ -744,7 +735,7 @@ function publicField(field: Field, hidden=false): Field {
 export function schemaOf(c: Compiled): Schema {
   return {
     contract: RULES_CONTRACT, dims: c.dims, seats: c.seats, ...(c.records?{records:true as const}:{}), ...(c.historySeconds ? { rewind: { historySeconds: c.historySeconds, ...(c.rewindSeconds !== undefined ? { capSeconds: c.rewindSeconds } : {}) } } : {}),
-    kinds: c.kinds.map((k) => ({ ...(k.query?{query:k.query}:{}), ...(k.collider?{collider:k.collider}:{}), ...(k.body?.terrain ? {terrain:k.body.terrain} : {}), name: k.name, player: Boolean(k.player), ...(k.player?.control ? {control:k.player.control}:{}), owner: Boolean(k.body?.owner), ...(c.dims === 2 && k.body?.shape === 'box' ? {shape: 'box'} : {}), radius: k.body?.radius ?? 0, ...(c.dims === 3 && k.body ? { shape: k.body.shape, height: k.body.height || 2 * k.body.radius } : {}), maxSpeed: k.body?.maxSpeed ?? 0, score: k.score, fields: k.fields.map(([name,field])=>[name,publicField(field)]), motion: k.motion, input: k.input })),
+    kinds: c.kinds.map((k) => ({ ...(k.query?{query:k.query}:{}), ...(k.collider?{collider:k.collider}:{}), ...(k.body?.terrain ? {terrain:k.body.terrain} : {}), name: k.name, player: Boolean(k.player), ...(k.player?.control ? {control:k.player.control}:{}), owner: Boolean(k.body?.owner), ...(k.body?.validatedOwner ? {validatedOwner:true} : {}), ...(c.dims === 2 && k.body?.shape === 'box' ? {shape: 'box'} : {}), radius: k.body?.radius ?? 0, ...(c.dims === 3 && k.body ? { shape: k.body.shape, height: k.body.height || 2 * k.body.radius } : {}), maxSpeed: k.body?.maxSpeed ?? 0, score: k.score, fields: k.fields.map(([name,field])=>[name,publicField(field)]), motion: k.motion, input: k.input })),
     effects: c.effects, effectNames: c.effectNames, commands: c.commands, shared: c.shared, rounds: c.rounds, settings: c.settings,
   };
 }

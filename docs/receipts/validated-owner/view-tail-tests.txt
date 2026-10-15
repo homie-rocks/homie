@@ -1,0 +1,280 @@
+TAP version 13
+# (node:64961) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a placement projects the body to its own tick without a second correction: small
+ok 1 - a placement projects the body to its own tick without a second correction: small
+  ---
+  duration_ms: 359.259125
+  type: 'test'
+  ...
+# Subtest: a placement projects the body to its own tick without a second correction: Gates
+ok 2 - a placement projects the body to its own tick without a second correction: Gates
+  ---
+  duration_ms: 325.29075
+  type: 'test'
+  ...
+# Subtest: a prior placement cannot inject held controls into the respawned body
+ok 3 - a prior placement cannot inject held controls into the respawned body
+  ---
+  duration_ms: 212.70325
+  type: 'test'
+  ...
+# Subtest: an acknowledged release does not stop recovery of the missing tap before it
+ok 4 - an acknowledged release does not stop recovery of the missing tap before it
+  ---
+  duration_ms: 288.123625
+  type: 'test'
+  ...
+# Subtest: vertical travel cannot blend a horizontal correction against the held direction
+ok 5 - vertical travel cannot blend a horizontal correction against the held direction
+  ---
+  duration_ms: 344.057458
+  type: 'test'
+  ...
+# Subtest: rewind stream preserves held aimed shots and cadence: 0 ms each way, 0 loss, seed 48301
+ok 6 - rewind stream preserves held aimed shots and cadence: 0 ms each way, 0 loss, seed 48301
+  ---
+  duration_ms: 540.691042
+  type: 'test'
+  ...
+# {"delay":0,"loss":0,"trigger":"held","shots":50,"matched":50,"feedback":{"predicted":50,"confirmed":50,"unpredicted":0,"retracted":0},"oversize":0,"maxBytes":1835}
+# Subtest: rewind stream preserves pulse aimed shots and cadence: 0 ms each way, 0 loss, seed 48301
+ok 7 - rewind stream preserves pulse aimed shots and cadence: 0 ms each way, 0 loss, seed 48301
+  ---
+  duration_ms: 535.396083
+  type: 'test'
+  ...
+# {"delay":0,"loss":0,"trigger":"pulse","shots":50,"matched":50,"feedback":{"predicted":50,"confirmed":50,"unpredicted":0,"retracted":0},"oversize":0,"maxBytes":1835}
+# Subtest: rewind stream preserves held aimed shots and cadence: 75 ms each way, 0 loss, seed 48301
+ok 8 - rewind stream preserves held aimed shots and cadence: 75 ms each way, 0 loss, seed 48301
+  ---
+  duration_ms: 553.384375
+  type: 'test'
+  ...
+# {"delay":75,"loss":0,"trigger":"held","shots":50,"matched":50,"feedback":{"predicted":50,"confirmed":50,"unpredicted":0,"retracted":0},"oversize":0,"maxBytes":1837}
+# Subtest: rewind stream preserves pulse aimed shots and cadence: 75 ms each way, 0 loss, seed 48301
+ok 9 - rewind stream preserves pulse aimed shots and cadence: 75 ms each way, 0 loss, seed 48301
+  ---
+  duration_ms: 553.987042
+  type: 'test'
+  ...
+# {"delay":75,"loss":0,"trigger":"pulse","shots":50,"matched":50,"feedback":{"predicted":50,"confirmed":50,"unpredicted":0,"retracted":0},"oversize":0,"maxBytes":1837}
+# Subtest: rewind stream preserves held aimed shots and cadence: 75 ms each way, 0.02 loss, seed 48301
+ok 10 - rewind stream preserves held aimed shots and cadence: 75 ms each way, 0.02 loss, seed 48301
+  ---
+  duration_ms: 558.900166
+  type: 'test'
+  ...
+# {"delay":75,"loss":0.02,"trigger":"held","shots":50,"matched":50,"feedback":{"predicted":50,"confirmed":50,"unpredicted":0,"retracted":0},"oversize":0,"maxBytes":1835}
+# Subtest: rewind stream preserves pulse aimed shots and cadence: 75 ms each way, 0.02 loss, seed 48301
+ok 11 - rewind stream preserves pulse aimed shots and cadence: 75 ms each way, 0.02 loss, seed 48301
+  ---
+  duration_ms: 558.109625
+  type: 'test'
+  ...
+# {"delay":75,"loss":0.02,"trigger":"pulse","shots":50,"matched":50,"feedback":{"predicted":50,"confirmed":50,"unpredicted":0,"retracted":0},"oversize":0,"maxBytes":1835}
+# Subtest: wide input preserves sub-tick held durations: 0 ms each way, seed 48302
+ok 12 - wide input preserves sub-tick held durations: 0 ms each way, seed 48302
+  ---
+  duration_ms: 683.19175
+  type: 'test'
+  ...
+# Subtest: wide input preserves sub-tick held durations: 75 ms each way, seed 48302
+ok 13 - wide input preserves sub-tick held durations: 75 ms each way, seed 48302
+  ---
+  duration_ms: 708.228125
+  type: 'test'
+  ...
+# Subtest: wide input preserves every numbered swap exactly once under repeated history, seed 48303
+ok 14 - wide input preserves every numbered swap exactly once under repeated history, seed 48303
+  ---
+  duration_ms: 526.741958
+  type: 'test'
+  ...
+# Subtest: own drawing stays outside a solid ledge under repeated TCP stalls seed 17
+ok 15 - own drawing stays outside a solid ledge under repeated TCP stalls seed 17
+  ---
+  duration_ms: 945.656667
+  type: 'test'
+  ...
+# Subtest: own drawing stays outside a solid ledge under repeated TCP stalls seed 41
+ok 16 - own drawing stays outside a solid ledge under repeated TCP stalls seed 41
+  ---
+  duration_ms: 947.427208
+  type: 'test'
+  ...
+# Subtest: own drawing stays outside a solid ledge under repeated TCP stalls seed 83
+ok 17 - own drawing stays outside a solid ledge under repeated TCP stalls seed 83
+  ---
+  duration_ms: 955.524542
+  type: 'test'
+  ...
+# Subtest: a square runner retains its shape on the wire and cannot enter an exact-contact floor
+ok 18 - a square runner retains its shape on the wire and cannot enter an exact-contact floor
+  ---
+  duration_ms: 321.985792
+  type: 'test'
+  ...
+# Subtest: counter-dash leaves knock catch-up on the press without a pose discontinuity: 80 ms
+ok 19 - counter-dash leaves knock catch-up on the press without a pose discontinuity: 80 ms
+  ---
+  duration_ms: 428.209833
+  type: 'test'
+  ...
+# Subtest: counter-dash leaves knock catch-up on the press without a pose discontinuity: 150 ms
+ok 20 - counter-dash leaves knock catch-up on the press without a pose discontinuity: 150 ms
+  ---
+  duration_ms: 434.847125
+  type: 'test'
+  ...
+# Subtest: counter-dash leaves knock catch-up on the press without a pose discontinuity: 300 ms
+ok 21 - counter-dash leaves knock catch-up on the press without a pose discontinuity: 300 ms
+  ---
+  duration_ms: 442.111792
+  type: 'test'
+  ...
+# Subtest: solid correction remains continuous after placement, seed 17
+ok 22 - solid correction remains continuous after placement, seed 17
+  ---
+  duration_ms: 943.956334
+  type: 'test'
+  ...
+# Subtest: solid correction remains continuous after placement, seed 41
+ok 23 - solid correction remains continuous after placement, seed 41
+  ---
+  duration_ms: 945.476
+  type: 'test'
+  ...
+# Subtest: solid correction remains continuous after placement, seed 83
+ok 24 - solid correction remains continuous after placement, seed 83
+  ---
+  duration_ms: 944.395792
+  type: 'test'
+  ...
+# Subtest: a correction across a ledge cannot change the drawn side in one frame
+ok 25 - a correction across a ledge cannot change the drawn side in one frame
+  ---
+  duration_ms: 405.969
+  type: 'test'
+  ...
+# {"p":{"x":2,"y":11.499991416931152,"z":0},"worst":0.11313714568130946,"stats":{"handlers":219,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":760,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":804,"maxTickUnits":804}}
+# Subtest: a correction below the same ledge routes around its edge
+ok 26 - a correction below the same ledge routes around its edge
+  ---
+  duration_ms: 407.70575
+  type: 'test'
+  ...
+# {"p":{"x":-3,"y":11.499991416931152,"z":0},"worst":0.11313706138764384,"stats":{"handlers":219,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":760,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":804,"maxTickUnits":804}}
+# Subtest: unchanged substep forecasts execute once across repeated view reads and refresh on input
+ok 27 - unchanged substep forecasts execute once across repeated view reads and refresh on input
+  ---
+  duration_ms: 267.749
+  type: 'test'
+  ...
+# Subtest: an entity traversal samples one presentation time for the entire group
+ok 28 - an entity traversal samples one presentation time for the entire group
+  ---
+  duration_ms: 250.880125
+  type: 'test'
+  ...
+# Subtest: box presentation preserves an uncorrected substep jump arc through its apex
+ok 29 - box presentation preserves an uncorrected substep jump arc through its apex
+  ---
+  duration_ms: 641.328291
+  type: 'test'
+  ...
+# {"worst":5.960464477539063e-8,"example":{"phase":0,"i":0,"ay":-0.5,"by":-0.5,"a":{"id":"e1","kind":"runner","pos":{"x":-3,"y":-0.8211466670036316,"z":0},"vel":{"x":0,"y":-13.066666603088379,"z":0},"heading":{"x":1,"y":0,"z":0},"grounded":true,"seat":0,"owner":"p1","driver":"person","away":false,"goal":null,"mine":true,"motion":{"air":true}},"b":{"id":"e1","kind":"runner","pos":{"x":-3,"y":-0.8211467266082764,"z":0},"vel":{"x":0,"y":-13.066666603088379,"z":0},"heading":{"x":1,"y":0,"z":0},"grounded":true,"seat":0,"owner":"p1","driver":"person","away":false,"goal":null,"mine":true,"motion":{"air":true}}}}
+# Subtest: interpolated remote poses do not fill the snapshot cache with one-use keys
+ok 30 - interpolated remote poses do not fill the snapshot cache with one-use keys
+  ---
+  duration_ms: 94.987417
+  type: 'test'
+  ...
+# Subtest: unchanged delta snapshot rows reuse their immutable unpacked view
+ok 31 - unchanged delta snapshot rows reuse their immutable unpacked view
+  ---
+  duration_ms: 51.058167
+  type: 'test'
+  ...
+# Subtest: a blocked correction does not route backwards against continuing horizontal movement
+ok 32 - a blocked correction does not route backwards against continuing horizontal movement
+  ---
+  duration_ms: 349.349292
+  type: 'test'
+  ...
+# {"worstReverse":0}
+# Subtest: held correction direction survives zero velocity at contact and neutral input can converge
+ok 33 - held correction direction survives zero velocity at contact and neutral input can converge
+  ---
+  duration_ms: 537.08925
+  type: 'test'
+  ...
+# {"worstReverse":0}
+# Subtest: a delayed rendered frame cannot spend a multi-body-length movement backlog at once
+ok 34 - a delayed rendered frame cannot spend a multi-body-length movement backlog at once
+  ---
+  duration_ms: 350.7855
+  type: 'test'
+  ...
+# {"gap":1.3930418491363525}
+# Subtest: a stationary correction uses blend speed rather than the declared terminal fall speed
+ok 35 - a stationary correction uses blend speed rather than the declared terminal fall speed
+  ---
+  duration_ms: 409.769583
+  type: 'test'
+  ...
+# {"worst":0.11313714568130946,"p":{"x":2,"y":11.499991416931152,"z":0}}
+# Subtest: explicit correction intent overrides an opposite stale replay velocity
+ok 36 - explicit correction intent overrides an opposite stale replay velocity
+  ---
+  duration_ms: 396.770042
+  type: 'test'
+  ...
+# {"worstReverse":0}
+# Subtest: a reconnect after an outage draws the own box runner continuously to where the server moved it
+ok 37 - a reconnect after an outage draws the own box runner continuously to where the server moved it
+  ---
+  duration_ms: 911.42025
+  type: 'test'
+  ...
+# {"worst":0.08000004291534424,"at":{"from":{"x":-1.7567635774612427,"y":-0.5,"z":0},"to":{"x":-1.836763620376587,"y":-0.5,"z":0},"connected":true},"back":256,"end":{"x":-2.63400936126709,"y":-0.5,"z":0}}
+# Subtest: a reconnect after an outage draws a placement the game names at once
+ok 38 - a reconnect after an outage draws a placement the game names at once
+  ---
+  duration_ms: 911.339416
+  type: 'test'
+  ...
+# {"worst":0.8772457838058472,"at":{"from":{"x":-1.7567635774612427,"y":-0.5,"z":0},"to":{"x":-2.63400936126709,"y":-0.5,"z":0},"connected":true},"back":251,"end":{"x":-2.63400936126709,"y":-0.5,"z":0}}
+# Subtest: validated owner keeps its own trajectory with delayed reports: 0 ms
+ok 39 - validated owner keeps its own trajectory with delayed reports: 0 ms
+  ---
+  duration_ms: 482.71075
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 150 ms
+ok 40 - validated owner keeps its own trajectory with delayed reports: 150 ms
+  ---
+  duration_ms: 476.419458
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 300 ms
+ok 41 - validated owner keeps its own trajectory with delayed reports: 300 ms
+  ---
+  duration_ms: 481.823584
+  type: 'test'
+  ...
+# Subtest: validated owner predicts through an outage, keeps score, and resumes without a wait
+ok 42 - validated owner predicts through an outage, keeps score, and resumes without a wait
+  ---
+  duration_ms: 421.401875
+  type: 'test'
+  ...
+1..42
+# tests 42
+# suites 0
+# pass 42
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 22018.85025

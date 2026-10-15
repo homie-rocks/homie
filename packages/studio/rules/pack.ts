@@ -377,15 +377,13 @@ export const DRIVERS = Object.freeze(['person', 'bot', 'ai']);
 export interface Unpacked {
   id: string; kind: string; r: number; pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean;
   seat?: number; owner?: string; driver?: string; away?: boolean; goal?: unknown;
-  placement?: Vec3;
   fields: Record<string, unknown>; motion: Record<string, unknown>;
 }
 
 /** One entity as a snapshot carries it: `[id, kind, r, pos, vel, heading, grounded, fields, motion]`, and for a player's body `seat, driver, away, owner` after. */
-export function packEntity(kind: KindShape & { index: number }, e: { placement?: {r:number;pos:Vec3}; id: string; r: number; pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean; seat: number; driver: string; away: boolean; owner: string; goal?: unknown; f: Record<string, unknown>; m: Record<string, unknown> }, dims: number): unknown[] {
+export function packEntity(kind: KindShape & { index: number }, e: { id: string; r: number; pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean; seat: number; driver: string; away: boolean; owner: string; goal?: unknown; f: Record<string, unknown>; m: Record<string, unknown> }, dims: number): unknown[] {
   const out: unknown[] = [e.id, kind.index, e.r, packVec(e.pos, dims), packVec(e.vel, dims), packVec(e.heading, dims), e.grounded ? 1 : 0, packFields(kind.fields, e.f, dims), packFields(kind.motion, e.m, dims)];
   if (kind.player) out.push(e.seat, DRIVERS.indexOf(e.driver), e.away ? 1 : 0, e.owner, e.goal ?? null);
-  if(kind.player && e.placement?.r===e.r)out.push(packVec(e.placement.pos,dims));
   return out;
 }
 export function unpackEntity(kinds: readonly KindShape[], w: unknown, dims: number): Unpacked | null {
@@ -396,6 +394,6 @@ export function unpackEntity(kinds: readonly KindShape[], w: unknown, dims: numb
     id: w[0], kind: kind.name, r: Number(w[2]) || 0, pos: unpackVec(w[3], dims), vel: unpackVec(w[4], dims), heading: unpackVec(w[5], dims), grounded: w[6] === 1,
     fields: unpackFields(kind.fields, w[7], dims), motion: unpackFields(kind.motion, w[8], dims),
   };
-  if (kind.player) { out.seat = Number(w[9]); out.driver = DRIVERS[Number(w[10])] ?? 'bot'; out.away = w[11] === 1; out.owner = typeof w[12] === 'string' ? w[12] : ''; out.goal = w[13] ?? null; if(Array.isArray(w[14]))out.placement=unpackVec(w[14],dims); }
+  if (kind.player) { out.seat = Number(w[9]); out.driver = DRIVERS[Number(w[10])] ?? 'bot'; out.away = w[11] === 1; out.owner = typeof w[12] === 'string' ? w[12] : ''; out.goal = w[13] ?? null; }
   return out;
 }

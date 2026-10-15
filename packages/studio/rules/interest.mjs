@@ -81,9 +81,6 @@ function sameValue(a, b) {
 // wire fragments across players whose visual baselines contain the same row.
 const changesByBase = new WeakMap(), wireRows = new WeakMap();
 function changedRow(entity, before) {
-  // Optional wire extensions (such as a placement origin) change row length.
-  // A mask is relative to the old row shape; replace the row when it changes.
-  if (entity.length !== before.length) return entity;
   let cached = changesByBase.get(before);
   if (cached?.entity === entity) return cached.row;
   let mask = 0; const values = [];
