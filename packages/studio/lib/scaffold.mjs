@@ -837,7 +837,7 @@ export { default, Table, Lobby, Gate, Concentrator } from '@homie-rocks/studio/w
     [`site/migrations/${CACHE_MIGRATION_FILE}`]: CACHE_MIGRATION,
     [`site/migrations/${TOOL_NAMESPACE_MIGRATION_FILE}`]: TOOL_NAMESPACE_MIGRATION,
     [`site/migrations/${RUNTIME_INDEX_MIGRATION_FILE}`]: RUNTIME_INDEX_MIGRATION,
-    ...Object.fromEntries(Object.entries(EXTRA_RUNTIME_MIGRATIONS).map(([name,sql])=>[`site/migrations/${name}`,sql])),
+    ...Object.fromEntries(Object.entries(EXTRA_RUNTIME_MIGRATIONS).sort(([a],[b])=>a.localeCompare(b)).map(([name,sql])=>[`site/migrations/${name}`,sql])),
     [`site/migrations/${BOOKING_HOLDS_MIGRATION_FILE}`]: BOOKING_HOLDS_MIGRATION,
     [`site/migrations/${APP_LIVE_MIGRATION_FILE}`]: APP_LIVE_MIGRATION,
     [`site/migrations/${TOOL_DATABASE_MIGRATION_FILE}`]: TOOL_DATABASE_MIGRATION,
@@ -1106,7 +1106,7 @@ function ensureRuntimeIndexes(root) {
  mkdirSync(dirname(file),{recursive:true});writeFileSync(file,RUNTIME_INDEX_MIGRATION);return `site/migrations/${RUNTIME_INDEX_MIGRATION_FILE}`;
 }
 export function ensureMigrations(root) {
-  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root), ensureFunctionReference(root), ensureShopRemoveReferrals(root), ensureFunctionRuns(root), ensureToolDatabase(root), ensureBookings(root), ensureSubscriptions(root), ensureAppLive(root), ensureBusinessEvents(root), ensureBookingHolds(root),ensureBookingResources(root),ensureOperational(root),ensureCache(root),ensureToolNamespaces(root),ensureRuntimeIndexes(root),...Object.entries(EXTRA_RUNTIME_MIGRATIONS).map(([name,sql])=>{const file=join(root,'site','migrations',name);if(existsSync(file))return null;mkdirSync(dirname(file),{recursive:true});writeFileSync(file,sql);return `site/migrations/${name}`;})].filter(Boolean);
+  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root), ensureFunctionReference(root), ensureShopRemoveReferrals(root), ensureFunctionRuns(root), ensureToolDatabase(root), ensureBookings(root), ensureSubscriptions(root), ensureAppLive(root), ensureBusinessEvents(root), ensureBookingHolds(root),ensureBookingResources(root),ensureOperational(root),ensureCache(root),ensureToolNamespaces(root),ensureRuntimeIndexes(root),...Object.entries(EXTRA_RUNTIME_MIGRATIONS).sort(([a],[b])=>a.localeCompare(b)).map(([name,sql])=>{const file=join(root,'site','migrations',name);if(existsSync(file))return null;mkdirSync(dirname(file),{recursive:true});writeFileSync(file,sql);return `site/migrations/${name}`;})].filter(Boolean);
 }
 
 /** What a migration file the template added is for, in a few words (deploy and dev say it). */
