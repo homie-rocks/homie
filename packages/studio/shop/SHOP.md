@@ -440,14 +440,13 @@ stored preset or an empty amount; keep the expected total visible on the phone.
 
 After a signed paid session matches the frozen link, revision, mode, currency and
 order reference, `order.paid` contains the **saved basket lines**, `amount` (actual
-payment), `basketTotal` (expected total), and `settlement` (`paid` or `short`).
+payment), `basketTotal` (expected total), and `settlement` (`paid`).
 Line `amount` is the saved extended amount (unit price × quantity); line `total`
 is its proportionally allocated share of the actual aggregate payment for refunds.
-A short payment emits the event so staff can resolve it, but grants no automatic
-entitlements. Apps must compare the actual payment with `basketTotal`, show a
-shortfall explicitly, and deduplicate by order ID. More than the total is paid.
-Reopening and paying the link creates another order for the same frozen basket;
-repeated delivery of the same session never creates another round.
+A payment that differs from the saved basket total emits `payment.review`, retains
+the actual payment, and shows the customer a staff-review notice. It never emits
+`order.paid` or grants entitlements. Staff reconcile or refund the difference.
+Exact payments emit `order.paid`; deduplicate fulfillment by order ID.
 
 The Stripe heading is the connected Stripe account's business name. A sandbox
 account named “Homie sandbox” shows that name; a real pub's account shows the pub's

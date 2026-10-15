@@ -976,6 +976,7 @@ async function reviewLinkPayment(env,session,mode,reason='The paid amount differ
   const id=`ord_${(await sha256Hex(session.id)).slice(0,20)}`;
   await env.DB.batch([
    env.DB.prepare("INSERT OR IGNORE INTO shop_orders(id,player,checkout_player,item,game,amount,currency,till,mode,status,parent,created_at,updated_at,session) SELECT ?2,player,checkout_player,item,game,amount,currency,till,mode,'started',parent,?4,?4,?3 FROM shop_orders WHERE id=?1").bind(source.id,id,session.id,Date.now()),
+   env.DB.prepare('INSERT OR IGNORE INTO meta(key,value) SELECT ?1,value FROM meta WHERE key=?2').bind(`shop-reference:${id}`,`shop-reference:${source.id}`),
    ...lines.map((l,i)=>env.DB.prepare('INSERT OR IGNORE INTO shop_order_lines(id,order_id,position,item,quantity,unit_amount,amount,snapshot) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)').bind(`${id}_${i}`,id,i,l.item,l.quantity,l.unit_amount,l.amount,l.snapshot)),
   ]);order=await orderBySession(env,session.id);
  }
@@ -1064,7 +1065,7 @@ async function paidBasket(env,shop,o,lines,session,paidAt) {
   if(session.payment_status!=='paid' || session.currency!==o.currency || !Number.isSafeInteger(total) || total<=0 || session.amount_subtotal!==total)return 'mismatch';
   if(o.paid_at!==null)return 'already';
   const expected=lines.reduce((n,l)=>n+Number(l.amount),0);
-  if(!Number.isSafeInteger(expected)||expected<=0)return 'mismatch';
+  if(!Number.isSafeInteger(expected)||expected<=0||total!==expected)return 'mismatch';
   const writes=[];let cumulative=0,allocated=0;
   for(const l of lines) {
     cumulative+=Number(l.amount);

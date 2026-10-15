@@ -117,7 +117,7 @@ test('free volunteer booking confirms locally without a Stripe connection',async
  assert.equal((await f.buy({item:'tune',game:'tune',booking:{collection:'bookings',slot:'morning'}},'bob')).status,409);
 });
 
-for (const amount of [13000,14000,12000]) test(`saved basket preserves exact lines at payment ${amount}`,async t=>{
+for (const amount of [13000]) test(`saved basket preserves exact lines at payment ${amount}`,async t=>{
  const f=fixture(t);f.config.menus[0].basket=true;f.config.menus[0].price='price_round';f.env.STRIPE_SHOP_LINKS=JSON.stringify(f.config);
  const cart=await f.buy({lines:[{item:'tune',quantity:2},{item:'wax',quantity:3}],reference:'table-7'});
  assert.equal(cart.ok,true);assert.equal(new URL(cart.url).searchParams.get('prefilled_amount'),'13000');assert.deepEqual(f.sql.prepare('SELECT item,quantity FROM shop_order_lines WHERE order_id=? ORDER BY position').all(cart.order).map(r=>[r.item,r.quantity]),[['tune',2],['wax',3]]);
@@ -147,10 +147,10 @@ test('basket sync creates one custom-amount line with studio wording and no Work
 test('saved single-item basket keeps quantity; unpaid events do not fulfil; full refund uses actual payment',async t=>{
  const f=fixture(t);f.config.menus[0].basket=true;f.config.menus[0].price='price_round';f.env.STRIPE_SHOP_LINKS=JSON.stringify(f.config);
  const a=await f.buy({lines:[{item:'wax',quantity:3}],reference:'table-2'});assert.match(a.url,/test_menu/);
- const s=f.session(a,'menu',{amount_subtotal:2000,amount_total:2000});
+ const s=f.session(a,'menu',{amount_subtotal:3000,amount_total:3000});
  await f.hook('checkout.session.completed',{...s,payment_status:'unpaid'});assert.equal(f.sql.prepare('SELECT paid_at FROM shop_orders WHERE id=?').get(a.order).paid_at,null);
  await f.hook('checkout.session.completed',s);assert.equal(f.sql.prepare('SELECT quantity FROM shop_order_lines WHERE order_id=?').get(a.order).quantity,3);
- await f.hook('refund.created',{id:'re_basket',payment_intent:s.payment_intent,currency:'cad',amount:2000,status:'succeeded'});
+ await f.hook('refund.created',{id:'re_basket',payment_intent:s.payment_intent,currency:'cad',amount:3000,status:'succeeded'});
  assert.equal(f.sql.prepare('SELECT status FROM shop_orders WHERE id=?').get(a.order).status,'refunded');
  await f.hook('checkout.session.completed',s);assert.equal(f.sql.prepare('SELECT status FROM shop_orders WHERE id=?').get(a.order).status,'refunded');
 });
@@ -179,4 +179,16 @@ test('a slot payment books the paid group quantity and retains an over-capacity 
  await f.hook('checkout.session.completed',replay);
  assert.equal(f.sql.prepare('SELECT status FROM shop_orders WHERE session=?').get(replay.id).status,'review');
  assert.equal(f.sql.prepare("SELECT SUM(quantity) n FROM shop_bookings WHERE state='confirmed'").get().n,3);
+});
+
+for(const amount of [12000,14000])test(`basket mismatch ${amount} creates review notice without a fulfillment event`,async t=>{
+ const f=fixture(t);f.config.menus[0].basket=true;f.config.menus[0].price='price_round';f.env.STRIPE_SHOP_LINKS=JSON.stringify(f.config);
+ const a=await f.buy({lines:[{item:'tune',quantity:2},{item:'wax',quantity:3}],reference:'table-7'}),s=f.session(a,'menu',{amount_subtotal:amount,amount_total:amount});
+ await f.hook('checkout.session.completed',s);
+ const o=f.sql.prepare('SELECT * FROM shop_orders WHERE id=?').get(a.order);assert.equal(o.status,'review');assert.equal(o.total,amount);
+ assert.equal(f.sql.prepare("SELECT count(*) n FROM studio_events WHERE type='order.paid'").get().n,0);
+ assert.equal(f.sql.prepare("SELECT count(*) n FROM studio_events WHERE type='payment.review'").get().n,1);
+ await f.hook('checkout.session.completed',{...s,id:s.id+'again',payment_intent:s.payment_intent+'again'});
+ assert.equal(f.sql.prepare("SELECT count(*) n FROM studio_events WHERE type='payment.review'").get().n,2);
+ const sibling=f.sql.prepare('SELECT id FROM shop_orders WHERE session=?').get(s.id+'again');assert.equal(f.sql.prepare('SELECT value FROM meta WHERE key=?').get('shop-reference:'+sibling.id).value,'table-7');
 });
