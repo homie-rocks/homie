@@ -1,0 +1,2002 @@
+[
+  {
+    "run": 0,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 211.91683299999931,
+    "ray": "a4b03e90cefb6b23-DFW"
+  },
+  {
+    "run": 0,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 107.43154200000026,
+    "ray": "a4b03e91ebc757bb-YVR"
+  },
+  {
+    "run": 0,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 110.0774169999986,
+    "ray": "a4b03e92cc5c6b23-DFW"
+  },
+  {
+    "run": 0,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 75.64295899999888,
+    "ray": "a4b03e934fdb57bb-YVR"
+  },
+  {
+    "run": 0,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 241.91712499999994,
+    "ray": "a4b03e93ff6b6b23-DFW"
+  },
+  {
+    "run": 0,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 114.03629100000035,
+    "ray": "a4b03e954c8d57bb-YVR"
+  },
+  {
+    "run": 0,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 113.75970799999959,
+    "ray": "a4b03e962d106b23-DFW"
+  },
+  {
+    "run": 0,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 279.00233300000036,
+    "ray": "a4b03e96a82557bb-YVR"
+  },
+  {
+    "run": 0,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 274.67091600000094,
+    "ray": "a4b03e98ab546b23-DFW"
+  },
+  {
+    "run": 0,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 301.26008399999955,
+    "ray": "a4b03e9a291a57bb-YVR"
+  },
+  {
+    "run": 1,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 78.68029200000092,
+    "ray": "a4b03e9c0e9357bb-YVR"
+  },
+  {
+    "run": 1,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 216.96862500000134,
+    "ray": "a4b03e9cccdd6b23-DFW"
+  },
+  {
+    "run": 1,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 166.53079200000138,
+    "ray": "a4b03e9debb257bb-YVR"
+  },
+  {
+    "run": 1,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 110.76141599999937,
+    "ray": "a4b03e9f2a556b23-DFW"
+  },
+  {
+    "run": 1,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 112.0434580000001,
+    "ray": "a4b03e9fa80157bb-YVR"
+  },
+  {
+    "run": 1,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 295.5732919999991,
+    "ray": "a4b03ea08d996b23-DFW"
+  },
+  {
+    "run": 1,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 79.83012500000041,
+    "ray": "a4b03ea23e6d57bb-YVR"
+  },
+  {
+    "run": 1,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 97.46216600000116,
+    "ray": "a4b03ea2eb2a6b23-DFW"
+  },
+  {
+    "run": 1,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 346.74554100000023,
+    "ray": "a4b03ea3593f57bb-YVR"
+  },
+  {
+    "run": 1,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 274.49683299999924,
+    "ray": "a4b03ea5b9e06b23-DFW"
+  },
+  {
+    "run": 2,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 247.7318749999995,
+    "ray": "a4b03ea77deb6b23-DFW"
+  },
+  {
+    "run": 2,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 99.8700000000008,
+    "ray": "a4b03ea8dea657bb-YVR"
+  },
+  {
+    "run": 2,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 116.6684580000001,
+    "ray": "a4b03ea9aa996b23-DFW"
+  },
+  {
+    "run": 2,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 73.13387500000135,
+    "ray": "a4b03eaa3a1c57bb-YVR"
+  },
+  {
+    "run": 2,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 422.6795409999995,
+    "ray": "a4b03eaade226b23-DFW"
+  },
+  {
+    "run": 2,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 94.97470799999974,
+    "ray": "a4b03ead4a7957bb-YVR"
+  },
+  {
+    "run": 2,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 240.11116599999878,
+    "ray": "a4b03eae1d756b23-DFW"
+  },
+  {
+    "run": 2,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 118.87920899999881,
+    "ray": "a4b03eaf68a857bb-YVR"
+  },
+  {
+    "run": 2,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 236.82516599999872,
+    "ray": "a4b03eb04a0a6b23-DFW"
+  },
+  {
+    "run": 2,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 248.0772079999988,
+    "ray": "a4b03eb19fbf57bb-YVR"
+  },
+  {
+    "run": 3,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 97.0799160000006,
+    "ray": "a4b03eb32baf57bb-YVR"
+  },
+  {
+    "run": 3,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 343.9398749999982,
+    "ray": "a4b03eb3fca66b23-DFW"
+  },
+  {
+    "run": 3,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 71.20491699999911,
+    "ray": "a4b03eb5fac457bb-YVR"
+  },
+  {
+    "run": 3,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 112.17324999999983,
+    "ray": "a4b03eb68bcb6b23-DFW"
+  },
+  {
+    "run": 3,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 99.28433399999994,
+    "ray": "a4b03eb70db857bb-YVR"
+  },
+  {
+    "run": 3,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 243.2544170000001,
+    "ray": "a4b03eb7eebe6b23-DFW"
+  },
+  {
+    "run": 3,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 168.04962499999965,
+    "ray": "a4b03eb93bcd57bb-YVR"
+  },
+  {
+    "run": 3,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 115.53712500000074,
+    "ray": "a4b03eba8b636b23-DFW"
+  },
+  {
+    "run": 3,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 272.45987499999865,
+    "ray": "a4b03ebb0a2b57bb-YVR"
+  },
+  {
+    "run": 3,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 260.55120799999895,
+    "ray": "a4b03ebce8696b23-DFW"
+  },
+  {
+    "run": 4,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 278.3195000000014,
+    "ray": "a4b03ebe8cd46b23-DFW"
+  },
+  {
+    "run": 4,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 88.66004199999952,
+    "ray": "a4b03ec018ad57bb-YVR"
+  },
+  {
+    "run": 4,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 101.88433399999849,
+    "ray": "a4b03ec0cc326b23-DFW"
+  },
+  {
+    "run": 4,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 84.50512499999968,
+    "ray": "a4b03ec14bf557bb-YVR"
+  },
+  {
+    "run": 4,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 231.5296249999992,
+    "ray": "a4b03ec20f626b23-DFW"
+  },
+  {
+    "run": 4,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 131.00637500000084,
+    "ray": "a4b03ec348e057bb-YVR"
+  },
+  {
+    "run": 4,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 112.19245899999805,
+    "ray": "a4b03ec44c6f6b23-DFW"
+  },
+  {
+    "run": 4,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 239.4565419999999,
+    "ray": "a4b03ec4dd6a57bb-YVR"
+  },
+  {
+    "run": 4,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 265.95766600000206,
+    "ray": "a4b03ec689de6b23-DFW"
+  },
+  {
+    "run": 4,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 262.89279199999874,
+    "ray": "a4b03ec7fd5957bb-YVR"
+  },
+  {
+    "run": 5,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 119.01466599999912,
+    "ray": "a4b03ec9a9a957bb-YVR"
+  },
+  {
+    "run": 5,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 198.22595900000306,
+    "ray": "a4b03eca99026b23-DFW"
+  },
+  {
+    "run": 5,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 197.09216600000218,
+    "ray": "a4b03ecbafb457bb-YVR"
+  },
+  {
+    "run": 5,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 126.96362500000032,
+    "ray": "a4b03ecd1d756b23-DFW"
+  },
+  {
+    "run": 5,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 404.4517500000002,
+    "ray": "a4b03ecdae4557bb-YVR"
+  },
+  {
+    "run": 5,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 203.9474169999994,
+    "ray": "a4b03ed06c716b23-DFW"
+  },
+  {
+    "run": 5,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 99.74604200000249,
+    "ray": "a4b03ed189cb57bb-YVR"
+  },
+  {
+    "run": 5,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 376.78745900000285,
+    "ray": "a4b03ed24a996b23-DFW"
+  },
+  {
+    "run": 5,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 366.3083750000005,
+    "ray": "a4b03ed46a0e57bb-YVR"
+  },
+  {
+    "run": 5,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 280.9439170000005,
+    "ray": "a4b03ed6ed236b23-DFW"
+  },
+  {
+    "run": 6,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 233.7113750000026,
+    "ray": "a4b03ed8ba2d6b23-DFW"
+  },
+  {
+    "run": 6,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 97.41345799999908,
+    "ray": "a4b03ed9ff9d57bb-YVR"
+  },
+  {
+    "run": 6,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 125.08562499999971,
+    "ray": "a4b03edabf456b23-DFW"
+  },
+  {
+    "run": 6,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 79.85966600000029,
+    "ray": "a4b03edb6b7457bb-YVR"
+  },
+  {
+    "run": 6,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 290.56254199999967,
+    "ray": "a4b03edc1ba16b23-DFW"
+  },
+  {
+    "run": 6,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 104.07483400000274,
+    "ray": "a4b03eddbc6057bb-YVR"
+  },
+  {
+    "run": 6,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 112.11283399999957,
+    "ray": "a4b03ede9a396b23-DFW"
+  },
+  {
+    "run": 6,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 237.62529200000063,
+    "ray": "a4b03edf18ee57bb-YVR"
+  },
+  {
+    "run": 6,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 294.71766699999716,
+    "ray": "a4b03ee0cf836b23-DFW"
+  },
+  {
+    "run": 6,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 276.58695799999987,
+    "ray": "a4b03ee26b4157bb-YVR"
+  },
+  {
+    "run": 7,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 124.93154199999844,
+    "ray": "a4b03ee42fa357bb-YVR"
+  },
+  {
+    "run": 7,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 347.04704200000197,
+    "ray": "a4b03ee51a536b23-DFW"
+  },
+  {
+    "run": 7,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 93.79762499999924,
+    "ray": "a4b03ee71fe757bb-YVR"
+  },
+  {
+    "run": 7,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 130.3462499999987,
+    "ray": "a4b03ee7e8666b23-DFW"
+  },
+  {
+    "run": 7,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 126.69633299999987,
+    "ray": "a4b03ee87bb157bb-YVR"
+  },
+  {
+    "run": 7,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 238.22108300000036,
+    "ray": "a4b03ee98c4f6b23-DFW"
+  },
+  {
+    "run": 7,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 92.45562500000233,
+    "ray": "a4b03eeadad357bb-YVR"
+  },
+  {
+    "run": 7,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 111.76366699999926,
+    "ray": "a4b03eeb983f6b23-DFW"
+  },
+  {
+    "run": 7,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 280.80412499999875,
+    "ray": "a4b03eec1e8957bb-YVR"
+  },
+  {
+    "run": 7,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 287.69512499999837,
+    "ray": "a4b03eee0c8e6b23-DFW"
+  },
+  {
+    "run": 8,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 210.91533300000083,
+    "ray": "a4b03eefc8466b23-DFW"
+  },
+  {
+    "run": 8,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 89.04375000000073,
+    "ray": "a4b03ef0fbe657bb-YVR"
+  },
+  {
+    "run": 8,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 119.46212500000183,
+    "ray": "a4b03ef1bc8f6b23-DFW"
+  },
+  {
+    "run": 8,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 82.85512499999822,
+    "ray": "a4b03ef2493e57bb-YVR"
+  },
+  {
+    "run": 8,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 225.34612500000003,
+    "ray": "a4b03ef2ff916b23-DFW"
+  },
+  {
+    "run": 8,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 177.9413339999992,
+    "ray": "a4b03ef43fb657bb-YVR"
+  },
+  {
+    "run": 8,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 176.23754199999894,
+    "ray": "a4b03ef58e5d6b23-DFW"
+  },
+  {
+    "run": 8,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 166.6092499999977,
+    "ray": "a4b03ef67e8c57bb-YVR"
+  },
+  {
+    "run": 8,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 265.8895420000008,
+    "ray": "a4b03ef7ab016b23-DFW"
+  },
+  {
+    "run": 8,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 261.2435839999998,
+    "ray": "a4b03ef92e3c57bb-YVR"
+  },
+  {
+    "run": 9,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 118.98949999999968,
+    "ray": "a4b03efaeb7c57bb-YVR"
+  },
+  {
+    "run": 9,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 201.03770799999984,
+    "ray": "a4b03efbbae86b23-DFW"
+  },
+  {
+    "run": 9,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 202.14295800000036,
+    "ray": "a4b03efcd94857bb-YVR"
+  },
+  {
+    "run": 9,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 113.4651249999988,
+    "ray": "a4b03efe3fef6b23-DFW"
+  },
+  {
+    "run": 9,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 102.44329199999993,
+    "ray": "a4b03efece6257bb-YVR"
+  },
+  {
+    "run": 9,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 300.86375000000044,
+    "ray": "a4b03eff9b496b23-DFW"
+  },
+  {
+    "run": 9,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 119.19750000000204,
+    "ray": "a4b03f015d5657bb-YVR"
+  },
+  {
+    "run": 9,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 113.02208400000018,
+    "ray": "a4b03f0249f06b23-DFW"
+  },
+  {
+    "run": 9,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 303.4344999999994,
+    "ray": "a4b03f02c93557bb-YVR"
+  },
+  {
+    "run": 9,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 343.5779169999987,
+    "ray": "a4b03f04cf016b23-DFW"
+  },
+  {
+    "run": 10,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 214.51695800000016,
+    "ray": "a4b03f070c696b23-DFW"
+  },
+  {
+    "run": 10,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 116.45908299999792,
+    "ray": "a4b03f082fcf57bb-YVR"
+  },
+  {
+    "run": 10,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 115.72154099999898,
+    "ray": "a4b03f0918c36b23-DFW"
+  },
+  {
+    "run": 10,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 66.52674999999726,
+    "ray": "a4b03f09abcf57bb-YVR"
+  },
+  {
+    "run": 10,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 280.56974999999875,
+    "ray": "a4b03f0a3b806b23-DFW"
+  },
+  {
+    "run": 10,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 110.65687500000058,
+    "ray": "a4b03f0bd99c57bb-YVR"
+  },
+  {
+    "run": 10,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 116.57191699999748,
+    "ray": "a4b03f0cc9f26b23-DFW"
+  },
+  {
+    "run": 10,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 187.0891249999986,
+    "ray": "a4b03f0d3db657bb-YVR"
+  },
+  {
+    "run": 10,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 292.1919999999991,
+    "ray": "a4b03f0eaee56b23-DFW"
+  },
+  {
+    "run": 10,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 243.65949999999793,
+    "ray": "a4b03f103e3757bb-YVR"
+  },
+  {
+    "run": 11,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 93.77700000000186,
+    "ray": "a4b03f11ba4157bb-YVR"
+  },
+  {
+    "run": 11,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 255.54300000000148,
+    "ray": "a4b03f1288216b23-DFW"
+  },
+  {
+    "run": 11,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 160.99725000000035,
+    "ray": "a4b03f13f87e57bb-YVR"
+  },
+  {
+    "run": 11,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 124.8012910000034,
+    "ray": "a4b03f152ec56b23-DFW"
+  },
+  {
+    "run": 11,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 176.21150000000125,
+    "ray": "a4b03f15cd7b57bb-YVR"
+  },
+  {
+    "run": 11,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 222.50866699999824,
+    "ray": "a4b03f16fa986b23-DFW"
+  },
+  {
+    "run": 11,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 118.59537500000079,
+    "ray": "a4b03f184c5757bb-YVR"
+  },
+  {
+    "run": 11,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 130.7881669999988,
+    "ray": "a4b03f192ebd6b23-DFW"
+  },
+  {
+    "run": 11,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 278.377625000001,
+    "ray": "a4b03f19c8aa57bb-YVR"
+  },
+  {
+    "run": 11,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 248.1165420000034,
+    "ray": "a4b03f1bbd466b23-DFW"
+  },
+  {
+    "run": 12,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 272.01900000000023,
+    "ray": "a4b03f1d49b16b23-DFW"
+  },
+  {
+    "run": 12,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 96.54262500000186,
+    "ray": "a4b03f1ecfb057bb-YVR"
+  },
+  {
+    "run": 12,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 122.3961249999993,
+    "ray": "a4b03f1fa8156b23-DFW"
+  },
+  {
+    "run": 12,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 76.163958000001,
+    "ray": "a4b03f202c0e57bb-YVR"
+  },
+  {
+    "run": 12,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 223.39108300000225,
+    "ray": "a4b03f20dac56b23-DFW"
+  },
+  {
+    "run": 12,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 103.79066699999748,
+    "ray": "a4b03f22199d57bb-YVR"
+  },
+  {
+    "run": 12,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 123.95991700000013,
+    "ray": "a4b03f22ff176b23-DFW"
+  },
+  {
+    "run": 12,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 107.45820900000035,
+    "ray": "a4b03f238dfb57bb-YVR"
+  },
+  {
+    "run": 12,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 285.0567500000034,
+    "ray": "a4b03f245ab56b23-DFW"
+  },
+  {
+    "run": 12,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 428.315290999999,
+    "ray": "a4b03f25ed2857bb-YVR"
+  },
+  {
+    "run": 13,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 111.57749999999942,
+    "ray": "a4b03f28be1257bb-YVR"
+  },
+  {
+    "run": 13,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 185.48791699999856,
+    "ray": "a4b03f2988466b23-DFW"
+  },
+  {
+    "run": 13,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 226.76191699999617,
+    "ray": "a4b03f2a8ae157bb-YVR"
+  },
+  {
+    "run": 13,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 112.16941699999734,
+    "ray": "a4b03f2c1d9d6b23-DFW"
+  },
+  {
+    "run": 13,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 110.83479100000113,
+    "ray": "a4b03f2cb91c57bb-YVR"
+  },
+  {
+    "run": 13,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 290.3213340000002,
+    "ray": "a4b03f2d88c06b23-DFW"
+  },
+  {
+    "run": 13,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 94.75700000000506,
+    "ray": "a4b03f2f387c57bb-YVR"
+  },
+  {
+    "run": 13,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 107.3992919999946,
+    "ray": "a4b03f2ffdfb6b23-DFW"
+  },
+  {
+    "run": 13,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 322.37133399999584,
+    "ray": "a4b03f306b8d57bb-YVR"
+  },
+  {
+    "run": 13,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 236.1655829999945,
+    "ray": "a4b03f329c056b23-DFW"
+  },
+  {
+    "run": 14,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 290.0897909999985,
+    "ray": "a4b03f3428516b23-DFW"
+  },
+  {
+    "run": 14,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 86.74108400000114,
+    "ray": "a4b03f35ca0057bb-YVR"
+  },
+  {
+    "run": 14,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 125.33762500000012,
+    "ray": "a4b03f368ebb6b23-DFW"
+  },
+  {
+    "run": 14,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 69.8838340000002,
+    "ray": "a4b03f370d6e57bb-YVR"
+  },
+  {
+    "run": 14,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 237.68350000000646,
+    "ray": "a4b03f37b9d06b23-DFW"
+  },
+  {
+    "run": 14,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 112.66716699999961,
+    "ray": "a4b03f390ac457bb-YVR"
+  },
+  {
+    "run": 14,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 119.73541700000351,
+    "ray": "a4b03f39fe2f6b23-DFW"
+  },
+  {
+    "run": 14,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 289.2696250000008,
+    "ray": "a4b03f3a7f0057bb-YVR"
+  },
+  {
+    "run": 14,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 274.7469579999961,
+    "ray": "a4b03f3c8c206b23-DFW"
+  },
+  {
+    "run": 14,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 307.0203330000004,
+    "ray": "a4b03f3e4fcd57bb-YVR"
+  },
+  {
+    "run": 15,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 85.87329099999624,
+    "ray": "a4b03f3febd857bb-YVR"
+  },
+  {
+    "run": 15,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 187.94674999999552,
+    "ray": "a4b03f40ae566b23-DFW"
+  },
+  {
+    "run": 15,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 192.10987499999464,
+    "ray": "a4b03f41982e57bb-YVR"
+  },
+  {
+    "run": 15,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 116.01633299999958,
+    "ray": "a4b03f430b9c6b23-DFW"
+  },
+  {
+    "run": 15,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 113.74504200000229,
+    "ray": "a4b03f439dcb57bb-YVR"
+  },
+  {
+    "run": 15,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 296.974000000002,
+    "ray": "a4b03f447e776b23-DFW"
+  },
+  {
+    "run": 15,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 86.73833300000115,
+    "ray": "a4b03f462cf057bb-YVR"
+  },
+  {
+    "run": 15,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 104.84920799999963,
+    "ray": "a4b03f46dc5c6b23-DFW"
+  },
+  {
+    "run": 15,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 329.19104200000584,
+    "ray": "a4b03f47499157bb-YVR"
+  },
+  {
+    "run": 15,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 254.06141699999716,
+    "ray": "a4b03f499b0f6b23-DFW"
+  },
+  {
+    "run": 16,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 265.40141700000095,
+    "ray": "a4b03f4b2e856b23-DFW"
+  },
+  {
+    "run": 16,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 100.75370800000383,
+    "ray": "a4b03f4cb8e057bb-YVR"
+  },
+  {
+    "run": 16,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 108.22875000000204,
+    "ray": "a4b03f4d7b646b23-DFW"
+  },
+  {
+    "run": 16,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 66.80924999999843,
+    "ray": "a4b03f4dfbcd57bb-YVR"
+  },
+  {
+    "run": 16,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 246.71229099999618,
+    "ray": "a4b03f4e9db96b23-DFW"
+  },
+  {
+    "run": 16,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 118.66399999999703,
+    "ray": "a4b03f4ff97257bb-YVR"
+  },
+  {
+    "run": 16,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 113.94029099999898,
+    "ray": "a4b03f50fa546b23-DFW"
+  },
+  {
+    "run": 16,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 79.29624999999942,
+    "ray": "a4b03f516db457bb-YVR"
+  },
+  {
+    "run": 16,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 264.45104100000026,
+    "ray": "a4b03f521d396b23-DFW"
+  },
+  {
+    "run": 16,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 245.0459159999955,
+    "ray": "a4b03f538c2a57bb-YVR"
+  },
+  {
+    "run": 17,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 222.0500000000029,
+    "ray": "a4b03f55189a57bb-YVR"
+  },
+  {
+    "run": 17,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 215.08791600000404,
+    "ray": "a4b03f56b9f86b23-DFW"
+  },
+  {
+    "run": 17,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 71.89541699999972,
+    "ray": "a4b03f57d89357bb-YVR"
+  },
+  {
+    "run": 17,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 241.0882500000007,
+    "ray": "a4b03f587dc46b23-DFW"
+  },
+  {
+    "run": 17,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 103.63337499999761,
+    "ray": "a4b03f59de7a57bb-YVR"
+  },
+  {
+    "run": 17,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 222.51549999999406,
+    "ray": "a4b03f5aabc26b23-DFW"
+  },
+  {
+    "run": 17,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 193.23216700000194,
+    "ray": "a4b03f5bdc1457bb-YVR"
+  },
+  {
+    "run": 17,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 114.51245900000504,
+    "ray": "a4b03f5d4a816b23-DFW"
+  },
+  {
+    "run": 17,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 241.0293329999986,
+    "ray": "a4b03f5dc93f57bb-YVR"
+  },
+  {
+    "run": 17,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 247.00587500000256,
+    "ray": "a4b03f5f7fc56b23-DFW"
+  },
+  {
+    "run": 18,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 196.66199999999662,
+    "ray": "a4b03f610b236b23-DFW"
+  },
+  {
+    "run": 18,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 241.94779199999903,
+    "ray": "a4b03f620ca457bb-YVR"
+  },
+  {
+    "run": 18,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 115.55616700000246,
+    "ray": "a4b03f63c90d6b23-DFW"
+  },
+  {
+    "run": 18,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 69.13883399999759,
+    "ray": "a4b03f644ac657bb-YVR"
+  },
+  {
+    "run": 18,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 334.97099999999773,
+    "ray": "a4b03f64fb6a6b23-DFW"
+  },
+  {
+    "run": 18,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 90.89920900000288,
+    "ray": "a4b03f66d9e357bb-YVR"
+  },
+  {
+    "run": 18,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 111.8158340000009,
+    "ray": "a4b03f679a3c6b23-DFW"
+  },
+  {
+    "run": 18,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 100.01995799999713,
+    "ray": "a4b03f682ce957bb-YVR"
+  },
+  {
+    "run": 18,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 265.8109590000022,
+    "ray": "a4b03f68fdc66b23-DFW"
+  },
+  {
+    "run": 18,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 262.41125000000466,
+    "ray": "a4b03f6a6aad57bb-YVR"
+  },
+  {
+    "run": 19,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 216.5879580000037,
+    "ray": "a4b03f6c1f7057bb-YVR"
+  },
+  {
+    "run": 19,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 190.12008400000195,
+    "ray": "a4b03f6d983d6b23-DFW"
+  },
+  {
+    "run": 19,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 84.07416599999851,
+    "ray": "a4b03f6eae1457bb-YVR"
+  },
+  {
+    "run": 19,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 246.73879199999647,
+    "ray": "a4b03f6f5b796b23-DFW"
+  },
+  {
+    "run": 19,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 124.99820900000486,
+    "ray": "a4b03f70bb3857bb-YVR"
+  },
+  {
+    "run": 19,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 174.60137500000565,
+    "ray": "a4b03f71a9f16b23-DFW"
+  },
+  {
+    "run": 19,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 222.20379200000025,
+    "ray": "a4b03f72a90557bb-YVR"
+  },
+  {
+    "run": 19,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 107.48820900000283,
+    "ray": "a4b03f743fa26b23-DFW"
+  },
+  {
+    "run": 19,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 413.04104100000404,
+    "ray": "a4b03f74bfa657bb-YVR"
+  },
+  {
+    "run": 19,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 250.1542499999996,
+    "ray": "a4b03f777df86b23-DFW"
+  },
+  {
+    "run": 20,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 272.6277919999993,
+    "ray": "a4b03f7909956b23-DFW"
+  },
+  {
+    "run": 20,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 95.37191700000403,
+    "ray": "a4b03f7a88aa57bb-YVR"
+  },
+  {
+    "run": 20,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 123.08924999999726,
+    "ray": "a4b03f7b4f826b23-DFW"
+  },
+  {
+    "run": 20,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 74.3379999999961,
+    "ray": "a4b03f7bebb657bb-YVR"
+  },
+  {
+    "run": 20,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 231.07329200000095,
+    "ray": "a4b03f7c8ab06b23-DFW"
+  },
+  {
+    "run": 20,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 100.13783300000068,
+    "ray": "a4b03f7dd8fd57bb-YVR"
+  },
+  {
+    "run": 20,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 116.59845800000039,
+    "ray": "a4b03f7eafe36b23-DFW"
+  },
+  {
+    "run": 20,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 91.72291699999914,
+    "ray": "a4b03f7f3c6b57bb-YVR"
+  },
+  {
+    "run": 20,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 256.24333299999853,
+    "ray": "a4b03f7ffb076b23-DFW"
+  },
+  {
+    "run": 20,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 258.9724999999962,
+    "ray": "a4b03f81697957bb-YVR"
+  },
+  {
+    "run": 21,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 224.09274999999616,
+    "ray": "a4b03f82fd6957bb-YVR"
+  },
+  {
+    "run": 21,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 190.69445799999812,
+    "ray": "a4b03f849c706b23-DFW"
+  },
+  {
+    "run": 21,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 72.05162500000006,
+    "ray": "a4b03f859c7057bb-YVR"
+  },
+  {
+    "run": 21,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 259.0614590000041,
+    "ray": "a4b03f8638c86b23-DFW"
+  },
+  {
+    "run": 21,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 116.2243329999983,
+    "ray": "a4b03f87aa1c57bb-YVR"
+  },
+  {
+    "run": 21,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 213.58112499999697,
+    "ray": "a4b03f889f0f6b23-DFW"
+  },
+  {
+    "run": 21,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 193.53712500000256,
+    "ray": "a4b03f89cfaf57bb-YVR"
+  },
+  {
+    "run": 21,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 116.76679100000183,
+    "ray": "a4b03f8b2d456b23-DFW"
+  },
+  {
+    "run": 21,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 404.080584000003,
+    "ray": "a4b03f8bac7957bb-YVR"
+  },
+  {
+    "run": 21,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 282.4240839999984,
+    "ray": "a4b03f8e6db96b23-DFW"
+  },
+  {
+    "run": 22,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 246.10733299999993,
+    "ray": "a4b03f9029cc6b23-DFW"
+  },
+  {
+    "run": 22,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 84.18454199999542,
+    "ray": "a4b03f918d4257bb-YVR"
+  },
+  {
+    "run": 22,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 117.86420900000667,
+    "ray": "a4b03f923eb36b23-DFW"
+  },
+  {
+    "run": 22,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 75.90812500000175,
+    "ray": "a4b03f92c83657bb-YVR"
+  },
+  {
+    "run": 22,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 238.35079099999712,
+    "ray": "a4b03f937a876b23-DFW"
+  },
+  {
+    "run": 22,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 110.75104100000317,
+    "ray": "a4b03f94cd8257bb-YVR"
+  },
+  {
+    "run": 22,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 106.6730830000015,
+    "ray": "a4b03f959fb36b23-DFW"
+  },
+  {
+    "run": 22,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 87.4051249999975,
+    "ray": "a4b03f96190e57bb-YVR"
+  },
+  {
+    "run": 22,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 247.72445799999696,
+    "ray": "a4b03f96d98f6b23-DFW"
+  },
+  {
+    "run": 22,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 251.2890830000033,
+    "ray": "a4b03f984e4f57bb-YVR"
+  },
+  {
+    "run": 23,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 239.88812499999767,
+    "ray": "a4b03f99ca4557bb-YVR"
+  },
+  {
+    "run": 23,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 185.77416700000322,
+    "ray": "a4b03f9b8ab86b23-DFW"
+  },
+  {
+    "run": 23,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 66.06949999999779,
+    "ray": "a4b03f9c794957bb-YVR"
+  },
+  {
+    "run": 23,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 108.49783300000126,
+    "ray": "a4b03f9d1e0f6b23-DFW"
+  },
+  {
+    "run": 23,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 160.9279170000009,
+    "ray": "a4b03f9d8cba57bb-YVR"
+  },
+  {
+    "run": 23,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 194.64075000000594,
+    "ray": "a4b03f9ecaff6b23-DFW"
+  },
+  {
+    "run": 23,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 83.52924999999959,
+    "ray": "a4b03f9fca2057bb-YVR"
+  },
+  {
+    "run": 23,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 240.4128750000018,
+    "ray": "a4b03fa08ed16b23-DFW"
+  },
+  {
+    "run": 23,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 263.2202499999985,
+    "ray": "a4b03fa1eff657bb-YVR"
+  },
+  {
+    "run": 23,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 262.0227909999958,
+    "ray": "a4b03fa3aec76b23-DFW"
+  },
+  {
+    "run": 24,
+    "variant": "after",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 181.10141699999804,
+    "ray": "a4b03fa559f56b23-DFW"
+  },
+  {
+    "run": 24,
+    "variant": "before",
+    "route": "page",
+    "status": 200,
+    "ttfbMs": 93.87666700000409,
+    "ray": "a4b03fa64c3057bb-YVR"
+  },
+  {
+    "run": 24,
+    "variant": "after",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 239.72995900000387,
+    "ray": "a4b03fa70dbb6b23-DFW"
+  },
+  {
+    "run": 24,
+    "variant": "before",
+    "route": "asset",
+    "status": 200,
+    "ttfbMs": 77.14233399999648,
+    "ray": "a4b03fa869b357bb-YVR"
+  },
+  {
+    "run": 24,
+    "variant": "after",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 171.8162089999969,
+    "ray": "a4b03fa90afe6b23-DFW"
+  },
+  {
+    "run": 24,
+    "variant": "before",
+    "route": "records",
+    "status": 200,
+    "ttfbMs": 95.90183300000353,
+    "ray": "a4b03fa9ee1457bb-YVR"
+  },
+  {
+    "run": 24,
+    "variant": "after",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 181.98470799999632,
+    "ray": "a4b03faabe5e6b23-DFW"
+  },
+  {
+    "run": 24,
+    "variant": "before",
+    "route": "mcp",
+    "status": 200,
+    "ttfbMs": 132.62758300000132,
+    "ray": "a4b03fabbb0257bb-YVR"
+  },
+  {
+    "run": 24,
+    "variant": "after",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 395.078290999998,
+    "ray": "a4b03facab4d6b23-DFW"
+  },
+  {
+    "run": 24,
+    "variant": "before",
+    "route": "seat",
+    "status": 200,
+    "ttfbMs": 273.5740420000002,
+    "ray": "a4b03faefbd257bb-YVR"
+  }
+]

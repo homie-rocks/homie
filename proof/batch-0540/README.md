@@ -31,26 +31,43 @@ game. No Stripe, player credentials or production data. Page `/cafe/open`, stati
 25 measured samples per route/version, after three warm-up rounds. Alternate before/after
 order on every round, consume response bodies, keep connections alive. TTFB is measured
 until fetch resolves its response headers. Every response was HTTP 200. Raw observations,
-including edge Ray IDs, are in `speed-persistent.json`.
+including edge Ray IDs, are in `speed-pinned.json`. Both hosts were pinned to
+`104.21.34.86` through an Undici connection lookup; all 250 measured responses
+reached SEA (Seattle). Hostname and TLS verification were retained.
 
 | Route | Before median ms | After median ms |
 | --- | ---: | ---: |
-| Page | 159.30 | 95.15 |
-| Asset | 97.04 | 57.57 |
-| Records | 156.11 | 98.33 |
-| MCP initialize | 139.91 | 57.50 |
-| Room seat | 329.50 | 143.97 |
+| Page | 143.10 | 97.12 |
+| Asset | 123.41 | 61.36 |
+| Records | 151.38 | 84.81 |
+| MCP initialize | 120.97 | 60.91 |
+| Room seat | 308.86 | 142.32 |
 
 The earlier curl-per-request run is retained in `speed-fresh-connections.json`. TLS,
 network and shared-machine scheduling noise made that run inconsistent (asset baseline
-146–2268 ms). Persistent connections are the primary comparison; neither run controls
+146–2268 ms). The initial persistent pass (`speed-persistent.json`) used PDX for baseline and YVR
+for updated. A later pass (`speed-mixed-edges.json`) used YVR versus DFW and showed
+regressions on three routes. Those cross-edge comparisons are confounded; the
+same-IP, same-SEA persistent pass above is the primary comparison; neither run controls
 other work on the owner's machine.
 
-Resources created (cleanup verification will be appended before completion):
+Resources created and deleted (2026-10-15):
 
 - Worker `hm-speed-0540-before`; D1 `bd972219-2667-44cd-b828-da5b1df346b0`.
 - Worker `hm-speed-0540-after`; D1 `536a4b6e-fd54-4fb0-a72d-adb1f661670c`.
 - Each Worker owns Table, Lobby, Gate and Concentrator namespaces; no R2 or KV.
 
-Initial measured versions: before `ef1ef699-6c40-4aa6-a486-34e85a9a9326`, after
-`edf815a0-8f42-41e1-9911-0c30f38920eb`. Only these throwaway Workers were deployed.
+Baseline version: before `ef1ef699-6c40-4aa6-a486-34e85a9a9326`, final measured after
+`73ac96fe-6e47-4edc-88c6-bdf940437c06` (initial after
+`edf815a0-8f42-41e1-9911-0c30f38920eb`). Only these throwaway Workers were deployed.
+
+Wrangler confirmed both Worker deletions and both D1 deletions. Subsequent deployment
+lookups report no Worker, D1 listing contains neither database, and the owner account’s
+Durable Object namespace listing contains no `hm-speed-0540` namespaces.
+
+Follow-up local evidence: 156 affected Node/workerd tests passed (8 existing skips),
+34 stats/routing tests passed, 14 dev/Stripe compatibility tests passed, and added
+player role-grant removal, role-link rotation and session-expiry tests passed. Request
+budgets also bound background D1 calls to at most one beyond the foreground budget.
+Review payments never emit `order.paid`, and later refunds update review records without
+granting anything. Internal staff notes remain private.

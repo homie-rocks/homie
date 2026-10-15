@@ -15,12 +15,13 @@ export function requestFixture(t) {
  for(const name of ['LOBBY','TABLE'])env[name]={idFromName:x=>x,get:id=>({fetch:async input=>{calls.push(name+' '+id+' '+(input.url??input));return Response.json({room:'pub-1',ok:true,rooms:[]});}})};
  return {env,calls,sql};
 }
-for(const [label,path,max] of [['asset','/_homie/site.js',0],['game asset','/race/__game/assets/main.js',0],['game shell','/race/play',1],['records','/cafe/api/app/records/notes',1],['page','/cafe/open',1],['seat','/race/api/lobby',1],['socket','/race/__net?room=pub-1',1]])test(`steady ${label} stays within its D1 request budget`,async t=>{
+for(const [label,path,max] of [['static file','/test.js',0],['asset','/_homie/site.js',0],['game asset','/race/__game/assets/main.js',0],['game shell','/race/play',1],['records','/cafe/api/app/records/notes',1],['page','/cafe/open',1],['seat','/race/api/lobby',1],['socket','/race/__net?room=pub-1',1]])test(`steady ${label} stays within its D1 request budget`,async t=>{
  const {env,calls}=requestFixture(t);
  const run=async()=>{const background=[];const response=await worker.fetch(new Request('https://speed.example'+path,{headers:label==='socket'?{upgrade:'websocket'}:{}}),env,{waitUntil:p=>background.push(p)});await response.text();return {response,background};};
  const warm=await run();await Promise.all(warm.background);calls.length=0;
  const {response,background}=await run();const foreground=calls.slice();await Promise.all(background);
  assert.equal(response.status,200);
  assert.ok(foreground.filter(q=>!q.startsWith('LOBBY ')&&!q.startsWith('TABLE ')).length<=max,`${label}: ${foreground.join('\n')}`);
+ assert.ok(calls.filter(q=>!q.startsWith('LOBBY ')&&!q.startsWith('TABLE ')).length<=max+1,`background budget: ${calls.join('\n')}`);
  assert.ok(calls.filter(q=>q.startsWith('LOBBY ')||q.startsWith('TABLE ')).length <= (['seat','socket'].includes(label)?1:0),calls.join('\n'));
 });
