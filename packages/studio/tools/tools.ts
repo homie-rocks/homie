@@ -16,7 +16,7 @@ export interface ToolContext {
   };
   bookings: {
     availability(args: {app: string; collection: string; after?: string; quantity?: number; option?: string; resource?: string; addons?: Record<string,number>}): Promise<BookingAvailability>;
-    calendar(args: {app:string;startDate:string;endDate:string;timeZone?:string;time?:string;days?:number;durationMinutes?:number;capacity?:number;weekdays?:number[];resources?:string[];options?:unknown[];prefix?:string}): Array<{id:string;start:string;end:string;capacity:number;date:string;timeZone:string}>;
+    calendar(args: {app:string;startDate:string;endDate:string;timeZone?:string;time?:string;days?:number;durationMinutes?:number;capacity?:number;weekdays?:number[];resources?:string[];options?:unknown[];prefix?:string;exceptions?:Record<string,null|{time?:string;capacity?:number;durationMinutes?:number}>}): Array<{id:string;start:string;end:string;capacity:number;date:string;timeZone:string}>;
     hold(args: {app: string; collection: string; slot?: string; time?: string; option?: string; resource?: string; preferredResource?: string; addons?: string[] | Record<string,number>; addOns?: string[] | Record<string,number>; quantity?: number; id: string; token?: string; expiresAt: number}): Promise<BookingHold>;
     get(args: {id: string; token?: string}): Promise<BookingHold>;
     confirm(args: {id: string; token?: string; version: number}): Promise<BookingHold>;
