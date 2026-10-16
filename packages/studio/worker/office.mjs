@@ -1,3 +1,4 @@
+import {lobbyFor} from './lobby-shards.mjs';
 import {databaseBinding, ORIGINAL_DB} from './request-db.mjs';
 import { selling } from './extensions.mjs';
 import { purchaseOrderIfPresent } from './shop.mjs';
@@ -410,7 +411,7 @@ export async function redeemInvite(request, env, url, cat, meta, settings) {
 
 /* ------------------------------------------------------------------ talking to rooms */
 
-const lobbyOf = (env, game) => env.LOBBY.get(env.LOBBY.idFromName(game));
+const lobbyOf = (env, game) => lobbyFor(env,game);
 const tableOf = (env, game, room) => env.TABLE.get(env.TABLE.idFromName(`${game}/${room}`));
 
 /** The rooms of one game with people in them now, as its Lobby last heard (public and named). */

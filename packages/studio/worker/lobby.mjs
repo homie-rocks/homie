@@ -1,13 +1,11 @@
+import {LOBBY_SHARDS,SHARDED_ROOM_BASE} from './lobby-shards.mjs';
+import {json} from './responses.mjs';
 import {lobbyStore} from './lobby-store.mjs';
 import { errorLine, versionOf } from './room-protocol.mjs';
 import { ROOM_ID } from './page-policy.mjs';
 import { SERVER_ID, pooledRoom, roomCode, roomServer } from './servers.mjs';
 import { seatCount } from './seats.mjs';
 import { counter, today } from './stats.mjs';
-
-const json = (body, status = 200, extra = {}) => new Response(`${JSON.stringify(body)}\n`, {
-  status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...extra },
-});
 
 import {LOBBY_APP_VERSIONS, LOBBY_ROOMS_MAX} from './lobby-limits.mjs';
 export {LOBBY_APP_VERSIONS, LOBBY_ROOMS_MAX} from './lobby-limits.mjs';
@@ -18,6 +16,8 @@ export class Lobby {
     this.env = env;
     this.store = lobbyStore(ctx.storage);
     this.rooms = new Map();
+    this.reservations=new Map();
+    ctx.storage.sql?.exec("CREATE TABLE IF NOT EXISTS matchmaking_reservations(id TEXT PRIMARY KEY,body TEXT NOT NULL,expires INTEGER NOT NULL)");
     /** Each pool's next room number: { public: n, <server>: n } (a store from before servers is public's). */
     this.next = { public: 1 };
     /** Every room of this game that reported players (public and named), for "playing now" and the day's peak. */
@@ -82,7 +82,7 @@ export class Lobby {
     }
     try {
       const response=await this.answer(request),url=new URL(request.url);
-      if(response.ok && request.method==='POST' && url.pathname==='/report' && this.env?.BACKGROUND && url.searchParams.get('game')) await this.scheduleSummary(url.searchParams.get('game'));
+      if(response.ok && request.method==='POST' && url.pathname==='/report' && this.env?.BACKGROUND && url.searchParams.get('game')) await this.scheduleSummary(url.searchParams.get('game'),Number(url.searchParams.get('shard'))||0);
       return response;
     } catch (error) {
       let path = '';
@@ -92,8 +92,9 @@ export class Lobby {
     }
   }
 
-  async scheduleSummary(game) {
-    if(this.summaryGame!==game) {await this.ctx.storage.put('summary-game',game);this.summaryGame=game;}
+  async scheduleSummary(game,shard=0) {
+    this.summaryShard=shard;
+    if(this.summaryGame!==game) {await this.ctx.storage.put('summary-game',{game,shard});this.summaryGame=game;}
     if(!this.summaryDue) {
       this.summaryDue=Date.now()+10000;
       try {await this.ctx.storage.setAlarm(this.summaryDue);} catch(error) {this.summaryDue=null;throw error;}
@@ -101,11 +102,23 @@ export class Lobby {
   }
   async alarm() {
     this.summaryDue=null;
-    const game=this.summaryGame??await this.ctx.storage.get('summary-game');
+    const saved=await this.ctx.storage.get('summary-game');
+    const game=this.summaryGame??(typeof saved==='string'?saved:saved?.game),shard=this.summaryShard??saved?.shard??0;
     if(!game||!this.env.BACKGROUND)return;
     const at=Date.now();
     const rooms=[...this.rooms.values()].filter(r=>r.players>0&&r.at>at-180000).map(({name,players,agents,ai,server,at})=>({name,players,agents:agents??0,ai:ai??0,server:server??roomServer(name),at}));
-    await this.env.BACKGROUND.send({v:1,type:'lobby.snapshot',game,at,rooms});
+    await this.env.BACKGROUND.send({v:1,type:'lobby.snapshot',game,shard,at,rooms});
+  }
+
+  reservation(key,result) {
+    const sql=this.ctx.storage.sql,now=Date.now();
+    if(sql){
+      if(result){sql.exec('DELETE FROM matchmaking_reservations WHERE expires<=?',now);sql.exec('INSERT OR REPLACE INTO matchmaking_reservations VALUES(?,?,?)',key,JSON.stringify(result),now+20000);return;}
+      const row=sql.exec('SELECT body FROM matchmaking_reservations WHERE id=? AND expires>?',key,now).toArray()[0];return row?JSON.parse(row.body):null;
+    }
+    for(const [id,row] of this.reservations)if(row.expires<=now)this.reservations.delete(id);
+    if(result)this.reservations.set(key,{result,expires:now+20000});
+    else return this.reservations.get(key)?.result;
   }
 
   async answer(request) {
@@ -116,6 +129,12 @@ export class Lobby {
     // the build of a game that names none ('').
     const ver = versionOf(url.searchParams.get('ver')) ?? '';
     if (url.pathname === '/join') {
+      const shard=url.searchParams.has('shard')?Number(url.searchParams.get('shard')):null;
+      if(shard!==null&&(!Number.isInteger(shard)||shard<0||shard>=LOBBY_SHARDS))return json({error:'shard'},400);
+      const identity=url.searchParams.get('reservation');
+      const reservation=identity?JSON.stringify([url.searchParams.get('server'),ver,url.searchParams.get('host'),identity.slice(0,128)]):null;
+      const prior=reservation&&this.reservation(reservation);
+      if(prior && this.rooms.has(prior.room) && !this.closed.has(prior.room) && !(url.searchParams.get('not')??'').split(',').includes(prior.room))return json(prior);
       // A server build can run only its current rules. Persisted browser rooms
       // (including pre-kind records) and old server revisions must not consume
       // the pool or become the fallback of a server with roomsMax=1.
@@ -187,15 +206,18 @@ export class Lobby {
         }
       }
       if (!room) {
-        let n = this.next[server] ?? 1;
-        while (not.has(roomCode(server, n)) || this.closed.has(roomCode(server, n)) || this.rooms.has(roomCode(server, n))) n += 1;
+        const step=server==='public'&&shard!==null?LOBBY_SHARDS:1;
+        let n = Math.max(this.next[server] ?? 1,step>1?SHARDED_ROOM_BASE+shard:1);
+        while (not.has(roomCode(server, n)) || this.closed.has(roomCode(server, n)) || this.rooms.has(roomCode(server, n))) n += step;
         room = { name: roomCode(server, n), server, players: 0, agents: 0, ai: 0, at: now, ver, ...(host ? { host } : {}), pending: [], agentPending: [] };
-        this.next[server] = n + 1;
+        this.next[server] = n + step;
         this.rooms.set(room.name, room);
       }
       room.pending.push(now);
       this.save();
-      return json({ room: room.name, players: room.players, max, server, ...(full ? { full: true } : {}) });
+      const result={ room: room.name, players: room.players, max, server, ...(full ? { full: true } : {}) };
+      if(reservation)this.reservation(reservation,result);
+      return json(result);
     }
     if (url.pathname === '/report' && request.method === 'POST') {
       const body = await request.json().catch(() => ({}));

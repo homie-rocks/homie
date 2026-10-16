@@ -72,3 +72,23 @@ test('chat statistics flush at most once per minute',async()=>{
  const table=Object.create(Table.prototype);let flushes=0;table.flushChatPending=async()=>flushes++;
  await table.flushChat();await table.flushChat();assert.equal(flushes,1);
 });
+
+import {Lobby} from '../worker/lobby.mjs';
+import {lobbyFor,roomShard,LOBBY_SHARDS} from '../worker/lobby-shards.mjs';
+test('matchmaking distributes rooms and repeated player reservations remain on one seat allocation',async()=>{
+ const objects=new Map();const env={LOBBY:{idFromName:x=>x,get(name){if(!objects.has(name)){const values=new Map();objects.set(name,new Lobby({storage:{get:async k=>values.get(k),put:async(k,v)=>values.set(k,v)},blockConcurrencyWhile:fn=>fn(),waitUntil(){}},{}));}return {fetch:(url,init)=>objects.get(name).fetch(new Request(url,init))};}}};
+ const assignments=await Promise.all(Array.from({length:96},async(_,i)=>{
+   const lobby=lobbyFor(env,'g','player-'+i),url='https://lobby/join?max=1';
+   const [a,b]=await Promise.all([lobby.fetch(url),lobby.fetch(url)]);const x=await a.json(),y=await b.json();assert.equal(x.room,y.room);return x.room;
+ }));
+ assert.equal(new Set(assignments).size,96);assert.equal(objects.size,LOBBY_SHARDS);
+ assert.equal(new Set(assignments.map(roomShard)).size,LOBBY_SHARDS);
+});
+
+import {liveRoomSummaries} from '../worker/lobby-summary.mjs';
+test('room summaries paginate beyond 500 games and aggregate shards',async()=>{
+ const now=Date.now(),rows=Array.from({length:1201},(_,i)=>({game:'g'+String(i).padStart(4,'0'),updated:now,rooms:JSON.stringify([{name:'pub-1',players:1,at:now}])}));
+ rows.push({game:'g1200~1',updated:now,rooms:JSON.stringify([{name:'pub-100000001',players:2,at:now}])});let queries=0;
+ const DB={prepare(sql){let after='';return {bind(value){after=value;return this;},async all(){queries++;assert.match(sql,/ORDER BY game/);return {results:rows.filter(r=>r.game>after).slice(0,500)};}};}};
+ const result=await liveRoomSummaries({DB,BACKGROUND:{}});assert.equal(result.size,1201);assert.equal(result.get('g1200').length,2);assert.equal(queries,3);
+});

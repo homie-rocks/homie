@@ -1,3 +1,4 @@
+import {lobbyFor} from './lobby-shards.mjs';
 /** Route dispatch; large interfaces and tool runtimes load at their own entry points. */
 import { catalogue } from './catalogue.mjs';
 
@@ -338,7 +339,7 @@ export default async function route(request, env, ctx) {
         if(!meta.room)return appRoleSession((await import('./records-page.mjs')).recordsPage(meta,url,cat,await availableShellShop(env,cat,game),Boolean(await (await import('./local-test.mjs')).localSession(request,env)),launch!=='public'?await appAssetTicket(env,game,undefined,{request,meta,launch}):null),request,env,meta,launch);
       }
     }
-    const lobby = () => env.LOBBY.get(env.LOBBY.idFromName(game));
+    const lobby = () => lobbyFor(env,game,/^[A-Za-z0-9_-]{16,43}$/.test(url.searchParams.get('b')??'')?url.searchParams.get('b'):'');
     if (sub === 'invite') return redeemInvite(request, env, url, cat, meta, settings);
 
     // SERVERS (worker/servers.mjs, NETPLAY.md section 17): which server a request is for — its path (/s/<id>/), its
