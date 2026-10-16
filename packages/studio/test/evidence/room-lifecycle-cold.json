@@ -1,0 +1,59 @@
+{
+  "runtimeCommit": "022121f8704f39b6b600d1a151cbcea302616164",
+  "baseline": "@homie-rocks/studio@0.54.0",
+  "colo": "YVR",
+  "method": "Alternate baseline/head order per pair. Redeploy a unique marker for each sample. Accept only HTTP 200, matching marker, first request in its Worker isolate, same colo, reused TCP/TLS connection. The public /bench/api/lobby endpoint assigns a room via real D1 and Lobby bindings. Cold means Worker isolate, not cold D1 or cold room. Two version-specific Workers/DO namespaces share one D1 database and an identical minimal catalogue. Connections are pinned to the same colo; this is a controlled cold-isolate comparison, not a reproduction of the historical fresh-TLS PDX experiment.",
+  "filter": {
+    "totalRequests": 79,
+    "accepted": 30,
+    "excluded": 49
+  },
+  "results": {
+    "baseline": {
+      "n": 15,
+      "ttfbMs": {
+        "median": 306.8,
+        "p25": 295.8,
+        "p75": 354.22,
+        "min": 228.13,
+        "max": 470.26
+      },
+      "workerMs": {
+        "median": 136,
+        "p25": 116.0,
+        "p75": 146.0,
+        "min": 110,
+        "max": 315
+      }
+    },
+    "head": {
+      "n": 15,
+      "ttfbMs": {
+        "median": 298.68,
+        "p25": 245.42,
+        "p75": 321.26,
+        "min": 216.5,
+        "max": 378.73
+      },
+      "workerMs": {
+        "median": 86,
+        "p25": 81.0,
+        "p75": 90.0,
+        "min": 69,
+        "max": 136
+      }
+    }
+  },
+  "headMinusBaselineMedianMs": -8.12,
+  "relativeMedianPercent": -2.65,
+  "pairedBootstrapMedianDifference95Ms": [
+    -70.7,
+    20.17
+  ],
+  "bootstrap": {
+    "replicates": 10000,
+    "seed": 151,
+    "pairedDeployments": 15,
+    "interpretation": "Exploratory percentile interval resampling adjacent deployment pairs; network and deployment conditions limit generalization."
+  }
+}
