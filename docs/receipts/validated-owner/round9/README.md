@@ -2,7 +2,7 @@
 
 PR #116 was rebased from `d37188d6` onto `a8acb479` (main 0.57.0). The original head remains in local branch `round9-pre-rebase`. No release version was changed. Rebase resolutions preserve the immediate-link subscription guard, bodyless turn-based participants, settled-round suspension, persisted idle deadlines and wakeup without replaying idle ticks. The new Table/Gate lifecycle, relay epochs and Lobby shards remain main's implementation.
 
-The studio uses npm-published 0.56.0 (the latest registry version at setup) with the PR-only runtime patch applied and packed as a checked-in tarball. Its clean installation matches the installed source files. Control is a detached checkout of Arcade main `c75980a`, also published 0.56.0. Both run locally; nothing was deployed.
+The studio now uses npm-published 0.57.0 with the PR-only runtime patch applied and packed as a checked-in tarball. The registry still offered 0.56.0 at setup; it was upgraded when 0.57.0 became available. Installed runtime sources and build identity are compared against the toolkit checkout. Control is a detached checkout of Arcade main `c75980a`, also published 0.56.0. Both run locally; nothing was deployed.
 
 Validation on `1a5e6d47`: full [CI passes](https://github.com/homie-rocks/homie/actions/runs/38867936748), TypeScript build and authoring-guide consistency pass. All 316 rules-view tests pass in alphabetic/numeric batches. The original monolithic attempt exhausted Node's heap; it is retained as a failed attempt. A subsequent overly broad nonalphabetic filter matched the test-file path and was stopped; the explicit numeric batch replaces it. The 44 focused rules, hostile-input, probe and Lab checks pass. The lifecycle/owner suite includes a new validated-owner catch-up case proving exactly one settled round and restored wakeup.
 
@@ -11,3 +11,12 @@ The studio's strict build and all 44 studio tests pass. Its proof scripts and ra
 **This is not the final acceptance verdict.** The full matrix is still running. Broad legacy catch/freeze diagnostics remain alongside the new round-aware phantom-candidate and continuously-moving-owner freeze analyzers. Round resets and standing-to-respawn intervals must not be presented as confirmed phantom catches or freezes.
 
 Quiet-load 300 ms repeats exposed deep observer contacts. Commit `f26f6e26` adds the bounded relay-latency query; the studio uses it with a 600 ms hard contact cap and retains all old stale-report tests. Two preliminary 180-second pairs had no deep passes or delayed catches on either side, with 3/0 brief shallow passes. These exploratory pairs do not replace the fresh full matrix. The 23 focused toolkit tests and 47 studio tests pass. Full CI for this API: https://github.com/homie-rocks/homie/actions/runs/38873162439 (status must be checked before final reporting).
+
+Recovery work after the first quiet-load stall traces:
+
+- Retain 512 unique owner input ticks, retire accepted prefixes, and deduplicate pending reports. Packet bytes and eight validations per tick stay bounded. This removed non-placement owner snap-backs after 15-second pauses.
+- Retained-authority clients keep an open transport through 20 seconds of silence; actual closes/errors still reconnect immediately.
+- Real close-event capture identified relay `4000 silent` eviction when a delayed server timer ran before queued input callbacks. Recently active clients now receive 2.5 seconds to deliver queued traffic after such a pause. A test also proves genuinely silent clients still expire. The subsequent three-pause pair kept one socket on both sides.
+- Placement snapshots must not label a new body revision with the prior revision's accepted-report tick. The new regression test fails before the timestamp fence and passes afterward.
+
+Full CI passed on `5af81402`: https://github.com/homie-rocks/homie/actions/runs/38878171594. This predates the last two recovery fixes. The latest focused suites pass: 21 owner validation tests, 14 owner-view cases, 45 netplay tests, six relay/lifecycle recovery tests, and 47 studio tests (the studio suite predates the final one-line snapshot fence). Strict 0.57.0 generated play still covers 18,000 ticks / 813 restores. Final-head full CI and the fresh paired matrix remain required.
