@@ -11,10 +11,11 @@ import worker,{useRoutes,isOwner,hasRole} from './worker/index.mjs';
 useRoutes(async(request,env)=>{
   const path=new URL(request.url).pathname;
   if(path==='/custom/owner')return Response.json({allowed:await isOwner(request,env)});
+  if(path==='/custom/visitor')return Response.json({allowed:await hasRole(request,env,'desk','visitor')});
   if(path==='/custom/staff')return Response.json({allowed:await hasRole(request,env,'desk','staff')});
   if(path==='/custom/html')return new Response('<p>Studio</p>',{headers:{'content-type':'text/html'}});
 });
-export default {fetch(request,env,ctx){return worker.fetch(request,{...env,ASSETS:{fetch:async request=>new URL(request.url).pathname==='/games.json'?Response.json({studio:{name:'Test'},games:[{id:'desk',kind:'app',roles:{staff:{signIn:true,can:[]}}}]}):new Response('missing',{status:404})}},ctx);}};
+export default {fetch(request,env,ctx){return worker.fetch(request,{...env,ASSETS:{fetch:async request=>new URL(request.url).pathname==='/games.json'?Response.json({studio:{name:'Test'},games:[{id:'desk',kind:'app',roles:{visitor:{signIn:false,can:[]},staff:{signIn:true,can:[]}}}]}):new Response('missing',{status:404})}},ctx);}};
 `},write:false,bundle:true,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*']});
   const mf=new Miniflare({telemetry:{enabled:false},workers:[{config:{name:'custom-routes',compatibilityDate:'2026-10-07',compatibilityFlags:['nodejs_compat'],manifest:{mainModule:'worker.mjs',modules:{'worker.mjs':{type:'esm',contents:bundled.outputFiles[0].text}}},env:{DB:{type:'d1',id:'custom-routes'}}}}]});
   t.after(()=>mf.dispose());
@@ -36,6 +37,12 @@ export default {fetch(request,env,ctx){return worker.fetch(request,{...env,ASSET
   await db.prepare('DELETE FROM stats_keys').run();
   assert.deepEqual(await get('/custom/owner'),{allowed:false});
   assert.deepEqual(await get('/custom/staff?access=private-link'),{allowed:false});
+  await db.prepare('CREATE TABLE office_games(game TEXT PRIMARY KEY, launch TEXT, max_players INTEGER, updated_at INTEGER)').run();
+  assert.deepEqual(await get('/custom/visitor',false),{allowed:true});
+  for(const launch of ['private','invite']) {
+    await db.prepare("INSERT OR REPLACE INTO office_games VALUES('desk',?1,4,0)").bind(launch).run();
+    assert.deepEqual(await get('/custom/visitor',false),{allowed:false},launch+' app must be closed to anonymous visitors');
+  }
   const html=await mf.dispatchFetch('http://localhost/custom/html');
   assert.equal(html.headers.get('x-frame-options'),'DENY');assert.equal(html.headers.get('x-content-type-options'),'nosniff');
   assert.equal(await html.text(),'<p>Studio</p>');

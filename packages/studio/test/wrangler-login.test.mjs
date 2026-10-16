@@ -1,3 +1,4 @@
+import {tmpdir} from 'node:os';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as cf from '../lib/cloudflare.mjs';
@@ -20,7 +21,7 @@ test('three studio processes recover together from a shared refresh collision',a
   const {mkdtempSync,mkdirSync,writeFileSync,rmSync}=await import('node:fs');
   const {join}=await import('node:path');
   const {spawn}=await import('node:child_process');
-  const root=mkdtempSync(new URL('../../../.wrangler-login-test-',import.meta.url).pathname);
+  const root=mkdtempSync(join(tmpdir(),'wrangler-login-'));
   t.after(()=>rmSync(root,{recursive:true,force:true}));
   const script=`#!/usr/bin/env node
 const fs=require('node:fs'),path=require('node:path');

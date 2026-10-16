@@ -13,7 +13,7 @@ import { appCors, isAppOrigin } from './standalone.mjs';
 import {json,finish} from './responses.mjs';
 
 export {useRoutes} from './custom-routes.mjs';
-export {isOwner,hasRole} from './route-auth.mjs';
+export {isOwner,hasRole,requireSameOrigin} from './route-auth.mjs';
 export { useFunctions } from './function-registry.mjs';
 export { Gate, Concentrator } from './gate.mjs';
 export { seatCount, SEAT_MAX } from './seats.mjs';

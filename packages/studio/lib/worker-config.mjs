@@ -28,6 +28,9 @@ export function updateWorkerConfig(root,generated) {
     writeFileSync(join(root,'wrangler.custom.json'),JSON.stringify(custom,null,2)+'\n');
   }
   const next=merge(base,custom);
+  // Authorization paths are additive: custom assets must never bypass toolkit gates.
+  const requiredRoutes=base.assets?.run_worker_first, customRoutes=custom.assets?.run_worker_first;
+  next.assets={...next.assets,run_worker_first:requiredRoutes===true || customRoutes===true ? true : [...new Set([...(Array.isArray(requiredRoutes)?requiredRoutes:[]),...(Array.isArray(customRoutes)?customRoutes:[])])]};
   if(readStudio(root).concept===true)next.assets={...next.assets,run_worker_first:true};
   next.vars={...next.vars,HOMIE_CONCEPT:readStudio(root).concept===true?'1':'0'};
   verifiedMcpConfig(root);

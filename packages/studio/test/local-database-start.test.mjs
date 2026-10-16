@@ -1,3 +1,4 @@
+import {tmpdir} from 'node:os';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {prepareLocalDatabase} from '../lib/local-database-start.mjs';
@@ -20,7 +21,7 @@ test('the first notice on a fresh local database reaches its registered function
  const {join}=await import('node:path');
  const {functionDeploymentSQL}=await import('../lib/functions-build.mjs');
  const {emitEvent,runFunctions}=await import('../worker/functions.mjs');
- const root=mkdtempSync(join(process.cwd(),'proof/batch-0560/functions-'));
+ const root=mkdtempSync(join(tmpdir(),'homie-functions-'));
  const sql=new DatabaseSync(':memory:');
  t.after(()=>{sql.close();rmSync(root,{recursive:true,force:true});});
  mkdirSync(join(root,'site/src/functions'),{recursive:true});

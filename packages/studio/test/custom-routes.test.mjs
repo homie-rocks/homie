@@ -52,3 +52,9 @@ test('custom routes preserve streams, redirects, fallthrough and reject invalid 
   toolkit.useRoutes(()=>{throw Error('callback failed');});
   await assert.rejects(toolkit.default.fetch(request('/throws'),env(),{}),/callback failed/);
 });
+
+test('custom mutations require same-origin browser evidence',()=>{
+ assert.equal(typeof toolkit.requireSameOrigin,'function');
+ for(const headers of [{origin:'https://studio.example'},{'sec-fetch-site':'same-origin'}]) assert.equal(toolkit.requireSameOrigin(request('/custom',headers)),null);
+ for(const headers of [{},{origin:'https://evil.example'},{origin:'null'}]) assert.equal(toolkit.requireSameOrigin(request('/custom',headers)).status,403);
+});
