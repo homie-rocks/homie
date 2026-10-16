@@ -3129,32 +3129,3 @@ test('latest entity reads reveal confirmed lifecycle fields without advancing th
  assert.equal(viewer.viewTick,tick,'authority reads must not fast-forward presentation');
  assert.equal(viewer.get('missing',{latest:true}),null);
 });
-
-test('opted-in remote forecasts and patrols share the owner clock under changing delivery delay',async t=>{
- const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-scene');
- const clock=virtualTime(t);let delay=0;
- const r=rig(L,compiled,false,0,(message,link)=>link===1&&message.t==='in'?delay:0);
- const viewer=openRoom({remoteInput:{runner:e=>({ax:Number(e.vel.x)/4}),monster:()=>({})},net:{config:cfg('Forecast scene'),WebSocketImpl:r.socket(),post:null}});
- await clock.wait(300);const owner=openRoom({net:{config:cfg('Forecast source'),WebSocketImpl:r.socket(),post:null}});
- t.after(()=>{viewer.close();owner.close();r.stop();});await clock.wait(1000);owner.input({ax:1});await clock.wait(500);
- let monster;viewer.each('monster',e=>{monster=e.id;});const id=owner.me.id;
- const offset=viewer.get(id).pos.x-viewer.get(monster).pos.x;
- for(const ms of [0,80,150,300,0]){delay=ms;for(let i=0;i<80;i++){
-  await clock.wait(16);const a=viewer.get(id),b=viewer.get(monster);
-  assert.ok(Math.abs(a.pos.x-b.pos.x-offset)<.01,`delay ${ms}, clocks disagree: ${a.pos.x-b.pos.x} vs ${offset}`);
- }}
- assert.equal(r.host.core.stats.held,0);assert.equal(r.host.core.stats.errors,0);
-});
-
-test('remote forecast corrections are bounded and placements discard old forecasts',async t=>{
- const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner-fast');
- const clock=virtualTime(t),r=rig(L,compiled,false,0,300);
- const viewer=openRoom({remoteInput:{runner:e=>({ax:Math.sign(Number(e.vel.x))})},net:{config:cfg('Forecast correction'),WebSocketImpl:r.socket(),post:null}});
- await clock.wait(300);const owner=openRoom({net:{config:cfg('Changing source'),WebSocketImpl:r.socket(),post:null}});
- t.after(()=>{viewer.close();owner.close();r.stop();});await clock.wait(2000);owner.input({ax:1});await clock.wait(1000);
- const id=owner.me.id;let x=viewer.get(id).pos.x;
- owner.input({ax:-1});for(let i=0;i<100;i++){await clock.wait(16);const next=viewer.get(id).pos.x;assert.ok(Math.abs(next-x)<=1.40001,`forecast correction jumped ${next-x}`);x=next;}
- owner.input({ax:0});await clock.wait(600);owner.command('respawn');await clock.wait(600);
- assert.ok(Math.abs(viewer.get(id).pos.x)<.001,'placement discards the previous forecast');
- assert.equal(r.host.core.stats.held,0);
-});

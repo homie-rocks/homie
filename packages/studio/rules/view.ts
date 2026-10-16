@@ -110,11 +110,6 @@ export interface OpenRoomOptions {
   predict?: Record<string, Predictor>;
   /** Camera axes on the rules' x/y plane for the testing tools. Default: x right, y up. */
   screenBasis?: PortProbeOptions['basis'];
-  /** Opt-in remote movement forecasts for deterministic 2D games. Inputs must
-   * come from the entity's last confirmed movement state; never run actions.
-   * All presentation uses the local input clock, with at most one second of
-   * remote movement forecast. Authority and owner input are unchanged. */
-  remoteInput?: Record<string, (entity: Entity) => Record<string, number | boolean>>;
   /** Horizontal intent for box-bodied 2D visual corrections: -1 left, 0 neutral, +1 right. Does not affect simulation. */
   correctionDirection?: (input: Readonly<Record<string, unknown>>, velocity: Vec3) => number;
   /**
@@ -1320,10 +1315,6 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let sceneCursor: number | null = null, sceneAt = 0, sceneFrame: number | null = null;
   let sceneCached: ReturnType<typeof net.sample> = null;
   function sceneSample(raw = net.sample()): ReturnType<typeof net.sample> {
-    if (opts.remoteInput && base && dims === 2 && !map.physics) {
-      const current = net.latest();
-      if (current) return {a:current,b:current,alpha:1,renderT:current.st};
-    }
     if (!raw || raw.renderT === undefined || !hasValidatedOwners) return raw;
     const now = clock();
     const frame = typeof document === 'undefined' ? now : Number(document.timeline?.currentTime ?? now);
@@ -1386,7 +1377,6 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     return sceneCached = {...raw, a, b, alpha, renderT:a.st+(b.st-a.st)*alpha};
   }
   function sceneTick(s: ReturnType<typeof net.sample>): number {
-    if (opts.remoteInput && dims === 2 && !map.physics && base) return tickAt(clock());
     return s === sceneCached && sceneCursor !== null ? sceneCursor : s ? s.a.k + (s.b.k-s.a.k)*s.alpha : latest?.k ?? 0;
   }
   function ownerDrawn(u: Unpacked, epoch: number, tick: number, bounded: boolean): Entity {
@@ -1439,50 +1429,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (drawnFrame.has(id)) return drawnFrame.get(id)!;
     const result = drawnRemote(id, s); drawnFrame.set(id, result); return result;
   }
-  type RemoteForecast = { source: Unpacked; epoch: number; start: number; states: ReturnType<typeof runMove>[]; input: Readonly<Record<string, unknown>>; drawn?: {pos:Vec3;frame:number}; };
-  const remoteForecasts = new Map<string, RemoteForecast>();
-  function forecastRemote(u: Unpacked, tick: number): Entity {
-    const kind = kindOf.get(u.kind)!, inputOf = opts.remoteInput![u.kind];
-    const start = u.ownerTick ?? latest!.k;
-    let q = remoteForecasts.get(u.id);
-    if (!q || q.source !== u || q.epoch !== epoch) {
-      const old = q;
-      const values = inputOf(entityOf(u));
-      const input: Record<string,unknown> = {};
-      for (const [name,fd] of kind.input) input[name] = fd.t === 'press' || fd.t === 'pulse' ? 0 : coerce(fd,values[name] ?? fd.init,dims);
-      q = {source:u,epoch,start,states:[{pos:u.pos,vel:u.vel,heading:u.heading,grounded:u.grounded,motion:motionOf(u.kind,u.motion)}],input:Object.freeze(input),
-        ...(old?.epoch === epoch && old.source.r === u.r ? {drawn:old.drawn} : {})};
-      remoteForecasts.set(u.id,q);
-      for(const id of remoteForecasts.keys())if(!latest!.ents.has(id))remoteForecasts.delete(id);
-    }
-    const at = Math.max(start,Math.min(start+tickHz,tick));
-    const whole = Math.floor(at), fraction = at-whole;
-    while(q.start+q.states.length-1 < Math.ceil(at)) {
-      const prior=q.states.at(-1)!;
-      q.states.push(runMove(u.kind,{...prior,motion:motionOf(u.kind,prior.motion)},q.input,q.start+q.states.length));
-    }
-    const a=q.states[whole-start],b=q.states[whole-start+1]??a;
-    let pos=blendPosition(a.pos,b.pos,fraction,map.wrap),vel=b.vel;
-    if(b.steps?.length && b!==a){
-      const n=b.steps.length-1,index=Math.min(n-1,Math.floor(fraction*n)),f=fraction*n-index;
-      pos=blendPosition(b.steps[index].pos,b.steps[index+1].pos,f,map.wrap);
-    }
-    const frame=typeof document==='undefined'?clock():Number(document.timeline?.currentTime??clock());
-    if(q.drawn){
-      if(q.drawn.frame===frame)pos=q.drawn.pos;
-      else {
-        // A changed remote input corrects presentation, never local movement.
-        // Keep the same body-width bound used by buffered owner presentation.
-        const d=distance(q.drawn.pos,pos),limit=kind.radius*2.8;
-        if(d>limit)pos=blendPosition(q.drawn.pos,pos,limit/d,map.wrap);
-      }
-    }
-    q.drawn={pos,frame};
-    return Object.freeze({...entityOf(u),pos:vec3(pos,dims),vel,heading:b.heading,grounded:a.grounded&&b.grounded});
-  }
   function drawnRemote(id: string, s: ReturnType<typeof net.sample>): Entity | null {
-    const current=latest?.ents.get(id);
-    if (current && base && opts.remoteInput?.[current.kind] && dims===2 && !map.physics) return forecastRemote(current,sceneTick(s));
     const a = s ? frameOf(s.a) : latest;
     const b = s ? frameOf(s.b) : latest;
     const ea = a?.ents.get(id); const eb = b?.ents.get(id);

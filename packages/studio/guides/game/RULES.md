@@ -1525,17 +1525,3 @@ as a confirmed destruction at a past contact tick. Apply that decision when the
 drawn scene reaches its timestamp. Keep positions on `room.viewTick`; mixing a
 latest position with buffered hazards puts them on different clocks. Latest
 reads do not include provisional entities or advance the drawing clock.
-
-
-For deterministic 2D movement against a static map, a view may opt into
-`openRoom({remoteInput: {runner: entity => ({...heldControls})}})`. The callback
-must derive controls from confirmed movement state (for example, declared last
-held-key bits). The toolkit runs the guarded move for remote bodies on the local
-input clock; `room.viewTick` uses that same clock for deterministic patrols.
-Forecasts run movement only, never predictors, actions, points or damage. Press
-and pulse fields are zero. They stop after one second without fresh authority;
-a changed report corrects the remote presentation by at most 1.4 body widths per
-frame, and placements discard the old forecast immediately. This is opt-in:
-ordinary rooms retain buffered interpolation. Do not opt in for a physics world
-or stateful moving geometry. Unknown remote control changes remain predictions;
-measure their correction, contacts and phone cost before adopting this mode.
