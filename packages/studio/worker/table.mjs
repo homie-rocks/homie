@@ -875,6 +875,7 @@ export class Table {
       const response = await this.env.GATE.get(this.env.GATE.idFromName(key)).fetch(url);
       if (!response.ok) throw new Error('Gate presence unavailable');
       const presence = new Map(await response.json());
+      relay.pings = presence;
       for (const [id, clientId] of relay.clients.values()) {
         const client = this.room?.clients.get(clientId);
         if (client && presence.has(id)) client.lastSeen = Math.max(client.lastSeen,presence.get(id));
@@ -1223,9 +1224,10 @@ export class Table {
     const key = `${url.searchParams.get('game')}/${url.searchParams.get('room')}/${gate}`;
     const socket = relayStream(this.ctx,async()=>{const response=await this.env.GATE.get(this.env.GATE.idFromName(key)).fetch(target);if(!response.ok)throw new Error('Gate wake failed');await response.body?.cancel();});
     const clients = new Map((descriptor?.clients??[]).map(row=>[row[0],row]));
-    const relay = {url:url.toString(),socket,clients};
+    const relay = {url:url.toString(),socket,clients,pings:new Map(descriptor?.pings??[])};
     relay.session = multiplexSession(socket,(request,transport)=>this.connect(request,transport),{
       receipts:false,
+      lastPing:id=>relay.pings.get(id)??0,
       source:(this.worldSource??=worldSource()),
       resume:id=>this.sessionSnapshot?.clients.get(clients.get(id)?.[1]),
       remember:(id,clientId,url,ip,agent)=>clients.set(id,[id,clientId,url,ip,agent]),
@@ -1234,7 +1236,7 @@ export class Table {
     this.relays.set(gate,relay);return relay;
   }
   saveSessions() {
-    this.relayDescriptors = [...this.relays.values()].map(relay=>({url:relay.url,clients:[...relay.clients.values()].filter(row=>this.room.clients.has(row[1]))}));
+    this.relayDescriptors = [...this.relays.values()].map(relay=>({url:relay.url,pings:[...relay.pings],clients:[...relay.clients.values()].filter(row=>this.room.clients.has(row[1]))}));
     const keys=['game','code','lastReport','lastPeople','lastAgents','lastAi','lastReportAt','openCounted','launchReadFor','relayDescriptors'];
     this.sessionStore.write(this.room,Object.fromEntries(keys.map(key=>[key,this[key]])));
   }

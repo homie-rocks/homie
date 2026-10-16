@@ -136,7 +136,7 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
 }
 
 /** Adapt one upstream socket into the same transport the Table accepts locally. */
-export function multiplexSession(socket, connect, { onMetrics = () => {}, delay = 60, source = worldSource(), onCount = () => {}, receipts = true, resume = () => null, remember = () => {} } = {}) {
+export function multiplexSession(socket, connect, { onMetrics = () => {}, delay = 60, source = worldSource(), onCount = () => {}, receipts = true, lastPing = () => 0, resume = () => null, remember = () => {} } = {}) {
   // Eight frames may be unacknowledged: 400 ms of 20 Hz worlds. Past that the newest world replaces an unsent one.
   // This link's Gate has every world up to `synced`, and holds the players in these seats.
   let synced = 0; const seats = new Map();
@@ -187,6 +187,7 @@ export function multiplexSession(socket, connect, { onMetrics = () => {}, delay 
           const client = {
             accept() {},
             resume: resume(id),
+            lastPing: () => lastPing(id),
             remember(clientId) { remember(id, clientId, value, ip, agent); },
             addEventListener(name, fn) { const list = handlers.get(name) ?? []; list.push(fn); handlers.set(name, list); },
             emit(name, event) { for (const fn of handlers.get(name) ?? []) fn(event); },
@@ -351,7 +352,6 @@ export class Gate {
       socket.addEventListener('reset',()=>{link.reset();sink=worldSink();worldReady=false;this.worlds=null;for(const client of this.clients.values()){client.snapEncoder=null;client.crowd=null;}link.send(['resync']);});
       const lost = (event = {}) => {
         if (this.link !== link) return;
-        this.linkFailure = {reason:event.reason,error:event.error?.message};
         console.log(JSON.stringify({ ev: 'room-link-lost', room: name, gate: url.searchParams.get('gate'), layer: 'gate', code: event.code ?? null, reason: event.reason ?? null, error: event.error?.message ?? null, clients: this.clients.size, transport: link.facts() }));
         this.link = null; this.worlds = null; link.close();
         for (const timer of this.admissions.values()) clearTimeout(timer); this.admissions.clear();
