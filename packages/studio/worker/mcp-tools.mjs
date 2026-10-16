@@ -76,6 +76,24 @@ export function services(env, cat, origin, caller, namespace, definition = {}) {
     shop:()=>office('/_studio/api/shop'),
     database:toolDatabase(env.DB,namespace),
     fetch:globalThis.fetch.bind(globalThis),
+    async fetchSelf(path,init={}) {
+      const url=new URL(path,origin);
+      if(url.origin!==new URL(origin).origin || url.username || url.password)throw new Error('Same origin required');
+      const headers=new Headers(init.headers);
+      if(headers.has('authorization')||headers.has('cookie'))throw new Error('Explicit credentials refused');
+      headers.set('origin',new URL(origin).origin);
+      const request=withToolIdentity(new Request(url,{...init,headers,redirect:'error'}),caller);
+      const pending=[];
+      const response=await (await import('./custom-routes.mjs')).customRoute(request,env,{waitUntil:promise=>pending.push(promise)});
+      await Promise.all(pending);
+      return response??new Response('Not found',{status:404});
+    },
+    async rateLimit(name,key=caller.id) {
+      const rule=cat.studio?.mcp?.rateLimits?.[name];
+      if(!rule?.tools?.includes(definition.name)||!env[rule.binding]?.limit)throw new Error('Rate limit not declared for this tool');
+      if(typeof key!=='string'||!key.length||key.length>256)throw new Error('Rate limit key required (1–256 characters)');
+      return env[rule.binding].limit({key:JSON.stringify([name,key])});
+    },
     // A named secret may authenticate an HTTPS request; its value is never returned.
     async fetchWithSecret(name,url,init={}) {
       const rule=cat.studio?.mcp?.secrets?.[name];

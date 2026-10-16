@@ -24,6 +24,10 @@ export interface ToolContext {
     append(key: string, value: unknown): Promise<{value: unknown[]; version: number}>;
     list(options?: {prefix?: string; after?: string; limit?: number}): Promise<{items: {key: string; value: unknown; version: number}[]; next: string | null}>;
   };
+  /** Dispatch a registered custom route in-process with this caller's identity. */
+  fetchSelf(path: string, init?: RequestInit): Promise<Response>;
+  /** Opt-in shared Cloudflare Rate Limiting binding. Anonymous callers need an explicit key. */
+  rateLimit(name: string, key?: string): Promise<{success: boolean}>;
   fetch: typeof fetch;
   fetchWithSecret(name: string, url: string, init?: RequestInit): Promise<Response>;
   ai(model: string, input: unknown): Promise<unknown>;
