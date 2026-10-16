@@ -811,6 +811,16 @@ export function toolDefs(ctx, avail = {}) {
       run: async (a) => { const r = studioDomain(ctx.root(a.studio), a.hostname); return r.ok ? ok(r.next, r) : fail(r.next, r); },
     },
     {
+      name: 'studio_read_only', title: 'Make the studio read-only',
+      description: 'Freeze the live studio for a few minutes, e.g. while moving it to another host or during maintenance, and open it again: on, off, or status. Uses the studio\'s own Cloudflare sign-in to set or delete the Worker secret STUDIO_READ_ONLY; Cloudflare applies it at once, with no build or deploy, and live rooms reconnect once. While on, every change answers 503 with Retry-After and x-studio-read-only: 1; pages, games, live rooms and the Stripe webhook keep working. Then it reads the live site\'s /api/games readOnly to confirm. Turn it off when the work is done.',
+      inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['on', 'off', 'status'] }, url: str('Optional: the live site to check, when this computer does not know it'), ...STUDIO_ARG }, required: ['action'] },
+      annotations: { title: 'Make the studio read-only', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      run: async (a) => {
+        const result = await (await import('./read-only.mjs')).readOnlyCommand(ctx.root(a.studio), a.action, { url: a.url ?? null });
+        return result.ok ? ok(result.message, result) : fail(result.why, result);
+      },
+    },
+    {
       name: 'setup_status', title: 'Setup status',
       description: 'Step 0 of a new studio, and any time the person asks what they need or whether they are set up: what this computer and their accounts have (Node, Cloudflare signed in and email verified, Chrome for the checks, ffmpeg, and the optional GitHub, ElevenLabs and fal), what each unlocks, and the exact fix; the studios in the studios folder; and the new-studio checklist with where they are on it. For a studio that is not made yet, pass its name as studio: the checklist is then the new studio\'s, never another studio\'s that happens to be in the folder. Read-only, a few seconds. Optional rows never block anything.',
       inputSchema: { type: 'object', properties: { studio: str('Optional: which studio (its folder name or name), or the name of a new studio that is not made yet; else the one in use'), fresh: { type: 'boolean', description: 'Check again now instead of the last 20 s' }, integrations: { type: 'object', description: 'Session evidence from official MCP tools: connected only after a successful authenticated call; unavailable when absent, otherwise unknown. Never credentials.', properties: Object.fromEntries(['fal','elevenlabs','cloudflare'].map(id => [id, { type: 'string', enum: ['connected','unavailable','unknown'] }])) } } },

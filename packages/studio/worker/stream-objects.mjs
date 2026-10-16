@@ -1,6 +1,7 @@
+import {readOnlyEnv} from './read-only.mjs';
 /** Streams use independent namespaces so subscribers never warm matchmaking state. */
 export class AppRecordHub {
-  constructor(ctx, env) { this.ctx=ctx; this.env=env; }
+  constructor(ctx, env) { this.ctx=ctx; this.env=readOnlyEnv(env); }
   async fetch(request) {
     const {AppRecordStreams}=await import('./app-streams.mjs');
     this.streams??=new AppRecordStreams(this.env,this.ctx);
@@ -9,7 +10,7 @@ export class AppRecordHub {
   }
 }
 export class EventHub {
-  constructor(ctx, env) { this.ctx=ctx; this.env=env; }
+  constructor(ctx, env) { this.ctx=ctx; this.env=readOnlyEnv(env); }
   async fetch(request) {
     const {EventStreams}=await import('./event-resources.mjs');
     this.streams??=new EventStreams(this.env,this.ctx);
