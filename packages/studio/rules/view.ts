@@ -1376,15 +1376,16 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       let target=Math.min(tick,q.samples.at(-1)!.t);
       const from=q.drawn?.frame===frame?q.drawn.start:q.drawn?.tick;
       if(from!==undefined && target>from) {
-        let span=target-from;
-        const limit=kindOf.get(u.kind)!.radius*2.8;
+        let remaining=kindOf.get(u.kind)!.radius*2.8;
         for(let i=1;i<q.samples.length;i++) {
           const a=q.samples[i-1],b=q.samples[i];
           if(b.t<=from)continue;if(a.t>=target)break;
+          const lo=Math.max(from,a.t),hi=Math.min(target,b.t);
           const speed=Math.hypot(b.u.pos.x-a.u.pos.x,b.u.pos.y-a.u.pos.y,b.u.pos.z-a.u.pos.z)/(b.t-a.t);
-          if(speed>0)span=Math.min(span,limit/speed);
+          const travel=(hi-lo)*speed;
+          if(travel>remaining){target=lo+remaining/speed;break;}
+          remaining-=travel;
         }
-        target=from+span;
       }
       if(q.drawn){q.drawn.tick=target;q.drawn.frame=frame;q.drawn.start=from??target;}else q.drawn={tick:target,frame,start:from??target};
       tick=target;
