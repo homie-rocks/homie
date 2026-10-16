@@ -2353,12 +2353,12 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
 
   // ---------------------------------------------------------------- wire in
   function onMessage(data: unknown): void {
-    lastMsgAt = wall();
     const text = typeof data === 'string' ? data : String(data);
     countBytes(bytesIn, text.length);
     let m: Record<string, unknown>;
     try { m = JSON.parse(text) as Record<string, unknown>; } catch { return; }
     if (!m || typeof m['t'] !== 'string') return;
+    lastMsgAt = wall();
     switch (m['t']) {
       case 'welcome': return onWelcome(m);
       case 'snap': return onSnap(m, text.length);
@@ -2812,7 +2812,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     const st = Number(m['st']);
     const sent = pingsOut.get(c);
     if (sent === undefined || !Number.isFinite(st)) return;
-    pingsOut.delete(c);
+    for (const key of pingsOut.keys()) if (key <= c) pingsOut.delete(key);
     const recv = Date.now();
     const r = recv - sent;
     const off = st + r / 2 - recv;
@@ -2887,7 +2887,10 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     // the word of a timer that itself ran seconds late: the page was blocked (a heavy boot, shaders compiling) and
     // could not have heard anything, and what the relay sent meanwhile is still queued behind this very timer.
     // Dropping a healthy socket there turned every long hitch into a reconnect.
-    if (ws && lastMsgAt && wall() - lastMsgAt > staleMs) {
+    const oldestPing = pingsOut.values().next().value;
+    if (ws && oldestPing !== undefined && Date.now() - oldestPing >= 30_000 && !pingHeld) { lost(ws, 'stale'); return; }
+    const silence = idlePing && roundInfo?.phase !== 'live' ? Math.max(staleMs, 60_000) : staleMs;
+    if (ws && lastMsgAt && wall() - lastMsgAt > silence) {
       if (!pingHeld) { lost(ws, 'stale'); return; }
       // Two and a half seconds to be heard from (a pong answers the ping below): a socket that is really dead is
       // still dropped, two beats from now.
@@ -2895,7 +2898,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     }
     // An idle hibernatable room can answer this at the edge. Keep a regular
     // clock/visibility sample every 30 s, and every heartbeat during play.
-    if (idlePing && roundInfo?.phase !== 'live' && !hidden() && wall() - lastClockPing < 30_000) {
+    if (idlePing && roundInfo?.phase !== 'live' && wall() - lastClockPing < 30_000) {
       try { ws?.send('homie-ping'); } catch { if(ws)lost(ws,'send'); }
       return;
     }
@@ -3035,6 +3038,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     ws = sock; socketStartedAt = wall();
     sock.onopen = () => {
       lastMsgAt = wall();
+      pingsOut.clear();
       raw({
         t: 'hello', rules: rulesGame, v: NETPLAY_VERSION, rev: NETPLAY_REVISION, token, name: name || undefined, device, want, canHost: asAgent && asAgent.hands === 'host' ? false : canHost, game: opts.game, max: opts.maxPlayers,
         ...(rulesGame ? { coast: 1 } : {}),

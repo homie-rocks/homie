@@ -869,7 +869,10 @@ export class Table {
 
   /** The alarm: the house guides' brains decide (worker/agents.mjs), then the day's usage is written. */
   async alarm() {
+    this.hostRt?.wakeRound();
+    if (this.hostRt?.running) this.start();
     for (const relay of this.relays.values()) {
+      try {
       const url = new URL(relay.url); url.pathname='/__relay-presence';
       const key = `${url.searchParams.get('game')}/${url.searchParams.get('room')}/${url.searchParams.get('gate')}`;
       const response = await this.env.GATE.get(this.env.GATE.idFromName(key)).fetch(url);
@@ -880,9 +883,8 @@ export class Table {
         const client = this.room?.clients.get(clientId);
         if (client && presence.has(id)) client.lastSeen = Math.max(client.lastSeen,presence.get(id));
       }
+      } catch (error) { this.say({ev:'gate-presence-failed',error:errorLine(error)}); }
     }
-    this.hostRt?.wakeRound();
-    if (this.hostRt?.running) this.start();
     if (this.room && (!this.room.clients.size || this.canSleep())) { this.room.tick(Boolean(this.canSleep())); this.room.tellWatchers(); this.report(); }
     await this.flushRoundRecords();
     await this.flushFunctionEvents();

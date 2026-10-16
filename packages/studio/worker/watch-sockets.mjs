@@ -37,7 +37,7 @@ export class WatchSockets {
   }
   async restore(connect) {
     const sockets = this.ctx.getWebSockets?.() ?? [];
-    const requests = await this.ctx.storage.list({prefix: 'watch:'});
+    const requests = await this.ctx.storage.list?.({prefix: 'watch:'}) ?? new Map();
     const live = new Set(sockets.map(socket => 'watch:' + socket.deserializeAttachment()?.id));
     for (const key of requests.keys()) if (!live.has(key)) await this.ctx.storage.delete(key);
     for (const socket of sockets) {
