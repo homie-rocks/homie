@@ -13,11 +13,18 @@ Use your app's authenticated same-origin endpoint. Do not put credentials in a p
 The CSS accepts `--checklist-ink`, `--checklist-card`, `--checklist-accent`.
 
 Each item has unique string `id`, opaque string `revision`, `title`, `consequence` and
-`confirmLabel`. State the exact effect, amount/currency, recipient, visibility and
+`confirmLabel`, and optional boolean `irreversible`. State the exact effect, amount/currency, recipient, visibility and
 irreversibility where applicable. All labels render as text, never HTML. Limit: 100 items.
 
 `execute` receives `{id, revision, operation: 'confirm'|'undo', key, token?}`.
-A successful durable commit returns `{ok:true, message?, undoToken?}`. Return an undo token
+A successful durable commit returns `{ok:true, message, undoToken?}`. `message` describes
+what actually happened (past tense); it appears after “Done —”. `irreversible: true`
+always labels the consequence before confirmation and suppresses undo even if a token arrives.
+The visible states are Pending → Confirming → Done → Undone. During execution, the button
+is disabled and live status announces progress. After undo, return `{ok:true,message,pendingItem}`
+with a complete freshly revisioned proposal to re-enable confirmation. Without `pendingItem`,
+the disabled button says “Undone”. The undo message should name the restored state, e.g.
+“Saturday’s booking is back to pending.” Never return a pending proposal before restoration commits. Return an undo token
 only for an operation your server can reverse; never show a refund as reversible. A token
 must be bound to the authenticated actor, original action and deadline on the server.
 The UI disables duplicate taps. An uncertain failure locks that revision for the lifetime

@@ -19,6 +19,10 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [Unreleased]
 
+### Changed
+
+- Shared terrain map: smooth high-resolution coast, lit terrain with cavity shading, animated depth-coloured water and foam, sky/haze, flowing elevated route, collision-aware leader labels, intro camera and measured-frame lite fallback. Owner checklist now distinguishes pending, confirming, done and undone, announces actual consequences, labels irreversible actions and restores fresh pending actions after undo. Phone/desktop/TV evidence is kept in `proof/parts-161/`.
+
 ### Added
 
 - Two Apache-2.0 shared building blocks: an owner action checklist with visible consequences, one-tap confirmation, server-authorized undo and existing studio role/origin checks; and a three.js terrain route map with a local heightmap coastline, route tube, markers and phone/TV camera controls. Both include standard part manifests, catalogue entries, AI integration docs, self-contained previews and fast logic checks. No tile service is required.

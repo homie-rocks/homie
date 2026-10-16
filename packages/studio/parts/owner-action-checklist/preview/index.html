@@ -2,9 +2,15 @@
 import {mountChecklist} from '../src/index.mjs';
 const items = [
 {id:'booking',title:'Approve Saturday’s booking',consequence:'Reserve Studio A, 10:00–12:00, for Morgan. No payment will be taken.',confirmLabel:'Approve'},
-{id:'refund',title:'Refund order #1042',consequence:'Return $24 to the original payment method. This cannot be undone.',confirmLabel:'Refund $24'},
+{id:'refund',irreversible:true,title:'Refund order #1042',consequence:'Return $24 to the original payment method.',confirmLabel:'Refund $24'},
 {id:'request',title:'Accept a studio request',consequence:'Allow North Studio to use the shared rehearsal schedule.',confirmLabel:'Accept'},
 {id:'publish',title:'Publish the summer programme',consequence:'Make revision 7 visible to everyone visiting your studio.',confirmLabel:'Publish'}
 ].map(i=>({...i,revision:'1'}));
-mountChecklist(document.querySelector('main'), {list:async()=>items,execute:async ({id,operation})=>({ok:true,message:operation==='undo'?'Restored the previous state.':'Confirmed in this local example.',...(operation==='confirm'&&id!=='refund'?{undoToken:id}: {})})});
+const messages={booking:'Saturday’s booking is approved. Studio A is reserved for Morgan.',refund:'$24 returned to the original payment method.',request:'North Studio can now use the shared rehearsal schedule.',publish:'Summer programme revision 7 is now public.'};
+mountChecklist(document.querySelector('main'), {list:async()=>items,execute:async ({id,operation})=>{
+ await new Promise(resolve=>setTimeout(resolve,350));
+ const item=items.find(i=>i.id===id);
+ if(operation==='undo')return {ok:true,message:id==='booking'?"Saturday’s booking is back to pending.":'The previous state is restored; action is pending again.',pendingItem:{...item,revision:String(Number(item.revision)+1)}};
+ return {ok:true,message:messages[id],...(id!=='refund'?{undoToken:id}: {})};
+}});
 </script></html>

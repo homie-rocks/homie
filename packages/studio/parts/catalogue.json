@@ -38,13 +38,13 @@
         },
         {
           "path": "README.md",
-          "sha256": "19d85d56a2e1e3b0a14662abf93364c7369d34302800ef6444e7b5ac72b9e56d",
-          "bytes": 3301
+          "sha256": "abf9429c9e40a8a96349d5b7d1d0fee7e1708f71ad0222f73c1253bf122607f2",
+          "bytes": 4032
         },
         {
           "path": "preview/index.html",
-          "sha256": "931e491db6fc6cb1aefcbf70d722607b9e889c94cac741731cb846875a7cac18",
-          "bytes": 1752
+          "sha256": "3e5cdaf2de123531fb83222179b20e43d7d97b707314552c3a183a68954e3a00",
+          "bytes": 2252
         },
         {
           "path": "src/handler.mjs",
@@ -53,13 +53,13 @@
         },
         {
           "path": "src/index.mjs",
-          "sha256": "f4ec8da76bd08e0e46b1fb79b24821b4a0d869eb2fd52001e7ee808f1b106674",
-          "bytes": 4081
+          "sha256": "2c89614866ee72ef050caca734213474ae2071af49bf366350870b9f0668755b",
+          "bytes": 5241
         },
         {
           "path": "src/style.css",
-          "sha256": "c971858965688388321a5744ca61d4eb111b9c88a707a572c5736ef9d9e01342",
-          "bytes": 1102
+          "sha256": "d6497f8f01bbc72663a45577ecb9d78797e8d978fd3dff11c23f8b12c40b6f1b",
+          "bytes": 1336
         },
         {
           "path": "tuning.json",
@@ -78,7 +78,7 @@
         }
       },
       "cost": {
-        "bytes": 24057
+        "bytes": 26682
       },
       "provenance": {
         "source": "original",
@@ -133,8 +133,8 @@
         },
         {
           "path": "README.md",
-          "sha256": "4f9c0a6d10cbdb970ee0cf01d7f2ca9f5b4517edd5e3a4882495a81a1f3da909",
-          "bytes": 3259
+          "sha256": "10826c959cea68e8ca41bc3097e4d6b3d366b969f6067b5f81213c842274b1f0",
+          "bytes": 4170
         },
         {
           "path": "THIRD-PARTY-LICENSE",
@@ -146,20 +146,20 @@
         },
         {
           "path": "preview/demo.js",
-          "sha256": "40e19e9e8da92b4125899fedc7cd6ac710df37de1a3d03d8c23b46345504b56e",
-          "bytes": 569550,
+          "sha256": "562ea2b1d2abce55b03398a805ae261a378617a196d814b7df06ad5691a0acd1",
+          "bytes": 578718,
           "rights": {
             "license": "Apache-2.0 AND MIT"
           }
         },
         {
           "path": "preview/heightmap.png",
-          "sha256": "1b66b99705337644262898b6a909dd6b0d22db6078b4402389939bf45e69c57c",
-          "bytes": 11165
+          "sha256": "35791172bf7ec80a607e700c1191727383b7158dedc2d02667c5f1fa8da924e1",
+          "bytes": 52522
         },
         {
           "path": "preview/index.html",
-          "sha256": "ac6b9cf2f3bd8fddbb5a8e5f72ee6c8138ea2071c5a065dbe76cc158f1a2893e",
+          "sha256": "9d5ffa3179a2fe2ebc7a1f146fee1a02f2e0fcfe5186512bfdfb9ccccde1b6a5",
           "bytes": 985
         },
         {
@@ -169,28 +169,28 @@
         },
         {
           "path": "preview/route.json",
-          "sha256": "894506f6627932fface4b50faabedbe9e47cadaead6a3c4cbc6b5bfeb40146dc",
+          "sha256": "d505766350b5556c386abb05076d142bf825099c2a2d46135db2a81a4d0a770e",
           "bytes": 321
         },
         {
           "path": "src/data.mjs",
-          "sha256": "ad7346e1a1ada219fa4b78a68a8df2912f38a6db02ac99261cc935140d886ace",
-          "bytes": 2042
+          "sha256": "0072825db914a1acfc1568e662d5cfd25beb2b63907eebe4cc174f6d2400c3f9",
+          "bytes": 2936
         },
         {
           "path": "src/index.mjs",
-          "sha256": "c330650a05732d5f40c9deceb759da7eeca14a7756bd8bb7cea39ab4ae603d55",
-          "bytes": 8086
+          "sha256": "c45b952153aaa48d31644bf79c7228194569abff13830c45e7abcbff94e54cd9",
+          "bytes": 13824
         },
         {
           "path": "src/style.css",
-          "sha256": "181b0da4c252007a3565c6dc1ba3bce714b617763b60c111cdce446ecf204821",
-          "bytes": 964
+          "sha256": "7354c997deec0933674a759e7f1e8027f7126eb59db5166ded82771d25acf7b1",
+          "bytes": 1580
         },
         {
           "path": "tuning.json",
-          "sha256": "50ce203549418e7c1371e6657b7acfb556dd4434c0dcdcb72ef379d4a51b39af",
-          "bytes": 42
+          "sha256": "ab68f2f4b6cc5ac13d58519ac0ad6932f88402dc203d90af04313fb72b8452a7",
+          "bytes": 64
         }
       ],
       "preview": {
@@ -210,7 +210,7 @@
         "collision": null
       },
       "cost": {
-        "bytes": 609324
+        "bytes": 668030
       },
       "provenance": {
         "source": "original",

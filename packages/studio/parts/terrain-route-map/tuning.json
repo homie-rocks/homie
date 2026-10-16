@@ -1,4 +1,5 @@
 {
-  "segments": 80,
-  "pixelRatio": 1.5
+  "segments": 192,
+  "pixelRatio": 1.5,
+  "quality": "auto"
 }

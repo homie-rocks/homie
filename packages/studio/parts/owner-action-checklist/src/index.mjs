@@ -6,6 +6,7 @@ export function validateItems(items) {
     for (const key of ['id', 'revision', 'title', 'consequence', 'confirmLabel']) {
       if (typeof item[key] !== 'string' || !item[key].trim() || item[key].length > 1000) throw new Error(`Invalid action ${key}`);
     }
+    if (item.irreversible !== undefined && typeof item.irreversible !== 'boolean') throw new Error('Invalid irreversible flag');
     if (ids.has(item.id)) throw new Error('Duplicate action id');
     ids.add(item.id);
   }
@@ -32,7 +33,8 @@ export function mountChecklist(root, { list, execute }) {
       const announce = () => {status.textContent = pending.size ? `${pending.size} actions to review` : 'All caught up.';};
       for (const item of items) {
         const row = el('li', ''); const title = el('h2', item.title);
-        const consequence = el('p', item.consequence); const note = el('p', '');
+        const consequence = el('p', item.consequence + (item.irreversible ? ' Irreversible — cannot be undone.' : '')); const note = el('p', 'Pending');
+        row.dataset.state = 'pending';
         note.setAttribute('role', 'status');
         const button = el('button', item.confirmLabel); button.type = 'button';
         title.id = `${prefix}-${rows.children.length}-title`;
@@ -42,7 +44,7 @@ export function mountChecklist(root, { list, execute }) {
         if (state && (state.pending || state.revision === item.revision)) { button.disabled = true; note.textContent = 'Outcome unknown. Refresh to reconcile before acting again.'; }
         async function run(operation, token) {
           if (button.disabled || disposed) return;
-          button.disabled = true; note.textContent = operation === 'undo' ? 'Undoing…' : 'Confirming…';
+          button.disabled = true; row.dataset.state = 'confirming'; button.textContent = operation === 'undo' ? 'Undoing…' : 'Confirming…'; note.textContent = button.textContent;
           const key = crypto.randomUUID();
           states.set(item.id, {revision: item.revision, key, pending:true});
           try {
@@ -50,10 +52,20 @@ export function mountChecklist(root, { list, execute }) {
             if (disposed) return;
             if (!result || result.ok !== true) throw new Error('Unconfirmed outcome');
             states.delete(item.id);
-            pending.delete(item.id); if (current === generation) announce();
-            note.textContent = result.message || (operation === 'undo' ? 'Undone.' : 'Confirmed.');
-            button.textContent = 'Done';
-            if (operation === 'confirm' && result.undoToken) {
+            row.dataset.state = operation === 'undo' ? 'undone' : 'done';
+            pending.delete(item.id);
+            note.textContent = `${operation === 'undo' ? 'Undone' : 'Done'} — ${result.message || (operation === 'undo' ? 'Previous state restored.' : item.consequence)}`;
+            button.textContent = operation === 'undo' ? 'Undone' : 'Done';
+            if (operation === 'undo' && result.pendingItem) {
+              const restored = validateItems([result.pendingItem])[0];
+              if (restored.id !== item.id || restored.revision === item.revision) throw new Error('Wrong restored action');
+              Object.assign(item, restored); pending.add(item.id);
+              button.textContent = item.confirmLabel; button.disabled = false;
+              consequence.textContent = item.consequence + (item.irreversible ? ' Irreversible — cannot be undone.' : '');
+              title.textContent = item.title; button.onclick = () => run('confirm');
+            }
+            if (current === generation) announce();
+            if (operation === 'confirm' && result.undoToken && !item.irreversible) {
               button.textContent = 'Undo'; button.disabled = false;
               button.onclick = () => run('undo', result.undoToken);
             }

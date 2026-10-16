@@ -22,7 +22,7 @@ test('parts pack through canonical pipeline, with complete licensed integrity ma
 });
 test('checklist rejects duplicate and unclear proposals',()=>{
  const item={id:'a',revision:'1',title:'Approve',consequence:'Reserve room A',confirmLabel:'Approve'};
- assert.equal(validateItems([item]).length,1);assert.throws(()=>validateItems([item,item]));assert.throws(()=>validateItems([{...item,consequence:''}]));
+ assert.equal(validateItems([item]).length,1);assert.throws(()=>validateItems([item,item]));assert.throws(()=>validateItems([{...item,consequence:''}]));assert.throws(()=>validateItems([{...item,irreversible:'no'}]));
 });
 test('worker boundary uses origin and role checks before any tool call',async()=>{
  let calls=0,seen; const auth={isOwner:async()=>false,hasRole:async(_r,_e,app,role)=>app==='desk'&&role==='staff',requireSameOrigin};
@@ -40,4 +40,17 @@ test('heightmap axes, interpolation, clamping and route limits are deterministic
  assert.equal(sample(10,0),20);assert.equal(sample(0,0),0);assert.equal(sample(-10,0),0);assert.ok(Math.abs(sample(5,5)-12.5098)<.001);
  const map=JSON.parse(readFileSync(join(source,'terrain-route-map/preview/route.json')));assert.equal(validateMap(map).markers.length,3);
  assert.throws(()=>validateMap({...map,bounds:[0,0,0,1]}));assert.throws(()=>validateMap({...map,route:{type:'LineString',coordinates:[[0,0],[0,0]]}}));assert.throws(()=>validateMap({...map,markers:[{coordinates:[999,0],label:'bad'}]}));
+});
+
+test('labels avoid collisions and stay clear of controls, excess markers remain accessible',async()=>{
+ const {placeLabels}=await import('../parts/terrain-route-map/src/data.mjs');
+ const boxes=placeLabels(Array.from({length:32},()=>({x:195,y:200,w:120,h:36})),390,550);
+ assert.ok(boxes.some(b=>b===null));
+ const visible=boxes.filter(Boolean);
+ for(const a of visible){assert.ok(a.x>=8&&a.x+a.w<=382&&a.y>=8&&a.y+a.h<=438);for(const b of visible)if(a!==b)assert.ok(a.x+a.w<=b.x||b.x+b.w<=a.x||a.y+a.h<=b.y||b.y+b.h<=a.y);}
+});
+test('quality fallback requires sustained measured slow frames and ignores hidden gaps',async()=>{
+ const {qualityMonitor}=await import('../parts/terrain-route-map/src/data.mjs');
+ const healthy=qualityMonitor();for(let i=0;i<180;i++)assert.equal(healthy(i%5===0?1000:16.7),false);
+ const slow=qualityMonitor();for(let i=0;i<89;i++)assert.equal(slow(34),false);assert.equal(slow(34),true);
 });

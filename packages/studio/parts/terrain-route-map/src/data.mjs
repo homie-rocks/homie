@@ -19,3 +19,24 @@ export function heightSampler({width, height, data}, bounds, amplitude) {
     return (sample(a,b)*(1-fx)+sample(a+1,b)*fx)*(1-fz)+(sample(a,b+1)*(1-fx)+sample(a+1,b+1)*fx)*fz;
   };
 }
+
+/** Stable screen-space packing. Hidden overflow remains in the accessible marker list. */
+export function placeLabels(points, width, height) {
+  const placed=[];
+  return points.map(({x,y,w,h})=>{
+    const left=Math.max(8,Math.min(width-w-8,x-w/2));
+    for(let step=0;step<height;step+=h+8){
+      for(const sign of [-1,1]){
+        const top=Math.max(8,Math.min(height-h-112,y-72+step*sign));
+        if(top<8 || placed.some(b=>left<b.x+b.w+8&&left+w+8>b.x&&top<b.y+b.h+8&&top+h+8>b.y))continue;
+        const box={x:left,y:top,w,h};placed.push(box);return box;
+      }
+    }
+    return null;
+  });
+}
+/** Ignore startup/hidden gaps; sustained slow frames reduce the GPU budget once. */
+export function qualityMonitor({threshold=28,samples=90}={}) {
+  let count=0,slow=0;
+  return dt=>{if(dt<=0||dt>250)return false;count++;if(dt>threshold)slow++;return count>=samples&&slow/count>.25;};
+}
