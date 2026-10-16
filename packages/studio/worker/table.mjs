@@ -3,25 +3,25 @@ import {relayStream} from './relay-channel.mjs';
 import {roomSessions,restoreRoomFields} from './room-sessions.mjs';
 import {idleChatSnapshot,restoreIdleChat,readIdleChat,writeIdleChat,expireIdleChat} from './idle-chat.mjs';
 import {WatchSockets} from './watch-sockets.mjs';
-import { catalogue } from './catalogue.mjs';
-import { RULES_WIRING_MESSAGE } from './rules-wiring.mjs';
-import { characterStore, characterRequest } from './characters.mjs';
-import { NetRoom, WATCH_POLICIES, departure, errorLine } from './room.mjs';
-import { hostedGame, hostedBuild, compiledFor, prepareHost, startHost } from './hosted.mjs';
-import { roomStore, restoreDelay, LOOSE_SAVE } from './room-store.mjs';
-import { pooledRoom } from './servers.mjs';
-import { BRAIN_BUDGET, HouseAgents, decodeFacts } from './agents.mjs';
-import { CLEF, DECIDE, clefRun, costOf, localAiOf, picksOf, talks } from './brain.mjs';
-import { reviewChat } from './chat.mjs';
-import { chatDay } from './chat-store.mjs';
-import { forgetLines, historyOf, keepLines, keptLine } from './lounge-store.mjs';
-import { multiplexSession, acceptMultiplex, diagnosticsOf, gatePlayers, nextGate } from './gate.mjs';
-import { worldSource } from './world-wire.mjs';
-import { seatCount, perAddress } from './seats.mjs';
-import { count, counter, isQa, today } from './stats.mjs';
-import { holders, regateArgs, verifyControl } from './office.mjs';
+import {RULES_WIRING_MESSAGE} from './rules-wiring.mjs';
+import {characterStore,characterRequest} from './characters.mjs';
+import {NetRoom,WATCH_POLICIES,departure,errorLine} from './room.mjs';
+import {hostedGame,hostedBuild,compiledFor,prepareHost,startHost} from './hosted.mjs';
+import {roomStore,restoreDelay,LOOSE_SAVE} from './room-store.mjs';
+import {pooledRoom} from './servers.mjs';
+import {BRAIN_BUDGET,HouseAgents,decodeFacts} from './agents.mjs';
+import {CLEF,DECIDE,clefRun,costOf,localAiOf,picksOf,talks} from './brain.mjs';
+import {reviewChat} from './chat.mjs';
+import {chatDay} from './chat-store.mjs';
+import {forgetLines,historyOf,keepLines,keptLine} from './lounge-store.mjs';
+import {multiplexSession,acceptMultiplex,diagnosticsOf,gatePlayers,nextGate} from './gate.mjs';
+import {worldSource} from './world-wire.mjs';
+import {seatCount,perAddress} from './seats.mjs';
+import {count,counter,isQa,today} from './stats.mjs';
+import {holders,regateArgs,verifyControl} from './office.mjs';
 
 import {json} from './responses.mjs';
+import {catalogue} from './catalogue.mjs';
 
 import {ROOM_ALARM_MS,ROOM_PAUSE_MS,roomEndAt} from './room-lifecycle.mjs';
 
@@ -1120,6 +1120,7 @@ export class Table {
       try {
         const held=transport?.resume && this.hostRt?.characters.get(account);
         if(held && !held.returning)this.characterGrants.set(account,held);
+        else if(transport?.resume)return new Response('Character lease unavailable',{status:409});
         else await this.acquireCharacter(account);
       }
       catch (error) { return new Response(String(error.message), { status: 409 }); }
@@ -1283,6 +1284,7 @@ export class Table {
     if(!room.clients.size&&!room.watchers.size&&!room.officeDirty) {
       for(const relay of this.relays.values()){relay.session.flush();relay.socket.sleep();}
       this.sessionStore.clear();
+      await this.watchSockets?.prune();
       // Empty rooms get one final expiry pass, never a permanent minute alarm.
       const until=room.emptySince+room.forgetMs;
       if(Number.isFinite(until)&&until>now){const alarm=await this.ctx.storage.getAlarm();if(alarm==null||alarm>until)await this.ctx.storage.setAlarm(until);}

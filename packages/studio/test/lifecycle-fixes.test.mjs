@@ -101,3 +101,26 @@ test('legacy and hidden JSON pings do not rewrite an idle client',t=>{
  for(let i=0;i<20;i++){now+=2000;h.onMessage(JSON.stringify({t:'ping',c:now,hid:true}));store.write(room);}
  assert.equal(st.writes,before);
 });
+
+test('Lobby eviction retains outstanding reservations and reported counts',async t=>{
+ const st=storage(t);st.get=async()=>null;st.delete=async()=>true;
+ let ready;const ctx={storage:st,blockConcurrencyWhile:fn=>{ready=fn();},waitUntil(){}};
+ let lobby=new Lobby(ctx,{});await ready;
+ const join=id=>lobby.fetch(new Request('https://lobby/join?max=1&shard=0&reservation='+id)).then(r=>r.json());
+ const first=await join('one');lobby=new Lobby(ctx,{});await ready;
+ const second=await join('two');assert.notEqual(first.room,second.room);
+ await lobby.fetch(new Request('https://lobby/report',{method:'POST',body:JSON.stringify({room:first.room,players:1})}));
+ lobby=new Lobby(ctx,{});await ready;
+ assert.equal((await (await lobby.fetch(new Request('https://lobby/now'))).json()).players,1);
+});
+
+import {games} from '../worker/hosted-registry.mjs';
+test('restored character transports reuse their saved lease without reacquiring',async t=>{
+ games.set('avatar',{rules:{},settings:{characters:true}});t.after(()=>games.delete('avatar'));
+ const room=new NetRoom({code:'r'}),table=Object.create(Table.prototype),held={account:'alice',lease:'lease',character:{}};
+ Object.assign(table,{ctx:{},env:{},roomFor:()=>room,ensureHost(){},hydrateHistory:async()=>{},hostRt:{characters:new Map([['alice',held]])},characterGrants:new Map(),accountTokens:{},start(){},acquireCharacter:()=>assert.fail('restoration must not acquire'),restoringSockets:true});
+ const transport={resume:{id:'saved',helloed:true},accept(){},send(){},addEventListener(){},close(){}};
+ assert.equal(await table.connect(new Request('https://room/__net?game=avatar&room=r&acct=1&via=p-alice'),transport),null);
+ assert.equal(table.characterGrants.get('alice'),held);
+ table.hostRt.characters.clear();assert.equal((await table.connect(new Request('https://room/__net?game=avatar&room=r&acct=1&via=p-alice'),transport)).status,409);
+});

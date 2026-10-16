@@ -36,6 +36,10 @@ export class WatchSockets {
     this.ctx.acceptWebSocket(socket, [new URL(request.url).pathname==='/__watch'?'watch':'net']);
     return Object.assign(this.transport(socket), {address});
   }
+  async prune() {
+    const live=new Set((this.ctx.getWebSockets?.()??[]).filter(socket=>socket.readyState!==3).map(socket=>'watch:'+socket.deserializeAttachment()?.id));
+    for(const key of (await this.ctx.storage.list?.({prefix:'watch:'})??new Map()).keys())if(!live.has(key))await this.ctx.storage.delete(key);
+  }
   async restore(connect) {
     const sockets = this.ctx.getWebSockets?.() ?? [];
     const requests = await this.ctx.storage.list?.({prefix: 'watch:'}) ?? new Map();
@@ -45,6 +49,12 @@ export class WatchSockets {
       const attachment = socket.deserializeAttachment();
       const request = attachment?.v === 1 && requests.get('watch:' + attachment.id);
       if (!request) { socket.close(1011, 'watch state missing'); continue; }
+      // Migrate older request records without retaining their raw user agent.
+      const headers=new Headers(request.headers);
+      const ip=headers.get('cf-connecting-ip');
+      if(ip&&!/^[a-f0-9]{64}$/.test(ip))headers.set('cf-connecting-ip',[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(ip)))].map(n=>n.toString(16).padStart(2,'0')).join(''));
+      const minimal=[...(headers.has('cf-connecting-ip')?[['cf-connecting-ip',headers.get('cf-connecting-ip')]]:[]),...(isQa({headers})?[['user-agent','homie-house-qa']]:[])];
+      if(JSON.stringify(request.headers)!==JSON.stringify(minimal)){request.headers=minimal;await this.ctx.storage.put('watch:'+attachment.id,request);}
       try {
         const response = await connect(new Request(request.url, {headers: request.headers}), this.transport(socket),attachment);
         if (response != null) { socket.close(1012, 'room restore rejected'); await this.close(socket, null, false); }

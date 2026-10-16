@@ -1,5 +1,6 @@
 /** Throwaway deployed proof only. These observation routes are not toolkit routes. */
 import worker, {Table as BaseTable, Lobby, Gate as BaseGate, Concentrator, hostRules} from '../../../worker/index.mjs';
+import {lobbyFor} from '../../../worker/lobby-shards.mjs';
 import {defineRules, roomSettings} from '../../../rules/rules.ts';
 export {Lobby, Concentrator};
 const rules = defineRules({
@@ -25,7 +26,7 @@ export class Table extends BaseTable {
     const path=new URL(request.url).pathname;
     if(path==='/proof-restart'){setTimeout(()=>this.ctx.abort('throwaway proof restart'),25);return Response.json({ok:true});}
     if(path==='/proof-stall'){const start=Date.now();while(Date.now()-start<1200){}return Response.json({stalled:Date.now()-start});}
-    if(path==='/proof-control'){return this.room.control('announce',{text:'break control'}).then(result=>{this.officeSaved=this.room.officeSaved();return this.ctx.storage.put('office',this.officeSaved).then(()=>Response.json(result));});}
+    if(path==='/proof-control'){return Promise.resolve(this.room.control('announce',{text:'break control',seconds:300})).then(result=>{this.officeSaved=this.room.officeSaved();return this.ctx.storage.put('office',this.officeSaved).then(()=>Response.json(result));});}
     if (path === '/proof-status') return Response.json({
       version: this.env.PROOF_VERSION, boot: this.proofBoot, tick: this.hostRt?.tick,
       round: this.hostRt?.core.round(), idle: this.hostRt?.roundIdleUntil,
@@ -47,6 +48,8 @@ export class Gate extends BaseGate {
 }
 export default {fetch(request, env, ctx) {
   const url = new URL(request.url);
+  if(url.pathname==='/proof-match')return lobbyFor(env,'proof-matches',url.searchParams.get('id')).fetch('https://lobby/join?max=1',{method:'POST'});
+  if(url.pathname==='/proof-count')return lobbyFor(env,'proof-matches').fetch('https://lobby/rooms');
   if(url.pathname==='/proof-watch') {
     const game=url.searchParams.get('game')??'gated',room=url.searchParams.get('room');
     const target=new URL('https://room/__watch');for(const [key,value] of Object.entries({game,room,max:game==='gated'?'300':'8',host:'server',rules:'1',cur:'proof',b:'watch-'+url.searchParams.get('id')}))target.searchParams.set(key,value);

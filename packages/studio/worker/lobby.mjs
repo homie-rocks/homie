@@ -32,6 +32,11 @@ export class Lobby {
         this.current = saved.current ?? null;
         this.next = typeof saved.next === 'number' ? { public: saved.next } : saved.next && typeof saved.next === 'object' ? { public: 1, ...saved.next } : { public: 1 };
         for (const r of saved.rooms ?? []) this.rooms.set(r.name, { ...r, server: r.server ?? roomServer(r.name), agents: r.agents ?? 0, ai: r.ai ?? 0, ver: typeof r.ver === 'string' ? r.ver : '', pending: [], agentPending: [] });
+        for(const r of this.rooms.values())if(r.players>0&&r.at>Date.now()-180000)this.live.set(r.name,{players:r.players,at:r.at});
+        if(ctx.storage.sql)for(const row of ctx.storage.sql.exec('SELECT body,expires FROM matchmaking_reservations WHERE expires>?',Date.now()).toArray()) {
+          const reservation=JSON.parse(row.body),room=this.rooms.get(reservation.room);
+          if(room)room.pending.push(row.expires-20000);
+        }
         for (const [name, until] of saved.closed ?? []) if (until > Date.now()) this.closed.set(name, until);
       }
     });
@@ -248,7 +253,7 @@ export class Lobby {
       const grew = Math.max(0, seated - r.players);
       // The room says which build it runs (it changes only when nobody on the old one is left).
       const rver = typeof body.ver === 'string' ? versionOf(body.ver) ?? '' : r.ver ?? '';
-      const changed = !this.rooms.has(r.name) || r.players !== seated || (r.agents ?? 0) !== agents || (r.ai ?? 0) !== ai || (r.ver ?? '') !== rver;
+      const changed = now-r.at>=60000 || !this.rooms.has(r.name) || r.players !== seated || (r.agents ?? 0) !== agents || (r.ai ?? 0) !== ai || (r.ver ?? '') !== rver;
       r.ver = rver;
       if (body.host === 'server' || body.host === 'browser') r.host = body.host;
       r.pending.splice(0, grew);
@@ -258,7 +263,7 @@ export class Lobby {
       r.ai = ai;
       r.at = now;
       this.rooms.set(r.name, r);
-      if (changed) this.save(); // the minute's "still here" report writes nothing
+      if (changed) this.save(); // Refresh durable presence at most once per minute.
       return json({ ok: true });
     }
     if (url.pathname === '/rooms') return json({ rooms: [...this.rooms.values()].map(({ name, players, agents, ai, server, at }) => ({ name, players, agents: agents ?? 0, ai: ai ?? 0, server: server ?? roomServer(name), at })) });
