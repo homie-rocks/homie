@@ -19,7 +19,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## Unreleased
 
-- Use Chrome debugging pipes and capture child stderr, exits, shared-memory availability and concurrent Chrome processes in CI artifacts.
+- Confine Chrome debugging pipes to CI with protocol deadlines matching launch deadlines; preserve owner CLI flags and capture child stderr, exits, shared-memory availability and concurrent Chrome processes in CI artifacts.
 
 ## [0.54.0] - 2026-10-15
 

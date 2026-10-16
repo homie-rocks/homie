@@ -7,7 +7,7 @@ mkdirSync('ci-results',{recursive:true});
 for(let n=0;n<12;n++)for(const pipe of [false,true]){
  const start=performance.now();let browser;
  try{
-  browser=await puppeteer.launch({executablePath:findChrome(),headless:true,args:chromeArgs().filter(arg=>pipe||arg!=='--remote-debugging-pipe')});
+  browser=await puppeteer.launch({executablePath:findChrome(),headless:true,args:chromeArgs(),pipe,timeout:30_000,protocolTimeout:30_000});
   rows.push({n,pipe,ok:true,launchMs:performance.now()-start});
  }catch(error){rows.push({n,pipe,ok:false,launchMs:performance.now()-start,error:error.message});}
  finally{await browser?.close();writeFileSync('ci-results/chrome-comparison.json',JSON.stringify(rows,null,2));}
