@@ -1,0 +1,22 @@
+TAP version 13
+# Subtest: local dev with a custom-domain route in wrangler.jsonc: the route never reaches the local runtime, and rooms are local, port included
+ok 1 - local dev with a custom-domain route in wrangler.jsonc: the route never reaches the local runtime, and rooms are local, port included
+  ---
+  duration_ms: 11317.531667
+  type: 'test'
+  ...
+# Subtest: a hostname forced on local dev is caught: the injected room socket must match the local origin, port included
+ok 2 - a hostname forced on local dev is caught: the injected room socket must match the local origin, port included
+  ---
+  duration_ms: 1395.527041
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 12921.098834

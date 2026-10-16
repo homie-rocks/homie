@@ -347,17 +347,15 @@ export async function dev(root, { lan = false, port: askedPort = 8787, remoteAi 
   if (!bin) return { ok: false, command: 'dev', why: 'run npm install in the studio first' };
   const env = { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1', ...(process.stdout.isTTY && !process.env.NO_COLOR ? { FORCE_COLOR: process.env.FORCE_COLOR ?? '1' } : {}) };
   for (const added of ensureMigrations(root)) log(`added ${added} (${migrationWord(added)})`);
-  await new Promise((done) => {
-    const m = spawn(bin, ['d1', 'migrations', 'apply', 'DB', '--local'], { cwd: workerDir(root), env, stdio: ['ignore', 'ignore', 'inherit'] });
-    m.on('close', done);
-    m.on('error', done);
-  });
   const {functionDeploymentSQL}=await import('./functions-build.mjs');
-  const registerFunctions=()=>new Promise(resolve=>{
-    const child=spawn(bin,['d1','execute','DB','--local','--command',functionDeploymentSQL(root)],{cwd:workerDir(root),env,stdio:['ignore','ignore','inherit']});
+  const {prepareLocalDatabase}=await import('./local-database-start.mjs');
+  const runLocal=args=>new Promise(resolve=>{
+    const child=spawn(bin,args,{cwd:workerDir(root),env,stdio:['ignore','ignore','inherit']});
     child.on('close',code=>resolve(code===0));child.on('error',()=>resolve(false));
   });
-  if(!await registerFunctions())return {ok:false,command:'dev',why:'Local function registration failed; fix the D1 error above before serving requests.'};
+  const registerFunctions=()=>runLocal(['d1','execute','DB','--local','--command',functionDeploymentSQL(root)]);
+  const failure=await prepareLocalDatabase({migrate:()=>runLocal(['d1','migrations','apply','DB','--local']),register:registerFunctions});
+  if(failure)return {ok:false,command:'dev',why:failure};
   const origin = `http://127.0.0.1:${port}`;
   const printedOrigin = `http://localhost:${port}`;
   log(`Local site: ${printedOrigin}/  (each game: ${printedOrigin}/<id>/play — open it in two browsers)`);

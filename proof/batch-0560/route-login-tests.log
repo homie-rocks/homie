@@ -1,0 +1,52 @@
+TAP version 13
+# Subtest: custom routes fall through, preserve Homie precedence, and receive response headers
+ok 1 - custom routes fall through, preserve Homie precedence, and receive response headers
+  ---
+  duration_ms: 49.123833
+  type: 'test'
+  ...
+# Subtest: public owner helper checks live sessions, not bearer keys or expired/revoked cookies
+ok 2 - public owner helper checks live sessions, not bearer keys or expired/revoked cookies
+  ---
+  duration_ms: 6.967875
+  type: 'test'
+  ...
+# Subtest: role helper uses declared roles and refuses missing grants and unknown roles
+ok 3 - role helper uses declared roles and refuses missing grants and unknown roles
+  ---
+  duration_ms: 1.806916
+  type: 'test'
+  ...
+# Subtest: custom routes preserve streams, redirects, fallthrough and reject invalid returns
+ok 4 - custom routes preserve streams, redirects, fallthrough and reject invalid returns
+  ---
+  duration_ms: 4.851041
+  type: 'test'
+  ...
+# Subtest: sign-in tolerates a refresh race and rereads Wrangler on each attempt
+ok 5 - sign-in tolerates a refresh race and rereads Wrangler on each attempt
+  ---
+  duration_ms: 2.341208
+  type: 'test'
+  ...
+# Subtest: failed checks retain real diagnostics and distinguish expired auth from temporary failure
+ok 6 - failed checks retain real diagnostics and distinguish expired auth from temporary failure
+  ---
+  duration_ms: 1.779417
+  type: 'test'
+  ...
+# Subtest: three studio processes recover together from a shared refresh collision
+ok 7 - three studio processes recover together from a shared refresh collision
+  ---
+  duration_ms: 991.95525
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1132.07075

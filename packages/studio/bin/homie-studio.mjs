@@ -973,7 +973,7 @@ async function main() {
   }
   if (cmd === 'status') {
     const studio = readStudio(root);
-    return { ok: true, command: 'status', root, studio, site: siteUrl(root, studio), games: listGames(root).map((g) => g.id), cloudflareSignedIn: Boolean(wranglerBin(root) && whoami(root)) };
+    return { ok: true, command: 'status', root, studio, site: siteUrl(root, studio), games: listGames(root).map((g) => g.id), cloudflareSignedIn: Boolean(wranglerBin(root) && await whoami(root)) };
   }
   if (cmd === 'upgrade') {
     const plan = upgradePlan(root);

@@ -174,7 +174,7 @@ test('a page whose room never answers plays alone and SAYS so; the welcome bring
   assert.equal(net.offline, true);
   assert.equal(net.connected, false);
   assert.equal(net.isHost, true);
-  assert.deepEqual(links.map((e) => [e.prev, e.state, e.why, e.hosting]), [['connecting', 'alone', 'relay-timeout', true]]);
+  assert.deepEqual(links.map((e) => [e.prev, e.state, e.why, e.hosting]), [['connecting', 'connecting', 'subscribe', false], ['connecting', 'alone', 'relay-timeout', true]]);
   assert.deepEqual(posts.filter((m) => m.what === 'link').map((m) => [m.state, m.why]), [['alone', 'relay-timeout']], 'the play page hears it too');
   assert.equal(roles.at(-1).why, 'relay-timeout');
   // The silent socket is dropped as stale and the next knock reaches the room: back in it, and said.
@@ -268,7 +268,7 @@ test('the line over the game: drawn after a moment of `reconnecting`, gone when 
   up = false;
   flaky.sockets.at(-1).cut();
   await clock.wait(1500);
-  assert.deepEqual(heard, ['online', 'reconnecting']);
+  assert.deepEqual(heard, ['connecting', 'online', 'reconnecting']);
   assert.deepEqual(made, [], 'nothing of the helper\'s is drawn');
   own.close();
 });
@@ -452,12 +452,12 @@ test('a page that was blocked for seconds does not drop a healthy socket on the 
   // socket that "said nothing for eight seconds" (staleMs is six). The snapshots are queued right behind it.
   blocked(t, 8000);
   await clock.wait(600);
-  assert.deepEqual(links, [['online', 'welcome']], 'no reconnect for a hitch');
+  assert.deepEqual(links, [['connecting', 'subscribe'], ['online', 'welcome']], 'no reconnect for a hitch');
   assert.deepEqual([net.link, net.stats().drops, net.reconnects], ['online', 0, 0]);
   // A socket that really went silent is dropped as before (and the bound takes over from there).
   r.sockets.at(-1).onmessage = null;
   await clock.wait(9000);
-  assert.deepEqual(links.at(1), ['reconnecting', 'stale']);
+  assert.deepEqual(links.at(2), ['reconnecting', 'stale']);
   assert.equal(net.stats().lastDisconnect.why, 'stale');
   assert.ok(net.stats().lastDisconnect.silentMs >= 6000);
   net.close(); host.close();
@@ -1337,7 +1337,7 @@ test('a slow page that joins mid-round always ends somewhere a player can act: e
     for (const m of queued) sock.heard({ data: JSON.stringify(m) });
     await clock.wait(400);
     assert.deepEqual(stands(j.room), { link: 'online', standing: 'playing', why: 'seated', body: true });
-    assert.deepEqual([j.room.solo, links.join(), j.room.net.stats().drops], [false, 'online', 0]);
+    assert.deepEqual([j.room.solo, links.join(), j.room.net.stats().drops], [false, 'connecting,online', 0]);
     assert.deepEqual(page.lines(), []);
     j.room.net.close(); host.net.close();
   }
@@ -1913,4 +1913,26 @@ test('deploy retires persisted rooms the current server build cannot run before 
   const publicFresh = await join(current, 'ver=server-v2&host=server');
   assert.notEqual(publicFresh.room, publicOld.room, 'public quick play also selects the current build');
 
+});
+
+test('a wall indicator mounted after welcome sees the current link after each reload', async t => {
+  const {createNetplay}=await netplayKit(); const clock=virtualTime(t);
+  const r=rig(); t.after(()=>r.stop());
+  for(let reload=0;reload<2;reload++){
+    const posts=[];
+    const net=createNetplay({config:cfg('wall',{want:'screen',kind:'app'}),WebSocketImpl:r.socket(),post:m=>posts.push(m)});
+    t.after(()=>net.close());
+    await clock.wait(100);
+    assert.equal(net.connected,true);
+    assert.ok(posts.some(m=>m.what==='link'&&m.state==='online'),'outer shell is connected');
+    let thrownCalls=0;
+    const stopThrowing=net.on('link',()=>{thrownCalls++;throw Error('UI failed');});
+    assert.equal(typeof stopThrowing,'function');stopThrowing();
+    assert.equal(thrownCalls,1);
+    let indicator='Connecting to Homie';
+    const off=net.on('link',e=>{indicator=e.state==='online'?'Connected':'Connecting to Homie';});
+    assert.equal(indicator,'Connected','late app UI receives the current state');
+    off(); net.close();
+    assert.equal(indicator,'Connected','unsubscribed UI is not updated');
+  }
 });

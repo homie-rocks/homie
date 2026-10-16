@@ -365,3 +365,10 @@ Authoritative bookings/inventory are server-side `defineTool` actions with stric
 Initialise text controls and navigation before 3D rendering. Catch renderer creation failures inside the scene section; keep fallback text in normal flow, never over navigation. Add a navigation need and run `homie-studio check <id> --webgl-failure --shots .checks/no-webgl` to prove the controls work without WebGL.
 
 On TV, reserve `--homie-join-inset-bottom/right` (or the configured corner's top/left) plus a gap; `body.homie-join-visible` and `--homie-join-x/y/width/height` describe the shell card in the app frame too. See `node_modules/@homie-rocks/studio/docs/toolkit-place-patterns.md` for layout and text-first examples, connector setup and diagnostics.
+
+For studio-owned HTTP routes, read
+`node_modules/@homie-rocks/studio/docs/custom-routes.md`. Register with `useRoutes`
+and use `/api/custom/*` (game/app IDs cannot claim `api`). App handoff cookies are
+scoped to `/<app>/` and do not reach `/custom-api/...`; use built-in app record
+endpoints or app tools for role-authorized mutations. Use direct `/api/` endpoints
+for function `self` calls, which use `redirect:'error'`.

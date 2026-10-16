@@ -17,6 +17,32 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [Unreleased]
+
+### Fixed
+
+- Custom route role checks enforce fresh app launch gates. Custom Worker asset routes preserve generated authorization paths; same-origin mutation protection is exported and documented with reserved `/api/custom/*` paths and app cookie scope.
+- Custom `assets.run_worker_first` entries cannot exclude paths with `!`; the build refuses them so private app files always stay behind their access checks.
+- Late link subscriptions no longer trigger rules-view reconnect recovery; throwing listeners still return their unsubscribe function.
+- MCP publishing and its preflight use the connector's directory. Wrangler sign-in checks stop immediately when logged out and retry refresh collisions without blocking the event loop, including CLI status.
+- Scaffold, local database and login regression tests use OS temporary directories and work from the package test command.
+
+
+### Added
+- Studio Worker `useRoutes` hook for custom APIs, well-known files and callbacks, after Homie's matched routes and before Worker asset fallback, with response security headers.
+- Public `isOwner(request, env)` and `hasRole(request, env, app, role)` authorization helpers using existing live session and app access checks.
+- Secret capabilities may use `self` for the runtime studio origin, with origin and redirect restrictions retained.
+
+### Fixed
+- New studios leave directory listing opt-in; existing explicit directory choices are preserved.
+- Deploy and storage sign-in checks retry shared Wrangler OAuth refresh races with bounded backoff and report the original diagnostic, distinguishing authentication from temporary check failures.
+- Room-link listeners immediately receive current state, so wall UIs mounted after welcome do not stay on “Connecting to Homie.”
+- Local dev refuses to serve until migrations and function registration succeed, preserving first-notice delivery on a fresh database.
+
+### Upgrade notes
+- `net.on('link', listener)` now calls the listener synchronously on subscription with `why: 'subscribe'` and `prev === state`, then reports changes as before.
+- Custom routes and authorization examples are in `packages/studio/docs/custom-routes.md` (the installed package uses `docs/custom-routes.md`).
+
 ## [0.55.0] - 2026-10-15
 
 **Plugin 0.55.0**

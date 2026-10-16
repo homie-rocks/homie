@@ -53,3 +53,18 @@ test('Cloudflare UTC expressions match lists, ranges, steps, names and calendar 
  assert.match(scheduleStatus([{name:'x',schedule:'bad'}],[])[0].status,/Cannot run/);
  assert.match(scheduleStatus([{name:'x',schedule:'*/15 * * * *'}],[])[0].status,/no configured trigger/);
 });
+
+ test('custom asset routes cannot remove generated authorization routes',t=>{
+ const root=mkdtempSync(join(tmpdir(),'asset-routes-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ newStudio(root,{name:'Routes',install:false});
+ mkdirSync(join(root,'site/dist'),{recursive:true});
+ writeFileSync(join(root,'site/dist/games.json'),JSON.stringify({games:[{id:'desk',kind:'app'}]}));
+ refreshWorkerConfig(root);const required=read(root).assets.run_worker_first;
+ assert.ok(required.includes('/desk/*'));
+ for(const custom of [['/feed.json'],[],false,true]) {
+ writeFileSync(join(root,'wrangler.custom.json'),JSON.stringify({assets:{run_worker_first:custom}}));
+ refreshWorkerConfig(root);const actual=read(root).assets.run_worker_first;
+ if(custom===true)assert.equal(actual,true);
+ else {for(const path of required)assert.ok(actual.includes(path),path);if(Array.isArray(custom))for(const path of custom)assert.ok(actual.includes(path));}
+ }
+ });

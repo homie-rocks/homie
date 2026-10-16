@@ -4020,7 +4020,10 @@
    },
    "sections": {
     "AGENTS.md": {
-     "(intro)": "394cbbe934e80722",
+     "(intro)": [
+      "394cbbe934e80722",
+      "af7f2f732505d379"
+     ],
      "## Version-matched authoring guides": "f6261a0e5801b96b",
      "## Layout": "f3a280b8c96cd068",
      "## Apps: one screen, roles and parts": "c10aa0441ea89702",
