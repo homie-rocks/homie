@@ -843,7 +843,7 @@ export function toolDefs(ctx, avail = {}) {
         let at = dir;
         if (existsSync(at) && readdirSync(at).some((f) => !['.DS_Store', '.git'].includes(f)) && !existsSync(join(at, 'studio.json'))) at = `${dir}-studio`;
         let made;
-        try { made = newStudio(at, { name, kind: a.kind ?? 'game', install: false, ...(ctx.directory ? { homie: ctx.directory } : {}) }); } catch (error) { return fail(error.message); }
+        try { made = newStudio(at, { name, kind: a.kind ?? 'game', install: false }); } catch (error) { return fail(error.message); }
         ctx.current = made.dir;
         ctx.note(made.dir).earlier = earlier.map((e) => e.path);
         let install = null;
@@ -1258,10 +1258,10 @@ export function toolDefs(ctx, avail = {}) {
         // the directory's read-only count for this site, the parts' lines, and nothing published. Run here, by THIS
         // toolkit, never handed to the studio's pinned one: a 0.31.0 toolkit reads `publish --before` as `publish`.
         if (a.before === true) {
-          const b = await publishBefore(root, { site: a.site ? String(a.site) : undefined });
+          const b = await publishBefore(root, { homie: ctx.directory ?? undefined, site: a.site ? String(a.site) : undefined });
           return ok(b.lines.join('\n'), { kind: 'publish-count', ...publishesSoFar(root), ...b });
         }
-        const r = await cli(ctx, root, 'publish', ['publish', ...(a.site ? ['--site', String(a.site)] : [])]);
+        const r = await cli(ctx, root, 'publish', ['publish', ...(ctx.directory ? ['--homie', ctx.directory] : []), ...(a.site ? ['--site', String(a.site)] : [])]);
         if (!r.ended) return stillRunning(r.job, 'Listing');
         if (r.job.code !== 0) return fail(`Not listed: ${whyOf(r.job)}`, r.result?.publishes ? { kind: 'publish', ok: false, needs: r.result.needs ?? null, publishes: r.result.publishes } : undefined);
         return ok(`Listed: ${r.result?.studioPage ?? r.result?.directory ?? ''}\n${(r.result?.games ?? []).map((g) => `  ${g.name}: ${g.play}`).join('\n')}${r.result?.publishes?.line ? `\n${r.result.publishes.line}` : ''}${partsSaid.length ? `\n${partsSaid.join('\n')}` : ''}`, { kind: 'publish', ...r.result });

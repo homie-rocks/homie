@@ -1,0 +1,91 @@
+TAP version 13
+# (node:20796) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:20796) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# Subtest: new declarations start now; replay requires both declaration permission and explicit request
+ok 1 - new declarations start now; replay requires both declaration permission and explicit request
+  ---
+  duration_ms: 28.441541
+  type: 'test'
+  ...
+# Subtest: event subscriptions avoid unused writes, index type cursors, page work and prune delivered events
+ok 2 - event subscriptions avoid unused writes, index type cursors, page work and prune delivered events
+  ---
+  duration_ms: 63.054958
+  type: 'test'
+  ...
+# Subtest: long paid runs renew leases and concurrent retries return the first result exactly once
+ok 3 - long paid runs renew leases and concurrent retries return the first result exactly once
+  ---
+  duration_ms: 28.941584
+  type: 'test'
+  ...
+# Subtest: failed paid handlers refund automatically and retries never execute or charge again
+ok 4 - failed paid handlers refund automatically and retries never execute or charge again
+  ---
+  duration_ms: 14.145458
+  type: 'test'
+  ...
+# Subtest: unpaid offers expire and indexed pruning preserves current offers and paid snapshots
+ok 5 - unpaid offers expire and indexed pruning preserves current offers and paid snapshots
+  ---
+  duration_ms: 16.65225
+  type: 'test'
+  ...
+# Subtest: upgrade removes the old default purchase limiter unless studio settings request it
+ok 6 - upgrade removes the old default purchase limiter unless studio settings request it
+  ---
+  duration_ms: 4.294833
+  type: 'test'
+  ...
+# Subtest: config derives current name compatibility previews and observability and removes crons aliases AI stably
+ok 7 - config derives current name compatibility previews and observability and removes crons aliases AI stably
+  ---
+  duration_ms: 4.184
+  type: 'test'
+  ...
+# Subtest: abandoned paid work refunds without rerunning; refund outages recover on the same claim
+ok 8 - abandoned paid work refunds without rerunning; refund outages recover on the same claim
+  ---
+  duration_ms: 14.957458
+  type: 'test'
+  ...
+# Subtest: deployment SQL registers new functions before requests without moving existing cursors
+ok 9 - deployment SQL registers new functions before requests without moving existing cursors
+  ---
+  duration_ms: 19.811208
+  type: 'test'
+  ...
+# Subtest: quote cleanup tolerates pre-offer and pre-expiry schemas during rolling upgrades
+ok 10 - quote cleanup tolerates pre-offer and pre-expiry schemas during rolling upgrades
+  ---
+  duration_ms: 14.765916
+  type: 'test'
+  ...
+# Subtest: event feeds opt in to configuration, retention and retry cron without a handler
+ok 11 - event feeds opt in to configuration, retention and retry cron without a handler
+  ---
+  duration_ms: 17.56875
+  type: 'test'
+  ...
+# Subtest: functions runs reads the deployed owner connection, forwards filters, and closes on error
+ok 12 - functions runs reads the deployed owner connection, forwards filters, and closes on error
+  ---
+  duration_ms: 67.790708
+  type: 'test'
+  ...
+# Subtest: MCP startup fetch retries a brief Cloudflare 1042 with notice and preserves the request body
+ok 13 - MCP startup fetch retries a brief Cloudflare 1042 with notice and preserves the request body
+  ---
+  duration_ms: 8.655875
+  type: 'test'
+  ...
+1..13
+# tests 13
+# suites 0
+# pass 13
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 367.120209
