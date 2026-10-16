@@ -19,6 +19,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## Unreleased
 
+- Weight Analytics Engine page counts by the sample interval, preserving historical totals and retry-safe corrections under sampling.
+
 - Stop queued Stripe reconciliation database operations and provider calls after lease renewal fails or the lease expires, leaving the event pending for retry.
 
 - **Upgrade notes:** Existing restricted Stripe keys need Products and Prices Read for expanded checkout/subscription lines. Shop-only keys also need Subscriptions Read, Invoices Read and Customer portal Write for renewal verification and subscription management. Update both test and live keys in Stripe before deploying. Expanded objects require their own permissions: https://docs.stripe.com/stripe-apps/reference/permissions.
@@ -32,6 +34,9 @@ file) and what the upgrade would change, and changes nothing until you agree.
 - Batch cold metadata, use causally consistent D1 sessions, bake catalogues, route public assets first, isolate subscription objects and load rendering modules at their entry points. Index MCP expiry and deliver catalogue notifications in background work.
 
 - Split request routing, runtime helpers, Table, Lobby, room chat, controls and wire validation into modules without changing behavior.
+- Skip unchanged analytics counters and watermarks, paginate rollups by UTC day, and show delayed counts in owner statistics.
+
+- Set `stats.analytics: true` in studio.json to count page activity with Analytics Engine and hourly, replay-safe D1 rollups that preserve historical totals. Owner statistics explain ingestion lag and sampling.
 
 ## [0.54.0] - 2026-10-15
 

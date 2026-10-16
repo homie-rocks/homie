@@ -31,6 +31,8 @@ export default {
   async queue(batch,env) {return (await import('./background-queue.mjs')).consumeBackground(batch,await loadShopLinks(env));},
   async scheduled(event, env, ctx) {
     env=await loadShopLinks(env);
+    const analytics=event.cron === '17 * * * *' ? (await import('./analytics.mjs')).rollupAnalytics(env) : Promise.resolve();
+    ctx.waitUntil(analytics);
     const maintenance=(async () => {
       const [{notifyTools},{reconcileOrders,shopOf}]=await Promise.all([import('./runtime-support.mjs'),import('./shop.mjs')]);
       const cat = await catalogue(env, 'https://studio.invalid');
@@ -48,7 +50,7 @@ export default {
       await Promise.all(tasks.map(async([name,run])=>{try{await run();}catch(error){console.error('Scheduled '+name+' failed:',error.message);}}));
     })();
     ctx.waitUntil(maintenance);
-    await maintenance;
+    await Promise.all([maintenance,analytics]);
   },
   async fetch(request, env, ctx) {
     const staticPath=new URL(request.url).pathname;

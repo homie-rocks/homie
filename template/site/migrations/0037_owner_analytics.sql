@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS stats_analytics_daily(day TEXT NOT NULL,metric TEXT NOT NULL,subject TEXT NOT NULL,source TEXT NOT NULL,n INTEGER NOT NULL,PRIMARY KEY(day,metric,subject,source)) WITHOUT ROWID;

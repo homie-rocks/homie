@@ -1,3 +1,4 @@
+import {ANALYTICS_MIGRATION,ANALYTICS_MIGRATION_FILE} from '../worker/analytics.mjs';
 import {backgroundQueues} from './background-queue.mjs';
 import {WORKER_ROUTES} from './static-assets.mjs';
 import {EXTRA_RUNTIME_MIGRATIONS,RUNTIME_INDEX_MIGRATION,RUNTIME_INDEX_MIGRATION_FILE,TOOL_NAMESPACE_MIGRATION,TOOL_NAMESPACE_MIGRATION_FILE,CACHE_MIGRATION,CACHE_MIGRATION_FILE,OPERATIONAL_MIGRATION,OPERATIONAL_MIGRATION_FILE} from '../worker/operational-schema.mjs';
@@ -78,7 +79,7 @@ export function slugify(name) {
  * No `database_id` until one is known: Wrangler (4.45.0+) and the Deploy to Cloudflare flow create the database
  * the binding names and keep it linked.
  */
-export function wranglerConfig({workerRoutes = WORKER_ROUTES, worker, name, d1, d1Id = null, r2 = null, layout = 'root', main = null, ai = false, routes = null, paidParts = false, partsRateLimit = null, triggers = null, eventFeeds = null }) {
+export function wranglerConfig({analytics = false, workerRoutes = WORKER_ROUTES, worker, name, d1, d1Id = null, r2 = null, layout = 'root', main = null, ai = false, routes = null, paidParts = false, partsRateLimit = null, triggers = null, eventFeeds = null }) {
   const at = layout === 'site' ? { schema: '../node_modules', main: 'src/runtime/worker.js', dist: './dist', migrations: 'migrations' }
     : { schema: 'node_modules', main: 'site/src/runtime/worker.js', dist: './site/dist', migrations: 'site/migrations' };
   const rooms = [{ name: 'TABLE', class_name: 'Table' }, { name: 'LOBBY', class_name: 'Lobby' }, { name: 'GATE', class_name: 'Gate' }, { name: 'CONCENTRATOR', class_name: 'Concentrator' }, {name:'APP_RECORDS',class_name:'AppRecordHub'}, {name:'EVENTS',class_name:'EventHub'}];
@@ -101,8 +102,9 @@ export function wranglerConfig({workerRoutes = WORKER_ROUTES, worker, name, d1, 
     // every deploy, and one written without them sends the studio's domain back to whatever else the zone routes
     // (lib/routes.mjs). A studio without routes gets no key at all.
     ...(routes?.length ? { routes } : {}),
-    triggers: { crons: [...new Set([...(triggers?.crons ?? []), ...(paidParts ? ['*/5 * * * *','17 * * * *'] : [])])] },
+    triggers: { crons: [...new Set([...(triggers?.crons ?? []), ...(paidParts ? ['*/5 * * * *','17 * * * *'] : []), ...(analytics ? ['17 * * * *'] : [])])] },
     assets: { directory: at.dist, binding: 'ASSETS', run_worker_first: workerRoutes },
+    ...(analytics ? {analytics_engine_datasets:[{binding:'STUDIO_ANALYTICS',dataset:`${worker.replace(/-/g,'_')}_visits`}],analytics:{binding:'ANALYTICS_SQL'}} : {}),
     queues:{producers:[{binding:'BACKGROUND',queue:backgroundQueues(worker).work},{binding:'BACKGROUND_DLQ',queue:backgroundQueues(worker).dead}],consumers:[{queue:backgroundQueues(worker).work,max_batch_size:100,max_batch_timeout:1,max_retries:5,dead_letter_queue:backgroundQueues(worker).dead}]},
     durable_objects: { bindings: rooms },
     migrations: [{ tag: 'v1', new_sqlite_classes: ['Table', 'Lobby'] }, { tag: 'v2-gates', new_sqlite_classes: ['Gate', 'Concentrator'] }, {tag:'v3-streams',new_sqlite_classes:['AppRecordHub','EventHub']}],
@@ -111,9 +113,9 @@ export function wranglerConfig({workerRoutes = WORKER_ROUTES, worker, name, d1, 
     // Workers AI, only when a server's AI guides think with it (agents_brain workers-ai; deploy adds it, 0.17.0).
     // Never in Previews: they do not inherit it, so a Preview's guides answer from the game's script.
     ...(ai ? { ai: { binding: 'AI' } } : {}),
-    vars: { STUDIO_NAME: name, ...(eventFeeds&&Object.keys(eventFeeds).length?{STUDIO_EVENT_FEEDS:JSON.stringify(eventFeeds)}:{}) },
+    vars: { STUDIO_NAME: name, ...(analytics ? {STUDIO_ANALYTICS_DATASET: `${worker.replace(/-/g,'_')}_visits`} : {}), ...(eventFeeds&&Object.keys(eventFeeds).length?{STUDIO_EVENT_FEEDS:JSON.stringify(eventFeeds)}:{}) },
     observability: { enabled: true },
-    previews: { vars: { STUDIO_NAME: name, HOMIE_PREVIEW: '1' }, durable_objects: { bindings: rooms } },
+    previews: { vars: { STUDIO_NAME: name, ...(analytics ? {STUDIO_ANALYTICS_DATASET: `${worker.replace(/-/g,'_')}_visits`} : {}), HOMIE_PREVIEW: '1' }, durable_objects: { bindings: rooms } },
   };
   return `// This studio's site on its own Cloudflare account (written by homie-studio). Everything here runs on
 // the studio's Cloudflare Workers account. \`npm run deploy\` (on this computer, or in Workers Builds) puts it live;
@@ -836,6 +838,7 @@ export { default, Table, Lobby, Gate, Concentrator } from '@homie-rocks/studio/w
     [`site/migrations/${OPERATIONAL_MIGRATION_FILE}`]: OPERATIONAL_MIGRATION,
     [`site/migrations/${CACHE_MIGRATION_FILE}`]: CACHE_MIGRATION,
     [`site/migrations/${TOOL_NAMESPACE_MIGRATION_FILE}`]: TOOL_NAMESPACE_MIGRATION,
+    [`site/migrations/${ANALYTICS_MIGRATION_FILE}`]: ANALYTICS_MIGRATION,
     [`site/migrations/${RUNTIME_INDEX_MIGRATION_FILE}`]: RUNTIME_INDEX_MIGRATION,
     ...Object.fromEntries(Object.entries(EXTRA_RUNTIME_MIGRATIONS).sort(([a],[b])=>a.localeCompare(b)).map(([name,sql])=>[`site/migrations/${name}`,sql])),
     [`site/migrations/${BOOKING_HOLDS_MIGRATION_FILE}`]: BOOKING_HOLDS_MIGRATION,
@@ -1105,8 +1108,13 @@ function ensureRuntimeIndexes(root) {
  if(existsSync(file))return null;
  mkdirSync(dirname(file),{recursive:true});writeFileSync(file,RUNTIME_INDEX_MIGRATION);return `site/migrations/${RUNTIME_INDEX_MIGRATION_FILE}`;
 }
+function ensureAnalytics(root) {
+ const file=join(root,'site','migrations',ANALYTICS_MIGRATION_FILE);
+ if(existsSync(file))return null;
+ mkdirSync(dirname(file),{recursive:true});writeFileSync(file,ANALYTICS_MIGRATION);return `site/migrations/${ANALYTICS_MIGRATION_FILE}`;
+}
 export function ensureMigrations(root) {
-  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root), ensureFunctionReference(root), ensureShopRemoveReferrals(root), ensureFunctionRuns(root), ensureToolDatabase(root), ensureBookings(root), ensureSubscriptions(root), ensureAppLive(root), ensureBusinessEvents(root), ensureBookingHolds(root),ensureBookingResources(root),ensureOperational(root),ensureCache(root),ensureToolNamespaces(root),ensureRuntimeIndexes(root),...Object.entries(EXTRA_RUNTIME_MIGRATIONS).sort(([a],[b])=>a.localeCompare(b)).map(([name,sql])=>{const file=join(root,'site','migrations',name);if(existsSync(file))return null;mkdirSync(dirname(file),{recursive:true});writeFileSync(file,sql);return `site/migrations/${name}`;})].filter(Boolean);
+  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root), ensureFunctionsMigration(root), ensureFunctionCursors(root), ensureFunctionMeta(root), ensureFunctionReference(root), ensureShopRemoveReferrals(root), ensureFunctionRuns(root), ensureToolDatabase(root), ensureBookings(root), ensureSubscriptions(root), ensureAppLive(root), ensureBusinessEvents(root), ensureBookingHolds(root),ensureBookingResources(root),ensureOperational(root),ensureCache(root),ensureToolNamespaces(root),ensureRuntimeIndexes(root),...Object.entries(EXTRA_RUNTIME_MIGRATIONS).sort(([a],[b])=>a.localeCompare(b)).map(([name,sql])=>{const file=join(root,'site','migrations',name);if(existsSync(file))return null;mkdirSync(dirname(file),{recursive:true});writeFileSync(file,sql);return `site/migrations/${name}`;}),ensureAnalytics(root)].filter(Boolean);
 }
 
 /** What a migration file the template added is for, in a few words (deploy and dev say it). */
