@@ -1320,7 +1320,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let sceneCursor: number | null = null, sceneAt = 0, sceneFrame: number | null = null;
   let sceneCached: ReturnType<typeof net.sample> = null;
   function sceneSample(raw = net.sample()): ReturnType<typeof net.sample> {
-    if (opts.remoteInput && dims === 2 && !map.physics) {
+    if (opts.remoteInput && base && dims === 2 && !map.physics) {
       const current = net.latest();
       if (current) return {a:current,b:current,alpha:1,renderT:current.st};
     }
@@ -1482,7 +1482,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   }
   function drawnRemote(id: string, s: ReturnType<typeof net.sample>): Entity | null {
     const current=latest?.ents.get(id);
-    if (current && opts.remoteInput?.[current.kind] && dims===2 && !map.physics) return forecastRemote(current,sceneTick(s));
+    if (current && base && opts.remoteInput?.[current.kind] && dims===2 && !map.physics) return forecastRemote(current,sceneTick(s));
     const a = s ? frameOf(s.a) : latest;
     const b = s ? frameOf(s.b) : latest;
     const ea = a?.ents.get(id); const eb = b?.ents.get(id);
