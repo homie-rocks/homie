@@ -412,8 +412,7 @@ test('a private game is the owner\'s alone: out of every list, the rooms and the
   // No game's source is served, public or not: the old address says so the same way for both (it tells nobody which exist).
   for (const id of ['night-vault', 'owl-run']) {
     const gone = await fetchSite(`/games/${id}/source.json`);
-    assert.equal(gone.status, 410, id);
-    assert.deepEqual(await gone.json(), { retired: 'remix', see: '/parts/' });
+    assert.equal(gone.status, 404, id);
   }
   // The owner, signed in: the game, a ticket for its frame and sockets, and the owner's overlay.
   const play = await fetchSite('/night-vault/play', { headers: owner });
@@ -581,7 +580,7 @@ test('invite-only: an invite code lets a browser in with a pass for that game; a
   assert.match((await sw.json()).message, /remix was retired: a game is no longer handed over whole.*parts \(\/parts\/\)/);
   const office = await (await fetchSite('/_studio/api/office', { headers: owner })).json();
   for (const k of ['remix', 'remixBuilt', 'remixOff', 'license']) assert.ok(!(k in office.games.find((g) => g.id === 'owl-run')), `the office has no ${k}`);
-  assert.equal((await fetchSite('/games/owl-run/source.json')).status, 410);
+  assert.equal((await fetchSite('/games/owl-run/source.json')).status, 404);
 });
 
 test('a room that opens just as its game narrows reads the launch state on its first heartbeat and re-gates', async () => {
