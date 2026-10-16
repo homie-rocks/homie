@@ -1,48 +1,41 @@
-# Studio-to-studio proof
+# Studio-to-studio proof, round 2
 
-Branch: `studio-to-studio`, based on the released 0.56.0 commit `e6d2b8a8`.
-No version bump. All resources in this proof are disposable fixtures.
+Rebased onto main `ba51a735`. No version bump. All live resources are throwaway fixtures.
 
-The [live result](live-result.json) records a 2026-10-16 UTC run (October 15 in
-Vancouver). Both `hm-s2s-a-mvaiesxf` and `hm-s2s-b-mvaiesxf` Workers and their two
-D1 databases were deleted in the runner's `finally` cleanup. The account subdomain
-is replaced with `studio-a.example`; no credential values are recorded.
+The [live result](live-result.json) records the successful 2026-10-16 UTC run.
+`hm-s2s-a-mvajcr14` and `hm-s2s-b-mvajcr14` Workers and D1 databases were deleted
+in `finally`. Public evidence substitutes example origins for the account hostname.
+No credentials or private keys are recorded. No browser, desktop app or screen was
+opened or read for this round.
 
-| Item | Design and observed proof |
+| Review item | Fix and proof |
 | --- | --- |
-| t | Official MCP SDK client and OAuth provider. Live A listed B's two allowed tools, read availability and decoded the structured booking result. Unit tests refuse non-HTTPS origins, escaped discovery URLs, redirects and oversized streamed responses. |
-| u | Receiver-provisioned OAuth client credentials, five-minute audience-bound tokens, existing provider validation hook. B returned verified A origin, asserted `Alex`, `owner:false`, and no app roles. Removing A's allowlist entry denied the next request. Unit tests also cover wrong credentials, receiver mismatch and rotation. |
-| v | Existing slot, hold and resource allocation paths produce schema.org Offer-shaped availability. Live A selected the offered slot and created and confirmed one reservation. Unit tests remove that offer after capacity is consumed; the existing booking UI browser test returns exactly the selected offer's arguments. |
-| o | Standard Webhooks and the MCP Events envelope feed existing durable publication/functions. Live B stored the verified sender, booking ID and ten-minute arrival in `function:arrival`. Unit tests cover duplicate delivery, changed payload conflicts, stale signatures, tampering, size limits and disabled senders. |
-| p | In-process `fetchSelf` uses existing internal caller identity. Unit tests preserve a friend's non-owner identity and reject explicit credentials or another origin. Existing custom-route authorization tests remain green. |
-| q | Explicit named Cloudflare Rate Limiting bindings share a caller key across delegated tools. Unit tests demonstrate shared success/refusal, undelegated-tool refusal and required anonymous keys. This binding is approximate per location, not a global hard quota. |
-| w, r | Owner checklist and 3D map/terrain catalogue parts require separate follow-up PRs and visual/device proof. They are not implemented here. |
+| 1. Limits | Both receiver limits and `ctx.rateLimit` use `studio:<origin>`. Fast regression failed with different keys for Alice/Bob, then passed. Anonymous MCP callers expose `clientAddressKey` as the default. Booking actor IDs remain handle-specific. |
+| 2. Availability | Pure allocator consumes one snapshot. A 50-slot × 64-option regression failed at 9,601 queries and now returns 3,200 offers in three queries. Holds retain atomic capacity enforcement. |
+| 3. Identity and policy | Ed25519 RFC 7523 private-key JWT, same-origin JWKS, `kid` cache refresh and public-key overlap. Fast tests cover deny-by-default, audience, replay, rotation and immediate denial. Deploy helper tests prove key generation through stdin, preservation, and sanitized errors. Live proof confirms origin identity, booking, Standard Webhooks v1a arrival/function execution, and D1 denial. Office Allow/Deny persists in D1; audit records origin and asserted handle. |
+| 4. Origins | Reject IP literals, mapped/loopback/link-local/integer hosts, private names and non-443 ports unless explicitly configured. Tests cover normalization, duplicates/mismatch, undelegated and unconfigured destinations. Anonymous access requires explicit opt-in. |
+| 5. Untrusted data | Results retain source/authentication and `untrusted:true`; lists and descriptions are marked. Regression failed first without the marker. Docs require wrapping before AI use. |
+| 6. Handles | `assertedHandle` accepts only 1–128 `[A-Za-z0-9._@-]` characters. Test rejects a decoded space and proves no local signed-in role. Docs prohibit local-account matching; audit display does not join asserted handles to players. |
+| 7. Small fixes | One 8,192-byte event limit, tested oversize/tamper/replay rejection; documented `fetchSelf` Origin implications. Live harness obtains URLs from deploy output and never reads Wrangler's OAuth file. Workerd checks that listing and calls share one request-scoped token; discovery responses are cached per origin. |
 
-## Reproduce
-
-Fast focused tests:
+## Reproduce without a browser
 
 ```sh
 node --test packages/studio/test/studios-*.test.mjs \
+  packages/studio/test/studio-boundaries.test.mjs \
+  packages/studio/test/studio-key-deploy.test.mjs \
   packages/studio/test/studio-services.test.mjs \
   packages/studio/test/booking-availability.test.mjs
 node --test packages/studio/test/studio-to-studio-workerd.test.mjs
-node --test --test-name-pattern='booking choice' packages/studio/test/app-sandbox.test.mjs
+npm run build
 ```
 
-The workerd test runs two independent studios with separate D1 databases and the
-real MCP server, SDK and OAuth transport. Its virtual network routes HTTPS between
-them without opening the internet. `fixture.mjs` is shared with the live proof.
+The two-worker test uses real workerd, D1, MCP SDK and OAuth transport over a virtual
+HTTPS network. Live uses the same fixture. With deployment authorization and a
+Wrangler login, run `node proof/studio-to-studio/live.mjs`. It creates only fresh
+`hm-s2s-*` resources, generates keys in memory, transfers secrets by stdin, tests
+the flow and deletes its resources. Configs/bundles/raw results remain git-ignored.
 
-With explicit deployment authorization and an authenticated Wrangler profile,
-`node proof/studio-to-studio/live.mjs` creates two fresh `hm-s2s-*` Workers/databases,
-provisions random secrets through stdin, tests the full flow, then deletes only
-those resources. Generated configs, bundles and raw results stay in git-ignored
-`.local/` beside this file. Nothing must be retained in `/tmp`.
-
-The new unit/browser tests were each run failing before their implementation.
-The focused regression run included 40 passing tests covering existing MCP,
-MCP Events and booking behavior. Build: `npm run build`. The ten existing OAuth/browser and tool-build regressions also pass. CI exposed
-a headless checker compatibility issue with structured envelopes; its two existing
-workerd tests pass after fixing the shared checker decoding. The live confirmation
-run retried one fresh-deployment HTTP 1042 using the same business IDs, then passed.
+An initial bundling failure and a subsequent transient authentication failure were
+cleaned up before the successful run. The runner checks public JWKS and retries
+only transient key-discovery/routing errors with stable business IDs.

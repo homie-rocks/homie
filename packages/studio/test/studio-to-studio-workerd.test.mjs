@@ -34,6 +34,7 @@ test('two studios: official SDK OAuth discovery, availability, named booking, ar
   assert.equal(result.data.booked.booking.state,'confirmed');
   assert.equal(result.data.booked.caller.studio.origin,'https://a.example');assert.equal(result.data.booked.caller.actingFor.assertedHandle,'Alex');assert.equal(result.data.booked.caller.actingFor.verified,false);
   const b=await mf.getD1Database('DB','hm-s2s-b');
+  assert.equal((await b.prepare("SELECT COUNT(*) n FROM mcp_kv WHERE key LIKE 'studio-token:%'").first()).n,1,'listing and both calls reuse one token within a request');
   const arrived=await b.prepare("SELECT value FROM tool_data WHERE namespace='function:arrival' AND key='arrival'").first();assert.ok(arrived);assert.equal(JSON.parse(arrived.value).data.minutes,10);
   assert.equal((await b.prepare('SELECT COUNT(*) n FROM shop_bookings').first()).n,1);
   await b.prepare("UPDATE mcp_kv SET value='{\"allow\":false}' WHERE key='studio-policy:https://a.example'").run();

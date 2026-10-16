@@ -32,20 +32,25 @@ export async function studioToken(request,env,cat,options={}) {
  const receiver=new URL(request.url).origin;
  if(!receiver.startsWith('https:')||form.getAll('resource').length!==1||form.get('resource')!==receiver+'/mcp')return json({error:'invalid_target'},400);
  if(form.has('scope')&&form.get('scope')!=='studio')return json({error:'invalid_scope'},400);
- let origin;
+ let origin,stage='assertion';
  try{
   for(const name of ['client_assertion','client_assertion_type','client_id'])if(form.getAll(name).length!==1)throw Error();
   if(form.get('client_assertion_type')!=='urn:ietf:params:oauth:client-assertion-type:jwt-bearer')throw Error();
   const parts=form.get('client_assertion').split('.');if(parts.length!==3)throw Error();
   const header=decode(parts[0]),claims=decode(parts[1]);origin=claims.iss;
+  stage='policy';
   const rule=await studioPolicy(env,cat,origin);if(!rule)throw Error();
+  stage='claims';
   if(studioOrigin(origin,{allowPrivate:rule.allowPrivate===true})!==origin||form.get('client_id')!==origin||claims.sub!==origin||claims.aud!==receiver+'/oauth/token'||header.alg!=='EdDSA'||header.jku||header.jwk||header.crit)throw Error();
   const now=Math.floor(Date.now()/1000);
   if(!Number.isSafeInteger(claims.exp)||!Number.isSafeInteger(claims.iat)||claims.iat>now+30||claims.iat<now-300||claims.exp<=now||claims.exp>claims.iat+300||claims.nbf!==undefined&&(!Number.isSafeInteger(claims.nbf)||claims.nbf>now)||typeof claims.jti!=='string'||! /^[A-Za-z0-9_-]{1,128}$/.test(claims.jti))throw Error();
+  stage='key discovery';
   const key=await originKey(env,origin,header.kid,{...options,allowPrivate:rule.allowPrivate===true});
+  stage='signature';
   if(!await verifyBytes(key,parts[2],parts.slice(0,2).join('.')))throw Error();
+  stage='replay';
   const used=await env.DB.prepare('INSERT OR IGNORE INTO mcp_kv(key,value,expires) VALUES(?1,?2,?3) RETURNING key').bind('studio-jti:'+await hash(JSON.stringify([origin,claims.jti])),'1',claims.exp).first();if(!used)throw Error();
- }catch{return json({error:'invalid_client'},401);}
+ }catch{return json({error:'invalid_client',error_description:'Studio authentication failed at '+stage},401);}
  const token='homie_studio_'+Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');
  const record={origin,resource:receiver+'/mcp',expires:Math.floor(Date.now()/1000)+300};
  await oauthStorage(env.DB).put('studio-token:'+await hash(token),JSON.stringify(record),{expiration:record.expires});

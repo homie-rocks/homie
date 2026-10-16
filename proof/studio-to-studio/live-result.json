@@ -1,19 +1,20 @@
 {
   "studios": [
-    "hm-s2s-a-mvaiesxf",
-    "hm-s2s-b-mvaiesxf"
+    "hm-s2s-a-mvajcr14",
+    "hm-s2s-b-mvajcr14"
   ],
-  "started": "2026-10-16T05:10:48.051Z",
+  "started": "2026-10-16T05:37:11.896Z",
   "cleanup": [
     {
-      "name": "hm-s2s-b-mvaiesxf",
+      "name": "hm-s2s-b-mvajcr14",
       "deleted": true
     },
     {
-      "name": "hm-s2s-a-mvaiesxf",
+      "name": "hm-s2s-a-mvajcr14",
       "deleted": true
     }
   ],
+  "publicJwks": true,
   "result": {
     "tools": [
       "studio_availability",
@@ -47,7 +48,7 @@
         "quantity": 1,
         "state": "confirmed",
         "version": 2,
-        "expiresAt": 1792128093462,
+        "expiresAt": 1792129695855,
         "paid": false,
         "choices": {
           "option": null,
@@ -56,10 +57,10 @@
         }
       },
       "caller": {
-        "id": "studio:fdd66f0062d0e02f32dce4516f68423117a575af9ac1b5ca077432212a7b7bbd",
+        "id": "studio:1f8f73c8d93d73eade6d102dab66aa72d818ab75a500b169b61196bf534941a7",
         "owner": false,
         "roles": {},
-        "client": "concierge",
+        "client": "https://studio-a.example",
         "tools": [
           "studio_availability",
           "venue_book"
@@ -67,13 +68,14 @@
         "studio": {
           "origin": "https://studio-a.example",
           "verified": true,
-          "method": "oauth-client-credentials"
+          "method": "private_key_jwt"
         },
         "actingFor": {
-          "handle": "Alex",
+          "assertedHandle": "Alex",
           "verified": false,
           "assertedBy": "https://studio-a.example"
-        }
+        },
+        "clientAddressKey": "public:2a06:98c0:3600::103"
       }
     },
     "arrival": {
@@ -91,6 +93,5 @@
     }
   },
   "denied": true,
-  "finished": "2026-10-16T05:11:44.636Z",
-  "redaction": "Deployed A origin replaced with https://studio-a.example; credentials were never logged."
+  "finished": "2026-10-16T05:38:32.446Z"
 }

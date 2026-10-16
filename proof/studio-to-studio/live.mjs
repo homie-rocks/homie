@@ -40,9 +40,11 @@ try{
  }
  await run(['d1','execute',names[1],'--remote','--config',resources[1].config,'--yes','--command',`INSERT INTO mcp_kv(key,value) VALUES('studio-policy:${urls[0]}','{"allow":true}')`]);
  await run(['d1','execute',names[1],'--remote','--config',resources[1].config,'--yes','--command',`INSERT INTO app_records(app,collection,id,value,version,updated_at) VALUES('venue','slots','morning','{"capacity":1,"start":"2030-10-15T10:00:00Z","end":"2030-10-15T11:00:00Z"}',1,1)`]);
+ for(const url of urls){const response=await fetch(url+'/.well-known/jwks.json');const jwks=await response.json();if(!response.ok||jwks.keys?.length!==1||jwks.keys.some(key=>key.d))throw new Error('Public JWKS proof failed');}
+ report.publicJwks=true;
  await client.connect(new StreamableHTTPClientTransport(new URL(urls[0]+'/mcp'),{requestInit:{headers:{'x-proof-key':proofSecret}}}));
  let result;
- for(let attempt=0;attempt<5;attempt++){result=studioResult(await client.callTool({name:'drive',arguments:{}}));if(!result.isError||!JSON.stringify(result).includes('1042'))break;console.log('Fresh deployment routing returned 1042; retrying stable proof IDs');await new Promise(resolve=>setTimeout(resolve,3000));}
+ for(let attempt=0;attempt<5;attempt++){result=studioResult(await client.callTool({name:'drive',arguments:{}}));if(!result.isError||! /1042|key discovery/.test(JSON.stringify(result)))break;console.log('Fresh deployment key routing unavailable; retrying stable proof IDs');await new Promise(resolve=>setTimeout(resolve,3000));}
  if(result.isError)throw new Error(JSON.stringify(result));
  if(result.data.booked.booking.state!=='confirmed')throw new Error('Reservation was not confirmed');
  report.result=result.data;console.log('Verified booking and event accepted');
