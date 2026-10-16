@@ -1847,6 +1847,21 @@ test('rules reconnects spread the first attempts and back off through a prolonge
   } finally { net.close(); }
 });
 
+test('retained authority retries a recent loss promptly, then backs off',async t=>{
+ const {createNetplay}=await netplayKit(),clock=virtualTime(t),r=rig();
+ r.room.setServerHost({frame(){},facts:()=>({})});t.mock.method(Math,'random',()=>.5);
+ let available=true;const starts=[],Base=r.socket();
+ class Socket{constructor(){starts.push(Date.now());if(available)return new Base();queueMicrotask(()=>this.onerror?.({}));}close(){}send(){}}
+ const net=createNetplay({rules:true,rulesHost:{mode:'server',offline:false,retainAuthority:true},config:cfg('retained'),WebSocketImpl:Socket,post:null,game:'x',linkOverlay:false});
+ try{
+  await clock.wait(100);assert.equal(net.link,'online');const down=Date.now();available=false;r.sockets[0].cut();await clock.wait(36000);
+  const early=starts.filter(at=>at>down&&at<down+30000);
+  assert.ok(early.length>20,'a short outage cannot leave a long retry sleep');
+  assert.ok(early.slice(1).every((at,i)=>at-early[i]<=250),'recent recovery is bounded to 250 ms between refused attempts');
+  assert.ok(starts.slice(1).some((at,i)=>at>down+30000&&at-starts[i]>=1000),'long outages regain the existing backoff');
+ }finally{net.close();r.stop();}
+});
+
 test('step input is only forwarded to a host that announced rules', () => {
   for (const rules of [false, true]) {
     const room = new NetRoom({ code: 'steps', maxPlayers: 4 });

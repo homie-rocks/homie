@@ -3061,7 +3061,13 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     const wait = Math.max(rulesGame ? (attempt < 3 ? Math.random() * Math.min(2000, 500 * 2 ** attempt) : (0.5 + Math.random() * 0.5) * Math.min(60_000, 2000 * 2 ** Math.min(attempt - 2, 5))) : LADDER[Math.min(attempt, LADDER.length - 1)] as number, aloneUntil - wall());
     attempt += 1;
     reconnects += 1;
-    retryTimer = setTimeout(open, rulesGame && (offline && rulesHost || opts.rulesHost?.retainAuthority && link === 'reconnecting') ? Math.min(wait, 2500) : wait);
+    // An established authoritative room may merely be resuming a stalled
+    // process. Do not add seconds of idle backoff once it is reachable again.
+    // Keep a short jittered recovery burst bounded to 30 seconds; initial joins
+    // and prolonged failures retain their existing backoff.
+    const retained = opts.rulesHost?.retainAuthority && link === 'reconnecting';
+    const recoveryCap = retained && downSince && wall()-downSince<30_000 ? 125+125*Math.random() : 2500;
+    retryTimer = setTimeout(open, rulesGame && (offline && rulesHost || retained) ? Math.min(wait, recoveryCap) : wait);
   }
 
   if (offline) {
