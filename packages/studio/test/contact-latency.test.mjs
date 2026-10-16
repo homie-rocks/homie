@@ -17,6 +17,7 @@ test('contact latency comes only from trusted relay measurements and is bounded'
  r.host.frame({t:'latency',seat:0,ms:600});r.ticks();assert.ok(Math.abs(delay(r.host.core)-.6)<.001);
  r.host.frame({t:'latency',seat:0,ms:10000});r.ticks();assert.equal(delay(r.host.core),2);
  r.host.frame({t:'latency',seat:0,ms:NaN});r.ticks();assert.equal(delay(r.host.core),2);
+ r.join(0,'Replacement',{occ:2});r.ticks();assert.equal(delay(r.host.core),0,'a new occupant cannot inherit the former connection measurement');
  r.host.stop();
 });
 test('offline cores default to zero and refuse nonfinite latency',()=>{

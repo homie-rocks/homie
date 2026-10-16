@@ -577,7 +577,7 @@ export function createHost(o: HostOptions): Host {
         }
         core.seatJoin({ seat, driver, owner, ...(grant ? { character } : {}) });
         core.seatAway(seat, false);
-        if (!previous || previous.driver !== driver || previous.owner !== owner) queues.delete(seat);
+        if (!previous || previous.driver !== driver || previous.owner !== owner) { queues.delete(seat); measuredRtt.delete(seat); }
         rosterText = '';
         if (people() > 0) { if (!running && !paused) start(); else if (paused) resume(); }
         return;
@@ -600,6 +600,7 @@ export function createHost(o: HostOptions): Host {
       case 'free': {
         if (!Number.isInteger(m.seat)) return;
         names.delete(m.seat as number);
+        measuredRtt.delete(m.seat as number);
         for (const [id, p] of peers) if (p.seat === m.seat) peers.delete(id);
         present.delete(m.seat as number);
         queues.delete(m.seat as number);
