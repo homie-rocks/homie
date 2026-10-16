@@ -54,6 +54,23 @@ class Stopped extends Error {}
 /** How long a seated browser is given for its loading cover to lift (the shell lifts it itself 30 s after the page opened). */
 export const READY_TIMEOUT_MS = 35_000;
 
+/** Join the first browser's room once its host is actually publishing a world.
+ * Matchmaking assigns a room before the game boots. Opening a replica then can
+ * deliver its join while a browser-hosted game's initial world is still loading.
+ * Server-hosted games report replica roles and need no browser-host snapshot.
+ */
+export async function pairedPlayTarget(first, play) {
+  await first.waitForFunction(() => {
+    const s = window.__shell;
+    return Boolean(s?.room && s.stats?.connected && s.stats.role &&
+      (s.stats.role !== 'host' || s.stats.snapHzOut > 0));
+  }, { timeout: 90_000 });
+  const room = await first.evaluate(() => window.__shell.room);
+  const target = new URL(play);
+  target.searchParams.set('room', room);
+  return target.href;
+}
+
 /**
  * Is the game on screen? `arrival` is the play page's `window.__shell.arrival` ({ phase, liftedMs, by }) or null.
  *   ready: true   the cover lifted (`by`: 'game' when the game said it was playable, else the helper or the shell)
@@ -205,10 +222,7 @@ export async function check({ webglFailure = false, isolate = true, root = null,
       const t0 = Date.now();
       let target = play;
       if (players.length) {
-        const first = players[0].page;
-        await first.waitForFunction(() => Boolean(window.__shell?.room), {timeout: 90_000});
-        const room = await first.evaluate(() => window.__shell.room);
-        target = `${play}?room=${encodeURIComponent(room)}`;
+        target = await pairedPlayTarget(players[0].page, play);
       }
       try { await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 90_000 }); } catch (error) {
         if (cannotAsk) return { ...cannotAsk, play, why: `${cannotAsk.why} (The ${kind.name} browser could not open it either: ${String(error?.message ?? error).split('\n')[0].slice(0, 120)}.)` };

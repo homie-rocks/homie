@@ -17,6 +17,12 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [Unreleased]
+
+### Fixed
+
+- `homie-studio check` waits for a browser host to publish its world before opening the second browser in the same room. This prevents startup joins from arriving before the host initializes its player bodies, which caused Kart Royale checks on 0.56.0 to finish rounds with the replica listed as a bot without a seat. Server-hosted checks continue as soon as the first browser connects.
+
 ## [0.56.0] - 2026-10-15
 
 **Plugin 0.56.0**
