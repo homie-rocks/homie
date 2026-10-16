@@ -1,3 +1,4 @@
+import {lobbyFor} from './lobby-shards.mjs';
 import {writePageMetric,analyticsStatus} from './analytics.mjs';
 /**
  * STUDIO METRICS: count, don't track (@homie-rocks/studio 0.6.0).
@@ -255,7 +256,7 @@ async function playingNow(env, games) {
   const out = {};
   await Promise.all(games.map(async (g) => {
     try {
-      const res = await env.LOBBY.get(env.LOBBY.idFromName(g.id)).fetch('https://lobby/now');
+      const res = await lobbyFor(env,g.id).fetch('https://lobby/now');
       const body = await res.json();
       out[g.id] = { players: Number(body.players) || 0, rooms: Number(body.rooms) || 0 };
     } catch { out[g.id] = { players: 0, rooms: 0 }; }

@@ -22,6 +22,7 @@ export async function consumeBackground(batch, env) {
   }
   for(const message of batch.messages)if(!changes.includes(message)) {
     try {
+      if(message.body?.v===1&&message.body.type==='lobby.snapshot'){await (await import('./lobby-summary.mjs')).storeLobbySummary(env,message.body);message.ack();continue;}
       if(message.body?.v!==1||message.body.type!=='stripe.event')throw new Error('Unknown background message type');
       await (await import('./stripe-intake.mjs')).reconcileStripeEvent(env,message.body.id,await catalogue(env));
       message.ack();

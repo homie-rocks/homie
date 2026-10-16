@@ -1713,6 +1713,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   const peers = new Map<string, Peer>();
   let heldPeers: Peer[] = [];
   let roundInfo: RoundInfo | null = null;
+  let idlePing = false, lastClockPing = -Infinity;
   let slots: Slot[] | null = null;
   let lastCkpt: Checkpoint<C> | null = null;
 
@@ -2352,12 +2353,13 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
 
   // ---------------------------------------------------------------- wire in
   function onMessage(data: unknown): void {
-    lastMsgAt = wall();
+    if (data === 'homie-pong' && idlePing) { lastMsgAt = wall(); return; }
     const text = typeof data === 'string' ? data : String(data);
     countBytes(bytesIn, text.length);
     let m: Record<string, unknown>;
     try { m = JSON.parse(text) as Record<string, unknown>; } catch { return; }
     if (!m || typeof m['t'] !== 'string') return;
+    lastMsgAt = wall();
     switch (m['t']) {
       case 'welcome': return onWelcome(m);
       case 'snap': return onSnap(m, text.length);
@@ -2583,6 +2585,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   }
 
   function onWelcome(m: Record<string, unknown>): void {
+    idlePing = m.idlePing === true; lastClockPing = -Infinity;
     post?.({ what: 'build', ver: version });
     clearTimeout(connectTimer);
     const next = m['role'] as Role;
@@ -2810,7 +2813,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     const st = Number(m['st']);
     const sent = pingsOut.get(c);
     if (sent === undefined || !Number.isFinite(st)) return;
-    pingsOut.delete(c);
+    for (const key of pingsOut.keys()) if (key <= c) pingsOut.delete(key);
     const recv = Date.now();
     const r = recv - sent;
     const off = st + r / 2 - recv;
@@ -2869,7 +2872,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   }
 
   function hidden(): boolean { try { return Boolean(g.document?.hidden); } catch { return false; } }
-  function ping(): void {
+  function ping(force = false): void {
     // This runs every two seconds at least. A gap of more than three and a half means the page itself was held.
     const beat = wall();
     const pingHeld = beat - lastPingTick > 2000 + 1500;
@@ -2885,12 +2888,22 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     // the word of a timer that itself ran seconds late: the page was blocked (a heavy boot, shaders compiling) and
     // could not have heard anything, and what the relay sent meanwhile is still queued behind this very timer.
     // Dropping a healthy socket there turned every long hitch into a reconnect.
-    if (ws && lastMsgAt && wall() - lastMsgAt > staleMs) {
+    const oldestPing = pingsOut.values().next().value;
+    if (ws && oldestPing !== undefined && Date.now() - oldestPing >= 30_000 && !pingHeld) { lost(ws, 'stale'); return; }
+    const silence = idlePing && (roundInfo?.phase !== 'live' || wall() - lastClockPing > staleMs) ? Math.max(staleMs, 60_000) : staleMs;
+    if (ws && lastMsgAt && wall() - lastMsgAt > silence) {
       if (!pingHeld) { lost(ws, 'stale'); return; }
       // Two and a half seconds to be heard from (a pong answers the ping below): a socket that is really dead is
       // still dropped, two beats from now.
       lastMsgAt = wall() - staleMs + 2500;
     }
+    // An idle hibernatable room can answer this at the edge. Keep a regular
+    // clock/visibility sample on visibility changes, and every heartbeat during play.
+    if (idlePing && roundInfo?.phase !== 'live' && !(roundInfo?.phase === 'over' && now() >= roundInfo.endsAt) && !force) {
+      try { ws?.send('homie-ping'); } catch { if(ws)lost(ws,'send'); }
+      return;
+    }
+    lastClockPing = wall();
     const c = Date.now();
     pingsOut.set(c, c);
     if (pingsOut.size > 16) { const first = pingsOut.keys().next().value; if (first !== undefined) pingsOut.delete(first); }
@@ -3026,6 +3039,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     ws = sock; socketStartedAt = wall();
     sock.onopen = () => {
       lastMsgAt = wall();
+      pingsOut.clear();
       raw({
         t: 'hello', rules: rulesGame, v: NETPLAY_VERSION, rev: NETPLAY_REVISION, token, name: name || undefined, device, want, canHost: asAgent && asAgent.hands === 'host' ? false : canHost, game: opts.game, max: opts.maxPlayers,
         ...(rulesGame ? { coast: 1 } : {}),
@@ -3101,8 +3115,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       if (hidden()) {
         // A hidden phone tab loses its timers and rAF: hand the round on before it stalls.
         if (role === 'host' && peers.size > 1) yieldHost();
-        ping();
-      } else ping();
+        ping(true);
+      } else ping(true);
     });
     g.addEventListener?.('online', () => { if (!closed && !connected && rulesGame) { if (ws) lost(ws, 'online'); if (retryTimer !== null) clearTimeout(retryTimer); retryTimer = null; attempt = 0; open(); } });
     g.addEventListener?.('pagehide', () => { if (role === 'host') { sendCheckpoint(); rulesSender?.leave(); } raw({ t: 'bye' }); });

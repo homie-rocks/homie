@@ -203,7 +203,14 @@ export async function check({ webglFailure = false, isolate = true, root = null,
       const ua = await browser.userAgent();
       await page.setUserAgent(`${ua} ${userAgentTag}`);
       const t0 = Date.now();
-      try { await page.goto(play, { waitUntil: 'domcontentloaded', timeout: 90_000 }); } catch (error) {
+      let target = play;
+      if (players.length) {
+        const first = players[0].page;
+        await first.waitForFunction(() => Boolean(window.__shell?.room), {timeout: 90_000});
+        const room = await first.evaluate(() => window.__shell.room);
+        target = `${play}?room=${encodeURIComponent(room)}`;
+      }
+      try { await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 90_000 }); } catch (error) {
         if (cannotAsk) return { ...cannotAsk, play, why: `${cannotAsk.why} (The ${kind.name} browser could not open it either: ${String(error?.message ?? error).split('\n')[0].slice(0, 120)}.)` };
         throw error;
       }
