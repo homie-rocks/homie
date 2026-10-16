@@ -80,13 +80,16 @@ export function runner(root, env) {
 }
 
 /** Retry with fresh Wrangler processes: another studio may be rotating shared OAuth credentials. */
-export function checkWranglerLogin(root, env = {}, {run = null, sleep = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)} = {}) {
-  const w = run ?? runner(root, env);
+export async function checkWranglerLogin(root, env = {}, {run = null, sleep = ms => new Promise(resolve => setTimeout(resolve, ms))} = {}) {
+  const bin = run ? null : wranglerBin(root);
+  if (!run && !bin) return {ok:false, needs:'cloudflare-login', why:'Wrangler is not installed in this studio yet: run `npm install` first.'};
+  const w = run ?? (args => wranglerRun(bin, args, {cwd:root, env:{...process.env,...env,WRANGLER_SEND_METRICS:'false',CI:'1'}, timeout:25_000}));
   let res, data;
   for (let attempt = 0; attempt < 4; attempt++) {
-    if (attempt) sleep([200, 600, 1400][attempt - 1] + Math.floor(Math.random() * 100));
-    res = w(['whoami', '--json'], {cwd: root, timeout: 25_000});
+    if (attempt) await sleep([200, 600, 1400][attempt - 1] + Math.floor(Math.random() * 100));
+    res = await w(['whoami', '--json'], {cwd: root, timeout: 25_000});
     try { data = JSON.parse(res.stdout ?? ''); } catch { data = null; }
+    if (res.code === 0 && data?.loggedIn === false) return {ok:false, needs:'cloudflare-login', why:'Wrangler is not signed in. Run `npx wrangler login` and approve once in your browser, then retry.'};
     if (res.code === 0 && data?.loggedIn === true) return {ok:true, who:{accounts:(data.accounts ?? []).map(a => ({id:a.id,name:a.name})),authType:data.authType}};
   }
   const detail = String(res.out ?? '').trim();
@@ -97,8 +100,8 @@ export function checkWranglerLogin(root, env = {}, {run = null, sleep = ms => At
 }
 
 /** Who Wrangler is signed in as, or null. Never prints a token. */
-export function whoami(root, env = {}) {
-  return checkWranglerLogin(root, env).who ?? null;
+export async function whoami(root, env = {}) {
+  return (await checkWranglerLogin(root, env)).who ?? null;
 }
 
 function parseJson(text) {
@@ -276,7 +279,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   const wide = wideRouteRefusal(readConfig(root), studio);
   if (wide) return { ok: false, command: 'deploy', ...wide };
   let routes = keptRoutes(root, studio);
-  const login = checkWranglerLogin(root);
+  const login = await checkWranglerLogin(root);
   const who = login.who;
   if (!login.ok) {
     if (cf.auth === 'stripe-projects' && login.needs === 'cloudflare-login') {
@@ -698,7 +701,7 @@ export async function storageAdd(root, { log = () => {} } = {}) {
   if (created.has(`r2:${bucket}`)) {
     return { ok: true, command: 'storage add', bucket, already: true, next: ['npm run deploy   (binds it as MEDIA if the live site does not have it yet)'] };
   }
-  const login = checkWranglerLogin(root);
+  const login = await checkWranglerLogin(root);
   if (!login.ok) return {...login, command:'storage add'};
   const who = login.who;
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || cf.accountId || (who.accounts.length === 1 ? who.accounts[0].id : null);
@@ -734,15 +737,15 @@ export async function storageAdd(root, { log = () => {} } = {}) {
 }
 
 /** One Wrangler command, run without blocking (an upload of a music video takes a while); the last of its words kept. */
-function wranglerRun(bin, args, { cwd, env }) {
+function wranglerRun(bin, args, { cwd, env, timeout }) {
   return new Promise((done) => {
-    const p = spawn(bin, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
-    let out = '';
+    const p = spawn(bin, args, { cwd, env, timeout, stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '', stdout = '';
     const keep = (d) => { out = `${out}${d}`.slice(-8000); };
-    p.stdout.on('data', keep);
+    p.stdout.on('data', data => {stdout = `${stdout}${data}`.slice(-65536); keep(data);});
     p.stderr.on('data', keep);
     p.on('error', (e) => done({ code: 1, out: String(e.message) }));
-    p.on('close', (code) => done({ code: code ?? 1, out: out.replace(ANSI, '') }));
+    p.on('close', (code) => done({ code: code ?? 1, out: out.replace(ANSI, ''), stdout: stdout.replace(ANSI, '') }));
   });
 }
 

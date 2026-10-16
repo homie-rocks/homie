@@ -3,16 +3,16 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as cf from '../lib/cloudflare.mjs';
 const yes={code:0,stdout:JSON.stringify({loggedIn:true,accounts:[{id:'a',name:'Studio'}],authType:'OAuth Token'})};
-test('sign-in tolerates a refresh race and rereads Wrangler on each attempt',()=>{
-  const waits=[], replies=[{code:1,out:'OAuth refresh token is invalid'}, {code:0,stdout:'{"loggedIn":false}'},yes];
-  const result=cf.checkWranglerLogin('.',{}, {run:()=>replies.shift(),sleep:ms=>waits.push(ms)});
+test('sign-in tolerates a refresh race and rereads Wrangler on each attempt',async()=>{
+  const waits=[], replies=[{code:1,out:'OAuth refresh token is invalid'}, {code:1,out:'EBUSY: config is locked'},yes];
+  const result=await cf.checkWranglerLogin('.',{}, {run:()=>replies.shift(),sleep:ms=>waits.push(ms)});
   assert.equal(result.ok,true);assert.deepEqual(result.who.accounts,[{id:'a',name:'Studio'}]);
   assert.equal(waits.length,2);assert.ok(waits[1]>waits[0]);
 });
-test('failed checks retain real diagnostics and distinguish expired auth from temporary failure',()=>{
+test('failed checks retain real diagnostics and distinguish expired auth from temporary failure',async()=>{
   for(const [reply,needs] of [[{code:1,out:'OAuth refresh token expired'},'cloudflare-login'],[{code:1,out:'EBUSY: config is locked'},'cloudflare-auth-check'],[{code:1,out:'network unavailable'},'cloudflare-auth-check'],[{code:0,stdout:'{"loggedIn":false}'},'cloudflare-login']]){
-    let calls=0;const result=cf.checkWranglerLogin('.',{},{run:()=>{calls++;return reply;},sleep:()=>{}});
-    assert.equal(calls,4);assert.equal(result.ok,false);assert.equal(result.needs,needs);
+    let calls=0;const result=await cf.checkWranglerLogin('.',{},{run:()=>{calls++;return reply;},sleep:()=>{}});
+    assert.equal(calls,reply.code===0?1:4);assert.equal(result.ok,false);assert.equal(result.needs,needs);
     if(reply.out)assert.ok(result.why.includes(reply.out));
   }
 });
@@ -32,7 +32,7 @@ console.log(JSON.stringify({loggedIn:true,accounts:[{id:'shared-account',name:'S
   const jobs=Array.from({length:3},(_,i)=>{
     const studio=join(root,String(i));mkdirSync(join(studio,'node_modules/.bin'),{recursive:true});
     writeFileSync(join(studio,'node_modules/.bin/wrangler'),script,{mode:0o755});
-    const source=`import {checkWranglerLogin} from ${JSON.stringify(new URL('../lib/cloudflare.mjs',import.meta.url).href)};const result=checkWranglerLogin(${JSON.stringify(studio)});console.log(JSON.stringify(result));process.exitCode=result.ok?0:1;`;
+    const source=`import {checkWranglerLogin} from ${JSON.stringify(new URL('../lib/cloudflare.mjs',import.meta.url).href)};const result=await checkWranglerLogin(${JSON.stringify(studio)});console.log(JSON.stringify(result));process.exitCode=result.ok?0:1;`;
     return new Promise((resolve,reject)=>{
       const child=spawn(process.execPath,['--input-type=module','-e',source]);let out='',err='';
       child.stdout.on('data',data=>out+=data);child.stderr.on('data',data=>err+=data);child.on('error',reject);
@@ -40,4 +40,11 @@ console.log(JSON.stringify({loggedIn:true,accounts:[{id:'shared-account',name:'S
     });
   });
   await Promise.all(jobs);
+});
+
+test('sign-in probe yields to the event loop',async()=>{
+ let yielded=false;setTimeout(()=>{yielded=true;},0);
+ let calls=0;
+ const result=await cf.checkWranglerLogin('.',{}, {run:async()=>++calls===1?{code:1,out:'refresh token invalid'}:yes});
+ assert.equal(result.ok,true);assert.equal(yielded,true);
 });

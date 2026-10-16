@@ -1591,7 +1591,11 @@ A page stands in one of six places with its room, and the helper says which:
 - **`net.offline` means "not in a room"**, not "no network": it is true for `alone` and `offline`.
   **`net.connected`** is true only while the socket is up and welcomed. The state between them
   (`!net.offline && !net.connected`) is `reconnecting`.
-- **`on('link', (e) => …)`** fires on every change with `{ state, prev, why, hosting, downMs }`.
+- **`on('link', (e) => …)`** immediately calls the listener with the current state
+  (`prev === state`, `why: 'subscribe'`), then fires on every change with `{ state, prev, why, hosting, downMs }`.
+  Ignore `why === 'subscribe'` when triggering reconnect recovery; it initializes
+  UI and does not signal a new connection. Listener errors are isolated, including
+  this immediate call, and `on()` always returns the unsubscribe function.
   `hosting` says this page is running the rules right now. Two pages can both say so for a
   moment: a host that was cut off keeps simulating until its welcome tells it the room moved on,
   and a page that is `alone` hosts its own private round. Before revision 9 neither said

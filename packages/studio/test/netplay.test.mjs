@@ -1925,6 +1925,10 @@ test('a wall indicator mounted after welcome sees the current link after each re
     await clock.wait(100);
     assert.equal(net.connected,true);
     assert.ok(posts.some(m=>m.what==='link'&&m.state==='online'),'outer shell is connected');
+    let thrownCalls=0;
+    const stopThrowing=net.on('link',()=>{thrownCalls++;throw Error('UI failed');});
+    assert.equal(typeof stopThrowing,'function');stopThrowing();
+    assert.equal(thrownCalls,1);
     let indicator='Connecting to Homie';
     const off=net.on('link',e=>{indicator=e.state==='online'?'Connected':'Connecting to Homie';});
     assert.equal(indicator,'Connected','late app UI receives the current state');

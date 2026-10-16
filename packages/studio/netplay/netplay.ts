@@ -3353,7 +3353,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     on(kind, fn) {
       (handlers[kind] as Set<unknown>).add(fn);
       if (kind === 'view') markFollows();
-      if (kind === 'link') (fn as NetHandlers<S, A, C>['link'])({state:link,prev:link,why:'subscribe',hosting:roleKnown && role === 'host',downMs:connected || !downSince ? 0 : Math.round(wall() - downSince)});
+      if (kind === 'link') try { (fn as NetHandlers<S, A, C>['link'])({state:link,prev:link,why:'subscribe',hosting:roleKnown && role === 'host',downMs:connected || !downSince ? 0 : Math.round(wall() - downSince)}); } catch { /* A failed UI listener must still be removable. */ }
       return () => { (handlers[kind] as Set<unknown>).delete(fn); };
     },
     now,
