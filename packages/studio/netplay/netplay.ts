@@ -170,7 +170,7 @@ export type LinkState = 'connecting' | 'online' | 'reconnecting' | 'alone' | 'of
 export interface LinkChange {
   state: LinkState;
   prev: LinkState;
-  /** Why it changed: `welcome`, `lost` (the socket closed), `stale` (it went silent), `relay-timeout` (the room never answered), `reconnect-timeout` (it was in the room and the room did not come back in `reconnectMaxMs`), `no-shell`, or a refusal's code. */
+  /** `subscribe` is the current state delivered immediately on subscription (prev equals state). Otherwise, why it changed: `welcome`, `lost` (the socket closed), `stale` (it went silent), `relay-timeout` (the room never answered), `reconnect-timeout` (it was in the room and the room did not come back in `reconnectMaxMs`), `no-shell`, or a refusal's code. */
   why: string;
   /** This browser is running the rules right now (alone, or as the room's host): two browsers can both say so while one is cut off. */
   hosting: boolean;
@@ -749,7 +749,7 @@ export interface NetHandlers<S, A, C> {
   unchat: (e: { ids: string[] }) => void;
   /** Revision 8: a message of mine was not sent (slow mode, sign in to type, a word, the studio's filter…). */
   held: (h: ChatHeld) => void;
-  /** Revision 9: where this browser stands with its room changed (online, reconnecting, alone, closed). */
+  /** Current link on subscription (why: subscribe), then changes (online, reconnecting, alone, closed). */
   link: (e: LinkChange) => void;
   /** Revision 9: a newer build of the game is live; this tab should reload (section 23). */
   stale: (e: StaleNotice) => void;
@@ -797,7 +797,7 @@ export interface Netplay<S = unknown, A = unknown, C = unknown> {
    * THE LINK (revision 9, NETPLAY.md section 22). `offline` is true when this browser is NOT in a room: there is no
    * shell at all, or the room never answered and it plays alone (`link === 'alone'`). `connected` is true only while
    * the socket is up and welcomed. Between the two (`!offline && !connected`) the browser was in a room and is
-   * knocking again: `link === 'reconnecting'`. `link` says which in one word, and `on('link')` when it changes.
+   * knocking again: `link === 'reconnecting'`. `link` says which in one word, and `on('link')` immediately reports the current state, then each change.
    */
   readonly link: LinkState;
   /** Times the helper has scheduled another knock at the relay (the same number as `stats().reconnects`). 0: never interrupted. */
@@ -3353,6 +3353,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     on(kind, fn) {
       (handlers[kind] as Set<unknown>).add(fn);
       if (kind === 'view') markFollows();
+      if (kind === 'link') (fn as NetHandlers<S, A, C>['link'])({state:link,prev:link,why:'subscribe',hosting:roleKnown && role === 'host',downMs:connected || !downSince ? 0 : Math.round(wall() - downSince)});
       return () => { (handlers[kind] as Set<unknown>).delete(fn); };
     },
     now,
