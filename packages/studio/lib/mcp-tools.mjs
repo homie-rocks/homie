@@ -46,6 +46,7 @@ import { ART_UI, artToolDefs } from './art-tools.mjs';
 import { PARTS_FIRST, partsToolDefs } from './parts-tools.mjs';
 import { standaloneToolDefs } from './standalone-tools.mjs';
 import { partsPlanLines } from './parts-build.mjs';
+import { hostingOf, hostedWords } from './hosted.mjs';
 import { FEEDBACK_APPS, FEEDBACK_KINDS, FEEDBACK_LIMITS, appOf, cleanNote, draftId, noteBlock, sendNote, withLine } from './feedback.mjs';
 
 export const UI = Object.freeze({
@@ -1164,7 +1165,11 @@ export function toolDefs(ctx, avail = {}) {
       annotations: { title: 'Put the studio online', readOnlyHint: false, destructiveHint: false, openWorldHint: true }, _meta: ui(UI.build),
       run: async (a) => {
         const root = ctx.root(a.studio);
-        const need = needsInstall(ctx, root); if (need) return need;
+        // A studio a git host keeps goes online by a push to main; never to the person's own Cloudflare.
+        const hosting = hostingOf(readStudio(root));
+        const need = needsInstall(ctx, root); if (need && !hosting) return need;
+        if (hosting && a.plan !== true) return startRun(ctx, root, { kind: 'deploy', game: null, title: `${readStudio(root).name}: pushed to ${hosting.name}`, steps: [{ label: 'deploy', args: ['deploy'] }] });
+        if (hosting) return ok(`${hostedWords(hosting)}\nGoing online here is a push of this studio's main to ${hosting.git}; the host builds a private preview and the owner publishes it there. Nothing is created on Cloudflare from this computer and it costs nothing here.`, { kind: 'deploy-plan', hosted: true, host: hosting.name });
         if (a.plan === true) {
           const r = await cli(ctx, root, 'deploy --plan', ['deploy', '--plan']);
           if (!r.ended) return stillRunning(r.job, 'The deploy plan');
@@ -1234,6 +1239,8 @@ export function toolDefs(ctx, avail = {}) {
       annotations: { title: 'Sign in to Cloudflare', readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       run: async (a) => {
         const root = ctx.root(a.studio);
+        const hosting = hostingOf(readStudio(root));
+        if (hosting) return fail(`${hostedWords(hosting)} No Cloudflare sign-in is needed: studio_deploy pushes to the host.`);
         const need = needsInstall(ctx, root); if (need) return need;
         const bin = join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'wrangler.cmd' : 'wrangler');
         const job = startJob({ root, label: 'Cloudflare sign-in (wrangler login)', cmd: bin, args: ['login'], keep: false });
@@ -1257,6 +1264,13 @@ export function toolDefs(ctx, avail = {}) {
         // before: true is `publish --before`, the same function the terminal runs (lib/directory.mjs publishBefore):
         // the directory's read-only count for this site, the parts' lines, and nothing published. Run here, by THIS
         // toolkit, never handed to the studio's pinned one: a 0.31.0 toolkit reads `publish --before` as `publish`.
+        const hosting = hostingOf(readStudio(root));
+        if (hosting) {
+          // The host puts a version live (its own publish, with the owner's approval where it asks for one).
+          const r = await cli(ctx, root, 'publish', ['publish']);
+          if (!r.ended) return stillRunning(r.job, 'Publishing on the host');
+          return r.job.code === 0 ? ok(r.result?.answer ?? 'The host took the publish request.', { kind: 'publish', hosted: true }) : fail(r.result?.why ?? whyOf(r.job));
+        }
         if (a.before === true) {
           const b = await publishBefore(root, { homie: ctx.directory ?? undefined, site: a.site ? String(a.site) : undefined });
           return ok(b.lines.join('\n'), { kind: 'publish-count', ...publishesSoFar(root), ...b });

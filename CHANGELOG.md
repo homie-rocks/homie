@@ -19,6 +19,11 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [Unreleased]
 
+### Added
+
+- A studio can be hosted by a git host instead of the owner's own Cloudflare. `homie-studio hosted connect <git url>` signs this computer in once in the browser with the host's own OAuth (discovered from the Git remote by the published standards, no key to copy), clones the studio and makes the toolkit Git's credential helper for that remote only. studio.json's new `hosting` block says so: `deploy` (and the studio_deploy tool) push main and the host builds a private preview, `publish` (and studio_publish) ask the host to put it live, and cloudflare_login and storage refuse with the reason. See [packages/studio/docs/hosted.md](packages/studio/docs/hosted.md).
+- `homie-studio git-credential`: Git's credential protocol for those hosts. Tokens are kept in `~/.homie/secrets/git-oauth/` (mode 0600), refresh themselves, and never appear in a URL, a remote or Git config.
+
 ## [0.58.0] - 2026-10-16
 
 **Plugin 0.58.0**
