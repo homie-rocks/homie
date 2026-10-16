@@ -80,6 +80,7 @@ function account(dir, { deployOut = null, deployCode = 0 } = {}) {
 S=${state}
 echo "$*" >> $S/calls
 case "$1" in
+  queues) if [ "$2" = info ]; then echo "Queue does not exist" >&2; exit 1; fi; echo created;;
   whoami) echo '{"loggedIn":true,"authType":"OAuth Token","accounts":[{"id":"acc1","name":"Test"}]}';;
   versions) echo 'This Worker does not exist on your account. [code: 10007]' >&2; exit 1;;
   d1) case "$2" in
@@ -120,6 +121,7 @@ function cloudflareApi({ zones = {}, status = 200 } = {}) {
     const json = (body, code = 200) => new Response(JSON.stringify(body), { status: code, headers: { 'content-type': 'application/json' } });
     if (status !== 200) return json({ success: false, errors: [{ code: 10000, message: 'Authentication error' }], result: null }, status);
     if (u.pathname === '/client/v4/zones') { const name = u.searchParams.get('name'); return json({ success: true, result: zones[name] ? [{ id: `zone-${name}`, name }] : [] }); }
+    if(init.method==='PATCH' && /\/d1\/database\//.test(u.pathname))return json({success:true,result:{read_replication:{mode:'auto'}}});
     const m = /^\/client\/v4\/zones\/zone-(.+)\/workers\/routes$/.exec(u.pathname);
     if (m && zones[m[1]]) return json({ success: true, result: zones[m[1]].map((r, i) => ({ id: `route-${i}`, ...r })) });
     return json({ success: false, errors: [{ code: 7003, message: 'not found' }], result: null }, 404);
@@ -240,7 +242,7 @@ test('deploy and its plan warn before Wrangler changes anything, read only, and 
   assert.ok(warned.notes.some((n) => n.includes('must not be edited or removed') && n.includes(warned.zone.line)), 'and in the result the terminal and the tool print');
   assert.deepEqual(warned.steps.find((s) => s.needs === 'cloudflare-routes')?.route, warned.zone.route);
   assert.ok(api.asked.filter((a) => a.includes('api.cloudflare.com')).length >= 2);
-  assert.ok(api.asked.every((a) => a.startsWith('GET ')), `Cloudflare's API was only read: ${api.asked.join(' | ')}`);
+  assert.ok(api.asked.filter(a=>!a.includes('/d1/database/')).every((a) => a.startsWith('GET ')), `Cloudflare's API was only read: ${api.asked.join(' | ')}`);
   assert.deepEqual(readConfig(dir).routes, [{ pattern: 'play.example.com', custom_domain: true }], 'nothing was added by itself');
   // The terminal prints the note.
   const cli = spawnSync(process.execPath, [CLI, 'deploy', '--homie', 'http://127.0.0.1:9'], { cwd: dir, encoding: 'utf8', env: { ...process.env, HOMIE_STUDIO_WARM: '0' } });
@@ -256,7 +258,7 @@ test('deploy and its plan warn before Wrangler changes anything, read only, and 
   assert.match(added.steps.map((s) => s.what).join('\n'), /added the studio's own exact-host route to "routes" in wrangler\.jsonc: \{"pattern":"play\.example\.com\/\*","zone_name":"example\.com"\}\. It covers play\.example\.com only, and every deploy keeps it; the other site's route was not touched\./);
   assert.equal(added.zone.state, 'own-route');
   assert.equal(added.notes, undefined, 'no warning once the studio has its own route');
-  assert.ok(api.asked.every((a) => a.startsWith('GET ')));
+  assert.ok(api.asked.filter(a=>!a.includes('/d1/database/')).every((a) => a.startsWith('GET ')));
   // The next plain deploy keeps it and has nothing to warn about; asking again adds nothing twice.
   const kept = await deploy(dir, { homie: 'http://127.0.0.1:9', fetchFn: api.fetchFn, ownRoute: true });
   assert.equal(kept.zone.state, 'own-route');
@@ -383,7 +385,7 @@ test('a studio beneath a zone\'s wildcard Worker route: the deploy says which ex
   assert.deepEqual(shadowed.steps.find((s) => s.route)?.route, { pattern: 'play.example.com/*', zone_name: 'example.com' });
   // The domain's routes are only ever read, and here they could not be (this stand-in Wrangler hands out no
   // sign-in): the deploy says that as unmeasured before it deploys, and changes no route.
-  assert.deepEqual([...new Set(cf.calls().map((c) => c.split(' ')[0]))].sort(), ['auth', 'd1', 'deploy', 'versions', 'whoami']);
+  assert.deepEqual([...new Set(cf.calls().map((c) => c.split(' ')[0]))].sort(), ['auth', 'd1', 'deploy', 'queues', 'versions', 'whoami']);
   assert.equal(shadowed.zone.state, 'unmeasured');
   assert.equal(zone.asked.some((u) => u.includes('api.cloudflare.com')), false, 'with no sign-in to read with, Cloudflare is asked nothing');
   assert.deepEqual(readConfig(dir).routes, [{ pattern: 'play.example.com', custom_domain: true }], 'the custom domain stayed; nothing was added by itself');

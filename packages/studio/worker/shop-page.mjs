@@ -556,6 +556,7 @@ export const OFFICE_SHOP_SCRIPT = String.raw`(function () {
       [['Payments', s.stripe.payments], ['Refunds', s.stripe.refunds], ['Disputes', s.stripe.disputes], ['Payouts', s.stripe.payouts], ['Balance', s.stripe.balance], ['Tax', s.stripe.tax]].concat(s.stripe.managedPayments ? [['Managed Payments', s.stripe.managedPayments]] : []).forEach(function (l) { links.appendChild(link(l[1], l[0])); });
       links.appendChild(link('/_studio/api/shop/orders.csv', 'CSV for your accountant'));
       top.appendChild(links);
+      if (s.delivery?.stuck) top.appendChild(el('p', { class: 'note', role: 'status' }, s.delivery.stuck + ' delayed Stripe deliveries. ' + s.delivery.message));
       if (s.keyless) top.appendChild(el('p', { class: 'note' }, 'Refund in Stripe or ask your AI connected to Stripe. If a payment is missing here, ask your AI to resend its Stripe webhook.'));
       for (const total of s.totalsByCurrency ?? (s.totals ? [s.totals] : [])) top.appendChild(el('p', { class: 'dim' }, 'Orders in the last 30 days: ' + total.sales + ' paid orders, ' + cents(total.paid, total.currency) + ' before tax and fees (subscription renewals are in Stripe); ' + total.refunds + ' refunded (' + cents(total.refunded, total.currency) + '); ' + total.disputes + ' disputed now, ' + total.lost + ' lost.'));
       /* purchase-office */

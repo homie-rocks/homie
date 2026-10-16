@@ -13,7 +13,7 @@ function studio(t){const root=mkdtempSync(join(tmpdir(),'stripe-upgrade-'));t.af
 async function builtAndDeployed(root){
  const {build}=await import('../lib/build.mjs');const {ciDeploy}=await import('../lib/cloudflare.mjs');
  assert.equal((await build(root)).ok,true);
- const calls=[];const deployed=await ciDeploy(root,{wrangler:args=>{calls.push(args);return {code:0,out:'[]'};}});
+ const calls=[];const deployed=await ciDeploy(root,{wrangler:args=>{calls.push(args);return args[0]==='queues'&&args[1]==='info'?{code:1,out:'Queue does not exist'}:{code:0,out:'[]'};}});
  assert.equal(deployed.ok,true,JSON.stringify(deployed));assert.ok(calls.some(a=>a[0]==='deploy'));
  return JSON.parse(readFileSync(join(root,'wrangler.jsonc'),'utf8').replace(/^\s*\/\/.*$/gm,'')).vars;
 }

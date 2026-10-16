@@ -5,7 +5,7 @@
  * `maxPlayers` or `players.max`); every room of that game has that many, as chosen by the studio.
  */
 
-import { stallOf, versionOf } from './room.mjs';
+import { stallOf, versionOf } from './room-protocol.mjs';
 
 /** Room size is chosen by the studio, not capped by admission. */
 export const seatCount = (n, fallback = 8) => Number.isSafeInteger(Number(n)) && Number(n) > 0 ? Number(n) : fallback;

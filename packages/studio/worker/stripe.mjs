@@ -1,3 +1,4 @@
+import {RECONCILE_GUARD} from './reconcile-guard.mjs';
 /**
  * THE STUDIO'S OWN STRIPE, from its Worker (@homie-rocks/studio 0.24.0). No SDK: a few form-encoded calls with the
  * studio's key (a Worker secret), and Stripe's documented webhook signature check with WebCrypto.
@@ -95,6 +96,7 @@ export async function productIdOf(slug, item) {
 
 /** One call with the studio's key. `idempotencyKey` makes a retried POST do the work once (Stripe keeps it 24 h). */
 export async function stripeCall(env, method, path, params = null, { idempotencyKey = null, fetcher = fetch, version = STRIPE_VERSION, timeout = 15_000 } = {}) {
+  await env?.[RECONCILE_GUARD]?.();
   const key = String(env?.STRIPE_KEY ?? '');
   if (!KEY_SHAPE.test(key)) throw new StripeError(0, { error: { message: 'no Stripe key on this Worker', code: 'no-key' } });
   const body = params && method !== 'GET' ? formEncode(params).toString() : null;
@@ -119,6 +121,7 @@ export async function stripeCall(env, method, path, params = null, { idempotency
     error.idempotentReplayed = res.headers.get('idempotent-replayed') === 'true';
     throw error;
   }
+  await env?.[RECONCILE_GUARD]?.();
   return json;
 }
 

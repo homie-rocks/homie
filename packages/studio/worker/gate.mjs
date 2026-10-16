@@ -27,64 +27,8 @@ function parseFrame(event) {
  * sockets: clients resume with their existing seat tokens and a fresh keyframe.
  * Inputs and commands are batched together, never overwritten or reordered.
  */
-/** Players a Gate holds in a room too big for its Table to hold directly.
- *
- * Two trials on Cloudflare set it. A Gate of 60 dense players that selected and encoded each one's view from
- * scratch (0.45.4) could not keep 20 frames a second; the same work now costs a third as much. But twenty to a
- * Gate (the first 0.46.2 build) made a room of 600 fifty channels, and the room spent its time on messages, not
- * rules: what the room's one thread can bear is counted in messages, and a channel is two a tick. So a Gate is
- * as full as it can serve, and a room opens only the Gates its players fill.
- * A studio chooses its room's size and nothing else. */
-export const GATE_PLAYERS = 50;
-/** `per`: players a Gate, for a trial that is finding the right number (`HOMIE_GATE_PLAYERS` on the Worker). A studio never sets it. */
-export const gatePlayers = (env) => { const n = Number(env?.HOMIE_GATE_PLAYERS); return Number.isInteger(n) && n >= 4 && n <= 200 ? n : GATE_PLAYERS; };
-export function roomLayout(seats, per = GATE_PLAYERS) {
-  // A room of up to 64 is its Table alone, as it has been since 0.45.0.
-  const gates = seats <= 64 ? 1 : Math.ceil(seats / per);
-  return { gates, concentrators: 0 };
-}
-/** The Gate a key lands on when the room cannot be asked: spread evenly, as 0.45.0 did. */
-function hashedGate(key, gates) {
-  let hash = 2166136261;
-  for (const c of key || crypto.randomUUID()) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619) >>> 0;
-  return hash % gates;
-}
-/**
- * Which Gate takes the next player: the lowest one with room. A room of 50 players in a 1,000-seat game is one
- * Gate, not twenty with two or three players each, every one of them costing the room a channel. `held` is each
- * Gate's players now and `promised` those sent to it who have not arrived yet.
- */
-export function nextGate(gates, held, promised = new Map(), per = GATE_PLAYERS) {
-  let least = 0, fewest = Infinity;
-  for (let i = 0; i < gates; i++) {
-    const n = (held.get(i) ?? 0) + (promised.get(i) ?? 0);
-    if (n < per) return i;
-    if (n < fewest) { fewest = n; least = i; }
-  }
-  return least;
-}
-export function gateFor(env, game, room, seats, key) {
-  const layout = roomLayout(seats, gatePlayers(env));
-  // One logical Gate is embedded in the Table for a small room. Same relay,
-  // admission and delivery protocol; no extra Durable Object or seat clamp.
-  const table = () => env.TABLE.get(env.TABLE.idFromName(`${game}/${room}`));
-  if (layout.gates === 1) return table();
-  return { async fetch(request) {
-    const url = new URL(request.url);
-    // The room says which Gate has room (one short question a join; a join is the room's work anyway). If it
-    // cannot be asked in time the key's hash chooses, as before.
-    let index = null;
-    try {
-      const asked = await Promise.race([table().fetch(`https://table/__gate?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${seats}&gates=${layout.gates}`), new Promise(done => setTimeout(() => done(null), 2000))]);
-      const said = asked?.ok ? await asked.json() : null;
-      if (Number.isInteger(said?.gate) && said.gate >= 0 && said.gate < layout.gates) index = said.gate;
-    } catch { /* the hash chooses */ }
-    index ??= hashedGate(key, layout.gates);
-    url.searchParams.set('gate', String(index));
-    url.searchParams.set('gates', String(layout.gates));
-    return env.GATE.get(env.GATE.idFromName(`${game}/${room}/${index}`)).fetch(new Request(url, request));
-  } };
-}
+export {GATE_PLAYERS,gatePlayers,roomLayout,nextGate,gateFor,diagnosticsOf} from './gate-routing.mjs';
+import {diagnosticsOf} from './gate-routing.mjs';
 
 export function* expandBatch(rows) {
   for (const row of rows) {
@@ -99,7 +43,7 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
   const timing = stageTimings();
   const stats = { frames: 0, rows: 0, bytes: 0, peakQueueBytes: 0, coalesced: 0, ackMs: 0, maxAckMs: 0, rttMs: 0 };
   const close = () => { closed = true; queue = []; views.clear(); strings.clear(); pending.clear(); inFlightBytes = 0; bytes = 0; if (timer !== null) clearTimer(timer); timer = null; };
-  const fail = (reason) => { close(); try { socket.close(1011, reason); } catch {} };
+  const fail = (reason) => { close(); try { socket.close(1011, reason); } catch { /* The peer already closed; local shutdown still runs. */ } };
   const schedule = () => { if (!closed && (receipt || pending.size < maxFrames && !blockedByBytes && (queue.length || views.size)) && timer === null) timer = setTimer(flush, delay > 1 ? Math.max(0, lastSentAt + delay - now()) : delay); };
   const flush = () => {
     if (timer !== null) clearTimer(timer); timer = null;
@@ -279,7 +223,7 @@ export function multiplexSession(socket, connect, { onMetrics = () => {}, delay 
       }
       out.consumed(rows);
       if (admissions.length && !attaching) { if (admissionTimer !== null) clearTimeout(admissionTimer); pump(); }
-    }).catch(error => { console.log(JSON.stringify({ ev: 'room-link-failed', stage: 'receive', error: String(error?.message ?? error).slice(0,160) })); shutdown(); try { socket.close(1011, 'room link failed'); } catch {} });
+    }).catch(error => { console.log(JSON.stringify({ ev: 'room-link-failed', stage: 'receive', error: String(error?.message ?? error).slice(0,160) })); shutdown(); try { socket.close(1011, 'room link failed'); } catch { /* The peer already closed; local shutdown still runs. */ } });
   });
   socket.addEventListener('close', shutdown);
   socket.addEventListener('error', shutdown);
@@ -385,10 +329,10 @@ export class Gate {
         console.log(JSON.stringify({ ev: 'room-link-lost', room: name, gate: url.searchParams.get('gate'), layer: 'gate', code: event.code ?? null, reason: event.reason ?? null, error: event.error?.message ?? null, clients: this.clients.size, transport: link.facts() }));
         this.link = null; this.worlds = null; link.close();
         for (const timer of this.admissions.values()) clearTimeout(timer); this.admissions.clear();
-        for (const client of this.clients.values()) { try { client.close(1012, 'room link restarted'); } catch {} }
+        for (const client of this.clients.values()) { try { client.close(1012, 'room link restarted'); } catch { /* The peer already closed; local shutdown still runs. */ } }
         this.clients.clear();
       };
-      const drop = (id, client) => { this.clients.delete(id); link.send(['close', id]); try { client.close(1011, 'client connection ended'); } catch {} };
+      const drop = (id, client) => { this.clients.delete(id); link.send(['close', id]); try { client.close(1011, 'client connection ended'); } catch { /* The peer already closed; local shutdown still runs. */ } };
       socket.addEventListener('message', event => {
         if (typeof event.data !== 'string') return;
         try {
@@ -400,12 +344,12 @@ export class Gate {
               if (op === 'seat') { if (client) { client.seat = value; client.subscribed = true; } }
               else if (op === 'view') { if (client) this.deliverOne(id, client, value, reason, settings, rate, drop); }
               else if (op === 'data') { try { client?.send(value); } catch { if (client) drop(id, client); } }
-              else if (op === 'close') { this.clients.delete(id); try { client?.close(value, reason); } catch {} }
+              else if (op === 'close') { this.clients.delete(id); try { client?.close(value, reason); } catch { /* The peer already closed; local shutdown still runs. */ } }
             }
           }
           link.consumed(rows);
           if (hz && Date.now() - this.metricsAt >= 1000) this.publishMetrics(url, link);
-        } catch (error) { lost({ error, reason: 'invalid room frame' }); try { socket.close(1011, 'room link failed'); } catch {} }
+        } catch (error) { lost({ error, reason: 'invalid room frame' }); try { socket.close(1011, 'room link failed'); } catch { /* The peer already closed; local shutdown still runs. */ } }
       });
       socket.addEventListener('close', lost); socket.addEventListener('error', lost);
       // A Gate nobody is on gives its channel back after ten seconds: an open channel keeps the room and this Gate in
@@ -470,7 +414,7 @@ export class Gate {
     let opened = false;
     const deadline = setTimeout(() => {
       this.admissions.delete(id);
-      if (!opened && this.clients.delete(id)) { try { server.close(4000, 'no-hello'); } catch {} }
+      if (!opened && this.clients.delete(id)) { try { server.close(4000, 'no-hello'); } catch { /* The peer already closed; local shutdown still runs. */ } }
     }, 5000);
     deadline?.unref?.(); this.admissions.set(id, deadline);
     server.addEventListener('message', event => {
@@ -481,7 +425,7 @@ export class Gate {
       if (event.data.length > 128 * 1024) {
         clearTimeout(deadline); this.admissions.delete(id); this.clients.delete(id);
         if (opened) link.send(['close', id]);
-        try { server.close(1009, 'message too large'); } catch {}
+        try { server.close(1009, 'message too large'); } catch { /* The peer already closed; local shutdown still runs. */ }
         return;
       }
       if (!opened) {
@@ -545,7 +489,7 @@ export class Gate {
     this.metricsPending = true;
     const work = diagnosticsOf(this.env, url.searchParams.get('game'), url.searchParams.get('room')).fetch('https://diagnostics/__diagnostics', {
       method: 'POST', body: JSON.stringify({ kind: 'gate', id: `gate/${url.searchParams.get('gate')}`, at: now, ...facts }),
-    }).then(r => r.body?.cancel?.()).catch(() => {}).finally(() => { this.metricsPending = false; });
+    }).then(r => r.body?.cancel?.()).catch(error => console.warn("Gate diagnostic publication failed:",error.message)).finally(() => { this.metricsPending = false; });
     this.ctx.waitUntil?.(work);
   }
   /** The room's diagnostics, kept by an object that is neither the room nor a
@@ -576,6 +520,6 @@ export class Gate {
   }
 }
 /** The object that keeps one room's diagnostics (a Gate by class, never one with players). */
-export function diagnosticsOf(env, game, room) { return env.GATE.get(env.GATE.idFromName(`${game}/${room}/diagnostics`)); }
+
 /** Kept so a studio deployed with 0.45.0's Concentrator binding still loads; nothing opens one. */
 export class Concentrator extends Gate {}

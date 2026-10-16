@@ -2,19 +2,24 @@ import { pendingJobsSQL, definitiveRefusal, REPLAY_LIMIT_MS, recoveryAction } fr
 import { orderFact, recordOrderState, releaseClaim } from './purchase-core.mjs';
 import { resumeSettlement } from './settlement-journal.mjs';
 /** Durable provider recordings outlive responses. A verified chain transfer is payment. */
-import { stripeCall, refundPayment, modeOf } from './stripe.mjs';
+import { stripeCall, refundPayment, modeOf, STRIPE_VERSION } from './stripe.mjs';
 import { byId, resourceAvailable } from './purchase-store.mjs';
 export async function saveRecording(env, order, params, options) {
   const chain = params.payment_method_options?.crypto?.transaction_verification_options;
   const id = chain ? `${order.id}:${chain.network}:${chain.transaction_hash}` : options.idempotencyKey;
   await env.DB.prepare("INSERT OR IGNORE INTO purchase_jobs (id,order_id,mode,state,payload,updated_at) VALUES (?1,?2,?3,?4,?5,?6)")
-    .bind(id, order.id, order.mode, chain ? 'paid_recording' : 'submitted', JSON.stringify({ params, options: { ...options, idempotencyKey: chain ? chain.transaction_hash : options.idempotencyKey }, chain, startedAt: Date.now() }), Date.now()).run();
+    .bind(id, order.id, order.mode, chain ? 'paid_recording' : 'submitted', JSON.stringify({ params, options: { ...options, version: options.version ?? options.apiVersion ?? STRIPE_VERSION, idempotencyKey: chain ? chain.transaction_hash : options.idempotencyKey }, chain, startedAt: Date.now() }), Date.now()).run();
   if (chain) {
     // Only the protocol's verified settlement callback reaches here, never buyer input.
     await orderFact(env, order.id, 'payment', {paid_at: Date.now()}).run();
     await env.DB.prepare("UPDATE purchase_settlements SET state = 'complete', updated_at = ?2 WHERE order_id = ?1 AND reference = ?3").bind(order.id, Date.now(), chain.transaction_hash).run();
   }
   return id;
+}
+/** Persist the provider id before any follow-up retrieve/cancel/fulfillment call. */
+export async function recordProviderId(env, order, id, pi) {
+  if (!/^pi_[A-Za-z0-9]+$/.test(pi.id) || pi.amount !== order.amount || pi.currency !== order.currency || pi.livemode !== (order.mode === 'live')) throw new Error('Provider receipt does not match order');
+  await env.DB.prepare('UPDATE purchase_jobs SET payment=?2,updated_at=?3 WHERE id=?1').bind(id,pi.id,Date.now()).run();
 }
 export async function recordProviderResult(env, order, id, pi) {
   if (pi.amount !== order.amount || pi.currency !== order.currency || pi.livemode !== (order.mode === 'live')) throw new Error('Provider receipt does not match order');
@@ -37,31 +42,40 @@ export async function recordingFailure(env, id, error) {
     await env.DB.prepare("UPDATE purchase_jobs SET state = 'failed', error = ?2, attempts = attempts + 1, updated_at = ?3 WHERE id = ?1 AND state = 'submitted'").bind(id, String(error.message).slice(0, 500), Date.now()).run();
     return;
   }
+  if(error.manualReview) {
+    await env.DB.prepare("UPDATE purchase_jobs SET state='manual_review',error=?2,updated_at=?3 WHERE id=?1").bind(id,error.message,Date.now()).run();
+    return;
+  }
   // A failure of our call is not a fact about the original payment.
   await env.DB.prepare("UPDATE purchase_jobs SET error = ?2, attempts = attempts + 1, updated_at = ?3 WHERE id = ?1")
     .bind(id, String(error.message).slice(0, 500), Date.now()).run();
 }
 
-/** Read existing objects first. Listing avoids the search index's delayed negative answers. */
+/** Read the recorded object, or recover a lost create response with its original key. */
 export async function readProviderPayment(env, order, job, payment = null) {
-  const options = { version: '2026-07-29.preview' };
+  const readOptions = { version: STRIPE_VERSION };
   if (payment && !/^pi_[A-Za-z0-9]+$/.test(payment)) throw new Error('Supply an existing Stripe PaymentIntent id');
   if (job.payment || payment) {
-    const pi = await stripeCall(env, 'GET', `/v1/payment_intents/${encodeURIComponent(job.payment ?? payment)}`, null, options);
+    const pi = await stripeCall(env, 'GET', `/v1/payment_intents/${encodeURIComponent(job.payment ?? payment)}`, null, readOptions);
     if (pi.metadata?.order !== order.id) throw new Error('The existing PaymentIntent belongs to another order');
     return pi;
   }
-  let cursor;
-  for (let page = 0; page < 100; page++) {
-    const result = await stripeCall(env, 'GET', '/v1/payment_intents', { limit: 100, created: { gte: Math.floor(order.created_at / 1000) - 60 }, ...(cursor ? { starting_after: cursor } : {}) }, options);
-    if (!Array.isArray(result.data)) throw new Error('Stripe did not return an existing-payment list');
-    const found = result.data.find((pi) => pi.metadata?.order === order.id);
-    if (found) return found;
-    if (!result.has_more) return null;
-    cursor = result.data.at(-1)?.id;
-    if (!cursor) throw new Error('Stripe payment list has no continuation');
+  const {params,options,startedAt}=JSON.parse(job.payload??'{}');
+  if(params&&options?.idempotencyKey&&Date.now()-(startedAt??order.created_at)<REPLAY_LIMIT_MS) {
+    // If the create response was lost, replay only the original request/key
+    // inside Stripe's guaranteed retention window. Never scan the account.
+    const version=options.version ?? options.apiVersion;
+    if(!version) {
+      const error=new Error('Original Stripe API version is missing; reconcile this retained order with an existing PaymentIntent id instead of replaying an uncertain request.');
+      error.manualReview=true;throw error;
+    }
+    const pi=await stripeCall(env,'POST','/v1/payment_intents',params,{...options,version});
+    await recordProviderId(env,order,job.id,pi);
+    return pi;
   }
-  throw new Error(`Existing payment scan exceeded 100 pages for order ${order.id}; the owner must reconcile this order.`);
+  const error=new Error(`PaymentIntent id missing after the safe replay window for order ${order.id}; reconcile with an existing PaymentIntent id. The order and its claim are retained.`);
+  error.manualReview=true;
+  throw error;
 }
 async function releaseUnpaid(env, order, job, pi = null) {
   await env.DB.batch([
@@ -87,18 +101,18 @@ export async function reconcileRecordings(env, orderId = null, dependencies = {}
       switch (recoveryAction(observation)) {
         case 'fail':
           if (pi?.status === 'requires_payment_method') {
-            pi = await stripeCall(env, 'POST', `/v1/payment_intents/${encodeURIComponent(pi.id)}/cancel`, {}, { idempotencyKey: `cancel-action-${pi.id}`, version: '2026-07-29.preview' });
+            pi = await stripeCall(env, 'POST', `/v1/payment_intents/${encodeURIComponent(pi.id)}/cancel`, {}, { idempotencyKey: `cancel-action-${pi.id}`, version: STRIPE_VERSION });
             if (pi.status !== 'canceled') throw new Error('The unpaid payment could not be canceled; the claim remains reserved');
           }
           await releaseUnpaid(env, order, job, pi); continue;
-        case 'replay': pi = await stripeCall(env, 'POST', '/v1/payment_intents', params, { ...options, version: '2026-07-29.preview' }); break;
+        case 'replay': pi = await stripeCall(env, 'POST', '/v1/payment_intents', params, { ...options, version: options.version ?? options.apiVersion ?? STRIPE_VERSION }); break;
         default:
           if (!pi) {
             if (deadline) throw new Error(`Paid transfer still needs recording: order ${order.id}; key ${options.idempotencyKey}`);
-            pi = await stripeCall(env, 'POST', '/v1/payment_intents', params, { ...options, version: '2026-07-29.preview' });
+            pi = await stripeCall(env, 'POST', '/v1/payment_intents', params, { ...options, version: options.version ?? options.apiVersion ?? STRIPE_VERSION });
           }
       }
-      if (['requires_action','requires_confirmation','requires_capture','requires_payment_method'].includes(pi.status) || orderId && dependencies.cancel === true && pi.status === 'processing') pi = await stripeCall(env, 'POST', `/v1/payment_intents/${encodeURIComponent(pi.id)}/cancel`, {}, { idempotencyKey: `cancel-action-${pi.id}`, version: '2026-07-29.preview' });
+      if (['requires_action','requires_confirmation','requires_capture','requires_payment_method'].includes(pi.status) || orderId && dependencies.cancel === true && pi.status === 'processing') pi = await stripeCall(env, 'POST', `/v1/payment_intents/${encodeURIComponent(pi.id)}/cancel`, {}, { idempotencyKey: `cancel-action-${pi.id}`, version: STRIPE_VERSION });
       await recordProviderResult(env, order, job.id, pi);
       if (['canceled','requires_payment_method'].includes(pi.status)) { await releaseUnpaid(env, order, job, pi); continue; }
       if (pi.status !== 'succeeded') {

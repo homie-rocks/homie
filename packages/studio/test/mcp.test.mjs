@@ -321,6 +321,7 @@ test('studio_open { repo }: a studio on GitHub, cloned with this computer\'s own
   mkdirSync(bin, { recursive: true });
   writeFileSync(join(bin, 'gh'), `#!/bin/sh
 case "$1" in
+  queues) if [ "$2" = info ]; then echo "Queue does not exist" >&2; exit 1; fi; echo created;;
   auth) if [ "$2" = status ]; then [ -n "$FAKE_GH_OUT" ] && exit 1; exit 0; fi; echo "! First copy your one-time code: ABCD-1234" >&2; exec sleep 20;;
   repo) exec git clone -q "${remote}" "$4";;
 esac

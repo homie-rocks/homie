@@ -1,3 +1,5 @@
+import {enableReadReplication} from './read-replication.mjs';
+import {ensureBackgroundQueues,backgroundQueues} from './background-queue.mjs';
 import { directoryUrl } from '../worker/directory-choice.mjs';
 import { roomLayout } from '../worker/gate.mjs';
 import {workerEntry} from './worker-build.mjs';
@@ -101,6 +103,12 @@ function parseJson(text) {
 export function explainCloudflare(out, accountId = null) {
   const text = String(out ?? '');
   const dash = accountId ? `https://dash.cloudflare.com/${accountId}` : 'https://dash.cloudflare.com';
+  if (/queue.*(?:permission|authentication|forbidden|unauthori)|(?:permission|authentication|forbidden|unauthori).*queue/is.test(text)) {
+    return {needs:'queues-permission',why:'The deployment token needs Account > Queues > Edit on this account. Update the CI/Workers Builds token permissions, then retry deploy.'};
+  }
+  if (/(?:cron|schedule).*?(?:limit|maximum|exceed)|(?:limit|maximum|exceed).*?(?:cron|schedule)/i.test(text)) {
+    return { needs: 'cron-limit', why: 'This account has reached its Cron Trigger limit (5 on Workers Free). Remove unused triggers from other Workers in the Cloudflare dashboard, or upgrade the account plan, then retry deploy. Required studio schedules have been retained.' };
+  }
   if (/\b10034\b|verify your email/i.test(text)) {
     return { needs: 'cloudflare-verify-email', why: `Cloudflare needs this account's email address verified before it runs a Worker. Ask the person to open the verification email from Cloudflare (or ${dash}/profile and "Send verification email"), click it. The AI resumes deployment after verification.` };
   }
@@ -210,6 +218,9 @@ export function deployPlan(root) {
       { kind: 'Durable Object', name: 'Table', what: hosted.length ? `one per public room: the netplay relay (seats, snapshots), and for ${hosted.map((h) => h.id).join(', ')} the game's own rules, which run here and nowhere else` : 'one per public room: the netplay relay (seats, host, snapshots); runs no game code', state: 'declared by the Worker' },
       ...hosted.map((h) => ({ kind: 'Game rules', name: h.id, what: `One full ${h.seats}-player room activates ${h.objects} objects (${h.layout.gates > 1 ? `${h.layout.gates} Gates, the room and its diagnostics` : 'the room'}): approximately ${h.gbSeconds} GB-seconds/hour before Lobby activity. Player input/ping alone contributes ${h.requests} request units/hour; relay frames and receipts, HTTP and storage are additional. Occupancy, batching and account usage determine the bill.`, state: 'in the Worker' })),
       { kind: 'Durable Object', name: 'Lobby', what: 'one per game: puts strangers who press Play into the same room', state: 'declared by the Worker' },
+      ...['Gate','Concentrator','AppRecordHub','EventHub'].map(name=>({kind:'Durable Object',name,what:name==='Gate'?'room transport and diagnostics':name==='Concentrator'?'compatibility for existing studios':'independent live subscriptions',state:'declared by the Worker'})),
+      ...Object.values(backgroundQueues(cf.worker)).map(name=>({kind:'Queue',name,what:'durable background delivery with retries and a dead-letter queue',state:mark('queue:'+name)})),
+      ...(studio.stats?.analytics===true ? [{kind:'Analytics Engine',name:`${cf.worker.replace(/-/g,'_')}_visits`,what:'page counts, rolled into historical D1 totals hourly',state:'bound by the Worker'}] : []),
       storage
         ? { kind: 'R2 bucket', name: storage, what: 'the studio\'s big media: songs and videos over the size studio.json media.r2Over names (1 MiB unless set) or that git leaves out, uploaded and checked by SHA-256 before the site stops carrying them, served at their same addresses', state: 'exists (this studio made it)', plan: 'R2 (payment method on the account; 10 GB-month free)' }
         : { kind: 'R2 bucket', name: null, what: 'none: a new studio needs no storage. `homie-studio storage add` adds it later, for large media only', state: 'not created', plan: null },
@@ -384,8 +395,10 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   step(`Cron triggers: ${(readConfig(root)?.triggers?.crons??[]).join("; ")||"none (remove toolkit triggers)"}`);
   if (routes) step(`kept the studio's own route${routes.length === 1 ? '' : 's'} in wrangler.jsonc: ${routes.map((r) => r.pattern).join(', ')}`);
   for (const added of ensureMigrations(root)) step(`added ${added} (${migrationWord(added)})`);
+  try {await ensureBackgroundQueues(root,w,{accountId,...(fetchFn?{fetchFn}:{})});for(const key of readStudio(root).cloudflare.created??[])created.add(key);} catch(error) {return refuse(error.message);}
   const migrate = w(['d1', 'migrations', 'apply', cf.d1, '--remote']);
   if (migrate.code !== 0) return refuse(`D1 migrations failed: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
+  try {const replication=await enableReadReplication(root,w,{accountId,databaseId:db.uuid,...(fetchFn?{fetchFn}:{})});step(replication.enabled?'D1 read replication enabled':`D1 uses the primary: ${replication.reason}`);} catch(error) {step(`D1 uses the primary: ${error.message}`);}
   step('D1 migrations applied');
   const subscriptions=w(['d1','execute',cf.d1,'--remote','--command',(await import('./functions-build.mjs')).functionDeploymentSQL(root)]);
   if(subscriptions.code!==0)return refuse('Could not register studio functions',subscriptions.out);
@@ -473,7 +486,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
 
   // studio.json keeps what is safe to commit: names, ids, the custom domain; never the workers.dev address.
   const { url: _url, deployedAt: _at, ...kept } = cf;
-  const next = { ...kept, ...(cf.url && !isWorkersDev(cf.url) ? { url: cf.url } : {}), accountId, d1Id: db.uuid, r2: cf.r2 ?? null, created: [...created].sort() };
+  const next = { ...kept, ...(cf.url && !isWorkersDev(cf.url) ? { url: cf.url } : {}), accountId, d1Id: db.uuid, r2: cf.r2 ?? null, created: [...new Set([...created,...(readStudio(root).cloudflare.created??[])])].sort() };
   writeStudio(root, { ...readStudio(root), cloudflare: next });
   return {
     ok: true, command: 'deploy', url, mcp: url ? `${url}/mcp` : null, connectAI: url ? `${url}/_studio/office/connections` : null, ...(workersDev ? { workersDev, local: LOCAL_STATE } : {}), worker: cf.worker, d1: cf.d1, r2, account: accountId, announced, steps,
@@ -604,6 +617,7 @@ export async function ciDeploy(root, { log = () => {}, wrangler = null } = {}) {
   const refuse = (why, out) => ({ ok: false, command: 'deploy', ci: true, ...(explainCloudflare(out) ?? { why }), steps });
   if (!existsSync(join(root, 'site', 'dist', 'games.json'))) return { ok: false, command: 'deploy', ci: true, why: 'nothing is built: the build command is `npm run build` (homie-studio build), and it runs before this', steps };
   for (const added of ensureMigrations(root)) step(`added ${added} (${migrationWord(added)})`);
+  try {await ensureBackgroundQueues(root,w);} catch(error) {return refuse(error.message);}
   const apply = () => w(['d1', 'migrations', 'apply', names.binding, '--remote']);
   let migrate = apply();
   const first = migrate.code !== 0 && /not found|could(?:n't| not) find|does not exist|no database|database_id/i.test(migrate.out);
@@ -633,6 +647,7 @@ export async function ciDeploy(root, { log = () => {}, wrangler = null } = {}) {
     step('D1 migrations applied (the database was created with this first deploy)');
     const registered=register();if(registered.code!==0)return refuse('Could not register studio functions',registered.out);
   }
+  try {const replication=await enableReadReplication(root,w);step(replication.enabled?'D1 read replication enabled':`D1 uses the primary: ${replication.reason}`);} catch(error) {step(`D1 uses the primary: ${error.message}`);}
   // The live address, from what Wrangler printed (a custom domain in studio.json wins).
   const workersDev = /https:\/\/[a-z0-9.-]+\.workers\.dev/i.exec(dep.out)?.[0] ?? null;
   let url = null;

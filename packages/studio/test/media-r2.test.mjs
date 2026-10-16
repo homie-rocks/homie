@@ -58,7 +58,7 @@ const a = process.argv.slice(2);
 fs.appendFileSync(path.join(S, 'calls'), a.join(' ') + '\\n');
 const opt = (n) => { const i = a.indexOf('--' + n); return i >= 0 ? a[i + 1] : null; };
 const say = (t) => process.stdout.write(t + '\\n');
-if (a[0] === 'whoami') say(JSON.stringify({ loggedIn: true, authType: 'OAuth Token', accounts: [{ id: 'acc1', name: 'Test' }] }));
+if (a[0] === 'queues') { if (a[1] === 'info') process.exit(1); say('created'); } else if (a[0] === 'whoami') say(JSON.stringify({ loggedIn: true, authType: 'OAuth Token', accounts: [{ id: 'acc1', name: 'Test' }] }));
 else if (a[0] === 'versions') { process.stderr.write('This Worker does not exist on your account. [code: 10007]\\n'); process.exit(1); }
 else if (a[0] === 'd1' && a[1] === 'list') say(fs.existsSync(path.join(S, 'db')) ? '[{"uuid":"22222222-2222-2222-2222-222222222222","name":"night-owls-db"}]' : '[]');
 else if (a[0] === 'd1' && a[1] === 'create') { fs.writeFileSync(path.join(S, 'db'), ''); say('"database_id": "22222222-2222-2222-2222-222222222222"'); }

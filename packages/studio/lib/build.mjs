@@ -1,3 +1,4 @@
+import {staticHeaders} from './static-assets.mjs';
 import {verifiedMcpConfig,publicMcpSetup} from './shop-mcp.mjs';
 import { directoryUrl } from '../worker/directory-choice.mjs';
 import { domainOrigin } from './studio.mjs';
@@ -741,6 +742,8 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
     const image = await playerImage(catalogue, game, dist, log);
     if (image) game.playerImage = image;
   }
+  const headerPath = join(dist, '_headers');
+  writeFileSync(headerPath, staticHeaders(existsSync(headerPath) ? readFileSync(headerPath, 'utf8') : '', {concept: studio.concept === true}));
   writeFileSync(join(dist, 'games.json'), `${JSON.stringify(catalogue, null, 2)}\n`);
   // What this build made, for whatever runs next (a deploy says which games it changes; a script checks the live
   // site against it): per game its digest, its bundle and chunks, and whether it differs from the build before.
@@ -761,7 +764,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
   await beforePublish();
   const hosted = (await rulesBuild()).writeRules(root, ruled, all.filter((g) => rulesOf.get(g.id)?.host === 'server').map((g) => g.id));
   log('Building site Worker…');
-  await (await import('./worker-build.mjs')).buildWorker(root, esbuild);
+  await (await import('./worker-build.mjs')).buildWorker(root, esbuild, { catalogue, posts: posts.map(p => ({ ...p })) });
   // All of it is there: now, and only now, it becomes site/dist (lib/stage.mjs).
   const swapped = swapIn(dist, live);
   return {

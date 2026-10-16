@@ -25,10 +25,59 @@
   ],
   "workers_dev": true,
   "preview_urls": true,
+  "triggers": {
+    "crons": []
+  },
   "assets": {
     "directory": "./site/dist",
     "binding": "ASSETS",
-    "run_worker_first": true
+    "run_worker_first": [
+      "/",
+      "/index.html",
+      "/api/*",
+      "/_studio/*",
+      "/mcp",
+      "/mcp/*",
+      "/oauth/*",
+      "/hooks/*",
+      "/.well-known/*",
+      "/_site/*",
+      "/parts/*",
+      "/games/*",
+      "/account",
+      "/account/*",
+      "/shop",
+      "/shop/*",
+      "/lounge",
+      "/lounge/*",
+      "/_homie/*",
+      "/media/*",
+      "/robots.txt",
+      "/sitemap.xml",
+      "/llms.txt",
+      "/llms-full.txt"
+    ]
+  },
+  "queues": {
+    "producers": [
+      {
+        "binding": "BACKGROUND",
+        "queue": "my-studio-background"
+      },
+      {
+        "binding": "BACKGROUND_DLQ",
+        "queue": "my-studio-background-dlq"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "my-studio-background",
+        "max_batch_size": 100,
+        "max_batch_timeout": 1,
+        "max_retries": 5,
+        "dead_letter_queue": "my-studio-background-dlq"
+      }
+    ]
   },
   "durable_objects": {
     "bindings": [
@@ -47,6 +96,14 @@
       {
         "name": "CONCENTRATOR",
         "class_name": "Concentrator"
+      },
+      {
+        "name": "APP_RECORDS",
+        "class_name": "AppRecordHub"
+      },
+      {
+        "name": "EVENTS",
+        "class_name": "EventHub"
       }
     ]
   },
@@ -63,6 +120,13 @@
       "new_sqlite_classes": [
         "Gate",
         "Concentrator"
+      ]
+    },
+    {
+      "tag": "v3-streams",
+      "new_sqlite_classes": [
+        "AppRecordHub",
+        "EventHub"
       ]
     }
   ],
@@ -101,6 +165,14 @@
         {
           "name": "CONCENTRATOR",
           "class_name": "Concentrator"
+        },
+        {
+          "name": "APP_RECORDS",
+          "class_name": "AppRecordHub"
+        },
+        {
+          "name": "EVENTS",
+          "class_name": "EventHub"
         }
       ]
     }

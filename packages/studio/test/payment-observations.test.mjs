@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { card, orders, jobs } from './paid-parts-review5-kit.mjs';
-import { saveRecording, reconcileRecordings } from '../worker/payment-recovery.mjs';
+import { saveRecording, recordProviderId, reconcileRecordings } from '../worker/payment-recovery.mjs';
 for (const status of ['succeeded','canceled','requires_payment_method','requires_action','requires_confirmation','requires_capture','processing']) {
   test(`recovery reads the existing ${status} PaymentIntent before acting`, async () => {
     const s = await card(`observed-${status}`);
@@ -9,7 +9,8 @@ for (const status of ['succeeded','canceled','requires_payment_method','requires
       await s.post(s.body()); const order = s.w.sql.prepare('SELECT * FROM purchase_orders').get();
       const pi = {id:'pi_observed',amount:order.amount,currency:order.currency,status,livemode:true,metadata:{order:order.id}};
       s.w.st.pis.set(pi.id,pi);
-      await saveRecording(s.w.env,order,{amount:order.amount,currency:order.currency,metadata:{order:order.id}},{idempotencyKey:'observed'});
+      const id=await saveRecording(s.w.env,order,{amount:order.amount,currency:order.currency,metadata:{order:order.id}},{idempotencyKey:'observed'});
+      await recordProviderId(s.w.env,order,id,pi);
       const from=s.w.st.reqs.length;
       await reconcileRecordings(s.w.env,order.id);
       const calls=s.w.st.reqs.slice(from);

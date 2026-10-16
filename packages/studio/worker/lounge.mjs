@@ -28,7 +28,7 @@ import { encodeFacts } from './agents.mjs';
 import { PUBLIC_SERVER, policyOf } from './servers.mjs';
 import { players } from './players.mjs';
 import { signControl } from './office.mjs';
-import { LOUNGE_JS, loungePage } from './lounge-page.mjs';
+
 import { STUDIO_VERSION_TAG } from './version.mjs';
 
 const json = (body, status = 200, extra = {}) => new Response(`${JSON.stringify(body)}\n`, {
@@ -262,14 +262,14 @@ export async function loungeRoutes(request, env, ctx, url, { catalogueOf, roomsO
   const cat = await catalogueOf();
   const L = loungeOf(cat);
   if (!L) return null;
-  if (path === '/_homie/lounge.js') return new Response(LOUNGE_JS, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': url.searchParams.get('v') === STUDIO_VERSION_TAG ? 'public, max-age=31536000, immutable' : 'public, max-age=300', 'x-content-type-options': 'nosniff' } });
+  if (path === '/_homie/lounge.js') return new Response((await import('./lounge-page.mjs')).LOUNGE_JS, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': url.searchParams.get('v') === STUDIO_VERSION_TAG ? 'public, max-age=31536000, immutable' : 'public, max-age=300', 'x-content-type-options': 'nosniff' } });
   if (path === '/lounge' && read) return Response.redirect(`${url.origin}/lounge/${url.search}`, 301);
   if (!env.TABLE || !env.DB) return path.startsWith('/lounge/api/') ? json({ ok: false, error: 'no-rooms', message: 'This studio has no rooms or database bound yet: `npm run deploy` sets them up.' }, 503) : null;
   const local = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(url.origin);
 
   if (path === '/lounge/' && read) {
     const [who, rules, nights] = await Promise.all([whoOf(request, env), loungeRules(env, cat), nightsOf(env)]);
-    return loungePage(cat, { origin: url.origin, who, rules: publicChat(rules), nights: nights.map((n) => nightView(n, cat, url.origin)) });
+    return (await import('./lounge-page.mjs')).loungePage(cat, { origin: url.origin, who, rules: publicChat(rules), nights: nights.map((n) => nightView(n, cat, url.origin)) });
   }
 
   if (path === '/lounge/__watch') {

@@ -7,7 +7,7 @@ export async function serviceResult(env,id,handler,refund,{now=Date.now,leaseMs=
   const fail=async()=>env.DB.prepare(`UPDATE service_results SET state='refund-pending' WHERE order_id=?1 AND state='running'`).bind(id).run();
   if(claimed.meta.changes) {
     let renewal=Promise.resolve();
-    const timer=setInterval(()=>{renewal=renewal.then(()=>env.DB.prepare(`UPDATE service_results SET due=?3 WHERE order_id=?1 AND lease=?2 AND state='running'`).bind(id,lease,now()+leaseMs).run()).catch(()=>{});},leaseMs/3);
+    const timer=setInterval(()=>{renewal=renewal.then(()=>env.DB.prepare(`UPDATE service_results SET due=?3 WHERE order_id=?1 AND lease=?2 AND state='running'`).bind(id,lease,now()+leaseMs).run()).catch(error=>console.warn("Service lease renewal failed:",error.message));},leaseMs/3);
     try {
       const value=await handler();
       await env.DB.prepare(`UPDATE service_results SET state='complete',result=?3 WHERE order_id=?1 AND lease=?2 AND state='running'`).bind(id,lease,JSON.stringify(value??null)).run();
