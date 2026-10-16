@@ -1,4 +1,4 @@
-import {allocateResources} from './booking-resources.mjs';
+import {allocateResources,resourceSnapshot} from './booking-resources.mjs';
 import {settingsOf,launchOf} from './office.mjs';
 import {allowed} from './mcp-tools.mjs';
 const fail=message=>Object.assign(new Error(message),{name:'StudioOperationError'});
@@ -14,6 +14,7 @@ export async function bookingAvailability(env,cat,caller,{app,collection,after='
  }
  const scope=caller.testScope?`${app}:check:${caller.testScope}`:app;
  const rows=(await env.DB.prepare(`SELECT s.id,s.value,COALESCE((SELECT SUM(b.quantity) FROM shop_bookings b WHERE b.app=s.app AND b.slots=s.collection AND b.slot=s.id AND b.state IN ('held','confirmed')),0) used FROM app_records s WHERE s.app=?1 AND s.collection=?2 AND s.id>?3 ORDER BY s.id LIMIT 51`).bind(scope,spec.slots,after).all()).results;
+ const snapshot=await resourceSnapshot(env,scope,spec);
  const items=[];
  for(const row of rows.slice(0,50)){
   const slot=JSON.parse(row.value),remaining=slot.capacity-row.used;
@@ -22,7 +23,7 @@ export async function bookingAvailability(env,cat,caller,{app,collection,after='
   if(choices.length>64)throw fail('Availability supports at most 64 options per slot');
   for(const choice of choices){
    const booking={app,collection,slot:row.id,quantity,...(choice===undefined?{}:{option:choice}),...(resource?{resource}:{}),...(addons?{addons}:{})};
-   try{await allocateResources(env,scope,spec,row.id,booking);}catch(error){
+   try{allocateResources(slot,spec,booking,snapshot);}catch(error){
     if(/Slot unavailable|Choose a declared option|Choose an option|Unknown add-on|no declared resources|Preferred resource|Resource capacity unavailable|No resource matches/.test(error.message))continue;
     throw error;
    }

@@ -13,3 +13,11 @@ test('availability lists valid booking arguments and changes after an authoritat
  assert.equal((await bookingAvailability(env,cat,caller,{app:'venue',collection:'bookings'})).items.length,0);
  await assert.rejects(()=>bookingAvailability(env,{games:[{...bookingApp,launch:'private'}]},caller,{app:'venue',collection:'bookings'}),/unavailable/);
 });
+test('availability query count stays constant across slots and options',async t=>{
+ const DB=database(t),app=structuredClone(bookingApp);app.records.collections.bookings.booking.resources='resources';
+ for(let i=0;i<50;i++)await DB.prepare('INSERT INTO app_records(app,collection,id,value,version,updated_at) VALUES(?1,?2,?3,?4,1,1)').bind('venue','slots',String(i).padStart(2,'0'),JSON.stringify({capacity:10,start:'2030-10-15T10:00:00Z',end:'2030-10-15T11:00:00Z',requireOption:true,options:Array.from({length:64},(_,n)=>({id:'o'+n,components:[{resources:['room']}]}))})).run();
+ await DB.prepare('INSERT INTO app_records(app,collection,id,value,version,updated_at) VALUES(?1,?2,?3,?4,1,1)').bind('venue','resources','room',JSON.stringify({capacity:10})).run();
+ let queries=0;const counted={prepare:q=>{queries++;return DB.prepare(q);}};
+ const page=await bookingAvailability({DB:counted},{games:[app]},{owner:true},{app:'venue',collection:'bookings'});
+ assert.equal(page.items.length,3200);assert.ok(queries<=3,`page used ${queries} queries`);
+});
