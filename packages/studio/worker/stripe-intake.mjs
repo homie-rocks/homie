@@ -1,3 +1,4 @@
+import {RECONCILE_GUARD,guardedDatabase} from './reconcile-guard.mjs';
 /** Called only after raw-body signature verification. D1 owns the work; queues
  * are wakeups and may be unavailable or exhaust their daily allowance. */
 export async function acceptStripeEvent(env,event,origin) {
@@ -31,10 +32,17 @@ export async function reconcileStripeEvent(env,id,cat,{leaseMs=300000,reconcile:
       lease=next;
     }).catch(error=>{lost=error;});
   },Math.max(1,Math.floor(leaseMs/3)));
+  const check=async()=>{
+    await renewal;
+    if(lost)throw lost;
+    if(Date.now()>=lease)throw new Error('Stripe reconciliation lease expired');
+  };
+  const guarded={...env,DB:guardedDatabase(env.DB,check),[RECONCILE_GUARD]:check};
   try {
+    await check();
     const event=JSON.parse(row.payload);
     if(event.id!==id)throw new Error('Stored Stripe event id differs');
-    const response=await deliver(env,row,event,cat);
+    const response=await deliver(guarded,row,event,cat);
     if(!response.ok)throw new Error('Stripe reconciliation needs retry ('+response.status+')');
     clearInterval(timer);await renewal;
     if(lost)throw lost;

@@ -60,3 +60,29 @@ test('legacy recordings without an API version retain uncertainty without replay
  await assert.rejects(readProviderPayment(env,{id:'old',amount:100,currency:'usd',mode:'test'},{id:'legacy',payload:JSON.stringify({params:{amount:100},options:{idempotencyKey:'old'},startedAt:Date.now()})}),error=>error.manualReview===true&&/version/i.test(error.message));
  assert.equal(calls,0);
 });
+
+test('D1 renewal failure fences later database and Stripe side effects',async t=>{
+ for(const effect of ['run','first','batch','stripe'])await t.test(effect,async t=>{
+  const env={...fixture(t),STRIPE_KEY:'rk_test_'+ 'a'.repeat(32)};
+  await intake.acceptStripeEvent(env,event,'https://studio.test');
+  let renewFailed,release,entered,fetches=0;
+  const failed=new Promise(r=>renewFailed=r),hold=new Promise(r=>release=r),started=new Promise(r=>entered=r);
+  const prepare=env.DB.prepare;
+  env.DB.prepare=q=>q.startsWith('UPDATE stripe_intake SET lease=?3')&&q.includes('RETURNING id')?{bind(){return this;},async first(){renewFailed();throw new Error('D1 renewal unavailable');}}:prepare(q);
+  t.mock.method(globalThis,'fetch',async()=>{fetches++;return Response.json({id:'re_should_not_exist'});});
+  t.mock.timers.enable({apis:['setInterval']});
+  const work=intake.reconcileStripeEvent(env,event.id,{games:[]},{leaseMs:300000,reconcile:async guarded=>{
+   const statement=guarded.DB.prepare("INSERT INTO meta(key,value) VALUES('lease-effect','1')");
+   entered();await hold;
+   if(effect==='stripe')await (await import('../worker/stripe.mjs')).createRefund(guarded,{payment_intent:'pi_test'});
+   else if(effect==='batch')await guarded.DB.batch([statement]);
+   else await statement[effect]();
+   return new Response();
+  }});
+  const rejection=assert.rejects(work,/D1 renewal unavailable/);
+  await started;t.mock.timers.tick(100000);await failed;release();await rejection;
+  assert.equal(env.DB.sql.prepare("SELECT value FROM meta WHERE key='lease-effect'").get(),undefined);
+  assert.equal(fetches,0);
+  assert.equal(env.DB.sql.prepare('SELECT done FROM stripe_intake').get().done,null);
+ });
+});
