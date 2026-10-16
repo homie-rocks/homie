@@ -1,3 +1,6 @@
+import {callerLimitKey} from './mcp-store.mjs';
+import {bookingAvailability} from './booking-availability.mjs';
+import {studiosClient} from './studios-client.mjs';
 import {bookingInputSchema,normalizeBookingArgs} from './booking-options.mjs';
 import {bookingHolds} from './booking-holds.mjs';
 import {toolDatabase} from './tool-database.mjs';
@@ -12,7 +15,7 @@ export const object = (properties = {}, required = []) => ({type:'object',proper
 const str = {type:'string',maxLength:128};
 export async function allowed(audience, caller, env) {
   if (audience === 'public') return true;
-  if (!caller.id) return false;
+  if (!caller.id || caller.studio) return false;
   if (audience === 'signed-in') return true;
   if (audience === 'studio-staff') return caller.owner === true || Boolean(await env.DB.prepare("SELECT player FROM app_roles WHERE app='*' AND role='staff' AND player=?1").bind(caller.id).first());
   if (audience === 'owner') return caller.owner === true;
@@ -70,12 +73,31 @@ export function services(env, cat, origin, caller, namespace, definition = {}) {
   const key = v=>{if(typeof v!=='string'||v.length>128||!v.length)throw new Error('invalid key');return v;};
   return Object.freeze({
     caller:Object.freeze({...caller,roles:Object.freeze(Object.fromEntries(Object.entries(caller.roles??{}).map(([app,roles])=>[app,Object.freeze([...roles])])) )}), records, office,
-    bookings:bookingHolds(env,caller,cat),
+    studios:studiosClient(env,cat,definition,{origin}),
+    bookings:Object.freeze({...bookingHolds(env,caller,cat),availability:args=>bookingAvailability(env,cat,caller,args)}),
     events:Object.freeze({publish:args=>import('./business-events.mjs').then(m=>m.publishBusinessEvent(env,caller,definition,namespace,args))}),
     rooms:Object.freeze({send:args=>import('./tool-events.mjs').then(m=>m.sendToolEvent(env,caller,definition,args))}),
     shop:()=>office('/_studio/api/shop'),
     database:toolDatabase(env.DB,namespace),
     fetch:globalThis.fetch.bind(globalThis),
+    async fetchSelf(path,init={}) {
+      const url=new URL(path,origin);
+      if(url.origin!==new URL(origin).origin || url.username || url.password)throw new Error('Same origin required');
+      const headers=new Headers(init.headers);
+      if(headers.has('authorization')||headers.has('cookie'))throw new Error('Explicit credentials refused');
+      headers.set('origin',new URL(origin).origin);
+      const request=withToolIdentity(new Request(url,{...init,headers,redirect:'error'}),caller);
+      const pending=[];
+      const response=await (await import('./custom-routes.mjs')).customRoute(request,env,{waitUntil:promise=>pending.push(promise)});
+      await Promise.all(pending);
+      return response??new Response('Not found',{status:404});
+    },
+    async rateLimit(name,key=callerLimitKey(caller)) {
+      const rule=cat.studio?.mcp?.rateLimits?.[name];
+      if(!rule?.tools?.includes(definition.name)||!env[rule.binding]?.limit)throw new Error('Rate limit not declared for this tool');
+      if(typeof key!=='string'||!key.length||key.length>256)throw new Error('Rate limit key required (1–256 characters)');
+      return env[rule.binding].limit({key:JSON.stringify([name,key])});
+    },
     // A named secret may authenticate an HTTPS request; its value is never returned.
     async fetchWithSecret(name,url,init={}) {
       const rule=cat.studio?.mcp?.secrets?.[name];
@@ -178,6 +200,7 @@ export function builtins(env,cat,origin) {
       const collections=new Set(Object.values(roles).flatMap(r=>r.can.map(cap=>cap.split(':')[1])));
       return {app,roles,collections:Object.fromEntries(Object.entries(meta.records?.collections??{}).filter(([name])=>collections.has(name)))};
     }),
+    tool('studio_availability','List available booking slots and options before studio_book. Returns schema.org Offers with exact booking arguments; availability is a snapshot, and booking rechecks capacity.','public',object({app:str,collection:str,after:str,quantity:{type:'integer',minimum:1},option:str,resource:str,addons:{type:'object',additionalProperties:{type:'integer',minimum:1,maximum:100}}},['app','collection']),async(args,ctx)=>ctx.bookings.availability(args)),
     tool('studio_book','Reserve a declared booking slot. Accepts slot/time, resource/preferredResource, and addons/addOns as an array or quantity object. Supply a stable id, future expiresAt and a private token for an anonymous booking. Payment is separate.','public',bookingInputSchema,async(input,ctx)=>{
       const args=normalizeBookingArgs(input),meta=cat.games.find(g=>g.id===args.app&&g.kind==='app'),spec=meta?.records?.collections?.[args.collection]?.booking;
       if(!spec)throw Object.assign(new Error('Unknown booking collection'),{name:'StudioOperationError'});

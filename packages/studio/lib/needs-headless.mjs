@@ -26,7 +26,7 @@ export function needsHeadless({url,secret,app,meta,scope,sessionFor}) {
       if(!call?.tool)throw new Error('MCP step requires tool and optional arguments');
       const result=await client.callTool({name:call.tool,arguments:call.arguments??{}},undefined,{timeout:item.schedule?15000:10000});
       if(result.isError)throw new Error(result.content?.filter(c=>c.type==='text').map(c=>c.text).join('; ')||'MCP tool failed');
-      if(result.structuredContent!==undefined)return result.structuredContent;
+      if(result.structuredContent!==undefined){const value=result.structuredContent;return value?.kind==='untrusted-tool-data'?value.data:value;}
       const content=result.content?.filter(c=>c.type==='text');
       if(content?.length===1) {try {const parsed=JSON.parse(content[0].text);return parsed.kind==='untrusted-tool-data'?parsed.data:parsed;}catch{}}
       return result;

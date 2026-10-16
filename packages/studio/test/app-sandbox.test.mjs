@@ -138,3 +138,13 @@ test('check baseline and each passing need mutate their own fresh room and save 
  const result=await checkApp({root,url:`http://localhost:${server.address().port}`,game:'form',meta:metadata,shots:join(root,'shots'),puppeteer,chrome:findChrome()});
  assert.equal(result.ok,true,JSON.stringify(result));assert.equal(counts.size,3);assert.deepEqual([...counts.values()],[1,1,1]);assert.ok(opened.filter(s=>s.surface==='wall').every(s=>s.role==='display'));assert.ok(readdirSync(join(root,'shots')).length>=7);
 });
+
+test('booking choice part consumes availability offers without reconstructing booking arguments',{timeout:15000},async t=>{
+ const {build}=await import('esbuild');const bundled=await build({entryPoints:[new URL('../apps/apps.ts',import.meta.url).pathname],bundle:true,write:false,format:'iife',globalName:'BookingUI'});
+ const booking={app:'venue',collection:'bookings',slot:'morning',option:'drive',quantity:2};
+ const availability={convention:'studio.booking-availability/1',bookingTool:'studio_book',items:[{'@type':'Offer',identifier:'drive',name:'Morning drive',availability:'https://schema.org/InStock',remaining:2,booking}],next:null};
+ const {page,origin}=await fixture(t,`<!doctype html><div id="choices"></div><button id="continue">Continue</button><output></output><script>${bundled.outputFiles[0].text}</script><script>const choices=BookingUI.createBookingChoices({container:document.querySelector('#choices'),availability:${JSON.stringify(availability)}});document.querySelector('button').onclick=()=>document.querySelector('output').textContent=JSON.stringify(choices.value());</script>`);
+ await page.goto(origin+'/frame');const frame=page.frames().find(f=>f.url().includes('/__game/'));
+ await frame.waitForSelector('select[name="booking"]',{timeout:1000});await frame.select('select[name="booking"]','0');await frame.click('#continue');
+ assert.deepEqual(JSON.parse(await frame.$eval('output',el=>el.textContent)),booking);
+});
