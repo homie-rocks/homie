@@ -1,0 +1,28 @@
+{
+  "qualifiedPairs": 42,
+  "rejectedPairs": 0,
+  "peakLoad": 12.7509765625,
+  "loadSamples": 8928,
+  "artifactSets": {
+    "b": [
+      "da8729b1b6379dab1af56affd73c4deeb3d7fcbcea02e173ce3469050e41cf6d"
+    ],
+    "c": [
+      "2bf6db04dabd7fec56dff48018c391e87c8bdc2a0702730d4a00f18cf715addb"
+    ]
+  },
+  "cleanInstallOverlayFilesMatch": 14,
+  "buildIdentityMatchesToolkit": true,
+  "rebuiltArtifactsMatchMeasured": true,
+  "studioTests": {
+    "passed": 47,
+    "failed": 0
+  },
+  "strictBuild": {
+    "ticks": 18000,
+    "restores": 813
+  },
+  "measuredToolkitRuntime": "92843051",
+  "measuredStudioTarballCommit": "53cab25",
+  "controlHead": "c75980acf259d466d8d2283bff66317397609840"
+}
