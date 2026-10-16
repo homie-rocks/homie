@@ -17,10 +17,11 @@ const run=(args,input)=>new Promise((resolve,reject)=>{
 const client=new Client({name:'studio-proof',version:'1'});
 try{
  // Wrangler has no command to read the account's Workers subdomain.
+ const who=await run(['whoami']);
  const auth=readFileSync(process.env.HOME+'/Library/Preferences/.wrangler/config/default.toml','utf8');
  const token=/oauth_token\s*=\s*"([^"]+)"/.exec(auth)?.[1];if(!token)throw new Error('Wrangler OAuth unavailable');
- const who=await run(['whoami']);const account=/\b[a-f0-9]{32}\b/.exec(who)?.[0];if(!account)throw new Error('Account unavailable');
- const sub=await (await fetch('https://api.cloudflare.com/client/v4/accounts/'+account+'/workers/subdomain',{headers:{authorization:'Bearer '+token}})).json();if(!sub.success)throw new Error('Subdomain unavailable');
+ const account=/\b[a-f0-9]{32}\b/.exec(who)?.[0];if(!account)throw new Error('Account unavailable');
+ const sub=await (await fetch('https://api.cloudflare.com/client/v4/accounts/'+account+'/workers/subdomain',{headers:{authorization:'Bearer '+token}})).json();if(!sub.success)throw new Error('Subdomain unavailable: '+JSON.stringify(sub.errors));
  const urls=names.map(name=>'https://'+name+'.'+sub.result.subdomain+'.workers.dev');
  const peerSecret=randomBytes(32).toString('hex'),eventSecret='whsec_'+randomBytes(32).toString('base64'),proofSecret=randomBytes(32).toString('hex');
  for(const [i,role] of ['a','b'].entries()){
@@ -37,7 +38,10 @@ try{
  }
  await run(['d1','execute',names[1],'--remote','--config',resources[1].config,'--yes','--command',`INSERT INTO app_records(app,collection,id,value,version,updated_at) VALUES('venue','slots','morning','{"capacity":1,"start":"2030-10-15T10:00:00Z","end":"2030-10-15T11:00:00Z"}',1,1)`]);
  await client.connect(new StreamableHTTPClientTransport(new URL(urls[0]+'/mcp'),{requestInit:{headers:{'x-proof-key':proofSecret}}}));
- const result=studioResult(await client.callTool({name:'drive',arguments:{}}));if(result.isError)throw new Error(JSON.stringify(result));
+ let result;
+ for(let attempt=0;attempt<5;attempt++){result=studioResult(await client.callTool({name:'drive',arguments:{}}));if(!result.isError||!JSON.stringify(result).includes('1042'))break;console.log('Fresh deployment routing returned 1042; retrying stable proof IDs');await new Promise(resolve=>setTimeout(resolve,3000));}
+ if(result.isError)throw new Error(JSON.stringify(result));
+ if(result.data.booked.booking.state!=='confirmed')throw new Error('Reservation was not confirmed');
  report.result=result.data;console.log('Verified booking and event accepted');
  const arrival=await run(['d1','execute',names[1],'--remote','--config',resources[1].config,'--json','--command',"SELECT value FROM tool_data WHERE namespace='function:arrival' AND key='arrival'"]);
  const rows=JSON.parse(arrival);if(!rows[0]?.results?.length)throw new Error('Arrival function did not save receipt');report.arrival=JSON.parse(rows[0].results[0].value);

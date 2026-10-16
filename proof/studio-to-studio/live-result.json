@@ -1,16 +1,16 @@
 {
   "studios": [
-    "hm-s2s-a-mvahzrks",
-    "hm-s2s-b-mvahzrks"
+    "hm-s2s-a-mvaiesxf",
+    "hm-s2s-b-mvaiesxf"
   ],
-  "started": "2026-10-16T04:59:06.460Z",
+  "started": "2026-10-16T05:10:48.051Z",
   "cleanup": [
     {
-      "name": "hm-s2s-b-mvahzrks",
+      "name": "hm-s2s-b-mvaiesxf",
       "deleted": true
     },
     {
-      "name": "hm-s2s-a-mvahzrks",
+      "name": "hm-s2s-a-mvaiesxf",
       "deleted": true
     }
   ],
@@ -45,9 +45,9 @@
         "id": "0a1d16dddf8f154c43c2a89447c0c3a7393c6b5a4cc1e697e686db9d23513f00",
         "slot": "morning",
         "quantity": 1,
-        "state": "held",
-        "version": 1,
-        "expiresAt": 1792127385165,
+        "state": "confirmed",
+        "version": 2,
+        "expiresAt": 1792128093462,
         "paid": false,
         "choices": {
           "option": null,
@@ -56,7 +56,7 @@
         }
       },
       "caller": {
-        "id": "studio:e49beab94ff0ea11556bd963b9a803633fa6380065359a921bcd7d5eaae6452b",
+        "id": "studio:fdd66f0062d0e02f32dce4516f68423117a575af9ac1b5ca077432212a7b7bbd",
         "owner": false,
         "roles": {},
         "client": "concierge",
@@ -91,6 +91,6 @@
     }
   },
   "denied": true,
-  "finished": "2026-10-16T04:59:57.802Z",
+  "finished": "2026-10-16T05:11:44.636Z",
   "redaction": "Deployed A origin replaced with https://studio-a.example; credentials were never logged."
 }

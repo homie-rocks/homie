@@ -28,6 +28,7 @@ test('two studios: official SDK OAuth discovery, availability, named booking, ar
   const fetcher=async(input,init)=>{const req=new Request(input,init);return mf.dispatchFetch(req.url,{method:req.method,headers:Object.fromEntries(req.headers),...(req.body?{body:await req.arrayBuffer()}:{})});};
   await client.connect(new StreamableHTTPClientTransport(new URL('https://a.example/mcp'),{fetch:fetcher}));
   const result=studioResult(await client.callTool({name:'drive',arguments:{}}));assert.equal(result.isError,false,JSON.stringify(result));
+  assert.equal(result.data.booked.booking.state,'confirmed');
   assert.equal(result.data.booked.caller.studio.origin,'https://a.example');assert.equal(result.data.booked.caller.actingFor.handle,'Alex');assert.equal(result.data.booked.caller.actingFor.verified,false);
   const b=await mf.getD1Database('DB','hm-s2s-b');
   const arrived=await b.prepare("SELECT value FROM tool_data WHERE namespace='function:arrival' AND key='arrival'").first();assert.ok(arrived);assert.equal(JSON.parse(arrived.value).data.minutes,10);

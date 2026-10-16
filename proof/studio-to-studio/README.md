@@ -4,7 +4,7 @@ Branch: `studio-to-studio`, based on the released 0.56.0 commit `e6d2b8a8`.
 No version bump. All resources in this proof are disposable fixtures.
 
 The [live result](live-result.json) records a 2026-10-16 UTC run (October 15 in
-Vancouver). Both `hm-s2s-a-mvahzrks` and `hm-s2s-b-mvahzrks` Workers and their two
+Vancouver). Both `hm-s2s-a-mvaiesxf` and `hm-s2s-b-mvaiesxf` Workers and their two
 D1 databases were deleted in the runner's `finally` cleanup. The account subdomain
 is replaced with `studio-a.example`; no credential values are recorded.
 
@@ -12,7 +12,7 @@ is replaced with `studio-a.example`; no credential values are recorded.
 | --- | --- |
 | t | Official MCP SDK client and OAuth provider. Live A listed B's two allowed tools, read availability and decoded the structured booking result. Unit tests refuse non-HTTPS origins, escaped discovery URLs, redirects and oversized streamed responses. |
 | u | Receiver-provisioned OAuth client credentials, five-minute audience-bound tokens, existing provider validation hook. B returned verified A origin, asserted `Alex`, `owner:false`, and no app roles. Removing A's allowlist entry denied the next request. Unit tests also cover wrong credentials, receiver mismatch and rotation. |
-| v | Existing slot, hold and resource allocation paths produce schema.org Offer-shaped availability. Live A selected the offered slot and created one hold. Unit tests remove that offer after capacity is consumed; the existing booking UI browser test returns exactly the selected offer's arguments. |
+| v | Existing slot, hold and resource allocation paths produce schema.org Offer-shaped availability. Live A selected the offered slot and created and confirmed one reservation. Unit tests remove that offer after capacity is consumed; the existing booking UI browser test returns exactly the selected offer's arguments. |
 | o | Standard Webhooks and the MCP Events envelope feed existing durable publication/functions. Live B stored the verified sender, booking ID and ten-minute arrival in `function:arrival`. Unit tests cover duplicate delivery, changed payload conflicts, stale signatures, tampering, size limits and disabled senders. |
 | p | In-process `fetchSelf` uses existing internal caller identity. Unit tests preserve a friend's non-owner identity and reject explicit credentials or another origin. Existing custom-route authorization tests remain green. |
 | q | Explicit named Cloudflare Rate Limiting bindings share a caller key across delegated tools. Unit tests demonstrate shared success/refusal, undelegated-tool refusal and required anonymous keys. This binding is approximate per location, not a global hard quota. |
@@ -42,5 +42,7 @@ those resources. Generated configs, bundles and raw results stay in git-ignored
 
 The new unit/browser tests were each run failing before their implementation.
 The focused regression run included 40 passing tests covering existing MCP,
-MCP Events and booking behavior. Build: `npm run build`. Additional existing
-OAuth/browser and tool-build regressions are run before PR completion.
+MCP Events and booking behavior. Build: `npm run build`. The ten existing OAuth/browser and tool-build regressions also pass. CI exposed
+a headless checker compatibility issue with structured envelopes; its two existing
+workerd tests pass after fixing the shared checker decoding. The live confirmation
+run retried one fresh-deployment HTTP 1042 using the same business IDs, then passed.

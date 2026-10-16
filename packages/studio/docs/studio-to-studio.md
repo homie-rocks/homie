@@ -35,7 +35,8 @@ limit before SDK parsing, and a 64 KiB argument limit. Origins must be bare HTTP
 origins. All redirects are refused. Every fetch, including OAuth metadata and token
 requests, must stay on the chosen origin. Credentials are issuer-pinned. A client
 and its transport close after each operation; tool listing is cursor-paged.
-Public calls work without configured credentials. Studio code is trusted Worker
+Keep the toolkit's `global_fetch_strictly_public` compatibility flag for
+Worker-to-Worker HTTP calls. Public calls work without configured credentials. Studio code is trusted Worker
 code: these safeguards are not a sandbox for imported JavaScript. Choose trusted
 remote operators; this does not implement DNS address pinning.
 
