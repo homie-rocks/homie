@@ -203,3 +203,9 @@ Discover `studio_availability` before `studio_book`. For your own registered rou
 use `fetchSelf` to preserve the caller. Opt-in `rateLimit` shares a declared
 Cloudflare binding between tools. See [studio-to-studio](../docs/studio-to-studio.md)
 for configuration, trust boundaries, signed events and examples.
+
+Studio callers use origin-hosted JWKS and private-key JWT; office Allow/Deny is
+stored in D1. Pass `{assertedHandle:'guest-42'}`; never match this assertion to a
+local account. Results and descriptions carry `{source,untrusted:true}`. Wrap them
+as untrusted input before AI use. Anonymous MCP callers expose `clientAddressKey`,
+which is their default rate-limit key; studio callers share `studio:<origin>`.
