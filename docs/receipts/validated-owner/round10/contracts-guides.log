@@ -1,0 +1,106 @@
+TAP version 13
+# Subtest: older installed plugin guidance names the installed guides and update step
+ok 1 - older installed plugin guidance names the installed guides and update step
+  ---
+  duration_ms: 3.509958
+  type: 'test'
+  ...
+# Subtest: check --json still tells an AI caller about installed version-matched guides
+ok 2 - check --json still tells an AI caller about installed version-matched guides
+  ---
+  duration_ms: 186.489417
+  type: 'test'
+  ...
+# Subtest: D: app authoring guidance points at the shipped app skill
+ok 3 - D: app authoring guidance points at the shipped app skill
+  ---
+  duration_ms: 0.337333
+  type: 'test'
+  ...
+# Subtest: undeliverable discriminates every declared payload in room and entity handlers
+ok 4 - undeliverable discriminates every declared payload in room and entity handlers
+  ---
+  duration_ms: 4566.805125
+  type: 'test'
+  ...
+# Subtest: the view reads companion goals and goal events without casts
+ok 5 - the view reads companion goals and goal events without casts
+  ---
+  duration_ms: 4952.846958
+  type: 'test'
+  ...
+# Subtest: shared map first-key reads replay after every restore
+ok 6 - shared map first-key reads replay after every restore
+  ---
+  duration_ms: 3735.548708
+  type: 'test'
+  ...
+# Subtest: replay diagnoses shared-counter with a remedy that repairs it
+ok 7 - replay diagnoses shared-counter with a remedy that repairs it
+  ---
+  duration_ms: 124.680917
+  type: 'test'
+  ...
+# Subtest: replay diagnoses hidden-counter with a remedy that repairs it
+ok 8 - replay diagnoses hidden-counter with a remedy that repairs it
+  ---
+  duration_ms: 122.602458
+  type: 'test'
+  ...
+# Subtest: maps keep native insertion order during edits, coercion, packing and restore
+ok 9 - maps keep native insertion order during edits, coercion, packing and restore
+  ---
+  duration_ms: 24.723417
+  type: 'test'
+  ...
+# Subtest: the entire contextual author surface is usable with natural member reads
+ok 10 - the entire contextual author surface is usable with natural member reads
+  ---
+  duration_ms: 5164.409083
+  type: 'test'
+  ...
+# Subtest: every remaining contextual unknown has a boundary or generic fallback reason
+ok 11 - every remaining contextual unknown has a boundary or generic fallback reason
+  ---
+  duration_ms: 5013.570083
+  type: 'test'
+  ...
+# Subtest: a history kept at its declared size builds, with the one line that says what was played
+ok 12 - a history kept at its declared size builds, with the one line that says what was played
+  ---
+  duration_ms: 3708.140125
+  type: 'test'
+  ...
+# Subtest: module constant mutation and the removed check key have usable repairs
+ok 13 - module constant mutation and the removed check key have usable repairs
+  ---
+  duration_ms: 1486.224667
+  type: 'test'
+  ...
+# Subtest: map payloads cross events, effects and ask state
+ok 14 - map payloads cross events, effects and ask state
+  ---
+  duration_ms: 4499.869333
+  type: 'test'
+  ...
+# Subtest: a difference inside a map is named down to its key
+ok 15 - a difference inside a map is named down to its key
+  ---
+  duration_ms: 51.433583
+  type: 'test'
+  ...
+# Subtest: account character fields in room.join use the game declarations, without casts
+ok 16 - account character fields in room.join use the game declarations, without casts
+  ---
+  duration_ms: 5224.720042
+  type: 'test'
+  ...
+1..16
+# tests 16
+# suites 0
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 38795.472209
