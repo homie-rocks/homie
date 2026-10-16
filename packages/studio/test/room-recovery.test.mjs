@@ -56,3 +56,16 @@ test('unchanged peaks write nothing and a burst of rises is coalesced',async t=>
  await clock.wait(1100);await Promise.all(pending);assert.equal(writes,1);
  assert.equal(values.get('concurrent-peak').players,16);
 });
+
+
+test('a server timer pause gives queued client traffic time to arrive before silence eviction',()=>{
+ let now=100000;const closed=[],room=new NetRoom({code:'paused',rules:true,now:()=>now});
+ room.setServerHost({frame(){},facts:()=>({})});
+ const peers=[0,1].map(i=>room.attach({send(){},close:(code,reason)=>closed.push({i,code,reason})}));
+ for(const peer of peers)peer.onMessage(JSON.stringify({t:'hello',v:1,rev:12,rules:true,want:'play'}));
+ room.tick();now+=250;room.tick();now+=15000;room.tick();
+ assert.deepEqual(closed,[],'a delayed timer is not evidence that the clients stopped sending');
+ peers[0].onMessage(JSON.stringify({t:'ping',c:now}));now+=2499;room.tick();assert.deepEqual(closed,[]);
+ now++;room.tick();assert.deepEqual(closed.map(c=>c.i),[1],'a genuinely silent socket still expires after bounded grace');
+ for(let i=0;i<41;i++){now+=250;room.tick();}assert.ok(closed.some(c=>c.i===0),'grace cannot keep an abandoned socket forever');
+});

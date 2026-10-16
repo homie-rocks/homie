@@ -684,7 +684,7 @@ export interface NetplayOptions<C = unknown> {
    * Restyle it with CSS on `[data-homie-link]`.
    */
   linkOverlay?: boolean;
-  /** A socket that delivered nothing for this long is dropped and reopened (pongs come every 2 s). Default 6000. */
+  /** A socket that delivered nothing for this long is dropped and reopened (pongs come every 2 s). Default 6000, or 20000 for retained authority. */
   staleMs?: number;
   /** Tests: a WebSocket constructor. */
   WebSocketImpl?: WebSocketCtor;

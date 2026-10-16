@@ -1,0 +1,286 @@
+TAP version 13
+# [netplay] relay refused: stale This game was updated. Loading it again.
+# (node:16456) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a rules client asks its page to reload an old build and rematch an ended room
+ok 1 - a rules client asks its page to reload an old build and rematch an ended room
+  ---
+  duration_ms: 127.557958
+  type: 'test'
+  ...
+# Subtest: an early replica is seated after browser host boot, without delaying its connection
+ok 2 - an early replica is seated after browser host boot, without delaying its connection
+  ---
+  duration_ms: 58.814208
+  type: 'test'
+  ...
+# Subtest: revision 12, and the numbers both sides share
+ok 3 - revision 12, and the numbers both sides share
+  ---
+  duration_ms: 0.4465
+  type: 'test'
+  ...
+# Subtest: a page whose room never answers plays alone and SAYS so; the welcome brings it back, and a dropped socket is `reconnecting`
+ok 4 - a page whose room never answers plays alone and SAYS so; the welcome brings it back, and a dropped socket is `reconnecting`
+  ---
+  duration_ms: 130.833708
+  type: 'test'
+  ...
+# Subtest: the line over the game: drawn after a moment of `reconnecting`, gone when the room is back, restyled by the game or turned off
+ok 5 - the line over the game: drawn after a moment of `reconnecting`, gone when the room is back, restyled by the game or turned off
+  ---
+  duration_ms: 267.366208
+  type: 'test'
+  ...
+# Subtest: the wait for the welcome is an option, and a game that boots for seconds starts the clock itself
+ok 6 - the wait for the welcome is an option, and a game that boots for seconds starts the clock itself
+  ---
+  duration_ms: 1302.147625
+  type: 'test'
+  ...
+# Subtest: `reconnecting` is bounded: a room that does not come back is not waited for with a frozen round; the page plays alone, says so, and still finds its room
+ok 7 - `reconnecting` is bounded: a room that does not come back is not waited for with a frozen round; the page plays alone, says so, and still finds its room
+  ---
+  duration_ms: 327.878834
+  type: 'test'
+  ...
+# Subtest: the line never says "reconnecting" to a page that was never connected, and a full or closed room is said in words
+ok 8 - the line never says "reconnecting" to a page that was never connected, and a full or closed room is said in words
+  ---
+  duration_ms: 269.539209
+  type: 'test'
+  ...
+# Subtest: a page that was blocked for seconds does not drop a healthy socket on the word of its own late timer; a dead socket is still dropped
+ok 9 - a page that was blocked for seconds does not drop a healthy socket on the word of its own late timer; a dead socket is still dropped
+  ---
+  duration_ms: 171.581792
+  type: 'test'
+  ...
+# Subtest: a host whose frames hitch keeps the room with a heartbeat, for four seconds; a frozen one is still replaced
+ok 10 - a host whose frames hitch keeps the room with a heartbeat, for four seconds; a frozen one is still replaced
+  ---
+  duration_ms: 130.546375
+  type: 'test'
+  ...
+# Subtest: heartbeatMs: 0 is the old behaviour, and a game names its own stall time within bounds
+ok 11 - heartbeatMs: 0 is the old behaviour, and a game names its own stall time within bounds
+  ---
+  duration_ms: 81.474583
+  type: 'test'
+  ...
+# [netplay] This room is still running another version of the game. It opens to this one when its players reload.
+# [netplay] relay refused: stale This game was updated. Reload to play the new version.
+# Subtest: a room runs one build at a time: an older tab is told to reload, a newer one waits for an old room, and the room starts fresh
+ok 12 - a room runs one build at a time: an older tab is told to reload, a newer one waits for an old room, and the room starts fresh
+  ---
+  duration_ms: 200.686666
+  type: 'test'
+  ...
+# [netplay] This room is still running another version of the game. It opens to this one when its players reload.
+# Subtest: revisions are ignorable: a helper from before them, a relay nobody told, and a game that names none
+ok 13 - revisions are ignorable: a helper from before them, a relay nobody told, and a game that names none
+  ---
+  duration_ms: 9.683125
+  type: 'test'
+  ...
+# Subtest: the Lobby matches strangers within the live build, and a room says which build it runs
+ok 14 - the Lobby matches strangers within the live build, and a room says which build it runs
+  ---
+  duration_ms: 101.911542
+  type: 'test'
+  ...
+# Subtest: features: what a build can do is in its peer's facts, so the next host knows without asking
+ok 15 - features: what a build can do is in its peer's facts, so the next host knows without asking
+  ---
+  duration_ms: 18.694958
+  type: 'test'
+  ...
+# Subtest: peer.occ: the same player keeps the number across a reconnect; a new holder of the seat number gets a new one
+ok 16 - peer.occ: the same player keeps the number across a reconnect; a new holder of the seat number gets a new one
+  ---
+  duration_ms: 45.501541
+  type: 'test'
+  ...
+# Subtest: Roster: a returning player keeps their body, a new holder of the seat is admitted like any arrival, and the game chooses the body
+ok 17 - Roster: a returning player keeps their body, a new holder of the seat is admitted like any arrival, and the game chooses the body
+  ---
+  duration_ms: 0.900416
+  type: 'test'
+  ...
+# Subtest: a room revived from its checkpoint: the newcomer takes a body over (onTakeover, adopt), a returning player keeps theirs
+ok 18 - a room revived from its checkpoint: the newcomer takes a body over (onTakeover, adopt), a returning player keeps theirs
+  ---
+  duration_ms: 277.127875
+  type: 'test'
+  ...
+# Subtest: admit: the game chooses the body an arrival takes, for a fresh join and for a restored room alike; a returner is not re-admitted
+ok 19 - admit: the game chooses the body an arrival takes, for a fresh join and for a restored room alike; a returner is not re-admitted
+  ---
+  duration_ms: 45.935417
+  type: 'test'
+  ...
+# Subtest: a host that reconnects as host learns who came and went meanwhile: no player without a body, no frozen body, no score lost
+ok 20 - a host that reconnects as host learns who came and went meanwhile: no player without a body, no frozen body, no score lost
+  ---
+  duration_ms: 21.630708
+  type: 'test'
+  ...
+# Subtest: equal scores: the documented order by default, shared places when the game asks
+ok 21 - equal scores: the documented order by default, shared places when the game asks
+  ---
+  duration_ms: 1.001083
+  type: 'test'
+  ...
+# Subtest: a late net.playable() after an automatic arrival warns once, and the arrival's facts are readable
+ok 22 - a late net.playable() after an automatic arrival warns once, and the arrival's facts are readable
+  ---
+  duration_ms: 38.047375
+  type: 'test'
+  ...
+# Subtest: a seat with no body is not for ever: the host seats whoever is waiting when a body frees up and at every round start, and the page says where it stands
+ok 23 - a seat with no body is not for ever: the host seats whoever is waiting when a body frees up and at every round start, and the page says where it stands
+  ---
+  duration_ms: 246.022542
+  type: 'test'
+  ...
+# Subtest: fallback: solo plays a private round with bots and moves into the room when it has a body; spectate watches; a full room says so
+ok 24 - fallback: solo plays a private round with bots and moves into the room when it has a body; spectate watches; a full room says so
+  ---
+  duration_ms: 281.362417
+  type: 'test'
+  ...
+# Subtest: a slow page that joins mid-round always ends somewhere a player can act: each way it can arrive, on the virtual clock
+ok 25 - a slow page that joins mid-round always ends somewhere a player can act: each way it can arrive, on the virtual clock
+  ---
+  duration_ms: 1023.30925
+  type: 'test'
+  ...
+# Subtest: net.prefs: kept by the play page, by this document when there is no page, and for the visit when there is neither
+ok 26 - net.prefs: kept by the play page, by this document when there is no page, and for the visit when there is neither
+  ---
+  duration_ms: 2.320333
+  type: 'test'
+  ...
+# Subtest: net.prefs: a number, a switch and a word that cannot go quiet: a missing key, a null, a wrong type and a read before the prefs arrived all answer with the fallback, in words
+ok 27 - net.prefs: a number, a switch and a word that cannot go quiet: a missing key, a null, a wrong type and a read before the prefs arrived all answer with the fallback, in words
+  ---
+  duration_ms: 1.017458
+  type: 'test'
+  ...
+# Subtest: net.params: the switches the play page passed in, and only the allowed ones
+ok 28 - net.params: the switches the play page passed in, and only the allowed ones
+  ---
+  duration_ms: 0.429916
+  type: 'test'
+  ...
+# Subtest: net.shell: where the page's own controls sit over the game, said by the page around the frame only
+ok 29 - net.shell: where the page's own controls sit over the game, said by the page around the frame only
+  ---
+  duration_ms: 0.188625
+  type: 'test'
+  ...
+# Subtest: guardGestures: gameplay surfaces never select, call out or pan; fields, links and marked text keep the browser's own behaviour
+ok 30 - guardGestures: gameplay surfaces never select, call out or pan; fields, links and marked text keep the browser's own behaviour
+  ---
+  duration_ms: 0.395416
+  type: 'test'
+  ...
+# Subtest: the relay says a departure and a failure apart: every line has a time and a room, and none a token
+ok 31 - the relay says a departure and a failure apart: every line has a time and a room, and none a token
+  ---
+  duration_ms: 6.061417
+  type: 'test'
+  ...
+# Subtest: the Worker: a room's lines carry the game and the room, a lost socket is a departure, and a browser that left mid-connect is not an uncaught error
+ok 32 - the Worker: a room's lines carry the game and the room, a lost socket is a departure, and a browser that left mid-connect is not an uncaught error
+  ---
+  duration_ms: 11.283875
+  type: 'test'
+  ...
+# Subtest: rules reconnects spread the first attempts and back off through a prolonged outage
+ok 33 - rules reconnects spread the first attempts and back off through a prolonged outage
+  ---
+  duration_ms: 636.937417
+  type: 'test'
+  ...
+# Subtest: retained authority preserves an open socket through a short server stall but bounds silence
+ok 34 - retained authority preserves an open socket through a short server stall but bounds silence
+  ---
+  duration_ms: 602.594875
+  type: 'test'
+  ...
+# Subtest: step input is only forwarded to a host that announced rules
+ok 35 - step input is only forwarded to a host that announced rules
+  ---
+  duration_ms: 0.651958
+  type: 'test'
+  ...
+# Subtest: a solo host returning after the hold gets no stale free after welcome
+ok 36 - a solo host returning after the hold gets no stale free after welcome
+  ---
+  duration_ms: 0.173542
+  type: 'test'
+  ...
+# Subtest: an old-style room is sent nothing revision 11 added: no held occupants, no free, no snapshot epoch, characters counted
+ok 37 - an old-style room is sent nothing revision 11 added: no held occupants, no free, no snapshot epoch, characters counted
+  ---
+  duration_ms: 0.363083
+  type: 'test'
+  ...
+# Subtest: an old-style host cannot authorize terminal rules failure through hello
+ok 38 - an old-style host cannot authorize terminal rules failure through hello
+  ---
+  duration_ms: 0.089583
+  type: 'test'
+  ...
+# Subtest: old-style accented snapshots keep the character measure from main
+ok 39 - old-style accented snapshots keep the character measure from main
+  ---
+  duration_ms: 0.202667
+  type: 'test'
+  ...
+# Subtest: forgetting a failed server room never elects a browser
+ok 40 - forgetting a failed server room never elects a browser
+  ---
+  duration_ms: 0.040542
+  type: 'test'
+  ...
+# Subtest: deploy retires persisted rooms the current server build cannot run before matching a fresh visitor
+ok 41 - deploy retires persisted rooms the current server build cannot run before matching a fresh visitor
+  ---
+  duration_ms: 1.691292
+  type: 'test'
+  ...
+# Subtest: negotiated idle heartbeats stay at the edge and live rounds retain clock pings
+ok 42 - negotiated idle heartbeats stay at the edge and live rounds retain clock pings
+  ---
+  duration_ms: 1426.793542
+  type: 'test'
+  ...
+# Subtest: edge pongs cannot hide a dead room with an unanswered clock ping
+ok 43 - edge pongs cannot hide a dead room with an unanswered clock ping
+  ---
+  duration_ms: 917.979209
+  type: 'test'
+  ...
+# Subtest: a missed round start probes the Table despite healthy edge pongs
+ok 44 - a missed round start probes the Table despite healthy edge pongs
+  ---
+  duration_ms: 634.270583
+  type: 'test'
+  ...
+# Subtest: a wall indicator mounted after welcome sees the current link after each reload
+ok 45 - a wall indicator mounted after welcome sees the current link after each reload
+  ---
+  duration_ms: 3.763375
+  type: 'test'
+  ...
+1..45
+# tests 45
+# suites 0
+# pass 45
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 9479.7145

@@ -1,0 +1,49 @@
+TAP version 13
+# (node:16443) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a new relay link seats and accepts inputs after idle
+ok 1 - a new relay link seats and accepts inputs after idle
+  ---
+  duration_ms: 166.434709
+  type: 'test'
+  ...
+# {"ev":"room-link-lost","room":"g/r","gate":"0","layer":"gate","code":null,"reason":"invalid room frame","error":"Unexpected token 'i', \\"invalid\\" is not valid JSON","clients":1,"transport":{"frames":2,"rows":3,"bytes":223,"peakQueueBytes":175,"coalesced":0,"ackMs":0,"maxAckMs":0,"rttMs":0,"timing":{"clock":"unavailable-or-below-resolution","ms":{"encode":null,"send":null}},"queueRows":0,"pendingViews":0,"queueBytes":0,"inFlight":0,"inFlightBytes":0}}
+# Subtest: a new relay link seats and accepts inputs after invalid frame
+ok 2 - a new relay link seats and accepts inputs after invalid frame
+  ---
+  duration_ms: 6.187583
+  type: 'test'
+  ...
+# Subtest: twenty arrivals over a minute fill shared eight-seat rooms
+ok 3 - twenty arrivals over a minute fill shared eight-seat rooms
+  ---
+  duration_ms: 12.581625
+  type: 'test'
+  ...
+# Subtest: quiet joins find open rooms in every previously busy pool
+ok 4 - quiet joins find open rooms in every previously busy pool
+  ---
+  duration_ms: 11.749042
+  type: 'test'
+  ...
+# Subtest: unchanged peaks write nothing and a burst of rises is coalesced
+ok 5 - unchanged peaks write nothing and a burst of rises is coalesced
+  ---
+  duration_ms: 31.580708
+  type: 'test'
+  ...
+# Subtest: a server timer pause gives queued client traffic time to arrive before silence eviction
+ok 6 - a server timer pause gives queued client traffic time to arrive before silence eviction
+  ---
+  duration_ms: 1.066125
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1326.551416

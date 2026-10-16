@@ -1382,13 +1382,19 @@ export class NetRoom {
   /** Call every ~250 ms (setInterval locally, an alarm or the socket traffic on a Durable Object). */
   tick(idle = false) {
     const now = this.now();
+    const previousTick = this.silenceTickAt;
+    this.silenceTickAt = now;
+    // A paused server can run this timer before its queued socket callbacks.
+    // Give recently active clients one bounded chance to deliver those frames.
+    const resumed = this.server && previousTick !== undefined && now - previousTick > this.idleMs;
     // Sockets that never said hello, or went silent (a slept phone, a half-open link): close them, and a seat
     // becomes a bot instead of a frozen body.
     for (const c of [...this.clients.values()]) {
       c.lastSeen=Math.max(c.lastSeen,c.conn.lastPing?.()??0);
       if (!c.helloed) { if (now - c.joinedAt > 5000) { this.clients.delete(c.id); try { c.conn.close(4000, 'no-hello'); } catch { /* gone */ } } continue; }
       // A loopback (the Table's own house agent) cannot be half-open: it is never closed for silence.
-      if (now - c.lastSeen > this.idleMs && !c.conn.loopback) this.kick(c, 'silent', 4000);
+      if (resumed && previousTick - c.lastSeen <= this.idleMs) c.silenceGraceUntil = now + 2500;
+      if (now - c.lastSeen > this.idleMs && now >= (c.silenceGraceUntil ?? 0) && !c.conn.loopback) this.kick(c, 'silent', 4000);
     }
     // A host that stopped sending snapshots while others are present.
     const h = this.host();
