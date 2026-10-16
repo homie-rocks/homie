@@ -25,3 +25,5 @@ first notice, and verifies its handler runs once. Removing startup registration
 makes that assertion fail (zero deliveries); restoring it passes. The startup
 and customer-review suites pass (15 tests), including migration and registration
 failure paths and preservation of subscription cursors.
+
+The two selected local-dev integration tests also pass; see `dev-tests.log`.
