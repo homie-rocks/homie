@@ -33,6 +33,7 @@ import { GAME_ID, POST_SLUG, BROWSER_KEY, json, sellingShop, availableShellShop,
 export default async function route(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname;
+  if (/^\/games\/[^/]+\/source\.json$/.test(path)) return json({ok:false,error:'gone',message:'Whole-game sources were retired; use parts instead.'},410);
   const parts = path.split('/').filter(Boolean);
   const read = request.method === 'GET' || request.method === 'HEAD';
   let catP = null;
@@ -157,12 +158,13 @@ export default async function route(request, env, ctx) {
     return json({ studio: cat.studio, games: (cat.games ?? []).map(g => g.room?.host === 'server' && !hostedGame(g.id) ? { ...g, rulesError: RULES_WIRING_MESSAGE } : g), live: (await roomsOf(env, cat.games ?? [])).live });
   }
   if (path === '/api/rooms') {
-    if(request.method!=='GET')return json({ok:false,error:'method'},405);
+    if(!read)return json({ok:false,error:'method'},405);
     const cat = await getCat();
-    return (await import('./rooms-cache.mjs')).cachedRooms(request,env,ctx,cat,async()=>{
+    const response = await (await import('./rooms-cache.mjs')).cachedRooms(request,env,ctx,cat,async()=>{
       const {rooms}=await roomsOf(env,cat.games??[]);
       return json({ok:true,playing:rooms.reduce((n,r)=>n+r.players,0),rooms},200,{'access-control-allow-origin':'*','cache-control':'public, max-age=15'});
     });
+    return request.method === 'HEAD' ? new Response(null,{status:response.status,headers:response.headers}) : response;
   }
   if (path.startsWith('/media/')) {
     if (!env.MEDIA) return new Response('this studio keeps no media in R2 yet', { status: 404 });

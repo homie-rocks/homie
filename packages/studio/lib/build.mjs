@@ -743,7 +743,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
     if (image) game.playerImage = image;
   }
   const headerPath = join(dist, '_headers');
-  writeFileSync(headerPath, staticHeaders(existsSync(headerPath) ? readFileSync(headerPath, 'utf8') : ''));
+  writeFileSync(headerPath, staticHeaders(existsSync(headerPath) ? readFileSync(headerPath, 'utf8') : '', {concept: studio.concept === true}));
   writeFileSync(join(dist, 'games.json'), `${JSON.stringify(catalogue, null, 2)}\n`);
   // What this build made, for whatever runs next (a deploy says which games it changes; a script checks the live
   // site against it): per game its digest, its bundle and chunks, and whether it differs from the build before.

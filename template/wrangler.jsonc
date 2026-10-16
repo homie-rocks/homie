@@ -26,9 +26,7 @@
   "workers_dev": true,
   "preview_urls": true,
   "triggers": {
-    "crons": [
-      "17 * * * *"
-    ]
+    "crons": []
   },
   "assets": {
     "directory": "./site/dist",

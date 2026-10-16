@@ -7,7 +7,7 @@ test('an ordinary studio imports no payment modules or SDKs and schedules analyt
   assert.doesNotMatch(Object.keys(built.metafile.inputs).join('\n'), /mppx|viem|\/purchase-|\/payment-|\/selling\//);
   const ordinary = JSON.parse(wranglerConfig({worker:'ordinary',name:'Ordinary',d1:'ordinary'}).replace(/^\s*\/\/.*$/gm,''));
   assert.ok(ordinary.compatibility_flags.includes('nodejs_compat'), 'Cloudflare MCP handler uses the Workers async context API');
-  assert.deepEqual(ordinary.triggers,{crons:['17 * * * *']});
+  assert.deepEqual(ordinary.triggers,{crons:[]});
   const selling = JSON.parse(wranglerConfig({worker:'selling',name:'Selling',d1:'selling',paidParts:true}).replace(/^\s*\/\/.*$/gm,''));
   assert.equal(selling.alias['@homie-rocks/studio/worker'],'@homie-rocks/studio/worker/selling');
   assert.ok(selling.compatibility_flags.includes('nodejs_compat'));

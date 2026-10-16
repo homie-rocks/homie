@@ -100,7 +100,7 @@ export function wranglerConfig({workerRoutes = WORKER_ROUTES, worker, name, d1, 
     // every deploy, and one written without them sends the studio's domain back to whatever else the zone routes
     // (lib/routes.mjs). A studio without routes gets no key at all.
     ...(routes?.length ? { routes } : {}),
-    triggers: { crons: [...new Set([...(triggers?.crons ?? []), ...(paidParts ? ['*/5 * * * *'] : []), '17 * * * *'])] },
+    triggers: { crons: [...new Set([...(triggers?.crons ?? []), ...(paidParts ? ['*/5 * * * *'] : [])])] },
     assets: { directory: at.dist, binding: 'ASSETS', run_worker_first: workerRoutes },
     durable_objects: { bindings: rooms },
     migrations: [{ tag: 'v1', new_sqlite_classes: ['Table', 'Lobby'] }, { tag: 'v2-gates', new_sqlite_classes: ['Gate', 'Concentrator'] }, {tag:'v3-streams',new_sqlite_classes:['AppRecordHub','EventHub']}],

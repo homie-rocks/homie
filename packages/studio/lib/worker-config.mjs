@@ -28,6 +28,7 @@ export function updateWorkerConfig(root,generated) {
     writeFileSync(join(root,'wrangler.custom.json'),JSON.stringify(custom,null,2)+'\n');
   }
   const next=merge(base,custom);
+  if(readStudio(root).concept===true)next.assets={...next.assets,run_worker_first:true};
   next.vars={...next.vars,HOMIE_CONCEPT:readStudio(root).concept===true?'1':'0'};
   verifiedMcpConfig(root);
   if(publicMcpSetup(root)) {

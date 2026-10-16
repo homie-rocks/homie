@@ -102,6 +102,9 @@ function parseJson(text) {
 export function explainCloudflare(out, accountId = null) {
   const text = String(out ?? '');
   const dash = accountId ? `https://dash.cloudflare.com/${accountId}` : 'https://dash.cloudflare.com';
+  if (/(?:cron|schedule).*?(?:limit|maximum|exceed)|(?:limit|maximum|exceed).*?(?:cron|schedule)/i.test(text)) {
+    return { needs: 'cron-limit', why: 'This account has reached its Cron Trigger limit (5 on Workers Free). Remove unused triggers from other Workers in the Cloudflare dashboard, or upgrade the account plan, then retry deploy. Required studio schedules have been retained.' };
+  }
   if (/\b10034\b|verify your email/i.test(text)) {
     return { needs: 'cloudflare-verify-email', why: `Cloudflare needs this account's email address verified before it runs a Worker. Ask the person to open the verification email from Cloudflare (or ${dash}/profile and "Send verification email"), click it. The AI resumes deployment after verification.` };
   }
@@ -388,7 +391,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   for (const added of ensureMigrations(root)) step(`added ${added} (${migrationWord(added)})`);
   const migrate = w(['d1', 'migrations', 'apply', cf.d1, '--remote']);
   if (migrate.code !== 0) return refuse(`D1 migrations failed: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
-  try {const replication=await enableReadReplication(root,w,{accountId,databaseId:db.uuid,...(fetchFn?{fetchFn}:{})});step(replication.enabled?'D1 read replication enabled':`D1 uses the primary: ${replication.reason}`);} catch(error) {return refuse(error.message);}
+  try {const replication=await enableReadReplication(root,w,{accountId,databaseId:db.uuid,...(fetchFn?{fetchFn}:{})});step(replication.enabled?'D1 read replication enabled':`D1 uses the primary: ${replication.reason}`);} catch(error) {step(`D1 uses the primary: ${error.message}`);}
   step('D1 migrations applied');
   const subscriptions=w(['d1','execute',cf.d1,'--remote','--command',(await import('./functions-build.mjs')).functionDeploymentSQL(root)]);
   if(subscriptions.code!==0)return refuse('Could not register studio functions',subscriptions.out);
@@ -636,7 +639,7 @@ export async function ciDeploy(root, { log = () => {}, wrangler = null } = {}) {
     step('D1 migrations applied (the database was created with this first deploy)');
     const registered=register();if(registered.code!==0)return refuse('Could not register studio functions',registered.out);
   }
-  try {const replication=await enableReadReplication(root,w);step(replication.enabled?'D1 read replication enabled':`D1 uses the primary: ${replication.reason}`);} catch(error) {return refuse(error.message);}
+  try {const replication=await enableReadReplication(root,w);step(replication.enabled?'D1 read replication enabled':`D1 uses the primary: ${replication.reason}`);} catch(error) {step(`D1 uses the primary: ${error.message}`);}
   // The live address, from what Wrangler printed (a custom domain in studio.json wins).
   const workersDev = /https:\/\/[a-z0-9.-]+\.workers\.dev/i.exec(dep.out)?.[0] ?? null;
   let url = null;
