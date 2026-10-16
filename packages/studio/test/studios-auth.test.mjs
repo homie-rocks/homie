@@ -1,0 +1,21 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {database} from './s2s-fixture.mjs';
+import {studioToken,studioCaller} from '../worker/studios-auth.mjs';
+import {allowed} from '../worker/mcp-tools.mjs';
+const origin='https://b.example',secret='s'.repeat(48);
+const config=()=>({studio:{mcp:{studios:{inbound:{concierge:{origin:'https://a.example',secret:'A_SECRET',tools:['book']}}}}}});
+const request=(password=secret,resource=origin+'/mcp')=>new Request(origin+'/oauth/token',{method:'POST',headers:{authorization:'Basic '+btoa('concierge:'+password),'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'client_credentials',resource,scope:'studio'})});
+test('client credentials bind the receiver, allowlist, rotation and asserted person',async t=>{
+ const env={DB:database(t),A_SECRET:secret},cat=config();
+ assert.equal((await studioToken(request('wrong'),env,cat)).status,401);
+ assert.equal((await studioToken(request(secret,'https://evil.example/mcp'),env,cat)).status,400);
+ const response=await studioToken(request(),env,cat);assert.equal(response.status,200);const token=await response.json();
+ const req=new Request(origin+'/mcp/auth',{headers:{authorization:'Bearer '+token.access_token,'x-studio-acting-for':'Alex'}});
+ const caller=await studioCaller(req,env,cat);assert.equal(caller.studio.origin,'https://a.example');assert.equal(caller.studio.verified,true);assert.deepEqual(caller.actingFor,{handle:'Alex',verified:false,assertedBy:'https://a.example'});
+ assert.equal(await allowed('signed-in',caller,env),false);assert.equal(await allowed('owner',caller,env),false);
+ assert.equal(await allowed('public',caller,env),true);
+ assert.equal(await studioCaller(new Request('https://other.example/mcp',{headers:req.headers}),env,cat),null);
+ env.A_SECRET='r'.repeat(48);assert.equal(await studioCaller(req,env,cat),null);env.A_SECRET=secret;
+ cat.studio.mcp.studios.inbound.concierge.enabled=false;assert.equal(await studioCaller(req,env,cat),null);
+});

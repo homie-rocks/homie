@@ -1,3 +1,4 @@
+import {studioToken,studioCaller} from './studios-auth.mjs';
 import {tokenCaller,toolInScope} from './connector-token.mjs';
 import {eventMethods,eventsCapability} from './mcp-events-wire.mjs';
 import {eventsRequest} from './mcp-events.mjs';
@@ -37,13 +38,15 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
   if(!env.DB)return json({error:'studio database required'},503);
   if(request.headers.has('origin') && request.headers.get('origin')!==origin)return json({error:'origin refused'},403);
   if(path.startsWith('/hooks/tools/')) return (await import('./tool-webhook.mjs')).toolWebhook(request,env,{cat:await catalogueOf(),definitions});
+  if(path==='/oauth/token'){const response=await studioToken(request,env,await catalogueOf());if(response)return response;}
+  const machine=request.headers.get('authorization')?.startsWith('Bearer homie_studio_');
   const scoped={...env,OAUTH_KV:oauthStorage(env.DB)};
   const localIdentity=await localCaller(request,env);
   const bearer=request.headers.get('authorization')?.startsWith('Bearer homie_owner_');
   const bearerIdentity=bearer?await tokenCaller(request,env):null;
   if(bearer&&!bearerIdentity)return json({error:'connector expired or revoked'},401);
   const api=async(request,env,ctx)=>{
-    const identity=async()=>{if(bearer){const fresh=await tokenCaller(request,env);if(!fresh)throw new Error('connector revoked');return fresh;}return localIdentity ?? currentCaller(env,ctx.props);};
+    const identity=async()=>{if(machine){const fresh=await studioCaller(request,env,await catalogueOf());if(!fresh)throw new Error('Studio authorization revoked');return fresh;}if(bearer){const fresh=await tokenCaller(request,env);if(!fresh)throw new Error('connector revoked');return fresh;}return localIdentity ?? currentCaller(env,ctx.props);};
     let caller;
     try{caller=await identity();}catch{return new Response(JSON.stringify({error:'connection revoked'}),{status:401,headers:{'content-type':'application/json','cache-control':'no-store','www-authenticate':`Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp", error="invalid_token"`}});}
     if(caller.tools){
@@ -144,7 +147,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
             if(tool.protocol) {const result=await tool.handler(args,{...context,paymentExtra:extra});outcome=result.isError?'error':'ok';return result;}
             const value=await (await import('./app-tools.mjs')).invokeAppTool(tool,args,{...context,request});
             const text=JSON.stringify({kind:'untrusted-tool-data',tool:tool.name,data:value});
-            outcome='ok';return {content:[{type:'text',text}]};
+            outcome='ok';return {structuredContent:{kind:'untrusted-tool-data',tool:tool.name,data:value??null},content:[{type:'text',text}]};
           }catch(error){if(error?.code===-32042)throw error;return {isError:true,content:[{type:'text',text:outcome==='denied'||outcome==='limited'||error?.name==='StudioOperationError'?error.message:(freshErrorMessage(error,env,caller))}]};}
           finally{
             try { await audit(env,caller,tool.name,outcome); }
@@ -178,6 +181,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
   if(localIdentity||bearerIdentity)return api(request,scoped,ctx);
   const provider=new OAuthProvider({
     apiRoute:'/mcp',apiHandler:{fetch:api},
+    resolveExternalToken:async({request,env})=>(await studioCaller(request,env,await catalogueOf()))?{props:{},audience:origin+'/mcp'}:null,
     authorizeEndpoint:'/oauth/authorize',tokenEndpoint:'/oauth/token',clientRegistrationEndpoint:'/oauth/register',
     resourceMetadata:{resource:origin+'/mcp',authorization_servers:[origin]},
     scopesSupported:['studio','offline_access'],requiredScopes:['studio'],
@@ -235,5 +239,10 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
     // Public tools remain available without an account. Clients can discover OAuth metadata directly.
     return api(request,scoped,ctx);
   }
-  return provider.fetch(request,scoped,ctx);
+  const response=await provider.fetch(request,scoped,ctx);
+  if(path==='/.well-known/oauth-authorization-server'&&response.ok){
+    const metadata=await response.json();
+    return json({...metadata,grant_types_supported:[...new Set([...(metadata.grant_types_supported??[]),'client_credentials'])],token_endpoint_auth_methods_supported:[...new Set([...(metadata.token_endpoint_auth_methods_supported??[]),'client_secret_basic'])]});
+  }
+  return response;
 }
