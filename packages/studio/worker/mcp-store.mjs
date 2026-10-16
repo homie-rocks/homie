@@ -1,3 +1,4 @@
+/** mcp_kv.expires is Unix seconds for ALL rows (OAuth, webhook dedupe and streams); NULL never expires. */
 /** OAuth's KV contract on the studio's existing D1. No new Cloudflare resource. */
 export const MCP_MIGRATION_FILE = '0017_studio_mcp.sql';
 export const MCP_MIGRATION = `CREATE TABLE IF NOT EXISTS mcp_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL, expires INTEGER);

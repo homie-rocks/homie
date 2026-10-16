@@ -19,7 +19,7 @@ export class McpEventStreams {
       const caller=await eventCaller(this.env,input.connection);const feed=await checkEvent(this.env,input.cat,caller,input.params);
       const start=await eventStart(this.env,input.params);
       const registryKey='mcp-event-stream:'+input.connection+':'+crypto.randomUUID();
-      await this.env.DB.prepare('INSERT INTO mcp_kv(key,value,expires) VALUES(?1,?2,?3)').bind(registryKey,JSON.stringify({connection:input.connection}),Date.now()+60000).run();
+      await this.env.DB.prepare('INSERT INTO mcp_kv(key,value,expires) VALUES(?1,?2,?3)').bind(registryKey,JSON.stringify({connection:input.connection}),Math.floor(Date.now()/1000)+60).run();
       const stream={...input,registryKey,source:eventSource(feed),cursor:cursorOf(input.params.name,start.after),closed:false,busy:false};
       const body=new ReadableStream({start:controller=>{stream.controller=controller;controller.enqueue(sseFrame(notification('active',{cursor:stream.cursor,truncated:start.truncated},stream.id)));},pull:()=>{const resume=stream.resume;stream.resume=null;resume?.();},cancel:()=>this.close(stream)});
       this.streams.add(stream);
@@ -46,7 +46,7 @@ export class McpEventStreams {
         }
         stream.cursor=page.cursor;more=page.hasMore;
       }
-      await this.env.DB.prepare('UPDATE mcp_kv SET expires=?2 WHERE key=?1').bind(stream.registryKey,Date.now()+60000).run();
+      await this.env.DB.prepare('UPDATE mcp_kv SET expires=?2 WHERE key=?1').bind(stream.registryKey,Math.floor(Date.now()/1000)+60).run();
       await this.write(stream,notification('heartbeat',{cursor:stream.cursor},stream.id));
     }catch(error){
       const details=eventError(error);

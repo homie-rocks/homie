@@ -240,6 +240,8 @@ async function newGuest(request, env, url, addressLimit = PLAYER_LIMITS.newPlaye
   if (addressLimit !== null && limited(`${counter}:${ip}`, addressLimit, HOUR)) return { error: fail(429, 'rate', 'too many new players from this address; try again later') };
   const capped = (counter !== 'shop-new' || env.PLAYER_LIMIT_DAILY !== undefined) && await dailyCapReached(env);
   if (capped) return { error: fail(503, 'busy', 'this studio has taken all the new players it takes in one day; try again tomorrow') };
+  // Studios without scheduled functions still reclaim idle guests on this write path.
+  if (Math.random() < 0.02) await pruneGuests(env);
   const id = newPlayerId();
   const now = Date.now();
   const name = handleFor(id);
