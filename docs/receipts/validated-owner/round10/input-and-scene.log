@@ -1,0 +1,54 @@
+TAP version 13
+# (node:71973) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a held input moves for the part of the tick it was down: sixty-millisecond taps at every phase of the tick, seed 4612: a small room
+ok 1 - a held input moves for the part of the tick it was down: sixty-millisecond taps at every phase of the tick, seed 4612: a small room
+  ---
+  duration_ms: 631.497208
+  type: 'test'
+  ...
+# Subtest: a held input moves for the part of the tick it was down: sixty-millisecond taps at every phase of the tick, seed 4612: Gates
+ok 2 - a held input moves for the part of the tick it was down: sixty-millisecond taps at every phase of the tick, seed 4612: Gates
+  ---
+  duration_ms: 622.685
+  type: 'test'
+  ...
+# Subtest: unchanged substep forecasts execute once across repeated view reads and refresh on input
+ok 3 - unchanged substep forecasts execute once across repeated view reads and refresh on input
+  ---
+  duration_ms: 130.552458
+  type: 'test'
+  ...
+# Subtest: validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame
+ok 4 - validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame
+  ---
+  duration_ms: 97.797167
+  type: 'test'
+  ...
+# Subtest: remote owners stay on the shared scene timeline when newer reports arrive
+ok 5 - remote owners stay on the shared scene timeline when newer reports arrive
+  ---
+  duration_ms: 128.444334
+  type: 'test'
+  ...
+# Subtest: accepted runner ticks stay aligned with a patrol when uplink delay changes
+ok 6 - accepted runner ticks stay aligned with a patrol when uplink delay changes
+  ---
+  duration_ms: 278.666959
+  type: 'test'
+  ...
+# Subtest: input call time precedes time spent pumping pending room work
+ok 7 - input call time precedes time spent pumping pending room work
+  ---
+  duration_ms: 88.737167
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2054.63875

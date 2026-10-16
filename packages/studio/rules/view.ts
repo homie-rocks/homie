@@ -1587,6 +1587,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     on(name, fn) { let set = listeners.get(name); if (!set) { set = new Set(); listeners.set(name, set); } set.add(fn); forwardSolo(name); return () => { set?.delete(fn); }; },
     get shared() { if (solo) return solo.shared; return Object.freeze(unpackFields(schema.shared, net.stateOf('shared'), dims)); },
     input(s, options) {
+      // Capture call time before pumping queued simulation/effects. That work
+      // must not move a control edge later in its physics substep.
+      const receivedAt = clock();
       pump();
       if (solo) { solo.input(s, options); return; }
       const kind = myKind() ?? schema.kinds.find((k) => k.player) ?? null;
@@ -1601,7 +1604,8 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       // may advance the new path, rather than drawing elapsed time with new input.
       // A held control changed NOW, before anything else here takes time: the steps this call runs must already know it.
       const now = clock();
-      const at = typeof options?.at === 'number' && Number.isFinite(options.at) ? Math.max(edgeOf(stepped), Math.min(now, options.at)) : now;
+      const eventAt = typeof options?.at === 'number' && Number.isFinite(options.at) ? options.at : receivedAt;
+      const at = Math.max(edgeOf(stepped), Math.min(now, eventAt));
       for (const [index, [name, fd]] of (kind?.input ?? []).entries()) {
         const value = Number(coerce(fd, s[name] ?? fd.init, dims));
         if(value !== Number(coerce(fd, sample[name] ?? fd.init, dims)))controlChanges.push([index, ++inputSequence, Math.max(0,Math.min(1,tickAt(at)-stepped)), value]);

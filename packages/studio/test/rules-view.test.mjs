@@ -3095,3 +3095,20 @@ test('the first accepted path after a placement stays bounded from its drawn spa
  for(let i=0;i<180;i++){await clock.wait(16);const x=viewer.get(id).pos.x;worst=Math.max(worst,Math.abs(x-prev));prev=x;}
  t.diagnostic(JSON.stringify({worst}));assert.ok(worst<1.4+1e-5,`first accepted path jumped ${worst} tiles from its spawn`);
 });
+
+test('input call time precedes time spent pumping pending room work',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t);let spent=0;
+ const r=rig(L,compiled),a=openRoom({now:()=>performance.now()+spent,net:{config:cfg('Input call clock'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(1000);
+ // Simulate synchronous room work between entry into input() and held sampling.
+ // The next pump reads offline before it takes its own clock reading.
+ const descriptor=Object.getOwnPropertyDescriptor(a.net,'offline');
+ let charge=false;
+ Object.defineProperty(a.net,'offline',{configurable:true,get(){if(charge){spent+=4;charge=false;}return false;}});
+ await clock.wait(10);const x=a.me.pos.x;charge=true;
+ a.input({ax:1});
+ const moved=a.me.pos.x-x;
+ assert.ok(moved>=.015,`four milliseconds at 4 m/s must already belong to the press, got ${moved}`);
+ if(descriptor)Object.defineProperty(a.net,'offline',descriptor);
+});
