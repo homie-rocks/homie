@@ -15,7 +15,7 @@ test('bounded transport refuses discovery escapes, redirects and oversized bodie
 });
 test('structured and legacy toolkit results are decoded once and stay labelled as data',()=>{
  const envelope={kind:'untrusted-tool-data',tool:'book',data:{id:'booking'}};
- assert.deepEqual(studioResult({structuredContent:envelope,content:[]}),{isError:false,data:{id:'booking'},content:[]});
+ assert.deepEqual(studioResult({structuredContent:envelope,content:[]}),{source:{origin:null,authenticated:false},untrusted:true,isError:false,data:{id:'booking'},content:[]});
  assert.deepEqual(studioResult({content:[{type:'text',text:JSON.stringify(envelope)}]}).data,{id:'booking'});
  assert.deepEqual(studioResult({structuredContent:{available:true},content:[]}).data,{available:true});
  assert.equal(studioResult({isError:true,content:[{type:'text',text:'unavailable'}]}).isError,true);

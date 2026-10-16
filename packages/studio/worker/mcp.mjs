@@ -18,7 +18,7 @@ import { players } from './players.mjs';
 import { isOwner, sameOrigin } from './office.mjs';
 import { cookieValue } from './stats.mjs';
 import { esc } from './site.mjs';
-import { oauthStorage, rateLimit, audit, callsPerMinute } from './mcp-store.mjs';
+import { oauthStorage, rateLimit, audit, callsPerMinute, callerLimitKey } from './mcp-store.mjs';
 import { allowed, currentCaller, services, builtins } from './mcp-tools.mjs';
 const validator = new CfWorkerJsonSchemaValidator();
 const json = (data,status=200)=>Response.json(data,{status,headers:{'cache-control':'no-store'}});
@@ -52,7 +52,8 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
   const bearerIdentity=bearer?await tokenCaller(request,env):null;
   if(bearer&&!bearerIdentity)return json({error:'connector expired or revoked'},401);
   const api=async(request,env,ctx)=>{
-    const identity=async()=>{if(machine){const fresh=await studioCaller(request,env,await catalogueOf());if(!fresh)throw new Error('Studio authorization revoked');return fresh;}if(bearer){const fresh=await tokenCaller(request,env);if(!fresh)throw new Error('connector revoked');return fresh;}return localIdentity ?? currentCaller(env,ctx.props);};
+    const rawIdentity=async()=>{if(machine){const fresh=await studioCaller(request,env,await catalogueOf());if(!fresh)throw new Error('Studio authorization revoked');return fresh;}if(bearer){const fresh=await tokenCaller(request,env);if(!fresh)throw new Error('connector revoked');return fresh;}return localIdentity ?? currentCaller(env,ctx.props);};
+    const identity=async()=>({...await rawIdentity(),clientAddressKey:`public:${request.headers.get('cf-connecting-ip')??'local'}`});
     let caller;
     try{caller=await identity();}catch{return new Response(JSON.stringify({error:'connection revoked'}),{status:401,headers:{'content-type':'application/json','cache-control':'no-store','www-authenticate':`Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp", error="invalid_token"`}});}
     if(caller.tools){
@@ -83,7 +84,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
     }
     const rate=async fresh=>{
       const limit=callsPerMinute(cat);
-      if(!await rateLimit(env,fresh.id??`public:${request.headers.get('cf-connecting-ip')??'local'}`,limit))throw new Error('Rate limit reached');
+      if(!await rateLimit(env,callerLimitKey(fresh),limit))throw new Error('Rate limit reached');
     };
     const read=async(name,handler)=>{
       let outcome='error';

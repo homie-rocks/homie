@@ -1,3 +1,4 @@
+import {callerLimitKey} from './mcp-store.mjs';
 import {bookingAvailability} from './booking-availability.mjs';
 import {studiosClient} from './studios-client.mjs';
 import {bookingInputSchema,normalizeBookingArgs} from './booking-options.mjs';
@@ -91,7 +92,7 @@ export function services(env, cat, origin, caller, namespace, definition = {}) {
       await Promise.all(pending);
       return response??new Response('Not found',{status:404});
     },
-    async rateLimit(name,key=caller.id) {
+    async rateLimit(name,key=callerLimitKey(caller)) {
       const rule=cat.studio?.mcp?.rateLimits?.[name];
       if(!rule?.tools?.includes(definition.name)||!env[rule.binding]?.limit)throw new Error('Rate limit not declared for this tool');
       if(typeof key!=='string'||!key.length||key.length>256)throw new Error('Rate limit key required (1–256 characters)');

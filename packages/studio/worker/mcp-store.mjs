@@ -55,3 +55,5 @@ export function callsPerMinute(cat) {
   const value=cat.studio?.mcp?.callsPerMinute;
   return Number.isSafeInteger(value)&&value>0?value:null;
 }
+
+export const callerLimitKey=caller=>caller.studio?'studio:'+caller.studio.origin:caller.id??caller.clientAddressKey;
