@@ -1,0 +1,300 @@
+TAP version 13
+# (node:97340) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: rejected restore 401 closes the transport
+ok 1 - rejected restore 401 closes the transport
+  ---
+  duration_ms: 14.920792
+  type: 'test'
+  ...
+# Subtest: rejected restore 409 closes the transport
+ok 2 - rejected restore 409 closes the transport
+  ---
+  duration_ms: 0.25775
+  type: 'test'
+  ...
+# Subtest: rejected restore 503 closes the transport
+ok 3 - rejected restore 503 closes the transport
+  ---
+  duration_ms: 0.283583
+  type: 'test'
+  ...
+# Subtest: restore purges abandoned watch records without retaining watcher IP or agent
+ok 4 - restore purges abandoned watch records without retaining watcher IP or agent
+  ---
+  duration_ms: 7.182584
+  type: 'test'
+  ...
+# Subtest: close replies explicitly for older compatibility dates
+ok 5 - close replies explicitly for older compatibility dates
+  ---
+  duration_ms: 0.334875
+  type: 'test'
+  ...
+# Subtest: restored watcher neither replays history nor resets its rate bucket
+ok 6 - restored watcher neither replays history nor resets its rate bucket
+  ---
+  duration_ms: 0.432166
+  type: 'test'
+  ...
+# Subtest: a failed Gate presence query does not stop another Gate or the round alarm
+ok 7 - a failed Gate presence query does not stop another Gate or the round alarm
+  ---
+  duration_ms: 1.702542
+  type: 'test'
+  ...
+# Subtest: crowd sessions store one relay client per row, share Gate URL, and exclude snapshots
+ok 8 - crowd sessions store one relay client per row, share Gate URL, and exclude snapshots
+  ---
+  duration_ms: 77.111542
+  type: 'test'
+  ...
+# Subtest: only meaningful client changes rewrite idle session rows
+ok 9 - only meaningful client changes rewrite idle session rows
+  ---
+  duration_ms: 0.973833
+  type: 'test'
+  ...
+# Subtest: unchanged chat does not rewrite storage or read its alarm
+ok 10 - unchanged chat does not rewrite storage or read its alarm
+  ---
+  duration_ms: 0.513834
+  type: 'test'
+  ...
+# Subtest: chat statistics flush at most once per minute
+ok 11 - chat statistics flush at most once per minute
+  ---
+  duration_ms: 0.111709
+  type: 'test'
+  ...
+# Subtest: matchmaking distributes rooms and repeated player reservations remain on one seat allocation
+ok 12 - matchmaking distributes rooms and repeated player reservations remain on one seat allocation
+  ---
+  duration_ms: 554.356167
+  type: 'test'
+  ...
+# Subtest: room summaries paginate beyond 500 games and aggregate shards
+ok 13 - room summaries paginate beyond 500 games and aggregate shards
+  ---
+  duration_ms: 3.408459
+  type: 'test'
+  ...
+# Subtest: legacy and hidden JSON pings do not rewrite an idle client
+ok 14 - legacy and hidden JSON pings do not rewrite an idle client
+  ---
+  duration_ms: 6.519833
+  type: 'test'
+  ...
+# Subtest: Lobby eviction retains outstanding reservations and reported counts
+ok 15 - Lobby eviction retains outstanding reservations and reported counts
+  ---
+  duration_ms: 2.187708
+  type: 'test'
+  ...
+# Subtest: restored character transports reuse their saved lease without reacquiring
+ok 16 - restored character transports reuse their saved lease without reacquiring
+  ---
+  duration_ms: 1.221584
+  type: 'test'
+  ...
+# Subtest: closed Table relay is removed so the next Gate request creates a session
+ok 17 - closed Table relay is removed so the next Gate request creates a session
+  ---
+  duration_ms: 0.642583
+  type: 'test'
+  ...
+# Subtest: 2-second legacy pings do not persist transport telemetry: relayed
+ok 18 - 2-second legacy pings do not persist transport telemetry: relayed
+  ---
+  duration_ms: 1.893708
+  type: 'test'
+  ...
+# Subtest: 2-second legacy pings do not persist transport telemetry: browser-rules
+ok 19 - 2-second legacy pings do not persist transport telemetry: browser-rules
+  ---
+  duration_ms: 1.742292
+  type: 'test'
+  ...
+# Subtest: 2-second legacy pings do not persist transport telemetry: server
+ok 20 - 2-second legacy pings do not persist transport telemetry: server
+  ---
+  duration_ms: 1.876125
+  type: 'test'
+  ...
+# Subtest: relay session rows retain only QA marker from user-agent
+ok 21 - relay session rows retain only QA marker from user-agent
+  ---
+  duration_ms: 0.695875
+  type: 'test'
+  ...
+# Subtest: two strangers in every quiet game share the same public matching pool
+ok 22 - two strangers in every quiet game share the same public matching pool
+  ---
+  duration_ms: 29.531791
+  type: 'test'
+  ...
+# Subtest: daily peak measures concurrent shard totals, survives restart, and ignores stale reports
+ok 23 - daily peak measures concurrent shard totals, survives restart, and ignores stale reports
+  ---
+  duration_ms: 1001.198959
+  type: 'test'
+  ...
+# Subtest: a failed openRelay retries without emitting a fatal channel error
+ok 24 - a failed openRelay retries without emitting a fatal channel error
+  ---
+  duration_ms: 101.928
+  type: 'test'
+  ...
+# Subtest: peak counter failure is retried by the next shard observation
+ok 25 - peak counter failure is retried by the next shard observation
+  ---
+  duration_ms: 0.628834
+  type: 'test'
+  ...
+# Subtest: matching entry eviction keeps a reservation on its original shard after load changes
+ok 26 - matching entry eviction keeps a reservation on its original shard after load changes
+  ---
+  duration_ms: 0.282042
+  type: 'test'
+  ...
+# Subtest: reported seated reservations do not become pending seats again after Lobby eviction
+ok 27 - reported seated reservations do not become pending seats again after Lobby eviction
+  ---
+  duration_ms: 1.176667
+  type: 'test'
+  ...
+# Subtest: settled stationary round freezes and resumes once after restoring its deadline
+ok 28 - settled stationary round freezes and resumes once after restoring its deadline
+  ---
+  duration_ms: 7.731542
+  type: 'test'
+  ...
+# Subtest: settled validated-owner catch-up round freezes and resumes once after restoring its deadline
+ok 29 - settled validated-owner catch-up round freezes and resumes once after restoring its deadline
+  ---
+  duration_ms: 1.758
+  type: 'test'
+  ...
+# Subtest: valid report accepted, duplicate does not move again, missing reports freeze
+ok 30 - valid report accepted, duplicate does not move again, missing reports freeze
+  ---
+  duration_ms: 7.665875
+  type: 'test'
+  ...
+# Subtest: reject forged speed as a cut
+ok 31 - reject forged speed as a cut
+  ---
+  duration_ms: 1.328708
+  type: 'test'
+  ...
+# Subtest: reject forged teleport as a cut
+ok 32 - reject forged teleport as a cut
+  ---
+  duration_ms: 1.87125
+  type: 'test'
+  ...
+# Subtest: reject forged gravity as a cut
+ok 33 - reject forged gravity as a cut
+  ---
+  duration_ms: 0.4475
+  type: 'test'
+  ...
+# Subtest: reject forged wall-pass as a cut
+ok 34 - reject forged wall-pass as a cut
+  ---
+  duration_ms: 1.139375
+  type: 'test'
+  ...
+# Subtest: reject forged NaN as a cut
+ok 35 - reject forged NaN as a cut
+  ---
+  duration_ms: 0.730583
+  type: 'test'
+  ...
+# Subtest: out of order reports wait for missing predecessor
+ok 36 - out of order reports wait for missing predecessor
+  ---
+  duration_ms: 0.334417
+  type: 'test'
+  ...
+# Subtest: transport decodes reports and ignores claims from an old placement
+ok 37 - transport decodes reports and ignores claims from an old placement
+  ---
+  duration_ms: 2.974917
+  type: 'test'
+  ...
+# Subtest: a burst cannot buy extra simulation time
+ok 38 - a burst cannot buy extra simulation time
+  ---
+  duration_ms: 1.0845
+  type: 'test'
+  ...
+# Subtest: an early fresh baseline still spends elapsed server time and cannot buy skipped travel
+ok 39 - an early fresh baseline still spends elapsed server time and cannot buy skipped travel
+  ---
+  duration_ms: 0.581125
+  type: 'test'
+  ...
+# Subtest: a rejected report fences all reports from the old revision
+ok 40 - a rejected report fences all reports from the old revision
+  ---
+  duration_ms: 0.317417
+  type: 'test'
+  ...
+# Subtest: report tolerance cannot accumulate into extra speed
+ok 41 - report tolerance cannot accumulate into extra speed
+  ---
+  duration_ms: 0.222292
+  type: 'test'
+  ...
+# Subtest: wall crossing is rejected even at legal speed and legal one-tick distance
+ok 42 - wall crossing is rejected even at legal speed and legal one-tick distance
+  ---
+  duration_ms: 0.262917
+  type: 'test'
+  ...
+# Subtest: a fresh baseline after a pause grants one physics step, never skipped travel
+ok 43 - a fresh baseline after a pause grants one physics step, never skipped travel
+  ---
+  duration_ms: 0.202833
+  type: 'test'
+  ...
+# Subtest: host replies to an excessive owner clock lead with a new placement instead of dropping forever
+ok 44 - host replies to an excessive owner clock lead with a new placement instead of dropping forever
+  ---
+  duration_ms: 0.804125
+  type: 'test'
+  ...
+# Subtest: every accepted report is available for contact checks and duplicate reports add no paths
+ok 45 - every accepted report is available for contact checks and duplicate reports add no paths
+  ---
+  duration_ms: 0.715292
+  type: 'test'
+  ...
+# Subtest: owner receive queue overflow explicitly resynchronizes without acknowledging a lost path
+ok 46 - owner receive queue overflow explicitly resynchronizes without acknowledging a lost path
+  ---
+  duration_ms: 1.604709
+  type: 'test'
+  ...
+# Subtest: server wall time permits valid continued reports across a stalled simulation
+ok 47 - server wall time permits valid continued reports across a stalled simulation
+  ---
+  duration_ms: 0.262292
+  type: 'test'
+  ...
+# Subtest: a stalled transport batch retains reports beyond the first 64 entries
+ok 48 - a stalled transport batch retains reports beyond the first 64 entries
+  ---
+  duration_ms: 3.767583
+  type: 'test'
+  ...
+1..48
+# tests 48
+# suites 0
+# pass 48
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2025.664958

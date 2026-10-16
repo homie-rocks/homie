@@ -1,0 +1,27 @@
+[
+  {
+    "batch": "af",
+    "pattern": "^[a-fA-F]",
+    "exit": 0
+  },
+  {
+    "batch": "gm",
+    "pattern": "^[g-mG-M]",
+    "exit": 0
+  },
+  {
+    "batch": "ns",
+    "pattern": "^[n-sN-S]",
+    "exit": 0
+  },
+  {
+    "batch": "tz",
+    "pattern": "^[t-zT-Z]",
+    "exit": 0
+  },
+  {
+    "batch": "numeric",
+    "pattern": "^[0-9]",
+    "exit": 0
+  }
+]

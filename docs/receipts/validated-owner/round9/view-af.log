@@ -1,0 +1,560 @@
+TAP version 13
+# (node:93511) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a watcher follows server bodies, returns to Auto on leave and follows the same seat on reconnect
+ok 1 - a watcher follows server bodies, returns to Auto on leave and follows the same seat on reconnect
+  ---
+  duration_ms: 329.052
+  type: 'test'
+  ...
+# Subtest: a restored epoch past 32 bits reaches the view and its input reaches the host unchanged
+ok 2 - a restored epoch past 32 bits reaches the view and its input reaches the host unchanged
+  ---
+  duration_ms: 30.057416
+  type: 'test'
+  ...
+# Subtest: browser hosts run the same rules, hand the round to the other browser, and finish it with bots
+ok 3 - browser hosts run the same rules, hand the round to the other browser, and finish it with bots
+  ---
+  duration_ms: 2007.355375
+  type: 'test'
+  ...
+# Subtest: browser rules play offline with a local body, input and bots
+ok 4 - browser rules play offline with a local body, input and bots
+  ---
+  duration_ms: 1764.79925
+  type: 'test'
+  ...
+# Subtest: a lost server room falls back locally, reports no offline progress, then rejoins the server
+ok 5 - a lost server room falls back locally, reports no offline progress, then rejoins the server
+  ---
+  duration_ms: 1140.146333
+  type: 'test'
+  ...
+# Subtest: a sixty-tick browser host sends a snapshot a tick inside the relay allowance
+ok 6 - a sixty-tick browser host sends a snapshot a tick inside the relay allowance
+  ---
+  duration_ms: 297.055667
+  type: 'test'
+  ...
+# [netplay] relay refused: room-over This game's rules stopped: budget. Join again for a fresh room.
+# [netplay] relay refused: room-over This game's rules stopped: budget. Join again for a fresh room.
+# Subtest: a failed browser runtime ends the room without electing its checkpoint again
+ok 7 - a failed browser runtime ends the room without electing its checkpoint again
+  ---
+  duration_ms: 352.864084
+  type: 'test'
+  ...
+# Subtest: a hidden solo host pauses and resumes, offline=true
+ok 8 - a hidden solo host pauses and resumes, offline=true
+  ---
+  duration_ms: 426.213667
+  type: 'test'
+  ...
+# Subtest: a hidden solo host pauses and resumes, offline=false
+ok 9 - a hidden solo host pauses and resumes, offline=false
+  ---
+  duration_ms: 440.727417
+  type: 'test'
+  ...
+# [netplay] rules module failed to load Error: module unavailable
+#     at Object.load (file:///Users/ryan/.homie/worktrees/runner-error-smoothing/packages/studio/test/rules-view.test.mjs:657:70)
+#     at file:///private/var/folders/63/1sbmhrlj05g9gvcghc49h8q80000gn/T/homie-studio-rules-view-LOWfkA/view-browser-true-20-false-9.mjs:3424:69
+#     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+# Subtest: a module that cannot load leaves no host without a runtime
+ok 10 - a module that cannot load leaves no host without a runtime
+  ---
+  duration_ms: 194.652875
+  type: 'test'
+  ...
+# Subtest: a present seat ignores a delayed free and snap size failure is visible and terminal
+ok 11 - a present seat ignores a delayed free and snap size failure is visible and terminal
+  ---
+  duration_ms: 205.879292
+  type: 'test'
+  ...
+# Subtest: a present seat ignores a delayed free and ckpt size failure is visible and terminal
+ok 12 - a present seat ignores a delayed free and ckpt size failure is visible and terminal
+  ---
+  duration_ms: 218.514
+  type: 'test'
+  ...
+# Subtest: a present seat ignores a delayed free and state size failure is visible and terminal
+ok 13 - a present seat ignores a delayed free and state size failure is visible and terminal
+  ---
+  duration_ms: 194.41425
+  type: 'test'
+  ...
+# Subtest: a present seat ignores a delayed free and ev size failure is visible and terminal
+ok 14 - a present seat ignores a delayed free and ev size failure is visible and terminal
+  ---
+  duration_ms: 211.046833
+  type: 'test'
+  ...
+# Subtest: a present seat ignores a delayed free and round size failure is visible and terminal
+ok 15 - a present seat ignores a delayed free and round size failure is visible and terminal
+  ---
+  duration_ms: 194.585167
+  type: 'test'
+  ...
+# Subtest: a present seat ignores a delayed free and roster size failure is visible and terminal
+ok 16 - a present seat ignores a delayed free and roster size failure is visible and terminal
+  ---
+  duration_ms: 204.246917
+  type: 'test'
+  ...
+# Subtest: a solo online save survives a forgotten relay without uploading later offline progress
+ok 17 - a solo online save survives a forgotten relay without uploading later offline progress
+  ---
+  duration_ms: 3221.437625
+  type: 'test'
+  ...
+# Subtest: browser rules carry reserved guides, validated goals, asks, answers and companion pacing
+ok 18 - browser rules carry reserved guides, validated goals, asks, answers and companion pacing
+  ---
+  duration_ms: 213.579542
+  type: 'test'
+  ...
+# Subtest: a persistently slow visible browser yields to another ready player
+ok 19 - a persistently slow visible browser yields to another ready player
+  ---
+  duration_ms: 364.429542
+  type: 'test'
+  ...
+# Subtest: a failed offline runtime still reconnects to its healthy server room
+ok 20 - a failed offline runtime still reconnects to its healthy server room
+  ---
+  duration_ms: 1133.404125
+  type: 'test'
+  ...
+# Subtest: a held person retains identity and body across browser promotion
+ok 21 - a held person retains identity and body across browser promotion
+  ---
+  duration_ms: 236.018959
+  type: 'test'
+  ...
+# [netplay] round over 4/s was dropped
+# Subtest: faulty reliable output hands over, excess snapshots only drop
+ok 22 - faulty reliable output hands over, excess snapshots only drop
+  ---
+  duration_ms: 259.583166
+  type: 'test'
+  ...
+# [never (the floor at its deadline)] before {"tick":41,"score":41,"bscore":41,"goal":"follow","asked":true,"roster":[[0,"First","person"],[1,"Second","person"],[3,"Rook · AI","ai"]],"round":[1,"live"],"answers":0,"answered":0,"endsAt":1200}
+#    after {"tick":240,"score":240,"bscore":240,"goal":"follow","asked":true,"roster":[[0,"First","person"],[1,"Second","person"],[3,"Rook · AI","ai"]],"round":[1,"live"],"answers":0,"answered":1,"endsAt":1200}; decides the relay was asked 1; decide frames from B 0; yes false
+#    the answer the asking body got: advance true by floor/local
+# Subtest: a decision pending at a handover is answered exactly once: never (the floor at its deadline)
+ok 23 - a decision pending at a handover is answered exactly once: never (the floor at its deadline)
+  ---
+  duration_ms: 490.173416
+  type: 'test'
+  ...
+# [the relay answers 2 s after the handover] before {"tick":41,"score":41,"bscore":41,"goal":"follow","asked":true,"roster":[[0,"First","person"],[1,"Second","person"],[3,"Rook · AI","ai"]],"round":[1,"live"],"answers":0,"answered":0,"endsAt":1200}
+#    after {"tick":260,"score":260,"bscore":260,"goal":"follow","asked":true,"roster":[[0,"First","person"],[1,"Second","person"],[3,"Rook · AI","ai"]],"round":[1,"live"],"answers":0,"answered":1,"endsAt":1200}; decides the relay was asked 1; decide frames from B 0; yes false
+#    the answer the asking body got: advance false by ai
+# Subtest: a decision pending at a handover is answered exactly once: the relay answers 2 s after the handover
+ok 24 - a decision pending at a handover is answered exactly once: the relay answers 2 s after the handover
+  ---
+  duration_ms: 514.543875
+  type: 'test'
+  ...
+# [the relay refuses 1 s after the handover] before {"tick":41,"score":41,"bscore":41,"goal":"follow","asked":true,"roster":[[0,"First","person"],[1,"Second","person"],[3,"Rook · AI","ai"]],"round":[1,"live"],"answers":0,"answered":0,"endsAt":1200}
+#    after {"tick":240,"score":240,"bscore":240,"goal":"follow","asked":true,"roster":[[0,"First","person"],[1,"Second","person"],[3,"Rook · AI","ai"]],"round":[1,"live"],"answers":0,"answered":1,"endsAt":1200}; decides the relay was asked 1; decide frames from B 0; yes false
+#    the answer the asking body got: advance true by floor/local
+# Subtest: a decision pending at a handover is answered exactly once: the relay refuses 1 s after the handover
+ok 25 - a decision pending at a handover is answered exactly once: the relay refuses 1 s after the handover
+  ---
+  duration_ms: 438.276834
+  type: 'test'
+  ...
+# Subtest: a sixty-second drop retries promptly while playing offline
+ok 26 - a sixty-second drop retries promptly while playing offline
+  ---
+  duration_ms: 1766.883166
+  type: 'test'
+  ...
+# Subtest: a 20-tick host that yields hands on its last tick: no page goes back and no effect plays twice
+ok 27 - a 20-tick host that yields hands on its last tick: no page goes back and no effect plays twice
+  ---
+  duration_ms: 1397.027292
+  type: 'test'
+  ...
+# Subtest: a 20-tick host that closes hands on its last tick: no page goes back and no effect plays twice
+ok 28 - a 20-tick host that closes hands on its last tick: no page goes back and no effect plays twice
+  ---
+  duration_ms: 1327.170541
+  type: 'test'
+  ...
+# Subtest: a 30-tick host that yields hands on its last tick: no page goes back and no effect plays twice
+ok 29 - a 30-tick host that yields hands on its last tick: no page goes back and no effect plays twice
+  ---
+  duration_ms: 1417.781417
+  type: 'test'
+  ...
+# Subtest: a 30-tick host that closes hands on its last tick: no page goes back and no effect plays twice
+ok 30 - a 30-tick host that closes hands on its last tick: no page goes back and no effect plays twice
+  ---
+  duration_ms: 1420.154333
+  type: 'test'
+  ...
+# Subtest: a 60-tick host that yields hands on its last tick: no page goes back and no effect plays twice
+ok 31 - a 60-tick host that yields hands on its last tick: no page goes back and no effect plays twice
+  ---
+  duration_ms: 1657.67
+  type: 'test'
+  ...
+# Subtest: a 60-tick host that closes hands on its last tick: no page goes back and no effect plays twice
+ok 32 - a 60-tick host that closes hands on its last tick: no page goes back and no effect plays twice
+  ---
+  duration_ms: 1600.813666
+  type: 'test'
+  ...
+# Subtest: a yield the relay refuses costs nothing: the host carries on with every tick and effect in order
+ok 33 - a yield the relay refuses costs nothing: the host carries on with every tick and effect in order
+  ---
+  duration_ms: 266.603416
+  type: 'test'
+  ...
+# Subtest: a host that reconnects to a restarted relay says the round, roster and shared state again as rules output
+ok 34 - a host that reconnects to a restarted relay says the round, roster and shared state again as rules output
+  ---
+  duration_ms: 371.733166
+  type: 'test'
+  ...
+# Subtest: an effect read before a simulation step cannot leave a stale browser presentation
+ok 35 - an effect read before a simulation step cannot leave a stale browser presentation
+  ---
+  duration_ms: 387.062167
+  type: 'test'
+  ...
+# Subtest: a late fast knock does not double its drawn speed while a large correction fades
+ok 36 - a late fast knock does not double its drawn speed while a large correction fades
+  ---
+  duration_ms: 523.5475
+  type: 'test'
+  ...
+# largest frame movement: 0.5760000190734935 m
+# Subtest: fresh 3D input preserves the pose at a 5 ms tick phase
+ok 37 - fresh 3D input preserves the pose at a 5 ms tick phase
+  ---
+  duration_ms: 410.9725
+  type: 'test'
+  ...
+# Subtest: fresh 3D input preserves the pose at a 17 ms tick phase
+ok 38 - fresh 3D input preserves the pose at a 17 ms tick phase
+  ---
+  duration_ms: 413.098875
+  type: 'test'
+  ...
+# Subtest: fresh 3D input preserves the pose at a 33 ms tick phase
+ok 39 - fresh 3D input preserves the pose at a 33 ms tick phase
+  ---
+  duration_ms: 401.030292
+  type: 'test'
+  ...
+# Subtest: fresh 3D input preserves the pose at a 45 ms tick phase
+ok 40 - fresh 3D input preserves the pose at a 45 ms tick phase
+  ---
+  duration_ms: 411.717125
+  type: 'test'
+  ...
+# Subtest: filtered rays and hit regions on authority and prediction
+ok 41 - filtered rays and hit regions on authority and prediction
+  ---
+  duration_ms: 734.640083
+  type: 'test'
+  ...
+# Subtest: filtered rays and hit regions on authority and prediction at 300 ms with loss
+ok 42 - filtered rays and hit regions on authority and prediction at 300 ms with loss
+  ---
+  duration_ms: 772.778541
+  type: 'test'
+  ...
+# Subtest: filtered ray declarations and API pass the strict author build
+ok 43 - filtered ray declarations and API pass the strict author build
+  ---
+  duration_ms: 8457.096709
+  type: 'test'
+  ...
+# Subtest: admission declarations pass the strict author build
+ok 44 - admission declarations pass the strict author build
+  ---
+  duration_ms: 5888.504542
+  type: 'test'
+  ...
+# Subtest: an effect with an audience reaches who may perceive it and nobody else, on the wire, seed 4611: a small room
+ok 45 - an effect with an audience reaches who may perceive it and nobody else, on the wire, seed 4611: a small room
+  ---
+  duration_ms: 238.334
+  type: 'test'
+  ...
+# Subtest: an effect with an audience reaches who may perceive it and nobody else, on the wire, seed 4611: Gates
+ok 46 - an effect with an audience reaches who may perceive it and nobody else, on the wire, seed 4611: Gates
+  ---
+  duration_ms: 262.756416
+  type: 'test'
+  ...
+# Subtest: a held input moves for the part of the tick it was down: sixty-millisecond taps at every phase of the tick, seed 4612: a small room
+ok 47 - a held input moves for the part of the tick it was down: sixty-millisecond taps at every phase of the tick, seed 4612: a small room
+  ---
+  duration_ms: 893.363792
+  type: 'test'
+  ...
+# Subtest: a held input moves for the part of the tick it was down: sixty-millisecond taps at every phase of the tick, seed 4612: Gates
+ok 48 - a held input moves for the part of the tick it was down: sixty-millisecond taps at every phase of the tick, seed 4612: Gates
+  ---
+  duration_ms: 985.605583
+  type: 'test'
+  ...
+# Subtest: a predicted effect is shown once a tick whatever else the predictor shows beside it, seed 4615: a small room
+ok 49 - a predicted effect is shown once a tick whatever else the predictor shows beside it, seed 4615: a small room
+  ---
+  duration_ms: 302.492792
+  type: 'test'
+  ...
+# Subtest: a predicted effect is shown once a tick whatever else the predictor shows beside it, seed 4615: Gates
+ok 50 - a predicted effect is shown once a tick whatever else the predictor shows beside it, seed 4615: Gates
+  ---
+  duration_ms: 321.185208
+  type: 'test'
+  ...
+# Subtest: a valued pulse is acted on in the tick it was predicted for: a predicted swap is drawn once and never drawn back, seed 4617: a small room
+ok 51 - a valued pulse is acted on in the tick it was predicted for: a predicted swap is drawn once and never drawn back, seed 4617: a small room
+  ---
+  duration_ms: 1545.644708
+  type: 'test'
+  ...
+# Subtest: a valued pulse is acted on in the tick it was predicted for: a predicted swap is drawn once and never drawn back, seed 4617: Gates
+ok 52 - a valued pulse is acted on in the tick it was predicted for: a predicted swap is drawn once and never drawn back, seed 4617: Gates
+  ---
+  duration_ms: 1618.930083
+  type: 'test'
+  ...
+# Subtest: a lying client cannot inflate its rewind: delayed acknowledgements, forged acknowledgements and the cap, seed 4614: a small room
+ok 53 - a lying client cannot inflate its rewind: delayed acknowledgements, forged acknowledgements and the cap, seed 4614: a small room
+  ---
+  duration_ms: 1026.998334
+  type: 'test'
+  ...
+# Subtest: a lying client cannot inflate its rewind: delayed acknowledgements, forged acknowledgements and the cap, seed 4614: Gates
+ok 54 - a lying client cannot inflate its rewind: delayed acknowledgements, forged acknowledgements and the cap, seed 4614: Gates
+  ---
+  duration_ms: 1076.122291
+  type: 'test'
+  ...
+# Subtest: a held tap whose frames arrive late still moves for the time it was down, seed 4618: a small room
+ok 55 - a held tap whose frames arrive late still moves for the time it was down, seed 4618: a small room
+  ---
+  duration_ms: 964.85325
+  type: 'test'
+  ...
+# late entries logged: 9
+# Subtest: a held tap whose frames arrive late still moves for the time it was down, seed 4618: Gates
+ok 56 - a held tap whose frames arrive late still moves for the time it was down, seed 4618: Gates
+  ---
+  duration_ms: 1131.873875
+  type: 'test'
+  ...
+# late entries logged: 8
+# Subtest: a predictor judges its own shot as the server will: the pose at the judged tick, 0 ms each way, seed 4620
+ok 57 - a predictor judges its own shot as the server will: the pose at the judged tick, 0 ms each way, seed 4620
+  ---
+  duration_ms: 895.980084
+  type: 'test'
+  ...
+# 0 ms each way: predicted 40, confirmed 40, retracted 0, not predicted 0
+# Subtest: a predictor judges its own shot as the server will: the pose at the judged tick, 75 ms each way, seed 4620
+ok 58 - a predictor judges its own shot as the server will: the pose at the judged tick, 75 ms each way, seed 4620
+  ---
+  duration_ms: 985.529208
+  type: 'test'
+  ...
+# 75 ms each way: predicted 40, confirmed 40, retracted 0, not predicted 0
+# Subtest: a predictor judges its own shot as the server will: the pose at the judged tick, 150 ms each way, seed 4620
+ok 59 - a predictor judges its own shot as the server will: the pose at the judged tick, 150 ms each way, seed 4620
+  ---
+  duration_ms: 969.03875
+  type: 'test'
+  ...
+# 150 ms each way: predicted 0, confirmed 0, retracted 0, not predicted 0
+# Subtest: a fresh held press after ten seconds without view frames has no backlog
+ok 60 - a fresh held press after ten seconds without view frames has no backlog
+  ---
+  duration_ms: 468.421542
+  type: 'test'
+  ...
+# Subtest: a placement projects the body to its own tick without a second correction: small
+ok 61 - a placement projects the body to its own tick without a second correction: small
+  ---
+  duration_ms: 302.996084
+  type: 'test'
+  ...
+# Subtest: a placement projects the body to its own tick without a second correction: Gates
+ok 62 - a placement projects the body to its own tick without a second correction: Gates
+  ---
+  duration_ms: 311.020875
+  type: 'test'
+  ...
+# Subtest: a prior placement cannot inject held controls into the respawned body
+ok 63 - a prior placement cannot inject held controls into the respawned body
+  ---
+  duration_ms: 132.581875
+  type: 'test'
+  ...
+# Subtest: an acknowledged release does not stop recovery of the missing tap before it
+ok 64 - an acknowledged release does not stop recovery of the missing tap before it
+  ---
+  duration_ms: 251.223875
+  type: 'test'
+  ...
+# Subtest: a square runner retains its shape on the wire and cannot enter an exact-contact floor
+ok 65 - a square runner retains its shape on the wire and cannot enter an exact-contact floor
+  ---
+  duration_ms: 339.679416
+  type: 'test'
+  ...
+# Subtest: counter-dash leaves knock catch-up on the press without a pose discontinuity: 80 ms
+ok 66 - counter-dash leaves knock catch-up on the press without a pose discontinuity: 80 ms
+  ---
+  duration_ms: 561.897458
+  type: 'test'
+  ...
+# Subtest: counter-dash leaves knock catch-up on the press without a pose discontinuity: 150 ms
+ok 67 - counter-dash leaves knock catch-up on the press without a pose discontinuity: 150 ms
+  ---
+  duration_ms: 583.439
+  type: 'test'
+  ...
+# Subtest: counter-dash leaves knock catch-up on the press without a pose discontinuity: 300 ms
+ok 68 - counter-dash leaves knock catch-up on the press without a pose discontinuity: 300 ms
+  ---
+  duration_ms: 580.769209
+  type: 'test'
+  ...
+# Subtest: a correction across a ledge cannot change the drawn side in one frame
+ok 69 - a correction across a ledge cannot change the drawn side in one frame
+  ---
+  duration_ms: 527.669083
+  type: 'test'
+  ...
+# {"p":{"x":2,"y":11.499991416931152,"z":0},"worst":0.11313714568130946,"stats":{"handlers":219,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":760,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":804,"maxTickUnits":804}}
+# Subtest: a correction below the same ledge routes around its edge
+ok 70 - a correction below the same ledge routes around its edge
+  ---
+  duration_ms: 558.603125
+  type: 'test'
+  ...
+# {"p":{"x":-3,"y":11.499991416931152,"z":0},"worst":0.11313706138764384,"stats":{"handlers":219,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":760,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":804,"maxTickUnits":804}}
+# Subtest: an entity traversal samples one presentation time for the entire group
+ok 71 - an entity traversal samples one presentation time for the entire group
+  ---
+  duration_ms: 128.201584
+  type: 'test'
+  ...
+# Subtest: box presentation preserves an uncorrected substep jump arc through its apex
+ok 72 - box presentation preserves an uncorrected substep jump arc through its apex
+  ---
+  duration_ms: 747.592833
+  type: 'test'
+  ...
+# {"worst":5.960464477539063e-8,"example":{"phase":0,"i":0,"ay":-0.5,"by":-0.5,"a":{"id":"e1","kind":"runner","pos":{"x":-3,"y":-0.8211466670036316,"z":0},"vel":{"x":0,"y":-13.066666603088379,"z":0},"heading":{"x":1,"y":0,"z":0},"grounded":true,"seat":0,"owner":"p1","driver":"person","away":false,"goal":null,"mine":true,"motion":{"air":true}},"b":{"id":"e1","kind":"runner","pos":{"x":-3,"y":-0.8211467266082764,"z":0},"vel":{"x":0,"y":-13.066666603088379,"z":0},"heading":{"x":1,"y":0,"z":0},"grounded":true,"seat":0,"owner":"p1","driver":"person","away":false,"goal":null,"mine":true,"motion":{"air":true}}}}
+# Subtest: a blocked correction does not route backwards against continuing horizontal movement
+ok 73 - a blocked correction does not route backwards against continuing horizontal movement
+  ---
+  duration_ms: 467.374667
+  type: 'test'
+  ...
+# {"worstReverse":0}
+# Subtest: a delayed rendered frame cannot spend a multi-body-length movement backlog at once
+ok 74 - a delayed rendered frame cannot spend a multi-body-length movement backlog at once
+  ---
+  duration_ms: 477.659792
+  type: 'test'
+  ...
+# {"gap":1.3930418491363525}
+# Subtest: a stationary correction uses blend speed rather than the declared terminal fall speed
+ok 75 - a stationary correction uses blend speed rather than the declared terminal fall speed
+  ---
+  duration_ms: 545.76975
+  type: 'test'
+  ...
+# {"worst":0.11313714568130946,"p":{"x":2,"y":11.499991416931152,"z":0}}
+# Subtest: explicit correction intent overrides an opposite stale replay velocity
+ok 76 - explicit correction intent overrides an opposite stale replay velocity
+  ---
+  duration_ms: 424.852041
+  type: 'test'
+  ...
+# {"worstReverse":0}
+# Subtest: a reconnect after an outage draws the own box runner continuously to where the server moved it
+ok 77 - a reconnect after an outage draws the own box runner continuously to where the server moved it
+  ---
+  duration_ms: 1620.487625
+  type: 'test'
+  ...
+# {"worst":0.08000004291534424,"at":{"from":{"x":-1.7567635774612427,"y":-0.5,"z":0},"to":{"x":-1.836763620376587,"y":-0.5,"z":0},"connected":true},"back":267,"end":{"x":-2.63400936126709,"y":-0.5,"z":0}}
+# Subtest: a reconnect after an outage draws a placement the game names at once
+ok 78 - a reconnect after an outage draws a placement the game names at once
+  ---
+  duration_ms: 1556.013584
+  type: 'test'
+  ...
+# {"worst":0.8772457838058472,"at":{"from":{"x":-1.7567635774612427,"y":-0.5,"z":0},"to":{"x":-2.63400936126709,"y":-0.5,"z":0},"connected":true},"back":258,"end":{"x":-2.63400936126709,"y":-0.5,"z":0}}
+# Subtest: a slow synchronous reader crossing a tick boundary shares the current presentation
+ok 79 - a slow synchronous reader crossing a tick boundary shares the current presentation
+  ---
+  duration_ms: 257.714875
+  type: 'test'
+  ...
+# Subtest: a delayed owner placement starts fresh reports near arrival time without granting travel
+ok 80 - a delayed owner placement starts fresh reports near arrival time without granting travel
+  ---
+  duration_ms: 429.706584
+  type: 'test'
+  ...
+# Subtest: an observer switches an owner placement at its sampled time, without interpolating across the map
+ok 81 - an observer switches an owner placement at its sampled time, without interpolating across the map
+  ---
+  duration_ms: 266.3905
+  type: 'test'
+  ...
+# Subtest: a three-second server stall does not rewind continued valid owner movement
+ok 82 - a three-second server stall does not rewind continued valid owner movement
+  ---
+  duration_ms: 423.639083
+  type: 'test'
+  ...
+# Subtest: committing a forecast preserves physics across control changes and isolates preview motion
+ok 83 - committing a forecast preserves physics across control changes and isolates preview motion
+  ---
+  duration_ms: 428.791375
+  type: 'test'
+  ...
+# Subtest: accepted runner ticks stay aligned with a patrol when uplink delay changes
+ok 84 - accepted runner ticks stay aligned with a patrol when uplink delay changes
+  ---
+  duration_ms: 688.041375
+  type: 'test'
+  ...
+# Subtest: a stalled scene reaches fresh movement without replaying a long stationary tail
+ok 85 - a stalled scene reaches fresh movement without replaying a long stationary tail
+  ---
+  duration_ms: 533.826125
+  type: 'test'
+  ...
+# [object Object]
+# Subtest: an idle remote source cannot pin a moving runner and its patrol
+ok 86 - an idle remote source cannot pin a moving runner and its patrol
+  ---
+  duration_ms: 579.2855
+  type: 'test'
+  ...
+1..86
+# tests 86
+# suites 0
+# pass 86
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 72422.961542

@@ -1,0 +1,11 @@
+# Round 9 — proof in progress
+
+PR #116 was rebased from `d37188d6` onto `a8acb479` (main 0.57.0). The original head remains in local branch `round9-pre-rebase`. No release version was changed. Rebase resolutions preserve the immediate-link subscription guard, bodyless turn-based participants, settled-round suspension, persisted idle deadlines and wakeup without replaying idle ticks. The new Table/Gate lifecycle, relay epochs and Lobby shards remain main's implementation.
+
+The studio uses npm-published 0.56.0 (the latest registry version at setup) with the PR-only runtime patch applied and packed as a checked-in tarball. Its clean installation matches the installed source files. Control is a detached checkout of Arcade main `c75980a`, also published 0.56.0. Both run locally; nothing was deployed.
+
+Validation on `1a5e6d47`: full [CI passes](https://github.com/homie-rocks/homie/actions/runs/38867936748), TypeScript build and authoring-guide consistency pass. All 316 rules-view tests pass in alphabetic/numeric batches. The original monolithic attempt exhausted Node's heap; it is retained as a failed attempt. A subsequent overly broad nonalphabetic filter matched the test-file path and was stopped; the explicit numeric batch replaces it. The 44 focused rules, hostile-input, probe and Lab checks pass. The lifecycle/owner suite includes a new validated-owner catch-up case proving exactly one settled round and restored wakeup.
+
+The studio's strict build and all 44 studio tests pass. Its proof scripts and raw paired traces are in `scripts/round9/` and `reviews/server-rules/round9/`. Measurements are sequential paired headless Chrome runs, with real ANGLE Metal on Apple M4 and synchronized start barriers. Every pair is rejected if one-minute load exceeds 25. No invalid sample contributes to the aggregate. Initial manifests precede per-run artifact hashing; a later runtime manifest records the unchanged initial bundles. Subsequent runs freeze and hash the exact harness files before launching either side.
+
+**This is not the final acceptance verdict.** The full matrix is still running. Broad legacy catch/freeze diagnostics remain alongside the new round-aware phantom-candidate and continuously-moving-owner freeze analyzers. Round resets and standing-to-respawn intervals must not be presented as confirmed phantom catches or freezes.

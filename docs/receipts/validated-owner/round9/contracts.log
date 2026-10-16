@@ -1,0 +1,274 @@
+TAP version 13
+# Subtest: a take: checked in words, expanded to timed presses, read back from a recording, written one input a line
+ok 1 - a take: checked in words, expanded to timed presses, read back from a recording, written one input a line
+  ---
+  duration_ms: 2.908709
+  type: 'test'
+  ...
+# Subtest: tunables: one a line, a kept value outside its range moves the range, unknown names and non-numbers refused
+ok 2 - tunables: one a line, a kept value outside its range moves the range, unknown names and non-numbers refused
+  ---
+  duration_ms: 0.213125
+  type: 'test'
+  ...
+# Subtest: the harness goes first in a game page, before any of its scripts
+ok 3 - the harness goes first in a game page, before any of its scripts
+  ---
+  duration_ms: 0.283083
+  type: 'test'
+  ...
+# Subtest: the server: New and Today built, the checkout holds only the game, writes only from the lab page, stop cleans up
+ok 4 - the server: New and Today built, the checkout holds only the game, writes only from the lab page, stop cleans up
+  ---
+  duration_ms: 59171.569333
+  type: 'test'
+  ...
+# Subtest: game new copies the lab files and renames a take's saves to the new id
+ok 5 - game new copies the lab files and renames a take's saves to the new id
+  ---
+  duration_ms: 494.793333
+  type: 'test'
+  ...
+# Subtest: in Chrome: the lab's clock, timers, dice and presses replay a take frame for frame, at 60 and at 30 fps
+ok 6 - in Chrome: the lab's clock, timers, dice and presses replay a take frame for frame, at 60 and at 30 fps
+  ---
+  duration_ms: 24589.33775
+  type: 'test'
+  ...
+# Subtest: in Chrome: a game that rolls crypto dice is caught replaying differently, and both starters replay the same
+ok 7 - in Chrome: a game that rolls crypto dice is caught replaying differently, and both starters replay the same
+  ---
+  duration_ms: 89190.546041
+  type: 'test'
+  ...
+# Subtest: replacing a port probe retires its sampler and exposes fresh metadata
+ok 8 - replacing a port probe retires its sampler and exposes fresh metadata
+  ---
+  duration_ms: 28.527209
+  type: 'test'
+  ...
+# Subtest: a list handed an object that cannot become a number freezes nothing: the room keeps its beat and its one timer
+ok 9 - a list handed an object that cannot become a number freezes nothing: the room keeps its beat and its one timer
+  ---
+  duration_ms: 131.45875
+  type: 'test'
+  ...
+# Subtest: what think returns, what a handler throws and what move leaves behind are read inside the handler's try
+ok 10 - what think returns, what a handler throws and what move leaves behind are read inside the handler's try
+  ---
+  duration_ms: 1073.320333
+  type: 'test'
+  ...
+# Subtest: the tick loop cannot break: whatever throws, a running room has one timer pending and a stopped one has none
+ok 11 - the tick loop cannot break: whatever throws, a running room has one timer pending and a stopped one has none
+  ---
+  duration_ms: 3323.283458
+  type: 'test'
+  ...
+# Subtest: a room whose every tick fails ends cleanly, and the log says where: the runtime's own faults count like the budget's
+ok 12 - a room whose every tick fails ends cleanly, and the log says where: the runtime's own faults count like the budget's
+  ---
+  duration_ms: 84.702458
+  type: 'test'
+  ...
+# Subtest: a function may not sit under valueOf, toString or toJSON: the build refuses it with its line, and what it cannot see is refused as it runs
+ok 13 - a function may not sit under valueOf, toString or toJSON: the build refuses it with its line, and what it cannot see is refused as it runs
+  ---
+  duration_ms: 314.267875
+  type: 'test'
+  ...
+# Subtest: the runtime runs no code of the rules when it reads a value, even for rules that never went through the wall
+ok 14 - the runtime runs no code of the rules when it reads a value, even for rules that never went through the wall
+  ---
+  duration_ms: 67.763292
+  type: 'test'
+  ...
+# Subtest: a value is held to its declared shape without throwing, whatever it is
+ok 15 - a value is held to its declared shape without throwing, whatever it is
+  ---
+  duration_ms: 74.547833
+  type: 'test'
+  ...
+# Subtest: a declaration is read as plain data too: nothing a module declares is turned into a number, walked without end or handed on as it is
+ok 16 - a declaration is read as plain data too: nothing a module declares is turned into a number, walked without end or handed on as it is
+  ---
+  duration_ms: 46.33675
+  type: 'test'
+  ...
+# Subtest: a query copies nothing: four hundred entities with full lists cost what four hundred entities cost
+ok 17 - a query copies nothing: four hundred entities with full lists cost what four hundred entities cost
+  ---
+  duration_ms: 401.32875
+  type: 'test'
+  ...
+# Subtest: a room whose ticks run slow or fail ends after seconds of the clock, not after a number of ticks
+ok 18 - a room whose ticks run slow or fail ends after seconds of the clock, not after a number of ticks
+  ---
+  duration_ms: 188.669
+  type: 'test'
+  ...
+# Subtest: the build stops on a tick that takes longer than a tick lasts, on its own clock
+ok 19 - the build stops on a tick that takes longer than a tick lasts, on its own clock
+  ---
+  duration_ms: 101.3515
+  type: 'test'
+  ...
+# Subtest: every planted way of making a tick slow, holding the isolate or keeping something outside a field is refused or stopped
+ok 20 - every planted way of making a tick slow, holding the isolate or keeping something outside a field is refused or stopped
+  ---
+  duration_ms: 5773.482458
+  type: 'test'
+  ...
+# Subtest: what world.ask is answered with is plain data of a bounded size
+ok 21 - what world.ask is answered with is plain data of a bounded size
+  ---
+  duration_ms: 53.224125
+  type: 'test'
+  ...
+# Subtest: move, think and join always run, and once the tick's budget is gone each is given a small share: two thousand bodies cannot take two thousand quarters
+ok 22 - move, think and join always run, and once the tick's budget is gone each is given a small share: two thousand bodies cannot take two thousand quarters
+  ---
+  duration_ms: 254.472708
+  type: 'test'
+  ...
+# Subtest: once the tick's budget is gone, a body's small share buys nothing large: a constant's keys are paid for before they are read
+ok 23 - once the tick's budget is gone, a body's small share buys nothing large: a constant's keys are paid for before they are read
+  ---
+  duration_ms: 3588.435625
+  type: 'test'
+  ...
+# Subtest: a room whose handlers all throw is no slower for it, pays for it, and ends when they use up every tick
+ok 24 - a room whose handlers all throw is no slower for it, pays for it, and ends when they use up every tick
+  ---
+  duration_ms: 1434.992708
+  type: 'test'
+  ...
+# Subtest: a room that holds more than a tick can send is charged for it, and ends
+ok 25 - a room that holds more than a tick can send is charged for it, and ends
+  ---
+  duration_ms: 503.078
+  type: 'test'
+  ...
+# Subtest: with the tick's budget gone nothing is lost: an entity that has not arrived waits, and so does a command
+ok 26 - with the tick's budget gone nothing is lost: an entity that has not arrived waits, and so does a command
+  ---
+  duration_ms: 97.580334
+  type: 'test'
+  ...
+# Subtest: the smoke and hostile tick clocks exclude time the process was not running
+ok 27 - the smoke and hostile tick clocks exclude time the process was not running
+  ---
+  duration_ms: 86.035208
+  type: 'test'
+  ...
+# Subtest: the maths rules are handed agrees with Math, and is the list the wall knows
+ok 28 - the maths rules are handed agrees with Math, and is the list the wall knows
+  ---
+  duration_ms: 148.176833
+  type: 'test'
+  ...
+# Subtest: a declaration that does not fit the contract is named
+ok 29 - a declaration that does not fit the contract is named
+  ---
+  duration_ms: 2.95
+  type: 'test'
+  ...
+# Subtest: declared state is held to its type, and packs and unpacks to itself
+ok 30 - declared state is held to its type, and packs and unpacks to itself
+  ---
+  duration_ms: 0.661
+  type: 'test'
+  ...
+# Subtest: the host runtime steps coin-dash: bots fill, a round is played, results rank the scores
+ok 31 - the host runtime steps coin-dash: bots fill, a round is played, results rank the scores
+  ---
+  duration_ms: 83.559584
+  type: 'test'
+  ...
+# Subtest: two runs on one seed are the same tick by tick, and a room packed to bytes carries on the same
+ok 32 - two runs on one seed are the same tick by tick, and a room packed to bytes carries on the same
+  ---
+  duration_ms: 78.509208
+  type: 'test'
+  ...
+# Subtest: the input protocol: on time, missing, early, too early, late, duplicate, another epoch, silence and the lead
+ok 33 - the input protocol: on time, missing, early, too early, late, duplicate, another epoch, silence and the lead
+  ---
+  duration_ms: 66.003875
+  type: 'test'
+  ...
+# Subtest: more frames buy no extra step, a command runs once, and an owner's claim is held to maxSpeed
+ok 34 - more frames buy no extra step, a command runs once, and an owner's claim is held to maxSpeed
+  ---
+  duration_ms: 4.354833
+  type: 'test'
+  ...
+# Subtest: the wall at run time: a handler that never ends is stopped and named, the room carries on, and then the room ends
+ok 35 - the wall at run time: a handler that never ends is stopped and named, the room carries on, and then the room ends
+  ---
+  duration_ms: 64.946625
+  type: 'test'
+  ...
+# Subtest: the wall at run time: a slow handler and one that grabs memory are stopped and named; one that throws is counted
+ok 36 - the wall at run time: a slow handler and one that grabs memory are stopped and named; one that throws is counted
+  ---
+  duration_ms: 515.824417
+  type: 'test'
+  ...
+# Subtest: the overrun check: a room whose ticks keep starting late ends, and a room that only ran after a slow one does not
+ok 37 - the overrun check: a room whose ticks keep starting late ends, and a room that only ran after a slow one does not
+  ---
+  duration_ms: 35.383875
+  type: 'test'
+  ...
+# Subtest: world has no way out: everything reachable from it is plain frozen data and functions the runtime made
+ok 38 - world has no way out: everything reachable from it is plain frozen data and functions the runtime made
+  ---
+  duration_ms: 1.529416
+  type: 'test'
+  ...
+# Subtest: the room with the server as host: no browser hosts, and a forged score, state or round frame changes nothing
+ok 39 - the room with the server as host: no browser hosts, and a forged score, state or round frame changes nothing
+  ---
+  duration_ms: 13.385708
+  type: 'test'
+  ...
+# Subtest: the life of a server-hosted room: it pauses with the last person, resumes on the tick it paused on, and is forgotten when nobody returns
+ok 40 - the life of a server-hosted room: it pauses with the last person, resumes on the tick it paused on, and is forgotten when nobody returns
+  ---
+  duration_ms: 101.72225
+  type: 'test'
+  ...
+# Subtest: rules that cannot start refuse joins and say why, and a room never falls back to a browser by itself
+ok 41 - rules that cannot start refuse joins and say why, and a room never falls back to a browser by itself
+  ---
+  duration_ms: 0.616917
+  type: 'test'
+  ...
+# Subtest: late paired callbacks sustaining 20 Hz do not end a healthy room as an overrun
+ok 42 - late paired callbacks sustaining 20 Hz do not end a healthy room as an overrun
+  ---
+  duration_ms: 13.958333
+  type: 'test'
+  ...
+# Subtest: sustained scheduler delays retain backlog and catch up in bounded callbacks
+ok 43 - sustained scheduler delays retain backlog and catch up in bounded callbacks
+  ---
+  duration_ms: 16.507458
+  type: 'test'
+  ...
+# Subtest: one suspension inside a tick does not masquerade as sustained execution overrun
+ok 44 - one suspension inside a tick does not masquerade as sustained execution overrun
+  ---
+  duration_ms: 9.760417
+  type: 'test'
+  ...
+1..44
+# tests 44
+# suites 0
+# pass 44
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 193121.631541
