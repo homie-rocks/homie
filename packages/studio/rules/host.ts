@@ -87,6 +87,8 @@ export interface HostOptions {
   restoreEpoch?: number;
   startDelayMs?: number;
   onTick?(): void;
+  /** Suspend settled round breaks; the owner persists and wakes this deadline. */
+  onRoundIdle?(until: number): void;
   /** Only the shared server isolate can attribute timer lateness to another tick. */
   enforceOverrun?: boolean;
   log?(line: Record<string, unknown>): void;
@@ -111,6 +113,8 @@ export interface Host {
   readonly epoch: number;
   readonly running: boolean;
   readonly paused: boolean;
+  readonly roundIdleUntil: number | null;
+  wakeRound(): void;
   readonly people: number;
   readonly viewRadiusM: number | null;
   readonly privateDelivery: boolean;
@@ -199,13 +203,14 @@ export function createHost(o: HostOptions): Host {
   // A log that throws takes nothing down with it.
   const log = (line: Record<string, unknown>): void => { try { o.log?.(line); } catch { /* nothing to say it with */ } };
   const random = o.random ?? Math.random;
-  const saved = o.restore ? fromBytes(o.restore) as { v: number; characters?: CharacterLease[]; core: SavedCore; names: [number, string][]; agents?: AgentsSaved; guideViews?: [number, { id: string; at: number; value: Record<string, unknown> }][]; queues: [number, Record<string, unknown>, StepInput['claim'], number, number][]; inputs?: [number, SeatIn][] } : null;
+  const saved = o.restore ? fromBytes(o.restore) as { v: number; roundIdleUntil?: number; characters?: CharacterLease[]; core: SavedCore; names: [number, string][]; agents?: AgentsSaved; guideViews?: [number, { id: string; at: number; value: Record<string, unknown> }][]; queues: [number, Record<string, unknown>, StepInput['claim'], number, number][]; inputs?: [number, SeatIn][] } : null;
   if (o.restore && (!saved || typeof saved !== 'object' || Array.isArray(saved))) throw new Error('saved host is not an object');
   if (saved) {
     const check = (ok: unknown): void => { if (!ok) throw new Error('saved host inputs are invalid'); };
     const uint = (n: unknown): boolean => Number.isSafeInteger(n) && (n as number) >= 0;
-    check(Object.keys(saved).every(k => ['v', 'core', 'names', 'agents', 'guideViews', 'queues', 'inputs', 'characters'].includes(k)));
+    check(Object.keys(saved).every(k => ['v', 'core', 'names', 'agents', 'guideViews', 'queues', 'inputs', 'characters', 'roundIdleUntil'].includes(k)));
     check(saved.core && Array.isArray(saved.names) && Array.isArray(saved.queues));
+    if (saved.roundIdleUntil !== undefined) check(Number.isFinite(saved.roundIdleUntil) && saved.roundIdleUntil >= 0 && saved.core.round[1] === 0 && !saved.core.overAt);
     if (saved.characters !== undefined) {
       check(c.settings.characters && Array.isArray(saved.characters));
       check(new Set(saved.characters.map(c => c.account)).size === saved.characters.length);
@@ -396,6 +401,7 @@ export function createHost(o: HostOptions): Host {
       core.goal(b.seat, g?.state === 'active' ? { goal: g.goal, args: g.args, from: g.from, at: Math.round(g.at / period), asked: g.asked === true } : null);
     }
   }
+  let roundIdleUntil: number | null = o.onRoundIdle && Number.isFinite(saved?.roundIdleUntil) ? saved!.roundIdleUntil! : null;
   let running = false;
   let paused = Boolean(saved && (o.startPaused ?? o.restoreEpoch !== undefined));
   let ended = false;
@@ -832,7 +838,17 @@ export function createHost(o: HostOptions): Host {
     }
     timing.record('tick', tickAt);
     if (ended) return;
-    if (!faulted && core.stats.ticksCut === cut) { failingSince = null; return; }
+    if (!faulted && core.stats.ticksCut === cut) {
+      failingSince = null;
+      const round = core.round();
+      if (o.onRoundIdle && running && round.phase === 'over' && round.results && round.endsAt > core.tick) {
+        roundIdleUntil = now + (round.endsAt - core.tick) * period;
+        running = false; disarm();
+        try { o.store?.save(save()); o.onRoundIdle(roundIdleUntil); }
+        catch (error) { fault('round-idle', error); stop(); o.onEnd?.('storage-or-tick-failed', { tick: core.tick }); }
+      }
+      return;
+    }
     if (failingSince === null) failingSince = now;
     if (now - failingSince < FAIL_MS) return;
     if (faulted) end('fault', { error: stats.lastFault, faults: stats.faults });
@@ -913,7 +929,7 @@ export function createHost(o: HostOptions): Host {
   const self = { blame: (): void => { blamed = true; } };
 
   function start(): void {
-    if (running || ended) return;
+    if (running || ended || roundIdleUntil !== null) return;
     running = true; paused = false;
     try {
       base = { ms: o.clock.now() + (firstTick ? o.startDelayMs ?? 0 : 0), tick: core.tick };
@@ -934,7 +950,7 @@ export function createHost(o: HostOptions): Host {
     try { checkpoint(true); o.onPause?.(); } catch (error) { fault('onPause', error); if (persistent) { stop(); o.onEnd?.('storage-or-tick-failed', { tick: core.tick }); } }
   }
   function resume(): void {
-    if (running || ended || !paused) return;
+    if (running || ended || !paused || roundIdleUntil !== null) return;
     running = true; paused = false;
     try {
       // The room resumes at the tick it paused on: no tick is skipped and no timer fires for the gap.
@@ -945,6 +961,14 @@ export function createHost(o: HostOptions): Host {
       log({ ev: 'host-resume', game: o.game, tick: core.tick });
       o.onResume?.();
     } catch (error) { fault('resume', error); } finally { keepTime(); }
+  }
+  function wakeRound(): void {
+    if (roundIdleUntil === null || o.clock.now() < roundIdleUntil || ended) return;
+    if (!core.resumeRound()) throw new Error('Round is not settled');
+    roundIdleUntil = null;
+    handle(core.drain(), o.clock.now());
+    if (people() > 0) { paused = true; resume(); }
+    else { paused = true; checkpoint(true); }
   }
   /** What a relay keeps for whoever joins next, said again: the round with its results, the roster, the shared state, the capabilities. */
   function announce(): void {
@@ -975,7 +999,7 @@ export function createHost(o: HostOptions): Host {
 
   function save(): Uint8Array {
     const reserved = new Set(core.bodies().filter(b => b.owner === 'reserved').map(b => b.seat));
-    return toBytes({ v: 1, ...(characters.size ? { characters: [...characters.values()] } : {}), core: core.save(), guideViews: [...guideViews], ...(agents ? { agents: agents.save() } : savedAgents ? { agents: savedAgents } : {}), names: [...names].filter(([seat]) => !reserved.has(seat)), queues: [...queues].map(([seat, q]) => [seat, q.held, q.claim, q.newest, q.ack]), inputs: [...queues] });
+    return toBytes({ v: 1, ...(roundIdleUntil !== null ? { roundIdleUntil } : {}), ...(characters.size ? { characters: [...characters.values()] } : {}), core: core.save(), guideViews: [...guideViews], ...(agents ? { agents: agents.save() } : savedAgents ? { agents: savedAgents } : {}), names: [...names].filter(([seat]) => !reserved.has(seat)), queues: [...queues].map(([seat, q]) => [seat, q.held, q.claim, q.newest, q.ack]), inputs: [...queues] });
   }
   function checkpoint(force = false): void {
     if (persistent) {
@@ -1032,6 +1056,8 @@ export function createHost(o: HostOptions): Host {
     get epoch() { return epoch; },
     get running() { return running; },
     get paused() { return paused; },
+    get roundIdleUntil() { return roundIdleUntil; },
+    wakeRound,
     get people() { return people(); },
     frame, start, pause, resume, announce,
     // An orderly stop of a lasting world folds what moved since the last checkpoint. One that follows a failed write, or arrives during one, writes nothing.

@@ -26,6 +26,8 @@ Studios start faster and serve files straight from Cloudflare, background work a
 ### Changed
 
 - Deploy with D1 primary fallback when replication is unavailable; only install needed schedules, explain account cron limits, and preserve retired-source, HEAD and concept-page protections.
+- Add an opt-in rules-host round-idle contract: finish both scoring-settlement ticks, persist the next-round deadline, and resume without simulating idle time.
+
 - Store Lobby rooms as SQLite rows and deliver room summaries through Queues. Hibernate direct player and watch sockets between browser-hosted rounds, retaining session and moderation state; Gate and server-room hibernation remains draft work.
 
 - Deliver mutations and verified Stripe webhooks through retryable Queues. Store PaymentIntent ids before follow-up, recover lost responses using the original idempotency key, and retain uncertain payments for review.

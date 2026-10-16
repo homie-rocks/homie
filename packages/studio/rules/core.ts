@@ -173,6 +173,8 @@ export interface Core {
   shared(): unknown[];
   /** The current round, for a host rebasing wall-clock deadlines after a pause or restore. */
   round(): Extract<CoreOut, { t: 'round' }>;
+  /** End a settled wall-clock break without simulating its idle ticks. */
+  resumeRound(): boolean;
   bodies(): Body[];
   /** Every person's body with where it stands: who an effect with an audience reaches (0.46.3). */
   listeners(): { seat: number; id: string; pos: Vec3 }[];
@@ -1537,6 +1539,13 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
   }
   return {
     round: () => ({ t: 'round', ...round, ...(round.phase === 'over' && !overAt ? { results: results() } : {}) }),
+    resumeRound() {
+      if (round.phase !== 'over' || overAt) return false;
+      // Preserve queued events and their simulation-time deadlines. Nothing
+      // moves during the wall-clock break; the next step delivers them.
+      if (playing) startRound(); else restartAt = tick;
+      return true;
+    },
     get tick() { return tick; },
     reviseMovement,
     get epoch() { return epoch; },
