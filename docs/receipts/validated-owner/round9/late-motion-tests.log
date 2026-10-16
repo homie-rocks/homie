@@ -1,0 +1,211 @@
+TAP version 13
+# (node:30450) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: wrapped world 2D: two spatial views, seam interpolation, replay and restore
+ok 1 - wrapped world 2D: two spatial views, seam interpolation, replay and restore
+  ---
+  duration_ms: 310.572541
+  type: 'test'
+  ...
+# {"dims":2,"delayed":false,"maxDrawStep":0.08275413513183594,"stats":{"handlers":452,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":167,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":444,"maxTickUnits":504}}
+# Subtest: wrapped world 2D: two spatial views, seam interpolation, replay and restore with 300 ms loss
+ok 2 - wrapped world 2D: two spatial views, seam interpolation, replay and restore with 300 ms loss
+  ---
+  duration_ms: 238.681458
+  type: 'test'
+  ...
+# {"dims":2,"delayed":true,"maxDrawStep":0.06774520874023438,"stats":{"handlers":474,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":167,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":444,"maxTickUnits":504}}
+# Subtest: wrapped world 3D: two spatial views, seam interpolation, replay and restore
+ok 3 - wrapped world 3D: two spatial views, seam interpolation, replay and restore
+  ---
+  duration_ms: 246.486625
+  type: 'test'
+  ...
+# {"dims":3,"delayed":false,"maxDrawStep":0.08275260925293537,"stats":{"handlers":452,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":319,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":652,"maxTickUnits":772}}
+# Subtest: wrapped world 3D: two spatial views, seam interpolation, replay and restore with 300 ms loss
+ok 4 - wrapped world 3D: two spatial views, seam interpolation, replay and restore with 300 ms loss
+  ---
+  duration_ms: 240.843875
+  type: 'test'
+  ...
+# {"dims":3,"delayed":true,"maxDrawStep":0.07045845031738907,"stats":{"handlers":474,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":319,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":652,"maxTickUnits":772}}
+# Subtest: unchanged substep forecasts execute once across repeated view reads and refresh on input
+ok 5 - unchanged substep forecasts execute once across repeated view reads and refresh on input
+  ---
+  duration_ms: 152.244792
+  type: 'test'
+  ...
+# Subtest: interpolated remote poses do not fill the snapshot cache with one-use keys
+ok 6 - interpolated remote poses do not fill the snapshot cache with one-use keys
+  ---
+  duration_ms: 234.091375
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 0 ms
+ok 7 - validated owner keeps its own trajectory with delayed reports: 0 ms
+  ---
+  duration_ms: 403.178834
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 150 ms
+ok 8 - validated owner keeps its own trajectory with delayed reports: 150 ms
+  ---
+  duration_ms: 414.510458
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 300 ms
+ok 9 - validated owner keeps its own trajectory with delayed reports: 300 ms
+  ---
+  duration_ms: 418.150584
+  type: 'test'
+  ...
+# Subtest: validated owner predicts through an outage, keeps score, and resumes without a wait
+ok 10 - validated owner predicts through an outage, keeps score, and resumes without a wait
+  ---
+  duration_ms: 401.395667
+  type: 'test'
+  ...
+# Subtest: validated owner draws a local corner landing without embedding the interpolated box
+ok 11 - validated owner draws a local corner landing without embedding the interpolated box
+  ---
+  duration_ms: 119.797625
+  type: 'test'
+  ...
+# Subtest: validated owner recovers room clock after 3000 ms server stall
+ok 12 - validated owner recovers room clock after 3000 ms server stall
+  ---
+  duration_ms: 261.08475
+  type: 'test'
+  ...
+# Subtest: validated owner recovers room clock after 15000 ms server stall
+ok 13 - validated owner recovers room clock after 15000 ms server stall
+  ---
+  duration_ms: 489.760166
+  type: 'test'
+  ...
+# Subtest: validated owner retains unacknowledged reports while the server tick is stopped
+ok 14 - validated owner retains unacknowledged reports while the server tick is stopped
+  ---
+  duration_ms: 474.946959
+  type: 'test'
+  ...
+# Subtest: a delayed owner placement starts fresh reports near arrival time without granting travel
+ok 15 - a delayed owner placement starts fresh reports near arrival time without granting travel
+  ---
+  duration_ms: 261.063166
+  type: 'test'
+  ...
+# Subtest: validated owner clock tracks room at 0.99 clock rate
+ok 16 - validated owner clock tracks room at 0.99 clock rate
+  ---
+  duration_ms: 2028.6555
+  type: 'test'
+  ...
+# Subtest: validated owner clock tracks room at 1.01 clock rate
+ok 17 - validated owner clock tracks room at 1.01 clock rate
+  ---
+  duration_ms: 2029.589666
+  type: 'test'
+  ...
+# Subtest: validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame
+ok 18 - validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame
+  ---
+  duration_ms: 122.616875
+  type: 'test'
+  ...
+# Subtest: remote presentation is shared within a frame and refreshed by snapshots
+ok 19 - remote presentation is shared within a frame and refreshed by snapshots
+  ---
+  duration_ms: 140.547292
+  type: 'test'
+  ...
+# Subtest: an observer switches an owner placement at its sampled time, without interpolating across the map
+ok 20 - an observer switches an owner placement at its sampled time, without interpolating across the map
+  ---
+  duration_ms: 165.447334
+  type: 'test'
+  ...
+# Subtest: a three-second server stall does not rewind continued valid owner movement
+ok 21 - a three-second server stall does not rewind continued valid owner movement
+  ---
+  duration_ms: 260.198792
+  type: 'test'
+  ...
+# Subtest: remote validated movement stays bounded while an owner catches up from an outage
+ok 22 - remote validated movement stays bounded while an owner catches up from an outage
+  ---
+  duration_ms: 361.460458
+  type: 'test'
+  ...
+# Subtest: committing a forecast preserves physics across control changes and isolates preview motion
+ok 23 - committing a forecast preserves physics across control changes and isolates preview motion
+  ---
+  duration_ms: 252.459916
+  type: 'test'
+  ...
+# Subtest: remote owners stay on the shared scene timeline when newer reports arrive
+ok 24 - remote owners stay on the shared scene timeline when newer reports arrive
+  ---
+  duration_ms: 167.967
+  type: 'test'
+  ...
+# Subtest: owner confirmations ignore a sampled scene from before the current placement
+ok 25 - owner confirmations ignore a sampled scene from before the current placement
+  ---
+  duration_ms: 137.316333
+  type: 'test'
+  ...
+# Subtest: runner and monster interpolation use one fraction through a burst of reports
+ok 26 - runner and monster interpolation use one fraction through a burst of reports
+  ---
+  duration_ms: 166.407833
+  type: 'test'
+  ...
+# Subtest: accepted runner ticks stay aligned with a patrol when uplink delay changes
+ok 27 - accepted runner ticks stay aligned with a patrol when uplink delay changes
+  ---
+  duration_ms: 368.569875
+  type: 'test'
+  ...
+# Subtest: receiving a placement preserves the moving runner history before its scene boundary
+ok 28 - receiving a placement preserves the moving runner history before its scene boundary
+  ---
+  duration_ms: 151.677042
+  type: 'test'
+  ...
+# Subtest: a stalled scene reaches fresh movement without replaying a long stationary tail
+ok 29 - a stalled scene reaches fresh movement without replaying a long stationary tail
+  ---
+  duration_ms: 259.238625
+  type: 'test'
+  ...
+# [object Object]
+# Subtest: an idle remote source cannot pin a moving runner and its patrol
+ok 30 - an idle remote source cannot pin a moving runner and its patrol
+  ---
+  duration_ms: 295.745
+  type: 'test'
+  ...
+# Subtest: a placement after a long server pause does not replay a stationary spawn tail
+ok 31 - a placement after a long server pause does not replay a stationary spawn tail
+  ---
+  duration_ms: 687.796333
+  type: 'test'
+  ...
+# {"longest":400}
+# Subtest: late movement after a stationary source cannot rewrite the drawn pose in one frame
+ok 32 - late movement after a stationary source cannot rewrite the drawn pose in one frame
+  ---
+  duration_ms: 278.406666
+  type: 'test'
+  ...
+# {"worst":1.4000000953674316}
+1..32
+# tests 32
+# suites 0
+# pass 32
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 12671.640667

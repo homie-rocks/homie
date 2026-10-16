@@ -3030,3 +3030,16 @@ test('a placement after a long server pause does not replay a stationary spawn t
  }
  t.diagnostic(JSON.stringify({longest}));assert.ok(longest<=400,`observer froze at the placement for ${longest} ms`);
 });
+
+test('late movement after a stationary source cannot rewrite the drawn pose in one frame',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t);let held=false;
+ const r=rig(L,compiled,false,0,(m,link)=>held&&link===0&&m.t==='in'?null:0);
+ const owner=openRoom({net:{config:cfg('Late moving owner'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const viewer=openRoom({net:{config:cfg('Late movement observer'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{owner.close();viewer.close();r.stop();});await clock.wait(1000);const id=owner.me.id;
+ held=true;owner.input({ax:1});for(let i=0;i<188;i++){await clock.wait(16);viewer.get(id);}
+ held=false;let prev=viewer.get(id).pos.x,worst=0;
+ for(let i=0;i<180;i++){await clock.wait(16);const x=viewer.get(id).pos.x;worst=Math.max(worst,Math.abs(x-prev));prev=x;}
+ t.diagnostic(JSON.stringify({worst}));assert.ok(worst<1.4+1e-6,`late movement jumped ${worst} tiles`);
+});

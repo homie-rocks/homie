@@ -811,7 +811,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         while (oldestRevision.previous && oldestRevision.placedAt > oldestTick) oldestRevision = oldestRevision.previous;
         oldestRevision.previous = undefined;
         if (!q.samples.length || u.ownerTick > q.samples.at(-1)!.t) q.samples.push({t:u.ownerTick,u});
-        while (q.samples.length > 2 && sceneCursor !== null && q.samples[1].t < sceneCursor - 2) q.samples.shift();
+        while (q.samples.length > 2 && sceneCursor !== null && q.samples[1].t < Math.min(sceneCursor,q.drawn?.start??sceneCursor) - 2) q.samples.shift();
         if (q.samples.length > 512) q.samples.shift();
       }
       sceneHistory.push(s);
@@ -1298,7 +1298,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   // body stands relative to another body's hazards.
   const hasValidatedOwners = schema.kinds.some(k => k.validatedOwner);
   const sceneHistory: Snapshot<unknown>[] = [];
-  interface OwnerHistory { epoch:number; r:number; placedAt:number; samples:{t:number; u:Unpacked}[]; previous?:OwnerHistory }
+  interface OwnerHistory { epoch:number; r:number; placedAt:number; samples:{t:number; u:Unpacked}[]; drawn?:{tick:number;frame:number;start:number}; previous?:OwnerHistory }
   const ownerHistory = new Map<string, OwnerHistory>();
   let sceneCursor: number | null = null, sceneAt = 0, sceneFrame: number | null = null;
   let sceneCached: ReturnType<typeof net.sample> = null;
@@ -1362,12 +1362,33 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   function sceneTick(s: ReturnType<typeof net.sample>): number {
     return s === sceneCached && sceneCursor !== null ? sceneCursor : s ? s.a.k + (s.b.k-s.a.k)*s.alpha : latest?.k ?? 0;
   }
-  function ownerDrawn(u: Unpacked, epoch: number, tick: number): Entity {
+  function ownerDrawn(u: Unpacked, epoch: number, tick: number, bounded: boolean): Entity {
     let q = ownerHistory.get(u.id);
     // A future placement must not discard the reports still being drawn from
     // the old revision. Switch histories at the scene boundary, not receipt.
     while (q && q.epoch === epoch && q.r !== u.r) q = q.previous;
     if (!q || q.epoch !== epoch || q.r !== u.r) return entityOf(u);
+    // A stationary source may have let the shared scene advance past its last
+    // report. Late movement then changes the pose even without advancing that
+    // clock. Bound this newly revealed path too, retaining its report history.
+    if (bounded) {
+      const frame=typeof document==='undefined'?clock():Number(document.timeline?.currentTime??clock());
+      let target=Math.min(tick,q.samples.at(-1)!.t);
+      const from=q.drawn?.frame===frame?q.drawn.start:q.drawn?.tick;
+      if(from!==undefined && target>from) {
+        let span=target-from;
+        const limit=kindOf.get(u.kind)!.radius*2.8;
+        for(let i=1;i<q.samples.length;i++) {
+          const a=q.samples[i-1],b=q.samples[i];
+          if(b.t<=from)continue;if(a.t>=target)break;
+          const speed=Math.hypot(b.u.pos.x-a.u.pos.x,b.u.pos.y-a.u.pos.y,b.u.pos.z-a.u.pos.z)/(b.t-a.t);
+          if(speed>0)span=Math.min(span,limit/speed);
+        }
+        target=from+span;
+      }
+      if(q.drawn){q.drawn.tick=target;q.drawn.frame=frame;q.drawn.start=from??target;}else q.drawn={tick:target,frame,start:from??target};
+      tick=target;
+    }
     // Read report time, not the server tick at which that report arrived.
     let a=q.samples[0], b=a;
     for (const sample of q.samples) { b=sample; if (sample.t>=tick) break; a=sample; }
@@ -1400,11 +1421,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // body must reach that snapshot's time before showing its new revision;
     // otherwise the respawn precedes the encounter in the interpolated scene.
     if (ea.r !== eb.r || a?.e !== b?.e || !s) {
-      if (kind?.validatedOwner && s && s.alpha < 1 && a && a.e === b?.e && ea.driver === 'person') return ownerDrawn(ea,a.e,sceneTick(s));
+      if (kind?.validatedOwner && s && s.alpha < 1 && a && a.e === b?.e && ea.driver === 'person') return ownerDrawn(ea,a.e,sceneTick(s),s===sceneCached);
       return entityOf(eb);
     }
     const t = s.alpha;
-    if (kind?.validatedOwner && eb.driver === 'person' && a && b) return ownerDrawn(t < 1 ? ea : eb, b.e, sceneTick(s));
+    if (kind?.validatedOwner && eb.driver === 'person' && a && b) return ownerDrawn(t < 1 ? ea : eb, b.e, sceneTick(s),s===sceneCached);
     // Static pickups and scenery need no new vectors or wrappers for every HUD,
     // scene and probe traversal. Fields still follow the sampled snapshot.
     if (ea.grounded === eb.grounded && ['pos','vel','heading'].every(key => {
