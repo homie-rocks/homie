@@ -2353,6 +2353,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
 
   // ---------------------------------------------------------------- wire in
   function onMessage(data: unknown): void {
+    if (data === 'homie-pong' && idlePing) { lastMsgAt = wall(); return; }
     const text = typeof data === 'string' ? data : String(data);
     countBytes(bytesIn, text.length);
     let m: Record<string, unknown>;

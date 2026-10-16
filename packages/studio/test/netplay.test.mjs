@@ -1924,7 +1924,7 @@ test('negotiated idle heartbeats stay at the edge and live rounds retain clock p
  assert.ok(socket.sent.filter(x=>x==='homie-ping').length>=8);
  assert.ok(socket.sent.filter(x=>x.startsWith('{"t":"ping"')).length<=2,'idle clocks never wake the room through a long break');
  net.round({n:1,phase:'live',start:Date.now(),end:Date.now()+60000});const from=socket.sent.length;
- await clock.wait(6500);const live=socket.sent.slice(from);assert.ok(live.filter(x=>x.startsWith('{"t":"ping"')).length>=2);assert.equal(live.includes('homie-ping'),false);
+ await clock.wait(6500);const live=socket.sent.slice(from);assert.ok(live.filter(x=>x.startsWith('{"t":"ping"')).length>=2,JSON.stringify({live,lines:r.lines.slice(-5),clients:r.room.clients.size,round:r.room.lastRound}));assert.equal(live.includes('homie-ping'),false);
 });
 
 test('edge pongs cannot hide a dead room with an unanswered clock ping',async t=>{
