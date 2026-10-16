@@ -67,7 +67,10 @@ export function relayStream(ctx, wake, {sleep: wait = sleep} = {}) {
   };
   return {
     accept() {}, emit,
-    canSend(size) { return !closed && (Boolean(live) || size * 3 + 1 + (controller ? limit-controller.desiredSize : bytes) <= limit); },
+    canSend(size, data) {
+      const needed=data===undefined?size*3+1:encoder.encode(data+'\n').byteLength;
+      return !closed && (Boolean(live) || needed+(controller?limit-controller.desiredSize:bytes)<=limit);
+    },
     addEventListener(name, fn) { const list=listeners.get(name)??[];list.push(fn);listeners.set(name,list); },
     send(data) {
       if(live){try{if(live.readyState===1){live.send(data);return;}}catch{ /* Retry over the idle transport. */ }live=null;}
@@ -94,7 +97,7 @@ export function relayStream(ctx, wake, {sleep: wait = sleep} = {}) {
     sleep() { controller?.close();controller=null;const socket=live;live=null;socket?.close(1000,'room idle'); },
     close(code,reason) {
       if(closed)return;closed=true;
-      live?.close(code,reason);live=null;
+      if(live){try{live.send(JSON.stringify([['link-close',code,reason]]));}catch{}live.close(code,reason);live=null;}
       if(controller){controller.enqueue(encoder.encode(JSON.stringify([['link-close',code,reason]])+'\n'));controller.close();}
       controller=null;queued=[];bytes=0;emit('close',{code,reason});
     },

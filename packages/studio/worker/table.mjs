@@ -1265,7 +1265,7 @@ export class Table {
       onCount:n=>{const index=Number(gate);if(n>(this.gateHeld.get(index)??0))this.gatePromised.get(index)?.shift();if(n)this.gateHeld.set(index,n);else this.gateHeld.delete(index);},
     });
     const remove = () => { if(this.relays.get(gate)===relay)this.relays.delete(gate); };
-    socket.addEventListener('close',remove);socket.addEventListener('error',remove);
+    socket.addEventListener('close',remove);socket.addEventListener('error',()=>{remove();socket.close(1011,'room link failed');});
     this.relays.set(gate,relay);return relay;
   }
   saveSessions() {

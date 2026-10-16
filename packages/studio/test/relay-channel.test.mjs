@@ -82,3 +82,9 @@ test('output queue exposes backpressure and resumes when drained',async()=>{
  const reader=stream.open().getReader();await reader.read();await Promise.resolve();
  assert.equal(stream.canSend(2),true);assert.ok(drains>0);await reader.cancel();
 });
+
+test('closing an active Table relay tells the Gate to reconnect its players',()=>{
+ const sent=[],stream=relayStream({waitUntil(){}},async()=>{});
+ stream.attachLive({readyState:1,send:s=>sent.push(JSON.parse(s)),close(){},addEventListener(){}});
+ stream.close(1011,'failed');assert.deepEqual(sent,[[['link-close',1011,'failed']]]);
+});

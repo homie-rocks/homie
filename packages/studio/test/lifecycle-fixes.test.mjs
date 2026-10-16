@@ -161,3 +161,12 @@ test('daily peak measures concurrent shard totals, survives restart, and ignores
  assert.equal((await report(0,99,now)).players,17,'late reports cannot inflate concurrent totals');
  lobby=new Lobby(ctx,{});assert.equal((await(await lobby.fetch(new Request('https://lobby/peak?game=g'))).json()).players,17);
 });
+
+import {Gate} from '../worker/gate.mjs';
+test('a failed openRelay retries without emitting a fatal channel error',async()=>{
+ const gate=Object.create(Gate.prototype),pending=[],events=[];let calls=0;
+ const socket={emit:name=>events.push(name),attachLive:async()=>{}};
+ Object.assign(gate,{link:{},relaySocket:socket,relayEpoch:'gate',ctx:{waitUntil:p=>pending.push(p)},env:{TABLE:{idFromName:x=>x,get:()=>({fetch:async()=>{if(++calls===1)throw Error('deploy');return {headers:new Headers({'x-homie-relay-epoch':'table'}),webSocket:{accept(){}}};}})}}});
+ gate.openRelay(new URL('https://room/?game=g&room=r'),socket);await Promise.all(pending);
+ assert.equal(calls,2);assert.equal(events.includes('error'),false);assert.deepEqual(events,['reset']);
+});

@@ -82,7 +82,7 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
     const size = text.length;
     if (size > maxBytes) { fail('room link frame limit'); return; }
     if (receipts && inFlightBytes + size > maxBytes) { blockedByBytes = true; return; }
-    if(socket.canSend && !socket.canSend(size)){blockedByTransport=true;return;}
+    if(socket.canSend && !socket.canSend(size,text)){blockedByTransport=true;return;}
     queue = []; views.clear(); strings.clear(); bytes = 0; receipt = 0;
     if (receipts && hasPayload) { pending.set(++sequence, { at: now(), bytes: size }); inFlightBytes += size; }
     stats.frames++; stats.rows += rows.length; stats.bytes += size;
