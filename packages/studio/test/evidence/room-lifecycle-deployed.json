@@ -1,0 +1,421 @@
+{
+  "runtimeCommit": "022121f8704f39b6b600d1a151cbcea302616164",
+  "runtimeIdentity": {
+    "version": "0.54.0",
+    "sha256": "7500d16bd9286e6f79bf4ce3a06809211fdce77f6789405e10143eaa5fbfbeba"
+  },
+  "method": "External player WebSockets through the public Worker; edge heartbeats every 2 seconds; no object polling for 26 seconds after settlement; constructor identifiers prove real idle eviction. No abort, redeploy, or reconnect occurs during observation.",
+  "fixture": "test/fixtures/room-lifecycle/worker.mjs",
+  "runs": [
+    {
+      "game": "direct",
+      "room": "proof-1792112936122",
+      "rays": [
+        "a4b32cdffcc6078e-YVR",
+        "a4b32ce2cea60384-PDX"
+      ],
+      "before": {
+        "version": "1792112844995",
+        "boot": "a666fcf5-1150-438b-97e9-869aebcda1a0",
+        "tick": 22,
+        "round": {
+          "t": "round",
+          "n": 1,
+          "phase": "over",
+          "endsAt": 470,
+          "startedAt": 0,
+          "results": [
+            {
+              "seat": 0,
+              "id": "e1",
+              "driver": "person",
+              "score": 0,
+              "place": 1
+            },
+            {
+              "seat": 1,
+              "id": "e2",
+              "driver": "person",
+              "score": 0,
+              "place": 1
+            }
+          ]
+        },
+        "idle": 1792112984244,
+        "clients": 2,
+        "timer": false
+      },
+      "after": {
+        "version": "1792112844995",
+        "boot": "a4c095cd-4357-4d07-810b-a961e58bc4ca",
+        "tick": 22,
+        "round": {
+          "t": "round",
+          "n": 1,
+          "phase": "over",
+          "endsAt": 470,
+          "startedAt": 0,
+          "results": [
+            {
+              "seat": 0,
+              "id": "e1",
+              "driver": "person",
+              "score": 0,
+              "place": 1
+            },
+            {
+              "seat": 1,
+              "id": "e2",
+              "driver": "person",
+              "score": 0,
+              "place": 1
+            }
+          ]
+        },
+        "idle": 1792112984244,
+        "clients": 2,
+        "timer": false
+      },
+      "continued": {
+        "version": "1792112844995",
+        "boot": "8691248c-efa1-4c61-a94b-da34dc3cd846",
+        "tick": 25,
+        "round": {
+          "t": "round",
+          "n": 2,
+          "phase": "live",
+          "endsAt": 42,
+          "startedAt": 22
+        },
+        "idle": null,
+        "clients": 2,
+        "timer": true
+      },
+      "peers": [
+        {
+          "welcome": 1,
+          "closed": 0,
+          "pongs": 23,
+          "id": "mXu86Peo",
+          "seat": 0,
+          "ownSnapshots": 25,
+          "undecodable": 0,
+          "snaps": 25,
+          "errors": []
+        },
+        {
+          "welcome": 1,
+          "closed": 0,
+          "pongs": 23,
+          "id": "2IigSpcv",
+          "seat": 1,
+          "ownSnapshots": 19,
+          "undecodable": 0,
+          "snaps": 19,
+          "errors": []
+        }
+      ],
+      "events": [
+        {
+          "at": 1792112937354,
+          "player": 0,
+          "round": {
+            "n": 1,
+            "phase": "live",
+            "startedAt": 1792112937244,
+            "endsAt": 1792112939244
+          }
+        },
+        {
+          "at": 1792112939414,
+          "player": 1,
+          "round": {
+            "n": 1,
+            "phase": "over",
+            "startedAt": 1792112937244,
+            "endsAt": 1792112984244,
+            "results": [
+              {
+                "slot": 0,
+                "seat": 0,
+                "name": "Turbo Badger",
+                "score": 0,
+                "bot": false,
+                "place": 1
+              },
+              {
+                "slot": 1,
+                "seat": 1,
+                "name": "Brave Rider",
+                "score": 0,
+                "bot": false,
+                "place": 1
+              }
+            ]
+          }
+        },
+        {
+          "at": 1792112939422,
+          "player": 0,
+          "round": {
+            "n": 1,
+            "phase": "over",
+            "startedAt": 1792112937244,
+            "endsAt": 1792112984244,
+            "results": [
+              {
+                "slot": 0,
+                "seat": 0,
+                "name": "Turbo Badger",
+                "score": 0,
+                "bot": false,
+                "place": 1
+              },
+              {
+                "slot": 1,
+                "seat": 1,
+                "name": "Brave Rider",
+                "score": 0,
+                "bot": false,
+                "place": 1
+              }
+            ]
+          }
+        },
+        {
+          "at": 1792112984247,
+          "player": 1,
+          "round": {
+            "n": 2,
+            "phase": "live",
+            "startedAt": 1792112984245,
+            "endsAt": 1792112986245
+          }
+        },
+        {
+          "at": 1792112984249,
+          "player": 0,
+          "round": {
+            "n": 2,
+            "phase": "live",
+            "startedAt": 1792112984245,
+            "endsAt": 1792112986245
+          }
+        }
+      ]
+    },
+    {
+      "game": "gated",
+      "room": "proof-1792112917279",
+      "rays": [
+        "a4b32c6f3a0ddf82-SJC",
+        "a4b32c72c82518fa-YVR"
+      ],
+      "before": {
+        "version": "1792112844995",
+        "boot": "0087742f-815d-492e-b181-9ec7c0afb4ec",
+        "tick": 22,
+        "round": {
+          "t": "round",
+          "n": 1,
+          "phase": "over",
+          "endsAt": 470,
+          "startedAt": 0,
+          "results": [
+            {
+              "seat": 0,
+              "id": "e1",
+              "driver": "person",
+              "score": 0,
+              "place": 1
+            },
+            {
+              "seat": 1,
+              "id": "e2",
+              "driver": "person",
+              "score": 0,
+              "place": 1
+            }
+          ]
+        },
+        "idle": 1792112966454,
+        "clients": 2,
+        "timer": false,
+        "gate": {
+          "version": "1792112844995",
+          "boot": "6281dff0-bb14-4d85-86ce-4478c6465062",
+          "clients": 2
+        }
+      },
+      "after": {
+        "version": "1792112844995",
+        "boot": "2ffd2bd4-0ee6-433f-bf18-c7cce678e0b8",
+        "tick": 22,
+        "round": {
+          "t": "round",
+          "n": 1,
+          "phase": "over",
+          "endsAt": 470,
+          "startedAt": 0,
+          "results": [
+            {
+              "seat": 0,
+              "id": "e1",
+              "driver": "person",
+              "score": 0,
+              "place": 1
+            },
+            {
+              "seat": 1,
+              "id": "e2",
+              "driver": "person",
+              "score": 0,
+              "place": 1
+            }
+          ]
+        },
+        "idle": 1792112966454,
+        "clients": 2,
+        "timer": false,
+        "gate": {
+          "version": "1792112844995",
+          "boot": "562b05cf-d74a-476d-be6e-0b9447104603",
+          "clients": 2
+        }
+      },
+      "continued": {
+        "version": "1792112844995",
+        "boot": "707887ca-94cb-4747-8a21-453c8e299382",
+        "tick": 28,
+        "round": {
+          "t": "round",
+          "n": 2,
+          "phase": "live",
+          "endsAt": 42,
+          "startedAt": 22
+        },
+        "idle": null,
+        "clients": 2,
+        "timer": true,
+        "gate": {
+          "version": "1792112844995",
+          "boot": "b1855f74-a720-423d-bc3a-742f07fa32fa",
+          "clients": 2
+        }
+      },
+      "peers": [
+        {
+          "welcome": 1,
+          "closed": 0,
+          "pongs": 23,
+          "id": "QErMowa5",
+          "seat": 0,
+          "ownSnapshots": 29,
+          "undecodable": 0,
+          "snaps": 29,
+          "errors": []
+        },
+        {
+          "welcome": 1,
+          "closed": 0,
+          "pongs": 23,
+          "id": "2WQpzNV2",
+          "seat": 1,
+          "ownSnapshots": 24,
+          "undecodable": 0,
+          "snaps": 24,
+          "errors": []
+        }
+      ],
+      "events": [
+        {
+          "at": 1792112919951,
+          "player": 0,
+          "round": {
+            "n": 1,
+            "phase": "live",
+            "startedAt": 1792112919454,
+            "endsAt": 1792112921454
+          }
+        },
+        {
+          "at": 1792112921642,
+          "player": 0,
+          "round": {
+            "n": 1,
+            "phase": "over",
+            "startedAt": 1792112919454,
+            "endsAt": 1792112966454,
+            "results": [
+              {
+                "slot": 0,
+                "seat": 0,
+                "name": "Turbo Ember",
+                "score": 0,
+                "bot": false,
+                "place": 1
+              },
+              {
+                "slot": 1,
+                "seat": 1,
+                "name": "Silent Yeti",
+                "score": 0,
+                "bot": false,
+                "place": 1
+              }
+            ]
+          }
+        },
+        {
+          "at": 1792112921646,
+          "player": 1,
+          "round": {
+            "n": 1,
+            "phase": "over",
+            "startedAt": 1792112919454,
+            "endsAt": 1792112966454,
+            "results": [
+              {
+                "slot": 0,
+                "seat": 0,
+                "name": "Turbo Ember",
+                "score": 0,
+                "bot": false,
+                "place": 1
+              },
+              {
+                "slot": 1,
+                "seat": 1,
+                "name": "Silent Yeti",
+                "score": 0,
+                "bot": false,
+                "place": 1
+              }
+            ]
+          }
+        },
+        {
+          "at": 1792112966554,
+          "player": 1,
+          "round": {
+            "n": 2,
+            "phase": "live",
+            "startedAt": 1792112966536,
+            "endsAt": 1792112968536
+          }
+        },
+        {
+          "at": 1792112966554,
+          "player": 0,
+          "round": {
+            "n": 2,
+            "phase": "live",
+            "startedAt": 1792112966536,
+            "endsAt": 1792112968536
+          }
+        }
+      ]
+    }
+  ],
+  "deploymentVersion": "c74d241d-6113-4f8d-be41-856e8d21be74"
+}
