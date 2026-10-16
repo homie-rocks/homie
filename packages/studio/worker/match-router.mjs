@@ -2,7 +2,10 @@ import {lobbyShard,LOBBY_SHARDS} from './lobby-shards.mjs';
 
 // Entry objects partition reservation ownership. They lease 8 routing decisions
 // at a time, so the policy object sees 1/8 of join traffic, never room reports.
-// A quiet game shares shard zero. Bursts open the remaining matching pools.
+// A quiet game refills existing pools before opening shard zero. Spread above
+// 128 observed joins/s: below half the slowest single-coordinator throughput
+// measured by the deployed fixture (1024 durable joins, 32 concurrent).
+// Count consumed leases, not all eight slots in a newly issued lease.
 export class MatchRouter {
   constructor(ctx,env) { this.ctx=ctx;this.env=env;this.pending=new Map();this.routes=new Map(); }
   async fetch(request) {
