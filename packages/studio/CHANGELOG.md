@@ -21,6 +21,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ### Fixed
 
+- Observers retain a placement pose as the starting anchor for its first accepted owner path, preventing a late first report from jumping away from a spawn already on screen.
+
 - Shared observer clock catch-up spends its travel budget along actual sampled paths, skipping stationary prefixes before charging later motion.
 
 - Late movement from a previously stationary remote owner observes the same per-frame travel bound as clock catch-up, including snapshot refreshes within one display frame.

@@ -801,16 +801,27 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       if (before && before.e !== f.e) { sceneHistory.length = 0; sceneCursor = null; }
       for (const [id, q] of ownerHistory) if (q.epoch !== f.e || !f.ents.has(id)) ownerHistory.delete(id);
       for (const [id, u] of f.ents) {
-        if (!kindOf.get(u.kind)?.validatedOwner || u.driver !== 'person' || u.ownerTick === undefined || u.ownerTick < 0) continue;
+        if (!kindOf.get(u.kind)?.validatedOwner || u.driver !== 'person') continue;
+        const accepted=u.ownerTick!==undefined&&u.ownerTick>=0;
         let q = ownerHistory.get(id);
-        if (!q || q.epoch !== f.e || q.r !== u.r) { q={epoch:f.e,r:u.r,placedAt:f.k,samples:[],...(q?.epoch===f.e?{previous:q}:{})};ownerHistory.set(id,q); }
+        if (!q || q.epoch !== f.e || q.r !== u.r) { q={epoch:f.e,r:u.r,placedAt:f.k,samples:accepted?[]:[{t:f.k,u}],awaitingReport:!accepted,...(q?.epoch===f.e?{previous:q}:{})};ownerHistory.set(id,q); }
         if (sceneCursor !== null && sceneCursor >= q.placedAt) q.previous = undefined;
         // Retain no more placement history than the bounded scene history can use.
         let oldestRevision = q;
         const oldestTick = sceneHistory[0]?.k ?? f.k;
         while (oldestRevision.previous && oldestRevision.placedAt > oldestTick) oldestRevision = oldestRevision.previous;
         oldestRevision.previous = undefined;
-        if (!q.samples.length || u.ownerTick > q.samples.at(-1)!.t) q.samples.push({t:u.ownerTick,u});
+        if (accepted) {
+          // The placement is a presentation anchor, not an accepted owner tick.
+          // Keep it while the first reports cross the network, then bound the
+          // newly revealed path from the pose the observer has already drawn.
+          if(q.awaitingReport){
+            const anchor=q.samples[0];anchor.t=Math.min(anchor.t,u.ownerTick!-1);
+            if(q.drawn){q.drawn.tick=Math.min(q.drawn.tick,anchor.t);q.drawn.start=Math.min(q.drawn.start,anchor.t);}
+            q.awaitingReport=false;
+          }
+          if (!q.samples.length || u.ownerTick! > q.samples.at(-1)!.t) q.samples.push({t:u.ownerTick!,u});
+        }
         while (q.samples.length > 2 && sceneCursor !== null && q.samples[1].t < Math.min(sceneCursor,q.drawn?.start??sceneCursor) - 2) q.samples.shift();
         if (q.samples.length > 512) q.samples.shift();
       }
@@ -1298,7 +1309,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   // body stands relative to another body's hazards.
   const hasValidatedOwners = schema.kinds.some(k => k.validatedOwner);
   const sceneHistory: Snapshot<unknown>[] = [];
-  interface OwnerHistory { epoch:number; r:number; placedAt:number; samples:{t:number; u:Unpacked}[]; drawn?:{tick:number;frame:number;start:number}; previous?:OwnerHistory }
+  interface OwnerHistory { epoch:number; r:number; placedAt:number; awaitingReport?:boolean; samples:{t:number; u:Unpacked}[]; drawn?:{tick:number;frame:number;start:number}; previous?:OwnerHistory }
   const ownerHistory = new Map<string, OwnerHistory>();
   let sceneCursor: number | null = null, sceneAt = 0, sceneFrame: number | null = null;
   let sceneCached: ReturnType<typeof net.sample> = null;
@@ -1312,7 +1323,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     let newestOwner = Infinity;
     for (const [id, q] of ownerHistory) {
       const u = q.samples.at(-1)!.u;
-      if (id === mine?.id || u.away || latest?.ents.get(id)?.driver !== 'person') continue;
+      if (id === mine?.id || q.awaitingReport || u.away || latest?.ents.get(id)?.driver !== 'person') continue;
       const previous = q.samples.at(-2)?.u;
       // A stationary path is still known after its last report. An idle tab's
       // delayed heartbeat must not stop every moving runner and patrol.

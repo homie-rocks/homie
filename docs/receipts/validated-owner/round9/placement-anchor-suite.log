@@ -1,0 +1,318 @@
+TAP version 13
+# (node:42217) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: browser rules carry reserved guides, validated goals, asks, answers and companion pacing
+ok 1 - browser rules carry reserved guides, validated goals, asks, answers and companion pacing
+  ---
+  duration_ms: 232.660667
+  type: 'test'
+  ...
+# Subtest: movement probes derive stationary controls from the declared player speed 0
+ok 2 - movement probes derive stationary controls from the declared player speed 0
+  ---
+  duration_ms: 130.715833
+  type: 'test'
+  ...
+# Subtest: movement probes derive stationary controls from the declared player speed 100
+ok 3 - movement probes derive stationary controls from the declared player speed 100
+  ---
+  duration_ms: 132.925417
+  type: 'test'
+  ...
+# Subtest: synchronous events preserve ordered pellet destruction and actor ownership
+ok 4 - synchronous events preserve ordered pellet destruction and actor ownership
+  ---
+  duration_ms: 192.142833
+  type: 'test'
+  ...
+# Subtest: synchronous events preserve ordered pellet destruction and actor ownership with delay/loss
+ok 5 - synchronous events preserve ordered pellet destruction and actor ownership with delay/loss
+  ---
+  duration_ms: 192.569167
+  type: 'test'
+  ...
+# Subtest: recipient-specific fields through Gates: an owner field reaches its owner alone and a server field nobody, seed 4619
+ok 6 - recipient-specific fields through Gates: an owner field reaches its owner alone and a server field nobody, seed 4619
+  ---
+  duration_ms: 238.067125
+  type: 'test'
+  ...
+# Subtest: wrapped world 2D: two spatial views, seam interpolation, replay and restore
+ok 7 - wrapped world 2D: two spatial views, seam interpolation, replay and restore
+  ---
+  duration_ms: 243.253541
+  type: 'test'
+  ...
+# {"dims":2,"delayed":false,"maxDrawStep":0.08275413513183594,"stats":{"handlers":452,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":167,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":444,"maxTickUnits":504}}
+# Subtest: wrapped world 2D: two spatial views, seam interpolation, replay and restore with 300 ms loss
+ok 8 - wrapped world 2D: two spatial views, seam interpolation, replay and restore with 300 ms loss
+  ---
+  duration_ms: 244.785041
+  type: 'test'
+  ...
+# {"dims":2,"delayed":true,"maxDrawStep":0.06774520874023438,"stats":{"handlers":474,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":167,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":444,"maxTickUnits":504}}
+# Subtest: wrapped world 3D: two spatial views, seam interpolation, replay and restore
+ok 9 - wrapped world 3D: two spatial views, seam interpolation, replay and restore
+  ---
+  duration_ms: 254.374209
+  type: 'test'
+  ...
+# {"dims":3,"delayed":false,"maxDrawStep":0.08275260925293537,"stats":{"handlers":452,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":319,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":652,"maxTickUnits":772}}
+# Subtest: wrapped world 3D: two spatial views, seam interpolation, replay and restore with 300 ms loss
+ok 10 - wrapped world 3D: two spatial views, seam interpolation, replay and restore with 300 ms loss
+  ---
+  duration_ms: 260.047542
+  type: 'test'
+  ...
+# {"dims":3,"delayed":true,"maxDrawStep":0.07045845031738907,"stats":{"handlers":474,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":319,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":652,"maxTickUnits":772}}
+# Subtest: a placement projects the body to its own tick without a second correction: small
+ok 11 - a placement projects the body to its own tick without a second correction: small
+  ---
+  duration_ms: 197.808292
+  type: 'test'
+  ...
+# Subtest: a placement projects the body to its own tick without a second correction: Gates
+ok 12 - a placement projects the body to its own tick without a second correction: Gates
+  ---
+  duration_ms: 209.130334
+  type: 'test'
+  ...
+# Subtest: a prior placement cannot inject held controls into the respawned body
+ok 13 - a prior placement cannot inject held controls into the respawned body
+  ---
+  duration_ms: 83.081584
+  type: 'test'
+  ...
+# Subtest: solid correction remains continuous after placement, seed 17
+ok 14 - solid correction remains continuous after placement, seed 17
+  ---
+  duration_ms: 1045.169041
+  type: 'test'
+  ...
+# Subtest: solid correction remains continuous after placement, seed 41
+ok 15 - solid correction remains continuous after placement, seed 41
+  ---
+  duration_ms: 1048.620125
+  type: 'test'
+  ...
+# Subtest: solid correction remains continuous after placement, seed 83
+ok 16 - solid correction remains continuous after placement, seed 83
+  ---
+  duration_ms: 1012.9145
+  type: 'test'
+  ...
+# Subtest: interpolated remote poses do not fill the snapshot cache with one-use keys
+ok 17 - interpolated remote poses do not fill the snapshot cache with one-use keys
+  ---
+  duration_ms: 236.48675
+  type: 'test'
+  ...
+# Subtest: a stationary correction uses blend speed rather than the declared terminal fall speed
+ok 18 - a stationary correction uses blend speed rather than the declared terminal fall speed
+  ---
+  duration_ms: 328.800666
+  type: 'test'
+  ...
+# {"worst":0.11313714568130946,"p":{"x":2,"y":11.499991416931152,"z":0}}
+# Subtest: a reconnect after an outage draws a placement the game names at once
+ok 19 - a reconnect after an outage draws a placement the game names at once
+  ---
+  duration_ms: 849.69425
+  type: 'test'
+  ...
+# {"worst":0.8772457838058472,"at":{"from":{"x":-1.7567635774612427,"y":-0.5,"z":0},"to":{"x":-2.63400936126709,"y":-0.5,"z":0},"connected":true},"back":229,"end":{"x":-2.63400936126709,"y":-0.5,"z":0}}
+# Subtest: validated owner keeps its own trajectory with delayed reports: 0 ms
+ok 20 - validated owner keeps its own trajectory with delayed reports: 0 ms
+  ---
+  duration_ms: 393.587
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 150 ms
+ok 21 - validated owner keeps its own trajectory with delayed reports: 150 ms
+  ---
+  duration_ms: 439.129041
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 300 ms
+ok 22 - validated owner keeps its own trajectory with delayed reports: 300 ms
+  ---
+  duration_ms: 401.637208
+  type: 'test'
+  ...
+# Subtest: validated owner predicts through an outage, keeps score, and resumes without a wait
+ok 23 - validated owner predicts through an outage, keeps score, and resumes without a wait
+  ---
+  duration_ms: 377.580333
+  type: 'test'
+  ...
+# Subtest: validated owner draws a local corner landing without embedding the interpolated box
+ok 24 - validated owner draws a local corner landing without embedding the interpolated box
+  ---
+  duration_ms: 126.493917
+  type: 'test'
+  ...
+# Subtest: validated owner recovers room clock after 3000 ms server stall
+ok 25 - validated owner recovers room clock after 3000 ms server stall
+  ---
+  duration_ms: 237.166167
+  type: 'test'
+  ...
+# Subtest: validated owner recovers room clock after 15000 ms server stall
+ok 26 - validated owner recovers room clock after 15000 ms server stall
+  ---
+  duration_ms: 452.012584
+  type: 'test'
+  ...
+# Subtest: validated owner retains unacknowledged reports while the server tick is stopped
+ok 27 - validated owner retains unacknowledged reports while the server tick is stopped
+  ---
+  duration_ms: 441.824208
+  type: 'test'
+  ...
+# Subtest: a delayed owner placement starts fresh reports near arrival time without granting travel
+ok 28 - a delayed owner placement starts fresh reports near arrival time without granting travel
+  ---
+  duration_ms: 243.518625
+  type: 'test'
+  ...
+# Subtest: validated owner clock tracks room at 0.99 clock rate
+ok 29 - validated owner clock tracks room at 0.99 clock rate
+  ---
+  duration_ms: 1869.947916
+  type: 'test'
+  ...
+# Subtest: validated owner clock tracks room at 1.01 clock rate
+ok 30 - validated owner clock tracks room at 1.01 clock rate
+  ---
+  duration_ms: 1870.096583
+  type: 'test'
+  ...
+# Subtest: validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame
+ok 31 - validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame
+  ---
+  duration_ms: 116.62625
+  type: 'test'
+  ...
+# Subtest: an observer switches an owner placement at its sampled time, without interpolating across the map
+not ok 32 - an observer switches an owner placement at its sampled time, without interpolating across the map
+  ---
+  duration_ms: 153.561833
+  type: 'test'
+  location: '/Users/ryan/.homie/worktrees/runner-error-smoothing/packages/studio/test/rules-view.test.mjs:2851:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    before the placement tick the old revision remains
+    + actual - expected
+    
+    + 4.000000476837158
+    - 1.399999976158142
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1.399999976158142
+  actual: 4.000000476837158
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/ryan/.homie/worktrees/runner-error-smoothing/packages/studio/test/rules-view.test.mjs:2859:56)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a three-second server stall does not rewind continued valid owner movement
+ok 33 - a three-second server stall does not rewind continued valid owner movement
+  ---
+  duration_ms: 243.972167
+  type: 'test'
+  ...
+# Subtest: remote validated movement stays bounded while an owner catches up from an outage
+ok 34 - remote validated movement stays bounded while an owner catches up from an outage
+  ---
+  duration_ms: 338.864333
+  type: 'test'
+  ...
+# Subtest: remote owners stay on the shared scene timeline when newer reports arrive
+ok 35 - remote owners stay on the shared scene timeline when newer reports arrive
+  ---
+  duration_ms: 160.518709
+  type: 'test'
+  ...
+# Subtest: owner confirmations ignore a sampled scene from before the current placement
+ok 36 - owner confirmations ignore a sampled scene from before the current placement
+  ---
+  duration_ms: 128.962459
+  type: 'test'
+  ...
+# Subtest: runner and monster interpolation use one fraction through a burst of reports
+ok 37 - runner and monster interpolation use one fraction through a burst of reports
+  ---
+  duration_ms: 171.577583
+  type: 'test'
+  ...
+# Subtest: accepted runner ticks stay aligned with a patrol when uplink delay changes
+ok 38 - accepted runner ticks stay aligned with a patrol when uplink delay changes
+  ---
+  duration_ms: 352.943334
+  type: 'test'
+  ...
+# Subtest: receiving a placement preserves the moving runner history before its scene boundary
+ok 39 - receiving a placement preserves the moving runner history before its scene boundary
+  ---
+  duration_ms: 142.645084
+  type: 'test'
+  ...
+# Subtest: a stalled scene reaches fresh movement without replaying a long stationary tail
+ok 40 - a stalled scene reaches fresh movement without replaying a long stationary tail
+  ---
+  duration_ms: 253.834
+  type: 'test'
+  ...
+# [object Object]
+# Subtest: an idle remote source cannot pin a moving runner and its patrol
+ok 41 - an idle remote source cannot pin a moving runner and its patrol
+  ---
+  duration_ms: 293.337917
+  type: 'test'
+  ...
+# Subtest: a placement after a long server pause does not replay a stationary spawn tail
+ok 42 - a placement after a long server pause does not replay a stationary spawn tail
+  ---
+  duration_ms: 648.267208
+  type: 'test'
+  ...
+# {"longest":96}
+# Subtest: late movement after a stationary source cannot rewrite the drawn pose in one frame
+ok 43 - late movement after a stationary source cannot rewrite the drawn pose in one frame
+  ---
+  duration_ms: 257.849208
+  type: 'test'
+  ...
+# {"worst":1.4000000953674316}
+# Subtest: a fast path after a placement skips stationary history without spending future travel
+ok 44 - a fast path after a placement skips stationary history without spending future travel
+  ---
+  duration_ms: 653.018833
+  type: 'test'
+  ...
+# {"longest":96}
+# Subtest: a scene drains stationary history before charging newly moving travel
+ok 45 - a scene drains stationary history before charging newly moving travel
+  ---
+  duration_ms: 280.8325
+  type: 'test'
+  ...
+# {"first":288,"worst":1.4000015258789062}
+# Subtest: the first accepted path after a placement stays bounded from its drawn spawn
+ok 46 - the first accepted path after a placement stays bounded from its drawn spawn
+  ---
+  duration_ms: 274.912958
+  type: 'test'
+  ...
+# {"worst":1.4000091552734375}
+1..46
+# tests 46
+# suites 0
+# pass 45
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 18602.275166

@@ -1,0 +1,78 @@
+TAP version 13
+# Subtest: late movement replay equals on-time nonlinear acceleration, seed 47171
+ok 1 - late movement replay equals on-time nonlinear acceleration, seed 47171
+  ---
+  duration_ms: 532.653459
+  type: 'test'
+  ...
+# (node:42129) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: accepted runner ticks stay aligned with a patrol when uplink delay changes
+ok 2 - accepted runner ticks stay aligned with a patrol when uplink delay changes
+  ---
+  duration_ms: 346.918833
+  type: 'test'
+  ...
+# Subtest: receiving a placement preserves the moving runner history before its scene boundary
+ok 3 - receiving a placement preserves the moving runner history before its scene boundary
+  ---
+  duration_ms: 141.386458
+  type: 'test'
+  ...
+# Subtest: a stalled scene reaches fresh movement without replaying a long stationary tail
+ok 4 - a stalled scene reaches fresh movement without replaying a long stationary tail
+  ---
+  duration_ms: 236.123375
+  type: 'test'
+  ...
+# [object Object]
+# Subtest: an idle remote source cannot pin a moving runner and its patrol
+ok 5 - an idle remote source cannot pin a moving runner and its patrol
+  ---
+  duration_ms: 266.758208
+  type: 'test'
+  ...
+# Subtest: a placement after a long server pause does not replay a stationary spawn tail
+ok 6 - a placement after a long server pause does not replay a stationary spawn tail
+  ---
+  duration_ms: 605.101125
+  type: 'test'
+  ...
+# {"longest":96}
+# Subtest: late movement after a stationary source cannot rewrite the drawn pose in one frame
+ok 7 - late movement after a stationary source cannot rewrite the drawn pose in one frame
+  ---
+  duration_ms: 248.438666
+  type: 'test'
+  ...
+# {"worst":1.4000000953674316}
+# Subtest: a fast path after a placement skips stationary history without spending future travel
+ok 8 - a fast path after a placement skips stationary history without spending future travel
+  ---
+  duration_ms: 603.387041
+  type: 'test'
+  ...
+# {"longest":96}
+# Subtest: a scene drains stationary history before charging newly moving travel
+ok 9 - a scene drains stationary history before charging newly moving travel
+  ---
+  duration_ms: 261.260458
+  type: 'test'
+  ...
+# {"first":288,"worst":1.4000015258789062}
+# Subtest: the first accepted path after a placement stays bounded from its drawn spawn
+ok 10 - the first accepted path after a placement stays bounded from its drawn spawn
+  ---
+  duration_ms: 252.387541
+  type: 'test'
+  ...
+# {"worst":1.4000091552734375}
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3609.738541

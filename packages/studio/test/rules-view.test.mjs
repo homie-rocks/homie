@@ -3081,3 +3081,17 @@ test('a scene drains stationary history before charging newly moving travel',asy
  assert.ok(first!==null&&first<400,`stationary prefix held the renderer for ${first} ms`);
  assert.ok(worst<1.4+1e-5,`moving travel exceeded its display bound: ${worst}`);
 });
+
+test('the first accepted path after a placement stays bounded from its drawn spawn',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner-fast');
+ const clock=virtualTime(t);let held=false;
+ const r=rig(L,compiled,false,300,(m,link)=>held&&link===0&&m.t==='in'?null:300);
+ const owner=openRoom({net:{config:cfg('Placed late owner'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const viewer=openRoom({net:{config:cfg('Placed late observer'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{owner.close();viewer.close();r.stop();});await clock.wait(1000);owner.input({ax:1});await clock.wait(500);
+ const id=owner.me.id;held=true;owner.command('respawn');
+ for(let i=0;i<188;i++){await clock.wait(16);viewer.get(id);}
+ held=false;let prev=viewer.get(id).pos.x,worst=0;
+ for(let i=0;i<180;i++){await clock.wait(16);const x=viewer.get(id).pos.x;worst=Math.max(worst,Math.abs(x-prev));prev=x;}
+ t.diagnostic(JSON.stringify({worst}));assert.ok(worst<1.4+1e-5,`first accepted path jumped ${worst} tiles from its spawn`);
+});
