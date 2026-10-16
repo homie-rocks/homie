@@ -2871,7 +2871,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   }
 
   function hidden(): boolean { try { return Boolean(g.document?.hidden); } catch { return false; } }
-  function ping(): void {
+  function ping(force = false): void {
     // This runs every two seconds at least. A gap of more than three and a half means the page itself was held.
     const beat = wall();
     const pingHeld = beat - lastPingTick > 2000 + 1500;
@@ -2897,8 +2897,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       lastMsgAt = wall() - staleMs + 2500;
     }
     // An idle hibernatable room can answer this at the edge. Keep a regular
-    // clock/visibility sample every 30 s, and every heartbeat during play.
-    if (idlePing && roundInfo?.phase !== 'live' && wall() - lastClockPing < 30_000) {
+    // clock/visibility sample on visibility changes, and every heartbeat during play.
+    if (idlePing && roundInfo?.phase !== 'live' && !force) {
       try { ws?.send('homie-ping'); } catch { if(ws)lost(ws,'send'); }
       return;
     }
@@ -3114,8 +3114,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       if (hidden()) {
         // A hidden phone tab loses its timers and rAF: hand the round on before it stalls.
         if (role === 'host' && peers.size > 1) yieldHost();
-        ping();
-      } else ping();
+        ping(true);
+      } else ping(true);
     });
     g.addEventListener?.('online', () => { if (!closed && !connected && rulesGame) { if (ws) lost(ws, 'online'); if (retryTimer !== null) clearTimeout(retryTimer); retryTimer = null; attempt = 0; open(); } });
     g.addEventListener?.('pagehide', () => { if (role === 'host') { sendCheckpoint(); rulesSender?.leave(); } raw({ t: 'bye' }); });

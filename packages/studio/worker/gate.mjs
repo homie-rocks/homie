@@ -1,5 +1,6 @@
 import {WatchSockets} from './watch-sockets.mjs';
-import {relayChannel,readRelay} from './relay-channel.mjs';
+import {isQa} from './stats.mjs';
+import {relayChannel,readRelay,retryRelay} from './relay-channel.mjs';
 import { STUDIO_BUILD } from './build-id.mjs';
 import { stageTimings } from '../rules/timing.mjs';
 import { crowdView, crowdWorlds, scheduledView, snapshotEncoder, snapshotText } from '../rules/interest.mjs';
@@ -338,7 +339,7 @@ export class Gate {
       let socket;
       if ((url.searchParams.get('relay') === '1' || url.searchParams.get('host') === 'server')) {
         target.pathname = '/__relay';
-        socket = relayChannel(this.ctx, data => this.env.TABLE.get(this.env.TABLE.idFromName(name)).fetch(target, {method:'POST',headers:{'x-homie-relay-epoch':this.relayEpoch},body:data}));
+        socket = relayChannel(this.ctx, (data,sequence) => this.env.TABLE.get(this.env.TABLE.idFromName(name)).fetch(target, {method:'POST',headers:{'x-homie-relay-epoch':this.relayEpoch,'x-homie-relay-sequence':String(sequence)},body:data}));
         this.relaySocket = socket;
         socket.addEventListener('detached',()=>{ /* The next input or room alarm crosses the idle boundary. */ });
       } else {
@@ -473,7 +474,7 @@ export class Gate {
         server.rememberGate?.(server.gateState);
         // Logical creation and the first frame share a batch: admission time at
         // the Table excludes the public handshake and relay transit.
-        link.send(['open', id, request.url, server.address ?? request.headers.get('cf-connecting-ip'), request.headers.get('user-agent')]);
+        link.send(['open', id, request.url, server.address ?? request.headers.get('cf-connecting-ip'), isQa(request)?'homie-house-qa':null]);
       }
       const now = Date.now();
       const said = REPORTED_TICK.exec(event.data);
@@ -553,7 +554,7 @@ export class Gate {
     if(this.readingRelay){this.relayAgain=true;return;}
     const target=new URL(url);target.pathname='/__relay-live';
     const key=`${url.searchParams.get('game')}/${url.searchParams.get('room')}`;
-    this.readingRelay=(async()=>{
+    this.readingRelay=retryRelay(async()=>{
       const stub=this.env.TABLE.get(this.env.TABLE.idFromName(key));
       let response=await stub.fetch(target,{headers:{Upgrade:'websocket','x-homie-relay-epoch':this.relayEpoch}});
       if(!response.webSocket){target.pathname='/__relay-stream';response=await stub.fetch(target,{headers:{'x-homie-relay-epoch':this.relayEpoch}});} 
@@ -561,7 +562,7 @@ export class Gate {
       if(this.remoteRelayEpoch!==epoch){this.remoteRelayEpoch=epoch;socket.emit('reset',{});}
       if(response.webSocket){response.webSocket.accept();await socket.attachLive(response.webSocket);}
       else await readRelay(response,socket);
-    })().catch(error=>socket.emit('error',{error})).finally(()=>{
+    },()=>this.relaySocket===socket && Boolean(this.link)).finally(()=>{
       this.readingRelay=null;
       if(this.relayAgain&&this.link){this.relayAgain=false;this.openRelay(url,socket);}
     });

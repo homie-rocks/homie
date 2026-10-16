@@ -124,3 +124,21 @@ test('restored character transports reuse their saved lease without reacquiring'
  assert.equal(table.characterGrants.get('alice'),held);
  table.hostRt.characters.clear();assert.equal((await table.connect(new Request('https://room/__net?game=avatar&room=r&acct=1&via=p-alice'),transport)).status,409);
 });
+
+test('closed Table relay is removed so the next Gate request creates a session',()=>{
+ const table=Object.create(Table.prototype);Object.assign(table,{ctx:{waitUntil(){}},env:{},relays:new Map(),gateHeld:new Map(),gatePromised:new Map()});
+ const url=new URL('https://room/__relay?game=g&room=r&gate=0');const old=table.relayFor(url);old.socket.close(1011,'failed');
+ assert.equal(table.relays.size,0);assert.notEqual(table.relayFor(url),old);
+});
+for(const mode of ['relayed','browser-rules','server'])test(`2-second legacy pings do not persist transport telemetry: ${mode}`,t=>{
+ const st=storage(t),store=roomSessions(st);store.read();let now=1000;const sent=[];
+ const room=new NetRoom({code:'idle',now:()=>now,rules:mode!=='relayed',server:mode==='server'?()=>{}:null});
+ const h=room.attach({send:s=>sent.push(JSON.parse(s))});h.onMessage(JSON.stringify({t:'hello',v:1,rev:12,want:'play',rules:mode!=='relayed'}));
+ const ping=()=>{h.onMessage(JSON.stringify({t:'ping',c:now,hid:false}),mode==='relayed'?now:undefined);const c=[...room.clients.values()][0];if(mode==='browser-rules')room.allow(c,'ping',20,true,null,now);if(mode==='server')room.latencySample(c,10,now);};
+ ping();store.write(room);const before=st.writes;for(let i=0;i<20;i++){now+=2000;ping();store.write(room);}assert.equal(st.writes,before);
+});
+test('relay session rows retain only QA marker from user-agent',t=>{
+ const st=storage(t),store=roomSessions(st);store.read();const room=new NetRoom({code:'r'}),url='https://room/?game=g';
+ store.write(room,{relayDescriptors:[{url,clients:[['a','a',url,null,'private browser'],['b','b',url,null,'private homie-house-qa browser']]}]});
+ const clients=roomSessions(st).read().table.relayDescriptors[0].clients;assert.equal(clients[0][4],null);assert.equal(clients[1][4],'homie-house-qa');
+});

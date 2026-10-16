@@ -993,8 +993,14 @@ export class Table {
       this.relayed = true;
       const relay = this.relayFor(new URL(request.url));
       const epoch=request.headers.get('x-homie-relay-epoch');
-      if(relay.remoteEpoch!==epoch){relay.remoteEpoch=epoch;relay.session.reset();}
-      await this.relayInput(relay,await request.text());
+      if(relay.remoteEpoch!==epoch){relay.remoteEpoch=epoch;relay.inputSequence=0;relay.session.reset();}
+      const sequence=Number(request.headers.get('x-homie-relay-sequence'));
+      const data=await request.text();
+      // One Gate serializes POSTs; a lost response must not replay admission/input.
+      if(!sequence || sequence>relay.inputSequence){
+        relay.inputSequence=sequence;
+        await this.relayInput(relay,data);
+      }
       return new Response(null,{status:204});
     }
     if (path === '/__multiplex') {
@@ -1249,7 +1255,7 @@ export class Table {
     const key = `${url.searchParams.get('game')}/${url.searchParams.get('room')}/${gate}`;
     const socket = relayStream(this.ctx,async()=>{const response=await this.env.GATE.get(this.env.GATE.idFromName(key)).fetch(target);if(!response.ok)throw new Error('Gate wake failed');await response.body?.cancel();});
     const clients = new Map((descriptor?.clients??[]).map(row=>[row[0],row]));
-    const relay = {url:url.toString(),socket,clients,pings:new Map(descriptor?.pings??[])};
+    const relay = {url:url.toString(),socket,clients,inputSequence:descriptor?.inputSequence??0,remoteEpoch:descriptor?.remoteEpoch,pings:new Map(descriptor?.pings??[])};
     relay.session = multiplexSession(socket,(request,transport)=>this.connect(request,transport),{
       receipts:false,
       lastPing:id=>relay.pings.get(id)??0,
@@ -1258,6 +1264,8 @@ export class Table {
       remember:(id,clientId,url,ip,agent)=>clients.set(id,[id,clientId,url,ip,agent]),
       onCount:n=>{const index=Number(gate);if(n>(this.gateHeld.get(index)??0))this.gatePromised.get(index)?.shift();if(n)this.gateHeld.set(index,n);else this.gateHeld.delete(index);},
     });
+    const remove = () => { if(this.relays.get(gate)===relay)this.relays.delete(gate); };
+    socket.addEventListener('close',remove);socket.addEventListener('error',remove);
     this.relays.set(gate,relay);return relay;
   }
   saveSessions() {

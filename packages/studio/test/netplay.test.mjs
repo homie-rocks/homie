@@ -1920,9 +1920,9 @@ test('negotiated idle heartbeats stay at the edge and live rounds retain clock p
  let lastPing=0;const Base=r.socket({conn:{idlePing:true,lastPing:()=>lastPing}});
  class EdgeSocket extends Base {send(text){if(text==='homie-ping'){this.sent.push(text);lastPing=Date.now();this.onmessage?.({data:'homie-pong'});}else super.send(text);}}
  const net=createNetplay({config:cfg('idle'),WebSocketImpl:EdgeSocket,post:null,game:'x'});t.after(()=>net.close());
- await clock.wait(25000);const socket=r.sockets[0];assert.equal(net.link,'online');
+ await clock.wait(95000);const socket=r.sockets[0];assert.equal(net.link,'online');
  assert.ok(socket.sent.filter(x=>x==='homie-ping').length>=8);
- assert.ok(socket.sent.filter(x=>x.startsWith('{"t":"ping"')).length<=2,'idle clock samples are infrequent');
+ assert.ok(socket.sent.filter(x=>x.startsWith('{"t":"ping"')).length<=2,'idle clocks never wake the room through a long break');
  net.round({n:1,phase:'live',start:Date.now(),end:Date.now()+60000});const from=socket.sent.length;
  await clock.wait(6500);const live=socket.sent.slice(from);assert.ok(live.filter(x=>x.startsWith('{"t":"ping"')).length>=2);assert.equal(live.includes('homie-ping'),false);
 });
@@ -1932,6 +1932,6 @@ test('edge pongs cannot hide a dead room with an unanswered clock ping',async t=
  let dead=false,lastPing=0;const Base=r.socket({conn:{idlePing:true,lastPing:()=>lastPing}});
  class EdgeSocket extends Base {send(text){if(text==='homie-ping'){lastPing=Date.now();this.onmessage?.({data:'homie-pong'});}else if(!dead)super.send(text);}}
  const net=createNetplay({config:cfg('idle'),WebSocketImpl:EdgeSocket,post:null,game:'x'});t.after(()=>net.close());
- await clock.wait(1000);assert.equal(net.link,'online');dead=true;
+ await clock.wait(1000);assert.equal(net.link,'online');net.round({n:1,phase:'live',start:Date.now(),end:Date.now()+120000});dead=true;
  await clock.wait(64000);assert.ok(r.sockets.length>1,'unanswered room clock ping must reconnect despite edge replies');
 });

@@ -59,3 +59,26 @@ test('a live socket closed during HTTP drain falls back without dropping the Gat
  const attached=channel.attachLive(socket);socket.close();listeners.get('close')();release();await attached;
  assert.doesNotThrow(()=>channel.send('[]'));await Promise.all(pending);assert.equal(posts,2);assert.equal(channel.isLive(),false);
 });
+
+test('transient POST failure retries the same ordered batch without closing',async()=>{
+ const pending=[],received=[];let attempts=0,errors=0;
+ const channel=relayChannel({waitUntil:p=>pending.push(p)},async(data,sequence)=>{
+   received.push([data,sequence]);if(++attempts===1)throw Error('deploy');return new Response(null,{status:204});
+ },{sleep:async()=>{}});
+ channel.addEventListener('error',()=>errors++);channel.send('first');channel.send('second');
+ await Promise.all(pending);assert.equal(errors,0);assert.deepEqual(received.map(x=>x[0]),['first','first','second']);
+ assert.equal(received[0][1],received[1][1]);assert.notEqual(received[1][1],received[2][1]);
+});
+test('failed wake retries without destroying the output session',async()=>{
+ const pending=[];let calls=0,errors=0;
+ const stream=relayStream({waitUntil:p=>pending.push(p)},async()=>{if(++calls===1)throw Error('reset');},{sleep:async()=>{}});
+ stream.addEventListener('error',()=>errors++);stream.send('hello');await Promise.all(pending);
+ assert.equal(errors,0);assert.equal(calls,2);const reader=stream.open().getReader();
+ assert.equal(new TextDecoder().decode((await reader.read()).value),'hello\n');await reader.cancel();
+});
+test('output queue exposes backpressure and resumes when drained',async()=>{
+ const stream=relayStream({waitUntil(){}},async()=>{});let drains=0;stream.addEventListener('drain',()=>drains++);
+ stream.send('x'.repeat(4*1024*1024-1));assert.equal(stream.canSend(2),false);
+ const reader=stream.open().getReader();await reader.read();await Promise.resolve();
+ assert.equal(stream.canSend(2),true);assert.ok(drains>0);await reader.cancel();
+});
