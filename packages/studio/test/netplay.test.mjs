@@ -107,6 +107,50 @@ const bodyGame = (extra = {}) => ({
 /** Run every room's host loop on the virtual clock (a frame every 50 ms). */
 const loop = (...rooms) => { const id = setInterval(() => { for (const r of rooms) r.update(); }, 50); return () => clearInterval(id); };
 
+test('an early replica is seated after browser host boot, without delaying its connection', async (t) => {
+  const { createNetplay, Roster } = await netplayKit();
+  const clock = virtualTime(t), r = rig();
+  t.after(r.stop);
+  const host = createNetplay({ config: cfg('computer'), WebSocketImpl: r.socket(), post: null, game: 'x', heartbeatMs: 0 });
+  t.after(() => host.close());
+  const roster = new Roster({ min: 3, max: 4 });
+  let booted = false, welcome, joins = 0;
+  host.on('role', (e) => { welcome = e; });
+  host.on('join', (p) => {
+    joins++;
+    if (booted && p.seat !== null) { roster.claim(p.seat, p.name); host.roster(roster.toJSON()); }
+  });
+  await clock.wait(100);
+  const replica = createNetplay({ config: cfg('phone'), WebSocketImpl: r.socket(), post: null, game: 'x', heartbeatMs: 0 });
+  t.after(() => replica.close());
+  await clock.wait(100);
+  assert.equal(host.role, 'host');
+  assert.equal(replica.role, 'replica');
+  assert.equal(replica.seat, 1);
+  assert.equal(joins, 1, 'the real join arrives while the world is unavailable');
+  assert.equal(welcome.peers.length, 1, 'the saved welcome predates the replica');
+  // Some games publish a boot roster before their handlers can create bodies.
+  roster.reconcile(welcome.peers);
+  host.roster(roster.toJSON());
+  host.snapshot({ b: [] });
+  await clock.wait(100);
+  const ignored = joins;
+  booted = true;
+  for (let i = 0; i < 60; i++) {
+    host.snapshot({ b: roster.toJSON().map((s) => [s.slot, s.seat, s.bot ? 1 : 0]) });
+    await clock.wait(50);
+  }
+  for (let n = 1; n <= 3; n++) {
+    host.round({ n, phase: 'over', startedAt: Date.now() - 1000, endsAt: Date.now(), results: roster.toJSON().map((s, i) => ({ ...s, score: 3 - i, place: i + 1 })) });
+    await clock.wait(100);
+    const body = replica.roundInfo.results.find((s) => s.seat === replica.seat);
+    assert.ok(body, 'the replica has a body carrying its seat in every finished round');
+    assert.equal(body.bot, false);
+  }
+  assert.equal(ignored, 2, 'the first retry also arrived before boot');
+  assert.equal(joins, ignored + 1, 'retry stops once the host acknowledges the seat in its roster');
+});
+
 /** A document small enough for the line over the game: `lines()` is what a player reads on it right now. */
 function pageDocument(t) {
   const made = [];

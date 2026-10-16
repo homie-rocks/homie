@@ -17,6 +17,12 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [Unreleased]
+
+### Fixed
+
+- Browser-hosted games retry connected players’ seat claims when the host’s roster has no player body for them. Friends joining while the host is still loading now become seated players when its world is ready, including games with older bundled netplay clients. Fixes the 0.56.0 regression where Kart Royale replicas stayed bots across rounds; the two-browser check retains its original early-join timing. Host-driven AI seats count as acknowledged; missing-seat retries use capped exponential backoff and stop after eight attempts with one diagnostic, avoiding repeated joins when a game has no available body.
+
 ## [0.56.0] - 2026-10-15
 
 **Plugin 0.56.0**
