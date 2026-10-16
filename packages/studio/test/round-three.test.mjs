@@ -38,13 +38,15 @@ test('phone shell removes access from address, records, tools and EventSource UR
  for(const type of ['homie-app','homie-app-tool','homie-app-subscribe'])await handlers.message({source,data:{type,id:'a'.repeat(32),collection:'notes',collections:['notes'],method:'GET',name:'hello'}});
  assert.equal(urls.length,3);assert.ok(urls.every(url=>!url.includes('access=')&&!url.includes('secret')));assert.deepEqual(replaced,['/cafe/open?role=staff&room=lobby#hello']);
 });
-test('tool catalogue loads once across static requests and refreshes after studio mutation',async t=>{
+test('static requests never load tools; scheduled maintenance refreshes the catalogue',async t=>{
  const {env,token}=setup(t);let loads=0;useTools(async()=>{loads++;return []});t.after(()=>useTools(async()=>[]));
  env.LOBBY={idFromName:x=>x,get:()=>({fetch:async()=>Response.json({rooms:[]})})};env.TABLE=env.LOBBY;
  async function call(path,options={}){const pending=[];const res=await worker.fetch(new Request('https://place.test'+path,options),env,{waitUntil:p=>pending.push(p)});for(let i=0;i<pending.length;i++)await pending[i];return res;}
- await call('/style.css');await call('/other.css');assert.equal(loads,1);
+ await call('/style.css');await call('/other.css');assert.equal(loads,0);
+ await worker.scheduled({cron:'17 * * * *'},env,{waitUntil(){}});assert.equal(loads,1);
  const response=await call('/_studio/api/game',{method:'POST',headers:{cookie:'studio_owner='+token,origin:'https://place.test','content-type':'application/json'},body:JSON.stringify({game:'cafe',launch:'private'})});
- assert.equal(response.status,200);assert.equal(loads,2);await call('/third.css');assert.equal(loads,2);
+ assert.equal(response.status,200);await call('/third.css');assert.equal(loads,1);
+ await worker.scheduled({cron:'17 * * * *'},env,{waitUntil(){}});assert.equal(loads,2);
 });
 test('test-kind assets require the same still-valid test session on use',async t=>{
  const {env}=setup(t),origin='https://place.test';

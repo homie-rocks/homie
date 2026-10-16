@@ -1,38 +1,43 @@
-/** Extracted from the studio runtime; behavior is unchanged. */
-import {trackBackground,requestDatabase,databaseBinding,MUTATIONS} from './request-db.mjs';
+/** Studio Worker event boundaries and public toolkit exports. */
+import { catalogue } from './catalogue.mjs';
+import {trackBackground,requestDatabase,MUTATIONS} from './request-db.mjs';
+
 import {loadShopLinks} from './shop-links.mjs';
-import {errorLine} from './room.mjs';
-import {appCors,isAppOrigin} from './standalone.mjs';
-import {players as playerAccounts} from './players.mjs';
-import {usePlayers} from './office.mjs';
-import {reconcileOrders,shopOf} from './shop.mjs';
-import {toolCatalogues,notifyTools} from './runtime-support.mjs';
+
+import { errorLine } from './room-protocol.mjs';
+
+import { appCors, isAppOrigin } from './standalone.mjs';
+
+
+
 import {json,finish} from './responses.mjs';
-import {catalogue} from './catalogue.mjs';
-import {route} from './routes.mjs';
-export { useFunctions } from './functions.mjs';
+
+export { useFunctions } from './function-registry.mjs';
 export { Gate, Concentrator } from './gate.mjs';
 export { seatCount, SEAT_MAX } from './seats.mjs';
-export { hostRules } from './hosted.mjs';
-export { usePlayers } from './office.mjs';
+export { hostRules } from './hosted-registry.mjs';
+export {usePlayers} from './player-registry.mjs';
 export { countVisit } from './stats.mjs';
 export { players, cleanName } from './players.mjs';
 export { mergeSaves } from './saves.mjs';
-export {directoryOf,useTools,getStudioTools} from './tool-registry.mjs';
-export {roomEndAt} from './room-lifecycle.mjs';
 export {Table} from './table.mjs';
-export {LOBBY_APP_VERSIONS,LOBBY_ROOMS_MAX} from './lobby-limits.mjs';
+export {roomEndAt} from './room-lifecycle.mjs';
 export {Lobby} from './lobby.mjs';
-
-usePlayers(playerAccounts);
-
+export {LOBBY_APP_VERSIONS, LOBBY_ROOMS_MAX} from './lobby-limits.mjs';
+export {AppRecordHub, EventHub} from './stream-objects.mjs';
+export {directoryOf,useTools,getStudioTools} from './tool-registry.mjs';
+const route = async (...args) => (await import('./routes.mjs')).default(...args);
 export default {
   async scheduled(event, env, ctx) {
     env=await loadShopLinks(env);
     const maintenance=(async () => {
+      const [{notifyTools},{reconcileOrders,shopOf}]=await Promise.all([import('./runtime-support.mjs'),import('./shop.mjs')]);
       const cat = await catalogue(env, 'https://studio.invalid');
       await notifyTools(env,cat,cat.studio?.url??'https://studio.invalid').catch(error=>console.warn('Tool catalogue refresh:',error.message));
       await reconcileOrders(env, shopOf(cat));
+      await (await import('./event-resources.mjs')).pruneMcpKeys(env);
+      if(event.cron === '17 * * * *') await (await import('./players.mjs')).pruneGuests(env);
+
       await (await import('./functions.mjs')).scheduleFunctions(event,env,cat,cat.studio?.url??'https://studio.invalid');
     })();
     ctx.waitUntil(maintenance);
@@ -42,14 +47,11 @@ export default {
     const staticPath=new URL(request.url).pathname;
     if(['GET','HEAD'].includes(request.method)&&staticPath==='/_homie/site.js')return finish(await route(request,env,ctx),staticPath);
     env=await loadShopLinks(env,new URL(request.url).origin);
-    env={...env,DB:requestDatabase(env.DB,request)};
+    env={...env,DB:requestDatabase(env.DB,request,{mutated:false,summaries:Boolean(env.BACKGROUND)})};
     const url = new URL(request.url);
     if(env.HOMIE_CONCEPT==='1' && url.pathname==='/robots.txt')return new Response('User-agent: *\nDisallow: /\n',{headers:{'content-type':'text/plain','x-robots-tag':'noindex, nofollow'}});
     if(env.HOMIE_CONCEPT==='1' && url.pathname==='/.well-known/homie-studio.json')return json({ok:false,error:'concept-unlisted'},404,{'x-robots-tag':'noindex, nofollow'});
     const dispatch=()=>import('./functions.mjs').then(m=>m.runFunctions(env,()=>catalogue(env,url.origin),url.origin));
-    // Some routes reconcile shop state in waitUntil after returning their page.
-    // Keep dispatch behind those writes too, preserving the runtime context's
-    // methods and OAuth verification symbols through the proxy.
     const background=trackBackground(ctx,()=>env.DB?.[MUTATIONS]?dispatch():undefined);
     const requestCtx=background.context;
     // A standalone copy's Lobby call (worker/standalone.mjs): every answer to it can be read by the app's page, an
@@ -63,14 +65,6 @@ export default {
       try { console.error(JSON.stringify({ at: new Date().toISOString(), ev: 'lobby-route-failed', path: url.pathname, error: errorLine(error) })); } catch { /* no console */ }
       res = json({ ok: false, error: 'failed' }, 500);
     } finally {
-      // Refresh after the route has populated the catalogue cache.
-      if(env.DB&&env.LOBBY&&ctx?.waitUntil) {
-        const binding=databaseBinding(env.DB),mutation=url.pathname.startsWith('/_studio/')&&env.DB[MUTATIONS];
-        if(!toolCatalogues.has(binding)||mutation) {
-          toolCatalogues.add(binding);
-          ctx.waitUntil(catalogue(env,url.origin).then(cat=>notifyTools(env,cat,url.origin)).catch(()=>toolCatalogues.delete(binding)));
-        }
-      }
       // A route can commit a write and then fail. Its outbox still needs delivery.
       if(env.DB) {
         const delivery=background.finish();
@@ -87,6 +81,8 @@ export default {
       }
       res=new Response(body,{status:res.status,headers});
     }
+    const bookmark=env.DB?.getBookmark?.();
+    if(bookmark&&res.status!==101){const headers=new Headers(res.headers);headers.set('x-studio-bookmark',bookmark);res=new Response(res.body,{status:res.status,statusText:res.statusText,headers});}
     if (appLobby || appRecords) return appCors(request, res);
     return res;
   },

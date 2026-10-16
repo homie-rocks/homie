@@ -63,13 +63,13 @@ import { toolIdentity } from './tool-identity.mjs';
  * from an office key it is ALWAYS an ask (the AI may only propose one).
  */
 import { seatsOf } from './seats.mjs';
-import { diagnosticsOf, gatePlayers, roomLayout } from './gate.mjs';
+import { diagnosticsOf, gatePlayers, roomLayout } from './gate-routing.mjs';
 import { PUBLIC_SERVER, SERVER_LIMITS, checkServer, levelName, narrows, policyOf, roomServer, rowFor, serverView, serversOf, serverPassCookie, writeServer } from './servers.mjs';
 import { BRAIN_BUDGET, aiName, brainFor, fillSpot, passById, passCreate, passList, passRevoke, think } from './agents.mjs';
 import { DEFAULT_MODEL, NEURONS_PER_M, OWNER_MODEL, vocabularyOf } from './brain.mjs';
 import { OWNER_COOKIE, cookieValues, counter, ownerAllowed, ownerSession, today } from './stats.mjs';
 import { esc, layout, notFoundPage } from './site.mjs';
-import { confirmPage, lockedPage, officePage } from './office-page.mjs';
+
 import { CHAT_MODES, CHAT_WHO, checkChatRules, publicChat } from './chat.mjs';
 import { chatDay, chatOf, chatRowsOf, clearChatRules, dismissReport, reportsOf, writeChatRules } from './chat-store.mjs';
 import { checkRelease, performRelease, checkRefund, describeRefund, officeShopPage, ordersCsv, performRefund, shopOffice } from './shop.mjs';
@@ -142,12 +142,8 @@ export function canonical(v) {
 
 /* ------------------------------------------------------------------ player accounts (a seam) */
 
-let players = null;
-/**
- * The player-accounts API, handed over once by a studio's Worker that has it:
- * `{ get(id, env), of?(request, env), isOwner?(request, env) }` (worker/players.mjs `players` is exactly this).
- */
-export function usePlayers(api) { players = api && typeof api === 'object' ? api : null; }
+import {players} from './player-registry.mjs';
+export {usePlayers} from './player-registry.mjs';
 
 async function playerOf(env, id) {
   if (!players?.get || !id) return null;
@@ -554,7 +550,7 @@ export async function agentsTry(env, cat, body) {
     const n = Math.round(t.cost.neurons);
     if (n > 0) rows.push(counter(env, { metric: 'brain-neurons', subject: meta.id, n }));
     if (t.cost.micros >= 1) rows.push(counter(env, { metric: 'brain-microdollars', subject: meta.id, n: Math.round(t.cost.micros) }));
-    await env.DB.batch(rows.filter(Boolean)).catch(() => {});
+    await env.DB.batch(rows.filter(Boolean));
   }
   return {
     ok: true, game: meta.id, mode, model: t.model ?? (mode === 'workers-ai' ? e.HOMIE_BRAIN_MODEL || DEFAULT_MODEL : null), engine: t.engine, provider: t.provider,
@@ -1118,7 +1114,7 @@ export async function perform(env, cat, a) {
       if (a.budget !== undefined) {
         const day = await brainDay(env);
         const next = { neurons: day.budget.neurons, usd: day.budget.usd, ...(a.mode === 'workers-ai' ? { neurons: Math.round(a.budget) } : { usd: Math.round(a.budget * 100) / 100 }) };
-        await env.DB.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('brain_budget', ?1)").bind(JSON.stringify(next)).run().catch(() => {});
+        await env.DB.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('brain_budget', ?1)").bind(JSON.stringify(next)).run();
       }
       await pushPolicy(env, meta, settings, sv);
       const day = await brainDay(env);
@@ -1342,42 +1338,42 @@ export async function officeRoutes(request, env, url, { catalogueOf }) {
   if (path === '/_studio/office' || path === '/_studio/office/') {
     const cat = await catalogueOf();
     if (request.method !== 'GET') return new Response('method', { status: 405 });
-    if (!(await isOwner(request, env))) return lockedPage(cat, { what: 'office' });
+    if (!(await isOwner(request, env))) return (await import('./office-page.mjs')).lockedPage(cat, { what: 'office' });
     // A session from before 0.13.0 lives only under /_studio/: carry it to / so the owner's games know them too.
     const session = await ownerSession(request, env);
     const secure = url.protocol === 'https:' ? '; Secure' : '';
-    return officePage(cat, session ? { 'set-cookie': `${OWNER_COOKIE}=${session}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}${secure}` } : {});
+    return (await import('./office-page.mjs')).officePage(cat, session ? { 'set-cookie': `${OWNER_COOKIE}=${session}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}${secure}` } : {});
   }
   if (path === '/_studio/office/shop' || path === '/_studio/office/shop/') {
     const cat = await catalogueOf();
     if (request.method !== 'GET') return new Response('method', { status: 405 });
-    if (!(await isOwner(request, env))) return lockedPage(cat, { what: 'office' });
+    if (!(await isOwner(request, env))) return (await import('./office-page.mjs')).lockedPage(cat, { what: 'office' });
     return officeShopPage(cat);
   }
   const confirm = /^\/_studio\/confirm\/(ask_[a-f0-9]{16})\/?$/.exec(path);
   if (confirm) {
     const cat = await catalogueOf();
-    if (!(await isOwner(request, env))) return lockedPage(cat, { what: 'confirm', ask: confirm[1] });
+    if (!(await isOwner(request, env))) return (await import('./office-page.mjs')).lockedPage(cat, { what: 'confirm', ask: confirm[1] });
     const row = await readAsk(env, confirm[1]);
-    if (!row) return confirmPage(cat, null, { missing: true });
+    if (!row) return (await import('./office-page.mjs')).confirmPage(cat, null, { missing: true });
     const ask = askView(row, cat, url.origin);
-    if (request.method === 'GET') return confirmPage(cat, ask);
+    if (request.method === 'GET') return (await import('./office-page.mjs')).confirmPage(cat, ask);
     if (request.method !== 'POST' || !sameOrigin(request, url)) return new Response('Not allowed', { status: 403 });
     let yes = false;
     try { yes = String((await request.formData()).get('do') ?? '') === 'yes'; } catch { yes = false; }
-    if (ask.state !== 'pending') return confirmPage(cat, ask);
+    if (ask.state !== 'pending') return (await import('./office-page.mjs')).confirmPage(cat, ask);
     if (!yes) {
       await env.DB.prepare("UPDATE office_asks SET state = 'cancelled' WHERE id = ?1 AND state = 'pending'").bind(ask.id).run();
-      return confirmPage(cat, { ...ask, state: 'cancelled' });
+      return (await import('./office-page.mjs')).confirmPage(cat, { ...ask, state: 'cancelled' });
     }
     // Claim it first, so a double tap does it once.
     await env.DB.prepare("UPDATE office_asks SET state = 'working' WHERE id = ?1 AND state = 'pending'").bind(ask.id).run();
     const claimed = await readAsk(env, ask.id);
-    if (claimed?.state !== 'working') return confirmPage(cat, askView(claimed ?? row, cat, url.origin));
+    if (claimed?.state !== 'working') return (await import('./office-page.mjs')).confirmPage(cat, askView(claimed ?? row, cat, url.origin));
     if (ask.action.op === 'shop-release') ask.action.by = await releaseIdentity(request, env);
     const result = await perform(env, cat, ask.action);
     await env.DB.prepare('UPDATE office_asks SET state = ?2, result = ?3 WHERE id = ?1').bind(ask.id, result.ok ? 'done' : 'failed', JSON.stringify(result).slice(0, 4000)).run();
-    return confirmPage(cat, { ...ask, state: result.ok ? 'done' : 'failed', result });
+    return (await import('./office-page.mjs')).confirmPage(cat, { ...ask, state: result.ok ? 'done' : 'failed', result });
   }
   return null;
 }

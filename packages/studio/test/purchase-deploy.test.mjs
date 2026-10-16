@@ -35,7 +35,8 @@ for (const stop of ['storage', 'migration', 'deploy', 'upload']) test(`paid depl
     writeFileSync(join(bin, 'wrangler'), `#!${process.execPath}
 const fs=require('node:fs');const args=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(calls)},JSON.stringify(args)+'\\n');
 const stop=${JSON.stringify(stop)};
-if(args[0]==='whoami') console.log(JSON.stringify({loggedIn:true,authType:'OAuth Token',accounts:[{id:'account',name:'Studio'}]}));
+if(args[0]==='queues') {if(args[1]==='info') process.exit(1);console.log('created');}
+else if(args[0]==='whoami') console.log(JSON.stringify({loggedIn:true,authType:'OAuth Token',accounts:[{id:'account',name:'Studio'}]}));
 else if(args[0]==='d1'&&args[1]==='list') console.log(JSON.stringify([{name:${JSON.stringify(studio.cloudflare.d1)},uuid:'22222222-2222-2222-2222-222222222222'}]));
 else if(args[0]==='d1'&&args[1]==='migrations'&&stop==='migration') {console.error('injected migration failure');process.exit(1);}
 else if(args[0]==='r2'&&args[1]==='bucket'&&args[2]==='list') console.log('[]');

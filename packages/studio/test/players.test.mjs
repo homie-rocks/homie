@@ -615,3 +615,13 @@ test('the game SDK in a studio shell: every call is a message to the shell, answ
     listeners.forEach((fn) => fn({ data: { t: 'homie-save', q: 999, ok: true }, source: { other: true } }));
   } finally { globalThis.addEventListener = prev; }
 });
+
+test('guest creation occasionally cleans idle guests without any scheduled trigger',async(t)=>{
+ const env=site();resetLimits();
+ env.DB.sql.prepare("INSERT INTO players(id,name,named,guest,owner,created_at,seen_at) VALUES('old','Old',0,1,0,1,1)").run();
+ t.mock.method(Math,'random',()=>0);
+ const response=await browser(env,{ip:'192.0.2.199'}).post('/api/player/saves/ember',{set:[{key:'hero',value:1}]});
+ assert.equal(response.status,200);
+ assert.equal(env.DB.sql.prepare("SELECT id FROM players WHERE id='old'").get(),undefined);
+ assert.equal(env.DB.sql.prepare('SELECT COUNT(*) n FROM players').get().n,1);
+});

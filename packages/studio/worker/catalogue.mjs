@@ -1,20 +1,18 @@
-/** Extracted from the studio runtime; behavior is unchanged. */
-const catalogueCache = new WeakMap();
-
-async function catalogue(env, origin) {
-  try {
-    const cached=catalogueCache.get(env.ASSETS);
-    if(cached?.origin===origin && env.HOMIE_PREVIEW!=='1' && env.HOMIE_DEV!=='1')return cached.value;
-    const res = await env.ASSETS.fetch(new Request(`${origin}/games.json`));
-    if (!res.ok) return { studio: { name: env.STUDIO_NAME || 'Studio' }, games: [] };
-    const tag = res.headers.get('etag');
-    const hit = catalogueCache.get(env.ASSETS);
-    if (tag && hit?.tag === tag && hit.origin === origin) { await res.body?.cancel(); return hit.value; }
-    const value = await res.json();
-    catalogueCache.set(env.ASSETS, { tag, origin, value });
-    return value;
-  } catch { return { studio: { name: env.STUDIO_NAME || 'Studio' }, games: [] }; }
+const cache = new WeakMap();
+/** Cache completed immutable data only. Never share pending I/O across requests. */
+export async function catalogue(env, origin = 'https://studio.invalid') {
+  const baked = (await import('./built-metadata.mjs')).default;
+  if (baked) return baked.catalogue;
+  const hit = cache.get(env.ASSETS);
+  if (hit?.origin === origin && env.HOMIE_PREVIEW !== '1' && env.HOMIE_DEV !== '1') return hit.value;
+  const response = await env.ASSETS.fetch(new Request(`${origin}/games.json`));
+  if (!response.ok) return {studio: {name: env.STUDIO_NAME || 'Studio'}, games: []};
+  const tag=response.headers.get('etag');
+  if(tag&&hit?.origin===origin&&hit.tag===tag){await response.body?.cancel();return hit.value;}
+  const value = await response.json();
+  cache.set(env.ASSETS, {origin, value, tag});
+  return value;
 }
-
-export {catalogue};
-
+export async function builtPosts() {
+  return (await import('./built-metadata.mjs')).default?.posts;
+}

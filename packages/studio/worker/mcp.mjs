@@ -52,7 +52,11 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
     }
     const cat=await catalogueOf();
     const tools=[...builtins(env,cat,origin),...definitions];
-    await pushToolList(env,cat,tools,origin);
+    // Catalogue notifications update existing streams; the caller's response
+    // uses the catalogue above and does not depend on that delivery finishing.
+    const refresh=pushToolList(env,cat,tools,origin);
+    if(ctx?.waitUntil)ctx.waitUntil(refresh);
+    else await refresh;
     if(request.method==='GET'&&env.LOBBY) {
       if(!request.headers.get('accept')?.includes('text/event-stream'))return json({error:'Accept text/event-stream required'},406);
       const connection=caller.connection??'public:'+crypto.randomUUID();
