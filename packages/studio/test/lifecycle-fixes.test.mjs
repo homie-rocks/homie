@@ -134,9 +134,10 @@ test('closed Table relay is removed so the next Gate request creates a session',
 });
 for(const mode of ['relayed','browser-rules','server'])test(`2-second legacy pings do not persist transport telemetry: ${mode}`,t=>{
  const st=storage(t),store=roomSessions(st);store.read();let now=1000;const sent=[];
- const room=new NetRoom({code:'idle',now:()=>now,rules:mode!=='relayed',server:mode==='server'?()=>{}:null});
+ const room=new NetRoom({code:'idle',now:()=>now,rules:mode!=='relayed'});
+ if(mode==='server')room.setServerHost({frame(){},facts:()=>({})});
  const h=room.attach({send:s=>sent.push(JSON.parse(s))});h.onMessage(JSON.stringify({t:'hello',v:1,rev:12,want:'play',rules:mode!=='relayed'}));
- const ping=()=>{h.onMessage(JSON.stringify({t:'ping',c:now,hid:false}),mode==='relayed'?now:undefined);const c=[...room.clients.values()][0];if(mode==='browser-rules')room.allow(c,'ping',20,true,null,now);if(mode==='server')room.latencySample(c,10,now);};
+ const ping=()=>{h.onMessage(JSON.stringify({t:'ping',c:now,hid:false}),mode==='relayed'?now:undefined);const c=[...room.clients.values()][0];if(mode==='server'&&c.probe){now+=10;h.onMessage(JSON.stringify({t:'probeAck',n:c.probe.n}));}};
  ping();store.write(room);const before=st.writes;for(let i=0;i<20;i++){now+=2000;ping();store.write(room);}assert.equal(st.writes,before);
 });
 test('relay session rows retain only QA marker from user-agent',t=>{
@@ -169,4 +170,20 @@ test('a failed openRelay retries without emitting a fatal channel error',async()
  Object.assign(gate,{link:{},relaySocket:socket,relayEpoch:'gate',ctx:{waitUntil:p=>pending.push(p)},env:{TABLE:{idFromName:x=>x,get:()=>({fetch:async()=>{if(++calls===1)throw Error('deploy');return {headers:new Headers({'x-homie-relay-epoch':'table'}),webSocket:{accept(){}}};}})}}});
  gate.openRelay(new URL('https://room/?game=g&room=r'),socket);await Promise.all(pending);
  assert.equal(calls,2);assert.equal(events.includes('error'),false);assert.deepEqual(events,['reset']);
+});
+
+test('peak counter failure is retried by the next shard observation',async()=>{
+ let attempts=0;const values=new Map(),env={DB:{prepare:()=>({bind:()=>({})}),batch:async()=>{if(++attempts===1)throw Error('unavailable');}}};
+ const {LobbyPeak}=await import('../worker/lobby-peak.mjs');
+ const peak=new LobbyPeak({storage:{get:async k=>values.get(k),put:async(k,v)=>values.set(k,v)}},env);
+ const report=at=>peak.fetch(new Request('https://lobby/peak?game=g',{method:'POST',body:JSON.stringify({shard:0,players:10,room:10,at})}));
+ await assert.rejects(report(Date.now()),/unavailable/);await report(Date.now()+1);assert.equal(attempts,2);
+});
+
+test('matching entry eviction keeps a reservation on its original shard after load changes',async()=>{
+ const {MatchRouter}=await import('../worker/match-router.mjs');const values=new Map(),seen=[];let wide=false;
+ const ctx={storage:{get:async k=>values.get(k),put:async(k,v)=>values.set(k,v)}};
+ const env={LOBBY:{idFromName:x=>x,get:name=>({fetch:async url=>{if(new URL(url).pathname==='/match-policy')return Response.json({wide,until:Date.now()+10000});seen.push(name);return Response.json({room:'reserved'});}})}};
+ const request=()=>new Request('https://lobby/match?game=g&reservation=player');
+ await new MatchRouter(ctx,env).fetch(request());wide=true;await new MatchRouter(ctx,env).fetch(request());assert.deepEqual(seen,['g','g']);
 });

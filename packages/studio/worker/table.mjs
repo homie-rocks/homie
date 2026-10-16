@@ -975,7 +975,9 @@ export class Table {
       if(this.room && this.canSleep())return new Response(null,{status:204});
       this.relayed=true;
       const relay=this.relayFor(new URL(request.url));
-      relay.remoteEpoch=request.headers.get('x-homie-relay-epoch');relay.session.reset();
+      const epoch=request.headers.get('x-homie-relay-epoch');
+      if(relay.remoteEpoch!==epoch){relay.remoteEpoch=epoch;relay.inputSequence=0;}
+      relay.session.reset();
       const [client,server]=Object.values(new WebSocketPair());server.accept();
       server.addEventListener('message',event=>this.ctx.waitUntil(this.relayInput(relay,event.data)));
       relay.socket.attachLive(server);
@@ -984,7 +986,9 @@ export class Table {
     if (path === '/__relay-stream') {
       this.relayed=true;
       const relay=this.relayFor(new URL(request.url));
-      relay.remoteEpoch=request.headers.get('x-homie-relay-epoch');relay.session.reset();
+      const epoch=request.headers.get('x-homie-relay-epoch');
+      if(relay.remoteEpoch!==epoch){relay.remoteEpoch=epoch;relay.inputSequence=0;}
+      relay.session.reset();
       const response=new Response(relay.socket.open(),{headers:{'content-type':'application/x-ndjson','x-homie-relay-epoch':this.relayEpoch}});
       if(this.canSleep())this.ctx.waitUntil(this.sleepRoom());
       return response;

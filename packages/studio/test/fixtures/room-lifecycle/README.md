@@ -33,3 +33,12 @@ node packages/studio/test/fixtures/room-lifecycle/probe.mjs <fixture-url> <PROOF
 ```
 
 The probe writes the observations before intentionally closing its sockets.
+
+For a crowd, append `128` to the gated probe command. The probe admits batches
+of 16 and starts heartbeats before admission, then waits for the settled break
+before measuring its 40-second hibernation interval.
+
+`match-probe.mjs <fixture-url> <output.json>` checks 16 quiet pairs, then 2,048
+unique players with duplicate concurrent joins. It asserts unique allocations,
+all 16 matching shards used, and bounded per-object request counts. The fixture's
+`/proof-lobby` counters are observation-only and never ship in the toolkit router.

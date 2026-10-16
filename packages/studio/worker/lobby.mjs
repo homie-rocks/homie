@@ -242,9 +242,10 @@ export class Lobby {
     if (url.pathname === '/report' && request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
       if (typeof body.room !== 'string' || !ROOM_ID.test(body.room)) return json({ ok: false }, 400);
-      if (body.ended === true) { this.rooms.delete(body.room); this.seen.delete(body.room); this.save(); return json({ ok: true }); }
+      if (body.ended === true) { this.notePeak(body.room,0,url.searchParams.get('game')); this.rooms.delete(body.room); this.seen.delete(body.room); this.save(); return json({ ok: true }); }
       // The owner closed this room: matched with nobody until then (and forgotten as a public room).
       if (Number.isFinite(body.closed)) {
+        if(body.closed>now)this.notePeak(body.room,0,url.searchParams.get('game'));
         if (body.closed > now) { this.closed.set(body.room, body.closed); this.rooms.delete(body.room); } else this.closed.delete(body.room);
         this.seen.delete(body.room);
         this.save();

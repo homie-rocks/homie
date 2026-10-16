@@ -1,8 +1,14 @@
 /** Throwaway deployed proof only. These observation routes are not toolkit routes. */
-import worker, {Table as BaseTable, Lobby, Gate as BaseGate, Concentrator, hostRules} from '../../../worker/index.mjs';
+import worker, {Table as BaseTable, Lobby as BaseLobby, Gate as BaseGate, Concentrator, hostRules} from '../../../worker/index.mjs';
 import {lobbyFor} from '../../../worker/lobby-shards.mjs';
 import {defineRules, roomSettings} from '../../../rules/rules.ts';
-export {Lobby, Concentrator};
+export {Concentrator};
+export class Lobby extends BaseLobby {
+  async fetch(request){
+    if(new URL(request.url).pathname==='/proof-lobby')return Response.json({requests:this.proofRequests??0});
+    this.proofRequests=(this.proofRequests??0)+1;return super.fetch(request);
+  }
+}
 const rules = defineRules({
   contract: 2, space: {dims: 2}, entities: {runner: {player: true}},
   room: {rounds: {seconds: 15, breakSeconds: 60}, join(_world, peer) {
@@ -48,7 +54,8 @@ export class Gate extends BaseGate {
 }
 export default {fetch(request, env, ctx) {
   const url = new URL(request.url);
-  if(url.pathname==='/proof-match')return (async()=>{const lobby=lobbyFor(env,'proof-matches',url.searchParams.get('id'));const result=await (await lobby.fetch('https://lobby/join?max=1',{method:'POST'})).json();await lobby.fetch('https://lobby/report?game=proof-matches',{method:'POST',body:JSON.stringify({room:result.room,players:1})});return Response.json(result);})();
+  if(url.pathname==='/proof-match')return (async()=>{const lobby=lobbyFor(env,url.searchParams.get('game')??'proof-matches',url.searchParams.get('id'));const result=await (await lobby.fetch('https://lobby/join?max='+(url.searchParams.get('max')??'1'),{method:'POST'})).json();if(url.searchParams.has('report'))await lobby.fetch('https://lobby/report?game=proof-matches',{method:'POST',body:JSON.stringify({room:result.room,players:1})});return Response.json(result);})();
+  if(url.pathname==='/proof-lobby')return env.LOBBY.get(env.LOBBY.idFromName(url.searchParams.get('name'))).fetch(request);
   if(url.pathname==='/proof-count')return lobbyFor(env,'proof-matches').fetch('https://lobby/rooms');
   if(url.pathname==='/proof-watch') {
     const game=url.searchParams.get('game')??'gated',room=url.searchParams.get('room');
