@@ -39,6 +39,8 @@ Studios scale with hibernating rooms, add custom routes with built-in access che
 
 ### Fixed
 
+- Custom studio Workers that wrap only `fetch` now inherit missing toolkit queue and scheduled handlers in the generated entry, so background queue consumers attach during deploy. Custom handlers remain intact.
+- Deploy failures retain Wrangler's real error and context with secrets redacted, instead of showing only the last six lines.
 - Custom route role checks enforce fresh app launch gates. Custom Worker asset routes preserve generated authorization paths; same-origin mutation protection is exported and documented with reserved `/api/custom/*` paths and app cookie scope.
 - Custom `assets.run_worker_first` entries cannot exclude paths with `!`; the build refuses them so private app files always stay behind their access checks.
 - Late link subscriptions no longer trigger rules-view reconnect recovery; throwing listeners still return their unsubscribe function.

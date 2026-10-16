@@ -1,3 +1,4 @@
+import {redactText} from './redact.mjs';
 import {enableReadReplication} from './read-replication.mjs';
 import {ensureBackgroundQueues,backgroundQueues} from './background-queue.mjs';
 import { directoryUrl } from '../worker/directory-choice.mjs';
@@ -52,6 +53,13 @@ import { ensureLocalIgnored, ensureMigrations, migrationWord } from './scaffold.
 import { LOCAL_STATE, configPath, domainOrigin, isRulesGame, isWorkersDev, layoutOf, listExperiences as listGames, readLocal, readStudio, siteUrl, workerDir, writeLocal, writeStudio } from './studio.mjs';
 
 const ANSI = /\u001b\[[0-9;]*m/g;
+
+/** Keep Wrangler's error and its context; progress/footer lines must not hide it. */
+export function wranglerDeployError(out) {
+  const clean = redactText(String(out ?? '').replace(ANSI, '')).text;
+  const error = clean.search(/(?:^|\n)[^\n]*\[ERROR\]/);
+  return (error >= 0 ? clean.slice(error) : clean).trim();
+}
 
 export function experienceAddresses(root, id, url) {
   const app = listGames(root).find(g => g.id === id)?.kind === 'app';
@@ -431,7 +439,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
     step(address.created ? 'registered the account’s workers.dev address automatically' : 'kept the account’s existing workers.dev address');
     dep = w(['deploy', ...(workerEntry(root) ? [workerEntry(root)] : []), ...repoVar(root)]);
   }
-  if (dep.code !== 0) return refuse(`wrangler deploy failed: ${dep.out.trim().split('\n').slice(-6).join(' ')}`, dep.out);
+  if (dep.code !== 0) return refuse(`wrangler deploy failed: ${wranglerDeployError(dep.out)}`, dep.out);
   if (paidReleases(root).length) {
     const bin = wranglerBin(root);
     const uploadOptions = { cwd: workerDir(root), env: { ...process.env, CLOUDFLARE_ACCOUNT_ID: accountId, WRANGLER_SEND_METRICS: 'false', CI: '1' } };
@@ -655,7 +663,7 @@ export async function ciDeploy(root, { log = () => {}, wrangler = null } = {}) {
   }
   const started = Date.now();
   const dep = w(['deploy', ...(workerEntry(root) ? [workerEntry(root)] : []), ...repoVar(root)]);
-  if (dep.code !== 0) return refuse(`wrangler deploy failed: ${dep.out.trim().split('\n').slice(-6).join(' ')}`, dep.out);
+  if (dep.code !== 0) return refuse(`wrangler deploy failed: ${wranglerDeployError(dep.out)}`, dep.out);
   step(`deployed ${names.worker ?? 'the Worker'} in ${Math.round((Date.now() - started) / 1000)} s`);
   const repo = repoOf(root);
   step(repo ? `the live site knows its GitHub repository (${repo}), for the Claude app's hand-off` : 'no GitHub repository found here (no HOMIE_REPO, studio.json "github" or git remote): the Claude app\'s card asks the person which it is');
