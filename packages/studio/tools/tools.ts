@@ -7,6 +7,7 @@ export interface ToolContext {
   office(path: string, body?: Record<string, unknown>, query?: Record<string, string>): Promise<unknown>;
   shop(): Promise<unknown>;
   studios: {
+    send(origin: string, event: string, input: {id: string; data: unknown}): Promise<{id: string}>;
     listTools(origin: string, options?: {cursor?: string}): Promise<{tools: Array<{name: string; description?: string; inputSchema: Record<string, unknown>}>; nextCursor?: string}>;
     call(origin: string, tool: string, args?: Record<string, unknown>, options?: {actingFor?: string}): Promise<{isError: boolean; data?: unknown; content: unknown[]}>;
   };

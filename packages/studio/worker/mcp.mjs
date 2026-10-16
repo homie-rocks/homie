@@ -37,6 +37,12 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
   const url=new URL(request.url), origin=url.origin, path=url.pathname;
   if(!env.DB)return json({error:'studio database required'},503);
   if(request.headers.has('origin') && request.headers.get('origin')!==origin)return json({error:'origin refused'},403);
+  if(path.startsWith('/hooks/studios/')) {
+    const cat=await catalogueOf();
+    const response=await (await import('./studios-events.mjs')).receiveStudioEvent(request,env,cat);
+    if(response.ok){const delivery=import('./functions.mjs').then(m=>m.runFunctions(env,cat,origin));if(ctx?.waitUntil)ctx.waitUntil(delivery);else await delivery;}
+    return response;
+  }
   if(path.startsWith('/hooks/tools/')) return (await import('./tool-webhook.mjs')).toolWebhook(request,env,{cat:await catalogueOf(),definitions});
   if(path==='/oauth/token'){const response=await studioToken(request,env,await catalogueOf());if(response)return response;}
   const machine=request.headers.get('authorization')?.startsWith('Bearer homie_studio_');

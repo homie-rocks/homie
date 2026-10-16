@@ -48,6 +48,7 @@ export function studiosClient(env,cat,definition,{fetchFn=globalThis.fetch.bind(
   }finally{controller.abort();clearTimeout(timer);await client.close();}
  };
  return Object.freeze({
+  send:(origin,name,event)=>import('./studios-events.mjs').then(m=>m.sendStudioEvent(env,cat,null,definition,origin,name,event,{fetchFn})),
   listTools:(origin,options)=>run(origin,(client,signal)=>client.listTools(options?.cursor?{cursor:options.cursor}:{},{signal,timeout:10000}),options),
   call:(origin,tool,args={},options)=>{
    if(new TextEncoder().encode(JSON.stringify(args)).length>65536)return Promise.reject(new Error('Studio arguments size exceeded'));
