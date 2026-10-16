@@ -34,13 +34,18 @@ export default {
     const maintenance=(async () => {
       const [{notifyTools},{reconcileOrders,shopOf}]=await Promise.all([import('./runtime-support.mjs'),import('./shop.mjs')]);
       const cat = await catalogue(env, 'https://studio.invalid');
-      await notifyTools(env,cat,cat.studio?.url??'https://studio.invalid').catch(error=>console.warn('Tool catalogue refresh:',error.message));
-      await reconcileOrders(env, shopOf(cat));
-      if(env.DB)await (await import('./stripe-intake.mjs')).pruneStripeEvents(env);
-      await (await import('./event-resources.mjs')).pruneMcpKeys(env);
-      if(event.cron === '17 * * * *') await (await import('./players.mjs')).pruneGuests(env);
-
-      await (await import('./functions.mjs')).scheduleFunctions(event,env,cat,cat.studio?.url??'https://studio.invalid');
+      // Each independent maintenance task settles before its errors are reported.
+      // Owner schedules must run even if pruning or payment recovery fails.
+      const tasks=[
+        ['tool catalogue',()=>notifyTools(env,cat,cat.studio?.url??'https://studio.invalid')],
+        ['orders',()=>reconcileOrders(env,shopOf(cat))],
+        ['Stripe retention',async()=>{if(env.DB)await (await import('./stripe-intake.mjs')).pruneStripeEvents(env);}],
+        ['MCP retention',async()=> (await import('./event-resources.mjs')).pruneMcpKeys(env)],
+        ['guest retention',async()=>{if(event.cron==='17 * * * *')await (await import('./players.mjs')).pruneGuests(env);}],
+        ['Stripe recovery',async()=>{if(env.BACKGROUND && event.cron==='17 * * * *')await (await import('./stripe-intake.mjs')).sweepStripeEvents(env,cat);}],
+        ['owner functions',async()=> (await import('./functions.mjs')).scheduleFunctions(event,env,cat,cat.studio?.url??'https://studio.invalid')],
+      ];
+      await Promise.all(tasks.map(async([name,run])=>{try{await run();}catch(error){console.error('Scheduled '+name+' failed:',error.message);}}));
     })();
     ctx.waitUntil(maintenance);
     await maintenance;

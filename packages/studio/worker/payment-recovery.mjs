@@ -8,7 +8,7 @@ export async function saveRecording(env, order, params, options) {
   const chain = params.payment_method_options?.crypto?.transaction_verification_options;
   const id = chain ? `${order.id}:${chain.network}:${chain.transaction_hash}` : options.idempotencyKey;
   await env.DB.prepare("INSERT OR IGNORE INTO purchase_jobs (id,order_id,mode,state,payload,updated_at) VALUES (?1,?2,?3,?4,?5,?6)")
-    .bind(id, order.id, order.mode, chain ? 'paid_recording' : 'submitted', JSON.stringify({ params, options: { ...options, idempotencyKey: chain ? chain.transaction_hash : options.idempotencyKey }, chain, startedAt: Date.now() }), Date.now()).run();
+    .bind(id, order.id, order.mode, chain ? 'paid_recording' : 'submitted', JSON.stringify({ params, options: { ...options, version: options.version ?? options.apiVersion ?? STRIPE_VERSION, idempotencyKey: chain ? chain.transaction_hash : options.idempotencyKey }, chain, startedAt: Date.now() }), Date.now()).run();
   if (chain) {
     // Only the protocol's verified settlement callback reaches here, never buyer input.
     await orderFact(env, order.id, 'payment', {paid_at: Date.now()}).run();
@@ -64,7 +64,7 @@ export async function readProviderPayment(env, order, job, payment = null) {
   if(params&&options?.idempotencyKey&&Date.now()-(startedAt??order.created_at)<REPLAY_LIMIT_MS) {
     // If the create response was lost, replay only the original request/key
     // inside Stripe's guaranteed retention window. Never scan the account.
-    const pi=await stripeCall(env,'POST','/v1/payment_intents',params,{...options,version:STRIPE_VERSION});
+    const pi=await stripeCall(env,'POST','/v1/payment_intents',params,{...options,version:options.version ?? options.apiVersion ?? STRIPE_VERSION});
     await recordProviderId(env,order,job.id,pi);
     return pi;
   }
@@ -100,11 +100,11 @@ export async function reconcileRecordings(env, orderId = null, dependencies = {}
             if (pi.status !== 'canceled') throw new Error('The unpaid payment could not be canceled; the claim remains reserved');
           }
           await releaseUnpaid(env, order, job, pi); continue;
-        case 'replay': pi = await stripeCall(env, 'POST', '/v1/payment_intents', params, { ...options, version: STRIPE_VERSION }); break;
+        case 'replay': pi = await stripeCall(env, 'POST', '/v1/payment_intents', params, { ...options, version: options.version ?? options.apiVersion ?? STRIPE_VERSION }); break;
         default:
           if (!pi) {
             if (deadline) throw new Error(`Paid transfer still needs recording: order ${order.id}; key ${options.idempotencyKey}`);
-            pi = await stripeCall(env, 'POST', '/v1/payment_intents', params, { ...options, version: STRIPE_VERSION });
+            pi = await stripeCall(env, 'POST', '/v1/payment_intents', params, { ...options, version: options.version ?? options.apiVersion ?? STRIPE_VERSION });
           }
       }
       if (['requires_action','requires_confirmation','requires_capture','requires_payment_method'].includes(pi.status) || orderId && dependencies.cancel === true && pi.status === 'processing') pi = await stripeCall(env, 'POST', `/v1/payment_intents/${encodeURIComponent(pi.id)}/cancel`, {}, { idempotencyKey: `cancel-action-${pi.id}`, version: STRIPE_VERSION });

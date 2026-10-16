@@ -385,7 +385,7 @@ test('a studio beneath a zone\'s wildcard Worker route: the deploy says which ex
   assert.deepEqual(shadowed.steps.find((s) => s.route)?.route, { pattern: 'play.example.com/*', zone_name: 'example.com' });
   // The domain's routes are only ever read, and here they could not be (this stand-in Wrangler hands out no
   // sign-in): the deploy says that as unmeasured before it deploys, and changes no route.
-  assert.deepEqual([...new Set(cf.calls().map((c) => c.split(' ')[0]))].sort(), ['auth', 'd1', 'deploy', 'versions', 'whoami']);
+  assert.deepEqual([...new Set(cf.calls().map((c) => c.split(' ')[0]))].sort(), ['auth', 'd1', 'deploy', 'queues', 'versions', 'whoami']);
   assert.equal(shadowed.zone.state, 'unmeasured');
   assert.equal(zone.asked.some((u) => u.includes('api.cloudflare.com')), false, 'with no sign-in to read with, Cloudflare is asked nothing');
   assert.deepEqual(readConfig(dir).routes, [{ pattern: 'play.example.com', custom_domain: true }], 'the custom domain stayed; nothing was added by itself');

@@ -1449,6 +1449,7 @@ export async function shopOffice(env, cat, origin, itemCursor = 0, orderCursor =
     },
     keyless: !hasStripeKey(env),
     hook: `${origin}/api/shop/hook`,
+    ...(env.BACKGROUND ? {delivery:await (await import('./stripe-intake.mjs')).stripeIntakeStatus(env)} : {}),
     totals: null, orders: [],
   };
   if (!(await migrated(env, { complete: false }))) return out;

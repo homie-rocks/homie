@@ -1,7 +1,10 @@
 import {catalogue} from './catalogue.mjs';
 /** Durable rows remain the source of truth. Messages carry wakeups, never records. */
 export async function enqueueChanges(env, origin) {
-  if(env.BACKGROUND) return env.BACKGROUND.send({v:1,type:'studio.changed',origin});
+  if(env.BACKGROUND) {
+    try {return await env.BACKGROUND.send({v:1,type:'studio.changed',origin});}
+    catch(error) {console.warn('Background queue unavailable; delivering inline:',error.message);}
+  }
   // Older wrappers and local unit fixtures without the binding keep their behavior.
   return (await import('./functions.mjs')).runFunctions(env,()=>catalogue(env,origin),origin);
 }

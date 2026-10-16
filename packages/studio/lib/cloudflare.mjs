@@ -391,7 +391,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   step(`Cron triggers: ${(readConfig(root)?.triggers?.crons??[]).join("; ")||"none (remove toolkit triggers)"}`);
   if (routes) step(`kept the studio's own route${routes.length === 1 ? '' : 's'} in wrangler.jsonc: ${routes.map((r) => r.pattern).join(', ')}`);
   for (const added of ensureMigrations(root)) step(`added ${added} (${migrationWord(added)})`);
-  try {ensureBackgroundQueues(root,w);for(const key of readStudio(root).cloudflare.created??[])created.add(key);} catch(error) {return refuse(error.message);}
+  try {await ensureBackgroundQueues(root,w,{accountId,...(fetchFn?{fetchFn}:{})});for(const key of readStudio(root).cloudflare.created??[])created.add(key);} catch(error) {return refuse(error.message);}
   const migrate = w(['d1', 'migrations', 'apply', cf.d1, '--remote']);
   if (migrate.code !== 0) return refuse(`D1 migrations failed: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
   try {const replication=await enableReadReplication(root,w,{accountId,databaseId:db.uuid,...(fetchFn?{fetchFn}:{})});step(replication.enabled?'D1 read replication enabled':`D1 uses the primary: ${replication.reason}`);} catch(error) {step(`D1 uses the primary: ${error.message}`);}
@@ -613,7 +613,7 @@ export async function ciDeploy(root, { log = () => {}, wrangler = null } = {}) {
   const refuse = (why, out) => ({ ok: false, command: 'deploy', ci: true, ...(explainCloudflare(out) ?? { why }), steps });
   if (!existsSync(join(root, 'site', 'dist', 'games.json'))) return { ok: false, command: 'deploy', ci: true, why: 'nothing is built: the build command is `npm run build` (homie-studio build), and it runs before this', steps };
   for (const added of ensureMigrations(root)) step(`added ${added} (${migrationWord(added)})`);
-  try {ensureBackgroundQueues(root,w);} catch(error) {return refuse(error.message);}
+  try {await ensureBackgroundQueues(root,w);} catch(error) {return refuse(error.message);}
   const apply = () => w(['d1', 'migrations', 'apply', names.binding, '--remote']);
   let migrate = apply();
   const first = migrate.code !== 0 && /not found|could(?:n't| not) find|does not exist|no database|database_id/i.test(migrate.out);

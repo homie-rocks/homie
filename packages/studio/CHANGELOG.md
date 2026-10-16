@@ -20,6 +20,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 ## Unreleased
 
 - Preserve live MCP OAuth and webhook dedupe rows during cleanup by using Unix seconds throughout MCP storage; reclaim idle guests occasionally on guest creation even without a studio cron.
+- Recover verified Stripe intake from D1 after queue failures, renew reconciliation leases, preserve replay API versions, report stuck deliveries, and isolate scheduled maintenance failures. Resume partial queue setup with clear CI token permission guidance.
 
 - Deploy with D1 primary fallback when replication is unavailable; only install needed schedules, explain account cron limits, and preserve retired-source, HEAD and concept-page protections.
 - Deliver mutations and verified Stripe webhooks through retryable Queues. Store PaymentIntent ids before follow-up, recover lost responses using the original idempotency key, and retain uncertain payments for review.
