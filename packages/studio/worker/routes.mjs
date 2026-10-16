@@ -1,4 +1,5 @@
 /** Route dispatch; large interfaces and tool runtimes load at their own entry points. */
+import {customRoute} from './custom-routes.mjs';
 import { catalogue } from './catalogue.mjs';
 
 import { RULES_WIRING_MESSAGE } from './rules-wiring.mjs';
@@ -40,6 +41,7 @@ export default async function route(request, env, ctx) {
   let pubP = null;
   // Every game (for a game's own pages and the owner's), and the public ones (every list, the rooms, the manifest).
   const getAll = () => (catP ??= catalogue(env, url.origin).then((cat) => named(cat, env)));
+  const customFallback = async () => (await customRoute(request, env, ctx)) ?? fallback(request, env, url, getCat);
   const getCat = () => (pubP ??= Promise.all([getAll(), settingsOf(env)]).then(([cat, settings]) => publicCatalogue(cat, settings, env)));
 
   // Keep tool transports and discovery on the alias; redirect browser pages only.
@@ -281,7 +283,7 @@ export default async function route(request, env, ctx) {
   if (game && GAME_ID.test(game)) {
     const all = await getAll();
     const meta = (all.games ?? []).find((g) => g.id === game);
-    if (!meta) return fallback(request, env, url, getCat);
+    if (!meta) return customFallback();
     if (parts.length === 1 && !path.endsWith('/')) return Response.redirect(`${url.origin}/${game}/`, 301);
     let sub = parts.slice(1).join('/');
     // Game bundles were already public assets; only the document carries access context.
@@ -663,5 +665,5 @@ export default async function route(request, env, ctx) {
     }
     if (sub.startsWith('__game/')) return gameAsset(request, env, url, game, sub.slice('__game/'.length));
   }
-  return fallback(request, env, url, getCat);
+  return customFallback();
 }

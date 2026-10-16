@@ -1,0 +1,41 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import * as toolkit from '../worker/index.mjs';
+const request = (path, headers) => new Request('https://studio.example'+path,{headers});
+const env = () => ({ASSETS:{async fetch(req){return new URL(req.url).pathname==='/games.json'?Response.json({studio:{name:'Test'},games:[]}):new Response('asset',{status:404});}}});
+test('custom routes fall through, preserve Homie precedence, and receive response headers',async t=>{
+  assert.equal(typeof toolkit.useRoutes,'function');
+  t.after(()=>toolkit.useRoutes(null));
+  const seen=[];
+  toolkit.useRoutes(async(req,bindings,ctx)=>{seen.push(new URL(req.url).pathname);assert.ok(bindings.ASSETS);return req.url.endsWith('/custom')?new Response('<p>Custom</p>',{headers:{'content-type':'text/html'}}):undefined;});
+  const custom=await toolkit.default.fetch(request('/custom'),env(),{});
+  assert.equal(await custom.text(),'<p>Custom</p>');
+  assert.equal(custom.headers.get('x-frame-options'),'DENY');
+  assert.match(custom.headers.get('cache-control'),/no-transform/);
+  const manifest=await toolkit.default.fetch(request('/.well-known/homie-studio.json'),env(),{});
+  assert.equal(manifest.status,200);assert.ok(!seen.includes('/.well-known/homie-studio.json'));
+  assert.equal((await toolkit.default.fetch(request('/missing'),env(),{})).status,404);
+  toolkit.useRoutes(()=>Response.json({ok:true}));
+  assert.equal((await toolkit.default.fetch(request('/.well-known/custom.json'),env(),{})).status,200);
+});
+test('public owner helper checks live sessions, not bearer keys or expired/revoked cookies',async()=>{
+  assert.equal(typeof toolkit.isOwner,'function');
+  const token='a'.repeat(64), hash=createHash('sha256').update(token).digest('hex');
+  let row={kind:'session',expires_at:Date.now()+60000};
+  const bindings={DB:{prepare(){return {bind(value){assert.equal(value,hash);return {async first(){return row;}};}};}}};
+  const req=request('/custom',{cookie:'studio_owner='+token});
+  assert.equal(await toolkit.isOwner(req,bindings),true);
+  assert.equal(await toolkit.isOwner(request('/custom'),bindings),false);
+  row={kind:'session',expires_at:Date.now()-1};assert.equal(await toolkit.isOwner(req,bindings),false);
+  row=null;assert.equal(await toolkit.isOwner(req,bindings),false);
+  row={kind:'read',expires_at:Date.now()+60000};assert.equal(await toolkit.isOwner(req,bindings),false);
+});
+test('role helper uses declared roles and refuses missing grants and unknown roles',async()=>{
+  const bindings=env();
+  bindings.ASSETS.fetch=async()=>Response.json({games:[{id:'desk',kind:'app',roles:{visitor:{signIn:false,can:[]},staff:{signIn:true,can:[]}}}]});
+  assert.equal(await toolkit.hasRole(request('/custom'),bindings,'desk','visitor'),true);
+  assert.equal(await toolkit.hasRole(request('/custom?role=visitor'),bindings,'desk','staff'),false);
+  assert.equal(await toolkit.hasRole(request('/custom'),bindings,'desk','missing'),false);
+  assert.equal(await toolkit.hasRole(request('/custom'),bindings,'missing','visitor'),false);
+});
