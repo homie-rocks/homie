@@ -1,3 +1,4 @@
+import {lobbyFor} from './lobby-shards.mjs';
 import {relayStream} from './relay-channel.mjs';
 import {roomSessions,restoreRoomFields} from './room-sessions.mjs';
 import {idleChatSnapshot,restoreIdleChat,readIdleChat,writeIdleChat,expireIdleChat} from './idle-chat.mjs';
@@ -970,6 +971,16 @@ export class Table {
       this.gatePromised.get(gate).push(now + 10_000);
       return json({ gate });
     }
+    if (path === '/__relay-live') {
+      if(this.room && this.canSleep())return new Response(null,{status:204});
+      this.relayed=true;
+      const relay=this.relayFor(new URL(request.url));
+      relay.remoteEpoch=request.headers.get('x-homie-relay-epoch');relay.session.reset();
+      const [client,server]=Object.values(new WebSocketPair());server.accept();
+      server.addEventListener('message',event=>this.ctx.waitUntil(this.relayInput(relay,event.data)));
+      relay.socket.attachLive(server);
+      return new Response(null,{status:101,webSocket:client,headers:{'x-homie-relay-epoch':this.relayEpoch}});
+    }
     if (path === '/__relay-stream') {
       this.relayed=true;
       const relay=this.relayFor(new URL(request.url));
@@ -983,12 +994,7 @@ export class Table {
       const relay = this.relayFor(new URL(request.url));
       const epoch=request.headers.get('x-homie-relay-epoch');
       if(relay.remoteEpoch!==epoch){relay.remoteEpoch=epoch;relay.session.reset();}
-      const data = await request.text();
-      relay.socket.emit('message',{data});
-      await relay.session.settled();
-      for (const row of JSON.parse(data)) if (row[0] === 'close') relay.clients.delete(row[1]);
-      if (this.canSleep()) await this.sleepRoom();
-      else if (JSON.parse(data).some(row=>row[0]==='open'||row[0]==='close')) this.saveSessions();
+      await this.relayInput(relay,await request.text());
       return new Response(null,{status:204});
     }
     if (path === '/__multiplex') {
@@ -1002,6 +1008,15 @@ export class Table {
       } });
     }
     return this.connect(request);
+  }
+
+  async relayInput(relay,data) {
+    relay.socket.emit('message',{data});
+    await relay.session.settled();
+    const rows=JSON.parse(data);
+    for(const row of rows)if(row[0]==='close')relay.clients.delete(row[1]);
+    if(this.canSleep())await this.sleepRoom();
+    else if(rows.some(row=>row[0]==='open'||row[0]==='close'))this.saveSessions();
   }
 
   async connect(request, transport = null) {
@@ -1330,7 +1345,7 @@ export class Table {
   tellLobby(extra) {
     if(extra.closed || extra.ended) this.queueFunctionEvent('room.closed',{game:this.game,room:this.code,...extra});
     if (!this.game || !this.code) return;
-    const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName(this.game));
+    const lobby = lobbyFor(this.env,this.game);
     this.lastReport = -1;
     this.ctx.waitUntil(lobby.fetch(`https://lobby/report?game=${encodeURIComponent(this.game)}`, { method: 'POST', body: JSON.stringify({ room: this.code, players: 0, people: 0, ...extra }) }).catch(error => this.say({ev:'background-failed',error:errorLine(error)})));
   }
@@ -1392,7 +1407,7 @@ export class Table {
     this.lastAgents = agents;
     this.lastAi = ai;
     this.lastReportAt = Date.now();
-    const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName(this.game));
+    const lobby = lobbyFor(this.env,this.game);
     // The build this room runs (section 23): the Lobby sends a visitor only to a room of the live build.
     const ver = room.gameVer === undefined ? undefined : room.gameVer ?? '';
     this.ctx.waitUntil(lobby.fetch(`https://lobby/report?game=${encodeURIComponent(this.game)}`, { method: 'POST', body: JSON.stringify({ room: this.code, players, people, agents, ai, host: room.server ? 'server' : 'browser', ...(ver !== undefined ? { ver } : {}) }) }).catch(error => this.say({ev:'background-failed',error:errorLine(error)})));

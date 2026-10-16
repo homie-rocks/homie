@@ -43,3 +43,10 @@ test('pending input bytes are bounded even before the first binding response',as
  release();await Promise.all(pending);
  channel.send('[]');await Promise.all(pending);
 });
+
+test('a stalled Table accepts more than eight input batches without dropping the Gate',async()=>{
+ const pending=[],received=[];let release;const held=new Promise(r=>release=r);
+ const channel=relayChannel({waitUntil:p=>pending.push(p)},async data=>{await held;received.push(...JSON.parse(data));return new Response(null,{status:204});});
+ for(let i=0;i<40;i++)assert.doesNotThrow(()=>channel.send(JSON.stringify([['data','p',String(i)]])));
+ release();await Promise.all(pending);assert.equal(received.length,40);
+});

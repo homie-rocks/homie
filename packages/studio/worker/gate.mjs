@@ -40,13 +40,13 @@ export function* expandBatch(rows) {
   }
 }
 export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTimeout, delay = 1, receipts = false, maxFrames = 4, maxBytes = 4 * 1024 * 1024, onWritable = () => {}, autoReceipt = true, now = Date.now, world = null, onAck = () => {} } = {}) {
-  let queue = [], views = new Map(), strings = new Set(), timer = null, closed = false, bytes = 0, sequence = 0, inFlightBytes = 0, blockedByBytes = false, receipt = 0, receiptAt = 0, stamp = null, lastSentAt = -Infinity;
+  let queue = [], views = new Map(), strings = new Set(), timer = null, closed = false, bytes = 0, sequence = 0, inFlightBytes = 0, blockedByBytes = false, blockedByTransport = false, receipt = 0, receiptAt = 0, stamp = null, lastSentAt = -Infinity;
   const pending = new Map();
   const timing = stageTimings();
   const stats = { frames: 0, rows: 0, bytes: 0, peakQueueBytes: 0, coalesced: 0, ackMs: 0, maxAckMs: 0, rttMs: 0 };
   const close = () => { closed = true; queue = []; views.clear(); strings.clear(); pending.clear(); inFlightBytes = 0; bytes = 0; if (timer !== null) clearTimer(timer); timer = null; };
   const fail = (reason) => { close(); try { socket.close(1011, reason); } catch { /* The peer already closed; local shutdown still runs. */ } };
-  const schedule = () => { if (!closed && (receipt || pending.size < maxFrames && !blockedByBytes && (queue.length || views.size)) && timer === null) timer = setTimer(flush, delay > 1 ? Math.max(0, lastSentAt + delay - now()) : delay); };
+  const schedule = () => { if (!closed && (receipt || pending.size < maxFrames && !blockedByBytes && !blockedByTransport && (queue.length || views.size)) && timer === null) timer = setTimer(flush, delay > 1 ? Math.max(0, lastSentAt + delay - now()) : delay); };
   const flush = () => {
     if (timer !== null) clearTimer(timer); timer = null;
     if (closed) return;
@@ -81,12 +81,14 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
     const size = text.length;
     if (size > maxBytes) { fail('room link frame limit'); return; }
     if (receipts && inFlightBytes + size > maxBytes) { blockedByBytes = true; return; }
+    if(socket.canSend && !socket.canSend(size)){blockedByTransport=true;return;}
     queue = []; views.clear(); strings.clear(); bytes = 0; receipt = 0;
     if (receipts && hasPayload) { pending.set(++sequence, { at: now(), bytes: size }); inFlightBytes += size; }
     stats.frames++; stats.rows += rows.length; stats.bytes += size;
     const sendAt = timing.now();
     try { lastSentAt = now(); socket.send(text); if (worldSeq) world.sent(worldSeq); timing.record('send', sendAt); onWritable(); } catch { fail('room link send failed'); }
   };
+  socket.addEventListener('drain',()=>{blockedByTransport=false;schedule();});
   if (receipts) socket.addEventListener('message', event => {
     if (typeof event.data !== 'string') return;
     try {
@@ -338,6 +340,7 @@ export class Gate {
         target.pathname = '/__relay';
         socket = relayChannel(this.ctx, data => this.env.TABLE.get(this.env.TABLE.idFromName(name)).fetch(target, {method:'POST',headers:{'x-homie-relay-epoch':this.relayEpoch},body:data}));
         this.relaySocket = socket;
+        socket.addEventListener('detached',()=>{ /* The next input or room alarm crosses the idle boundary. */ });
       } else {
         const response = await this.env.TABLE.get(this.env.TABLE.idFromName(name)).fetch(new Request(target, { headers: { Upgrade: 'websocket' } }));
         if (!response.webSocket) throw new Error('room link refused');
@@ -548,13 +551,16 @@ export class Gate {
   }
   openRelay(url,socket) {
     if(this.readingRelay){this.relayAgain=true;return;}
-    const target=new URL(url);target.pathname='/__relay-stream';
+    const target=new URL(url);target.pathname='/__relay-live';
     const key=`${url.searchParams.get('game')}/${url.searchParams.get('room')}`;
     this.readingRelay=(async()=>{
-      const response=await this.env.TABLE.get(this.env.TABLE.idFromName(key)).fetch(target,{headers:{'x-homie-relay-epoch':this.relayEpoch}});
+      const stub=this.env.TABLE.get(this.env.TABLE.idFromName(key));
+      let response=await stub.fetch(target,{headers:{Upgrade:'websocket','x-homie-relay-epoch':this.relayEpoch}});
+      if(!response.webSocket){target.pathname='/__relay-stream';response=await stub.fetch(target,{headers:{'x-homie-relay-epoch':this.relayEpoch}});} 
       const epoch=response.headers.get('x-homie-relay-epoch');
       if(this.remoteRelayEpoch!==epoch){this.remoteRelayEpoch=epoch;socket.emit('reset',{});}
-      await readRelay(response,socket);
+      if(response.webSocket){response.webSocket.accept();await socket.attachLive(response.webSocket);}
+      else await readRelay(response,socket);
     })().catch(error=>socket.emit('error',{error})).finally(()=>{
       this.readingRelay=null;
       if(this.relayAgain&&this.link){this.relayAgain=false;this.openRelay(url,socket);}
