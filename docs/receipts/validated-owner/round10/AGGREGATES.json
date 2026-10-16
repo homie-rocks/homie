@@ -1,0 +1,622 @@
+{
+  "prefix": "g10-",
+  "remaining": [],
+  "sets": {
+    "network": {
+      "pairs": 16,
+      "counts": {
+        "frames": {
+          "b": 173658,
+          "c": 173664
+        },
+        "fair.seenFrames": {
+          "b": 173928,
+          "c": 173841
+        },
+        "presentationJumps.jumps": {
+          "b": 0,
+          "c": 382
+        },
+        "observerJumpsOver3": {
+          "b": 0,
+          "c": 469
+        },
+        "contacts.passes": {
+          "b": 12,
+          "c": 13
+        },
+        "contacts.deepPasses": {
+          "b": 0,
+          "c": 3
+        },
+        "contacts.opportunities": {
+          "b": 126,
+          "c": 40
+        },
+        "contacts.possibleStompResolutions": {
+          "b": 0,
+          "c": 0
+        },
+        "contacts.unresolvedPasses": {
+          "b": 12,
+          "c": 13
+        },
+        "contacts.unresolvedDeepPasses": {
+          "b": 0,
+          "c": 3
+        },
+        "stomp.vanish": {
+          "b": 36,
+          "c": 42
+        },
+        "stomp.reshow": {
+          "b": 0,
+          "c": 0
+        },
+        "shape.jumps": {
+          "b": 0,
+          "c": 3
+        },
+        "shape.slides": {
+          "b": 0,
+          "c": 6
+        },
+        "shape.stalls": {
+          "b": 0,
+          "c": 0
+        },
+        "phantom.own.catches": {
+          "b": 154,
+          "c": 121
+        },
+        "phantom.own.phantomCandidates": {
+          "b": 84,
+          "c": 56
+        },
+        "phantom.observer.catches": {
+          "b": 152,
+          "c": 103
+        },
+        "phantom.observer.phantomCandidates": {
+          "b": 34,
+          "c": 65
+        }
+      },
+      "hostObserver": {
+        "pairs": 8,
+        "counts": {
+          "frames": {
+            "b": 87077,
+            "c": 87015
+          },
+          "presentationJumps.jumps": {
+            "b": 0,
+            "c": 0
+          },
+          "observerJumpsOver3": {
+            "b": 0,
+            "c": 0
+          },
+          "contacts.passes": {
+            "b": 7,
+            "c": 43
+          },
+          "contacts.deepPasses": {
+            "b": 0,
+            "c": 17
+          },
+          "contacts.opportunities": {
+            "b": 69,
+            "c": 104
+          },
+          "contacts.unresolvedPasses": {
+            "b": 7,
+            "c": 42
+          },
+          "contacts.unresolvedDeepPasses": {
+            "b": 0,
+            "c": 16
+          }
+        }
+      }
+    },
+    "crowd": {
+      "pairs": 6,
+      "counts": {
+        "frames": {
+          "b": 65144,
+          "c": 65149
+        },
+        "fair.seenFrames": {
+          "b": 65229,
+          "c": 65119
+        },
+        "presentationJumps.jumps": {
+          "b": 0,
+          "c": 10
+        },
+        "observerJumpsOver3": {
+          "b": 0,
+          "c": 10
+        },
+        "contacts.passes": {
+          "b": 1,
+          "c": 24
+        },
+        "contacts.deepPasses": {
+          "b": 0,
+          "c": 12
+        },
+        "contacts.opportunities": {
+          "b": 33,
+          "c": 73
+        },
+        "contacts.possibleStompResolutions": {
+          "b": 0,
+          "c": 0
+        },
+        "contacts.unresolvedPasses": {
+          "b": 1,
+          "c": 24
+        },
+        "contacts.unresolvedDeepPasses": {
+          "b": 0,
+          "c": 12
+        },
+        "stomp.vanish": {
+          "b": 3,
+          "c": 3
+        },
+        "stomp.reshow": {
+          "b": 0,
+          "c": 0
+        },
+        "shape.jumps": {
+          "b": 0,
+          "c": 7
+        },
+        "shape.slides": {
+          "b": 0,
+          "c": 9
+        },
+        "shape.stalls": {
+          "b": 0,
+          "c": 0
+        },
+        "phantom.own.catches": {
+          "b": 57,
+          "c": 69
+        },
+        "phantom.own.phantomCandidates": {
+          "b": 40,
+          "c": 48
+        },
+        "phantom.observer.catches": {
+          "b": 55,
+          "c": 68
+        },
+        "phantom.observer.phantomCandidates": {
+          "b": 16,
+          "c": 21
+        }
+      }
+    },
+    "allFrames": {
+      "pairs": 37,
+      "counts": {
+        "frames": {
+          "b": 401521,
+          "c": 401533
+        },
+        "fair.seenFrames": {
+          "b": 369549,
+          "c": 369291
+        },
+        "presentationJumps.jumps": {
+          "b": 0,
+          "c": 643
+        },
+        "observerJumpsOver3": {
+          "b": 0,
+          "c": 772
+        },
+        "contacts.passes": {
+          "b": 26,
+          "c": 44
+        },
+        "contacts.deepPasses": {
+          "b": 5,
+          "c": 15
+        },
+        "contacts.opportunities": {
+          "b": 241,
+          "c": 127
+        },
+        "contacts.possibleStompResolutions": {
+          "b": 2,
+          "c": 0
+        },
+        "contacts.unresolvedPasses": {
+          "b": 24,
+          "c": 44
+        },
+        "contacts.unresolvedDeepPasses": {
+          "b": 3,
+          "c": 15
+        },
+        "stomp.vanish": {
+          "b": 68,
+          "c": 83
+        },
+        "stomp.reshow": {
+          "b": 0,
+          "c": 0
+        },
+        "shape.jumps": {
+          "b": 0,
+          "c": 14
+        },
+        "shape.slides": {
+          "b": 0,
+          "c": 19
+        },
+        "shape.stalls": {
+          "b": 0,
+          "c": 0
+        },
+        "phantom.own.catches": {
+          "b": 312,
+          "c": 261
+        },
+        "phantom.own.phantomCandidates": {
+          "b": 179,
+          "c": 136
+        },
+        "phantom.observer.catches": {
+          "b": 304,
+          "c": 230
+        },
+        "phantom.observer.phantomCandidates": {
+          "b": 79,
+          "c": 126
+        }
+      }
+    },
+    "networkFocus": {
+      "pairs": 22,
+      "counts": {
+        "frames": {
+          "b": 238783,
+          "c": 238784
+        },
+        "fair.seenFrames": {
+          "b": 239148,
+          "c": 239028
+        },
+        "presentationJumps.jumps": {
+          "b": 0,
+          "c": 549
+        },
+        "observerJumpsOver3": {
+          "b": 0,
+          "c": 646
+        },
+        "contacts.passes": {
+          "b": 16,
+          "c": 13
+        },
+        "contacts.deepPasses": {
+          "b": 1,
+          "c": 3
+        },
+        "contacts.opportunities": {
+          "b": 163,
+          "c": 40
+        },
+        "contacts.possibleStompResolutions": {
+          "b": 1,
+          "c": 0
+        },
+        "contacts.unresolvedPasses": {
+          "b": 15,
+          "c": 13
+        },
+        "contacts.unresolvedDeepPasses": {
+          "b": 0,
+          "c": 3
+        },
+        "stomp.vanish": {
+          "b": 50,
+          "c": 66
+        },
+        "stomp.reshow": {
+          "b": 0,
+          "c": 0
+        },
+        "shape.jumps": {
+          "b": 0,
+          "c": 3
+        },
+        "shape.slides": {
+          "b": 0,
+          "c": 6
+        },
+        "shape.stalls": {
+          "b": 0,
+          "c": 0
+        },
+        "phantom.own.catches": {
+          "b": 204,
+          "c": 135
+        },
+        "phantom.own.phantomCandidates": {
+          "b": 111,
+          "c": 57
+        },
+        "phantom.observer.catches": {
+          "b": 201,
+          "c": 124
+        },
+        "phantom.observer.phantomCandidates": {
+          "b": 46,
+          "c": 83
+        }
+      }
+    },
+    "networkLowLag": {
+      "pairs": 12,
+      "counts": {
+        "frames": {
+          "b": 130116,
+          "c": 130118
+        },
+        "fair.seenFrames": {
+          "b": 130347,
+          "c": 130271
+        },
+        "presentationJumps.jumps": {
+          "b": 0,
+          "c": 87
+        },
+        "observerJumpsOver3": {
+          "b": 0,
+          "c": 125
+        },
+        "contacts.passes": {
+          "b": 11,
+          "c": 9
+        },
+        "contacts.deepPasses": {
+          "b": 0,
+          "c": 1
+        },
+        "contacts.opportunities": {
+          "b": 92,
+          "c": 23
+        },
+        "contacts.possibleStompResolutions": {
+          "b": 0,
+          "c": 0
+        },
+        "contacts.unresolvedPasses": {
+          "b": 11,
+          "c": 9
+        },
+        "contacts.unresolvedDeepPasses": {
+          "b": 0,
+          "c": 1
+        },
+        "stomp.vanish": {
+          "b": 36,
+          "c": 41
+        },
+        "stomp.reshow": {
+          "b": 0,
+          "c": 0
+        },
+        "shape.jumps": {
+          "b": 0,
+          "c": 0
+        },
+        "shape.slides": {
+          "b": 0,
+          "c": 0
+        },
+        "shape.stalls": {
+          "b": 0,
+          "c": 0
+        },
+        "phantom.own.catches": {
+          "b": 81,
+          "c": 50
+        },
+        "phantom.own.phantomCandidates": {
+          "b": 25,
+          "c": 8
+        },
+        "phantom.observer.catches": {
+          "b": 81,
+          "c": 38
+        },
+        "phantom.observer.phantomCandidates": {
+          "b": 6,
+          "c": 22
+        }
+      }
+    },
+    "allFramesCore": {
+      "pairs": 31,
+      "counts": {
+        "frames": {
+          "b": 336396,
+          "c": 336413
+        },
+        "fair.seenFrames": {
+          "b": 304329,
+          "c": 304104
+        },
+        "presentationJumps.jumps": {
+          "b": 0,
+          "c": 476
+        },
+        "observerJumpsOver3": {
+          "b": 0,
+          "c": 595
+        },
+        "contacts.passes": {
+          "b": 22,
+          "c": 44
+        },
+        "contacts.deepPasses": {
+          "b": 4,
+          "c": 15
+        },
+        "contacts.opportunities": {
+          "b": 204,
+          "c": 127
+        },
+        "contacts.possibleStompResolutions": {
+          "b": 1,
+          "c": 0
+        },
+        "contacts.unresolvedPasses": {
+          "b": 21,
+          "c": 44
+        },
+        "contacts.unresolvedDeepPasses": {
+          "b": 3,
+          "c": 15
+        },
+        "stomp.vanish": {
+          "b": 54,
+          "c": 59
+        },
+        "stomp.reshow": {
+          "b": 0,
+          "c": 0
+        },
+        "shape.jumps": {
+          "b": 0,
+          "c": 14
+        },
+        "shape.slides": {
+          "b": 0,
+          "c": 19
+        },
+        "shape.stalls": {
+          "b": 0,
+          "c": 0
+        },
+        "phantom.own.catches": {
+          "b": 262,
+          "c": 247
+        },
+        "phantom.own.phantomCandidates": {
+          "b": 152,
+          "c": 135
+        },
+        "phantom.observer.catches": {
+          "b": 255,
+          "c": 209
+        },
+        "phantom.observer.phantomCandidates": {
+          "b": 67,
+          "c": 108
+        }
+      }
+    },
+    "movementCore": {
+      "pairs": 28,
+      "counts": {
+        "frames": {
+          "b": 303895,
+          "c": 303903
+        },
+        "fair.seenFrames": {
+          "b": 304329,
+          "c": 304104
+        },
+        "presentationJumps.jumps": {
+          "b": 0,
+          "c": 476
+        },
+        "observerJumpsOver3": {
+          "b": 0,
+          "c": 595
+        },
+        "contacts.passes": {
+          "b": 22,
+          "c": 44
+        },
+        "contacts.deepPasses": {
+          "b": 4,
+          "c": 15
+        },
+        "contacts.opportunities": {
+          "b": 204,
+          "c": 127
+        },
+        "contacts.possibleStompResolutions": {
+          "b": 1,
+          "c": 0
+        },
+        "contacts.unresolvedPasses": {
+          "b": 21,
+          "c": 44
+        },
+        "contacts.unresolvedDeepPasses": {
+          "b": 3,
+          "c": 15
+        },
+        "stomp.vanish": {
+          "b": 54,
+          "c": 59
+        },
+        "stomp.reshow": {
+          "b": 0,
+          "c": 0
+        },
+        "shape.jumps": {
+          "b": 0,
+          "c": 12
+        },
+        "shape.slides": {
+          "b": 0,
+          "c": 17
+        },
+        "shape.stalls": {
+          "b": 0,
+          "c": 0
+        },
+        "phantom.own.catches": {
+          "b": 262,
+          "c": 247
+        },
+        "phantom.own.phantomCandidates": {
+          "b": 152,
+          "c": 135
+        },
+        "phantom.observer.catches": {
+          "b": 255,
+          "c": 209
+        },
+        "phantom.observer.phantomCandidates": {
+          "b": 67,
+          "c": 108
+        }
+      }
+    }
+  },
+  "phone": {
+    "b": {
+      "frames": 32403,
+      "over33": 0,
+      "over50": 0
+    },
+    "c": {
+      "frames": 32403,
+      "over33": 0,
+      "over50": 0
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "cleanInstall": "passed",
+  "studioTests": {
+    "passed": 54,
+    "failed": 0
+  },
+  "fullBuild": "completed",
+  "generatedRules": {
+    "ticks": 18000,
+    "saveRestores": 813
+  },
+  "postBuildArtifactMismatches": [],
+  "toolkitCI": {
+    "run": 38915716803,
+    "successfulJobs": 51,
+    "conditionalSkips": 8
+  },
+  "screenshotsReviewed": 14,
+  "ownedDevServers": "stopped",
+  "ownedControlWorktree": "removed"
+}

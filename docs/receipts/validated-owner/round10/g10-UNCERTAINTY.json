@@ -1,0 +1,457 @@
+{
+  "method": "Resample matched runs, then trials within each side of each sampled run. 4,000 replicates; seed 101016. No interval with fewer than three independent runs. Intervals describe measured variability, not a guarantee under unmeasured workloads.",
+  "profiles": {
+    "feel150h": {
+      "pairs": 1,
+      "metrics": {
+        "runs": {
+          "candidate": {
+            "n": 48,
+            "p90": 28.1
+          },
+          "live": {
+            "n": 48,
+            "p90": 31
+          },
+          "p90DifferenceMs": -2.8999999999999986,
+          "hierarchicalBootstrap95Ms": null,
+          "perPair": [
+            {
+              "tag": "g10-feel150h",
+              "candidateP90": 28.1,
+              "liveP90": 31
+            }
+          ]
+        },
+        "jumps": {
+          "candidate": {
+            "n": 40,
+            "p90": 28.5
+          },
+          "live": {
+            "n": 40,
+            "p90": 31.4
+          },
+          "p90DifferenceMs": -2.8999999999999986,
+          "hierarchicalBootstrap95Ms": null,
+          "perPair": [
+            {
+              "tag": "g10-feel150h",
+              "candidateP90": 28.5,
+              "liveP90": 31.4
+            }
+          ]
+        }
+      }
+    },
+    "feel150n": {
+      "pairs": 4,
+      "metrics": {
+        "runs": {
+          "candidate": {
+            "n": 190,
+            "p90": 31.3
+          },
+          "live": {
+            "n": 192,
+            "p90": 30.8
+          },
+          "p90DifferenceMs": 0.5,
+          "hierarchicalBootstrap95Ms": [
+            -1.0,
+            2.6999999999999957
+          ],
+          "perPair": [
+            {
+              "tag": "g10-feel150n",
+              "candidateP90": 32.6,
+              "liveP90": 31.1
+            },
+            {
+              "tag": "g10-feel150n2",
+              "candidateP90": 31.3,
+              "liveP90": 30.6
+            },
+            {
+              "tag": "g10-feel150n3",
+              "candidateP90": 29.8,
+              "liveP90": 28.5
+            },
+            {
+              "tag": "g10-feel150n4",
+              "candidateP90": 30.9,
+              "liveP90": 31.7
+            }
+          ]
+        },
+        "jumps": {
+          "candidate": {
+            "n": 160,
+            "p90": 30
+          },
+          "live": {
+            "n": 159,
+            "p90": 31.3
+          },
+          "p90DifferenceMs": -1.3000000000000007,
+          "hierarchicalBootstrap95Ms": [
+            -4.099999999999998,
+            1.0
+          ],
+          "perPair": [
+            {
+              "tag": "g10-feel150n",
+              "candidateP90": 31.1,
+              "liveP90": 30.7
+            },
+            {
+              "tag": "g10-feel150n2",
+              "candidateP90": 28.7,
+              "liveP90": 31
+            },
+            {
+              "tag": "g10-feel150n3",
+              "candidateP90": 29.3,
+              "liveP90": 31.4
+            },
+            {
+              "tag": "g10-feel150n4",
+              "candidateP90": 31.8,
+              "liveP90": 31.7
+            }
+          ]
+        }
+      }
+    },
+    "feel300h": {
+      "pairs": 1,
+      "metrics": {
+        "runs": {
+          "candidate": {
+            "n": 47,
+            "p90": 32
+          },
+          "live": {
+            "n": 48,
+            "p90": 30.8
+          },
+          "p90DifferenceMs": 1.1999999999999993,
+          "hierarchicalBootstrap95Ms": null,
+          "perPair": [
+            {
+              "tag": "g10-feel300h",
+              "candidateP90": 32,
+              "liveP90": 30.8
+            }
+          ]
+        },
+        "jumps": {
+          "candidate": {
+            "n": 40,
+            "p90": 32.5
+          },
+          "live": {
+            "n": 40,
+            "p90": 32
+          },
+          "p90DifferenceMs": 0.5,
+          "hierarchicalBootstrap95Ms": null,
+          "perPair": [
+            {
+              "tag": "g10-feel300h",
+              "candidateP90": 32.5,
+              "liveP90": 32
+            }
+          ]
+        }
+      }
+    },
+    "feel300n": {
+      "pairs": 4,
+      "metrics": {
+        "runs": {
+          "candidate": {
+            "n": 189,
+            "p90": 31.3
+          },
+          "live": {
+            "n": 192,
+            "p90": 31.8
+          },
+          "p90DifferenceMs": -0.5,
+          "hierarchicalBootstrap95Ms": [
+            -1.8999999999999986,
+            1.7000000000000028
+          ],
+          "perPair": [
+            {
+              "tag": "g10-feel300n",
+              "candidateP90": 31.3,
+              "liveP90": 30.2
+            },
+            {
+              "tag": "g10-feel300n2",
+              "candidateP90": 31.1,
+              "liveP90": 31.4
+            },
+            {
+              "tag": "g10-feel300n3",
+              "candidateP90": 31.9,
+              "liveP90": 32.3
+            },
+            {
+              "tag": "g10-feel300n4",
+              "candidateP90": 33.3,
+              "liveP90": 31.9
+            }
+          ]
+        },
+        "jumps": {
+          "candidate": {
+            "n": 160,
+            "p90": 29.5
+          },
+          "live": {
+            "n": 156,
+            "p90": 31.6
+          },
+          "p90DifferenceMs": -2.1000000000000014,
+          "hierarchicalBootstrap95Ms": [
+            -5.400000000000002,
+            0.5999999999999979
+          ],
+          "perPair": [
+            {
+              "tag": "g10-feel300n",
+              "candidateP90": 31.6,
+              "liveP90": 32.1
+            },
+            {
+              "tag": "g10-feel300n2",
+              "candidateP90": 31.6,
+              "liveP90": 31.3
+            },
+            {
+              "tag": "g10-feel300n3",
+              "candidateP90": 26.3,
+              "liveP90": 31.6
+            },
+            {
+              "tag": "g10-feel300n4",
+              "candidateP90": 29.3,
+              "liveP90": 31.7
+            }
+          ]
+        }
+      }
+    },
+    "feel80h": {
+      "pairs": 4,
+      "metrics": {
+        "runs": {
+          "candidate": {
+            "n": 192,
+            "p90": 31.4
+          },
+          "live": {
+            "n": 191,
+            "p90": 31.1
+          },
+          "p90DifferenceMs": 0.29999999999999716,
+          "hierarchicalBootstrap95Ms": [
+            -2.0,
+            3.3999999999999986
+          ],
+          "perPair": [
+            {
+              "tag": "g10-feel80h",
+              "candidateP90": 34.4,
+              "liveP90": 31
+            },
+            {
+              "tag": "g10-feel80h2",
+              "candidateP90": 30.2,
+              "liveP90": 30.9
+            },
+            {
+              "tag": "g10-feel80h3",
+              "candidateP90": 31.7,
+              "liveP90": 31.8
+            },
+            {
+              "tag": "g10-feel80h4",
+              "candidateP90": 32.9,
+              "liveP90": 31.6
+            }
+          ]
+        },
+        "jumps": {
+          "candidate": {
+            "n": 160,
+            "p90": 28.6
+          },
+          "live": {
+            "n": 160,
+            "p90": 32.3
+          },
+          "p90DifferenceMs": -3.6999999999999957,
+          "hierarchicalBootstrap95Ms": [
+            -5.700000000000003,
+            1.3000000000000007
+          ],
+          "perPair": [
+            {
+              "tag": "g10-feel80h",
+              "candidateP90": 29.9,
+              "liveP90": 31.2
+            },
+            {
+              "tag": "g10-feel80h2",
+              "candidateP90": 29.2,
+              "liveP90": 32.9
+            },
+            {
+              "tag": "g10-feel80h3",
+              "candidateP90": 27.5,
+              "liveP90": 33.3
+            },
+            {
+              "tag": "g10-feel80h4",
+              "candidateP90": 32.1,
+              "liveP90": 30.5
+            }
+          ]
+        }
+      }
+    },
+    "feel80n": {
+      "pairs": 1,
+      "metrics": {
+        "runs": {
+          "candidate": {
+            "n": 48,
+            "p90": 28.5
+          },
+          "live": {
+            "n": 47,
+            "p90": 30.7
+          },
+          "p90DifferenceMs": -2.1999999999999993,
+          "hierarchicalBootstrap95Ms": null,
+          "perPair": [
+            {
+              "tag": "g10-feel80n",
+              "candidateP90": 28.5,
+              "liveP90": 30.7
+            }
+          ]
+        },
+        "jumps": {
+          "candidate": {
+            "n": 40,
+            "p90": 27.2
+          },
+          "live": {
+            "n": 40,
+            "p90": 31.8
+          },
+          "p90DifferenceMs": -4.600000000000001,
+          "hierarchicalBootstrap95Ms": null,
+          "perPair": [
+            {
+              "tag": "g10-feel80n",
+              "candidateP90": 27.2,
+              "liveP90": 31.8
+            }
+          ]
+        }
+      }
+    },
+    "feelh": {
+      "pairs": 1,
+      "metrics": {
+        "runs": {
+          "candidate": {
+            "n": 46,
+            "p90": 30.5
+          },
+          "live": {
+            "n": 48,
+            "p90": 31.8
+          },
+          "p90DifferenceMs": -1.3000000000000007,
+          "hierarchicalBootstrap95Ms": null,
+          "perPair": [
+            {
+              "tag": "g10-feelh",
+              "candidateP90": 30.5,
+              "liveP90": 31.8
+            }
+          ]
+        },
+        "jumps": {
+          "candidate": {
+            "n": 40,
+            "p90": 29.1
+          },
+          "live": {
+            "n": 40,
+            "p90": 31.8
+          },
+          "p90DifferenceMs": -2.6999999999999993,
+          "hierarchicalBootstrap95Ms": null,
+          "perPair": [
+            {
+              "tag": "g10-feelh",
+              "candidateP90": 29.1,
+              "liveP90": 31.8
+            }
+          ]
+        }
+      }
+    },
+    "feeln": {
+      "pairs": 1,
+      "metrics": {
+        "runs": {
+          "candidate": {
+            "n": 48,
+            "p90": 29.5
+          },
+          "live": {
+            "n": 48,
+            "p90": 37.8
+          },
+          "p90DifferenceMs": -8.299999999999997,
+          "hierarchicalBootstrap95Ms": null,
+          "perPair": [
+            {
+              "tag": "g10-feeln",
+              "candidateP90": 29.5,
+              "liveP90": 37.8
+            }
+          ]
+        },
+        "jumps": {
+          "candidate": {
+            "n": 40,
+            "p90": 31.4
+          },
+          "live": {
+            "n": 40,
+            "p90": 32
+          },
+          "p90DifferenceMs": -0.6000000000000014,
+          "hierarchicalBootstrap95Ms": null,
+          "perPair": [
+            {
+              "tag": "g10-feeln",
+              "candidateP90": 31.4,
+              "liveP90": 32
+            }
+          ]
+        }
+      }
+    }
+  }
+}

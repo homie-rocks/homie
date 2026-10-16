@@ -1,0 +1,128 @@
+{
+  "prefix": "g10-",
+  "plannedPairs": 55,
+  "qualifiedPairs": 55,
+  "remaining": [],
+  "rejectedPairs": 1,
+  "peakQualifiedLoad": 24.70068359375,
+  "peakAttemptLoad": 25.3525390625,
+  "qualifiedLoadSamples": 12249,
+  "allLoadSamples": 12437,
+  "artifactSets": {
+    "b": [
+      "c5f30ff8f305d80e9c9876f0caa239e625f4170d22dc19b7b98daadb1e3d3c38"
+    ],
+    "c": [
+      "2bf6db04dabd7fec56dff48018c391e87c8bdc2a0702730d4a00f18cf715addb"
+    ]
+  },
+  "changedDuringPair": [],
+  "rebuiltArtifactMismatches": [],
+  "overlayFiles": 15,
+  "installedOverlayMismatches": [],
+  "runtimeErrors": [
+    {
+      "path": "c-g10-stall3000.shape.errors",
+      "value": [
+        "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb58lyp&b=yG0AJlAz0-f8cVV_rEpa2A' failed: Page entered Back-Forward Cache.",
+        "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__net?room=cmp-c-g10-stal-lag80-mvb58lyp&b=yG0AJlAz0-f8cVV_rEpa2A' failed: Page entered Back-Forward Cache.",
+        "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb58lyp&b=yG0AJlAz0-f8cVV_rEpa2A' failed: Page entered Back-Forward Cache.",
+        "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb58lyp&b=yG0AJlAz0-f8cVV_rEpa2A' failed: Page entered Back-Forward Cache."
+      ]
+    },
+    {
+      "path": "c-g10-stall15000.shape.errors",
+      "value": [
+        "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb4wc7p&b=LT6kUKnbZbh0G3Y6_9sthA' failed: Page entered Back-Forward Cache.",
+        "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__net?room=cmp-c-g10-stal-lag80-mvb4wc7p&b=LT6kUKnbZbh0G3Y6_9sthA' failed: Page entered Back-Forward Cache.",
+        "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb4wc7p&b=LT6kUKnbZbh0G3Y6_9sthA' failed: Page entered Back-Forward Cache.",
+        "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb4wc7p&b=LT6kUKnbZbh0G3Y6_9sthA' failed: Page entered Back-Forward Cache."
+      ]
+    },
+    {
+      "path": "c-g10-stall15000b.shape.errors",
+      "value": [
+        "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb50fks&b=uvVsfQwKt1XProzd8attVA' failed: Page entered Back-Forward Cache.",
+        "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__net?room=cmp-c-g10-stal-lag80-mvb50fks&b=uvVsfQwKt1XProzd8attVA' failed: Page entered Back-Forward Cache.",
+        "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb50fks&b=uvVsfQwKt1XProzd8attVA' failed: Page entered Back-Forward Cache.",
+        "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb50fks&b=uvVsfQwKt1XProzd8attVA' failed: Page entered Back-Forward Cache."
+      ]
+    },
+    {
+      "path": "c-g10-stall6000.shape.errors",
+      "value": [
+        "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb54itf&b=3LlBsZkcyGCVhVLAIwCaHg' failed: Page entered Back-Forward Cache.",
+        "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__net?room=cmp-c-g10-stal-lag80-mvb54itf&b=3LlBsZkcyGCVhVLAIwCaHg' failed: Page entered Back-Forward Cache.",
+        "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb54itf&b=3LlBsZkcyGCVhVLAIwCaHg' failed: Page entered Back-Forward Cache.",
+        "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb54itf&b=3LlBsZkcyGCVhVLAIwCaHg' failed: Page entered Back-Forward Cache."
+      ]
+    }
+  ],
+  "intentionalFreezeConsole": [
+    {
+      "path": "c-g10-stall3000.shape.errors",
+      "message": "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb58lyp&b=yG0AJlAz0-f8cVV_rEpa2A' failed: Page entered Back-Forward Cache."
+    },
+    {
+      "path": "c-g10-stall3000.shape.errors",
+      "message": "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__net?room=cmp-c-g10-stal-lag80-mvb58lyp&b=yG0AJlAz0-f8cVV_rEpa2A' failed: Page entered Back-Forward Cache."
+    },
+    {
+      "path": "c-g10-stall3000.shape.errors",
+      "message": "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb58lyp&b=yG0AJlAz0-f8cVV_rEpa2A' failed: Page entered Back-Forward Cache."
+    },
+    {
+      "path": "c-g10-stall3000.shape.errors",
+      "message": "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb58lyp&b=yG0AJlAz0-f8cVV_rEpa2A' failed: Page entered Back-Forward Cache."
+    },
+    {
+      "path": "c-g10-stall15000.shape.errors",
+      "message": "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb4wc7p&b=LT6kUKnbZbh0G3Y6_9sthA' failed: Page entered Back-Forward Cache."
+    },
+    {
+      "path": "c-g10-stall15000.shape.errors",
+      "message": "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__net?room=cmp-c-g10-stal-lag80-mvb4wc7p&b=LT6kUKnbZbh0G3Y6_9sthA' failed: Page entered Back-Forward Cache."
+    },
+    {
+      "path": "c-g10-stall15000.shape.errors",
+      "message": "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb4wc7p&b=LT6kUKnbZbh0G3Y6_9sthA' failed: Page entered Back-Forward Cache."
+    },
+    {
+      "path": "c-g10-stall15000.shape.errors",
+      "message": "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb4wc7p&b=LT6kUKnbZbh0G3Y6_9sthA' failed: Page entered Back-Forward Cache."
+    },
+    {
+      "path": "c-g10-stall15000b.shape.errors",
+      "message": "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb50fks&b=uvVsfQwKt1XProzd8attVA' failed: Page entered Back-Forward Cache."
+    },
+    {
+      "path": "c-g10-stall15000b.shape.errors",
+      "message": "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__net?room=cmp-c-g10-stal-lag80-mvb50fks&b=uvVsfQwKt1XProzd8attVA' failed: Page entered Back-Forward Cache."
+    },
+    {
+      "path": "c-g10-stall15000b.shape.errors",
+      "message": "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb50fks&b=uvVsfQwKt1XProzd8attVA' failed: Page entered Back-Forward Cache."
+    },
+    {
+      "path": "c-g10-stall15000b.shape.errors",
+      "message": "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb50fks&b=uvVsfQwKt1XProzd8attVA' failed: Page entered Back-Forward Cache."
+    },
+    {
+      "path": "c-g10-stall6000.shape.errors",
+      "message": "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb54itf&b=3LlBsZkcyGCVhVLAIwCaHg' failed: Page entered Back-Forward Cache."
+    },
+    {
+      "path": "c-g10-stall6000.shape.errors",
+      "message": "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__net?room=cmp-c-g10-stal-lag80-mvb54itf&b=3LlBsZkcyGCVhVLAIwCaHg' failed: Page entered Back-Forward Cache."
+    },
+    {
+      "path": "c-g10-stall6000.shape.errors",
+      "message": "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb54itf&b=3LlBsZkcyGCVhVLAIwCaHg' failed: Page entered Back-Forward Cache."
+    },
+    {
+      "path": "c-g10-stall6000.shape.errors",
+      "message": "console: WebSocket connection to 'ws://127.0.0.1:8792/tiny-platformer/__watch?room=cmp-c-g10-stal-lag80-mvb54itf&b=3LlBsZkcyGCVhVLAIwCaHg' failed: Page entered Back-Forward Cache."
+    }
+  ],
+  "unexpectedRuntimeErrors": []
+}
