@@ -1,0 +1,95 @@
+{
+  "id": "owner-action-checklist",
+  "name": "Owner action checklist",
+  "kind": "ui",
+  "version": "1.0.0",
+  "summary": "Consequence-first pending owner actions with one-tap confirmation and server-authorized undo.",
+  "license": "Apache-2.0",
+  "attribution": "Ryan Campbell — Homie toolkit",
+  "share": true,
+  "tags": [
+    "owner",
+    "staff",
+    "checklist",
+    "approval",
+    "tools"
+  ],
+  "uses": [
+    "app",
+    "game"
+  ],
+  "entry": "src/index.mjs",
+  "files": [
+    {
+      "path": "LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358
+    },
+    {
+      "path": "NOTICE",
+      "sha256": "99ef9d6d5ea52f701ed623a7181c87ceaa0d1c9e047d20fa396de2ed3b42704e",
+      "bytes": 90
+    },
+    {
+      "path": "README.md",
+      "sha256": "19d85d56a2e1e3b0a14662abf93364c7369d34302800ef6444e7b5ac72b9e56d",
+      "bytes": 3301
+    },
+    {
+      "path": "preview/index.html",
+      "sha256": "931e491db6fc6cb1aefcbf70d722607b9e889c94cac741731cb846875a7cac18",
+      "bytes": 1752
+    },
+    {
+      "path": "src/handler.mjs",
+      "sha256": "e2a34b4bb2f39950cbfd942cbb4b8906ce5b902e71db6f74cbc5335650b96098",
+      "bytes": 2347
+    },
+    {
+      "path": "src/index.mjs",
+      "sha256": "f4ec8da76bd08e0e46b1fb79b24821b4a0d869eb2fd52001e7ee808f1b106674",
+      "bytes": 4081
+    },
+    {
+      "path": "src/style.css",
+      "sha256": "c971858965688388321a5744ca61d4eb111b9c88a707a572c5736ef9d9e01342",
+      "bytes": 1102
+    },
+    {
+      "path": "tuning.json",
+      "sha256": "255d3ba827e3244527bf4dc81eccabaa94f03830b6bd7053ed518e0683959c91",
+      "bytes": 26
+    }
+  ],
+  "preview": {
+    "page": "preview/index.html",
+    "aspect": "4:3",
+    "phoneAspect": "2:3"
+  },
+  "requires": {
+    "packages": {
+      "@homie-rocks/studio": "^0.57.0"
+    }
+  },
+  "cost": {
+    "bytes": 24057
+  },
+  "provenance": {
+    "source": "original",
+    "notes": "Original code and example data authored for the Homie toolkit."
+  },
+  "contract": {
+    "inputs": {
+      "items": "See README; revisioned server-owned proposals"
+    },
+    "state": {
+      "authority": "Studio tools own mutations; UI is local"
+    },
+    "netplay": "local"
+  },
+  "from": {
+    "kind": "app",
+    "id": "owner-action-checklist",
+    "studio": "Homie toolkit"
+  }
+}

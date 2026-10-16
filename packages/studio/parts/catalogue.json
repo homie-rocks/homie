@@ -1,0 +1,236 @@
+{
+  "v": 1,
+  "studio": {
+    "name": "Homie toolkit"
+  },
+  "parts": [
+    {
+      "id": "owner-action-checklist",
+      "name": "Owner action checklist",
+      "kind": "ui",
+      "version": "1.0.0",
+      "summary": "Consequence-first pending owner actions with one-tap confirmation and server-authorized undo.",
+      "license": "Apache-2.0",
+      "attribution": "Ryan Campbell — Homie toolkit",
+      "share": true,
+      "tags": [
+        "owner",
+        "staff",
+        "checklist",
+        "approval",
+        "tools"
+      ],
+      "uses": [
+        "app",
+        "game"
+      ],
+      "entry": "src/index.mjs",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "bytes": 11358
+        },
+        {
+          "path": "NOTICE",
+          "sha256": "99ef9d6d5ea52f701ed623a7181c87ceaa0d1c9e047d20fa396de2ed3b42704e",
+          "bytes": 90
+        },
+        {
+          "path": "README.md",
+          "sha256": "19d85d56a2e1e3b0a14662abf93364c7369d34302800ef6444e7b5ac72b9e56d",
+          "bytes": 3301
+        },
+        {
+          "path": "preview/index.html",
+          "sha256": "931e491db6fc6cb1aefcbf70d722607b9e889c94cac741731cb846875a7cac18",
+          "bytes": 1752
+        },
+        {
+          "path": "src/handler.mjs",
+          "sha256": "e2a34b4bb2f39950cbfd942cbb4b8906ce5b902e71db6f74cbc5335650b96098",
+          "bytes": 2347
+        },
+        {
+          "path": "src/index.mjs",
+          "sha256": "f4ec8da76bd08e0e46b1fb79b24821b4a0d869eb2fd52001e7ee808f1b106674",
+          "bytes": 4081
+        },
+        {
+          "path": "src/style.css",
+          "sha256": "c971858965688388321a5744ca61d4eb111b9c88a707a572c5736ef9d9e01342",
+          "bytes": 1102
+        },
+        {
+          "path": "tuning.json",
+          "sha256": "255d3ba827e3244527bf4dc81eccabaa94f03830b6bd7053ed518e0683959c91",
+          "bytes": 26
+        }
+      ],
+      "preview": {
+        "page": "preview/index.html",
+        "aspect": "4:3",
+        "phoneAspect": "2:3"
+      },
+      "requires": {
+        "packages": {
+          "@homie-rocks/studio": "^0.57.0"
+        }
+      },
+      "cost": {
+        "bytes": 24057
+      },
+      "provenance": {
+        "source": "original",
+        "notes": "Original code and example data authored for the Homie toolkit."
+      },
+      "contract": {
+        "inputs": {
+          "items": "See README; revisioned server-owned proposals"
+        },
+        "state": {
+          "authority": "Studio tools own mutations; UI is local"
+        },
+        "netplay": "local"
+      },
+      "from": {
+        "kind": "app",
+        "id": "owner-action-checklist",
+        "studio": "Homie toolkit"
+      }
+    },
+    {
+      "id": "terrain-route-map",
+      "name": "Terrain route map",
+      "kind": "environment",
+      "version": "1.0.0",
+      "summary": "Local heightmap coastline with a draped route tube, markers and touch or TV camera controls.",
+      "license": "Apache-2.0",
+      "attribution": "Ryan Campbell — Homie toolkit",
+      "share": true,
+      "tags": [
+        "terrain",
+        "map",
+        "route",
+        "heightmap",
+        "three",
+        "camera"
+      ],
+      "uses": [
+        "app",
+        "game"
+      ],
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "bytes": 11358
+        },
+        {
+          "path": "NOTICE",
+          "sha256": "5f149927ffe3253d38a25acfb7f1a02bd00c4b4a5b36b5e468b0e0b22f9319be",
+          "bytes": 85
+        },
+        {
+          "path": "README.md",
+          "sha256": "4f9c0a6d10cbdb970ee0cf01d7f2ca9f5b4517edd5e3a4882495a81a1f3da909",
+          "bytes": 3259
+        },
+        {
+          "path": "THIRD-PARTY-LICENSE",
+          "sha256": "8b378ebe60e2fe500158cb0ac71cb5e8b7d92953c2abcc63a0eb90499653b5bc",
+          "bytes": 1081,
+          "rights": {
+            "license": "MIT"
+          }
+        },
+        {
+          "path": "preview/demo.js",
+          "sha256": "40e19e9e8da92b4125899fedc7cd6ac710df37de1a3d03d8c23b46345504b56e",
+          "bytes": 569550,
+          "rights": {
+            "license": "Apache-2.0 AND MIT"
+          }
+        },
+        {
+          "path": "preview/heightmap.png",
+          "sha256": "1b66b99705337644262898b6a909dd6b0d22db6078b4402389939bf45e69c57c",
+          "bytes": 11165
+        },
+        {
+          "path": "preview/index.html",
+          "sha256": "ac6b9cf2f3bd8fddbb5a8e5f72ee6c8138ea2071c5a065dbe76cc158f1a2893e",
+          "bytes": 985
+        },
+        {
+          "path": "preview/main.mjs",
+          "sha256": "36b7799ed3b0c1dc95aa8ee452638b5ebaf303118421785ee333fb5078f12c44",
+          "bytes": 386
+        },
+        {
+          "path": "preview/route.json",
+          "sha256": "894506f6627932fface4b50faabedbe9e47cadaead6a3c4cbc6b5bfeb40146dc",
+          "bytes": 321
+        },
+        {
+          "path": "src/data.mjs",
+          "sha256": "ad7346e1a1ada219fa4b78a68a8df2912f38a6db02ac99261cc935140d886ace",
+          "bytes": 2042
+        },
+        {
+          "path": "src/index.mjs",
+          "sha256": "c330650a05732d5f40c9deceb759da7eeca14a7756bd8bb7cea39ab4ae603d55",
+          "bytes": 8086
+        },
+        {
+          "path": "src/style.css",
+          "sha256": "181b0da4c252007a3565c6dc1ba3bce714b617763b60c111cdce446ecf204821",
+          "bytes": 964
+        },
+        {
+          "path": "tuning.json",
+          "sha256": "50ce203549418e7c1371e6657b7acfb556dd4434c0dcdcb72ef379d4a51b39af",
+          "bytes": 42
+        }
+      ],
+      "preview": {
+        "page": "preview/index.html",
+        "aspect": "4:3",
+        "phoneAspect": "2:3"
+      },
+      "requires": {
+        "packages": {
+          "three": "0.185.1"
+        }
+      },
+      "physical": {
+        "units": "metres",
+        "scale": 1,
+        "pivot": "origin",
+        "collision": null
+      },
+      "cost": {
+        "bytes": 609324
+      },
+      "provenance": {
+        "source": "original",
+        "notes": "Original code and example data authored for the Homie toolkit."
+      },
+      "entry": "src/index.mjs",
+      "contract": {
+        "inputs": {
+          "data": "See README; local LineString, bounds and PNG heightmap"
+        },
+        "state": {
+          "camera": "local"
+        },
+        "netplay": "local"
+      },
+      "from": {
+        "kind": "app",
+        "id": "terrain-route-map",
+        "studio": "Homie toolkit"
+      }
+    }
+  ]
+}

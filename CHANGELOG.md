@@ -19,6 +19,10 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [Unreleased]
 
+### Added
+
+- Two Apache-2.0 shared building blocks: an owner action checklist with visible consequences, one-tap confirmation, server-authorized undo and existing studio role/origin checks; and a three.js terrain route map with a local heightmap coastline, route tube, markers and phone/TV camera controls. Both include standard part manifests, catalogue entries, AI integration docs, self-contained previews and fast logic checks. No tile service is required.
+
 ### Fixed
 
 - The MCP Events workerd conformance test now parses SSE frames across HTTP chunks, including combined event/heartbeat frames and split UTF-8. Its former one-chunk-per-event assumption caused the intermittent 0.57.0 publish-gate JSON parse failure; production delivery and webhook formats are unchanged. PR CI adds a path-filtered Events/webhook gate covering protocol, push, durable delivery and signed studio events.

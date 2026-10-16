@@ -1,0 +1,10 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Owner action checklist</title><link rel="stylesheet" href="../src/style.css"><style>body{margin:0;padding:24px;background:#0d1d1e;color:#edf4ef;font-family:system-ui}header{max-width:52rem;margin:0 auto 28px}small{color:#cbef9c;letter-spacing:.15em}h1{font-size:clamp(2rem,5vw,3.8rem);letter-spacing:-.05em;margin:12px 0}header p{color:#b9ccc7;max-width:36rem}</style><header><small>STUDIO / ACTIONS</small><h1>A clear next step.</h1><p>Review the consequence, then confirm. This local example changes no real bookings, payments or publications.</p></header><main id="checklist" aria-label="Pending owner actions"></main><script type="module">
+import {mountChecklist} from '../src/index.mjs';
+const items = [
+{id:'booking',title:'Approve Saturday’s booking',consequence:'Reserve Studio A, 10:00–12:00, for Morgan. No payment will be taken.',confirmLabel:'Approve'},
+{id:'refund',title:'Refund order #1042',consequence:'Return $24 to the original payment method. This cannot be undone.',confirmLabel:'Refund $24'},
+{id:'request',title:'Accept a studio request',consequence:'Allow North Studio to use the shared rehearsal schedule.',confirmLabel:'Accept'},
+{id:'publish',title:'Publish the summer programme',consequence:'Make revision 7 visible to everyone visiting your studio.',confirmLabel:'Publish'}
+].map(i=>({...i,revision:'1'}));
+mountChecklist(document.querySelector('main'), {list:async()=>items,execute:async ({id,operation})=>({ok:true,message:operation==='undo'?'Restored the previous state.':'Confirmed in this local example.',...(operation==='confirm'&&id!=='refund'?{undoToken:id}: {})})});
+</script></html>
