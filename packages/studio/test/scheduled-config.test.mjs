@@ -23,22 +23,22 @@ test('cron ownership survives refresh and upgrade; removing schedules removes on
  const declarations=join(root,'site/src/functions/declarations.json');mkdirSync(join(root,'site/src/functions'),{recursive:true});
  writeFileSync(declarations,JSON.stringify([{name:'cleanup',event:'tick',schedule:'*/15 * * * *'}]));
  const own='0 2 * * *';writeFileSync(join(root,'wrangler.custom.json'),JSON.stringify({triggers:{crons:[own]},vars:{OWN:'kept'}}));
- refreshWorkerConfig(root);assert.deepEqual(read(root).triggers.crons,['*/15 * * * *',own,'17 * * * *']);
+ refreshWorkerConfig(root);assert.deepEqual(read(root).triggers.crons,['*/15 * * * *',own]);
  const first=readFileSync(join(root,'wrangler.jsonc'),'utf8');refreshWorkerConfig(root);assert.equal(readFileSync(join(root,'wrangler.jsonc'),'utf8'),first);
  const {upgradeApply,upgradePlan}=await import('../lib/upgrade.mjs');upgradeApply(root,upgradePlan(root));
- assert.deepEqual(read(root).triggers.crons,['*/15 * * * *',own,'17 * * * *']);
- writeFileSync(declarations,'[]');refreshWorkerConfig(root);assert.deepEqual(read(root).triggers.crons,[own,'17 * * * *']);assert.equal(read(root).vars.OWN,'kept');
- writeFileSync(join(root,'wrangler.custom.json'),'{}');refreshWorkerConfig(root);assert.deepEqual(read(root).triggers.crons,['17 * * * *'],'removing custom entries is respected');
+ assert.deepEqual(read(root).triggers.crons,['*/15 * * * *',own]);
+ writeFileSync(declarations,'[]');refreshWorkerConfig(root);assert.deepEqual(read(root).triggers.crons,[own]);assert.equal(read(root).vars.OWN,'kept');
+ writeFileSync(join(root,'wrangler.custom.json'),'{}');refreshWorkerConfig(root);assert.deepEqual(read(root).triggers.crons,[],'removing custom entries is respected');
 });
 
 test('last schedule clears remote triggers explicitly and preserves identical custom entries',t=>{
  const root=mkdtempSync(join(tmpdir(),'scheduled-remove-'));t.after(()=>rmSync(root,{recursive:true,force:true}));newStudio(root,{name:'Cleanup',install:false});
  mkdirSync(join(root,'site/src/functions'),{recursive:true});const declarations=join(root,'site/src/functions/declarations.json');
  writeFileSync(declarations,JSON.stringify([{name:'cleanup',event:'tick',schedule:'*/15 * * * *'}]));refreshWorkerConfig(root);
- writeFileSync(declarations,'[]');refreshWorkerConfig(root);assert.deepEqual(read(root).triggers.crons,['17 * * * *']);
+ writeFileSync(declarations,'[]');refreshWorkerConfig(root);assert.deepEqual(read(root).triggers.crons,[]);
  writeFileSync(join(root,'wrangler.custom.json'),JSON.stringify({triggers:{crons:['*/15 * * * *']}}));
  writeFileSync(declarations,JSON.stringify([{name:'cleanup',event:'tick',schedule:'*/15 * * * *'}]));refreshWorkerConfig(root);
- writeFileSync(declarations,'[]');refreshWorkerConfig(root);assert.deepEqual(read(root).triggers.crons,['*/15 * * * *','17 * * * *']);
+ writeFileSync(declarations,'[]');refreshWorkerConfig(root);assert.deepEqual(read(root).triggers.crons,['*/15 * * * *']);
 });
 
 import {parseSchedule,nextDue,scheduleTrigger,scheduleStatus} from '../worker/function-schedule.mjs';

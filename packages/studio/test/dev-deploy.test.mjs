@@ -232,7 +232,7 @@ test('deploy and its plan warn before Wrangler changes anything, read only, and 
   const said = [];
   const warned = await deploy(dir, { homie: 'http://127.0.0.1:9', fetchFn: api.fetchFn, log: (line) => said.push(line) });
   assert.equal(warned.ok, true, JSON.stringify(warned));
-  assert.deepEqual(readConfig(dir).triggers, { crons: ['*/5 * * * *','17 * * * *'] });
+  assert.deepEqual(readConfig(dir).triggers, { crons: ['*/5 * * * *'] });
   assert.deepEqual(JSON.parse(readFileSync(join(cf.state, 'deployed-config'), 'utf8').replace(/^\s*\/\/.*$/gm, '')).triggers, readConfig(dir).triggers);
   assert.equal(warned.zone.state, 'foreign');
   assert.deepEqual(warned.zone.foreign, [{ pattern: '*/*', worker: 'main-site', kind: 'catch-all' }]);
