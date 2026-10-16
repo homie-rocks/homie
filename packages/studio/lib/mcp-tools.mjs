@@ -843,7 +843,7 @@ export function toolDefs(ctx, avail = {}) {
         let at = dir;
         if (existsSync(at) && readdirSync(at).some((f) => !['.DS_Store', '.git'].includes(f)) && !existsSync(join(at, 'studio.json'))) at = `${dir}-studio`;
         let made;
-        try { made = newStudio(at, { name, kind: a.kind ?? 'game', install: false, ...(ctx.directory ? { homie: ctx.directory } : {}) }); } catch (error) { return fail(error.message); }
+        try { made = newStudio(at, { name, kind: a.kind ?? 'game', install: false }); } catch (error) { return fail(error.message); }
         ctx.current = made.dir;
         ctx.note(made.dir).earlier = earlier.map((e) => e.path);
         let install = null;
