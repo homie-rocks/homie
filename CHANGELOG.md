@@ -17,6 +17,12 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## Unreleased
+
+- Close failed room restores, detect unanswered clock pings, preserve live Gate multiplexing, bound crowd session storage, and avoid unchanged idle writes. Restore watcher rate limits without replay, shard matchmaking, and paginate aggregated room summaries.
+- Add an opt-in rules-host round-idle contract: finish both scoring-settlement ticks, persist the next-round deadline, and resume without simulating idle time.
+- Store Lobby rooms as SQLite rows and deliver room summaries through Queues. Hibernate player and watch sockets, including Gates and server-rule rooms, between settled rounds. Retain logical sessions and moderation state, detach idle relay streams, and restore complete world headers without repeating admission.
+
 ## [0.55.0] - 2026-10-15
 
 **Plugin 0.55.0**
@@ -26,10 +32,6 @@ Studios start faster and serve files straight from Cloudflare, background work a
 ### Changed
 
 - Deploy with D1 primary fallback when replication is unavailable; only install needed schedules, explain account cron limits, and preserve retired-source, HEAD and concept-page protections.
-- Add an opt-in rules-host round-idle contract: finish both scoring-settlement ticks, persist the next-round deadline, and resume without simulating idle time.
-
-- Store Lobby rooms as SQLite rows and deliver room summaries through Queues. Hibernate player and watch sockets, including Gates and server-rule rooms, between settled rounds. Retain logical sessions and moderation state, detach idle relay streams, and restore complete world headers without repeating admission.
-
 - Deliver mutations and verified Stripe webhooks through retryable Queues. Store PaymentIntent ids before follow-up, recover lost responses using the original idempotency key, and retain uncertain payments for review.
 - Batch cold metadata, use causally consistent D1 sessions, bake catalogues, route public assets first, isolate subscription objects and load rendering modules at their entry points. Index MCP expiry and deliver catalogue notifications in background work.
 - Split request routing, runtime helpers, Table, Lobby, room chat, controls and wire validation into modules without changing behavior.
