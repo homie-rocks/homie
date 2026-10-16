@@ -54,3 +54,9 @@ test('long reconcile renews its lease and rejects a lost completion claim',async
  env.DB.sql.prepare('UPDATE stripe_intake SET lease=0').run();release();await assert.rejects(first,/lease/i);
  assert.equal(env.DB.sql.prepare('SELECT done FROM stripe_intake').get().done,null);
 });
+test('legacy recordings without an API version retain uncertainty without replay',async t=>{
+ const env={...fixture(t),STRIPE_KEY:'rk_test_'+ 'a'.repeat(32)};let calls=0;
+ t.mock.method(globalThis,'fetch',async()=>{calls++;return Response.json({id:'pi_legacy',amount:100,currency:'usd',livemode:false});});
+ await assert.rejects(readProviderPayment(env,{id:'old',amount:100,currency:'usd',mode:'test'},{id:'legacy',payload:JSON.stringify({params:{amount:100},options:{idempotencyKey:'old'},startedAt:Date.now()})}),error=>error.manualReview===true&&/version/i.test(error.message));
+ assert.equal(calls,0);
+});

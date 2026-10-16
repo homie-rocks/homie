@@ -64,7 +64,12 @@ export async function readProviderPayment(env, order, job, payment = null) {
   if(params&&options?.idempotencyKey&&Date.now()-(startedAt??order.created_at)<REPLAY_LIMIT_MS) {
     // If the create response was lost, replay only the original request/key
     // inside Stripe's guaranteed retention window. Never scan the account.
-    const pi=await stripeCall(env,'POST','/v1/payment_intents',params,{...options,version:options.version ?? options.apiVersion ?? STRIPE_VERSION});
+    const version=options.version ?? options.apiVersion;
+    if(!version) {
+      const error=new Error('Original Stripe API version is missing; reconcile this retained order with an existing PaymentIntent id instead of replaying an uncertain request.');
+      error.manualReview=true;throw error;
+    }
+    const pi=await stripeCall(env,'POST','/v1/payment_intents',params,{...options,version});
     await recordProviderId(env,order,job.id,pi);
     return pi;
   }
