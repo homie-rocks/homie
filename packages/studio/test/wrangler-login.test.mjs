@@ -48,3 +48,22 @@ test('sign-in probe yields to the event loop',async()=>{
  const result=await cf.checkWranglerLogin('.',{}, {run:async()=>++calls===1?{code:1,out:'refresh token invalid'}:yes});
  assert.equal(result.ok,true);assert.equal(yielded,true);
 });
+
+test('CLI status reports a logged-out studio after one Wrangler probe',async t=>{
+  const {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync}=await import('node:fs');
+  const {join}=await import('node:path');
+  const {execFile}=await import('node:child_process');
+  const {promisify}=await import('node:util');
+  const {newStudio}=await import('../lib/scaffold.mjs');
+  const root=mkdtempSync(join(tmpdir(),'wrangler-status-'));
+  t.after(()=>rmSync(root,{recursive:true,force:true}));
+  newStudio(root,{name:'Status',install:false});
+  mkdirSync(join(root,'node_modules/.bin'),{recursive:true});
+  writeFileSync(join(root,'node_modules/.bin/wrangler'),`#!/usr/bin/env node
+require('node:fs').appendFileSync('attempts','probe\\n');
+console.log('{"loggedIn":false}');
+`,{mode:0o755});
+  const {stdout}=await promisify(execFile)(process.execPath,[new URL('../bin/homie-studio.mjs',import.meta.url).pathname,'status','--json'],{cwd:root});
+  assert.equal(JSON.parse(stdout).cloudflareSignedIn,false);
+  assert.equal(readFileSync(join(root,'attempts'),'utf8'),'probe\n');
+});
