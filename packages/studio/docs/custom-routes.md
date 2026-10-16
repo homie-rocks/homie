@@ -34,7 +34,7 @@ build/deploy preserves that setting. To intercept only selected files, use
 `{"assets":{"run_worker_first":["/feed.json"]}}`. These paths are unioned with
 Homie's generated `/games/*`, `/_studio/*`, `/_site/*` and per-app paths. Those
 paths must reach the Worker to enforce private app authorization; custom arrays
-(including empty arrays) or `false` cannot remove them. A second `useRoutes` call replaces the handler; `useRoutes(null)` removes
+(including empty arrays) or `false` cannot remove them. Exclusion patterns (starting with `!`) are refused at build, because they would take those paths out from behind their access checks. A second `useRoutes` call replaces the handler; `useRoutes(null)` removes
 it. Register configuration only, never request data, at module scope.
 
 The handler may return a `Response`, `null` or `undefined`. Errors propagate as

@@ -22,6 +22,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 ### Fixed
 
 - Custom route role checks enforce fresh app launch gates. Custom Worker asset routes preserve generated authorization paths; same-origin mutation protection is exported and documented with reserved `/api/custom/*` paths and app cookie scope.
+- Custom `assets.run_worker_first` entries cannot exclude paths with `!`; the build refuses them so private app files always stay behind their access checks.
 - Late link subscriptions no longer trigger rules-view reconnect recovery; throwing listeners still return their unsubscribe function.
 - MCP publishing and its preflight use the connector's directory. Wrangler sign-in checks stop immediately when logged out and retry refresh collisions without blocking the event loop, including CLI status.
 - Scaffold, local database and login regression tests use OS temporary directories and work from the package test command.
