@@ -672,7 +672,10 @@ for (const kind of ['open', 'humans-only', 'hybrid', 'beginner', 'kids']) test(`
   const { signControl } = await import('../worker/office.mjs');
   const ctl = await signControl(s.env, { game: 'rules-run', room, op: 'level', args: { level: 2 } });
   const good = await s.env.TABLE.get(`rules-run/${room}`).fetch(`https://table/__office?game=rules-run&room=${room}`, { method: 'POST', body: JSON.stringify(ctl) }); assert.equal(good.status, 200);
-  tick(61); table.recordRound(); await s.settle();
+  // Background peak coalescing may let real timers advance during admission.
+  // Observe the first settled round instead of jumping past its short break.
+  for(let i=0;i<120&&!table.recorded;i++){tick(1);table.recordRound();}
+  await s.settle();
   assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM rounds WHERE game = ? AND room = ?').get('rules-run', room).n, 1);
   for (const c of [...table.room.live()]) if (!c.agent) table.room.kick(c, 'closed');
   assert.equal(table.hostRt.paused, true); const stopped = table.hostRt.tick;
