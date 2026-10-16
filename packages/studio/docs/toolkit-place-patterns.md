@@ -67,7 +67,7 @@ Tokens are bound to this origin, limited to the exact named tools, expire after 
 
 Cloudflare's official MCP request interface cannot authorize new static-asset uploads with an upload JWT; deploy with Wrangler, Cloudflare's own CLI using browser OAuth.
 
-### Weekly calendar exceptions
+## Weekly calendar exceptions
 
 `calendarSlots` (also exposed by `ctx.bookings.calendar`) accepts `exceptions`,
 keyed by local `YYYY-MM-DD`. Use `null` to omit a holiday or an object containing
@@ -76,3 +76,9 @@ must belong to the declared range and weekdays. The occurrence ID remains based
 on the original series time when an exception changes its start time. DST gaps
 and ambiguous times refuse rather than silently changing the booking. Publishing
 new calendar data does not itself move existing reservations or change payments.
+
+A `durationMinutes` exception replaces the series `days` duration for that date.
+Explicit `undefined` override values are invalid. Removing a published slot with
+active reservations is refused by the database (`slot has active bookings`).
+Release or cancel those reservations through the payment-aware booking flow before
+deleting the slot; omitting a generated date alone does not delete a published row.

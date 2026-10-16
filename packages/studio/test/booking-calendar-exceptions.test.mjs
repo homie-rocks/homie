@@ -13,3 +13,17 @@ test('bad dates, unrecognized fields, off-series dates and DST ambiguity refuse'
  for(const exceptions of [{'2026-10-24':null},{'2026-02-30':null},{'2026-10-23':{price:1}},{'2026-10-23':{capacity:0}},[]])assert.throws(()=>calendarSlots({...series,exceptions}));
  assert.throws(()=>calendarSlots({...series,startDate:'2026-11-01',endDate:'2026-11-01',weekdays:[0],exceptions:{'2026-11-01':{time:'01:30'}}}),/ambiguous/);
 });
+test('explicit undefined exception fields refuse instead of resetting defaults',()=>{
+ for(const key of ['time','capacity','durationMinutes'])assert.throws(()=>calendarSlots({...series,exceptions:{'2026-10-23':{[key]:undefined}}}),/exception/);
+});
+test('duration override replaces a multi-day series duration',()=>{
+ const [slot]=calendarSlots({...series,days:2,exceptions:{'2026-10-23':{durationMinutes:90}}});
+ assert.equal(Date.parse(slot.end)-Date.parse(slot.start),90*60000);
+});
+test('published occurrence deletion refuses active reservations atomically',async t=>{
+ const {database}=await import('./place-database.mjs');const DB=database(t);
+ DB.sql.exec(`INSERT INTO app_records VALUES('place','slots','supper-2026-10-23-1900','{"capacity":12}',1,1);
+ INSERT INTO shop_bookings(id,app,collection,slots,slot,quantity,order_id,state,updated_at) VALUES('reservation','place','bookings','slots','supper-2026-10-23-1900',1,'order','confirmed',1);`);
+ assert.throws(()=>DB.sql.exec("DELETE FROM app_records WHERE collection='slots'"),/slot has active bookings/);
+ assert.equal(DB.sql.prepare("SELECT count(*) n FROM app_records WHERE collection='slots'").get().n,1);
+});
