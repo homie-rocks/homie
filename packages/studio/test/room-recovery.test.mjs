@@ -2,24 +2,29 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Gate} from '../worker/gate.mjs';
 import {Table} from '../worker/table.mjs';
+import {NetRoom} from '../worker/room.mjs';
 import {Lobby} from '../worker/lobby.mjs';
 import {LobbyPeak} from '../worker/lobby-peak.mjs';
 import {lobbyFor,roomShard} from '../worker/lobby-shards.mjs';
 import {virtualTime} from './virtual-time.mjs';
 
 for(const failure of ['idle','invalid frame'])test(`a new relay link seats and accepts inputs after ${failure}`,async t=>{
- const clock=virtualTime(t),pending=[],accepted=[],relay={session:{reset(){}}};
- const table=Object.create(Table.prototype);Object.assign(table,{relayFor:()=>relay,relayInput:async(_relay,data)=>accepted.push(...JSON.parse(data))});
+ const clock=virtualTime(t),pending=[],room=new NetRoom({code:'r',rules:true}),inputs=[];
+ room.setServerHost({frame:m=>{if(m.t==='in')inputs.push(m);},facts:()=>({})});
  const ctx={waitUntil:p=>pending.push(p)};
+ const table=Object.create(Table.prototype);Object.assign(table,{ctx,env:{},relays:new Map(),gateHeld:new Map(),gatePromised:new Map(),canSleep:()=>false,saveSessions(){},connect(_request,transport){
+   const peer=room.attach({send:text=>transport.send(text),close:(...args)=>transport.close(...args)});
+   transport.addEventListener('message',e=>peer.onMessage(e.data));transport.addEventListener('close',()=>peer.onClose());
+ }});
  const gate=new Gate(ctx,{TABLE:{idFromName:x=>x,get:()=>({fetch:(url,init)=>table.fetch(new Request(url,init))})}});
- gate.openRelay=()=>{};
- const client=()=>{const handlers={};return {send(){},close(){handlers.close?.();},addEventListener:(n,fn)=>handlers[n]=fn,emit:data=>handlers.message({data})};};
- const request=new Request('https://room/__net?game=g&room=r&relay=1');
- const a=client();await gate.connect(request,a);a.emit('{"t":"hello"}');await clock.wait(60);a.emit('{"t":"in","n":1}');await clock.wait(60);
+ gate.openRelay=(url,socket)=>table.relayFor(url).socket.attachLive({readyState:1,send:data=>socket.emit('message',{data}),addEventListener(){},close(){}});
+ const client=()=>{const handlers={},frames=[];return {frames,send:text=>frames.push(JSON.parse(text)),close(){handlers.close?.();},addEventListener:(n,fn)=>handlers[n]=fn,emit:data=>handlers.message({data})};};
+ const request=new Request('https://room/__net?game=g&room=r&relay=1&gate=0');
+ const a=client();await gate.connect(request,a);a.emit('{"t":"hello","v":1,"rev":12,"rules":true,"want":"play"}');await clock.wait(60);a.emit('{"t":"in","k":1,"s":[]}');await clock.wait(60);
  if(failure==='idle'){a.close();await clock.wait(10001);}else gate.relaySocket.emit('message',{data:'invalid'});
- const before=accepted.length,b=client();await gate.connect(request,b);b.emit('{"t":"hello"}');await clock.wait(60);b.emit('{"t":"in","n":2}');await clock.wait(60);await Promise.all(pending);
- assert.ok(accepted.slice(before).some(row=>row[0]==='open'),'new player admission reaches Table');
- assert.ok(accepted.slice(before).some(row=>row[0]==='data'&&row[2].includes('"n":2')),'new inputs reach Table');
+ const before=inputs.length,b=client();await gate.connect(request,b);b.emit('{"t":"hello","v":1,"rev":12,"rules":true,"want":"play"}');await clock.wait(60);b.emit('{"t":"in","k":2,"s":[]}');await clock.wait(60);await Promise.all(pending);
+ assert.ok(b.frames.some(m=>m.t==='welcome'&&Number.isInteger(m.seat)),'new player is seated');
+ assert.equal(inputs.length,before+1,'new input accepted by room host');assert.equal(inputs.at(-1).k,2);
  b.close();gate.rest();
 });
 function matching(){

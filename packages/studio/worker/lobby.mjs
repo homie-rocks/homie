@@ -37,7 +37,7 @@ export class Lobby {
         for(const r of this.rooms.values())if(r.players>0&&r.at>Date.now()-180000)this.live.set(r.name,{players:r.players,at:r.at});
         if(ctx.storage.sql)for(const row of ctx.storage.sql.exec('SELECT body,expires FROM matchmaking_reservations WHERE expires>?',Date.now()).toArray()) {
           const reservation=JSON.parse(row.body),room=this.rooms.get(reservation.room);
-          if(room)room.pending.push(row.expires-20000);
+          if(room && reservation.pending!==false)room.pending.push(row.expires-20000);
         }
         for (const [name, until] of saved.closed ?? []) if (until > Date.now()) this.closed.set(name, until);
       }
@@ -132,8 +132,8 @@ export class Lobby {
   reservation(key,result) {
     const sql=this.ctx.storage.sql,now=Date.now();
     if(sql){
-      if(result){sql.exec('DELETE FROM matchmaking_reservations WHERE expires<=?',now);sql.exec('INSERT OR REPLACE INTO matchmaking_reservations VALUES(?,?,?)',key,JSON.stringify(result),now+20000);return;}
-      const row=sql.exec('SELECT body FROM matchmaking_reservations WHERE id=? AND expires>?',key,now).toArray()[0];return row?JSON.parse(row.body):null;
+      if(result){sql.exec('DELETE FROM matchmaking_reservations WHERE expires<=?',now);sql.exec('INSERT OR REPLACE INTO matchmaking_reservations VALUES(?,?,?)',key,JSON.stringify({...result,pending:true}),now+20000);return;}
+      const row=sql.exec('SELECT body FROM matchmaking_reservations WHERE id=? AND expires>?',key,now).toArray()[0];if(!row)return null;const {pending,...saved}=JSON.parse(row.body);return saved;
     }
     for(const [id,row] of this.reservations)if(row.expires<=now)this.reservations.delete(id);
     if(result)this.reservations.set(key,{result,expires:now+20000});
@@ -274,6 +274,9 @@ export class Lobby {
       r.ver = rver;
       if (body.host === 'server' || body.host === 'browser') r.host = body.host;
       r.pending.splice(0, grew);
+      // Retain retry ownership while retiring fulfilled seat holds. Otherwise
+      // eviction restores those holds on top of the already reported players.
+      if(grew && this.ctx.storage.sql)this.ctx.storage.sql.exec("UPDATE matchmaking_reservations SET body=json_set(body,'$.pending',json('false')) WHERE id IN (SELECT id FROM matchmaking_reservations WHERE json_extract(body,'$.room')=? AND json_extract(body,'$.pending') IS NOT 0 ORDER BY expires,id LIMIT ?)",body.room,grew);
       if ((r.agents ?? 0) < agents) (r.agentPending ?? []).splice(0, agents - (r.agents ?? 0));
       r.players = seated;
       r.agents = agents;

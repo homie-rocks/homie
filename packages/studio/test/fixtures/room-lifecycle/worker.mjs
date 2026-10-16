@@ -30,10 +30,6 @@ const configured = env => ({...env, HOMIE_ROOM_LOG: '0', ASSETS: {fetch: async r
   new URL(request.url).pathname === '/games.json' ? Response.json(catalogue) : new Response('', {status: 404})}});
 export class Table extends BaseTable {
   constructor(ctx, env) { super(ctx, configured(env)); this.proofBoot = crypto.randomUUID(); }
-  async relayInput(relay,data) {
-    for(const row of JSON.parse(data))if(row[0]==='data'&&JSON.parse(row[2]).t==='in')this.proofInputs=(this.proofInputs??0)+1;
-    return super.relayInput(relay,data);
-  }
   fetch(request) {
     const path=new URL(request.url).pathname;
     if(path==='/proof-miss-start')return this.ctx.storage.deleteAlarm().then(()=>Response.json({ok:true}));
@@ -41,7 +37,7 @@ export class Table extends BaseTable {
     if(path==='/proof-stall')return this.ctx.blockConcurrencyWhile(async()=>{const start=Date.now();await new Promise(resolve=>setTimeout(resolve,1200));return Response.json({stalled:Date.now()-start});});
     if(path==='/proof-control'){return Promise.resolve(this.room.control('announce',{text:'break control',seconds:300})).then(result=>{this.officeSaved=this.room.officeSaved();return this.ctx.storage.put('office',this.officeSaved).then(()=>Response.json(result));});}
     if (path === '/proof-status') return Response.json({
-      inputs:this.proofInputs??0, version: this.env.PROOF_VERSION, boot: this.proofBoot, tick: this.hostRt?.tick,
+      inputs:this.room?.stats.ins??0, version: this.env.PROOF_VERSION, boot: this.proofBoot, tick: this.hostRt?.tick,
       round: this.hostRt?.core.round(), idle: this.hostRt?.roundIdleUntil,
       clients: this.room?.clients.size, watchers:this.room?.watchers.size, timer: Boolean(this.timer), announcement:this.room?.announcement,
       sessionBytes:this.ctx.storage.sql.exec('SELECT sum(length(value)) n FROM room_sessions').toArray()[0]?.n,

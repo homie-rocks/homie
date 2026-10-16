@@ -188,3 +188,15 @@ test('matching entry eviction keeps a reservation on its original shard after lo
  const request=()=>new Request('https://lobby/match?game=g&reservation=player');
  await new MatchRouter(ctx,env).fetch(request());wide=true;await new MatchRouter(ctx,env).fetch(request());assert.deepEqual(seen,['g','g','g']);
 });
+
+test('reported seated reservations do not become pending seats again after Lobby eviction',async t=>{
+ const st=storage(t);st.get=async()=>null;st.delete=async()=>true;let ready;
+ const ctx={storage:st,blockConcurrencyWhile:fn=>{ready=fn();},waitUntil(){}};
+ let lobby=new Lobby(ctx,{});await ready;
+ const join=id=>lobby.fetch(new Request('https://lobby/join?max=8&shard=0&reservation='+id)).then(r=>r.json());
+ let row;for(let i=0;i<7;i++)row=await join('player-'+i);
+ await lobby.fetch(new Request('https://lobby/report',{method:'POST',body:JSON.stringify({room:row.room,players:7})}));
+ lobby=new Lobby(ctx,{});await ready;
+ assert.equal((await join('eighth')).room,row.room);
+ assert.equal((await join('player-0')).room,row.room,'settled reservation still retries its original room');
+});
