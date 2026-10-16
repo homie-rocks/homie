@@ -295,7 +295,7 @@ export function createHost(o: HostOptions): Host {
     const need = Math.ceil(((measuredRtt.get(seat) ?? 0) + 150) / period) + waited;
     return rewindCap === null ? need : Math.min(rewindCap, need);
   };
-  const core = createCore(c, { validateOwners:true, ownerTime:()=>o.clock.now()/period, ...characterOptions, rewindTicks, label: (seat,driver)=>nameOf(seat,driver), moved: o.moved, observe: o.observe, noted: o.noted, seed: Math.floor(random() * 4294967296) >>> 0, epoch: saved ? undefined : (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
+  const core = createCore(c, { validateOwners:true, latency:seat=>(measuredRtt.get(seat)??0)/1000, ownerTime:()=>o.clock.now()/period, ...characterOptions, rewindTicks, label: (seat,driver)=>nameOf(seat,driver), moved: o.moved, observe: o.observe, noted: o.noted, seed: Math.floor(random() * 4294967296) >>> 0, epoch: saved ? undefined : (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
   let epoch = core.epoch;
   if (saved && (o.startPaused ?? o.restoreEpoch !== undefined)) for (const body of core.bodies()) if (body.driver !== 'bot' && body.owner !== 'reserved') core.seatAway(body.seat, true);
   let lastSaveAt = o.clock.now();

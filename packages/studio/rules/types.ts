@@ -36,6 +36,8 @@ export type World<E, F, S, V, C, A, T, Room extends boolean = false> = Clock & {
   readonly unitsLeft: number;
   random(): number;
   label(player:string):string;
+  /** Relay-measured round-trip seconds (0 when unknown), bounded to two seconds. */
+  latency(player:string):number;
   send<K extends keyof E>(target: string, event: K, ...data: Payload<E[K]>): void;
   dispatch<K extends keyof E>(target: string, event: K, ...data: Payload<E[K]>): boolean;
   sendRoom<K extends keyof E>(event: K, ...data: Payload<E[K]>): void;

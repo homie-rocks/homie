@@ -203,7 +203,7 @@ export interface Core {
  * `noted`: told, as it happens, of a value the rules wrote that the runtime changed to make it fit, or dropped (pack.ts
  * `Adjusted`; also `effect`, `think` and `decision`): the handler, what was done, the field's name and what was written.
  */
-export function createCore(c: Compiled, opts: { ownerTime?: () => number; validateOwners?: boolean; characterForSeat?: (seat: number) => import('./rules.ts').Character | null | undefined; characterSaved?: (seat: number, character: import('./rules.ts').Character) => void; rewindTicks?: (seat: number)=>number; label?: (seat:number,driver:Driver)=>string; moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes, id: string) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
+export function createCore(c: Compiled, opts: { latency?: (seat: number) => number; ownerTime?: () => number; validateOwners?: boolean; characterForSeat?: (seat: number) => import('./rules.ts').Character | null | undefined; characterSaved?: (seat: number, character: import('./rules.ts').Character) => void; rewindTicks?: (seat: number)=>number; label?: (seat:number,driver:Driver)=>string; moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes, id: string) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
   if (opts.restore && (c.map.physics !== undefined) !== (opts.restore.physics !== undefined)) throw new Error('physics: save and game differ');
   const physics = physicsWorld(c.map.physics, opts.restore?.physics);
   let currentMap=c.map;
@@ -709,6 +709,13 @@ export function createCore(c: Compiled, opts: { ownerTime?: () => number; valida
       charge(cost);
       found.sort((a, b) => a.d - b.d || a.e.n - b.e.n);
       return Object.freeze(found.map((x) => viewOf(x.e)));
+    },
+    latency: (id: unknown): number => {
+      charge(16);
+      const e = typeof id === 'string' ? ents.get(id) : undefined;
+      if (!e || e.dead || e.driver !== 'person') return 0;
+      const seconds = opts.latency?.(e.seat) ?? 0;
+      return Number.isFinite(seconds) ? Math.max(0, Math.min(2, seconds)) : 0;
     },
     movement: (id: unknown, kind?: unknown): readonly unknown[] => {
       charge(16);

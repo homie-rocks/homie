@@ -88,8 +88,13 @@ for that entity in this server tick (up to eight): `tick`, `pos`, `vel`, `headin
 accepted or a placement invalidated them. Contact rules must check every state,
 including their game's recorded substeps, rather than only the last state in a
 packet burst. It does not replay game handlers or award points automatically.
-Bound any past-time contact allowance in the game's rules; Tiny Platformer uses
-150 ms and judges older reports against current monsters. Scores displayed as
+Bound any past-time contact allowance in the game's rules. `world.latency(id)`
+returns the relay's measured round-trip seconds for a human entity (zero when
+unknown or for non-human entities), bounded to two seconds. This is a transport
+measurement, not a client-provided timestamp or permission to rewind arbitrarily.
+A game may add it to a small presentation allowance, with its own hard cap;
+reports older than that cap still need explicit current-time handling. This query
+does not allocate pose history or alter the bounds on ray rewinds. Scores displayed as
 confirmed must come from server fields, not a prediction callback.
 
 
