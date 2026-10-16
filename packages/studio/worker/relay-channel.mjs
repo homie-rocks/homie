@@ -2,7 +2,7 @@
  * output travels on a separate stream, never a recursive callback chain. */
 export function relayChannel(ctx, deliver) {
   const listeners = new Map();
-  let chain = Promise.resolve(), closed = false, pending = 0;
+  let chain = Promise.resolve(), closed = false, pending = 0, pendingBytes = 0;
   const emit = (name, event) => { for (const fn of listeners.get(name) ?? []) fn(event); };
   return {
     accept() {},
@@ -10,13 +10,15 @@ export function relayChannel(ctx, deliver) {
     emit,
     send(data) {
       if (closed) throw new Error('Relay channel closed');
-      if (++pending > 64) throw new Error('Relay channel queue limit');
+      const size=data.length;
+      if (pending>=8 || pendingBytes+size>4*1024*1024) throw new Error('Relay channel queue limit');
+      pending++;pendingBytes+=size;
       chain = chain.then(async () => {
         if (closed) return;
         const response = await deliver(data);
         if (!response.ok) throw new Error('Relay delivery failed: ' + response.status);
         await response.body?.cancel();
-      }).catch(error => { if (!closed) { closed = true; emit('error', {error}); } }).finally(() => { pending--; });
+      }).catch(error => { if (!closed) { closed = true; emit('error', {error}); } }).finally(() => { pending--;pendingBytes-=size; });
       ctx.waitUntil(chain);
     },
     close(code, reason) { if (!closed) { closed = true; emit('close', {code, reason}); } },

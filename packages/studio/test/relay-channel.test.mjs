@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {relayStream,readRelay} from '../worker/relay-channel.mjs';
+import {relayChannel,relayStream,readRelay} from '../worker/relay-channel.mjs';
 
 test('detaching output preserves logical clients and drains frames in order on resume',async()=>{
  const pending=[],ctx={waitUntil:p=>pending.push(p)};let wakes=0,closes=0;
@@ -31,4 +31,15 @@ test('a stale stream cancellation cannot disconnect its replacement',async()=>{
  channel.send('[]');channel.sleep();
  assert.equal(new TextDecoder().decode((await next.read()).value),'[]\n');
  assert.equal((await next.read()).done,true);
+});
+
+
+test('pending input bytes are bounded even before the first binding response',async()=>{
+ const pending=[];let release;
+ const held=new Promise(resolve=>{release=resolve;});
+ const channel=relayChannel({waitUntil:p=>pending.push(p)},async()=>{await held;return new Response(null,{status:204});});
+ channel.send('x'.repeat(4*1024*1024));
+ assert.throws(()=>channel.send('x'),/queue limit/);
+ release();await Promise.all(pending);
+ channel.send('[]');await Promise.all(pending);
 });
