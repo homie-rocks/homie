@@ -104,7 +104,14 @@ test('public Worker, real Table storage and Gates admit above 32 and preserve se
       const gone=new Set();for(const p of holders)p.ws.addEventListener('close',()=>gone.add(p));
       const query=failure==='table'?'table=1':'key=crowd/pub-1/0';
       assert.equal((await mf.dispatchFetch(`https://studio.test/test-abort?${query}`)).status,204);
-      const expected=failure==='table'?holders.length:Math.min(holders.length,GATE_PLAYERS);
+      if(failure==='table'){
+        const previous=holders.map(p=>p.view.own);
+        for(let wait=0;wait<200&&!holders.every((p,i)=>p.view.own>previous[i]+1);wait++)await new Promise(r=>setTimeout(r,50));
+        assert.equal(gone.size,0,'Table recovery preserves the Gate transports');
+        assert.ok(holders.every((p,i)=>p.view.own>previous[i]+1),'every existing seat receives its own body after Table restart');
+        continue;
+      }
+      const expected=Math.min(holders.length,GATE_PLAYERS);
       for(let wait=0;wait<200&&gone.size<expected;wait++)await new Promise(r=>setTimeout(r,50));
       assert.equal(gone.size,expected,`${failure}: every player it carried was closed, and nobody else`);
       const affected=[...gone];

@@ -1,0 +1,69 @@
+import {tmpdir} from 'node:os';
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import * as cf from '../lib/cloudflare.mjs';
+const yes={code:0,stdout:JSON.stringify({loggedIn:true,accounts:[{id:'a',name:'Studio'}],authType:'OAuth Token'})};
+test('sign-in tolerates a refresh race and rereads Wrangler on each attempt',async()=>{
+  const waits=[], replies=[{code:1,out:'OAuth refresh token is invalid'}, {code:1,out:'EBUSY: config is locked'},yes];
+  const result=await cf.checkWranglerLogin('.',{}, {run:()=>replies.shift(),sleep:ms=>waits.push(ms)});
+  assert.equal(result.ok,true);assert.deepEqual(result.who.accounts,[{id:'a',name:'Studio'}]);
+  assert.equal(waits.length,2);assert.ok(waits[1]>waits[0]);
+});
+test('failed checks retain real diagnostics and distinguish expired auth from temporary failure',async()=>{
+  for(const [reply,needs] of [[{code:1,out:'OAuth refresh token expired'},'cloudflare-login'],[{code:1,out:'EBUSY: config is locked'},'cloudflare-auth-check'],[{code:1,out:'network unavailable'},'cloudflare-auth-check'],[{code:0,stdout:'{"loggedIn":false}'},'cloudflare-login']]){
+    let calls=0;const result=await cf.checkWranglerLogin('.',{},{run:()=>{calls++;return reply;},sleep:()=>{}});
+    assert.equal(calls,reply.code===0?1:4);assert.equal(result.ok,false);assert.equal(result.needs,needs);
+    if(reply.out)assert.ok(result.why.includes(reply.out));
+  }
+});
+
+test('three studio processes recover together from a shared refresh collision',async t=>{
+  const {mkdtempSync,mkdirSync,writeFileSync,rmSync}=await import('node:fs');
+  const {join}=await import('node:path');
+  const {spawn}=await import('node:child_process');
+  const root=mkdtempSync(join(tmpdir(),'wrangler-login-'));
+  t.after(()=>rmSync(root,{recursive:true,force:true}));
+  const script=`#!/usr/bin/env node
+const fs=require('node:fs'),path=require('node:path');
+const first=path.join(process.cwd(),'attempt');
+if(!fs.existsSync(first)){fs.writeFileSync(first,'1');console.error('OAuth refresh token is invalid during concurrent refresh');process.exit(1);}
+console.log(JSON.stringify({loggedIn:true,accounts:[{id:'shared-account',name:'Studio'}]}));
+`;
+  const jobs=Array.from({length:3},(_,i)=>{
+    const studio=join(root,String(i));mkdirSync(join(studio,'node_modules/.bin'),{recursive:true});
+    writeFileSync(join(studio,'node_modules/.bin/wrangler'),script,{mode:0o755});
+    const source=`import {checkWranglerLogin} from ${JSON.stringify(new URL('../lib/cloudflare.mjs',import.meta.url).href)};const result=await checkWranglerLogin(${JSON.stringify(studio)});console.log(JSON.stringify(result));process.exitCode=result.ok?0:1;`;
+    return new Promise((resolve,reject)=>{
+      const child=spawn(process.execPath,['--input-type=module','-e',source]);let out='',err='';
+      child.stdout.on('data',data=>out+=data);child.stderr.on('data',data=>err+=data);child.on('error',reject);
+      child.on('close',code=>{try{assert.equal(code,0,err);assert.equal(JSON.parse(out).who.accounts[0].id,'shared-account');resolve();}catch(error){reject(error);}});
+    });
+  });
+  await Promise.all(jobs);
+});
+
+test('sign-in probe yields to the event loop',async()=>{
+ let yielded=false;setTimeout(()=>{yielded=true;},0);
+ let calls=0;
+ const result=await cf.checkWranglerLogin('.',{}, {run:async()=>++calls===1?{code:1,out:'refresh token invalid'}:yes});
+ assert.equal(result.ok,true);assert.equal(yielded,true);
+});
+
+test('CLI status reports a logged-out studio after one Wrangler probe',async t=>{
+  const {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync}=await import('node:fs');
+  const {join}=await import('node:path');
+  const {execFile}=await import('node:child_process');
+  const {promisify}=await import('node:util');
+  const {newStudio}=await import('../lib/scaffold.mjs');
+  const root=mkdtempSync(join(tmpdir(),'wrangler-status-'));
+  t.after(()=>rmSync(root,{recursive:true,force:true}));
+  newStudio(root,{name:'Status',install:false});
+  mkdirSync(join(root,'node_modules/.bin'),{recursive:true});
+  writeFileSync(join(root,'node_modules/.bin/wrangler'),`#!/usr/bin/env node
+require('node:fs').appendFileSync('attempts','probe\\n');
+console.log('{"loggedIn":false}');
+`,{mode:0o755});
+  const {stdout}=await promisify(execFile)(process.execPath,[new URL('../bin/homie-studio.mjs',import.meta.url).pathname,'status','--json'],{cwd:root});
+  assert.equal(JSON.parse(stdout).cloudflareSignedIn,false);
+  assert.equal(readFileSync(join(root,'attempts'),'utf8'),'probe\n');
+});

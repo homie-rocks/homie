@@ -53,7 +53,12 @@ Workers AI requires the studio's own binding and owner authority, or an explicit
 never exposes the environment or raw credentials. A named secret capability in
 `studio.json` (`mcp.secrets.NAME: { origin, header, prefix, tools }`) lets an owner tool
 make an HTTPS request to one declared origin; `tools` can explicitly delegate this capability to named staff tools; redirects and credential echoes are
-refused. The studio’s AI can generate an integration secret and place it in Cloudflare and the sender through their authorized APIs. Never ask the person to find or paste a key, and never put a secret in source files.
+refused. Use `origin: 'self'` for the studio's own API: the capability resolves to
+ the current Worker request origin (or the configured studio origin for scheduled
+ functions), so a workers.dev address need not be known at build time. Calls may
+ use a relative URL such as `ctx.fetchWithSecret('API_TOKEN', '/api/sync')`.
+ HTTPS is still required; credentials in URLs and cross-origin targets are refused.
+ The studio’s AI can generate an integration secret and place it in Cloudflare and the sender through their authorized APIs. Never ask the person to find or paste a key, and never put a secret in source files.
 
 Studio handlers and imported parts are trusted Worker code, not sandboxed plugins.
 Review shared code before adding it: JavaScript wrappers cannot confine malicious

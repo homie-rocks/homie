@@ -1,3 +1,4 @@
+import {redactText} from './redact.mjs';
 import {enableReadReplication} from './read-replication.mjs';
 import {ensureBackgroundQueues,backgroundQueues} from './background-queue.mjs';
 import { directoryUrl } from '../worker/directory-choice.mjs';
@@ -53,6 +54,13 @@ import { LOCAL_STATE, configPath, domainOrigin, isRulesGame, isWorkersDev, layou
 
 const ANSI = /\u001b\[[0-9;]*m/g;
 
+/** Keep Wrangler's error and its context; progress/footer lines must not hide it. */
+export function wranglerDeployError(out) {
+  const clean = redactText(String(out ?? '').replace(ANSI, '')).text;
+  const error = clean.search(/(?:^|\n)[^\n]*\[ERROR\]/);
+  return (error >= 0 ? clean.slice(error) : clean).trim();
+}
+
 export function experienceAddresses(root, id, url) {
   const app = listGames(root).find(g => g.id === id)?.kind === 'app';
   return { [app ? 'open' : 'play']: url ? `${url}/${id}/${app ? 'open' : 'play'}` : null, wall: url ? `${url}/${id}/tv` : null };
@@ -67,24 +75,41 @@ export function wranglerBin(root) {
 export function runner(root, env) {
   const bin = wranglerBin(root);
   if (!bin) throw new Error('Wrangler is not installed in this studio yet: run `npm install` in the studio folder first');
-  return (args, { cwd = workerDir(root), input } = {}) => {
+  return (args, { cwd = workerDir(root), input, timeout = 10 * 60_000 } = {}) => {
     const dev = join(workerDir(root), '.wrangler', 'homie-dev.wrangler.json');
     if (args.includes('--local') && !args.includes('--config') && existsSync(dev)) args = [...args, '--config', dev, '--persist-to', join(workerDir(root), '.wrangler', 'state')];
     const res = spawnSync(bin, args, {
       cwd, env: { ...process.env, ...env, WRANGLER_SEND_METRICS: 'false', CI: '1' }, encoding: 'utf8',
-      input, maxBuffer: 64 * 1024 * 1024, timeout: 10 * 60_000,
+      input, maxBuffer: 64 * 1024 * 1024, timeout,
     });
-    const out = `${res.stdout ?? ''}${res.stderr ?? ''}`.replace(ANSI, '');
+    const out = `${res.stdout ?? ''}${res.stderr ?? ''}${res.error ? '\n' + res.error.message : ''}`.replace(ANSI, '');
     return { code: res.status ?? 1, out, stdout: (res.stdout ?? '').replace(ANSI, '') };
   };
 }
 
+/** Retry with fresh Wrangler processes: another studio may be rotating shared OAuth credentials. */
+export async function checkWranglerLogin(root, env = {}, {run = null, sleep = ms => new Promise(resolve => setTimeout(resolve, ms))} = {}) {
+  const bin = run ? null : wranglerBin(root);
+  if (!run && !bin) return {ok:false, needs:'cloudflare-login', why:'Wrangler is not installed in this studio yet: run `npm install` first.'};
+  const w = run ?? (args => wranglerRun(bin, args, {cwd:root, env:{...process.env,...env,WRANGLER_SEND_METRICS:'false',CI:'1'}, timeout:25_000}));
+  let res, data;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt) await sleep([200, 600, 1400][attempt - 1] + Math.floor(Math.random() * 100));
+    res = await w(['whoami', '--json'], {cwd: root, timeout: 25_000});
+    try { data = JSON.parse(res.stdout ?? ''); } catch { data = null; }
+    if (res.code === 0 && data?.loggedIn === false) return {ok:false, needs:'cloudflare-login', why:'Wrangler is not signed in. Run `npx wrangler login` and approve once in your browser, then retry.'};
+    if (res.code === 0 && data?.loggedIn === true) return {ok:true, who:{accounts:(data.accounts ?? []).map(a => ({id:a.id,name:a.name})),authType:data.authType}};
+  }
+  const detail = String(res.out ?? '').trim();
+  const expired = data?.loggedIn === false || /(?:refresh token.*(?:expired|invalid)|invalid_grant|not (?:logged|signed) in|authentication error|authenticate request)/i.test(detail);
+  return {ok:false, needs:expired ? 'cloudflare-login' : 'cloudflare-auth-check', why: (expired
+    ? 'Wrangler could not authenticate after four attempts. Run `npx wrangler login`, then retry.'
+    : 'Wrangler could not check sign-in after four attempts. Another process may be refreshing credentials, or Cloudflare may be unreachable. Retry shortly.') + (detail ? '\nWrangler: '+detail : '')};
+}
+
 /** Who Wrangler is signed in as, or null. Never prints a token. */
-export function whoami(root, env = {}) {
-  const w = runner(root, env);
-  const res = w(['whoami', '--json'], { cwd: root });
-  if (res.code !== 0) return null;
-  try { const d = JSON.parse(res.stdout); return d.loggedIn ? { accounts: (d.accounts ?? []).map((a) => ({ id: a.id, name: a.name })), authType: d.authType } : null; } catch { return null; }
+export async function whoami(root, env = {}) {
+  return (await checkWranglerLogin(root, env)).who ?? null;
 }
 
 function parseJson(text) {
@@ -262,12 +287,13 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   const wide = wideRouteRefusal(readConfig(root), studio);
   if (wide) return { ok: false, command: 'deploy', ...wide };
   let routes = keptRoutes(root, studio);
-  const who = whoami(root);
-  if (!who) {
-    if (cf.auth === 'stripe-projects') {
-      return { ok: false, command: 'deploy', needs: 'cloudflare-login', why: 'Wrangler did not accept the Cloudflare token Stripe Projects keeps for this studio (studio.json "auth": "stripe-projects"). Run `stripe projects env --pull` in the studio folder (it rewrites the git-ignored .env from Projects\' vault), then `npm run deploy` again; or sign in the usual way (`npx wrangler login`) and remove "auth" from studio.json.' };
+  const login = await checkWranglerLogin(root);
+  const who = login.who;
+  if (!login.ok) {
+    if (cf.auth === 'stripe-projects' && login.needs === 'cloudflare-login') {
+      return { ok: false, command: 'deploy', needs: 'cloudflare-login', why: login.why + '\nWrangler did not accept the Cloudflare token Stripe Projects keeps for this studio (studio.json "auth": "stripe-projects"). Run `stripe projects env --pull` in the studio folder (it rewrites the git-ignored .env from Projects\' vault), then `npm run deploy` again; or sign in the usual way (`npx wrangler login`) and remove "auth" from studio.json.' };
     }
-    return { ok: false, command: 'deploy', needs: 'cloudflare-login', why: 'Wrangler is not signed in to Cloudflare. Run `npx wrangler login` in the studio folder: it opens Cloudflare in the browser and the person approves once (a free account works, no payment method). Then run `npm run deploy` again.' };
+    return { ...login, command: 'deploy' };
   }
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || cf.accountId || (who.accounts.length === 1 ? who.accounts[0].id : null);
   if (!accountId) {
@@ -413,7 +439,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
     step(address.created ? 'registered the account’s workers.dev address automatically' : 'kept the account’s existing workers.dev address');
     dep = w(['deploy', ...(workerEntry(root) ? [workerEntry(root)] : []), ...repoVar(root)]);
   }
-  if (dep.code !== 0) return refuse(`wrangler deploy failed: ${dep.out.trim().split('\n').slice(-6).join(' ')}`, dep.out);
+  if (dep.code !== 0) return refuse(`wrangler deploy failed: ${wranglerDeployError(dep.out)}`, dep.out);
   if (paidReleases(root).length) {
     const bin = wranglerBin(root);
     const uploadOptions = { cwd: workerDir(root), env: { ...process.env, CLOUDFLARE_ACCOUNT_ID: accountId, WRANGLER_SEND_METRICS: 'false', CI: '1' } };
@@ -637,7 +663,7 @@ export async function ciDeploy(root, { log = () => {}, wrangler = null } = {}) {
   }
   const started = Date.now();
   const dep = w(['deploy', ...(workerEntry(root) ? [workerEntry(root)] : []), ...repoVar(root)]);
-  if (dep.code !== 0) return refuse(`wrangler deploy failed: ${dep.out.trim().split('\n').slice(-6).join(' ')}`, dep.out);
+  if (dep.code !== 0) return refuse(`wrangler deploy failed: ${wranglerDeployError(dep.out)}`, dep.out);
   step(`deployed ${names.worker ?? 'the Worker'} in ${Math.round((Date.now() - started) / 1000)} s`);
   const repo = repoOf(root);
   step(repo ? `the live site knows its GitHub repository (${repo}), for the Claude app's hand-off` : 'no GitHub repository found here (no HOMIE_REPO, studio.json "github" or git remote): the Claude app\'s card asks the person which it is');
@@ -683,8 +709,9 @@ export async function storageAdd(root, { log = () => {} } = {}) {
   if (created.has(`r2:${bucket}`)) {
     return { ok: true, command: 'storage add', bucket, already: true, next: ['npm run deploy   (binds it as MEDIA if the live site does not have it yet)'] };
   }
-  const who = whoami(root);
-  if (!who) return { ok: false, command: 'storage add', needs: 'cloudflare-login', why: 'Wrangler is not signed in to Cloudflare. Run `npx wrangler login` first (one approval in the browser).' };
+  const login = await checkWranglerLogin(root);
+  if (!login.ok) return {...login, command:'storage add'};
+  const who = login.who;
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || cf.accountId || (who.accounts.length === 1 ? who.accounts[0].id : null);
   if (!accountId) return { ok: false, command: 'storage add', needs: 'cloudflare-account', why: 'This login reaches several Cloudflare accounts; put the studio\'s in studio.json (cloudflare.accountId) first.', accounts: who.accounts };
   const w = runner(root, { CLOUDFLARE_ACCOUNT_ID: accountId });
@@ -718,15 +745,15 @@ export async function storageAdd(root, { log = () => {} } = {}) {
 }
 
 /** One Wrangler command, run without blocking (an upload of a music video takes a while); the last of its words kept. */
-function wranglerRun(bin, args, { cwd, env }) {
+function wranglerRun(bin, args, { cwd, env, timeout }) {
   return new Promise((done) => {
-    const p = spawn(bin, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
-    let out = '';
+    const p = spawn(bin, args, { cwd, env, timeout, stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '', stdout = '';
     const keep = (d) => { out = `${out}${d}`.slice(-8000); };
-    p.stdout.on('data', keep);
+    p.stdout.on('data', data => {stdout = `${stdout}${data}`.slice(-65536); keep(data);});
     p.stderr.on('data', keep);
     p.on('error', (e) => done({ code: 1, out: String(e.message) }));
-    p.on('close', (code) => done({ code: code ?? 1, out: out.replace(ANSI, '') }));
+    p.on('close', (code) => done({ code: code ?? 1, out: out.replace(ANSI, ''), stdout: stdout.replace(ANSI, '') }));
   });
 }
 

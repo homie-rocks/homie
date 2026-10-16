@@ -1,3 +1,4 @@
+import {LobbyPeak} from '../worker/lobby-peak.mjs';
 import { fixtureRun } from './studio-fixture.mjs';
 import { deployPlan } from '../lib/cloudflare.mjs';
 import { browserRulesGame } from './browser-rules-game.mjs';
@@ -220,7 +221,8 @@ test('stats: the site counts, only the owner reads, and a one-time link signs th
   const { default: worker, Table, Lobby } = await import('../worker/index.mjs');
   const DB = fakeD1(dir);
   const lobbyNow = { players: 3, rooms: 1 };
-  const LOBBY = { idFromName: () => 'x', get: () => ({ fetch: async (u) => new Response(JSON.stringify(String(u).endsWith('/now') ? lobbyNow : { rooms: [] })) }) };
+  const peakValues=new Map();const peakStore=new LobbyPeak({storage:{get:async k=>peakValues.get(k),put:async(k,v)=>peakValues.set(k,v)}},{DB});
+  const LOBBY = { idFromName: name => name, get: name => ({ fetch: async (u,init) => new URL(u).pathname==='/peak' ? peakStore.fetch(new Request(u,init)) : new Response(JSON.stringify(new URL(u).pathname==='/now' ? (name.includes('/shard/')?{players:0,rooms:0}:lobbyNow) : { rooms: [] })) }) };
   const env = { HOMIE_DEV: '1', ASSETS: assetsOf(dir), LOBBY, DB, STUDIO_NAME: 'Stat Owls' };
   const waits = [];
   const ctx = { waitUntil: (p) => waits.push(p) };

@@ -1,4 +1,6 @@
+import {lobbyFor} from './lobby-shards.mjs';
 /** Route dispatch; large interfaces and tool runtimes load at their own entry points. */
+import {customRoute} from './custom-routes.mjs';
 import { catalogue } from './catalogue.mjs';
 
 import { RULES_WIRING_MESSAGE } from './rules-wiring.mjs';
@@ -40,6 +42,7 @@ export default async function route(request, env, ctx) {
   let pubP = null;
   // Every game (for a game's own pages and the owner's), and the public ones (every list, the rooms, the manifest).
   const getAll = () => (catP ??= catalogue(env, url.origin).then((cat) => named(cat, env)));
+  const customFallback = async () => (await customRoute(request, env, ctx)) ?? fallback(request, env, url, getCat);
   const getCat = () => (pubP ??= Promise.all([getAll(), settingsOf(env)]).then(([cat, settings]) => publicCatalogue(cat, settings, env)));
 
   // Keep tool transports and discovery on the alias; redirect browser pages only.
@@ -281,7 +284,7 @@ export default async function route(request, env, ctx) {
   if (game && GAME_ID.test(game)) {
     const all = await getAll();
     const meta = (all.games ?? []).find((g) => g.id === game);
-    if (!meta) return fallback(request, env, url, getCat);
+    if (!meta) return customFallback();
     if (parts.length === 1 && !path.endsWith('/')) return Response.redirect(`${url.origin}/${game}/`, 301);
     let sub = parts.slice(1).join('/');
     // Game bundles were already public assets; only the document carries access context.
@@ -338,7 +341,7 @@ export default async function route(request, env, ctx) {
         if(!meta.room)return appRoleSession((await import('./records-page.mjs')).recordsPage(meta,url,cat,await availableShellShop(env,cat,game),Boolean(await (await import('./local-test.mjs')).localSession(request,env)),launch!=='public'?await appAssetTicket(env,game,undefined,{request,meta,launch}):null),request,env,meta,launch);
       }
     }
-    const lobby = () => env.LOBBY.get(env.LOBBY.idFromName(game));
+    const lobby = () => lobbyFor(env,game,/^[A-Za-z0-9_-]{16,43}$/.test(url.searchParams.get('b')??'')?url.searchParams.get('b'):'');
     if (sub === 'invite') return redeemInvite(request, env, url, cat, meta, settings);
 
     // SERVERS (worker/servers.mjs, NETPLAY.md section 17): which server a request is for — its path (/s/<id>/), its
@@ -629,7 +632,7 @@ export default async function route(request, env, ctx) {
       const cur = versionOf(meta?.netplay?.version) ?? '';
       const gv = versionOf(url.searchParams.get('gv')) ?? '';
       const stall = Number(meta?.netplay?.stallMs) || 0;
-      const target = `https://table/${sub}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}${b ? `&b=${b}` : ''}${who ? `&via=${encodeURIComponent(who)}` : ''}${sub === '__net' ? `&wp=${policy}${w ? '&w=1' : ''}` : ''}&pol=${encodeFacts(pol)}&chat=${encodeFacts(lean)}${acct ? '&acct=1' : ''}${member ? '&mem=1' : ''}${hub ? '&hub=1' : ''}${ag ? `&ag=${encodeFacts(ag)}` : ''}${badge ? `&bd=${encodeURIComponent(badge)}` : ''}&cur=${encodeURIComponent(cur)}${gv ? `&gv=${encodeURIComponent(gv)}` : ''}${stall ? `&stall=${stall}` : ''}${meta?.room?.contract ? `&rules=1&hz=${meta.room.tickHz ?? 20}` : ''}${meta?.room?.host === 'server' ? '&host=server' : ''}`;
+      const target = `https://table/${sub}?relay=1&game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}${b ? `&b=${b}` : ''}${who ? `&via=${encodeURIComponent(who)}` : ''}${sub === '__net' ? `&wp=${policy}${w ? '&w=1' : ''}` : ''}&pol=${encodeFacts(pol)}&chat=${encodeFacts(lean)}${acct ? '&acct=1' : ''}${member ? '&mem=1' : ''}${hub ? '&hub=1' : ''}${ag ? `&ag=${encodeFacts(ag)}` : ''}${badge ? `&bd=${encodeURIComponent(badge)}` : ''}&cur=${encodeURIComponent(cur)}${gv ? `&gv=${encodeURIComponent(gv)}` : ''}${stall ? `&stall=${stall}` : ''}${meta?.room?.contract ? `&rules=1&hz=${meta.room.tickHz ?? 20}` : ''}${meta?.room?.host === 'server' ? '&host=server' : ''}`;
       // The room's own failure to answer is told apart from the browser going away while it was connecting (a closed
       // tab, a reload racing its own socket): the second is a departure, said in one line with its room, never an
       // uncaught error with nothing on it.
@@ -663,5 +666,5 @@ export default async function route(request, env, ctx) {
     }
     if (sub.startsWith('__game/')) return gameAsset(request, env, url, game, sub.slice('__game/'.length));
   }
-  return fallback(request, env, url, getCat);
+  return customFallback();
 }

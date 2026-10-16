@@ -152,6 +152,8 @@ the Table/Lobby Durable Objects, on the studio's Cloudflare account), built
 from \`@homie-rocks/studio\`, pinned in \`package.json\`. The homie.rocks
 directory lists its games; homie.rocks does not host them.
 
+For studio-owned HTTP endpoints, read \`node_modules/@homie-rocks/studio/docs/custom-routes.md\` before editing \`site/src/worker.mjs\`. Use the reserved \`/api/custom/*\` namespace and the documented authorization and cookie scopes.
+
 ## Version-matched authoring guides
 
 Before authoring or rewriting a game, read \`node_modules/@homie-rocks/studio/guides/game/SKILL.md\`,

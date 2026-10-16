@@ -17,6 +17,45 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.56.0] - 2026-10-15
+
+**Plugin 0.56.0**
+
+Studios scale with hibernating rooms, add custom routes with built-in access checks, and deploy reliably with background queue handlers.
+
+### Added
+
+- Studio Worker `useRoutes` hook for custom APIs, well-known files and callbacks, after Homie's matched routes and before Worker asset fallback, with response security headers.
+- Public `isOwner(request, env)` and `hasRole(request, env, app, role)` authorization helpers using existing live session and app access checks.
+- Secret capabilities may use `self` for the runtime studio origin, with origin and redirect restrictions retained.
+
+### Changed
+
+- Renew relay sequence epochs whenever a Gate opens a link, probe the room after a missed round start, refill quiet games across all matching pools, and coalesce peak increases without writing unchanged room reports.
+- Recover Gate relay transport failures with ordered backoff and bounded output queues; remove dead sessions so players can reconnect. Keep idle heartbeats at the edge through long breaks, exclude transport telemetry from session writes, and retain only QA markers from relay user agents. Match quiet public games in one pool, spread bursts through leased shard routing, and calculate daily peaks from concurrent shard totals.
+- Close failed room restores, detect unanswered clock pings, preserve live Gate multiplexing, bound crowd session storage, and avoid unchanged idle writes. Restore watcher rate limits without replay, shard matchmaking, and paginate aggregated room summaries.
+- Add an opt-in rules-host round-idle contract: finish both scoring-settlement ticks, persist the next-round deadline, and resume without simulating idle time.
+- Store Lobby rooms as SQLite rows and deliver room summaries through Queues. Hibernate player and watch sockets, including Gates and server-rule rooms, between settled rounds. Retain logical sessions and moderation state, detach idle relay streams, and restore complete world headers without repeating admission.
+
+### Fixed
+
+- Custom studio Workers that wrap only `fetch` now inherit missing toolkit queue and scheduled handlers in the generated entry, so background queue consumers attach during deploy. Custom handlers remain intact.
+- Deploy failures retain Wrangler's real error and context with secrets redacted, instead of showing only the last six lines.
+- Custom route role checks enforce fresh app launch gates. Custom Worker asset routes preserve generated authorization paths; same-origin mutation protection is exported and documented with reserved `/api/custom/*` paths and app cookie scope.
+- Custom `assets.run_worker_first` entries cannot exclude paths with `!`; the build refuses them so private app files always stay behind their access checks.
+- Late link subscriptions no longer trigger rules-view reconnect recovery; throwing listeners still return their unsubscribe function.
+- MCP publishing and its preflight use the connector's directory. Wrangler sign-in checks stop immediately when logged out and retry refresh collisions without blocking the event loop, including CLI status.
+- Scaffold, local database and login regression tests use OS temporary directories and work from the package test command.
+- New studios leave directory listing opt-in; existing explicit directory choices are preserved.
+- Deploy and storage sign-in checks retry shared Wrangler OAuth refresh races with bounded backoff and report the original diagnostic, distinguishing authentication from temporary check failures.
+- Room-link listeners immediately receive current state, so wall UIs mounted after welcome do not stay on “Connecting to Homie.”
+- Local dev refuses to serve until migrations and function registration succeed, preserving first-notice delivery on a fresh database.
+
+### Upgrade notes
+
+- `net.on('link', listener)` now calls the listener synchronously on subscription with `why: 'subscribe'` and `prev === state`, then reports changes as before.
+- Custom routes and authorization examples are in `packages/studio/docs/custom-routes.md` (the installed package uses `docs/custom-routes.md`).
+
 ## [0.55.0] - 2026-10-15
 
 **Plugin 0.55.0**

@@ -1,0 +1,292 @@
+TAP version 13
+# Subtest: custom routes fall through, preserve Homie precedence, and receive response headers
+ok 1 - custom routes fall through, preserve Homie precedence, and receive response headers
+  ---
+  duration_ms: 28.669625
+  type: 'test'
+  ...
+# Subtest: public owner helper checks live sessions, not bearer keys or expired/revoked cookies
+ok 2 - public owner helper checks live sessions, not bearer keys or expired/revoked cookies
+  ---
+  duration_ms: 5.826166
+  type: 'test'
+  ...
+# Subtest: role helper uses declared roles and refuses missing grants and unknown roles
+ok 3 - role helper uses declared roles and refuses missing grants and unknown roles
+  ---
+  duration_ms: 0.906542
+  type: 'test'
+  ...
+# Subtest: a custom domain beside another site's catch-all: the finding names the route, says never to edit or remove it, and gives the one line
+ok 4 - a custom domain beside another site's catch-all: the finding names the route, says never to edit or remove it, and gives the one line
+  ---
+  duration_ms: 9.124541
+  type: 'test'
+  ...
+# Subtest: no catch-all: no warning; routes that cannot be read: unmeasured, never "fine"
+ok 5 - no catch-all: no warning; routes that cannot be read: unmeasured, never "fine"
+  ---
+  duration_ms: 3.446375
+  type: 'test'
+  ...
+# Subtest: deploy and its plan warn before Wrangler changes anything, read only, and --own-route adds exactly the one line
+ok 6 - deploy and its plan warn before Wrangler changes anything, read only, and --own-route adds exactly the one line
+  ---
+  duration_ms: 3750.76575
+  type: 'test'
+  ...
+# Subtest: a Node.js that is too old is refused by every command, with the version it needs
+ok 7 - a Node.js that is too old is refused by every command, with the version it needs
+  ---
+  duration_ms: 954.323542
+  type: 'test'
+  ...
+# Subtest: routes: the studio's own are told from a wildcard and a catch-all, and a config without routes is unchanged
+ok 8 - routes: the studio's own are told from a wildcard and a catch-all, and a config without routes is unchanged
+  ---
+  duration_ms: 0.543167
+  type: 'test'
+  ...
+# Subtest: deploy keeps the studio's custom-domain and exact-host routes: the rewritten wrangler.jsonc does not drop them
+ok 9 - deploy keeps the studio's custom-domain and exact-host routes: the rewritten wrangler.jsonc does not drop them
+  ---
+  duration_ms: 1203.356583
+  type: 'test'
+  ...
+# Subtest: a studio beneath a zone's wildcard Worker route: the deploy says which exact-host route is needed, touches no other route, and keeps the route once it is there
+ok 10 - a studio beneath a zone's wildcard Worker route: the deploy says which exact-host route is needed, touches no other route, and keeps the route once it is there
+  ---
+  duration_ms: 5680.276291
+  type: 'test'
+  ...
+# Subtest: a catch-all or wildcard route in the studio's config is never deployed: refused before Cloudflare is asked anything
+ok 11 - a catch-all or wildcard route in the studio's config is never deployed: refused before Cloudflare is asked anything
+  ---
+  duration_ms: 162.049209
+  type: 'test'
+  ...
+# Subtest: two deploys at once: the second is refused and changes nothing; a lock a killed deploy left is taken over
+ok 12 - two deploys at once: the second is refused and changes nothing; a lock a killed deploy left is taken over
+  ---
+  duration_ms: 1957.878458
+  type: 'test'
+  ...
+# Subtest: a deploy says which games changed with a content hash, and asks the directory to re-read a listed studio once when an older deploy offered a game's whole source
+ok 13 - a deploy says which games changed with a content hash, and asks the directory to re-read a listed studio once when an older deploy offered a game's whole source
+  ---
+  duration_ms: 50968.736291
+  type: 'test'
+  ...
+# Subtest: publish says how many publishes are left: before from what this computer knows, after from the directory's own answer
+ok 14 - publish says how many publishes are left: before from what this computer knows, after from the directory's own answer
+  ---
+  duration_ms: 48.286916
+  type: 'test'
+  ...
+# Subtest: publish from the command line and the MCP tool: the count is in what a person reads
+ok 15 - publish from the command line and the MCP tool: the count is in what a person reads
+  ---
+  duration_ms: 1135.16325
+  type: 'test'
+  ...
+# Subtest: a command that changes something outside this computer stops at a flag it does not know: nothing is sent
+ok 16 - a command that changes something outside this computer stops at a flag it does not know: nothing is sent
+  ---
+  duration_ms: 10148.241708
+  type: 'test'
+  ...
+# Subtest: local dev with a custom-domain route in wrangler.jsonc: the route never reaches the local runtime, and rooms are local, port included
+ok 17 - local dev with a custom-domain route in wrangler.jsonc: the route never reaches the local runtime, and rooms are local, port included
+  ---
+  duration_ms: 10694.663375
+  type: 'test'
+  ...
+# Subtest: a hostname forced on local dev is caught: the injected room socket must match the local origin, port included
+ok 18 - a hostname forced on local dev is caught: the injected room socket must match the local origin, port included
+  ---
+  duration_ms: 1586.7835
+  type: 'test'
+  ...
+# Subtest: stale dev state heals itself: a record whose server was stopped another way, a leftover runtime on the port, and somebody else's port
+ok 19 - stale dev state heals itself: a record whose server was stopped another way, a leftover runtime on the port, and somebody else's port
+  ---
+  duration_ms: 28978.084667
+  type: 'test'
+  ...
+# Subtest: a game added while dev runs: named while it is not built, and picked up once it is, without a hand restart
+ok 20 - a game added while dev runs: named while it is not built, and picked up once it is, without a hand restart
+  ---
+  duration_ms: 21449.404375
+  type: 'test'
+  ...
+# Subtest: relay lines: a time on room sockets and errors, what a connection loss can mean said once, every line with --timestamps
+ok 21 - relay lines: a time on room sockets and errors, what a connection loss can mean said once, every line with --timestamps
+  ---
+  duration_ms: 0.738375
+  type: 'test'
+  ...
+# Subtest: a name Node.js cannot look up is a network preflight failure with local testing offered, never a game failure
+ok 22 - a name Node.js cannot look up is a network preflight failure with local testing offered, never a game failure
+  ---
+  duration_ms: 263.942208
+  type: 'test'
+  ...
+# Subtest: committed studio stays clean after npm build and dry deploy, with and without a dev config
+ok 23 - committed studio stays clean after npm build and dry deploy, with and without a dev config
+  ---
+  duration_ms: 2190.869125
+  type: 'test'
+  ...
+# Subtest: boolean listing choice publishes without crashing
+ok 24 - boolean listing choice publishes without crashing
+  ---
+  duration_ms: 38.102792
+  type: 'test'
+  ...
+# Subtest: rerunning new completes missing files without overwriting studio edits
+ok 25 - rerunning new completes missing files without overwriting studio edits
+  ---
+  duration_ms: 188.996125
+  type: 'test'
+  ...
+# Subtest: local D1 commands retain the dev binding after deploy changes the real database id
+ok 26 - local D1 commands retain the dev binding after deploy changes the real database id
+  ---
+  duration_ms: 374.695916
+  type: 'test'
+  ...
+# Subtest: deploy reports app open and wall addresses
+ok 27 - deploy reports app open and wall addresses
+  ---
+  duration_ms: 6766.682209
+  type: 'test'
+  ...
+# Subtest: explicit publish opts an unlisted studio in without an extra deploy
+ok 28 - explicit publish opts an unlisted studio in without an extra deploy
+  ---
+  duration_ms: 266.118708
+  type: 'test'
+  ...
+# Subtest: an MCP directory connection is not consent to list a new studio
+ok 29 - an MCP directory connection is not consent to list a new studio
+  ---
+  duration_ms: 1263.467125
+  type: 'test'
+  ...
+# Subtest: explicit listings and existing studios retain their directory choice
+ok 30 - explicit listings and existing studios retain their directory choice
+  ---
+  duration_ms: 95.200667
+  type: 'test'
+  ...
+# Subtest: self secret capability follows the runtime origin without allowing other origins or redirects
+ok 31 - self secret capability follows the runtime origin without allowing other origins or redirects
+  ---
+  duration_ms: 23.586208
+  type: 'test'
+  ...
+# Subtest: new: a studio monorepo in a new folder, every file listed; a non-empty folder is refused untouched
+ok 32 - new: a studio monorepo in a new folder, every file listed; a non-empty folder is refused untouched
+  ---
+  duration_ms: 672.350042
+  type: 'test'
+  ...
+# Subtest: game new + build: the starter becomes this studio's game, bundled with netplay, with its source shared
+ok 33 - game new + build: the starter becomes this studio's game, bundled with netplay, with its source shared
+  ---
+  duration_ms: 8755.575666
+  type: 'test'
+  ...
+# Subtest: the Lobby: two strangers pressing Play together land in the same room; a full room opens the next
+ok 34 - the Lobby: two strangers pressing Play together land in the same room; a full room opens the next
+  ---
+  duration_ms: 117.246
+  type: 'test'
+  ...
+# Subtest: deploy: never a Worker, database or bucket this studio did not create; not signed in asks for one browser approval
+ok 35 - deploy: never a Worker, database or bucket this studio did not create; not signed in asks for one browser approval
+  ---
+  duration_ms: 17586.784709
+  type: 'test'
+  ...
+# Subtest: deploy resumes after a cut: a resource it created is recorded the moment it exists
+ok 36 - deploy resumes after a cut: a resource it created is recorded the moment it exists
+  ---
+  duration_ms: 18801.407916
+  type: 'test'
+  ...
+# Subtest: NO CREDIT CARD: a free account without R2 deploys the whole studio, and deploy never asks R2 anything
+ok 37 - NO CREDIT CARD: a free account without R2 deploys the whole studio, and deploy never asks R2 anything
+  ---
+  duration_ms: 18867.222459
+  type: 'test'
+  ...
+# Subtest: the workers.dev address never goes into studio.json (it names the account); a custom domain stays, and claim and publish use it
+ok 38 - the workers.dev address never goes into studio.json (it names the account); a custom domain stays, and claim and publish use it
+  ---
+  duration_ms: 28503.594958
+  type: 'test'
+  ...
+# Subtest: storage add: refused with the dashboard link on an account without R2 (nothing created); on one with R2 it makes the bucket and deploy binds it
+ok 39 - storage add: refused with the dashboard link on an account without R2 (nothing created); on one with R2 it makes the bucket and deploy binds it
+  ---
+  duration_ms: 13722.718417
+  type: 'test'
+  ...
+# Subtest: dev --stop stops exactly this studio's dev server (Wrangler with it), and nothing else
+ok 40 - dev --stop stops exactly this studio's dev server (Wrangler with it), and nothing else
+  ---
+  duration_ms: 9019.016833
+  type: 'test'
+  ...
+# Subtest: a new account's first deploy says the next step: verify the email (10034), let the AI register workers.dev
+ok 41 - a new account's first deploy says the next step: verify the email (10034), let the AI register workers.dev
+  ---
+  duration_ms: 8246.649125
+  type: 'test'
+  ...
+# Subtest: port: plan grades a single-player game and reads its risks; import brings it in as a static game with the toolkit first; build ships homie-port.js
+ok 42 - port: plan grades a single-player game and reads its risks; import brings it in as a static game with the toolkit first; build ships homie-port.js
+  ---
+  duration_ms: 1207.432833
+  type: 'test'
+  ...
+# Subtest: port check judges motion on screen axes: a straight hold passes, a camera that turns or a curve fails, a wall is contact
+ok 43 - port check judges motion on screen axes: a straight hold passes, a camera that turns or a curve fails, a wall is contact
+  ---
+  duration_ms: 3.77925
+  type: 'test'
+  ...
+# Subtest: port check, maze view: a turn queued behind a wall is not a wrong turn; moving against the press is
+ok 44 - port check, maze view: a turn queued behind a wall is not a wrong turn; moving against the press is
+  ---
+  duration_ms: 0.20075
+  type: 'test'
+  ...
+# Subtest: media: published songs and videos from the manifests get pages, players, byte ranges and directory rows; the rest is listed as left out
+ok 45 - media: published songs and videos from the manifests get pages, players, byte ranges and directory rows; the rest is listed as left out
+  ---
+  duration_ms: 1523.84025
+  type: 'test'
+  ...
+# Subtest: sign-in tolerates a refresh race and rereads Wrangler on each attempt
+ok 46 - sign-in tolerates a refresh race and rereads Wrangler on each attempt
+  ---
+  duration_ms: 1.988167
+  type: 'test'
+  ...
+# Subtest: failed checks retain real diagnostics and distinguish expired auth from temporary failure
+ok 47 - failed checks retain real diagnostics and distinguish expired auth from temporary failure
+  ---
+  duration_ms: 0.351583
+  type: 'test'
+  ...
+1..47
+# tests 47
+# suites 0
+# pass 47
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 149344.834958

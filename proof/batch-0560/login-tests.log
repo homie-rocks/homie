@@ -1,0 +1,28 @@
+TAP version 13
+# Subtest: sign-in tolerates a refresh race and rereads Wrangler on each attempt
+ok 1 - sign-in tolerates a refresh race and rereads Wrangler on each attempt
+  ---
+  duration_ms: 1.537042
+  type: 'test'
+  ...
+# Subtest: failed checks retain real diagnostics and distinguish expired auth from temporary failure
+ok 2 - failed checks retain real diagnostics and distinguish expired auth from temporary failure
+  ---
+  duration_ms: 0.592125
+  type: 'test'
+  ...
+# Subtest: three studio processes recover together from a shared refresh collision
+ok 3 - three studio processes recover together from a shared refresh collision
+  ---
+  duration_ms: 1050.339458
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1186.555167

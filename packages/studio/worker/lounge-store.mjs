@@ -116,7 +116,7 @@ export function recOf(r) {
 export async function historyOf(env, game, room, { days, before = null, limit = LOUNGE_LIMITS.page, now = Date.now() } = {}) {
   if (!env?.DB || !(days > 0)) return [];
   const since = now - days * DAY;
-  await env.DB.prepare('DELETE FROM chat_history WHERE game = ?1 AND room = ?2 AND at < ?3').bind(game, room, since).run().catch(() => {});
+  await env.DB.prepare('DELETE FROM chat_history WHERE game = ?1 AND room = ?2 AND at < ?3').bind(game, room, since).run().catch(error => console.warn("Lounge retention deferred:",error.message));
   const n = Math.max(1, Math.min(LOUNGE_LIMITS.page, Math.floor(Number(limit) || LOUNGE_LIMITS.page)));
   const q = Number.isFinite(Number(before)) && before !== null
     ? env.DB.prepare('SELECT * FROM chat_history WHERE game = ?1 AND room = ?2 AND at >= ?3 AND at < ?4 ORDER BY at DESC LIMIT ?5').bind(game, room, since, Number(before), n)
@@ -192,7 +192,7 @@ export async function removeNight(env, id) {
 export async function nightsOf(env, { now = Date.now(), limit = 6 } = {}) {
   if (!env?.DB) return [];
   try {
-    await env.DB.prepare('DELETE FROM lounge_nights WHERE starts_at + minutes * 60000 < ?1').bind(now - DAY).run().catch(() => {});
+    await env.DB.prepare('DELETE FROM lounge_nights WHERE starts_at + minutes * 60000 < ?1').bind(now - DAY).run().catch(error => console.warn("Lounge retention deferred:",error.message));
     const { results } = await env.DB.prepare('SELECT * FROM lounge_nights WHERE starts_at + minutes * 60000 >= ?1 ORDER BY starts_at ASC LIMIT ?2').bind(now, Math.max(1, Math.min(LOUNGE_LIMITS.nights, limit))).all();
     return (results ?? []).map((r) => ({ id: r.id, title: r.title, at: Number(r.starts_at), minutes: Number(r.minutes), note: r.note ?? null, game: r.game ?? null, on: Number(r.starts_at) <= now }));
   } catch { return []; }

@@ -22,3 +22,17 @@ import {explainCloudflare} from '../lib/cloudflare.mjs';
 test('deploy diagnostics explain a revoked queue permission on an existing CI token',()=>{
  assert.match(explainCloudflare('Queue binding: authentication error (10000)')?.why??'',/Queues.*Edit/);
 });
+
+import {wranglerDeployError} from '../lib/cloudflare.mjs';
+test('deploy reports the real consumer error above a long footer and redacts credentials',()=>{
+ const out='Uploaded worker\n\u001b[31mX [ERROR] Queue handler is missing. [code: 11001]\u001b[0m\n'+
+  'Authorization: Bearer '+ 'sensitive123'.repeat(5)+'\n'+
+  'CLOUDFLARE_API_TOKEN='+ 'secret456'.repeat(5)+'\n'+
+  'To learn more about this error, visit: https://developers.cloudflare.com/queues/configuration/javascript-apis/#consumer\n'+
+  '\n'.repeat(8)+'Successful trigger changes were not rolled back.\n';
+ const result=wranglerDeployError(out);
+ assert.match(result,/Queue handler is missing.*11001/);
+ assert.match(result,/Successful trigger changes/);
+ assert.doesNotMatch(result,/sensitive123|secret456|\u001b/);
+ assert.equal(wranglerDeployError('plain failure without an ERROR marker'),'plain failure without an ERROR marker');
+});

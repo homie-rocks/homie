@@ -78,8 +78,10 @@ export function services(env, cat, origin, caller, namespace, definition = {}) {
     fetch:globalThis.fetch.bind(globalThis),
     // A named secret may authenticate an HTTPS request; its value is never returned.
     async fetchWithSecret(name,url,init={}) {
-      const rule=cat.studio?.mcp?.secrets?.[name]; const target=new URL(url);
-      if(!rule || target.protocol!=='https:' || target.origin!==rule.origin || (!caller.owner&&!rule.tools?.includes(definition.name))) throw new Error('secret capability refused');
+      const rule=cat.studio?.mcp?.secrets?.[name];
+      const permittedOrigin=rule?.origin==='self'?new URL(origin).origin:rule?.origin;
+      const target=new URL(url,rule?.origin==='self'?permittedOrigin:undefined);
+      if(!rule || target.protocol!=='https:' || target.username || target.password || target.origin!==permittedOrigin || (!caller.owner&&!rule.tools?.includes(definition.name))) throw new Error('secret capability refused');
       const secret=env[name];if(typeof secret!=='string')throw new Error('secret unavailable');
       const headers=new Headers(init.headers);headers.set(rule.header??'authorization',`${rule.prefix??'Bearer '}${secret}`);
       const res=await fetch(target,{...init,headers,redirect:'error'});
