@@ -1,0 +1,242 @@
+CHANGELOG.md: 106 versions, the newest 0.57.0 (plugin 0.57.0); the package's copy is the same file.
+Release tags: this checkout has 102; older sections that link theirs: 53.
+Note: 0.56.0 was released (the tag release-2026-10-15-studio-0.56.0), and its section does not link the tag yet. Make line 97 of CHANGELOG.md:
+
+      **Plugin 0.56.0** · [release-2026-10-15-studio-0.56.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-15-studio-0.56.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.55.0 was released (the tag release-2026-10-15-studio-0.55.0), and its section does not link the tag yet. Make line 136 of CHANGELOG.md:
+
+      **Plugin 0.55.0** · [release-2026-10-15-studio-0.55.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-15-studio-0.55.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.54.0 was released (the tag release-2026-10-15-studio-0.54.0), and its section does not link the tag yet. Make line 163 of CHANGELOG.md:
+
+      **Plugin 0.54.0** · [release-2026-10-15-studio-0.54.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-15-studio-0.54.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.53.0 was released (the tag release-2026-10-15-studio-0.53.0), and its section does not link the tag yet. Make line 193 of CHANGELOG.md:
+
+      **Plugin 0.53.0** · [release-2026-10-15-studio-0.53.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-15-studio-0.53.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.52.0 was released (the tag release-2026-10-14-studio-0.52.0), and its section does not link the tag yet. Make line 220 of CHANGELOG.md:
+
+      **Plugin 0.52.0** · [release-2026-10-14-studio-0.52.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-14-studio-0.52.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.51.8 was released (the tag release-2026-10-14-studio-0.51.8), and its section does not link the tag yet. Make line 252 of CHANGELOG.md:
+
+      **Plugin 0.51.8** · [release-2026-10-14-studio-0.51.8](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-14-studio-0.51.8)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.51.7 was released (the tag release-2026-10-14-studio-0.51.7), and its section does not link the tag yet. Make line 274 of CHANGELOG.md:
+
+      **Plugin 0.51.7** · [release-2026-10-14-studio-0.51.7](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-14-studio-0.51.7)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.51.6 was released (the tag release-2026-10-14-studio-0.51.6), and its section does not link the tag yet. Make line 287 of CHANGELOG.md:
+
+      **Plugin 0.51.6** · [release-2026-10-14-studio-0.51.6](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-14-studio-0.51.6)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.51.5 was released (the tag release-2026-10-14-studio-0.51.5), and its section does not link the tag yet. Make line 308 of CHANGELOG.md:
+
+      **Plugin 0.51.5** · [release-2026-10-14-studio-0.51.5](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-14-studio-0.51.5)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.51.4 was released (the tag release-2026-10-14-studio-0.51.4), and its section does not link the tag yet. Make line 337 of CHANGELOG.md:
+
+      **Plugin 0.51.4** · Studio events through experimental MCP Events. · [release-2026-10-14-studio-0.51.4](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-14-studio-0.51.4)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.51.3 was released (the tag release-2026-10-14-studio-0.51.3), and its section does not link the tag yet. Make line 353 of CHANGELOG.md:
+
+      **Plugin 0.51.3** · [release-2026-10-14-studio-0.51.3](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-14-studio-0.51.3)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.51.2 was released (the tag release-2026-10-14-studio-0.51.2), and its section does not link the tag yet. Make line 378 of CHANGELOG.md:
+
+      **Plugin 0.51.2** · Deploying and listing do what the studio chose, under one address. · [release-2026-10-14-studio-0.51.2](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-14-studio-0.51.2)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.51.1 was released (the tag release-2026-10-14-studio-0.51.1), and its section does not link the tag yet. Make line 398 of CHANGELOG.md:
+
+      **Plugin 0.51.1** · A player's own runner never jumps across the screen. · [release-2026-10-14-studio-0.51.1](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-14-studio-0.51.1)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.51.0 was released (the tag release-2026-10-14-studio-0.51.0), and its section does not link the tag yet. Make line 410 of CHANGELOG.md:
+
+      **Plugin 0.51.0** · Take the money through your own Stripe, keyless by default. · [release-2026-10-14-studio-0.51.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-14-studio-0.51.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.50.7 was released (the tag release-2026-10-14-studio-0.50.7), and its section does not link the tag yet. Make line 452 of CHANGELOG.md:
+
+      **Plugin 0.50.7** · Prove your needs on every screen, with fixes from studio testers. · [release-2026-10-14-studio-0.50.7](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-14-studio-0.50.7)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.50.6 was released (the tag release-2026-10-14-studio-0.50.6), and its section does not link the tag yet. Make line 472 of CHANGELOG.md:
+
+      **Plugin 0.50.6** · Scheduled functions run, and your AI can see every run. · [release-2026-10-14-studio-0.50.6](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-14-studio-0.50.6)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.50.5 was released (the tag release-2026-10-14-studio-0.50.5), and its section does not link the tag yet. Make line 492 of CHANGELOG.md:
+
+      **Plugin 0.50.5** · Homie has no referral system. · [release-2026-10-14-studio-0.50.5](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-14-studio-0.50.5)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.50.4 was released (the tag release-2026-10-14-studio-0.50.4), and its section does not link the tag yet. Make line 508 of CHANGELOG.md:
+
+      **Plugin 0.50.4** · Send studio events by signed webhook. · [release-2026-10-14-studio-0.50.4](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-14-studio-0.50.4)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.50.3 was released (the tag release-2026-10-13-studio-0.50.3), and its section does not link the tag yet. Make line 524 of CHANGELOG.md:
+
+      **Plugin 0.50.3** · A counter-dash continues from where the player sees it. · [release-2026-10-13-studio-0.50.3](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-13-studio-0.50.3)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.50.2 was released (the tag release-2026-10-13-studio-0.50.2), and its section does not link the tag yet. Make line 538 of CHANGELOG.md:
+
+      **Plugin 0.50.2** · Keep your own runner out of solid ground. · [release-2026-10-13-studio-0.50.2](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-13-studio-0.50.2)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.50.1 was released (the tag release-2026-10-13-studio-0.50.1), and its section does not link the tag yet. Make line 553 of CHANGELOG.md:
+
+      **Plugin 0.50.1** · Studio events reach their functions and the owner's AI. · [release-2026-10-13-studio-0.50.1](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-13-studio-0.50.1)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.50.0 was released (the tag release-2026-10-13-studio-0.50.0), and its section does not link the tag yet. Make line 575 of CHANGELOG.md:
+
+      **Plugin 0.50.0** · Build the person's app from their dream. · [release-2026-10-13-studio-0.50.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-13-studio-0.50.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.49.0 was released (the tag release-2026-10-13-studio-0.49.0), and its section does not link the tag yet. Make line 596 of CHANGELOG.md:
+
+      **Plugin 0.49.0** · Apps from the first request. · [release-2026-10-13-studio-0.49.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-13-studio-0.49.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.48.4 was released (the tag release-2026-10-13-studio-0.48.4), and its section does not link the tag yet. Make line 621 of CHANGELOG.md:
+
+      **Plugin 0.48.4** · Deploys go right. · [release-2026-10-13-studio-0.48.4](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-13-studio-0.48.4)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.48.3 was released (the tag release-2026-10-13-studio-0.48.3), and its section does not link the tag yet. Make line 638 of CHANGELOG.md:
+
+      **Plugin 0.48.3** · Restore rewind-based hits with input history. · [release-2026-10-13-studio-0.48.3](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-13-studio-0.48.3)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.48.1 was released (the tag release-2026-10-13-studio-0.48.1), and its section does not link the tag yet. Make line 660 of CHANGELOG.md:
+
+      **Plugin 0.48.1** · Input history under loss. · [release-2026-10-13-studio-0.48.1](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-13-studio-0.48.1)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.48.0 was released (the tag release-2026-10-13-studio-0.48.0), and its section does not link the tag yet. Make line 712 of CHANGELOG.md:
+
+      **Plugin 0.48.0** · Baked physics worlds for server rules and local prediction. · [release-2026-10-13-studio-0.48.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-13-studio-0.48.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.47.0 was released (the tag release-2026-10-13-studio-0.47.0), and its section does not link the tag yet. Make line 751 of CHANGELOG.md:
+
+      **Plugin 0.47.0** · Wrapped worlds and generated collision maps. · [release-2026-10-13-studio-0.47.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-13-studio-0.47.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.46.5 was released (the tag release-2026-10-11-studio-0.46.5), and its section does not link the tag yet. Make line 819 of CHANGELOG.md:
+
+      **Plugin 0.46.5** · [release-2026-10-11-studio-0.46.5](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-11-studio-0.46.5)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.46.3 was released (the tag release-2026-10-11-studio-0.46.3), and its section does not link the tag yet. Make line 864 of CHANGELOG.md:
+
+      **Plugin 0.46.3** · [release-2026-10-11-studio-0.46.3](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-11-studio-0.46.3)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.46.2 was released (the tag release-2026-10-11-studio-0.46.2), and its section does not link the tag yet. Make line 925 of CHANGELOG.md:
+
+      **Plugin 0.46.2** · Big rooms: the room runs the rules, its Gates do the rest. · [release-2026-10-11-studio-0.46.2](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-11-studio-0.46.2)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.46.0 was released (the tag release-2026-10-10-studio-0.46.0), and its section does not link the tag yet. Make line 969 of CHANGELOG.md:
+
+      **Plugin 0.46.0** · [release-2026-10-10-studio-0.46.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-10-studio-0.46.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.45.3 was released (the tag release-2026-10-10-studio-0.45.3), and its section does not link the tag yet. Make line 1027 of CHANGELOG.md:
+
+      **Plugin 0.45.3** · [release-2026-10-10-studio-0.45.3](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-10-studio-0.45.3)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.45.2 was released (the tag release-2026-10-10-studio-0.45.2), and its section does not link the tag yet. Make line 1056 of CHANGELOG.md:
+
+      **Plugin 0.45.2** · [#76](https://github.com/homie-rocks/homie/pull/76) · [release-2026-10-10-studio-0.45.2](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-10-studio-0.45.2)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.45.1 was released (the tag release-2026-10-10-studio-0.45.1), and its section does not link the tag yet. Make line 1080 of CHANGELOG.md:
+
+      **Plugin 0.45.1** · [#75](https://github.com/homie-rocks/homie/pull/75) · [release-2026-10-10-studio-0.45.1](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-10-studio-0.45.1)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.45.0 was released (the tag release-2026-10-10-studio-0.45.0), and its section does not link the tag yet. Make line 1099 of CHANGELOG.md:
+
+      **Plugin 0.45.0** · [#85](https://github.com/homie-rocks/homie/pull/85) · [release-2026-10-10-studio-0.45.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-10-studio-0.45.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.44.3 was released (the tag release-2026-10-10-studio-0.44.3), and its section does not link the tag yet. Make line 1120 of CHANGELOG.md:
+
+      **Plugin 0.44.3** · [release-2026-10-10-studio-0.44.3](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-10-studio-0.44.3)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.44.1 was released (the tag release-2026-10-10-studio-0.44.1), and its section does not link the tag yet. Make line 1140 of CHANGELOG.md:
+
+      **Plugin 0.44.1** · [release-2026-10-10-studio-0.44.1](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-10-studio-0.44.1)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.44.0 was released (the tag release-2026-10-10-studio-0.44.0), and its section does not link the tag yet. Make line 1162 of CHANGELOG.md:
+
+      **Plugin 0.44.0** · [#83](https://github.com/homie-rocks/homie/pull/83) · [release-2026-10-10-studio-0.44.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-10-studio-0.44.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.42.0 was released (the tag release-2026-10-10-studio-0.42.0), and its section does not link the tag yet. Make line 1204 of CHANGELOG.md:
+
+      **Plugin 0.42.0** · [release-2026-10-10-studio-0.42.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-10-studio-0.42.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.40.0 was released (the tag release-2026-10-09-studio-0.40.0), and its section does not link the tag yet. Make line 1231 of CHANGELOG.md:
+
+      **Plugin 0.40.0** · [#79](https://github.com/homie-rocks/homie/pull/79) · [release-2026-10-09-studio-0.40.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-09-studio-0.40.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.39.0 was released (the tag release-2026-10-09-studio-0.39.0), and its section does not link the tag yet. Make line 1258 of CHANGELOG.md:
+
+      **Plugin 0.39.0** · [#78](https://github.com/homie-rocks/homie/pull/78) · [release-2026-10-09-studio-0.39.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-09-studio-0.39.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.38.0 was released (the tag release-2026-10-09-studio-0.38.0), and its section does not link the tag yet. Make line 1287 of CHANGELOG.md:
+
+      **Plugin 0.39.0** · [#77](https://github.com/homie-rocks/homie/pull/77) · [release-2026-10-09-studio-0.38.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-09-studio-0.38.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.37.2 was released (the tag release-2026-10-09-studio-0.37.2), and its section does not link the tag yet. Make line 1319 of CHANGELOG.md:
+
+      **Plugin 0.38.2** · [#70](https://github.com/homie-rocks/homie/pull/70) · [release-2026-10-09-studio-0.37.2](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-09-studio-0.37.2)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.37.1 was released (the tag release-2026-10-09-studio-0.37.1), and its section does not link the tag yet. Make line 1347 of CHANGELOG.md:
+
+      **Plugin 0.38.1** · [#74](https://github.com/homie-rocks/homie/pull/74) · [release-2026-10-09-studio-0.37.1](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-09-studio-0.37.1)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.37.0 was released (the tag release-2026-10-09-studio-0.37.0), and its section does not link the tag yet. Make line 1365 of CHANGELOG.md:
+
+      **Plugin 0.38.0** · [#72](https://github.com/homie-rocks/homie/pull/72) · [release-2026-10-09-studio-0.37.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-09-studio-0.37.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.36.0 was released (the tag release-2026-10-09-studio-0.36.0), and its section does not link the tag yet. Make line 1381 of CHANGELOG.md:
+
+      **Plugin 0.37.0** · [#68](https://github.com/homie-rocks/homie/pull/68) · [#73](https://github.com/homie-rocks/homie/pull/73) · [release-2026-10-09-studio-0.36.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-09-studio-0.36.0)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md
+Note: 0.35.1 was released (the tag release-2026-10-08-studio-0.35.1), and its section does not link the tag yet. Make line 1405 of CHANGELOG.md:
+
+      **Plugin 0.36.0** · [#71](https://github.com/homie-rocks/homie/pull/71) · [release-2026-10-08-studio-0.35.1](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-08-studio-0.35.1)
+
+    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md

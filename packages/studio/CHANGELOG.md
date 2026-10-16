@@ -21,6 +21,10 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ### Fixed
 
+- `room.input()` retains its entry timestamp before synchronous room pumping, so queued simulation work does not shorten a newly held control.
+
+- Views can read immutable latest authority with `room.get(id, {latest:true})` for explicitly ticked lifecycle decisions. Ordinary drawing remains buffered; authority reads do not advance its clock.
+
 - Observers retain a placement pose as the starting anchor for its first accepted owner path, preventing a late first report from jumping away from a spawn already on screen.
 
 - Shared observer clock catch-up spends its travel budget along actual sampled paths, skipping stationary prefixes before charging later motion.
