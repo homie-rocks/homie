@@ -24,3 +24,17 @@ test('MCP expiry preserves live OAuth, dedupe and stream rows and removes expire
   wakes.length=0;await pushToolList(env,{},[],'https://example.test');assert.equal(wakes.length,1);
  }finally{sql.close();}
 });
+
+test('runtime upgrade converts existing millisecond stream registrations only',async()=>{
+ const {RUNTIME_INDEX_MIGRATION}=await import('../worker/operational-schema.mjs');
+ const sql=new DatabaseSync(':memory:');sql.exec(MCP_MIGRATION);
+ try{
+  const now=Math.floor(Date.now()/1000);
+  for(const key of ['tools-stream:old','mcp-event-stream:old'])sql.prepare('INSERT INTO mcp_kv VALUES(?,?,?)').run(key,'{}',(now+60)*1000);
+  sql.prepare('INSERT INTO mcp_kv VALUES(?,?,?)').run('oauth:kept','{}',now+600);
+  sql.exec(RUNTIME_INDEX_MIGRATION);
+  assert.equal(sql.prepare("SELECT expires FROM mcp_kv WHERE key='tools-stream:old'").get().expires,now+60);
+  assert.equal(sql.prepare("SELECT expires FROM mcp_kv WHERE key='mcp-event-stream:old'").get().expires,now+60);
+  assert.equal(sql.prepare("SELECT expires FROM mcp_kv WHERE key='oauth:kept'").get().expires,now+600);
+ }finally{sql.close();}
+});
