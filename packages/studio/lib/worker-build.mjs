@@ -20,7 +20,10 @@ export async function buildWorker(root,esbuild,metadata=null) {
   // classes in the generated bundle without rewriting the studio's source/customizations.
   const standardRooms=/export\s*\{[^}]*\bTable\b[^}]*\bLobby\b[^}]*\}\s*from\s*['"]@homie-rocks\/studio\/worker['"]/.test(readFileSync(source,'utf8'));
   const lazyRooms=standardRooms?`export {Table,Lobby} from ${JSON.stringify(join(PACKAGE_ROOT,'worker/lazy-objects.mjs'))};\n`:'';
-  const contents=`${lazyRooms}export * from ${JSON.stringify(source)};\nexport { default } from ${JSON.stringify(source)};\nexport { Gate, Concentrator } from ${JSON.stringify(join(PACKAGE_ROOT,'worker/lazy-objects.mjs'))};\nexport {AppRecordHub, EventHub} from ${JSON.stringify(join(PACKAGE_ROOT,'worker/lazy-objects.mjs'))};\n`;
+  // A custom fetch wrapper may predate background delivery. Complete the event
+  // boundary here, preserving explicit studio handlers and leaving source alone.
+  const toolkitEntry=alias['@homie-rocks/studio/worker']==='@homie-rocks/studio/worker/selling'?'worker/selling/index.mjs':'worker/index.mjs';
+  const contents=`${lazyRooms}export * from ${JSON.stringify(source)};\nimport studioWorker from ${JSON.stringify(source)};\nimport toolkitWorker from ${JSON.stringify(join(PACKAGE_ROOT,toolkitEntry))};\nexport default { ...studioWorker, queue: studioWorker.queue ?? toolkitWorker.queue, scheduled: studioWorker.scheduled ?? toolkitWorker.scheduled };\nexport { Gate, Concentrator } from ${JSON.stringify(join(PACKAGE_ROOT,'worker/lazy-objects.mjs'))};\nexport {AppRecordHub, EventHub} from ${JSON.stringify(join(PACKAGE_ROOT,'worker/lazy-objects.mjs'))};\n`;
   const result=await esbuild.build({stdin:{contents,resolveDir:root,sourcefile:'worker.mjs'},entryNames:'worker',absWorkingDir:root,alias,outdir:out,bundle:true,splitting:true,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*'],target:'es2022',write:false,minify:true,metafile:true,logLevel:'silent',plugins:[{name:'studio-runtime',setup(build){
     if(metadata)build.onLoad({filter:/[/\\]worker[/\\]built-metadata\.mjs$/},()=>({contents:'export default '+JSON.stringify(metadata),loader:'js'}));
     // Merely overriding entry exports still evaluates the barrel's dependencies.
