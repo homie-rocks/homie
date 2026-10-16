@@ -1,0 +1,167 @@
+full / Changelog	UNKNOWN STEP	﻿2026-10-16T08:46:03.6592563Z Current runner version: '2.337.0'
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6617325Z ##[group]Runner Image Provisioner
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6618135Z Hosted Compute Agent
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6618713Z Version: 20261012.601
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6619322Z Commit: f3dc54e1fb89da6852db922499a0233137369e1d
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6619986Z Build Date: 2026-10-12T17:48:21Z
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6620651Z Worker ID: {dcb86b99-582a-4f32-8ebc-55d8d4312a09}
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6621289Z Region: westus3
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6621797Z Cloud: Azure
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6622540Z ##[endgroup]
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6624074Z ##[group]Operating System
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6624730Z Ubuntu
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6625211Z 24.04.5
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6625711Z LTS
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6626218Z ##[endgroup]
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6626755Z ##[group]Runner Image
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6627354Z Image: ubuntu-24.04
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6627865Z Version: 20261012.334.1
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6629041Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261012.334/images/ubuntu/Ubuntu2404-Readme.md
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6630390Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261012.334
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6631315Z ##[endgroup]
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6632525Z ##[group]GITHUB_TOKEN Permissions
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6634794Z Contents: read
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6635331Z Metadata: read
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6635897Z ##[endgroup]
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6637960Z Secret source: Actions
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6639265Z Cache mode: write
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6639970Z Prepare workflow directory
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.6960518Z Prepare all required actions
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:03.7008794Z Getting action download info
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.0207111Z Download action repository 'actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09' (SHA:fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09)
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.1121870Z Download action repository 'actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444' (SHA:a0853c24544627f65ddf259abe73b1d18a591444)
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.2734867Z Uses: homie-rocks/homie/.github/workflows/nightly.yml@refs/heads/runner-error-smoothing (f7e967458c0c4be08cc0a72aa1f437188c11f3d9)
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.2739890Z ##[group] Inputs
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.2740789Z   full: true
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.2741265Z ##[endgroup]
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.2741816Z Complete job name: full / Changelog
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.3410845Z ##[group]Run actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.3412072Z with:
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.3412610Z   ref: f7e967458c0c4be08cc0a72aa1f437188c11f3d9
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.3413249Z   repository: homie-rocks/homie
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.3416793Z   token: ***
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.3417265Z   ssh-strict: true
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.3417751Z   ssh-user: git
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.3418254Z   persist-credentials: true
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.3418756Z   clean: true
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.3419303Z   sparse-checkout-cone-mode: true
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.3419847Z   fetch-depth: 1
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.3420311Z   fetch-tags: false
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.3420791Z   show-progress: true
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.3421339Z   lfs: false
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.3421817Z   submodules: false
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.3422458Z   set-safe-directory: true
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.3423000Z   allow-unsafe-pr-checkout: false
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.3423892Z ##[endgroup]
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4503253Z Syncing repository: homie-rocks/homie
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4504945Z ##[group]Getting Git version info
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4505551Z Working directory is '/home/runner/work/homie/homie'
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4506723Z [command]/usr/bin/git version
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4507189Z git version 2.55.0
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4508671Z ##[endgroup]
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4513528Z Temporarily overriding HOME='/home/runner/work/_temp/35e298fd-9625-4a54-a335-d01fde1a6b21' before making global git config changes
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4514749Z Adding repository directory to the temporary git global config as a safe directory
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4516063Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/homie/homie
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4518319Z Deleting the contents of '/home/runner/work/homie/homie'
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4520202Z ##[group]Initializing the repository
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4524311Z [command]/usr/bin/git init /home/runner/work/homie/homie
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4611049Z hint: Using 'master' as the name for the initial branch. This default branch name
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4612819Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4614139Z hint: to use in all of your new repositories, which will suppress this warning,
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4614829Z hint: call:
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4615201Z hint:
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4615692Z hint: 	git config --global init.defaultBranch <name>
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4616235Z hint:
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4617011Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4618001Z hint: 'development'. The just-created branch can be renamed via this command:
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4619112Z hint:
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4619538Z hint: 	git branch -m <name>
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4619985Z hint:
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4620552Z hint: Disable this message with "git config set advice.defaultBranchName false"
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4621416Z Initialized empty Git repository in /home/runner/work/homie/homie/.git/
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4623749Z [command]/usr/bin/git remote add origin https://github.com/homie-rocks/homie
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4660817Z ##[endgroup]
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4661517Z ##[group]Disabling automatic garbage collection
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4664510Z [command]/usr/bin/git config --local gc.auto 0
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4688493Z ##[endgroup]
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4689179Z ##[group]Setting up auth
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4694932Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4718858Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.4985074Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.5012969Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.5184413Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.5209459Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.5381411Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.5409874Z ##[endgroup]
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.5411109Z ##[group]Fetching the repository
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:04.5419228Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin f7e967458c0c4be08cc0a72aa1f437188c11f3d9
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.4365868Z From https://github.com/homie-rocks/homie
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.4366932Z  * branch            f7e967458c0c4be08cc0a72aa1f437188c11f3d9 -> FETCH_HEAD
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.4369478Z ##[endgroup]
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.4370299Z ##[group]Determining the checkout info
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.4372425Z ##[endgroup]
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.4377177Z [command]/usr/bin/git sparse-checkout disable
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.4416584Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.4439572Z ##[group]Checking out the ref
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.4443333Z [command]/usr/bin/git checkout --progress --force f7e967458c0c4be08cc0a72aa1f437188c11f3d9
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8198950Z Note: switching to 'f7e967458c0c4be08cc0a72aa1f437188c11f3d9'.
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8200052Z 
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8200807Z You are in 'detached HEAD' state. You can look around, make experimental
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8202894Z changes and commit them, and you can discard any commits you make in this
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8205010Z state without impacting any branches by switching back to a branch.
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8206099Z 
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8206869Z If you want to create a new branch to retain commits you create, you may
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8208617Z do so (now or later) by using -c with the switch command. Example:
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8209880Z 
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8210505Z   git switch -c <new-branch-name>
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8211540Z 
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8212286Z Or undo this operation with:
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8213228Z 
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8213760Z   git switch -
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8214462Z 
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8215724Z Turn off this advice by setting config variable advice.detachedHead to false
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8217678Z 
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8219213Z HEAD is now at f7e9674 Retain missing owner reports independently of a stalled server clock
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8224983Z ##[endgroup]
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8258424Z [command]/usr/bin/git log -1 --format=%H
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8280632Z f7e967458c0c4be08cc0a72aa1f437188c11f3d9
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8627318Z ##[group]Run actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8628926Z with:
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8629815Z   node-version: 24
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8630753Z   always-auth: false
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8631716Z   check-latest: false
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8640602Z   token: ***
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8641570Z   package-manager-cache: true
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:06.8642735Z ##[endgroup]
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.0126279Z Found in cache @ /opt/hostedtoolcache/node/24.21.0/x64
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.0131580Z (node:2313) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.0134777Z (Use `node --trace-deprecation ...` to show where the warning was created)
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.0137076Z ##[group]Environment details
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.3616039Z node: v24.21.0
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.3616673Z npm: 11.19.0
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.3617074Z yarn: 1.22.22
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.3617948Z ##[endgroup]
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.3747910Z ##[group]Run node scripts/changelog.mjs --check ${BASE:+--base "$BASE"}
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.3748652Z ^[[36;1mnode scripts/changelog.mjs --check ${BASE:+--base "$BASE"}^[[0m
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.3923803Z shell: /usr/bin/bash -e {0}
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.3924173Z env:
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.3924421Z   BASE: 
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.3924665Z ##[endgroup]
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.4456348Z CHANGELOG.md needs a fix:
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.4475604Z   - packages/studio/CHANGELOG.md is not the same as CHANGELOG.md: run node scripts/changelog.mjs --sync and commit both
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.4488078Z ##[error]Process completed with exit code 1.
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.4623646Z Post job cleanup.
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.5460210Z [command]/usr/bin/git version
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.5492505Z git version 2.55.0
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.5525744Z Temporarily overriding HOME='/home/runner/work/_temp/567c140f-392d-453d-a290-df9f5a036d93' before making global git config changes
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.5527181Z Adding repository directory to the temporary git global config as a safe directory
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.5529919Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/homie/homie
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.5562358Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.5591058Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.5768422Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.5790060Z http.https://github.com/.extraheader
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.5799328Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.5826287Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.5996704Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.6023570Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+full / Changelog	UNKNOWN STEP	2026-10-16T08:46:07.6309598Z Cleaning up orphan processes

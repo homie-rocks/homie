@@ -21,6 +21,10 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ### Fixed
 
+- Retained-authority clients keep an open transport through up to 20 seconds of server silence, avoiding reconnect churn during short server stalls. Explicit close/error events still retry immediately; explicit stale timeouts and bounded prolonged-outage handling remain supported.
+
+- Validated owners retain 512 input ticks for outage recovery, keep unacknowledged reports even while the server clock is stopped, retire acknowledged prefixes, and deduplicate pending reports by tick, preventing honest 15-second server stalls from triggering a cut back to an old pose. Packet byte limits, per-tick validation work, physics and overflow guards remain bounded.
+
 - Fresh validated-owner clocks account for transit without granting skipped travel;
   observer placements wait for the sampled scene to reach their revision.
 
@@ -35,6 +39,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
   within a browser animation frame; input and simulation changes invalidate it.
 
 ### Added
+
+- Rules handlers can read bounded relay-measured round-trip time with `world.latency(id)` to apply game-defined contact-history limits. Unknown and non-human connections return zero; client timestamps do not set this measurement.
 
 - Opt-in `body.move: 'validated-owner'`: the owning browser keeps its local
   movement, while the server validates ordered state reports with the same move

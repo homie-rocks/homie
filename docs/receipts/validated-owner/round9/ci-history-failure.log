@@ -1,0 +1,1581 @@
+full / Package shard 15 (Node 22)	UNKNOWN STEP	﻿2026-10-16T08:46:03.3340609Z Current runner version: '2.337.0'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3378921Z ##[group]Runner Image Provisioner
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3380388Z Hosted Compute Agent
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3381441Z Version: 20261012.601
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3382708Z Commit: f3dc54e1fb89da6852db922499a0233137369e1d
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3384000Z Build Date: 2026-10-12T17:48:21Z
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3385173Z Worker ID: {bd30659e-71ed-4a95-8046-224c338d00f9}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3386941Z Region: eastus2
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3387983Z Cloud: Azure
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3389138Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3391394Z ##[group]Operating System
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3392479Z Ubuntu
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3393500Z 24.04.5
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3394357Z LTS
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3395272Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3396221Z ##[group]Runner Image
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3397613Z Image: ubuntu-24.04
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3398644Z Version: 20261012.334.1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3400698Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261012.334/images/ubuntu/Ubuntu2404-Readme.md
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3403424Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261012.334
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3405181Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3407931Z ##[group]GITHUB_TOKEN Permissions
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3410977Z Contents: read
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3412118Z Metadata: read
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3413127Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3416098Z Secret source: Actions
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3418249Z Cache mode: write
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3419867Z Prepare workflow directory
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.3981263Z Prepare all required actions
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.4028840Z Getting action download info
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.5801106Z Download action repository 'actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09' (SHA:fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.6979900Z Download action repository 'actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830' (SHA:0057852bfaa89a56745cba8c7296529d2fc39830)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:03.8514941Z Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.1316082Z Uses: homie-rocks/homie/.github/workflows/nightly.yml@refs/heads/runner-error-smoothing (f7e967458c0c4be08cc0a72aa1f437188c11f3d9)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.1321376Z ##[group] Inputs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.1322255Z   full: true
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.1322706Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.1323218Z Complete job name: full / Package shard 15 (Node 22)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2158409Z ##[group]Run actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2159558Z with:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2160047Z   ref: f7e967458c0c4be08cc0a72aa1f437188c11f3d9
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2160650Z   repository: homie-rocks/homie
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2164606Z   token: ***
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2165033Z   ssh-strict: true
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2165464Z   ssh-user: git
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2165906Z   persist-credentials: true
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2166384Z   clean: true
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2167055Z   sparse-checkout-cone-mode: true
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2167569Z   fetch-depth: 1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2167999Z   fetch-tags: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2168434Z   show-progress: true
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2168883Z   lfs: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2169299Z   submodules: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2169736Z   set-safe-directory: true
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2170233Z   allow-unsafe-pr-checkout: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2171005Z env:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2171570Z   HOMIE_TEST_FIXTURES: /tmp/homie-studio-fixtures
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.2172199Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3203488Z Syncing repository: homie-rocks/homie
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3205454Z ##[group]Getting Git version info
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3206150Z Working directory is '/home/runner/work/homie/homie'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3207493Z [command]/usr/bin/git version
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3310816Z git version 2.55.0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3369160Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3384826Z Temporarily overriding HOME='/home/runner/work/_temp/1f8cdd0e-7282-4848-88d9-030d9aafad9a' before making global git config changes
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3387968Z Adding repository directory to the temporary git global config as a safe directory
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3392184Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/homie/homie
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3454710Z Deleting the contents of '/home/runner/work/homie/homie'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3460747Z ##[group]Initializing the repository
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3466369Z [command]/usr/bin/git init /home/runner/work/homie/homie
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3626396Z hint: Using 'master' as the name for the initial branch. This default branch name
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3629054Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3631065Z hint: to use in all of your new repositories, which will suppress this warning,
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3632802Z hint: call:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3633772Z hint:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3634977Z hint: 	git config --global init.defaultBranch <name>
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3636396Z hint:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3637997Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3639979Z hint: 'development'. The just-created branch can be renamed via this command:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3642095Z hint:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3643142Z hint: 	git branch -m <name>
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3644296Z hint:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3645917Z hint: Disable this message with "git config set advice.defaultBranchName false"
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3649009Z Initialized empty Git repository in /home/runner/work/homie/homie/.git/
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3653796Z [command]/usr/bin/git remote add origin https://github.com/homie-rocks/homie
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3703876Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3705337Z ##[group]Disabling automatic garbage collection
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3708816Z [command]/usr/bin/git config --local gc.auto 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3748270Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3749703Z ##[group]Setting up auth
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3756124Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.3802649Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.4215669Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.4250811Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.4486252Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.4527659Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.4755805Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.4792379Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.4793198Z ##[group]Fetching the repository
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:04.4801852Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin f7e967458c0c4be08cc0a72aa1f437188c11f3d9
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.5541908Z From https://github.com/homie-rocks/homie
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.5552901Z  * branch            f7e967458c0c4be08cc0a72aa1f437188c11f3d9 -> FETCH_HEAD
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.5555247Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.5556001Z ##[group]Determining the checkout info
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.5557307Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.5567248Z [command]/usr/bin/git sparse-checkout disable
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.5615216Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.5665043Z ##[group]Checking out the ref
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.5671097Z [command]/usr/bin/git checkout --progress --force f7e967458c0c4be08cc0a72aa1f437188c11f3d9
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9817109Z Note: switching to 'f7e967458c0c4be08cc0a72aa1f437188c11f3d9'.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9818945Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9820051Z You are in 'detached HEAD' state. You can look around, make experimental
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9822627Z changes and commit them, and you can discard any commits you make in this
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9825174Z state without impacting any branches by switching back to a branch.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9826926Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9828077Z If you want to create a new branch to retain commits you create, you may
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9830831Z do so (now or later) by using -c with the switch command. Example:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9832146Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9832773Z   git switch -c <new-branch-name>
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9833700Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9834308Z Or undo this operation with:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9835209Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9835792Z   git switch -
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9836731Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9837892Z Turn off this advice by setting config variable advice.detachedHead to false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9839516Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9840575Z HEAD is now at f7e9674 Retain missing owner reports independently of a stalled server clock
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9845672Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9890889Z [command]/usr/bin/git log -1 --format=%H
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:05.9915031Z f7e967458c0c4be08cc0a72aa1f437188c11f3d9
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.0359600Z Prepare all required actions
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.0361726Z Getting action download info
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.1090707Z Download action repository 'actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444' (SHA:a0853c24544627f65ddf259abe73b1d18a591444)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.2882402Z ##[group]Run ./.github/actions/ci-setup
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.2882842Z with:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.2883145Z   node: 22
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.2883433Z env:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.2883811Z   HOMIE_TEST_FIXTURES: /tmp/homie-studio-fixtures
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.2884241Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.2947349Z ##[start-action display=Run actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444;id=__self.__actions_setup-node]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.3043276Z ##[group]Run actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.3043833Z with:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.3044140Z   node-version: 22
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.3044464Z   cache: npm
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.3044782Z   always-auth: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.3045177Z   check-latest: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.3048249Z   token: ***
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.3048593Z   package-manager-cache: true
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.3048964Z env:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.3049322Z   HOMIE_TEST_FIXTURES: /tmp/homie-studio-fixtures
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.3049758Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.4586848Z Found in cache @ /opt/hostedtoolcache/node/22.23.3/x64
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.4591070Z (node:2293) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.4592692Z (Use `node --trace-deprecation ...` to show where the warning was created)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:06.4594651Z ##[group]Environment details
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:09.4077633Z node: v22.23.3
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:09.4079100Z npm: 10.9.9
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:09.4079487Z yarn: 1.22.22
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:09.4080694Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:09.4109114Z [command]/opt/hostedtoolcache/node/22.23.3/x64/bin/npm config get cache
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:09.7113665Z /home/runner/.npm
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:09.8072598Z Cache hit for: node-cache-Linux-x64-npm-365e4fa46d1294d56bf12b9d954a1b87eb0d3036800ea2824feabcb1f08b30d7
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:09.8180069Z (node:2293) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:10.7835203Z Received 191512393 of 191512393 (100.0%), 194.3 MBs/sec
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:10.7836836Z Cache Size: ~183 MB (191512393 B)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:10.7978176Z [command]/usr/bin/tar -xf /home/runner/work/_temp/ce44bf68-90fb-4922-97f4-a4f165d6797f/cache.tzst -P -C /home/runner/work/homie/homie --use-compress-program unzstd
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.2343699Z Cache restored successfully
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.2441284Z Cache restored from key: node-cache-Linux-x64-npm-365e4fa46d1294d56bf12b9d954a1b87eb0d3036800ea2824feabcb1f08b30d7
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.2591304Z ##[end-action id=__self.__actions_setup-node;outcome=success;conclusion=success;duration_ms=4964]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.2595441Z ##[start-action display=Run actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830;id=__self.dependencies]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.7685746Z ##[group]Run actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.7686152Z with:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.7686404Z   path: node_modules
+full / Package shard 15 (Node 22)	UNKNOWN STEP	packages/*/node_modules
+full / Package shard 15 (Node 22)	UNKNOWN STEP	
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.7687272Z   key: deps-Linux-X64-node22-d18a5faeffc39ace2388102e4f51422931bdbaf51cdf1ad24ffb90008d674515
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.7687797Z   enableCrossOsArchive: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.7688108Z   fail-on-cache-miss: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.7688363Z   lookup-only: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.7688590Z   save-always: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.7688820Z env:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.7689063Z   HOMIE_TEST_FIXTURES: /tmp/homie-studio-fixtures
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.7689368Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.8807160Z (node:2355) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.8809177Z (Use `node --trace-deprecation ...` to show where the warning was created)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.9667341Z Cache hit for: deps-Linux-X64-node22-d18a5faeffc39ace2388102e4f51422931bdbaf51cdf1ad24ffb90008d674515
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:11.9782022Z (node:2355) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:12.8424870Z Received 178971943 of 178971943 (100.0%), 207.9 MBs/sec
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:12.8427456Z Cache Size: ~171 MB (178971943 B)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:12.8470155Z [command]/usr/bin/tar -xf /home/runner/work/_temp/d08a9bcd-0aac-4c6c-9a15-98eaf86c3036/cache.tzst -P -C /home/runner/work/homie/homie --use-compress-program unzstd
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.4933915Z Cache restored successfully
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.5094639Z Cache restored from key: deps-Linux-X64-node22-d18a5faeffc39ace2388102e4f51422931bdbaf51cdf1ad24ffb90008d674515
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.5236920Z ##[end-action id=__self.dependencies;outcome=success;conclusion=success;duration_ms=4263]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.5242298Z ##[start-action display=Run npm ci;id=__self.__run]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.5252458Z ##[end-action id=__self.__run;outcome=skipped;conclusion=skipped;duration_ms=0]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.5254677Z ##[start-action display=Run actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830;id=__self.__actions_cache]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.5878437Z ##[group]Run actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.5879028Z with:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.5879418Z   path: ~/.cache/homie-studio/chrome
+full / Package shard 15 (Node 22)	UNKNOWN STEP	~/.cache/puppeteer
+full / Package shard 15 (Node 22)	UNKNOWN STEP	
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.5879952Z   key: chrome-Linux-X64-3aaf162320a6560e5a53921bcce55815cda9ec596b107752064266e6303163b5
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.5880474Z   enableCrossOsArchive: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.5880741Z   fail-on-cache-miss: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.5880991Z   lookup-only: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.5881209Z   save-always: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.5881412Z env:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.5881661Z   HOMIE_TEST_FIXTURES: /tmp/homie-studio-fixtures
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.5881966Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.6959358Z (node:2386) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.6960449Z (Use `node --trace-deprecation ...` to show where the warning was created)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.7761889Z Cache not found for input keys: chrome-Linux-X64-3aaf162320a6560e5a53921bcce55815cda9ec596b107752064266e6303163b5
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.7839354Z ##[end-action id=__self.__actions_cache;outcome=success;conclusion=success;duration_ms=258]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.7842362Z ##[start-action display=Run npm run prepare --workspaces --if-present;id=__self.__run_2]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.7874956Z ##[group]Run npm run prepare --workspaces --if-present
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.7875425Z ^[[36;1mnpm run prepare --workspaces --if-present^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.8240492Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.8240988Z env:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.8241318Z   HOMIE_TEST_FIXTURES: /tmp/homie-studio-fixtures
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:15.8241738Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.1733682Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.1734344Z > @homie-rocks/nav@0.1.1 prepare
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.1734869Z > node scripts/runtime.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.1735092Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.2368704Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.2369505Z > @homie-rocks/physics@0.1.2 prepare
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.2370098Z > node scripts/engine.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.2370290Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.3712130Z ##[end-action id=__self.__run_2;outcome=success;conclusion=success;duration_ms=586]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.3715095Z ##[start-action display=Run actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830;id=__self.build]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.7979680Z ##[group]Run actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.7980125Z with:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.7980479Z   path: packages/*/dist
+full / Package shard 15 (Node 22)	UNKNOWN STEP	packages/*/tsconfig.tsbuildinfo
+full / Package shard 15 (Node 22)	UNKNOWN STEP	
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.7981341Z   key: tsc-Linux-X64-node22-e1031a4708abbeb46b543b7e19d4be9049655ad6f9cb78d03c6b427b4aa89fa7
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.7981965Z   enableCrossOsArchive: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.7982282Z   fail-on-cache-miss: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.7982578Z   lookup-only: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.7982842Z   save-always: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.7983090Z env:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.7983372Z   HOMIE_TEST_FIXTURES: /tmp/homie-studio-fixtures
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.7983744Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.9100611Z (node:2454) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.9101754Z (Use `node --trace-deprecation ...` to show where the warning was created)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.9874470Z Cache hit for: tsc-Linux-X64-node22-e1031a4708abbeb46b543b7e19d4be9049655ad6f9cb78d03c6b427b4aa89fa7
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:16.9983698Z (node:2454) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:17.1019731Z Received 6170714 of 6170714 (100.0%), 84.1 MBs/sec
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:17.1020476Z Cache Size: ~6 MB (6170714 B)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:17.1048655Z [command]/usr/bin/tar -xf /home/runner/work/_temp/c509e246-fd5c-4bcb-ace2-3d3dc5f8f98c/cache.tzst -P -C /home/runner/work/homie/homie --use-compress-program unzstd
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:17.2067964Z Cache restored successfully
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:17.2149551Z Cache restored from key: tsc-Linux-X64-node22-e1031a4708abbeb46b543b7e19d4be9049655ad6f9cb78d03c6b427b4aa89fa7
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:17.2219210Z ##[end-action id=__self.build;outcome=success;conclusion=success;duration_ms=850]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:17.2221856Z ##[start-action display=Run npm run build;id=__self.__run_3]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:17.2240680Z ##[group]Run npm run build
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:17.2240965Z ^[[36;1mnpm run build^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:17.2303824Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:17.2304192Z env:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:17.2304463Z   HOMIE_TEST_FIXTURES: /tmp/homie-studio-fixtures
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:17.2304790Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:17.3304599Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:17.3305366Z > build
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:17.3305813Z > tsc --build
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:17.3306070Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:20.9853448Z ##[end-action id=__self.__run_3;outcome=success;conclusion=success;duration_ms=3763]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:20.9856364Z ##[start-action display=Run find packages/*/dist -type f -exec touch {} +;id=__self.__run_4]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:20.9879692Z ##[group]Run find packages/*/dist -type f -exec touch {} +
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:20.9880147Z ^[[36;1mfind packages/*/dist -type f -exec touch {} +^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:20.9941477Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:20.9942077Z env:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:20.9942351Z   HOMIE_TEST_FIXTURES: /tmp/homie-studio-fixtures
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:20.9942720Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:21.0179004Z ##[end-action id=__self.__run_4;outcome=success;conclusion=success;duration_ms=32]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.2941864Z ##[group]Run actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.2942279Z with:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.2942512Z   path: /tmp/homie-studio-fixtures
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.2943611Z   key: studio-fixtures-v1-Linux-node22-15-cf15c2ac439dc546d733ee094c2f73458d5955acd237f77f293eeb155d828467
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.2944655Z   enableCrossOsArchive: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.2945137Z   fail-on-cache-miss: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.2945572Z   lookup-only: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.2945976Z   save-always: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.2946343Z env:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.2947199Z   HOMIE_TEST_FIXTURES: /tmp/homie-studio-fixtures
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.2947868Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.4298059Z (node:2506) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.4299791Z (Use `node --trace-deprecation ...` to show where the warning was created)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.5070243Z Cache not found for input keys: studio-fixtures-v1-Linux-node22-15-cf15c2ac439dc546d733ee094c2f73458d5955acd237f77f293eeb155d828467
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.5261643Z ##[group]Run curl -fsSL -o stripe-mock.tgz https://github.com/stripe/stripe-mock/releases/download/v0.206.0/stripe-mock_0.206.0_linux_amd64.tar.gz
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.5262785Z ^[[36;1mcurl -fsSL -o stripe-mock.tgz https://github.com/stripe/stripe-mock/releases/download/v0.206.0/stripe-mock_0.206.0_linux_amd64.tar.gz^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.5263701Z ^[[36;1mecho "b6fe5a8f02aaeb5a5001710b304fc93a222f1983a9a6050a38f55cfdc48b8d19  stripe-mock.tgz" | sha256sum -c -^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.5264523Z ^[[36;1mmkdir -p "$RUNNER_TEMP/stripe-mock" && tar xzf stripe-mock.tgz -C "$RUNNER_TEMP/stripe-mock" && rm stripe-mock.tgz^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.5265357Z ^[[36;1m"$RUNNER_TEMP/stripe-mock/stripe-mock" -http-port 12111 -https-port 12112 > "$RUNNER_TEMP/stripe-mock.log" 2>&1 &^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.5266222Z ^[[36;1mfor i in $(seq 1 30); do curl -fs -u sk_test_ci: http://127.0.0.1:12111/v1/checkout/sessions?limit=1 > /dev/null && break; sleep 1; done^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.5267371Z ^[[36;1mecho "STRIPE_MOCK_URL=http://127.0.0.1:12111" >> "$GITHUB_ENV"^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.5340611Z shell: /usr/bin/bash -e {0}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.5340907Z env:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.5341178Z   HOMIE_TEST_FIXTURES: /tmp/homie-studio-fixtures
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.5341501Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:24.7414226Z stripe-mock.tgz: OK
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:25.9453576Z ##[group]Run if node scripts/ci-shards.mjs 15 --full --files | grep -q 'packages/studio/test/upgrade.test.mjs'; then
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:25.9454429Z ^[[36;1mif node scripts/ci-shards.mjs 15 --full --files | grep -q 'packages/studio/test/upgrade.test.mjs'; then^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:25.9454999Z ^[[36;1m  git fetch --unshallow --tags origin^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:25.9455305Z ^[[36;1mfi^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:25.9515503Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:25.9515884Z env:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:25.9516150Z   HOMIE_TEST_FIXTURES: /tmp/homie-studio-fixtures
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:25.9516737Z   STRIPE_MOCK_URL: http://127.0.0.1:12111
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:25.9517063Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.0045738Z ##[group]Run timeout --signal=TERM --kill-after=15s 11m node scripts/ci-shards.mjs 15 --full || {
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.0046798Z ^[[36;1mtimeout --signal=TERM --kill-after=15s 11m node scripts/ci-shards.mjs 15 --full || {^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.0047322Z ^[[36;1m  code=$?^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.0047602Z ^[[36;1m  if [ "$code" = 124 ] || [ "$code" = 137 ]; then^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.0048157Z ^[[36;1m    echo '::error::Shard exceeded 11 minutes. See the last file group for a stuck runner or unbounded wait.'^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.0048679Z ^[[36;1m  fi^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.0048897Z ^[[36;1m  exit "$code"^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.0049332Z ^[[36;1m}^[[0m
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.0110353Z shell: /usr/bin/bash -e {0}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.0110632Z env:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.0110899Z   HOMIE_TEST_FIXTURES: /tmp/homie-studio-fixtures
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.0111280Z   STRIPE_MOCK_URL: http://127.0.0.1:12111
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.0111594Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.0596345Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.0597587Z ##[group]packages/studio/test/watch.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.1208328Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4561568Z # (node:2563) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4563179Z # (Use `node --trace-warnings ...` to show where the warning was created)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4649500Z # Subtest: a watcher never takes a seat, not even one that frees up; the room counts it and names it a watcher
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4674743Z ok 1 - a watcher never takes a seat, not even one that frees up; the room counts it and names it a watcher
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4676041Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4676785Z   duration_ms: 12.344965
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4677268Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4677642Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4678400Z # Subtest: a watcher hosts only a room no player can host, and never deposes one
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4679499Z ok 2 - a watcher hosts only a room no player can host, and never deposes one
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4680313Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4680790Z   duration_ms: 4.951194
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4681316Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4681763Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4682789Z # Subtest: a game that cannot be watched refuses a watcher for good; an "overview" game tells it so
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4684210Z ok 3 - a game that cannot be watched refuses a watcher for good; an "overview" game tells it so
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4685027Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4685418Z   duration_ms: 0.824681
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4685853Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4686223Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4687493Z # Subtest: a second tab is not a peek: a browser that holds a seat watches that room in the overview only
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4688992Z ok 4 - a second tab is not a peek: a browser that holds a seat watches that room in the overview only
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4689912Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4690305Z   duration_ms: 0.945317
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4690726Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4691097Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4691874Z # Subtest: the contract's palette is the same in the relay and the helper
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4692934Z ok 5 - the contract's palette is the same in the relay and the helper
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4693600Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4693968Z   duration_ms: 0.902026
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4694380Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4694981Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.4839815Z # (node:2563) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.5134590Z # Subtest: netplay helper: a watcher follows a player, Auto picks one, and a player who leaves hands the view back on return
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.5137088Z ok 6 - netplay helper: a watcher follows a player, Auto picks one, and a player who leaves hands the view back on return
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.5138532Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.5139200Z   duration_ms: 80.444555
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.5139588Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.5139831Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.5477550Z # Subtest: netplay helper: Auto cuts to the newest spotlight after a moment, else follows the leader of the scores probe
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.5479071Z ok 7 - netplay helper: Auto cuts to the newest spotlight after a moment, else follows the leader of the scores probe
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.5479621Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.5479862Z   duration_ms: 36.259454
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.5480119Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:46:26.5480345Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.7538853Z # Subtest: netplay helper: an "overview" game and a seat in the same browser show the whole room; an older relay says nothing
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.7539951Z ok 8 - netplay helper: an "overview" game and a seat in the same browser show the whole room; an older relay says nothing
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.7540906Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.7541133Z   duration_ms: 7.825236
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.7541392Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.7541612Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.7541978Z # Subtest: the build keeps what each game lets its watchers see
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.7542499Z ok 9 - the build keeps what each game lets its watchers see
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.7542833Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.7543049Z   duration_ms: 64137.295523
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.7543301Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.7543509Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.7544054Z # Subtest: the watch door: the game as a watcher, its frame and socket say so, and a game that says no has none
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.7544866Z ok 10 - the watch door: the game as a watcher, its frame and socket say so, and a game that says no has none
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.7545348Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.7545562Z   duration_ms: 56.076866
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.7545823Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.7546037Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.8850285Z # {"at":"2026-10-16T08:47:30.883Z","ev":"hello","room":"pub-1","id":"sUNgtyjf","seat":0,"device":"desk","want":"play","role":"host","why":"first","full":false,"resumed":false,"clients":1,"ver":"f248d41cd614586fd5a268276067b1fe","game":"owl-run"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.8888997Z # {"at":"2026-10-16T08:47:30.888Z","ev":"hello","room":"pub-2","id":"HsOXW_jz","seat":0,"device":"desk","want":"play","role":"host","why":"first","full":false,"resumed":false,"clients":1,"ver":"f248d41cd614586fd5a268276067b1fe","game":"owl-run"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.8901747Z # Subtest: a private game is watched only by whoever may play it
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.8902888Z ok 11 - a private game is watched only by whoever may play it
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.8903739Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.8904332Z   duration_ms: 123.255316
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.8905012Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:30.8905416Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:31.8905562Z # {"at":"2026-10-16T08:47:31.889Z","ev":"hello","room":"pub-2","id":"4MtG-OWa","seat":1,"device":"desk","want":"play","role":"replica","why":"joined","full":false,"resumed":false,"clients":2,"ver":"f248d41cd614586fd5a268276067b1fe","game":"owl-run"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:31.8920457Z # {"at":"2026-10-16T08:47:31.891Z","ev":"hello","room":"pub-1","id":"AOiHJudk","seat":0,"device":"desk","want":"play","role":"host","why":"first","full":false,"resumed":false,"clients":1,"ver":"bcfa289b2d7bdabf2325a7dd7bc90983","game":"card-night"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.0159444Z # Subtest: /api/watch names the busiest public room and reserves nothing; every room row carries its Watch link
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.0165141Z ok 12 - /api/watch names the busiest public room and reserves nothing; every room row carries its Watch link
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.0166425Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.0170245Z   duration_ms: 2066.598678
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.0170743Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.0171108Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.0185939Z # Subtest: server rules watch page and door boot a screen with no seat
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.0187309Z ok 13 - server rules watch page and door boot a screen with no seat
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.0188019Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.0188364Z   duration_ms: 3.6972
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.0188772Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.0189169Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.2025747Z # Subtest: server host ignores watcher inputs, commands, asks, decisions and votes
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.2027244Z ok 14 - server host ignores watcher inputs, commands, asks, decisions and votes
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.2027724Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.2027965Z   duration_ms: 237.596992
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.2028220Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.2028445Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:33.5168871Z # {"at":"2026-10-16T08:47:33.516Z","ev":"elect","room":"pub-2","id":"4MtG-OWa","seat":1,"why":"host-stalled","ckptAge":null,"game":"owl-run"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:35.0205087Z # {"at":"2026-10-16T08:47:35.019Z","ev":"elect","room":"pub-2","id":"HsOXW_jz","seat":0,"why":"host-stalled","ckptAge":null,"game":"owl-run"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:36.5234633Z # {"at":"2026-10-16T08:47:36.522Z","ev":"elect","room":"pub-2","id":"4MtG-OWa","seat":1,"why":"host-stalled","ckptAge":null,"game":"owl-run"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:38.0251674Z # {"at":"2026-10-16T08:47:38.024Z","ev":"elect","room":"pub-2","id":"HsOXW_jz","seat":0,"why":"host-stalled","ckptAge":null,"game":"owl-run"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:39.5264591Z # {"at":"2026-10-16T08:47:39.525Z","ev":"elect","room":"pub-2","id":"4MtG-OWa","seat":1,"why":"host-stalled","ckptAge":null,"game":"owl-run"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:40.8972545Z # {"at":"2026-10-16T08:47:40.896Z","ev":"leave","room":"pub-1","id":"sUNgtyjf","seat":0,"why":"silent","role":"host","left":0,"game":"owl-run"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:40.8987147Z # {"at":"2026-10-16T08:47:40.898Z","ev":"persist-failed","error":"this.ctx.storage.getAlarm is not a function","game":"owl-run","room":"pub-1"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:41.0281636Z # {"at":"2026-10-16T08:47:41.027Z","ev":"leave","room":"pub-2","id":"HsOXW_jz","seat":0,"why":"silent","role":"replica","left":1,"game":"owl-run"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:41.8998311Z # {"at":"2026-10-16T08:47:41.899Z","ev":"persist-failed","error":"this.ctx.storage.getAlarm is not a function","game":"owl-run","room":"pub-1"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:42.0294387Z # {"at":"2026-10-16T08:47:42.028Z","ev":"leave","room":"pub-1","id":"AOiHJudk","seat":0,"why":"silent","role":"host","left":0,"game":"card-night"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:42.0304681Z # {"at":"2026-10-16T08:47:42.029Z","ev":"persist-failed","error":"this.ctx.storage.getAlarm is not a function","game":"card-night","room":"pub-1"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:42.0313267Z # {"at":"2026-10-16T08:47:42.030Z","ev":"leave","room":"pub-2","id":"4MtG-OWa","seat":1,"why":"silent","role":"host","left":0,"game":"owl-run"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:42.0320297Z # {"at":"2026-10-16T08:47:42.031Z","ev":"persist-failed","error":"this.ctx.storage.getAlarm is not a function","game":"owl-run","room":"pub-2"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:42.0554709Z 1..14
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:42.0555136Z # tests 14
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:42.0555511Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:42.0555894Z # pass 14
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:42.0556362Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:42.0557629Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:42.0558381Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:42.0558974Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:42.0560194Z # duration_ms 75947.245273
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:42.0609856Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:42.0610583Z FILE_DURATION packages/studio/test/watch.test.mjs 76s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:42.0611305Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:42.0612238Z ##[group]packages/studio/test/rules-browser.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:42.1021318Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:50.3885726Z # Subtest: the Lab feeds private sliders and world.stage into the same guarded runtime, and each take repeats
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:50.3888688Z ok 1 - the Lab feeds private sliders and world.stage into the same guarded runtime, and each take repeats
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:50.3889525Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:50.3889886Z   duration_ms: 7960.410745
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:50.3890282Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:50.3890640Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:50.3891435Z # Subtest: public sliders round-trip without moving private tunables or losing their ranges
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:50.3892342Z ok 2 - public sliders round-trip without moving private tunables or losing their ranges
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:50.3892877Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:50.3893089Z   duration_ms: 0.641188
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:50.3893337Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:50.3893716Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:58.2432313Z # Subtest: browser timers recover after 1000,1000,1000,1000,1000,1000,1000,1000,1000,1000 ms delays
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:58.2434009Z ok 3 - browser timers recover after 1000,1000,1000,1000,1000,1000,1000,1000,1000,1000 ms delays
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:58.2434820Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:58.2435472Z   duration_ms: 7855.830292
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:58.2436105Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:47:58.2436504Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:06.0744589Z # Subtest: browser timers recover after 30000 ms delays
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:06.0745747Z ok 4 - browser timers recover after 30000 ms delays
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:06.0747036Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:06.0747674Z   duration_ms: 7831.575273
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:06.0748373Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:06.0749399Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:13.9342881Z # Subtest: browser timers recover after 6000 ms delays
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:13.9348459Z ok 5 - browser timers recover after 6000 ms delays
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:13.9349247Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:13.9349830Z   duration_ms: 7853.90475
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:13.9350474Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:13.9350983Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:13.9351785Z # Subtest: a malformed saved core is refused before restoration
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:13.9352788Z ok 6 - a malformed saved core is refused before restoration
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:13.9353495Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:13.9354013Z   duration_ms: 5.086225
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:13.9354576Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:13.9355096Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7537007Z # Subtest: production ignores a page-defined Lab stage and tuning
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7538550Z ok 7 - production ignores a page-defined Lab stage and tuning
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7539856Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7540877Z   duration_ms: 7796.674045
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7541771Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7544902Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7546175Z # Subtest: damaged saved commands and queued events are rejected
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7547394Z ok 8 - damaged saved commands and queued events are rejected
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7548001Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7548579Z   duration_ms: 5.683602
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7549000Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7549327Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7550498Z # Subtest: a saved seat identity is replaced by the relay peer before rules run
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7551509Z ok 9 - a saved seat identity is replaced by the relay peer before rules run
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7552397Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7552912Z   duration_ms: 6.180531
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7553487Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7553845Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7554744Z # Subtest: restoration refuses exhausted counters, duplicate seats and unbounded round deadlines
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7557113Z ok 10 - restoration refuses exhausted counters, duplicate seats and unbounded round deadlines
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7558252Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7558793Z   duration_ms: 11.725674
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7559330Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.7559737Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.9527359Z # Subtest: the production Worker adapter enables overrun attribution
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.9528666Z ok 11 - the production Worker adapter enables overrun attribution
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.9529599Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.9587993Z   duration_ms: 196.206806
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.9651895Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:21.9666600Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:29.7941399Z # Subtest: late browser callbacks coalesce round corrections within the relay rate
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:29.7958006Z ok 12 - late browser callbacks coalesce round corrections within the relay rate
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:29.7959118Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:29.7959677Z   duration_ms: 7843.415468
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:29.7960132Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:29.7960507Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:37.6942862Z # Subtest: a 20-tick browser host whose timers fire every 70 ms runs 200 ticks in ten seconds
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:37.6944962Z ok 13 - a 20-tick browser host whose timers fire every 70 ms runs 200 ticks in ten seconds
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:37.6946052Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:37.6947097Z   duration_ms: 7900.222036
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:37.6947915Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:37.6948488Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:45.6011883Z # Subtest: a 20-tick browser host whose timers fire every 100 ms runs 200 ticks in ten seconds
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:45.6013438Z ok 14 - a 20-tick browser host whose timers fire every 100 ms runs 200 ticks in ten seconds
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:45.6014326Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:45.6014785Z   duration_ms: 7906.762752
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:45.6015358Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:45.6015971Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:53.4241462Z # Subtest: a 20-tick browser host whose timers fire every 250 ms runs 40 ticks in ten seconds
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:53.4242675Z ok 15 - a 20-tick browser host whose timers fire every 250 ms runs 40 ticks in ten seconds
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:53.4243434Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:53.4243912Z   duration_ms: 7816.656143
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:53.4244732Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:53.4245206Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:53.4246724Z # Subtest: a deep checkpoint is refused deliberately before cloning
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:53.4248207Z ok 16 - a deep checkpoint is refused deliberately before cloning
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:53.4255287Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:53.4256151Z   duration_ms: 6.378403
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:53.4257461Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:48:53.4257922Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3016819Z # Subtest: hostile saved shapes are rejected rather than coerced by browser restore
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3018344Z ok 17 - hostile saved shapes are rejected rather than coerced by browser restore
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3022594Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3022931Z   duration_ms: 7875.878455
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3023274Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3023548Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3248770Z 1..17
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3249287Z # tests 17
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3249697Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3250104Z # pass 17
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3250647Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3251318Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3251950Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3252608Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3253261Z # duration_ms 79235.170994
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3309186Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3309981Z FILE_DURATION packages/studio/test/rules-browser.test.mjs 79.3s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3319185Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3319839Z ##[group]packages/studio/test/apps.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.3740617Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.8748659Z # (node:2756) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:01.8750012Z # (Use `node --trace-warnings ...` to show where the warning was created)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:47.5004114Z # Subtest: apps share discovery, build, parts and standalone without changing a game bundle
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:47.5029200Z ok 1 - apps share discovery, build, parts and standalone without changing a game bundle
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:47.5030157Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:47.5030599Z   duration_ms: 45616.792959
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:47.5031224Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:47.5031628Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:47.5035564Z # Subtest: app schema, LAN addresses and public HTTP links refuse invalid input
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:47.5037536Z ok 2 - app schema, LAN addresses and public HTTP links refuse invalid input
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:47.5038357Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:47.5039164Z   duration_ms: 22.879772
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:47.5039667Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:47.5040075Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:47.5369622Z # Subtest: records require account grants, survive room lifetimes, validate and compare versions; staff links are not bearer permissions
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:47.5371457Z ok 3 - records require account grants, survive room lifetimes, validate and compare versions; staff links are not bearer permissions
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:47.5372597Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:47.5373012Z   duration_ms: 65.826029
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:47.5373457Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:49:47.5373829Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.1865510Z # Subtest: app home, landing, manifest and shared watch shell use app language and public addresses
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.1867647Z ok 4 - app home, landing, manifest and shared watch shell use app language and public addresses
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.1868917Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.1869600Z   duration_ms: 13588.408866
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.1870059Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.1870415Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.8332113Z # Subtest: MCP app_make creates a starter beside game_make and exposes the app guide
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.8333405Z ok 5 - MCP app_make creates a starter beside game_make and exposes the app guide
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.8338161Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.8338759Z   duration_ms: 595.636596
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.8339238Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.8339643Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.8340351Z # Subtest: a cause can retain and read more than a thousand gifts
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.8341298Z ok 6 - a cause can retain and read more than a thousand gifts
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.8341899Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.8342258Z   duration_ms: 85.452565
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.8345265Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.8345668Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.8923391Z # Subtest: private records app can load its module without cookies using a scoped expiring asset address
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.8925019Z ok 7 - private records app can load its module without cookies using a scoped expiring asset address
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.8925912Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.8926722Z   duration_ms: 61.348758
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.8927363Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.8927983Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.9976227Z # Subtest: private room-backed app uses its play ticket for the frame and scoped asset paths for modules
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.9986361Z ok 8 - private room-backed app uses its play ticket for the frame and scoped asset paths for modules
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.9990313Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.9990744Z   duration_ms: 48.877299
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.9991154Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.9991384Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.9991926Z # Subtest: resource booking declarations reject missing collections and anonymous resource edits
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.9992732Z ok 9 - resource booking declarations reject missing collections and anonymous resource edits
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.9993191Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.9993406Z   duration_ms: 0.563654
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.9993647Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.9993856Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.9994553Z # Subtest: writing needs evidence does not restart the app runtime while source edits still do
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.9995976Z ok 10 - writing needs evidence does not restart the app runtime while source edits still do
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.9996873Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.9997318Z   duration_ms: 22.57247
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.9997591Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:01.9997807Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:02.0287479Z 1..10
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:02.0287953Z # tests 10
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:02.0288358Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:02.0288747Z # pass 10
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:02.0297822Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:02.0298283Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:02.0298734Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:02.0299188Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:02.0299654Z # duration_ms 60667.398927
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:02.0341038Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:02.0341764Z FILE_DURATION packages/studio/test/apps.test.mjs 60.7s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:02.0348893Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:02.0349829Z ##[group]packages/studio/test/rules-ember-determinism.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:02.0780290Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:33.3230999Z # Subtest: Ember Vale: server and browser saves match at all 2400 ticks, with and without handovers
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:33.3242596Z ok 1 - Ember Vale: server and browser saves match at all 2400 ticks, with and without handovers
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:33.3243473Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:33.3244264Z   duration_ms: 30926.76696
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:33.3244730Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:33.3245015Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:33.3245723Z # Subtest: Ember Vale: workerd agrees with Node at every tick
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:33.3249137Z ok 2 - Ember Vale: workerd agrees with Node at every tick # SKIP set HOMIE_TEST_MINIFLARE to the installed module
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:33.3250179Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:33.3250765Z   duration_ms: 0.223999
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:33.3251112Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:33.3251332Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8139874Z # Subtest: Ember Vale: Chrome agrees with Node at every tick
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8144301Z ok 3 - Ember Vale: Chrome agrees with Node at every tick
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8145126Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8146160Z   duration_ms: 18519.600541
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8146992Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8147523Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8536849Z 1..3
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8537230Z # tests 3
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8538509Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8539086Z # pass 2
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8539774Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8540415Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8541006Z # skipped 1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8541606Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8542243Z # duration_ms 49788.980079
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8589946Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8590488Z FILE_DURATION packages/studio/test/rules-ember-determinism.test.mjs 49.8s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8593478Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.8594346Z ##[group]packages/studio/test/rules-author-requests.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:50:51.9015435Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:02.0473632Z # Subtest: author request: A shooter with health, respawns and points for hits.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:02.0480300Z ok 1 - author request: A shooter with health, respawns and points for hits.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:02.0481325Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:02.0481869Z   duration_ms: 9872.006973
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:02.0482443Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:02.0482923Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:11.5851251Z # Subtest: author request: A race around four gates that records completed laps.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:11.5853111Z ok 2 - author request: A race around four gates that records completed laps.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:11.5854514Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:11.5854952Z   duration_ms: 9537.822164
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:11.5855436Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:11.5855707Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.2896823Z # Subtest: author request: Tag with a transfer cooldown and recovery when a recipient leaves.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.2898545Z ok 3 - author request: Tag with a transfer cooldown and recovery when a recipient leaves.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.2899717Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.2900719Z   duration_ms: 9703.162595
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.2901599Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.2902106Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.3102236Z 1..3
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.3102693Z # tests 3
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.3102920Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.3104821Z # pass 3
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.3105540Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.3106361Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.3107276Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.3107965Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.3108751Z # duration_ms 29422.337582
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.3156938Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.3157437Z FILE_DURATION packages/studio/test/rules-author-requests.test.mjs 29.5s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.3159463Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.3160132Z ##[group]packages/studio/test/app-services.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.3574156Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.7975950Z # (node:3084) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.7978223Z # (Use `node --trace-warnings ...` to show where the warning was created)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.7997849Z # Subtest: app calls the trusted tool with strict schema and atomic idempotent writes
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.8007553Z ok 1 - app calls the trusted tool with strict schema and atomic idempotent writes
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.8008630Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.8009051Z   duration_ms: 38.107994
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.8009532Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.8009938Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.8014564Z # Subtest: frame transport cannot manufacture staff or owner authority or bypass origin checks
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.8017791Z ok 2 - frame transport cannot manufacture staff or owner authority or bypass origin checks
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.8018528Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.8018911Z   duration_ms: 26.927237
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.8019374Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.8019935Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.8021205Z # Subtest: live record streams push changes across screens without a rules room, isolate scopes, and count presence
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.8023004Z ok 3 - live record streams push changes across screens without a rules room, isolate scopes, and count presence
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.8024167Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.8024812Z   duration_ms: 29.811798
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.8027077Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:21.8027515Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8294007Z # Subtest: live changes survive delete/recreate and isolate signed local proof scopes
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8308406Z ok 4 - live changes survive delete/recreate and isolate signed local proof scopes
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8309393Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8310019Z   duration_ms: 15041.367406
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8310854Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8311485Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8463613Z # Subtest: place guide examples bundle against toolkit exports
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8465178Z ok 5 - place guide examples bundle against toolkit exports
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8466170Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8466918Z   duration_ms: 29.662018
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8467457Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8468002Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8470649Z # Subtest: shell trusts only its own frame, preserves server role, and gates the proof clock
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8471666Z ok 6 - shell trusts only its own frame, preserves server role, and gates the proof clock
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8472503Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8472977Z   duration_ms: 5.705565
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8473421Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8473795Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8653539Z 1..6
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8653982Z # tests 6
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8654392Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8654778Z # pass 6
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8667706Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8668146Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8668500Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8668749Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8669029Z # duration_ms 15520.438277
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8705430Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8706102Z FILE_DURATION packages/studio/test/app-services.test.mjs 15.6s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8708100Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.8708856Z ##[group]packages/studio/test/local-database-start.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:36.9133359Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2858995Z # (node:3112) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2861542Z # (Use `node --trace-warnings ...` to show where the warning was created)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2897750Z # Subtest: local serving is gated on migrations then function registration
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2907852Z ok 1 - local serving is gated on migrations then function registration
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2908758Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2909134Z   duration_ms: 1.502357
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2909558Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2909782Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2910195Z # Subtest: failed migration never registers functions or permits serving
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2910781Z ok 2 - failed migration never registers functions or permits serving
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2911412Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2911631Z   duration_ms: 0.217877
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2911877Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2912085Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2912395Z # Subtest: failed registration never permits serving
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2912829Z ok 3 - failed registration never permits serving
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2913128Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2913345Z   duration_ms: 0.270335
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2913573Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2913776Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2914204Z # Subtest: the first notice on a fresh local database reaches its registered function
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2914832Z ok 4 - the first notice on a fresh local database reaches its registered function
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2915231Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2915440Z   duration_ms: 193.968705
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2915686Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.2915890Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.3093158Z 1..4
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.3093573Z # tests 4
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.3093930Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.3094312Z # pass 4
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.3094961Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.3095596Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.3096170Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.3096991Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.3097775Z # duration_ms 409.652085
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.3154452Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.3155234Z FILE_DURATION packages/studio/test/local-database-start.test.mjs 0.4s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.3157424Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.3158387Z ##[group]packages/studio/test/request-fallbacks.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:37.3574374Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2305060Z # (node:3126) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2307874Z # (Use `node --trace-warnings ...` to show where the warning was created)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2331372Z # Subtest: steady static file stays within its D1 request budget
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2337729Z ok 1 - steady static file stays within its D1 request budget
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2338410Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2383325Z   duration_ms: 46.154396
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2385416Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2385958Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2386380Z # Subtest: steady asset stays within its D1 request budget
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2387511Z ok 2 - steady asset stays within its D1 request budget
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2388070Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2388484Z   duration_ms: 25.485578
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2389003Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2389401Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2390008Z # Subtest: steady game asset stays within its D1 request budget
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2390919Z ok 3 - steady game asset stays within its D1 request budget
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2391493Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2391849Z   duration_ms: 27.502296
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2392292Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2392644Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2393262Z # Subtest: steady game shell stays within its D1 request budget
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2394101Z ok 4 - steady game shell stays within its D1 request budget
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2394669Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2395033Z   duration_ms: 43.62516
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2395446Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2395731Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2396083Z # Subtest: steady records stays within its D1 request budget
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2396843Z ok 5 - steady records stays within its D1 request budget
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2397431Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2397787Z   duration_ms: 28.763713
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2398167Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2398377Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2398834Z # Subtest: steady page stays within its D1 request budget
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2399625Z ok 6 - steady page stays within its D1 request budget
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2400220Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2400567Z   duration_ms: 29.697066
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2400954Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2401162Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2401476Z # Subtest: steady seat stays within its D1 request budget
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2401923Z ok 7 - steady seat stays within its D1 request budget
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2402231Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2402436Z   duration_ms: 28.731712
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2402699Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2402900Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2403230Z # Subtest: steady socket stays within its D1 request budget
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2403677Z ok 8 - steady socket stays within its D1 request budget
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2403988Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2404191Z   duration_ms: 28.428637
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2404432Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2404635Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2405026Z # Subtest: ordinary GET leaves tool announcements to scheduled maintenance
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2405605Z ok 9 - ordinary GET leaves tool announcements to scheduled maintenance
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2405976Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2406183Z   duration_ms: 141.029723
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2406425Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2406879Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2407523Z # Subtest: an idle studio needs no cron; scheduled studios retain their ticks
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2408361Z ok 10 - an idle studio needs no cron; scheduled studios retain their ticks
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2408744Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2408953Z   duration_ms: 1.934735
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2409188Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2409390Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2409829Z # Subtest: concept static pages traverse the banner and static headers forbid indexing
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2410500Z ok 11 - concept static pages traverse the banner and static headers forbid indexing
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2411187Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2411496Z   duration_ms: 0.254526
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2411768Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2411979Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2412422Z # Subtest: retired sources cannot leak even when an old asset exists; rooms accept HEAD
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2413083Z ok 12 - retired sources cannot leak even when an old asset exists; rooms accept HEAD
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2413491Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2413698Z   duration_ms: 28.876644
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2413936Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2414135Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2414568Z # Subtest: replication PATCH refusal and network failure leave the primary available
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2415360Z ok 13 - replication PATCH refusal and network failure leave the primary available
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2415778Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2415978Z   duration_ms: 2.204749
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2416207Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2416411Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2419381Z # Subtest: rooms HEAD succeeds without a response body
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2420051Z ok 14 - rooms HEAD succeeds without a response body
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2420508Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2420843Z   duration_ms: 26.874753
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2421297Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2421664Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2422285Z # Subtest: cron exhaustion explains how to free account capacity
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2423077Z ok 15 - cron exhaustion explains how to free account capacity
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2423619Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2423917Z   duration_ms: 0.448017
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2424310Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2424708Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2670792Z 1..15
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2671213Z # tests 15
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2671560Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2671915Z # pass 15
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2672258Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2672608Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2673059Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2673527Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2674101Z # duration_ms 922.572665
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2723201Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2723921Z FILE_DURATION packages/studio/test/request-fallbacks.test.mjs 1s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2725404Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.2726067Z ##[group]packages/studio/test/studios-client.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.3155844Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6127376Z # Subtest: remote origins must be bare HTTPS origins
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6153347Z ok 1 - remote origins must be bare HTTPS origins
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6154176Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6154589Z   duration_ms: 1.395968
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6157547Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6157923Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6158634Z # Subtest: bounded transport refuses discovery escapes, redirects and oversized bodies
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6159371Z ok 2 - bounded transport refuses discovery escapes, redirects and oversized bodies
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6159797Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6160015Z   duration_ms: 9.672612
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6160269Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6160480Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6160981Z # Subtest: structured and legacy toolkit results are decoded once and stay labelled as data
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6161684Z ok 3 - structured and legacy toolkit results are decoded once and stay labelled as data
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6162110Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6162320Z   duration_ms: 0.919618
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6162554Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6162763Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6300816Z 1..3
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6301267Z # tests 3
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6301646Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6302672Z # pass 3
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6303340Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6303922Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6304442Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6305048Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6305666Z # duration_ms 326.687831
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6361274Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6369707Z FILE_DURATION packages/studio/test/studios-client.test.mjs 0.4s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6370201Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6370808Z ##[group]packages/studio/test/rules-answer-types.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:38.6785585Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:41.0420212Z # Subtest: main compatibility: main-kit keeps its original answer assignments
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:41.0429146Z ok 1 - main compatibility: main-kit keeps its original answer assignments
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:41.0429771Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:41.0430162Z   duration_ms: 2088.617989
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:41.0430596Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:41.0430952Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8345502Z # Subtest: main compatibility: main-probe keeps its original answer assignments
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8347517Z ok 2 - main compatibility: main-probe keeps its original answer assignments
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8348381Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8349429Z   duration_ms: 7790.613677
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8350028Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8350582Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8509607Z 1..2
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8510227Z # tests 2
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8511088Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8511924Z # pass 2
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8512536Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8514000Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8514582Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8515163Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8515840Z # duration_ms 10185.052972
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8565875Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8567170Z FILE_DURATION packages/studio/test/rules-answer-types.test.mjs 10.2s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8568225Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.8568907Z ##[group]packages/studio/test/purchase-interruptions.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:48.9011635Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:50.3889810Z # (node:3187) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:50.3891752Z # (Use `node --trace-warnings ...` to show where the warning was created)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:51.5303049Z # (node:3187) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:51.5874159Z # Subtest: N5 401 key refused, webhook none
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:51.5882988Z ok 1 - N5 401 key refused, webhook none
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:51.5883734Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:51.5884231Z   duration_ms: 1211.301
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:51.5884549Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:51.5884819Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:52.6789816Z # Subtest: N5 401 key refused, webhook late
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:52.6793579Z ok 2 - N5 401 key refused, webhook late
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:52.6794584Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:52.6795213Z   duration_ms: 1092.776859
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:52.6795917Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:52.6796445Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:53.7557343Z # Subtest: N5 403 permission removed, webhook none
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:53.7560510Z ok 3 - N5 403 permission removed, webhook none
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:53.7561570Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:53.7562219Z   duration_ms: 1076.910033
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:53.7562978Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:53.7563578Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:54.8287181Z # Subtest: N5 403 permission removed, webhook late
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:54.8288921Z ok 4 - N5 403 permission removed, webhook late
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:54.8289687Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:54.8290158Z   duration_ms: 1073.521872
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:54.8290610Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:54.8291130Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:55.8988367Z # Subtest: N5 400 idempotency mismatch, webhook none
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:55.8989574Z ok 5 - N5 400 idempotency mismatch, webhook none
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:55.8990798Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:55.8991352Z   duration_ms: 1070.252473
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:55.8991895Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:55.8992355Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:56.9627486Z # Subtest: N5 400 idempotency mismatch, webhook late
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:56.9628726Z ok 6 - N5 400 idempotency mismatch, webhook late
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:56.9629850Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:56.9630403Z   duration_ms: 1071.758285
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:56.9630845Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:56.9631395Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:57.0160913Z 1..6
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:57.0161362Z # tests 6
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:57.0161751Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:57.0162148Z # pass 6
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:57.0162520Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:57.0162918Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:57.0163533Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:57.0164155Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:57.0164896Z # duration_ms 8128.620417
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:57.0211596Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:57.0212729Z FILE_DURATION packages/studio/test/purchase-interruptions.test.mjs 8.2s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:57.0213663Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:57.0216099Z ##[group]packages/studio/test/event-delivery-workerd.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:51:57.0640673Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:00.1534821Z # CIMD (Client ID Metadata Document) is disabled: add '"compatibility_flags": ["global_fetch_strictly_public"]' to your wrangler.jsonc to enable. See: https://developers.cloudflare.com/workers/configuration/compatibility-flags/\#global-fetch-strictly-public
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5549812Z # Subtest: fresh studio delivers an MCP record event during the writing request, without another visitor
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5557614Z ok 1 - fresh studio delivers an MCP record event during the writing request, without another visitor
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5558828Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5559586Z   duration_ms: 3825.058266
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5560233Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5560805Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5838260Z 1..1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5838722Z # tests 1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5839149Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5841258Z # pass 1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5842144Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5842982Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5844727Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5845271Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5846066Z # duration_ms 4533.353554
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5894658Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5895420Z FILE_DURATION packages/studio/test/event-delivery-workerd.test.mjs 4.6s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5897847Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.5898616Z ##[group]packages/studio/test/paid-parts-review4-machine4.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:01.6325234Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.1396924Z # (node:3239) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.1398973Z # (Use `node --trace-warnings ...` to show where the warning was created)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.2732108Z # \# A1 receipt {"method":"stripe","reference":"pi_0002","status":"success","timestamp":"2026-10-16T08:52:03.260Z"} | files 6 | proof true | stripe version header 2026-07-29.preview | idem mpp_tqHjpgl3Wu8Ganvu_yyAWhKl1i
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.2735819Z # \# A1 PI form {"amount":"1000","automatic_payment_methods[allow_redirects]":"never","automatic_payment_methods[enabled]":"true","confirm":"true","currency":"usd","metadata[machine_payment]":"true","metadata[mpp_sdk]":"mppx/0.13.2","metadata[mpp_intent]":"charge","metadata[mpp_challenge_id]":"tqHjpgl3Wu8Ganvu_yyAWhKl1i2CdpuI2Udgb11qXFM","metadata[homie]":"purchase-v1","metadata[order]":"ord_EwXy4yvkT3bLpZQKFzr0","shared_payment_granted_token":"spt_a1_1"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.2878562Z # Subtest: A1 happy path through the real route: challenge, SPT credential, files + proof + receipt in one exchange
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.2887906Z ok 1 - A1 happy path through the real route: challenge, SPT credential, files + proof + receipt in one exchange
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.2888838Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.2889205Z   duration_ms: 160.776229
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.2889621Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.2889854Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.3342590Z # \# A2 garbage credential: 402 {"type":"https://paymentauth.org/problems/malformed-credential","title":"Malformed Credential","status":402,"detail":"Credential is malformed: Invalid base64url | then valid credential: 200 {"delivery":"If this stream is interrupted, retry the same purchase to retrieve the files without paying again.","ok":true,"entitlement":{"order":"ord_l9mGne6XN | charged 1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.3429712Z # Subtest: A2 a first credential that fails (malformed) must not brick the order for the valid one
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.3432103Z ok 2 - A2 a first credential that fails (malformed) must not brick the order for the valid one
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.3433305Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.3433864Z   duration_ms: 59.265259
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.3434351Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.3434754Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.3957247Z # \# A3 declined: 503 {"type":"about:blank","title":"Service Unavailable","status":503,"detail":"The payment outcome is being reconciled. Retry this purchase; do not pay again.","ok" | new token: 200 {"delivery":"If this stream is interrupted, retry the same purchase to retrieve the files without paying again.","ok":true,"entitlement":{"order":"ord_9CA4l380p | charged 1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4056365Z # Subtest: A3 a declined token, then a new approved token for the same order
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4059194Z ok 3 - A3 a declined token, then a new approved token for the same order
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4060069Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4060593Z   duration_ms: 61.444704
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4061184Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4062106Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4210430Z # \# A4 challenge lifetime seconds 300
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4222893Z # (node:3239) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4445211Z # \# A4 expired challenge: 402 {"type":"https://paymentauth.org/problems/invalid-challenge","title":"Invalid Challenge","status":402,"detail":"Challenge \\"5KeVR0-ffUvSsmrs5WYYOPVen9OKXK7xiQiR | fresh challenge + token: 200 {"delivery":"If this stream is interrupted, retry the same purchase to retrieve the files without paying again.","ok":true,"entitlement":{"order":"ord_tFwPWjKFV | charged 1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4535017Z # Subtest: A4 the person takes longer than the challenge lifetime to approve in the wallet
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4537057Z ok 4 - A4 the person takes longer than the challenge lifetime to approve in the wallet
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4538186Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4538818Z   duration_ms: 48.418684
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4539229Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4539500Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4814377Z # \# A5 bearer first: 402 {"type":"https://paymentauth.org/problems/payment-required","title":"Payment Required","status":402,"detail":"Payment is required (Camera 0.1.0).","hint":"Use a | then valid: 200 {"delivery":"If this stream is interrupted, retry the same purchase to retrieve the files without paying again.","ok":true,"entitlement":{"order":"ord_48UsdfWQT
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4928826Z # Subtest: A5 any Authorization header pins the order (*** a proxy or a buggy client)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4930833Z ok 5 - A5 any Authorization header pins the order (*** a proxy or a buggy client)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4931917Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4932581Z   duration_ms: 36.715883
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4932992Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.4933224Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.5150324Z # \# A6 offer now 2500 | sync {"ok":true,"expired":1,"cleaned":0} | old claim re-challenged at undefined | paid: 402 {"type":"about:blank","title":"Payment Required","status":402,"detail":"Purchase is expired; do not pay this order again","ok":false,"message":"Purchase is expi | charged amount []
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.5233560Z # \# A6 retired {"ok":true,"canceled":0,"message":"New sales are closed and  | open order after retirement: 402 {"type":"about:blank","title":"Payment Required","status":402,"detail":"Purchase is expired; do not pay this order again","ok":false,"message":"Purchase is expi
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.5326019Z # Subtest: A6 an open machine order is a price lock: paid at the old price after reprice, withdrawal and retirement
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.5330147Z ok 6 - A6 an open machine order is a price lock: paid at the old price after reprice, withdrawal and retirement
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.5331237Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.5331785Z   duration_ms: 42.223147
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.5332415Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.5333004Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.5651954Z # \# A7 credential of order A on order B: 402 {"type":"https://paymentauth.org/problems/invalid-challenge","title":"Invalid Challenge","status":402,"detail":"Challenge \\"OpXdXZ1FDDRZtZHUsDtnrHBFnckCEQw544x9 | charged 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.5768902Z # \# A7 tampered amount: 402 {"type":"https://paymentauth.org/problems/invalid-challenge","title":"Invalid Challenge","status":402,"detail":"Challenge \\"hh3p0advDlgw7LHJLyivodJrrA4UDXSpAg9F | charged 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.5868090Z # \# A7 forged challenge id: 402 {"type":"https://paymentauth.org/problems/invalid-challenge","title":"Invalid Challenge","status":402,"detail":"Challenge \\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.6243767Z # \# A7 three concurrent identical paid requests: 200 200 200 | replay: 200 | money moved 1 | PI posts 3
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.6418536Z # \# A7 spent token on a new order: 503 {"type":"about:blank","title":"Service Unavailable","status":503,"detail":"The payment outcome is being reconciled. Retry this purchase; do not pay again.","ok"
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.6510626Z # Subtest: A7 credential for one order used on another; tampered amount; forged HMAC; replay; double spend
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.6512270Z ok 7 - A7 credential for one order used on another; tampered amount; forged HMAC; replay; double spend
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.6513266Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.6513716Z   duration_ms: 118.202906
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.6514295Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.6514806Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.6883896Z # Subtest: A8 test mode refuses payment before owner approval
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.6885447Z ok 8 - A8 test mode refuses payment before owner approval
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.6886100Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.6886362Z   duration_ms: 36.925153
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.6886982Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.6887334Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7123377Z # \# A9 live order under a test key: 409 {"type":"about:blank","title":"Conflict","status":409,"detail":"Request differs from this purchase","ok":false,"message":"Request differs from this purchase"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7236332Z # Subtest: A9 live order, shop switched to a test key, and back
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7239478Z ok 9 - A9 live order, shop switched to a test key, and back
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7240436Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7240766Z   duration_ms: 33.762183
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7241181Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7241470Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7636990Z # \# A10 first (write failed after charge): 503 {"type":"about:blank","title":"Service Unavailable","status":503,"detail":"The payment outcome is being reconciled. Retry this purchase; do not pay again.","ok" | retry: 200 | retry 2: 200 | money moved 1 | order fulfilled
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7725372Z # Subtest: A10 the payment succeeds at Stripe but the order write fails once: the buyer is delivered, not charged twice
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7728324Z ok 10 - A10 the payment succeeds at Stripe but the order write fails once: the buyer is delivered, not charged twice
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7732836Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7733392Z   duration_ms: 51.245244
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7733906Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7734321Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7925384Z # mppx: internal verification error Error: Stripe PaymentIntent status: processing
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7927375Z #     at Object.verify (file:///home/runner/work/homie/homie/node_modules/mppx/dist/stripe/server/Charge.js:190:23)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7928933Z #     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7930444Z #     at async handler (file:///home/runner/work/homie/homie/node_modules/mppx/dist/server/Mppx.js:845:31)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7932108Z #     at async machineResource (file:///home/runner/work/homie/homie/packages/studio/worker/purchase-machine.mjs:203:16)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7933934Z #     at async Object.purchaseRoutes (file:///home/runner/work/homie/homie/packages/studio/worker/purchase-routes.mjs:146:14)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7935556Z #     at async Module.route (file:///home/runner/work/homie/homie/packages/studio/worker/routes.mjs:74:21)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7937413Z #     at async Object.fetch (file:///home/runner/work/homie/homie/packages/studio/worker/index.mjs:88:24)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7939431Z #     at async TestContext.<anonymous> (file:///home/runner/work/homie/homie/packages/studio/test/paid-parts-review4-machine4.test.mjs:182:15)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7940951Z #     at async Test.run (node:internal/test_runner/test:1054:7)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7942527Z #     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.7944992Z # \# A11 PaymentIntent processing: 503 {"type":"about:blank","title":"Service Unavailable","status":503,"detail":"The payment outcome is being reconciled. Retry this purchase; do not pay again.","ok" | order started | money objects 1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.8036325Z # \# A11 then payment_intent.succeeded webhook: 200 {"ok":true,"did":"purchase-payment"}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.8037594Z #  | same claim, no credential: 200 | order fulfilled
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.8124240Z # Subtest: A11 Stripe answers requires_action or processing
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.8126175Z ok 11 - A11 Stripe answers requires_action or processing
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.8127247Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.8127888Z   duration_ms: 39.72713
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.8128314Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:03.8128661Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.0835437Z # \# A12 50 unpaid POSTs -> 50 purchase_orders rows, 0 meta rows; expiry of machine orders: 50 still started after sync {"ok":true,"expired":0,"cleaned":0}
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.0847337Z # Subtest: A12 unauthenticated requests create order rows before any payment
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.0848970Z ok 12 - A12 unauthenticated requests create order rows before any payment
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.0849716Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.0850280Z   duration_ms: 280.10752
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.0850731Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.0851062Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.1573713Z 1..12
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.1574144Z # tests 12
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.1574503Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.1574857Z # pass 12
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.1575209Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.1575569Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.1576057Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.1576776Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.1577794Z # duration_ms 2538.05506
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.1629996Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.1630949Z FILE_DURATION packages/studio/test/paid-parts-review4-machine4.test.mjs 2.6s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.1632175Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.1632884Z ##[group]packages/studio/test/rules-mcp.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:04.2051846Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1328973Z # Subtest: MCP check refuses a planted rules fault before opening either browser, even with a supplied URL
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1337818Z ok 1 - MCP check refuses a planted rules fault before opening either browser, even with a supplied URL
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1338810Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1343382Z   duration_ms: 1537.30831
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1343873Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1344102Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1522617Z 1..1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1523419Z # tests 1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1524319Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1525025Z # pass 1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1527100Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1528012Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1528787Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1530434Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1531071Z # duration_ms 1959.476025
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1580724Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1581450Z FILE_DURATION packages/studio/test/rules-mcp.test.mjs 2s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1582859Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.1583565Z ##[group]packages/studio/test/parts-agent-purchase.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:06.2019088Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.6889778Z # (node:3290) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.6892350Z # (Use `node --trace-warnings ...` to show where the warning was created)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9003246Z # Subtest: agent discovers, pays through upstream MPP client, receives, verifies, updates, recovers and refunds with only seller and provider reachable
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9011339Z ok 1 - agent discovers, pays through upstream MPP client, receives, verifies, updates, recovers and refunds with only seller and provider reachable
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9012873Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9013546Z   duration_ms: 221.154964
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9014250Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9014871Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9016038Z # Subtest: Link wallet owns spend approval; retry carries its original approval challenge
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9018358Z ok 2 - Link wallet owns spend approval; retry carries its original approval challenge
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9019534Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9020181Z   duration_ms: 0.56747
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9020865Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9021487Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9023257Z # Subtest: crypto clients receive the approved price through their native limits
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9025933Z ok 3 - crypto clients receive the approved price through their native limits
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9027144Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9027459Z   duration_ms: 0.276065
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9027791Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9028023Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9582618Z # Subtest: a stale provider read cannot reopen a canonically refunded purchase
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9584145Z ok 4 - a stale provider read cannot reopen a canonically refunded purchase
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9585005Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9585301Z   duration_ms: 68.163302
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9585631Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9585908Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9985742Z 1..4
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9986226Z # tests 4
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9986912Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9987336Z # pass 4
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9987711Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9988100Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9988753Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9989403Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:07.9989956Z # duration_ms 1810.548217
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:08.0045772Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:08.0046391Z FILE_DURATION packages/studio/test/parts-agent-purchase.test.mjs 1.8s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:08.0049096Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:08.0049505Z ##[group]scripts/changelog.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:08.0468410Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2810991Z # Subtest: this repository passes the check
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2828477Z not ok 1 - this repository passes the check
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2829128Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2829498Z   duration_ms: 54.686571
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2829824Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2830344Z   location: '/home/runner/work/homie/homie/scripts/changelog.test.mjs:48:1'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2831222Z   failureType: 'testCodeFailure'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2831878Z   error: |-
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2832475Z     CHANGELOG.md needs a fix:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2833690Z       - packages/studio/CHANGELOG.md is not the same as CHANGELOG.md: run node scripts/changelog.mjs --sync and commit both
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2834595Z     
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2835046Z     
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2835403Z     1 !== 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2840319Z     
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2840931Z   code: 'ERR_ASSERTION'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2841461Z   name: 'AssertionError'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2841977Z   expected: 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2842401Z   actual: 1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2842870Z   operator: 'strictEqual'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2843368Z   stack: |-
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2844332Z     TestContext.<anonymous> (file:///home/runner/work/homie/homie/scripts/changelog.test.mjs:50:10)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2857329Z     Test.runInAsyncScope (node:async_hooks:214:14)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2858004Z     Test.run (node:internal/test_runner/test:1047:25)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2858685Z     Test.start (node:internal/test_runner/test:944:17)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2859490Z     startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2860136Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2860840Z # Subtest: a version bump with no section fails, and says exactly what to write
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2861835Z ok 2 - a version bump with no section fails, and says exactly what to write
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2862459Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2862801Z   duration_ms: 197.436266
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2863193Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2863511Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2864521Z # Subtest: a Plugin line for another plugin version, a different copy, and a section ahead of the package each fail with the fix
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2866109Z ok 3 - a Plugin line for another plugin version, a different copy, and a section ahead of the package each fail with the fix
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2867258Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2867593Z   duration_ms: 153.94565
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2867994Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2868772Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2869654Z # Subtest: missing release links are advisory so released sections can stay unchanged; wrong links fail
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2871021Z ok 4 - missing release links are advisory so released sections can stay unchanged; wrong links fail
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2898540Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2898926Z   duration_ms: 333.409307
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2899381Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2899783Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2900754Z # Subtest: --notes: a release's notes are the section with the Desktop extension's line; no section, no notes
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2902681Z ok 5 - --notes: a release's notes are the section with the Desktop extension's line; no section, no notes
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2903254Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2903481Z   duration_ms: 113.260712
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2903726Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2904133Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2904975Z # Subtest: an explicitly pending patch can precede unchanged release versions, but cannot hide a bump or missing current section
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2905969Z ok 6 - an explicitly pending patch can precede unchanged release versions, but cannot hide a bump or missing current section
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2906798Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2907191Z   duration_ms: 184.527276
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2907603Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.2907987Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.3067429Z 1..6
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.3067827Z # tests 6
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.3068192Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.3068547Z # pass 5
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.3068891Z # fail 1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.3069440Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.3069979Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.3070500Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.3071124Z # duration_ms 1272.100568
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.3117969Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.3118598Z FILE_DURATION scripts/changelog.test.mjs 1.3s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.3141993Z ##[error]Test file failed.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.3149657Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.3150032Z ##[group]packages/nav/test/rotation.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:09.3536851Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5375036Z # Subtest: z-up is a proper rotation, including avoidance and three helpers
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5384192Z ok 1 - z-up is a proper rotation, including avoidance and three helpers
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5385348Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5385791Z   duration_ms: 926.664822
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5386270Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5386978Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5576276Z 1..1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5577696Z # tests 1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5578564Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5579489Z # pass 1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5581705Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5582502Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5583356Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5585120Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5585694Z # duration_ms 1216.684128
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5632387Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5632947Z FILE_DURATION packages/nav/test/rotation.test.mjs 1.3s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5634863Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.5635415Z ##[group]packages/input/test/package.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:10.6054495Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2050836Z # Subtest: @homie-rocks/input: name, licence, module type, exports map and npm files
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2058616Z ok 1 - @homie-rocks/input: name, licence, module type, exports map and npm files
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2059798Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2060464Z   duration_ms: 1.91732
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2060937Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2061355Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2067041Z # Subtest: @homie-rocks/input: every src module is built, and loads in Node by the package's own name
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2069177Z ok 2 - @homie-rocks/input: every src module is built, and loads in Node by the package's own name
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2070086Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2070631Z   duration_ms: 14.396952
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2071135Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2071555Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2072914Z # Subtest: @homie-rocks/input: every import is declared, internal pins are exact, and tsconfig references them
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2075948Z ok 3 - @homie-rocks/input: every import is declared, internal pins are exact, and tsconfig references them
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2087455Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2089549Z   duration_ms: 35.154521
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2089951Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2090263Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2278893Z 1..3
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2279358Z # tests 3
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2279736Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2280445Z # pass 3
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2281114Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2281905Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2282495Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2283048Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2283676Z # duration_ms 635.150804
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2338287Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2338797Z FILE_DURATION packages/input/test/package.test.mjs 0.7s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2340373Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2341038Z ##[group]packages/studio/test/customer-review.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.2755551Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8332242Z # (node:3567) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8334554Z # (Use `node --trace-warnings ...` to show where the warning was created)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8338049Z # (node:3567) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8361288Z # Subtest: new declarations start now; replay requires both declaration permission and explicit request
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8369462Z ok 1 - new declarations start now; replay requires both declaration permission and explicit request
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8370425Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8376994Z   duration_ms: 32.107161
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8377692Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8378084Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8378725Z # Subtest: event subscriptions avoid unused writes, index type cursors, page work and prune delivered events
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8379579Z ok 2 - event subscriptions avoid unused writes, index type cursors, page work and prune delivered events
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8380065Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8380297Z   duration_ms: 127.568137
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8380546Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8380750Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8944128Z # Subtest: long paid runs renew leases and concurrent retries return the first result exactly once
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8946048Z ok 3 - long paid runs renew leases and concurrent retries return the first result exactly once
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8947306Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8947641Z   duration_ms: 35.99478
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8948045Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8948386Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8950217Z # Subtest: failed paid handlers refund automatically and retries never execute or charge again
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8951601Z ok 4 - failed paid handlers refund automatically and retries never execute or charge again
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8952493Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8953009Z   duration_ms: 25.575135
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8953627Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:11.8954133Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0252329Z # Subtest: unpaid offers expire and indexed pruning preserves current offers and paid snapshots
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0253892Z ok 5 - unpaid offers expire and indexed pruning preserves current offers and paid snapshots
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0254774Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0255195Z   duration_ms: 30.656853
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0255675Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0256039Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0257275Z # Subtest: upgrade removes the old default purchase limiter unless studio settings request it
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0259992Z ok 6 - upgrade removes the old default purchase limiter unless studio settings request it
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0261025Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0276866Z   duration_ms: 4.895541
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0277706Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0278326Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0279517Z # Subtest: config derives current name compatibility previews and observability and removes crons aliases AI stably
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0281329Z ok 7 - config derives current name compatibility previews and observability and removes crons aliases AI stably
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0282790Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0283234Z   duration_ms: 5.142393
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0283681Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0284071Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0285086Z # Subtest: abandoned paid work refunds without rerunning; refund outages recover on the same claim
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0286891Z ok 8 - abandoned paid work refunds without rerunning; refund outages recover on the same claim
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0287801Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0288221Z   duration_ms: 25.602065
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0288693Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0289083Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0290043Z # Subtest: deployment SQL registers new functions before requests without moving existing cursors
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0291809Z ok 9 - deployment SQL registers new functions before requests without moving existing cursors
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0292670Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0293062Z   duration_ms: 32.97985
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0293512Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0293905Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0294838Z # Subtest: quote cleanup tolerates pre-offer and pre-expiry schemas during rolling upgrades
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0296217Z ok 10 - quote cleanup tolerates pre-offer and pre-expiry schemas during rolling upgrades
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0299159Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0299563Z   duration_ms: 26.370129
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0300010Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0300370Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0300982Z # Subtest: event feeds opt in to configuration, retention and retry cron without a handler
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0301675Z ok 11 - event feeds opt in to configuration, retention and retry cron without a handler
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0310666Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0311117Z   duration_ms: 30.717817
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0311424Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0311644Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0493409Z 1..11
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0493861Z # tests 11
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0494254Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0494641Z # pass 11
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0495021Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0495410Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0495853Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0496252Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0496945Z # duration_ms 786.718663
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0548178Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0548936Z FILE_DURATION packages/studio/test/customer-review.test.mjs 0.8s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0550918Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0551755Z ##[group]packages/studio/test/rules-live.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.0968380Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4487775Z # {
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4497801Z #   "toolkit": "0.43.1",
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4499109Z #   "scope": "Direct real core test, not a browser latency trial. Same movement API used by prediction.",
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4500279Z #   "dynamic": {
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4500889Z #     "mode": "dynamic",
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4501566Z #     "x": -0.9010000228881836,
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4502232Z #     "entities": 2,
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4502828Z #     "errors": 0,
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4503404Z #     "ticks": 21
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4503944Z #   },
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4504445Z #   "fixed": {
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4505256Z #     "mode": "static",
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4506238Z #     "x": -0.9010000228881836,
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4507238Z #     "entities": 1,
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4507722Z #     "errors": 0,
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4508177Z #     "ticks": 21
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4508578Z #   },
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4509014Z #   "handler": {
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4509414Z #     "mode": "entity-handler",
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4509739Z #     "x": -0.9010000228881836,
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4510023Z #     "entities": 2,
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4510269Z #     "errors": 0,
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4510500Z #     "ticks": 21
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4510722Z #   },
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4511264Z #   "conclusion": "Declared live cover matches static cover; the view release gate proves prediction."
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4511752Z # }
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4528667Z # Subtest: the studio Stormbreak probe: declared live cover matches static cover and prediction
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4558228Z ok 1 - the studio Stormbreak probe: declared live cover matches static cover and prediction
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4573919Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4574551Z   duration_ms: 72.889777
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4575067Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4575426Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4777310Z # Subtest: collision revisions choose the tick world, support and overlap retain opaque refs; queries pay budget
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4779491Z ok 2 - collision revisions choose the tick world, support and overlap retain opaque refs; queries pay budget
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4782596Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4783311Z   duration_ms: 24.447666
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4783866Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4784774Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4950788Z 1..2
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4951260Z # tests 2
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4951546Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4951963Z # pass 2
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4952869Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4953443Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4954142Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4954888Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.4955486Z # duration_ms 411.009493
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.5005179Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.5005676Z FILE_DURATION packages/studio/test/rules-live.test.mjs 0.4s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.5007694Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.5008229Z ##[group]packages/heightfield/test/collision.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.5435242Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7403251Z # Subtest: a mesh bake samples the outside surface: the top from above, the underside from below
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7412056Z ok 1 - a mesh bake samples the outside surface: the top from above, the underside from below
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7413152Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7413606Z   duration_ms: 4.409484
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7414196Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7414620Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7415969Z # Subtest: a bake knows which mesh it read: a changed mesh, or another cell, is stale with a reason
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7418452Z ok 2 - a bake knows which mesh it read: a changed mesh, or another cell, is stale with a reason
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7427172Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7447187Z   duration_ms: 0.976424
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7467601Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7468186Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7469079Z # Subtest: a bake survives a JSON file, and its overlay lies on the surface at true scale
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7470268Z ok 3 - a bake survives a JSON file, and its overlay lies on the surface at true scale
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7471005Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7471372Z   duration_ms: 4.047667
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7471790Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7472079Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7472680Z # Subtest: authored proxies: a top to stand on, a body that overlaps, a ray that stops
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7473851Z ok 4 - authored proxies: a top to stand on, a body that overlaps, a ray that stops
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7474590Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7474974Z   duration_ms: 0.849046
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7475395Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7475777Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7477140Z # Subtest: a sample bot walks the baked landmark: up the ramp and across the deck, and not off its side or through a crate
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7478806Z ok 5 - a sample bot walks the baked landmark: up the ramp and across the deck, and not off its side or through a crate
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7479725Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7480124Z   duration_ms: 3.984841
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7480502Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7480838Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7640453Z 1..5
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7641345Z # tests 5
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7641718Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7641965Z # pass 5
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7647243Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7647607Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7647865Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7648139Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7648400Z # duration_ms 233.347089
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7690798Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7691411Z FILE_DURATION packages/heightfield/test/collision.test.mjs 0.3s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7693221Z 
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.7693749Z ##[group]scripts/studio-check-perf.test.mjs
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.8102406Z TAP version 13
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.9966212Z # Subtest: fresh studio perf accepts server replicas and browser hosting, with all numbers on both devices
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.9974569Z ok 1 - fresh studio perf accepts server replicas and browser hosting, with all numbers on both devices
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.9975557Z   ---
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.9975984Z   duration_ms: 2.248819
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.9976433Z   type: 'test'
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:12.9977010Z   ...
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0199167Z 1..1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0200051Z # tests 1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0201193Z # suites 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0201943Z # pass 1
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0203741Z # fail 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0204520Z # cancelled 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0205426Z # skipped 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0207564Z # todo 0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0207980Z # duration_ms 222.131166
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0256316Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0257209Z FILE_DURATION scripts/studio-check-perf.test.mjs 0.3s
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0258952Z SHARD_DURATION full-15 347.0s (budget 480s)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0314019Z ##[error]Process completed with exit code 1.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0382446Z ##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0382879Z with:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0383095Z   name: timings-node22-15
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0383341Z   path: ci-results/
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0383577Z   if-no-files-found: warn
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0383818Z   compression-level: 6
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0384047Z   overwrite: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0384274Z   include-hidden-files: false
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0384520Z env:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0384760Z   HOMIE_TEST_FIXTURES: /tmp/homie-studio-fixtures
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0385119Z   STRIPE_MOCK_URL: http://127.0.0.1:12111
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.0385432Z ##[endgroup]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.2116291Z (node:3633) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.2117909Z (Use `node --trace-deprecation ...` to show where the warning was created)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.2175168Z With the provided path, there will be 2 files uploaded
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.2180424Z Artifact name is valid!
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.2181421Z Root directory input is valid!
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.4643919Z Beginning upload of artifact content to blob storage
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.4918789Z (node:3633) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.5333546Z Uploaded bytes 1563
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.5524761Z Finished uploading artifact content to blob storage!
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.5526483Z SHA256 digest of uploaded artifact zip is b143f1ca22aa027843447e978ee88d798d755475773b99310f5a834b241da6c4
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.5527919Z Finalizing artifact upload
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.7690358Z Artifact timings-node22-15.zip successfully finalized. Artifact ID 12035587105
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.7692246Z Artifact timings-node22-15 has been successfully uploaded! Final size is 1563 bytes. Artifact ID is 12035587105
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.7699633Z Artifact download URL: https://github.com/homie-rocks/homie/actions/runs/38875873097/artifacts/12035587105
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.7901021Z Post job cleanup.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.7906393Z ##[start-action display=Run actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830;id=__c65092aa-c4e6-4b2a-91e4-69b40e8cc080.build]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.7909224Z ##[end-action id=__c65092aa-c4e6-4b2a-91e4-69b40e8cc080.build;outcome=skipped;conclusion=skipped;duration_ms=0]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.7911434Z ##[start-action display=Run actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830;id=__c65092aa-c4e6-4b2a-91e4-69b40e8cc080.__actions_cache]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.7913582Z ##[end-action id=__c65092aa-c4e6-4b2a-91e4-69b40e8cc080.__actions_cache;outcome=skipped;conclusion=skipped;duration_ms=0]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.7915896Z ##[start-action display=Run actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830;id=__c65092aa-c4e6-4b2a-91e4-69b40e8cc080.dependencies]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.7918717Z ##[end-action id=__c65092aa-c4e6-4b2a-91e4-69b40e8cc080.dependencies;outcome=skipped;conclusion=skipped;duration_ms=0]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.7921017Z ##[start-action display=Run actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444;id=__c65092aa-c4e6-4b2a-91e4-69b40e8cc080.__actions_setup-node]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.7923447Z ##[end-action id=__c65092aa-c4e6-4b2a-91e4-69b40e8cc080.__actions_setup-node;outcome=skipped;conclusion=skipped;duration_ms=0]
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.7991455Z Post job cleanup.
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.8860623Z [command]/usr/bin/git version
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.8900189Z git version 2.55.0
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.8939716Z Temporarily overriding HOME='/home/runner/work/_temp/0089df56-108b-45ae-9425-94d2ae0e92e6' before making global git config changes
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.8941184Z Adding repository directory to the temporary git global config as a safe directory
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.8946901Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/homie/homie
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.8989572Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.9026894Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.9263834Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.9291748Z http.https://github.com/.extraheader
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.9302679Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.9343762Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.9573995Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:13.9641891Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:14.0032668Z Cleaning up orphan processes
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:14.0352419Z Terminate orphan process: pid (2529) (stripe-mock)
+full / Package shard 15 (Node 22)	UNKNOWN STEP	2026-10-16T08:52:14.0384229Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830, actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
