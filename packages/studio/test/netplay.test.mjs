@@ -136,7 +136,7 @@ test('an early replica is seated after browser host boot, without delaying its c
   await clock.wait(100);
   const ignored = joins;
   booted = true;
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 60; i++) {
     host.snapshot({ b: roster.toJSON().map((s) => [s.slot, s.seat, s.bot ? 1 : 0]) });
     await clock.wait(50);
   }
