@@ -50,6 +50,8 @@ export const HOOK_EVENTS = Object.freeze([
 ]);
 /** The restricted key's permissions, as Stripe's key page names them. Nothing else. */
 export const KEY_PERMISSIONS = Object.freeze([
+  ['Products', 'Read', 'read expanded products on checkout and subscription lines'],
+  ['Prices', 'Read', 'read prices on checkout and subscription lines'],
   ['Checkout Sessions', 'Write', 'open Stripe\'s checkout page for one item'],
   ['Charges', 'Write', 'refunds (Stripe keeps refunds under Charges)'],
   ['PaymentIntents', 'Write', 'verify, create and cancel machine payments as well as read purchase receipts'],
@@ -70,6 +72,11 @@ export const SHOP_HOOK_EVENTS = Object.freeze([
 ]);
 /** The restricted key's permissions, as Stripe's key page names them. Nothing else. */
 export const SHOP_KEY_PERMISSIONS = Object.freeze([
+  ['Subscriptions', 'Read', 'verify current subscription items and paid periods'],
+  ['Invoices', 'Read', 'verify subscription renewal payments'],
+  ['Customer portal', 'Write', 'let shop buyers manage their subscription'],
+  ['Products', 'Read', 'read expanded products on checkout and subscription lines'],
+  ['Prices', 'Read', 'read prices on checkout and subscription lines'],
   ['Checkout Sessions', 'Write', 'open Stripe\'s checkout page for one item'],
   ['Charges', 'Write', 'refunds (Stripe keeps refunds under Charges)'],
   ['PaymentIntents', 'Read', 'which payment an order was'],

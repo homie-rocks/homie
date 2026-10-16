@@ -19,6 +19,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## Unreleased
 
+- **Upgrade notes:** Existing restricted Stripe keys need Products and Prices Read for expanded checkout/subscription lines. Shop-only keys also need Subscriptions Read, Invoices Read and Customer portal Write for renewal verification and subscription management. Update both test and live keys in Stripe before deploying. Expanded objects require their own permissions: https://docs.stripe.com/stripe-apps/reference/permissions.
+
 - Preserve live MCP OAuth and webhook dedupe rows during cleanup by using Unix seconds throughout MCP storage; reclaim idle guests occasionally on guest creation even without a studio cron.
 - Recover verified Stripe intake from D1 after queue failures, renew reconciliation leases, preserve replay API versions, report stuck deliveries, and isolate scheduled maintenance failures. Resume partial queue setup with clear CI token permission guidance.
 
