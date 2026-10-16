@@ -1,3 +1,5 @@
+import {LobbyPeak} from './lobby-peak.mjs';
+import {MatchRouter} from './match-router.mjs';
 import {LOBBY_SHARDS,SHARDED_ROOM_BASE} from './lobby-shards.mjs';
 import {json} from './responses.mjs';
 import {lobbyStore} from './lobby-store.mjs';
@@ -54,6 +56,14 @@ export class Lobby {
     if (this.peak.day !== day) this.peak = { day, players: 0, room: 0 };
     let all = 0;
     for (const r of this.live.values()) all += r.players;
+    if(this.env.LOBBY){
+      const subject=game??this.game??'';if(game)this.game=game;
+      const target=new URL('https://lobby/peak');target.searchParams.set('game',subject);
+      const at=this.peakReportAt=Math.max(now,(this.peakReportAt??0)+1);
+      const body=JSON.stringify({shard:this.shard??0,players:all,room:players,at});
+      this.ctx.waitUntil(this.env.LOBBY.get(this.env.LOBBY.idFromName(subject+'/peak')).fetch(target,{method:'POST',body}).then(r=>{if(!r.ok)throw Error('peak report failed');return r.body?.cancel();}).catch(error=>console.warn('Lobby peak report failed:',error.message)));
+      return;
+    }
     const writes = [];
     if (all > this.peak.players) { this.peak.players = all; writes.push(counter(this.env, { metric: 'peak', subject: game ?? this.game ?? '', n: all, day })); }
     if (players > this.peak.room) { this.peak.room = players; writes.push(counter(this.env, { metric: 'peak-room', subject: game ?? this.game ?? '', n: players, day })); }
@@ -74,6 +84,8 @@ export class Lobby {
 
   /** A request that throws is said with what it was (never its body) and answered as a failure, not left uncaught. */
   async fetch(request) {
+    if(new URL(request.url).pathname==='/peak')return (this.peakStore??=new LobbyPeak(this.ctx,this.env)).fetch(request);
+    if(['/match','/match-policy'].includes(new URL(request.url).pathname))return (this.matchRouter??=new MatchRouter(this.ctx,this.env)).fetch(request);
     if(new URL(request.url).pathname==='/__app_records') {
       const {AppRecordStreams}=await import('./app-streams.mjs');
       this.appStreams??=new AppRecordStreams(this.env,this.ctx);
@@ -106,6 +118,8 @@ export class Lobby {
     }
   }
   async alarm() {
+    if(this.matchRouter)return this.matchRouter.alarm();
+    if((await this.ctx.storage.list?.({prefix:'match:',limit:1}))?.size)return (this.matchRouter??=new MatchRouter(this.ctx,this.env)).alarm();
     this.summaryDue=null;
     const saved=await this.ctx.storage.get('summary-game');
     const game=this.summaryGame??(typeof saved==='string'?saved:saved?.game),shard=this.summaryShard??saved?.shard??0;
@@ -129,6 +143,7 @@ export class Lobby {
   async answer(request) {
     const url = new URL(request.url);
     const now = Date.now();
+    this.shard=Number(url.searchParams.get('shard'))||0;
     this.prune(now);
     // REVISIONS (section 23): rooms are matched within one build of the game. A room that never said its build is
     // the build of a game that names none ('').

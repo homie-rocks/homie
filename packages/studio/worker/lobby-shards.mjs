@@ -21,6 +21,7 @@ export function lobbyFor(env,game,identity='') {
       const key=identity||url.searchParams.get('b')||crypto.randomUUID();
       const shard=lobbyShard(server==='public'?key:server);
       url.searchParams.set('reservation',key.slice(0,128));
+      if(server==='public'){url.pathname='/match';url.searchParams.set('game',game);return env.LOBBY.get(env.LOBBY.idFromName(`${game}/match/${shard}`)).fetch(url.toString(),init);}
       return send(shard,url,init);
     }
     if(url.pathname==='/report') {
@@ -31,7 +32,12 @@ export function lobbyFor(env,game,identity='') {
       const response=await send(shard,url,init);if(!response.ok)throw Error('Lobby shard unavailable');return response.json();
     }));
     if(url.pathname==='/busiest')return Response.json(rows.sort((a,b)=>b.players-a.players||String(a.room).localeCompare(String(b.room)))[0]);
-    if(url.pathname==='/now')return Response.json({players:rows.reduce((n,r)=>n+r.players,0),rooms:rows.reduce((n,r)=>n+r.rooms,0),peak:{players:rows.reduce((n,r)=>n+(r.peak?.players??0),0),room:Math.max(...rows.map(r=>r.peak?.room??0))}});
+    if(url.pathname==='/now'){
+      const target=new URL('https://lobby/peak');target.searchParams.set('game',game);
+      const response=await env.LOBBY.get(env.LOBBY.idFromName(game+'/peak')).fetch(target);
+      if(!response.ok)throw Error('Lobby peak unavailable');
+      return Response.json({players:rows.reduce((n,r)=>n+r.players,0),rooms:rows.reduce((n,r)=>n+r.rooms,0),peak:await response.json()});
+    }
     return Response.json({rooms:[...new Map(rows.flatMap(r=>r.rooms??[]).map(r=>[r.name??r.room,r])).values()].sort((a,b)=>b.players-a.players)});
   }};
 }

@@ -76,13 +76,15 @@ test('chat statistics flush at most once per minute',async()=>{
 import {Lobby} from '../worker/lobby.mjs';
 import {lobbyFor,roomShard,LOBBY_SHARDS} from '../worker/lobby-shards.mjs';
 test('matchmaking distributes rooms and repeated player reservations remain on one seat allocation',async()=>{
- const objects=new Map();const env={LOBBY:{idFromName:x=>x,get(name){if(!objects.has(name)){const values=new Map();objects.set(name,new Lobby({storage:{get:async k=>values.get(k),put:async(k,v)=>values.set(k,v)},blockConcurrencyWhile:fn=>fn(),waitUntil(){}},{}));}return {fetch:(url,init)=>objects.get(name).fetch(new Request(url,init))};}}};
- const assignments=await Promise.all(Array.from({length:96},async(_,i)=>{
+ const objects=new Map(),requests=new Map();const env={LOBBY:{idFromName:x=>x,get(name){if(!objects.has(name)){const values=new Map();objects.set(name,new Lobby({storage:{get:async k=>values.get(k),put:async(k,v)=>values.set(k,v)},blockConcurrencyWhile:fn=>fn(),waitUntil(){}},env));}return {fetch:(url,init)=>{requests.set(name,(requests.get(name)??0)+1);return objects.get(name).fetch(new Request(url,init));}};}}};
+ const assignments=await Promise.all(Array.from({length:2048},async(_,i)=>{
    const lobby=lobbyFor(env,'g','player-'+i),url='https://lobby/join?max=1';
    const [a,b]=await Promise.all([lobby.fetch(url),lobby.fetch(url)]);const x=await a.json(),y=await b.json();assert.equal(x.room,y.room);return x.room;
  }));
- assert.equal(new Set(assignments).size,96);assert.equal(objects.size,LOBBY_SHARDS);
+ assert.equal(new Set(assignments).size,2048);assert.ok(objects.size<=LOBBY_SHARDS*2+1);
  assert.equal(new Set(assignments.map(roomShard)).size,LOBBY_SHARDS);
+ assert.ok(requests.get('g/match-policy')<=80);
+ assert.ok(Math.max(...requests.values())<400,JSON.stringify([...requests]));
 });
 
 import {liveRoomSummaries} from '../worker/lobby-summary.mjs';
@@ -141,4 +143,21 @@ test('relay session rows retain only QA marker from user-agent',t=>{
  const st=storage(t),store=roomSessions(st);store.read();const room=new NetRoom({code:'r'}),url='https://room/?game=g';
  store.write(room,{relayDescriptors:[{url,clients:[['a','a',url,null,'private browser'],['b','b',url,null,'private homie-house-qa browser']]}]});
  const clients=roomSessions(st).read().table.relayDescriptors[0].clients;assert.equal(clients[0][4],null);assert.equal(clients[1][4],'homie-house-qa');
+});
+
+ test('two strangers in every quiet game share the same public matching pool',async()=>{
+ const objects=new Map();const env={LOBBY:{idFromName:x=>x,get(name){if(!objects.has(name)){const values=new Map();objects.set(name,new Lobby({storage:{get:async k=>values.get(k),put:async(k,v)=>values.set(k,v)},blockConcurrencyWhile:fn=>fn(),waitUntil(){}},env));}return {fetch:(url,init)=>objects.get(name).fetch(new Request(url,init))};}}};
+ for(let i=0;i<32;i++){const a=await(await lobbyFor(env,'quiet'+i,'alice'+i).fetch('https://lobby/join?max=8')).json();const b=await(await lobbyFor(env,'quiet'+i,'bob'+i).fetch('https://lobby/join?max=8')).json();assert.equal(a.room,b.room);}
+ });
+
+test('daily peak measures concurrent shard totals, survives restart, and ignores stale reports',async()=>{
+ const values=new Map();const ctx={storage:{get:async k=>values.get(k),put:async(k,v)=>values.set(k,structuredClone(v))},blockConcurrencyWhile:fn=>fn(),waitUntil(){}};
+ let lobby=new Lobby(ctx,{});
+ const report=(shard,players,at)=>lobby.fetch(new Request('https://lobby/peak?game=g',{method:'POST',body:JSON.stringify({shard,players,room:players,at})})).then(r=>r.json());
+ const now=Date.now();assert.equal((await report(0,10,now)).players,10);
+ assert.equal((await report(0,0,now+1)).players,10);
+ assert.equal((await report(1,12,now+2)).players,12,'nonconcurrent peaks are never added');
+ assert.equal((await report(0,5,now+3)).players,17);
+ assert.equal((await report(0,99,now)).players,17,'late reports cannot inflate concurrent totals');
+ lobby=new Lobby(ctx,{});assert.equal((await(await lobby.fetch(new Request('https://lobby/peak?game=g'))).json()).players,17);
 });
