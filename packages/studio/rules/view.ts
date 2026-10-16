@@ -1341,13 +1341,18 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         if (id===mine?.id || u.away || latest?.ents.get(id)?.driver!=='person') continue;
         const limit=kindOf.get(u.kind)!.radius*2.8;
         // Each revision has its own continuous path; placements still cut.
+        // Skip stationary prefixes before spending the movement budget.
         for (let h:OwnerHistory|undefined=q;h;h=h.previous) {
+          let remaining=limit;
           for (let i=1;i<h.samples.length;i++) {
             const a=h.samples[i-1],b=h.samples[i];
             if(b.t<=sceneCursor)continue;
             if(a.t>=sceneCursor+ticks)break;
+            const lo=Math.max(sceneCursor,a.t),hi=Math.min(sceneCursor+ticks,b.t);
             const speed=Math.hypot(b.u.pos.x-a.u.pos.x,b.u.pos.y-a.u.pos.y,b.u.pos.z-a.u.pos.z)/(b.t-a.t);
-            if(speed>0)ticks=Math.min(ticks,limit/speed);
+            const travel=(hi-lo)*speed;
+            if(travel>remaining){ticks=lo-sceneCursor+remaining/speed;break;}
+            remaining-=travel;
           }
         }
       }

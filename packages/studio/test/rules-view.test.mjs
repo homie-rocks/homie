@@ -42,11 +42,16 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-10,-10],max:[10,10]},boxes:[{min:[0,1],max:[1,2]}]}));
       writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';export default defineRules({contract:2,space:{dims:2},move,map:'./map',entities:{runner:{player:true,input:{ax:f.held()},body:{shape:'box',radius:.5,maxSpeed:60,move:'validated-owner'}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:1.6,y:1.2,z:0}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){c.substeps(b,60,()=>{if(i.ax){b.pos={x:1.35,y:.5,z:0};b.grounded=true;}});}});`);
-    } else if (runaway === 'validated-owner' || runaway === 'validated-owner-substeps' || runaway === 'validated-scene') {
+    } else if (runaway === 'validated-owner' || runaway === 'validated-owner-fast' || runaway === 'validated-owner-substeps' || runaway === 'validated-scene') {
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-100,-100],max:[100,100]},boxes:[{min:[-100,1],max:[100,3]}]}));
       writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
 export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{respawn:{},knock:{},point:{}}},entities:{runner:{player:true,input:{ax:f.held()},fields:{score:f.u16({score:true})},motion:{push:f.u8()},body:{shape:'box',radius:.5,maxSpeed:10,move:'validated-owner'},commands:{respawn(w,s){w.place(s,{x:0,y:.5},{vel:{x:0,y:0}});},knock(w,s){s.motion.push=4;},point(w,s){s.score++;}}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:0,y:.5,z:0}};}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:b.motion.push?8:i.ax*4,y:0,z:0};if(b.motion.push)b.motion.push--;c.map.sweep(b,{x:b.vel.x*c.dt,y:0,z:0});}});`);
+      if (runaway === 'validated-owner-fast') {
+        writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-100000,-100],max:[100000,100]},boxes:[{min:[-100000,1],max:[100000,3]}]}));
+        writeFileSync(file,readFileSync(file,'utf8').replace('maxSpeed:10','maxSpeed:60'));
+        const m=join(dir,'src/move.ts');writeFileSync(m,readFileSync(m,'utf8').replace('i.ax*4','i.ax*54'));
+      }
       if (runaway === 'validated-scene') {
         writeFileSync(file,readFileSync(file,'utf8').replace('entities:{runner:',"entities:{monster:{body:{shape:'box',radius:.5,maxSpeed:10}},runner:").replace('room:{bots:',"room:{start(w){w.spawn('monster',{x:0,y:-5,z:0});},bots:"));
         const m=join(dir,'src/move.ts');writeFileSync(m,readFileSync(m,'utf8').replace('defineMove({runner',"defineMove({monster(b,i,c){b.vel={x:4,y:0,z:0};b.pos={x:b.pos.x+4*c.dt,y:-5,z:0};},runner"));
@@ -3042,4 +3047,37 @@ test('late movement after a stationary source cannot rewrite the drawn pose in o
  held=false;let prev=viewer.get(id).pos.x,worst=0;
  for(let i=0;i<180;i++){await clock.wait(16);const x=viewer.get(id).pos.x;worst=Math.max(worst,Math.abs(x-prev));prev=x;}
  t.diagnostic(JSON.stringify({worst}));assert.ok(worst<1.4+1e-6,`late movement jumped ${worst} tiles`);
+});
+
+test('a fast path after a placement skips stationary history without spending future travel',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner-fast');
+ const clock=virtualTime(t);let until=0;
+ const r=rig(L,compiled,{enforceOverrun:true,clock:{now:()=>Date.now(),setTimer:(fn,ms)=>{
+  const run=()=>Date.now()<until?setTimeout(run,until-Date.now()):fn();return setTimeout(run,ms);
+ },clearTimer:h=>clearTimeout(h)}},80,80);
+ const viewer=openRoom({net:{config:cfg('Placement observer'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const owner=openRoom({net:{config:cfg('Moving placed owner'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{viewer.close();owner.close();r.stop();});await clock.wait(1500);owner.input({ax:1});
+ const id=owner.me.id;until=Date.now()+15000;
+ for(let i=0;i<950;i++){if(i===850)owner.input({ax:0});if(i===900)owner.command('respawn');if(i===940)owner.input({ax:1});await clock.wait(16);viewer.get(id);}
+ let prior=viewer.get(id).pos.x,still=0,longest=0;
+ for(let i=0;i<500;i++){
+  await clock.wait(16);const x=viewer.get(id).pos.x;
+  still=Math.abs(x-prior)<1e-8?still+16:0;longest=Math.max(longest,still);prior=x;
+ }
+ t.diagnostic(JSON.stringify({longest}));assert.ok(longest<=700,`observer froze at the placement for ${longest} ms`);
+});
+
+test('a scene drains stationary history before charging newly moving travel',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner-fast');
+ const clock=virtualTime(t),r=rig(L,compiled),viewer=openRoom({net:{config:cfg('Sleeping renderer'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const owner=openRoom({net:{config:cfg('Fast late movement'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{viewer.close();owner.close();r.stop();});await clock.wait(1000);
+ const id=owner.me.id,start=viewer.get(id).pos.x;
+ await clock.wait(5000);owner.input({ax:1});await clock.wait(300);
+ let first=null,prior=start,worst=0;
+ for(let i=0;i<125;i++){await clock.wait(16);const x=viewer.get(id).pos.x;worst=Math.max(worst,Math.abs(x-prior));if(first===null&&x>start+.02)first=(i+1)*16;prior=x;}
+ t.diagnostic(JSON.stringify({first,worst}));
+ assert.ok(first!==null&&first<400,`stationary prefix held the renderer for ${first} ms`);
+ assert.ok(worst<1.4+1e-5,`moving travel exceeded its display bound: ${worst}`);
 });

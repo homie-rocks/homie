@@ -21,6 +21,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ### Fixed
 
+- Shared observer clock catch-up spends its travel budget along actual sampled paths, skipping stationary prefixes before charging later motion.
+
 - Late movement from a previously stationary remote owner observes the same per-frame travel bound as clock catch-up, including snapshot refreshes within one display frame.
 
 - Observer recovery drains long stationary history in proportion to its backlog, while retaining the existing sampled movement bound. A placement queued during a 15-second server pause no longer adds seconds of frozen replay.
