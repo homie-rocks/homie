@@ -159,7 +159,8 @@ export interface Room<R = unknown> extends RayQueries {
   readonly seat: number | null;
   readonly me: Entity | null;
   each(kind: string, fn: (e: Entity) => void): void;
-  get(id: string): Entity | null;
+  /** Read the drawn entity, or latest authority for explicitly ticked lifecycle decisions. */
+  get(id: string, options?: { latest?: boolean }): Entity | null;
   on(name: string, fn: (e: any) => void): () => void;
   readonly shared: Readonly<Record<string, unknown>>;
   input(sample: Record<string, number | boolean>, options?: { at?: number }): void;
@@ -1452,7 +1453,15 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // This interpolated key exists for one read only; caching it retains useless weak entries.
     return Object.freeze({ ...entityOf(t < 1 ? ea : eb), grounded: t >= 1 ? eb.grounded : ea.grounded && (t === 0 || eb.grounded), pos: vec3(blendPosition(ea.pos, eb.pos, t, map.wrap), dims), vel: vec3({ x: lerp(ea.vel.x, eb.vel.x, t), y: lerp(ea.vel.y, eb.vel.y, t), z: lerp(ea.vel.z, eb.vel.z, t) }, dims), heading: h });
   }
-  function get(id: string): Entity | null { const g = ghosts.get(id); return g ? ghostEntity(g) : drawn(id); }
+  function get(id: string, options?: { latest?: boolean }): Entity | null {
+    if (options?.latest) {
+      pump();
+      if (solo) return solo.get(id, options);
+      const u = latest?.ents.get(id);
+      return u ? entityOf(u, id === mine?.id) : null;
+    }
+    const g = ghosts.get(id); return g ? ghostEntity(g) : drawn(id);
+  }
   function each(kind: string, fn: (e: Entity) => void): void {
     pump();
     if (solo) { solo.each(kind, fn); return; }

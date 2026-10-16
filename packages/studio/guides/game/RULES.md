@@ -1514,3 +1514,14 @@ same body and draws on from where it was shown, gliding and routing around solid
 was really placed while the player was away (a respawn, a new round) should still be drawn at once: say so with
 `openRoom({ respawned: (before, after) => after.diedAt !== before.diedAt })`, where `before` and `after` are the own
 body as the server last had it before and after the outage.
+
+
+### Ticked lifecycle presentation
+
+`room.get(id, {latest: true})` reads an immutable entity from the latest received
+server snapshot. Ordinary `get` and `each` remain buffered; `me` remains predicted.
+Use latest fields only for decisions with an explicit simulation timestamp, such
+as a confirmed destruction at a past contact tick. Apply that decision when the
+drawn scene reaches its timestamp. Keep positions on `room.viewTick`; mixing a
+latest position with buffered hazards puts them on different clocks. Latest
+reads do not include provisional entities or advance the drawing clock.

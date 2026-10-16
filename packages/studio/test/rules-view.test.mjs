@@ -3112,3 +3112,20 @@ test('input call time precedes time spent pumping pending room work',async t=>{
  assert.ok(moved>=.015,`four milliseconds at 4 m/s must already belong to the press, got ${moved}`);
  if(descriptor)Object.defineProperty(a.net,'offline',descriptor);
 });
+
+
+test('latest entity reads reveal confirmed lifecycle fields without advancing the buffered scene',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),r=rig(L,compiled),viewer=openRoom({net:{config:cfg('Lifecycle viewer'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const owner=openRoom({net:{config:cfg('Lifecycle owner'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{viewer.close();owner.close();r.stop();});await clock.wait(1000);
+ const sample=viewer.net.sample();viewer.net.sample=()=>sample;
+ const id=owner.me.id,before=viewer.get(id),tick=viewer.viewTick;
+ owner.command('point');owner.input({ax:1});await clock.wait(500);
+ const current=viewer.get(id,{latest:true});
+ assert.equal(current.score,1);assert.ok(current.pos.x>before.pos.x);
+ assert.ok(Object.isFrozen(current));assert.equal(current.provisional,undefined);
+ assert.equal(viewer.get(id).score,0);assert.equal(viewer.get(id).pos.x,before.pos.x);
+ assert.equal(viewer.viewTick,tick,'authority reads must not fast-forward presentation');
+ assert.equal(viewer.get('missing',{latest:true}),null);
+});
