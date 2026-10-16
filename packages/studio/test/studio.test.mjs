@@ -110,7 +110,7 @@ test('deploy: never a Worker, database or bucket this studio did not create; not
   const bin = join(dir, 'node_modules', '.bin');
   mkdirSync(bin, { recursive: true });
   const fake = (script) => { writeFileSync(join(bin, 'wrangler'), `#!/bin/sh\n${script}\n`); chmodSync(join(bin, 'wrangler'), 0o755); };
-  fake('case "$1" in whoami) exit 1;; esac; exit 0');
+  fake(`case "$1" in whoami) echo '{"loggedIn":false}';; esac; exit 0`);
   const signedOut = out(run(['deploy'], dir));
   assert.equal(signedOut.needs, 'cloudflare-login');
   assert.match(signedOut.why, /npx wrangler login/);

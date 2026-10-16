@@ -17,6 +17,23 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [Unreleased]
+
+### Added
+- Studio Worker `useRoutes` hook for custom APIs, well-known files and callbacks, after Homie's matched routes and before Worker asset fallback, with response security headers.
+- Public `isOwner(request, env)` and `hasRole(request, env, app, role)` authorization helpers using existing live session and app access checks.
+- Secret capabilities may use `self` for the runtime studio origin, with origin and redirect restrictions retained.
+
+### Fixed
+- New studios leave directory listing opt-in; existing explicit directory choices are preserved.
+- Deploy and storage sign-in checks retry shared Wrangler OAuth refresh races with bounded backoff and report the original diagnostic, distinguishing authentication from temporary check failures.
+- Room-link listeners immediately receive current state, so wall UIs mounted after welcome do not stay on “Connecting to Homie.”
+- Local dev refuses to serve until migrations and function registration succeed, preserving first-notice delivery on a fresh database.
+
+### Upgrade notes
+- `net.on('link', listener)` now calls the listener synchronously on subscription with `why: 'subscribe'` and `prev === state`, then reports changes as before.
+- Custom routes and authorization examples are in `packages/studio/docs/custom-routes.md` (the installed package uses `docs/custom-routes.md`).
+
 ## [0.55.0] - 2026-10-15
 
 **Plugin 0.55.0**

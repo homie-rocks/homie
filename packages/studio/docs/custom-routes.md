@@ -23,7 +23,10 @@ Homie's matched routes always take precedence, including its office, OAuth,
 MCP, discovery, app and game routes, and their authorization refusals. Use a
 separate namespace such as `/callbacks/provider` for your OAuth callback;
 `/oauth/*` belongs to Homie. Unmatched requests reach your handler before static
-assets. A second `useRoutes` call replaces the handler; `useRoutes(null)` removes
+assets inside the Worker. Cloudflare normally serves existing public static files
+without invoking the Worker. If a custom route must override such a file, put
+`{"assets":{"run_worker_first":true}}` in the studio's `wrangler.custom.json`;
+build/deploy preserves that setting. A second `useRoutes` call replaces the handler; `useRoutes(null)` removes
 it. Register configuration only, never request data, at module scope.
 
 The handler may return a `Response`, `null` or `undefined`. Errors propagate as
