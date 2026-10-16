@@ -1,0 +1,46 @@
+{
+  "at": "2026-10-16T09:30:13.040Z",
+  "platform": "darwin",
+  "arch": "arm64",
+  "chrome": "Chrome/155.0.8059.80",
+  "cpuThrottle": 4,
+  "viewport": "390x844 DPR 1",
+  "load": [
+    5.9775390625,
+    5.45654296875,
+    5.416015625
+  ],
+  "frameMs": {
+    "p50": 16.699999999999932,
+    "p95": 16.700000000000273,
+    "max": 16.800000000000068
+  },
+  "renderCpuMs": {
+    "p50": 0.29999999701976776,
+    "p95": 1,
+    "max": 1.2000000029802322
+  },
+  "triangles": 15338,
+  "drawCalls": 6,
+  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+  "screenshots": [
+    "checklist-phone.png",
+    "terrain-phone.png",
+    "terrain-tv.png"
+  ],
+  "checks": [
+    "duplicate tap blocked",
+    "uncertain revision locked",
+    "text-only labels",
+    "confirm/undo",
+    "irreversible action",
+    "no phone overflow",
+    "keyboard camera",
+    "camera buttons",
+    "two-finger pinch",
+    "idle zero frames",
+    "TV viewport",
+    "dispose",
+    "no page errors"
+  ]
+}

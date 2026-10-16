@@ -1,0 +1,46 @@
+TAP version 13
+# Subtest: parts pack through canonical pipeline, with complete licensed integrity manifests
+ok 1 - parts pack through canonical pipeline, with complete licensed integrity manifests
+  ---
+  duration_ms: 38.868958
+  type: 'test'
+  ...
+# Subtest: checklist rejects duplicate and unclear proposals
+ok 2 - checklist rejects duplicate and unclear proposals
+  ---
+  duration_ms: 0.329333
+  type: 'test'
+  ...
+# Subtest: worker boundary uses origin and role checks before any tool call
+ok 3 - worker boundary uses origin and role checks before any tool call
+  ---
+  duration_ms: 11.481792
+  type: 'test'
+  ...
+# Subtest: heightmap axes, interpolation, clamping and route limits are deterministic
+ok 4 - heightmap axes, interpolation, clamping and route limits are deterministic
+  ---
+  duration_ms: 0.358042
+  type: 'test'
+  ...
+# Subtest: labels avoid collisions and stay clear of controls, excess markers remain accessible
+ok 5 - labels avoid collisions and stay clear of controls, excess markers remain accessible
+  ---
+  duration_ms: 0.570584
+  type: 'test'
+  ...
+# Subtest: quality fallback requires sustained measured slow frames and ignores hidden gaps
+ok 6 - quality fallback requires sustained measured slow frames and ignores hidden gaps
+  ---
+  duration_ms: 0.189583
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 249.328541

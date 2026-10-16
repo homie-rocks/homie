@@ -19,7 +19,17 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [Unreleased]
 
+### Changed
+
+- Shared terrain map: smooth high-resolution coast, lit terrain with cavity shading, animated depth-coloured water and foam, sky/haze, flowing elevated route, collision-aware leader labels, intro camera and measured-frame lite fallback. Owner checklist now distinguishes pending, confirming, done and undone, announces actual consequences, labels irreversible actions and restores fresh pending actions after undo. Phone/desktop/TV evidence is kept in `proof/parts-161/`.
+
+### Added
+
+- Two Apache-2.0 shared building blocks: an owner action checklist with visible consequences, one-tap confirmation, server-authorized undo and existing studio role/origin checks; and a three.js terrain route map with a local heightmap coastline, route tube, markers and phone/TV camera controls. Both include standard part manifests, catalogue entries, AI integration docs, self-contained previews and fast logic checks. No tile service is required.
+
 ### Fixed
+
+- Public checklist proposals now require per-action staff authorization, validate tokens, retain retry keys and use separate expiring undo grants. Terrain heightmaps restrict origins and PNG types and enforce byte/dimension budgets before decoding.
 
 - The MCP Events workerd conformance test now parses SSE frames across HTTP chunks, including combined event/heartbeat frames and split UTF-8. Its former one-chunk-per-event assumption caused the intermittent 0.57.0 publish-gate JSON parse failure; production delivery and webhook formats are unchanged. PR CI adds a path-filtered Events/webhook gate covering protocol, push, durable delivery and signed studio events.
 
