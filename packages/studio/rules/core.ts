@@ -51,7 +51,7 @@ import { argsWhy, type Vocabulary } from '../agents/agents.ts';
 import { BudgetError, G, brand, charge, deepFreeze, plainData } from './guard.ts';
 import { SKIN, castMap, exact, math, rayCircle } from './math.ts';
 import type { Hit } from './math.ts';
-import { AHEAD, ZERO, coerce, coerceFields, dir, est, estFields, initFields, mutable, num, own, packEntity, packFields, packVec, packed, said, thaw, naming, unpackFields, unpackVec, vec3 } from './pack.ts';
+import { OWNER_REPORT_LIMIT, AHEAD, ZERO, coerce, coerceFields, dir, est, estFields, initFields, mutable, num, own, packEntity, packFields, packVec, packed, said, thaw, naming, unpackFields, unpackVec, vec3 } from './pack.ts';
 import { ENTITY_MAX, QUEUE_MAX, REACH_M, SAVE_REVISION, cellsOf } from './rules.ts';
 import type { Compiled, Field, FieldList, KindTable, Vec3 } from './rules.ts';
 
@@ -1135,7 +1135,7 @@ export function createCore(c: Compiled, opts: { latency?: (seat: number) => numb
     }
     const elapsed = Math.max(tick - state.since, Math.floor((opts.ownerTime?.() ?? tick) - state.started));
     const reject = () => { stats.held++; e.r = (e.r+1)&0xffff; owners.delete(e.id); };
-    for (const report of reports.slice(0,256)) {
+    for (const report of reports.slice(0,OWNER_REPORT_LIMIT)) {
       if (report.r !== e.r) continue;
       // A report and its baseline may arrive early after transit improves.
       // Both remain inside the report's existing future window; the elapsed
@@ -1150,7 +1150,7 @@ export function createCore(c: Compiled, opts: { latency?: (seat: number) => numb
         for (const t of state.pending.keys()) if (t <= report.base) state.pending.delete(t);
       }
       if (report.tick <= state.last) continue;
-      if (state.pending.size >= 256) { reject(); return; }
+      if (!state.pending.has(report.tick) && state.pending.size >= OWNER_REPORT_LIMIT) { reject(); return; }
       state.pending.set(report.tick,report);
     }
     // Missing reports wait for redundant delivery. Never infer omitted controls.
@@ -1181,7 +1181,7 @@ export function createCore(c: Compiled, opts: { latency?: (seat: number) => numb
       const pose = deepFreeze({...movementState(e),motion:coerceFields(e.kind.motion,e.m,dims),tick:report.tick});
       acceptedMovement.set(e.id,{r:e.r,steps:Object.freeze([...(path?.steps ?? []),pose])});
     }
-    if (state.pending.size && Math.max(...state.pending.keys())-(state.last ?? 0)>256) reject();
+    if (state.pending.size && Math.max(...state.pending.keys())-(state.last ?? 0)>OWNER_REPORT_LIMIT) reject();
   }
   function reviseMovement(seat: number, at: number, values: Record<string, unknown>): boolean {
     const id=seats.get(seat)?.id, e=id?ents.get(id):null;

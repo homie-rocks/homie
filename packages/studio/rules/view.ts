@@ -53,7 +53,7 @@ import { lab } from '../lab/lab.ts';
 import { exposePort, type PortProbeOptions } from '../port/probe.ts';
 import { BudgetError, brand } from './guard.ts';
 import { math, moveContext } from './math.ts';
-import { coerce, coerceFields, dir, initFields, stepMove, thawFields, unpackEntity, unpackFields, unpackVec, vec3 } from './pack.ts';
+import { OWNER_REPORT_LIMIT, coerce, coerceFields, dir, initFields, stepMove, thawFields, unpackEntity, unpackFields, unpackVec, vec3 } from './pack.ts';
 import type { Unpacked } from './pack.ts';
 import { compileMap } from './rules.ts';
 import type { FieldList, MoveFn, Schema, Vec3 } from './rules.ts';
@@ -658,7 +658,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const claim = kind.owner ? [mine.pos.x, mine.pos.y, mine.pos.z, mine.vel.x, mine.vel.y, mine.vel.z, mine.heading.x, mine.heading.y, mine.heading.z, ...(kind.validatedOwner ? [ownerBaseTick] : [])] : [];
     const sig = kind.validatedOwner ? '' : JSON.stringify([values, claim]);
     if (kind.validatedOwner || sig !== lastSent || press || controlChanges.length) { entries.push({ t, row: [...values, ...claim, -471, ++inputSequence, controlChanges.length, ...controlChanges.flat()] }); pending.push({ seq: inputSequence, t, input: held, ...(numbered ? { pulses: numbered } : {}) }); lastSent = sig; }
-    if (kind.validatedOwner && pending.length>256) pending.splice(0,pending.length-256);
+    if (kind.validatedOwner && pending.length>OWNER_REPORT_LIMIT) pending.splice(0,pending.length-OWNER_REPORT_LIMIT);
     controlChanges = [];
     if (!kind.validatedOwner) {
       history.set(t, copyMine(mine));
@@ -686,7 +686,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // until they return, without allowing an unbounded packet or retained history.
     const missing = sentHistory.find(e => e.t <= (latest?.k ?? 0) && !applications.has(e.row[marker + 1]));
     const recoveryTicks = missing ? t - missing.t + 2 * sendEvery : 0;
-    const historyCap = myKind()?.validatedOwner ? 256 : 64;
+    const historyCap = myKind()?.validatedOwner ? OWNER_REPORT_LIMIT : 64;
     const windowTicks = Math.min(historyCap, Math.max(4, recoveryTicks, Math.ceil((2 * authorityRtt() + 250) / period + targetLead())));
     let kept = 0;
     for (const e of sentHistory) if (e.t >= t - windowTicks) sentHistory[kept++] = e;

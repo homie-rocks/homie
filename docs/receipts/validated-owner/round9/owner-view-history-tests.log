@@ -1,0 +1,84 @@
+TAP version 13
+# (node:11806) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: validated owner keeps its own trajectory with delayed reports: 0 ms
+ok 1 - validated owner keeps its own trajectory with delayed reports: 0 ms
+  ---
+  duration_ms: 407.444541
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 150 ms
+ok 2 - validated owner keeps its own trajectory with delayed reports: 150 ms
+  ---
+  duration_ms: 364.76575
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 300 ms
+ok 3 - validated owner keeps its own trajectory with delayed reports: 300 ms
+  ---
+  duration_ms: 362.881416
+  type: 'test'
+  ...
+# Subtest: validated owner predicts through an outage, keeps score, and resumes without a wait
+ok 4 - validated owner predicts through an outage, keeps score, and resumes without a wait
+  ---
+  duration_ms: 325.085333
+  type: 'test'
+  ...
+# Subtest: validated owner draws a local corner landing without embedding the interpolated box
+ok 5 - validated owner draws a local corner landing without embedding the interpolated box
+  ---
+  duration_ms: 104.622708
+  type: 'test'
+  ...
+# Subtest: validated owner recovers room clock after 3000 ms server stall
+ok 6 - validated owner recovers room clock after 3000 ms server stall
+  ---
+  duration_ms: 207.653584
+  type: 'test'
+  ...
+# Subtest: validated owner recovers room clock after 15000 ms server stall
+ok 7 - validated owner recovers room clock after 15000 ms server stall
+  ---
+  duration_ms: 407.1755
+  type: 'test'
+  ...
+# Subtest: a delayed owner placement starts fresh reports near arrival time without granting travel
+ok 8 - a delayed owner placement starts fresh reports near arrival time without granting travel
+  ---
+  duration_ms: 221.736792
+  type: 'test'
+  ...
+# Subtest: validated owner clock tracks room at 0.99 clock rate
+ok 9 - validated owner clock tracks room at 0.99 clock rate
+  ---
+  duration_ms: 1681.222375
+  type: 'test'
+  ...
+# Subtest: validated owner clock tracks room at 1.01 clock rate
+ok 10 - validated owner clock tracks room at 1.01 clock rate
+  ---
+  duration_ms: 1671.908041
+  type: 'test'
+  ...
+# Subtest: validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame
+ok 11 - validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame
+  ---
+  duration_ms: 113.582125
+  type: 'test'
+  ...
+# Subtest: owner confirmations ignore a sampled scene from before the current placement
+ok 12 - owner confirmations ignore a sampled scene from before the current placement
+  ---
+  duration_ms: 113.172541
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6072.000292

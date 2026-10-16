@@ -25,6 +25,8 @@ import { G, charge, keyCount, own, refusedName } from './guard.ts';
 const RANGE: Record<string, [number, number]> = { pulse: [0, 255], u8: [0, 255], u16: [0, 65535], u32: [0, 4294967295], i8: [-128, 127], i16: [-32768, 32767], i32: [-2147483648, 2147483647], tick: [0, 4294967295], ticks: [0, 4294967295] };
 /** `f.fix`: steps of 1/4096, to plus or minus 2^31 (a tick count with a fraction fits for the life of any room). */
 export const FIX_STEP = 4096;
+/** Bounded owner recovery history; packet bytes and eight validations per tick stay unchanged. */
+export const OWNER_REPORT_LIMIT = 512;
 const FIX_MAX = 2147483648;
 const fr = Math.fround;
 

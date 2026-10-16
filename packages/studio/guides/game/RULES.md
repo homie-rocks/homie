@@ -64,7 +64,7 @@ pose or motion. Other bodies retain normal interpolation.
 
 Reports are ordered, deduplicated and bounded by elapsed server ticks. Missing
 reports wait for redundant delivery; the server never invents missing controls.
-The browser retains up to 256 input ticks for recovery across an outage.
+The browser retains up to 512 input ticks for recovery across an outage.
 An impossible report increments the body's revision: the browser cuts to that
 state. `world.place`, server velocity/motion changes and round starts also cut.
 A transient disconnect/reconnect does not replace an owner’s motion. Scores and other rule decisions remain server-owned. Restores

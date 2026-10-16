@@ -2757,7 +2757,10 @@ for (const stall of [3000,15000]) test(`validated owner recovers room clock afte
  },clearTimer:h=>clearTimeout(h)}});
  const a=openRoom({net:{config:cfg('Stalled owner'),WebSocketImpl:r.socket(),post:null}});
  t.after(()=>{a.close();r.stop();});await clock.wait(1000);a.input({ax:1});await clock.wait(500);
+ const revision=r.host.core.bodies()[0].r;
  until=Date.now()+stall;await clock.wait(stall+2000);
+ assert.equal(r.host.core.stats.held,0,'an honest stalled owner must not be rejected');
+ assert.equal(r.host.core.bodies()[0].r,revision,'recovery must not cut to an old authority pose');
  const start=r.host.core.listeners()[0].pos.x;await clock.wait(1000);
  assert.ok(r.host.core.listeners()[0].pos.x>start+3,'others see movement after recovery');
  a.command('point');await clock.wait(300);assert.equal(a.me.score,1,'score still confirms');

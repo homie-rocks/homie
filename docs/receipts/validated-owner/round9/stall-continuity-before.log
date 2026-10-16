@@ -1,0 +1,40 @@
+TAP version 13
+# (node:11672) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: validated owner recovers room clock after 3000 ms server stall
+ok 1 - validated owner recovers room clock after 3000 ms server stall
+  ---
+  duration_ms: 298.442083
+  type: 'test'
+  ...
+# Subtest: validated owner recovers room clock after 15000 ms server stall
+not ok 2 - validated owner recovers room clock after 15000 ms server stall
+  ---
+  duration_ms: 387.711167
+  type: 'test'
+  location: '/Users/ryan/.homie/worktrees/runner-error-smoothing/packages/studio/test/rules-view.test.mjs:2752:35'
+  failureType: 'testCodeFailure'
+  error: |-
+    recovery must not cut to an old authority pose
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/ryan/.homie/worktrees/runner-error-smoothing/packages/studio/test/rules-view.test.mjs:2763:9)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 1
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 796.835375

@@ -49,7 +49,7 @@ import { AGENT_RULES, useAgents, type Agents, type AgentsSaved, type Vocabulary 
 import { DEFAULT_POLICY, type Netplay, type Peer, type Policy, type Slot } from '../netplay/netplay.ts';
 import { createCore } from './core.ts';
 import type { Core, CoreOut, Driver, SavedCore, StepInput } from './core.ts';
-import { coerce, coerceFields, num, own, fromBytes, initFields, toBytes, unpackVec, unpackFields } from './pack.ts';
+import { OWNER_REPORT_LIMIT, coerce, coerceFields, num, own, fromBytes, initFields, toBytes, unpackVec, unpackFields } from './pack.ts';
 import type { Compiled, KindTable, Vec3 } from './rules.ts';
 
 export interface HostClock {
@@ -455,7 +455,7 @@ export function createHost(o: HostOptions): Host {
 
   /* ---------------------------------------------------------------- frames in */
 
-  const ownerReports = new Map<number, NonNullable<StepInput['reports']>>();
+  const ownerReports = new Map<number, Map<number, NonNullable<StepInput['reports']>[number]>>();
   function onIn(m: Record<string, unknown>): void {
     const seat = m.from;
     if (!Number.isInteger(seat) || m.e !== epoch || !Array.isArray(m.s)) { stats.dropped += 1; return; }
@@ -503,9 +503,9 @@ export function createHost(o: HostOptions): Host {
       const claim = kind.body?.owner && raw.length >= i + 9 ? { pos: unpackVec([raw[i], raw[i + 1], raw[i + 2]], c.dims), vel: unpackVec([raw[i + 3], raw[i + 4], raw[i + 5]], c.dims), heading: unpackVec([raw[i + 6], raw[i + 7], raw[i + 8]], c.dims), r } : null;
       if (kind.body?.validatedOwner) {
         if (!claim || !raw.slice(i,i+10).every(v=>typeof v==='number' && Number.isFinite(v))) continue;
-        const reports = ownerReports.get(seat as number) ?? [];
-        if (reports.length >= 256) { core.resyncOwner(seat as number); ownerReports.delete(seat as number); queues.delete(seat as number); return; }
-        reports.push({...claim,tick:j,base:raw[i+9],values:{...values,...Object.fromEntries(presses.filter(p=>typeof p==='string').map(p=>[p,true]))}});
+        const reports = ownerReports.get(seat as number) ?? new Map();
+        if (!reports.has(j) && reports.size >= OWNER_REPORT_LIMIT) { core.resyncOwner(seat as number); ownerReports.delete(seat as number); queues.delete(seat as number); return; }
+        if (!reports.has(j) || reports.get(j)!.r !== r) reports.set(j,{...claim,tick:j,base:raw[i+9],values:{...values,...Object.fromEntries(presses.filter(p=>typeof p==='string').map(p=>[p,true]))}});
         ownerReports.set(seat as number,reports);
         q.receipts??=[]; if(seq)q.receipts.push([seq,j]); if(q.receipts.length>64)q.receipts.splice(0,q.receipts.length-64);
         q.ack=Math.max(q.ack,j);
@@ -730,7 +730,7 @@ export function createHost(o: HostOptions): Host {
       const body = core.bodyOf(seat);
       if (!body) continue;
       if (body.kind.body?.validatedOwner) {
-        inputs.set(seat,{values:neutral(body.kind),reports:ownerReports.get(seat) ?? []});
+        inputs.set(seat,{values:neutral(body.kind),reports:[...(ownerReports.get(seat)?.values() ?? [])].sort((a,b)=>a.tick-b.tick)});
         ownerReports.delete(seat); continue;
       }
       const presses: (string | [string, number])[] = [];
