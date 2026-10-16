@@ -983,7 +983,7 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
     try { arrived = performance.getEntriesByType('navigation')[0].type; } catch (e) {}
     askedRoom = kept && (arrived === 'reload' || arrived === 'back_forward') && EMBED_ROOM.test(kept.room || '') ? kept.room : null;
   }
-  var lobbyQ = [];
+  var lobbyQ = ['b=' + encodeURIComponent(roomKey)];
   if (state.server) lobbyQ.push('server=' + encodeURIComponent(state.server.id));
   if (/^[A-Za-z0-9_,-]{1,140}$/.test(params.get('not') || '')) lobbyQ.push('not=' + encodeURIComponent(params.get('not')));
   // Once the game has the screen, the chip says the room's facts for a few seconds, then gets out of the way.

@@ -1,6 +1,8 @@
+import {lobbyFor} from './lobby-shards.mjs';
 import {studioTools,directoryOf} from './tool-registry.mjs';
 export {useTools,getStudioTools} from './tool-registry.mjs';
 import {json,finish} from './responses.mjs';
+import {liveRoomSummaries} from './lobby-summary.mjs';
 /** Shared catalogue, assets, and room presentation helpers. */
 import {catalogue,builtPosts} from './catalogue.mjs';
 
@@ -138,11 +140,11 @@ async function roomsOf(env, games, { servers = null } = {}) {
   const live = {};
   // Room chat (section 19): whether each room's chat is on and may show on homie.rocks's page for it.
   const chatRows = await chatRowsOf(env);
-  const summaries=null;
+  const summaries=await liveRoomSummaries(env);
   await Promise.all(games.map(async (g) => {
     let list = [];
     if(summaries)list=summaries.get(g.id)??[];
-    else try { list = (await (await env.LOBBY.get(env.LOBBY.idFromName(g.id)).fetch('https://lobby/rooms')).json()).rooms ?? []; } catch { list = []; }
+    else try { list = (await (await lobbyFor(env,g.id).fetch('https://lobby/rooms')).json()).rooms ?? []; } catch { list = []; }
     const busy = list.filter((r) => (r.players || 0) > 0);
     live[g.id] = busy.reduce((n, r) => n + (r.players || 0), 0);
     const known = busy.some((r) => r.server && r.server !== 'public') ? (servers?.[g.id] ?? await serversOf(env, g).catch(() => [])) : [];
@@ -428,7 +430,7 @@ async function weekOf(env, game) {
   const w = await playedThisWeek(env, game);
   if (!w) return null;
   let peak = 0;
-  try { peak = (await (await env.LOBBY.get(env.LOBBY.idFromName(game)).fetch('https://lobby/now')).json()).peak?.players ?? 0; } catch { peak = 0; }
+  try { peak = (await (await lobbyFor(env,game).fetch('https://lobby/now')).json()).peak?.players ?? 0; } catch { peak = 0; }
   return { plays: w.plays, rounds: w.rounds, ...(peak ? { peak } : {}) };
 }
 

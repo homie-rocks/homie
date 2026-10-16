@@ -1,3 +1,4 @@
+import {lobbyFor} from './lobby-shards.mjs';
 import {signControl,settingsOf,launchOf,seatsFor} from './office.mjs';
 import {appAccess} from './app-records.mjs';
 import {withToolIdentity} from './tool-identity.mjs';
@@ -23,7 +24,7 @@ export async function remoteSeat(env,cat,caller,op,args) {
   if(refusal)throw new Error(refusal.message);
   let room=args.room;
   if(!room&&op==='sit'){
-    const joined=await env.LOBBY.get(env.LOBBY.idFromName(meta.id)).fetch(`https://lobby/join?max=${max}&server=${serverId}&agent=1&ai=${policy.aiSeats+policy.guides}`,{method:'POST'});room=(await joined.json()).room;
+    const joined=await lobbyFor(env,meta.id).fetch(`https://lobby/join?max=${max}&server=${serverId}&agent=1&ai=${policy.aiSeats+policy.guides}`,{method:'POST'});room=(await joined.json()).room;
   }
   if(!/^[A-Za-z0-9_-]{1,32}$/.test(room??''))throw new Error('No room with people; an AI never starts a room');
   const ctl=await signControl(env,{op:'mcp-seat',game:meta.id,room,args:{...args,operation:op,connection:caller.connection,person:caller.id,name:caller.name??'Studio AI'}});

@@ -17,6 +17,16 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## Unreleased
+
+- Renew relay sequence epochs whenever a Gate opens a link, probe the room after a missed round start, refill quiet games across all matching pools, and coalesce peak increases without writing unchanged room reports.
+
+- Recover Gate relay transport failures with ordered backoff and bounded output queues; remove dead sessions so players can reconnect. Keep idle heartbeats at the edge through long breaks, exclude transport telemetry from session writes, and retain only QA markers from relay user agents. Match quiet public games in one pool, spread bursts through leased shard routing, and calculate daily peaks from concurrent shard totals.
+
+- Close failed room restores, detect unanswered clock pings, preserve live Gate multiplexing, bound crowd session storage, and avoid unchanged idle writes. Restore watcher rate limits without replay, shard matchmaking, and paginate aggregated room summaries.
+- Add an opt-in rules-host round-idle contract: finish both scoring-settlement ticks, persist the next-round deadline, and resume without simulating idle time.
+- Store Lobby rooms as SQLite rows and deliver room summaries through Queues. Hibernate player and watch sockets, including Gates and server-rule rooms, between settled rounds. Retain logical sessions and moderation state, detach idle relay streams, and restore complete world headers without repeating admission.
+
 ## [0.55.0] - 2026-10-15
 
 **Plugin 0.55.0**

@@ -23,6 +23,9 @@ export class Gate {
     this.ready=ctx.blockConcurrencyWhile(async()=>{this.gate=new (await import('./gate.mjs')).Gate(ctx,env);});
   }
   async fetch(request) {await this.ready;return this.gate.fetch(request);}
+  async webSocketMessage(...args) {await this.ready;return this.gate.webSocketMessage(...args);}
+  async webSocketClose(...args) {await this.ready;return this.gate.webSocketClose(...args);}
+  async webSocketError(...args) {await this.ready;return this.gate.webSocketError(...args);}
 }
 export class Concentrator extends Gate {}
 

@@ -542,17 +542,19 @@ async function soundSession(base, game, out, seconds, gameJson) {
   } finally { await close(h); }
 }
 
-/** A round with one person playing hard (a computer) and one doing nothing (a phone), both strangers in the public room. */
+/** A round with one person playing hard (a computer) and one doing nothing (a phone), in the same public room. */
 async function playSession(base, game, out, roundSeconds, gameJson) {
   const profile = actionProfile(gameJson, 'desk');
   const actions = newActions(profile);
   const active = await launch('desk', `${base}/${game}/play`);
-  const idle = await launch('phone', `${base}/${game}/play`);
+  let idle;
   try {
     const seat = async (h) => { const until = Date.now() + 45_000; while (Date.now() < until) { const s = await shell(h); if (s?.room && s.seat !== null && s.seat !== undefined && s.role) return s; await sleep(300); } return null; };
-    const [sa, si] = await Promise.all([seat(active), seat(idle)]);
+    const sa = await seat(active);
+    idle = await launch('phone', `${base}/${game}/play${sa?.room ? `?room=${encodeURIComponent(sa.room)}` : ''}`);
+    const si = await seat(idle);
     if (!sa || !si) { row('play', 'FAIL', { why: 'a browser never got a seat in 45 s' }); return; }
-    if (sa.room !== si.room) { row('play', 'FAIL', { why: `the two browsers landed in different rooms (${sa.room}, ${si.room}): two strangers who press Play must meet` }); return; }
+    if (sa.room !== si.room) { row('play', 'FAIL', { why: `the two browsers landed in different rooms (${sa.room}, ${si.room}): the invitation must join the same room` }); return; }
     const since = Date.now();
     // Only a round that STARTS after both are seated counts: a newcomer takes a bot's place mid-round and inherits
     // its body and score, so the round already running says nothing about how these two played.
@@ -597,7 +599,7 @@ async function playSession(base, game, out, roundSeconds, gameJson) {
       results: rowsR.map((x) => ({ place: x.place, score: x.score, bot: x.bot, who: x.seat === sa.seat ? 'the active player' : x.seat === si.seat ? 'the idle player' : x.bot ? 'a bot' : 'another person' })),
       scoreSamples: scores.filter((_, k) => k % 5 === 0).slice(0, 40), shot: 'play-round-over.png',
     });
-  } finally { await close(active); await close(idle); }
+  } finally { await close(active); if (idle) await close(idle); }
 }
 
 /** The studio's own checks, run as the creator would: the owner tests (port check) and the two-stranger round. */
