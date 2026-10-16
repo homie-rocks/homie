@@ -67,14 +67,14 @@ export function wranglerBin(root) {
 export function runner(root, env) {
   const bin = wranglerBin(root);
   if (!bin) throw new Error('Wrangler is not installed in this studio yet: run `npm install` in the studio folder first');
-  return (args, { cwd = workerDir(root), input } = {}) => {
+  return (args, { cwd = workerDir(root), input, timeout = 10 * 60_000 } = {}) => {
     const dev = join(workerDir(root), '.wrangler', 'homie-dev.wrangler.json');
     if (args.includes('--local') && !args.includes('--config') && existsSync(dev)) args = [...args, '--config', dev, '--persist-to', join(workerDir(root), '.wrangler', 'state')];
     const res = spawnSync(bin, args, {
       cwd, env: { ...process.env, ...env, WRANGLER_SEND_METRICS: 'false', CI: '1' }, encoding: 'utf8',
-      input, maxBuffer: 64 * 1024 * 1024, timeout: 10 * 60_000,
+      input, maxBuffer: 64 * 1024 * 1024, timeout,
     });
-    const out = `${res.stdout ?? ''}${res.stderr ?? ''}`.replace(ANSI, '');
+    const out = `${res.stdout ?? ''}${res.stderr ?? ''}${res.error ? '\n' + res.error.message : ''}`.replace(ANSI, '');
     return { code: res.status ?? 1, out, stdout: (res.stdout ?? '').replace(ANSI, '') };
   };
 }
@@ -85,7 +85,7 @@ export function checkWranglerLogin(root, env = {}, {run = null, sleep = ms => At
   let res, data;
   for (let attempt = 0; attempt < 4; attempt++) {
     if (attempt) sleep([200, 600, 1400][attempt - 1] + Math.floor(Math.random() * 100));
-    res = w(['whoami', '--json'], {cwd: root});
+    res = w(['whoami', '--json'], {cwd: root, timeout: 25_000});
     try { data = JSON.parse(res.stdout ?? ''); } catch { data = null; }
     if (res.code === 0 && data?.loggedIn === true) return {ok:true, who:{accounts:(data.accounts ?? []).map(a => ({id:a.id,name:a.name})),authType:data.authType}};
   }
@@ -279,7 +279,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   const login = checkWranglerLogin(root);
   const who = login.who;
   if (!login.ok) {
-    if (cf.auth === 'stripe-projects') {
+    if (cf.auth === 'stripe-projects' && login.needs === 'cloudflare-login') {
       return { ok: false, command: 'deploy', needs: 'cloudflare-login', why: login.why + '\nWrangler did not accept the Cloudflare token Stripe Projects keeps for this studio (studio.json "auth": "stripe-projects"). Run `stripe projects env --pull` in the studio folder (it rewrites the git-ignored .env from Projects\' vault), then `npm run deploy` again; or sign in the usual way (`npx wrangler login`) and remove "auth" from studio.json.' };
     }
     return { ...login, command: 'deploy' };

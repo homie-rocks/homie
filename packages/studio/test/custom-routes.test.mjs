@@ -39,3 +39,16 @@ test('role helper uses declared roles and refuses missing grants and unknown rol
   assert.equal(await toolkit.hasRole(request('/custom'),bindings,'desk','missing'),false);
   assert.equal(await toolkit.hasRole(request('/custom'),bindings,'missing','visitor'),false);
 });
+test('custom routes preserve streams, redirects, fallthrough and reject invalid returns',async t=>{
+  t.after(()=>toolkit.useRoutes(null));
+  toolkit.useRoutes(()=>Response.redirect('https://studio.example/done',302));
+  const redirect=await toolkit.default.fetch(request('/callback'),env(),{});
+  assert.equal(redirect.status,302);assert.equal(redirect.headers.get('location'),'https://studio.example/done');
+  assert.equal(redirect.headers.get('x-content-type-options'),'nosniff');
+  toolkit.useRoutes(()=>new Response(new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode('streamed'));controller.close();}})));
+  assert.equal(await (await toolkit.default.fetch(request('/stream'),env(),{})).text(),'streamed');
+  toolkit.useRoutes(()=>false);
+  await assert.rejects(toolkit.default.fetch(request('/invalid'),env(),{}),/must return a Response/);
+  toolkit.useRoutes(()=>{throw Error('callback failed');});
+  await assert.rejects(toolkit.default.fetch(request('/throws'),env(),{}),/callback failed/);
+});
