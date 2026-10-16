@@ -17,6 +17,12 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [Unreleased]
+
+### Fixed
+
+- The MCP Events workerd conformance test now parses SSE frames across HTTP chunks, including combined event/heartbeat frames and split UTF-8. Its former one-chunk-per-event assumption caused the intermittent 0.57.0 publish-gate JSON parse failure; production delivery and webhook formats are unchanged. PR CI adds a path-filtered Events/webhook gate covering protocol, push, durable delivery and signed studio events.
+
 ## [0.57.0] - 2026-10-16
 
 **Plugin 0.57.0**
