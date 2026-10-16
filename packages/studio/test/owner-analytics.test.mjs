@@ -55,3 +55,12 @@ test('owner sees a failed rollup and previously stored totals remain available',
  const result=await readStats(env,{games:[]},{range:{from:'2026-10-15',to:'2026-10-15',days:1}});
  assert.match(result.note,/delayed.*query unavailable/i);
 });
+
+import {wranglerConfig} from '../lib/scaffold.mjs';
+test('analytics bindings and hourly cron are only installed when enabled',()=>{
+ const config=analytics=>JSON.parse(wranglerConfig({worker:'stats',name:'Stats',d1:'stats',analytics}).replace(/^\s*\/\/.*$/gm,''));
+ assert.deepEqual(config(false).triggers.crons,[]);assert.equal(config(false).analytics,undefined);
+ const enabled=config(true);assert.deepEqual(enabled.triggers.crons,['17 * * * *']);
+ assert.equal(enabled.analytics_engine_datasets[0].dataset,enabled.vars.STUDIO_ANALYTICS_DATASET);
+ assert.equal(enabled.analytics.binding,'ANALYTICS_SQL');
+});
