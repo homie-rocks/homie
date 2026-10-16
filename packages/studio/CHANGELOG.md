@@ -19,9 +19,15 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## Unreleased
 
+- Stop queued Stripe reconciliation database operations and provider calls after lease renewal fails or the lease expires, leaving the event pending for retry.
+
+- **Upgrade notes:** Existing restricted Stripe keys need Products and Prices Read for expanded checkout/subscription lines. Shop-only keys also need Subscriptions Read, Invoices Read and Customer portal Write for renewal verification and subscription management. Update both test and live keys in Stripe before deploying. Expanded objects require their own permissions: https://docs.stripe.com/stripe-apps/reference/permissions.
+
 - Preserve live MCP OAuth and webhook dedupe rows during cleanup by using Unix seconds throughout MCP storage; reclaim idle guests occasionally on guest creation even without a studio cron.
+- Recover verified Stripe intake from D1 after queue failures, renew reconciliation leases, preserve replay API versions, report stuck deliveries, and isolate scheduled maintenance failures. Resume partial queue setup with clear CI token permission guidance.
 
 - Deploy with D1 primary fallback when replication is unavailable; only install needed schedules, explain account cron limits, and preserve retired-source, HEAD and concept-page protections.
+- Deliver mutations and verified Stripe webhooks through retryable Queues. Store PaymentIntent ids before follow-up, recover lost responses using the original idempotency key, and retain uncertain payments for review.
 
 - Batch cold metadata, use causally consistent D1 sessions, bake catalogues, route public assets first, isolate subscription objects and load rendering modules at their entry points. Index MCP expiry and deliver catalogue notifications in background work.
 

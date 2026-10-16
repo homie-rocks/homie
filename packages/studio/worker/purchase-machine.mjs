@@ -1,7 +1,7 @@
 import { definitiveRefusal, blockingJobsSQL } from './payment-policy.mjs';
 import { orderFact, offerVersion, orderState } from './purchase-core.mjs';
 import { problem } from './purchase-problem.mjs';
-import { saveRecording, recordProviderResult, recordingFailure, reconcileRecordings } from './payment-recovery.mjs';
+import { saveRecording, recordProviderId, recordProviderResult, recordingFailure, reconcileRecordings } from './payment-recovery.mjs';
 import { machineCapabilities, notePaymentRefusal } from './payment-capabilities.mjs';
 import { purchaseResponse } from './purchase-response.mjs';
 /** One durable purchase, regardless of transport. No seller browser page is involved. */
@@ -262,12 +262,14 @@ function recordingClient(env, o, providerClient) {
   client.paymentIntents = Object.create(providerClient.paymentIntents);
   client.paymentIntents.create = async (params, options) => {
     params = { ...params, metadata: { ...params.metadata, homie: "purchase-v1", order: o.id } };
-    const id = await saveRecording(env, o, params, options);
+    const id = await saveRecording(env, o, params, { ...options, version: options?.apiVersion ?? providerClient.getApiField?.('version') });
     try {
       const saved = await env.DB.prepare('SELECT state,payload FROM purchase_jobs WHERE id = ?1').bind(id).first();
       if (saved.state === 'manual_review') throw new Error('Stripe recording was refused; the seller must handle any refund manually.');
       const original = JSON.parse(saved.payload);
-      let pi = await create(original.params, original.options);
+      const {version,...originalOptions}=original.options;
+      let pi = await create(original.params, { ...originalOptions, apiVersion: version });
+      await recordProviderId(env,o,id,pi);
       if (pi.status === 'processing') pi = await providerClient.paymentIntents.retrieve(pi.id);
       if (pi.status === 'requires_action') pi = await providerClient.paymentIntents.cancel(pi.id);
       await recordProviderResult(env, o, id, pi);

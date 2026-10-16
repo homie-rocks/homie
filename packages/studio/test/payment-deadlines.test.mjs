@@ -14,8 +14,8 @@ test('old unresolved submissions stop before the provider idempotency window can
   s.w.sql.prepare('UPDATE purchase_jobs SET payload = ? WHERE id = ?').run(JSON.stringify(payload),id);
   const before=s.w.st.reqs.length;
   await reconcileRecordings(s.w.env);await reconcileRecordings(s.w.env);
-  assert.ok(s.w.st.reqs.slice(before).every((r) => r.method === 'GET'));assert.equal(jobs(s.w)[0].state,'failed');
-  assert.equal((await s.post(s.body())).status,402);
+  assert.ok(s.w.st.reqs.slice(before).every((r) => r.method === 'GET'));assert.equal(jobs(s.w)[0].state,'manual_review');
+  assert.ok(orders(s.w).some(order=>order.id===o.id),'uncertain payment cannot discard its order');
  }finally{s.K.restore();await s.w.close();}
 });
 test('unrecorded Base payment has one job and a verified manual refund completion path',async()=>{

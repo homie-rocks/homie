@@ -32,12 +32,14 @@ import { testPaymentExchange } from '../payment-test-exchange.mjs';
 useSelling({ enabled: true, customerTools, paidTool, productDescription, entryDescription, discoveryRoutes, officeScript, officeRoutes, refundOrder, extendOffice, testPaymentExchange, jobsSQL, manualRefundDetails, confirmManualRefund, listOffers, orderFact, resourceOrder, currentPurchaseOrder, purchasePaymentEvent, refundPurchasePayment, purchaseReadiness, purchaseRoutes, recordOrderState, authorizePurchaseTest, expirePurchaseCheckouts, reissuePurchaseClaim, retireResource, reconcileRecordings, machineCapabilities, paidFile, priceWords, purchaseDiscovery });
 export default { ...worker,
   async scheduled(controller, env, ctx) {
-    await worker.scheduled(controller, env, ctx);
-    if(env.DB)await pruneOffers(env);
-    if (!env.PURCHASE_MACHINE_PAYMENTS || !env.DB) return;
-    const { refreshMachineCapabilities } = await import('../payment-capabilities.mjs');
     const errors = [];
-    for (const step of [reconcileRecordings, refreshMachineCapabilities, expirePurchaseCheckouts]) {
+    const steps = [() => worker.scheduled(controller, env, ctx)];
+    if(env.DB)steps.push(pruneOffers);
+    if(env.PURCHASE_MACHINE_PAYMENTS && env.DB) {
+      const { refreshMachineCapabilities } = await import('../payment-capabilities.mjs');
+      steps.push(reconcileRecordings, refreshMachineCapabilities, expirePurchaseCheckouts);
+    }
+    for (const step of steps) {
       try { await step(env); } catch (error) { errors.push(error); }
     }
     if (errors.length) throw new AggregateError(errors, 'Selling maintenance needs retry');
