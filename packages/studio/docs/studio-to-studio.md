@@ -78,12 +78,53 @@ Assertions have short expiry, `kid`, and a one-use `jti` checked atomically in D
 The receiver accepts Ed25519/EdDSA keys. Five-minute opaque access tokens are hashed
 in D1. Browser OAuth continues using the existing provider.
 
-JWKS cache lifetime is five minutes. An unknown `kid` refreshes the cache, with a
-one-second refresh throttle. Rotate by generating a new Ed25519 private JWK and
-unique `kid` directly into Worker secrets, retaining the prior **public** JWK in
-`STUDIO_PREVIOUS_PUBLIC_KEYS` (JSON array) for at least ten minutes. Deploy the two
-bindings together; never expose private material to the model. Remove the old
-public key after the overlap. Deny the origin immediately if compromised.
+JWKS cache lifetime is five minutes. Failed fetches are cached for 60 seconds;
+unknown `kid` refreshes are limited to once per origin per 60 seconds, including
+concurrent requests. Token and studio-hook requests share a mandatory limit of
+60 requests per IP per minute before key discovery. Throttled requests return
+429 with `Retry-After: 60`. Authentication failures return the same generic 401;
+only the owner-visible audit log records the failed stage.
+
+### Manual key rotation
+
+Rotation is manual today. From the studio's `site/` directory (the directory with
+its deployed `wrangler.jsonc`), run the following with the deployed origin in
+`STUDIO_ORIGIN`. These commands fetch only public keys; the new private key stays
+in the Node process and Wrangler stdin. Do not enable shell tracing or print the
+bulk input. Use the same Wrangler environment/account as the existing deployment.
+
+```sh
+export STUDIO_ORIGIN=https://your-studio.example
+node --input-type=module <<'NODE' | npx wrangler secret bulk
+import {generateKeyPairSync, randomUUID} from 'node:crypto';
+const response = await fetch(new URL('/.well-known/jwks.json', process.env.STUDIO_ORIGIN), {redirect:'error'});
+if (!response.ok) throw new Error('Cannot read existing public keys; rotation aborted');
+const jwks = await response.json();
+if (!Array.isArray(jwks.keys) || !jwks.keys.length || jwks.keys.length > 7 ||
+    jwks.keys.some(k => !k || k.d || k.kty !== 'OKP' || k.crv !== 'Ed25519' || !k.x || !k.kid))
+  throw new Error('Invalid or too many retained public keys; rotation aborted');
+const previous = jwks.keys.map(({kty,crv,x,kid}) => ({kty,crv,x,kid,alg:'EdDSA',use:'sig'}));
+const {privateKey} = generateKeyPairSync('ed25519');
+const next = {...privateKey.export({format:'jwk'}), kid:randomUUID()};
+process.stdout.write(JSON.stringify({
+  STUDIO_PREVIOUS_PUBLIC_KEYS: JSON.stringify(previous),
+  STUDIO_SIGNING_KEY: JSON.stringify(next)
+}));
+NODE
+```
+
+1. Confirm Wrangler reports that **both** secrets were updated. If the command
+   fails, inspect the public JWKS and Wrangler deployment status before retrying.
+2. Check `curl --fail "$STUDIO_ORIGIN/.well-known/jwks.json"`: it must publish the
+   new `kid` and the previous public keys, with no `d` field. Peer caches may take
+   up to 60 seconds to refresh for the new `kid`; retry failed operations with
+   their original stable business/event IDs.
+3. Retain the old public keys for at least ten minutes after successful rotation.
+   Then, provided no other rotation is still in its overlap period, remove them:
+   `printf '%s' '[]' | npx wrangler secret put STUDIO_PREVIOUS_PUBLIC_KEYS`.
+4. Check the public JWKS again: only the new public key should remain. Existing
+   signing keys survive future normal deploys. Deny the origin immediately if a
+   key is compromised; rotation overlap is not emergency revocation.
 
 ```ts
 ctx.caller.studio // {origin:'https://concierge.example', verified:true,
@@ -168,7 +209,9 @@ await ctx.studios.send('https://venue.example', 'arrival', {
 });
 ```
 
-The receiver verifies Standard Webhooks `id.timestamp.body` signatures with Web Crypto Ed25519, including a five-minute timestamp window. Both studio event envelopes and business-feed data are limited to **8,192 UTF-8 bytes**; oversized events return a clear 413 error. `webhook-key-id` selects the origin JWKS key; `webhook-origin` must match the configured sender and signed body. IDs are 1–128 letters,
+The JavaScript `standardwebhooks` package currently supports HMAC `v1` only, so
+studio `v1a` uses Web Crypto directly, with fixed cryptographic and spec-framing
+regression vectors. The receiver verifies Standard Webhooks `id.timestamp.body` signatures with Web Crypto Ed25519, including a five-minute timestamp window. Both studio event envelopes and business-feed data are limited to **8,192 UTF-8 bytes**; oversized events return a clear 413 error. `webhook-key-id` selects the origin JWKS key; `webhook-origin` must match the configured sender and signed body. IDs are 1–128 letters,
 digits, underscores or hyphens. A receipt is committed atomically with the event
 using existing business-event publication. Identical retries return 204 without
 running the function again; a signed changed payload under the same ID returns

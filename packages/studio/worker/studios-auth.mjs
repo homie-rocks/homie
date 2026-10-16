@@ -1,5 +1,5 @@
 import {decode,originKey,verifyBytes} from './studios-keys.mjs';
-import {oauthStorage} from './mcp-store.mjs';
+import {oauthStorage,audit} from './mcp-store.mjs';
 import {studioOrigin} from './studios-client.mjs';
 const hash=async text=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))),b=>b.toString(16).padStart(2,'0')).join('');
 const json=(data,status=200)=>Response.json(data,{status,headers:{'cache-control':'no-store','pragma':'no-cache',...(status===401?{'www-authenticate':'Bearer'}:{})}});
@@ -50,7 +50,10 @@ export async function studioToken(request,env,cat,options={}) {
   if(!await verifyBytes(key,parts[2],parts.slice(0,2).join('.')))throw Error();
   stage='replay';
   const used=await env.DB.prepare('INSERT OR IGNORE INTO mcp_kv(key,value,expires) VALUES(?1,?2,?3) RETURNING key').bind('studio-jti:'+await hash(JSON.stringify([origin,claims.jti])),'1',claims.exp).first();if(!used)throw Error();
- }catch{return json({error:'invalid_client',error_description:'Studio authentication failed at '+stage},401);}
+ }catch{
+  await audit(env,{client:typeof origin==='string'?origin.slice(0,2048):null},'studio-auth','denied:'+stage);
+  return json({error:'invalid_client',error_description:'Studio authentication failed'},401);
+ }
  const token='homie_studio_'+Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');
  const record={origin,resource:receiver+'/mcp',expires:Math.floor(Date.now()/1000)+300};
  await oauthStorage(env.DB).put('studio-token:'+await hash(token),JSON.stringify(record),{expiration:record.expires});

@@ -39,6 +39,10 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
   if(!env.DB)return json({error:'studio database required'},503);
   if(request.headers.has('origin') && request.headers.get('origin')!==origin)return json({error:'origin refused'},403);
   if(path==='/.well-known/jwks.json')return Response.json((await import('./studios-keys.mjs')).publicKeys(env),{headers:{'cache-control':'public, max-age=60'}});
+  if(path==='/oauth/token'||path.startsWith('/hooks/studios/')) {
+    if(!await rateLimit(env,'studio-ingress:'+(request.headers.get('cf-connecting-ip')??'local'),60))
+      return Response.json({error:'rate_limit_exceeded'},{status:429,headers:{'retry-after':'60','cache-control':'no-store'}});
+  }
   if(path.startsWith('/hooks/studios/')) {
     const cat=await catalogueOf();
     const response=await (await import('./studios-events.mjs')).receiveStudioEvent(request,env,cat);

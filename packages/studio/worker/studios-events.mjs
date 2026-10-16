@@ -24,7 +24,7 @@ export async function receiveStudioEvent(request,env,cat,options={}) {
  if(request.method!=='POST')return new Response(null,{status:405});
  const id=new URL(request.url).pathname.slice('/hooks/studios/'.length),entries=cat.studio?.mcp?.studios?.inbound??{};
  const configured=Object.hasOwn(entries,id)?entries[id]:null;
- let origin,rule;try{origin=studioOrigin(configured?.origin,{allowPrivate:configured?.allowPrivate===true});rule=await studioPolicy(env,cat,origin);}catch{}
+ let origin,rule;try{origin=studioOrigin(configured?.origin,{allowPrivate:configured?.allowPrivate===true});if(configured.enabled!==false&&await studioPolicy(env,cat,origin))rule=configured;}catch{}
  if(!rule)return new Response(null,{status:403});
  let body;try{body=await boundedBody(request,BUSINESS_EVENT_MAX_BYTES);}catch{return new Response('Studio event exceeds 8192 bytes',{status:413});}
  let event;
@@ -37,7 +37,7 @@ export async function receiveStudioEvent(request,env,cat,options={}) {
   }
   if(!valid)throw Error();event=JSON.parse(body);
  }catch{return new Response(null,{status:401});}
- if(event.source!==origin||event.eventId!==request.headers.get('webhook-id')||typeof event.name!=='string')return new Response(null,{status:400});
+ if(!event||typeof event!=='object'||Array.isArray(event)||event.source!==origin||event.eventId!==request.headers.get('webhook-id')||typeof event.name!=='string')return new Response(null,{status:400});
  const feed=Object.hasOwn(rule.events??{},event.name)?rule.events[event.name]:null;
  if(!feed)return new Response(null,{status:403});
  await syncFunctions(env);

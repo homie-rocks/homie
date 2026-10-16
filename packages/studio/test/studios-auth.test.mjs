@@ -18,6 +18,7 @@ test('origin proof, deny by default, replay, audience, handles, rotation and imm
  const caller=await studioCaller(call(),env,cat);assert.equal(caller.studio.verified,true);assert.deepEqual(caller.actingFor,{assertedHandle:'Alex',verified:false,assertedBy:'https://a.example'});
  assert.equal(await allowed('signed-in',caller,env),false);assert.equal(await studioCaller(call('Alex%20Admin'),env,cat),null);
  const rotated=await keyEnv();keys={keys:[...keys.keys,...publicKeys(rotated).keys]};sender.STUDIO_SIGNING_KEY=rotated.STUDIO_SIGNING_KEY;
+ env.DB.sql.exec("DELETE FROM mcp_kv WHERE key LIKE 'studio-jwks-fetch:%'");
  env.DB.sql.exec("UPDATE mcp_kv SET value=json_set(value,'$.at',0) WHERE key LIKE 'studio-jwks:%'");
  assert.equal((await studioToken(await request(),env,cat,options)).status,200);assert.equal(fetches,2);
  await setStudioPolicy(env,'https://a.example',false);assert.equal(await studioCaller(call(),env,cat),null);

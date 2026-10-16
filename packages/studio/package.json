@@ -156,7 +156,6 @@
     "puppeteer-core": "25.8.0",
     "sharp": "0.35.5",
     "spdx-expression-parse": "5.0.0",
-    "standardwebhooks": "1.1.1",
     "stripe": "23.0.0",
     "three": "0.185.1",
     "typescript": "5.9.3",

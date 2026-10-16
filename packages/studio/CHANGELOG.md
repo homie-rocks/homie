@@ -21,6 +21,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ### Fixed
 
+- Studio ingress now limits requests by IP before discovery; failed JWKS fetches and unknown keys share an atomic 60-second per-origin fetch bound. Authentication errors are generic, with stage details only in owner audit logs. Signed events use the exact inbound path rule, honour disabled entries and reject non-object bodies with 400. Removed the unused v1-only webhook production dependency and documented exact manual key rotation steps through stdin.
+
 - Studio-to-studio limits aggregate by proven origin, outbound destinations require explicit configuration, and remote results retain untrusted provenance. Asserted handles never identify local accounts.
 - Availability allocates from a page snapshot in three queries instead of querying per slot, option and resource.
 - Studio identity uses Ed25519 private-key JWT and origin-hosted JWKS; events use Standard Webhooks v1a with the same key. Deploy provisions private keys through stdin. Office Allow/Deny is stored in D1, denied by default, with origin/handle audit entries. Owners exchange no secrets.
