@@ -9,7 +9,7 @@ test.after(()=>rmSync(scratch,{recursive:true,force:true}));
 const L=await loadGame(scratch,writeGame(scratch,'owner',{rules:`
 import {defineRules,defineMove,f} from '@homie-rocks/studio/rules';
 const move=defineMove({pawn(b,i,c){b.vel={x:i.x*4,y:b.vel.y+10*c.dt,z:0};c.map.sweep(b,{x:b.vel.x*c.dt,y:b.vel.y*c.dt,z:0});}});
-export default defineRules({contract:2,space:{dims:2},move,entities:{pawn:{player:true,input:{x:f.i8()},body:{shape:'box',radius:.5,maxSpeed:20,move:'validated-owner'}}},room:{join(){return{kind:'pawn',at:{x:0,y:0,z:0}};}}});
+export default defineRules({contract:2,space:{dims:2},move,shapes:{commands:{place:{}}},entities:{pawn:{commands:{place(w,s){w.place(s,{x:-5,y:0,z:0});}},player:true,input:{x:f.i8()},body:{shape:'box',radius:.5,maxSpeed:20,move:'validated-owner'}}},room:{join(){return{kind:'pawn',at:{x:0,y:0,z:0}};}}});
 `}), 'owner');
 const compile=()=>L.R.compileRules(L.def,{settings:L.R.roomSettings({host:'server'}).settings,seats:2,map:L.R.compileMap({bounds:{min:[-10,-10],max:[10,10]},boxes:[{min:[1,-5],max:[2,5]}]})});
 function setup(){const c=compile(),core=L.C.createCore(c);core.seatJoin({seat:0,driver:'person',owner:'p'});core.step(new Map([[0,{values:{x:0},reports:[]}]]));return{core,c};}
@@ -96,4 +96,11 @@ test('a stalled transport batch retains 320 reports across a fifteen-second outa
  assert.equal(state(core).r,revision);assert.equal(core.stats.held,0);
  assert.equal(core.snapshot()[1][0][14],base+320,'all reports were consumed, not just the first batch slice');
  assert.deepEqual(state(core).pos,state(reference).pos);
+});
+
+test('a placed body never inherits the prior revision accepted report tick',()=>{
+ const {core}=setup(),a=report(core);apply(core,[a]);
+ assert.equal(core.snapshot()[1][0][14],a.tick);
+ core.command(0,'place',{});apply(core,[]);
+ assert.equal(core.snapshot()[1][0][14],null,'a new placement has no accepted movement yet');
 });

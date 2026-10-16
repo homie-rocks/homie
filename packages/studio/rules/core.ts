@@ -1713,7 +1713,7 @@ export function createCore(c: Compiled, opts: { latency?: (seat: number) => numb
       packed.n = 0;
       const list = [...ents.values()].map((e) => {
         const row = packEntity(e.kind, e, dims), owner = owners.get(e.id);
-        if (e.kind.player && e.kind.body?.validatedOwner) { row.push(owner?.last ?? null); packed.n++; }
+        if (e.kind.player && e.kind.body?.validatedOwner) { row.push(owner?.r === e.r ? owner.last : null); packed.n++; }
         return row;
       });
       // Include all three components of position, velocity and heading in a 3D snapshot.

@@ -21,6 +21,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ### Fixed
 
+- New validated-owner placements no longer advertise an accepted movement tick from the previous body revision.
+
 - A server timer resuming after a long pause gives recently active sockets 2.5 seconds to deliver queued traffic before silence eviction; abandoned sockets still expire.
 
 - Retained-authority clients keep an open transport through up to 20 seconds of server silence, avoiding reconnect churn during short server stalls. Explicit close/error events still retry immediately; explicit stale timeouts and bounded prolonged-outage handling remain supported.
