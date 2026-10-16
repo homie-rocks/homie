@@ -7,7 +7,7 @@ test('analytics page rollups preserve old counts and replay atomically without d
  const DB=database(t),day='2026-10-15',points=[];
  await DB.prepare("INSERT INTO stats_daily VALUES(?1,'visit','cafe','',10)").bind(day).run();
  let n=7;
- const env={DB,STUDIO_ANALYTICS_DATASET:'studio_visits',STUDIO_ANALYTICS:{writeDataPoint:p=>points.push(p)},ANALYTICS_SQL:{query:async({query})=>{assert.match(query,/SUM\(double1\)/);return {data:[{day,metric:'visit',subject:'cafe',source:'',n}]};}}};
+ const env={DB,STUDIO_ANALYTICS_DATASET:'studio_visits',STUDIO_ANALYTICS:{writeDataPoint:p=>points.push(p)},ANALYTICS_SQL:{query:async({query})=>{assert.match(query,/SUM\(_sample_interval \* double1\)/);return {data:[{day,metric:'visit',subject:'cafe',source:'',n}]};}}};
  assert.equal(writePageMetric(env,{metric:'visit',subject:'cafe',day}),true);
  assert.equal(points.length,1);assert.deepEqual(points[0].blobs,[day,'visit','cafe','']);
  assert.equal(writePageMetric(env,{metric:'room'}),false);
@@ -63,4 +63,22 @@ test('analytics bindings and hourly cron are only installed when enabled',()=>{
  const enabled=config(true);assert.deepEqual(enabled.triggers.crons,['17 * * * *']);
  assert.equal(enabled.analytics_engine_datasets[0].dataset,enabled.vars.STUDIO_ANALYTICS_DATASET);
  assert.equal(enabled.analytics.binding,'ANALYTICS_SQL');
+});
+
+test('sampled analytics rows contribute weighted counts and corrected rollups remain replay safe',async t=>{
+ const DB=database(t),day='2026-10-15';
+ DB.sql.exec('CREATE TABLE sampled(timestamp TEXT,blob1 TEXT,blob2 TEXT,blob3 TEXT,blob4 TEXT,double1 REAL,_sample_interval INTEGER)');
+ const insert=DB.sql.prepare('INSERT INTO sampled VALUES(?,?,?,?,?,?,?)');
+ insert.run(day+'T01:00:00Z',day,'visit','home','',3,1);
+ insert.run(day+'T02:00:00Z',day,'visit','home','',2,10);
+ insert.run(day+'T03:00:00Z',day,'play','game','',4,5);
+ await DB.prepare("INSERT INTO stats_daily VALUES(?1,'visit','home','',10)").bind(day).run();
+ const env={DB,STUDIO_ANALYTICS_DATASET:'studio_visits',ANALYTICS_SQL:{query:async({query,params})=>({data:DB.sql.prepare(query.replace('events.analyticsEngine."studio_visits"','sampled')).all(params)})}};
+ const options={now:Date.parse(day+'T12:00:00Z')};
+ await rollupAnalytics(env,options);await rollupAnalytics(env,options);
+ assert.equal(DB.sql.prepare("SELECT n FROM stats_daily WHERE metric='visit'").get().n,33);
+ assert.equal(DB.sql.prepare("SELECT n FROM stats_daily WHERE metric='play'").get().n,20);
+ DB.sql.exec("UPDATE sampled SET _sample_interval=8 WHERE _sample_interval=10");
+ await rollupAnalytics(env,options);await rollupAnalytics(env,options);
+ assert.equal(DB.sql.prepare("SELECT n FROM stats_daily WHERE metric='visit'").get().n,29);
 });

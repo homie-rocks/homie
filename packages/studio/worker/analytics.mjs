@@ -27,7 +27,7 @@ async function* analyticsPages(env,{now=Date.now(),pageSize=1000}={}) {
     const day=new Date(now-ago*86400000).toISOString().slice(0,10);
     for(let offset=0;;offset+=pageSize) {
       const result=await env.ANALYTICS_SQL.query({
-        query:`SELECT blob1 AS day, blob2 AS metric, blob3 AS subject, blob4 AS source, SUM(double1) AS n
+        query:`SELECT blob1 AS day, blob2 AS metric, blob3 AS subject, blob4 AS source, SUM(_sample_interval * double1) AS n
           FROM events.analyticsEngine."${dataset}" WHERE timestamp >= $start AND blob1 = $day
           GROUP BY blob1, blob2, blob3, blob4 ORDER BY blob1, blob2, blob3, blob4 LIMIT ${pageSize} OFFSET $offset`,
         params:{start:day+'T00:00:00Z',day,offset},

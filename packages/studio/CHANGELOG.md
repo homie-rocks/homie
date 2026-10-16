@@ -19,6 +19,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## Unreleased
 
+- Weight Analytics Engine page counts by the sample interval, preserving historical totals and retry-safe corrections under sampling.
+
 - Stop queued Stripe reconciliation database operations and provider calls after lease renewal fails or the lease expires, leaving the event pending for retry.
 
 - **Upgrade notes:** Existing restricted Stripe keys need Products and Prices Read for expanded checkout/subscription lines. Shop-only keys also need Subscriptions Read, Invoices Read and Customer portal Write for renewal verification and subscription management. Update both test and live keys in Stripe before deploying. Expanded objects require their own permissions: https://docs.stripe.com/stripe-apps/reference/permissions.
