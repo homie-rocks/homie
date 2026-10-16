@@ -106,6 +106,12 @@
  *                                         A command that changes something outside this computer (deploy, publish,
  *                                         storage add, the office, …) stops at a flag it does not know: nothing is sent.
  *   homie-studio storage add              (large media only: an R2 bucket; needs R2 turned on for the account)
+ *   homie-studio read-only [on|off|status] [--url <site>]
+ *                                         (freeze the live studio for a few minutes, e.g. while moving it or for
+ *                                          maintenance: the Worker secret STUDIO_READ_ONLY, applied at once with no
+ *                                          deploy. While on, every change answers 503 with Retry-After and
+ *                                          x-studio-read-only: 1; pages, games, live rooms and the Stripe webhook keep
+ *                                          working; /api/games says readOnly. worker/read-only.mjs says exactly what)
  *   homie-studio media list               (every song and video page, where each file is served from, what moves to R2)
  *   homie-studio media move [<file>...] [--dry-run] [--verify]
  *                                         (with storage: the big files of published songs and videos into R2, each
@@ -529,6 +535,10 @@ function print(result) {
         ...(result.parts && partsPlanLines(result.parts).length ? ['', ...partsPlanLines(result.parts)] : []),
         ...(result.standalone?.length ? ['', ...result.standalone] : []));
       break;
+    case 'read-only on':
+    case 'read-only off':
+    case 'read-only status':
+      lines.push(result.message); break;
     case 'storage add':
       lines.push(result.already ? `Storage is already added: R2 bucket ${result.bucket}.` : `Storage added: R2 bucket ${result.bucket}.`, 'Next:', ...result.next.map((n) => `  ${n}`));
       break;
@@ -829,6 +839,7 @@ const OUTWARD_FLAGS = {
   publish: ['homie', 'site', 'before'],
   deploy: ['plan', 'ci', 'homie', 'own-route'],
   'storage add': [],
+  'read-only': ['url'],
   'media put': ['as'],
   'media move': ['dry-run', 'plan', 'verify'],
   'setup attach': ['homie', 'client'],
@@ -917,6 +928,7 @@ async function main() {
   if (['build', 'check', 'upgrade'].includes(cmd)) {
     for (const line of (await import('../lib/authoring-guides.mjs')).authoringWords({ kind: ['app', 'business', 'cause'].includes(readStudio(root).kind) || listExperiences(root).some(g => g.kind === 'app') ? 'app' : 'game' })) process.stderr.write(`${line}\n`);
   }
+  if (cmd === 'read-only') return (await import('../lib/read-only.mjs')).readOnlyCommand(root, sub ?? 'status', { url: flags.get('url') ?? null });
   if (cmd === 'events') return (await import('../lib/events-cli.mjs')).eventsCommand(root, sub, positional, flags, { log });
   if (cmd === 'function' || cmd === 'functions') return (await import('../lib/functions-cli.mjs')).functionCommand(root, sub, positional, flags, { log });
   if (cmd === 'connector') return (await import('../lib/connector-token.mjs')).connectorToken(root,{url:flags.get('url'),tools:typeof flags.get('tools')==='string'?flags.get('tools').split(','):[],out:flags.get('out'),days:flags.has('days')?Number(flags.get('days')):30,revoke:flags.get('revoke')});

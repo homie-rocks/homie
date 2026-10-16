@@ -737,7 +737,7 @@ test('a command that changes something outside this computer stops at a flag it 
     'events webhook': ['add', 'bookings', 'https://receiver.example/events'],
     'function new': ['example'], 'function fire': ['order.paid'], 'function replay':['example'], 'function runs': [], 'functions runs': [],
     'tool new': ['example'], 'tool list': [], 'tool call': ['example'],
-    publish: [], deploy: [], 'storage add': [], 'media put': ['notes.txt'], 'media move': [], 'setup attach': ['hs_made_up'], handoff: ['hb_made_up'],
+    publish: [], deploy: [], 'storage add': [], 'read-only': ['on'], 'media put': ['notes.txt'], 'media move': [], 'setup attach': ['hs_made_up'], handoff: ['hb_made_up'],
     'players owner': [], 'stats key': [], 'stats link': [], 'stats revoke': [], 'stats share': ['off'],
     'office link': [], 'office key': [], 'office announce': ['back', 'soon'], 'office invite': ['crown-thief'], 'office launch': ['crown-thief', 'public'],
     'office kick': ['crown-thief', 'room-1', 'p1'], 'office mute': ['crown-thief', 'room-1', 'p1'], 'office close': ['crown-thief', 'room-1'], 'office revoke': [],
@@ -751,7 +751,7 @@ test('a command that changes something outside this computer stops at a flag it 
   };
   // The table in the command itself: every command in it is tried here, and none is tried that is not in it.
   const table = /const OUTWARD_FLAGS = \{([\s\S]*?)\n\};/.exec(readFileSync(CLI, 'utf8'))[1];
-  const keys = [...table.matchAll(/(?:^|[\s,{])(?:'([a-z]+(?: [a-z]+)?)'|([a-z]+)): \[/g)].map((m) => m[1] ?? m[2]);
+  const keys = [...table.matchAll(/(?:^|[\s,{])(?:'([a-z-]+(?: [a-z]+)?)'|([a-z]+)): \[/g)].map((m) => m[1] ?? m[2]);
   assert.deepEqual(keys.slice().sort(), Object.keys(commands).sort());
   for (const [key, words] of Object.entries(commands)) {
     const r = await ask([...key.split(' '), ...words, '--made-up-flag']);

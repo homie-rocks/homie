@@ -752,6 +752,40 @@ that, with when it ends.
 open it), the command says "network preflight failed", not that the site or a game is broken, and offers the local
 dev site instead.
 
+## Read-only for a few minutes: `homie-studio read-only`
+
+Before moving a studio to another host, or during maintenance, the owner freezes it from their own computer and
+opens it again when the work is done. Nothing is lost on the way:
+
+```sh
+npx homie-studio read-only on        # every change is refused for now; the site stays up
+npx homie-studio read-only status    # what Cloudflare has, and what the live site says
+npx homie-studio read-only off       # open again
+```
+
+The switch is the Worker secret `STUDIO_READ_ONLY` (`1`), set and deleted with the studio's own Wrangler sign-in.
+Cloudflare applies a secret as a new version of the live Worker within seconds, with no build or deploy, and a deploy
+made while it is on keeps it on; like any new version, it reconnects live rooms once. The local MCP tool
+`studio_read_only` does the same for an AI. While it is on:
+
+- every request other than `GET`, `HEAD` and `OPTIONS` answers `503` with `Retry-After: 120`,
+  `x-studio-read-only: 1` and `{"ok":false,"error":"read-only","message":"…"}`. Nothing it carried was applied, so
+  the caller sends it again later;
+- every other answer carries `x-studio-read-only: 1` too, a page shows a short "read-only for a few minutes"
+  notice, and `/api/games` says `"readOnly": true` (and `false` when open), so a tool checks the switch without
+  sending a write;
+- D1 refuses writes, so a read that would also write (a visit counted, a sign-in link redeemed) writes nothing; a
+  page that needed its write answers the same 503;
+- Stripe's webhook (`POST /api/shop/hook`) and the queued reconciliation of its events keep the whole database:
+  payments already made are recorded and fulfilled;
+- live rooms keep playing and new ones still open (matchmaking and sockets are `GET`s, a room's state is its own
+  storage), but no room writes to D1: round records and function events wait in the room's outbox and are written
+  once the studio is open, counters with the room's next report;
+- scheduled work skips its tick, apart from the recovery of Stripe events (an owner function due in that minute does
+  not run for it); queued work other than Stripe events is retried after the window.
+
+`worker/read-only.mjs` is the whole behaviour.
+
 ## A trailer: `homie-studio trailer`
 
 ```sh

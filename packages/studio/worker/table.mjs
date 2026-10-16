@@ -22,6 +22,7 @@ import {holders,regateArgs,verifyControl} from './office.mjs';
 
 import {json} from './responses.mjs';
 import {catalogue} from './catalogue.mjs';
+import {readOnlyEnv} from './read-only.mjs';
 
 import {ROOM_ALARM_MS,ROOM_PAUSE_MS,roomEndAt} from './room-lifecycle.mjs';
 
@@ -29,7 +30,8 @@ export class Table {
   constructor(ctx, env) {
     this.ctx = ctx;
     this.watchSockets = new WatchSockets(ctx);
-    this.env = env;
+    // Read-only (worker/read-only.mjs): the room plays on; its D1 writes wait in its outbox or for the next report.
+    this.env = readOnlyEnv(env);
     this.room = null;
     this.timer = null;
     this.saved = null;
