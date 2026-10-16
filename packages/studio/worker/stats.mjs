@@ -1,4 +1,4 @@
-import {writePageMetric} from './analytics.mjs';
+import {writePageMetric,analyticsStatus} from './analytics.mjs';
 /**
  * STUDIO METRICS: count, don't track (@homie-rocks/studio 0.6.0).
  *
@@ -340,7 +340,7 @@ export async function readStats(env, cat, { range, only = null, studios = new Se
     // The studio's own pages: its home, and the /music/ and /videos/ lists (a catalogue's road).
     pages: Object.fromEntries(['home', 'games', 'rooms', 'posts', 'music', 'videos'].map((p) => [p, sum((r) => r.metric === 'visit' && r.subject === p)])),
     games: perGame, songs: media(songs, 'song', 'music'), videos: media(videos, 'video', 'videos'), referrers, days,
-    note: 'Counts, never people: a visit is a page a browser opened, a play is a Play press, a round is a finished round. Prefetches, crawlers and house QA are not counted. Times are UTC days.' + (env.STUDIO_ANALYTICS && env.STUDIO_ANALYTICS_DATASET ? ' Page visits, plays, screens and watches show the last hourly rollup; recent activity appears after ingestion and the next rollup. These counters may be sampled at high traffic.' : ''),
+    note: 'Counts, never people: a visit is a page a browser opened, a play is a Play press, a round is a finished round. Prefetches, crawlers and house QA are not counted. Times are UTC days.' + (env.STUDIO_ANALYTICS && env.STUDIO_ANALYTICS_DATASET ? ' Page visits, plays, screens and watches show the last hourly rollup; recent activity appears after ingestion and the next rollup. These counters may be sampled at high traffic.' + await analyticsStatus(env).then(s=>s.delayed ? ' Counts are delayed: '+(s.error??'awaiting a successful rollup')+'.' : '') : ''),
   };
 }
 

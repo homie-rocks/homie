@@ -30,3 +30,28 @@ test('owner totals retain history while analytics ingestion waits and explain th
  await rollupAnalytics(env);await rollupAnalytics(env);
  assert.equal((await read()).totals.visits,13);
 });
+
+test('unchanged rollups write no counter or watermark rows',async t=>{
+ const DB=database(t),day='2026-10-15';
+ const env={DB,STUDIO_ANALYTICS_DATASET:'studio_visits',ANALYTICS_SQL:{query:async()=>({data:[{day,metric:'visit',subject:'home',source:'',n:5}]})}};
+ await rollupAnalytics(env);
+ const before=DB.sql.prepare('SELECT total_changes() AS n').get().n;
+ await rollupAnalytics(env);
+ assert.ok(DB.sql.prepare('SELECT total_changes() AS n').get().n-before<=1,'only a rollup health timestamp may change');
+});
+test('daily pagination continues past a full page instead of freezing counts',async t=>{
+ const DB=database(t),day='2026-10-15',pages=[];
+ const env={DB,STUDIO_ANALYTICS_DATASET:'studio_visits',ANALYTICS_SQL:{query:async({params})=>{
+  pages.push(params);return {data:params.day===day?(params.offset===0?[{day,metric:'visit',subject:'a',source:'',n:2},{day,metric:'visit',subject:'b',source:'',n:3}]:params.offset===2?[{day,metric:'visit',subject:'c',source:'',n:4}]:[]):[]};
+ }}};
+ await rollupAnalytics(env,{now:Date.parse(day+'T12:00:00Z'),pageSize:2});
+ assert.equal(DB.sql.prepare('SELECT SUM(n) AS n FROM stats_daily').get().n,9);
+ assert.ok(pages.some(p=>p.offset===2));assert.ok(new Set(pages.map(p=>p.day)).size>=7);
+});
+test('owner sees a failed rollup and previously stored totals remain available',async t=>{
+ const DB=database(t),env={DB,STUDIO_ANALYTICS_DATASET:'studio_visits',STUDIO_ANALYTICS:{},ANALYTICS_SQL:{query:async()=>{throw new Error('query unavailable');}}};
+ await rollupAnalytics(env);
+ const {readStats}=await import('../worker/stats.mjs');
+ const result=await readStats(env,{games:[]},{range:{from:'2026-10-15',to:'2026-10-15',days:1}});
+ assert.match(result.note,/delayed.*query unavailable/i);
+});

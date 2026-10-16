@@ -32,6 +32,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 - Batch cold metadata, use causally consistent D1 sessions, bake catalogues, route public assets first, isolate subscription objects and load rendering modules at their entry points. Index MCP expiry and deliver catalogue notifications in background work.
 
 - Split request routing, runtime helpers, Table, Lobby, room chat, controls and wire validation into modules without changing behavior.
+- Skip unchanged analytics counters and watermarks, paginate rollups by UTC day, and show delayed counts in owner statistics.
+
 - Count page activity with Analytics Engine and hourly, replay-safe D1 rollups that preserve historical totals. Owner statistics explain ingestion lag and sampling.
 
 ## [0.54.0] - 2026-10-15
