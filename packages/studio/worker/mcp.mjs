@@ -1,3 +1,5 @@
+import {studioOrigin} from './studios-client.mjs';
+import {studioToken,studioCaller,setStudioPolicy,studioRegistration} from './studios-auth.mjs';
 import {tokenCaller,toolInScope} from './connector-token.mjs';
 import {eventMethods,eventsCapability} from './mcp-events-wire.mjs';
 import {eventsRequest} from './mcp-events.mjs';
@@ -17,7 +19,7 @@ import { players } from './players.mjs';
 import { isOwner, sameOrigin } from './office.mjs';
 import { cookieValue } from './stats.mjs';
 import { esc } from './site.mjs';
-import { oauthStorage, rateLimit, audit, callsPerMinute } from './mcp-store.mjs';
+import { oauthStorage, rateLimit, audit, callsPerMinute, callerLimitKey } from './mcp-store.mjs';
 import { allowed, currentCaller, services, builtins } from './mcp-tools.mjs';
 const validator = new CfWorkerJsonSchemaValidator();
 const json = (data,status=200)=>Response.json(data,{status,headers:{'cache-control':'no-store'}});
@@ -36,14 +38,28 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
   const url=new URL(request.url), origin=url.origin, path=url.pathname;
   if(!env.DB)return json({error:'studio database required'},503);
   if(request.headers.has('origin') && request.headers.get('origin')!==origin)return json({error:'origin refused'},403);
+  if(path==='/.well-known/jwks.json')return Response.json((await import('./studios-keys.mjs')).publicKeys(env),{headers:{'cache-control':'public, max-age=60'}});
+  if(path==='/oauth/token'||path.startsWith('/hooks/studios/')) {
+    if(!await rateLimit(env,'studio-ingress:'+(request.headers.get('cf-connecting-ip')??'local'),60))
+      return Response.json({error:'rate_limit_exceeded'},{status:429,headers:{'retry-after':'60','cache-control':'no-store'}});
+  }
+  if(path.startsWith('/hooks/studios/')) {
+    const cat=await catalogueOf();
+    const response=await (await import('./studios-events.mjs')).receiveStudioEvent(request,env,cat);
+    if(response.ok){const delivery=import('./functions.mjs').then(m=>m.runFunctions(env,cat,origin));if(ctx?.waitUntil)ctx.waitUntil(delivery);else await delivery;}
+    return response;
+  }
   if(path.startsWith('/hooks/tools/')) return (await import('./tool-webhook.mjs')).toolWebhook(request,env,{cat:await catalogueOf(),definitions});
+  if(path==='/oauth/token'){const response=await studioToken(request,env,await catalogueOf());if(response)return response;}
+  const machine=request.headers.get('authorization')?.startsWith('Bearer homie_studio_');
   const scoped={...env,OAUTH_KV:oauthStorage(env.DB)};
   const localIdentity=await localCaller(request,env);
   const bearer=request.headers.get('authorization')?.startsWith('Bearer homie_owner_');
   const bearerIdentity=bearer?await tokenCaller(request,env):null;
   if(bearer&&!bearerIdentity)return json({error:'connector expired or revoked'},401);
   const api=async(request,env,ctx)=>{
-    const identity=async()=>{if(bearer){const fresh=await tokenCaller(request,env);if(!fresh)throw new Error('connector revoked');return fresh;}return localIdentity ?? currentCaller(env,ctx.props);};
+    const rawIdentity=async()=>{if(machine){const fresh=await studioCaller(request,env,await catalogueOf());if(!fresh)throw new Error('Studio authorization revoked');return fresh;}if(bearer){const fresh=await tokenCaller(request,env);if(!fresh)throw new Error('connector revoked');return fresh;}return localIdentity ?? currentCaller(env,ctx.props);};
+    const identity=async()=>({...await rawIdentity(),clientAddressKey:`public:${request.headers.get('cf-connecting-ip')??'local'}`});
     let caller;
     try{caller=await identity();}catch{return new Response(JSON.stringify({error:'connection revoked'}),{status:401,headers:{'content-type':'application/json','cache-control':'no-store','www-authenticate':`Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp", error="invalid_token"`}});}
     if(caller.tools){
@@ -74,7 +90,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
     }
     const rate=async fresh=>{
       const limit=callsPerMinute(cat);
-      if(!await rateLimit(env,fresh.id??`public:${request.headers.get('cf-connecting-ip')??'local'}`,limit))throw new Error('Rate limit reached');
+      if(!await rateLimit(env,callerLimitKey(fresh),limit))throw new Error('Rate limit reached');
     };
     const read=async(name,handler)=>{
       let outcome='error';
@@ -144,7 +160,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
             if(tool.protocol) {const result=await tool.handler(args,{...context,paymentExtra:extra});outcome=result.isError?'error':'ok';return result;}
             const value=await (await import('./app-tools.mjs')).invokeAppTool(tool,args,{...context,request});
             const text=JSON.stringify({kind:'untrusted-tool-data',tool:tool.name,data:value});
-            outcome='ok';return {content:[{type:'text',text}]};
+            outcome='ok';return {structuredContent:{kind:'untrusted-tool-data',tool:tool.name,data:value??null},content:[{type:'text',text}]};
           }catch(error){if(error?.code===-32042)throw error;return {isError:true,content:[{type:'text',text:outcome==='denied'||outcome==='limited'||error?.name==='StudioOperationError'?error.message:(freshErrorMessage(error,env,caller))}]};}
           finally{
             try { await audit(env,caller,tool.name,outcome); }
@@ -178,6 +194,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
   if(localIdentity||bearerIdentity)return api(request,scoped,ctx);
   const provider=new OAuthProvider({
     apiRoute:'/mcp',apiHandler:{fetch:api},
+    resolveExternalToken:async({request,env})=>(await studioCaller(request,env,await catalogueOf()))?{props:{},audience:origin+'/mcp'}:null,
     authorizeEndpoint:'/oauth/authorize',tokenEndpoint:'/oauth/token',clientRegistrationEndpoint:'/oauth/register',
     resourceMetadata:{resource:origin+'/mcp',authorization_servers:[origin]},
     scopesSupported:['studio','offline_access'],requiredScopes:['studio'],
@@ -209,7 +226,14 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
         const owner=await isOwner(req,env);
         if(req.method==='POST'){
           if(!sameOrigin(req,u))return json({error:'origin refused'},403);
-          const f=await req.formData();const id=String(f.get('connection')??'');
+          const f=await req.formData();
+          if(f.has('studioOrigin')){
+            const studio=String(f.get('studioOrigin'));
+            if(!owner||!studioRegistration(await catalogueOf(),studio))return json({error:'studio policy refused'},403);
+            await setStudioPolicy(env,studio,f.get('allow')==='true');
+            return Response.redirect(origin+u.pathname,303);
+          }
+          const id=String(f.get('connection')??'');
           const connection=await env.DB.prepare('SELECT * FROM mcp_connections WHERE id=?1').bind(id).first();
           if(connection&&(owner||connection.person===person)){
             // Local denial takes effect first, even if upstream token cleanup must be retried.
@@ -224,9 +248,15 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
         }
         const page=Math.max(0,Math.min(100,Number.parseInt(u.searchParams.get('page')??'0',10)||0)),offset=page*100;
         const rows=(await env.DB.prepare(owner?'SELECT c.*,p.name FROM mcp_connections c LEFT JOIN players p ON p.id=c.person ORDER BY c.created DESC LIMIT 100 OFFSET ?1':'SELECT c.*,p.name FROM mcp_connections c LEFT JOIN players p ON p.id=c.person WHERE c.person=?1 ORDER BY c.created DESC LIMIT 100 OFFSET ?2').bind(...(owner?[offset]:[person,offset])).all()).results;
-        const events=owner?(await env.DB.prepare('SELECT a.*,p.name FROM mcp_audit a LEFT JOIN players p ON p.id=a.person ORDER BY a.id DESC LIMIT 100 OFFSET ?1').bind(offset).all()).results:[];
+        const events=owner?(await env.DB.prepare("SELECT a.*,p.name FROM mcp_audit a LEFT JOIN players p ON p.id=a.person AND (a.client IS NULL OR a.client NOT LIKE 'https://%') ORDER BY a.id DESC LIMIT 100 OFFSET ?1").bind(offset).all()).results:[];
         const names=new Map(await Promise.all([...new Set([...rows,...events].map(r=>r.client).filter(Boolean))].map(async id=>[id,(await oauth.lookupClient(id).catch(()=>null))?.clientName??id])));
-        return html(`<h1>Your studio's AI connections</h1><p>Signed-in MCP address: <code>${esc(origin)}/mcp/auth</code> · Public: <code>${esc(origin)}/mcp</code></p><ul>${rows.map(r=>`<li>${esc(r.name??(r.person.startsWith('office-')?'Owner browser':r.person))} · ${esc(names.get(r.client))} · ${r.revoked?'Revoked':`<form method="post"><input type="hidden" name="connection" value="${esc(r.id)}"><button>Revoke</button></form>`}</li>`).join('')}</ul><h2>Recent tool calls</h2><ul>${events.map(r=>`<li>${esc(new Date(r.at).toISOString())} · ${esc(r.name??(r.person?.startsWith('office-')?'Owner browser':r.person)??'Public')} · ${esc(names.get(r.client)??'Anonymous')} · ${esc(r.tool)} · ${esc(r.outcome)}</li>`).join('')}</ul><nav>${page?`<a href="?page=${page-1}">Newer</a>`:''}${rows.length===100||events.length===100?`<a href="?page=${page+1}">Older</a>`:''}</nav>`);
+        const studioRows=[];
+        if(owner)for(const rule of Object.values((await catalogueOf()).studio?.mcp?.studios?.inbound??{})){
+          let peer;try{peer=studioOrigin(rule.origin,{allowPrivate:rule.allowPrivate===true});}catch{continue;}
+          const policy=await oauthStorage(env.DB).get('studio-policy:'+peer,'json');
+          studioRows.push(`<li>${esc(peer)} · ${policy?.allow?'Allowed':'Denied'}<form method="post"><input type="hidden" name="studioOrigin" value="${esc(peer)}"><input type="hidden" name="allow" value="${policy?.allow?'false':'true'}"><button>${policy?.allow?'Deny':'Allow'}</button></form></li>`);
+        }
+        return html(`${owner?'<h2>Studio connections</h2><p>Denied by default. Allow only origins you trust for their declared tools and events.</p><ul>'+studioRows.join('')+'</ul>':''}<h1>Your studio's AI connections</h1><p>Signed-in MCP address: <code>${esc(origin)}/mcp/auth</code> · Public: <code>${esc(origin)}/mcp</code></p><ul>${rows.map(r=>`<li>${esc(r.name??(r.person.startsWith('office-')?'Owner browser':r.person))} · ${esc(names.get(r.client))} · ${r.revoked?'Revoked':`<form method="post"><input type="hidden" name="connection" value="${esc(r.id)}"><button>Revoke</button></form>`}</li>`).join('')}</ul><h2>Recent tool calls</h2><ul>${events.map(r=>`<li>${esc(new Date(r.at).toISOString())} · ${esc(r.client?.startsWith('https://')?'Asserted handle: '+(r.person??'(none)'):(r.name??(r.person?.startsWith('office-')?'Owner browser':r.person)??'Public'))} · ${esc(names.get(r.client)??'Anonymous')} · ${esc(r.tool)} · ${esc(r.outcome)}</li>`).join('')}</ul><nav>${page?`<a href="?page=${page-1}">Newer</a>`:''}${rows.length===100||events.length===100?`<a href="?page=${page+1}">Older</a>`:''}</nav>`);
       }
       return json({error:'not found'},404);
     }},
@@ -235,5 +265,10 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
     // Public tools remain available without an account. Clients can discover OAuth metadata directly.
     return api(request,scoped,ctx);
   }
-  return provider.fetch(request,scoped,ctx);
+  const response=await provider.fetch(request,scoped,ctx);
+  if(path==='/.well-known/oauth-authorization-server'&&response.ok){
+    const metadata=await response.json();
+    return json({...metadata,grant_types_supported:[...new Set([...(metadata.grant_types_supported??[]),'client_credentials'])],token_endpoint_auth_methods_supported:[...new Set([...(metadata.token_endpoint_auth_methods_supported??[]),'private_key_jwt'])]});
+  }
+  return response;
 }

@@ -1,0 +1,97 @@
+{
+  "studios": [
+    "hm-s2s-a-mvajcr14",
+    "hm-s2s-b-mvajcr14"
+  ],
+  "started": "2026-10-16T05:37:11.896Z",
+  "cleanup": [
+    {
+      "name": "hm-s2s-b-mvajcr14",
+      "deleted": true
+    },
+    {
+      "name": "hm-s2s-a-mvajcr14",
+      "deleted": true
+    }
+  ],
+  "publicJwks": true,
+  "result": {
+    "tools": [
+      "studio_availability",
+      "venue_book"
+    ],
+    "availability": {
+      "convention": "studio.booking-availability/1",
+      "bookingTool": "studio_book",
+      "items": [
+        {
+          "@type": "Offer",
+          "identifier": "[\"morning\",null]",
+          "availability": "https://schema.org/InStock",
+          "availabilityStarts": "2030-10-15T10:00:00Z",
+          "availabilityEnds": "2030-10-15T11:00:00Z",
+          "remaining": 1,
+          "booking": {
+            "app": "venue",
+            "collection": "bookings",
+            "slot": "morning",
+            "quantity": 1
+          }
+        }
+      ],
+      "next": null
+    },
+    "booked": {
+      "booking": {
+        "id": "0a1d16dddf8f154c43c2a89447c0c3a7393c6b5a4cc1e697e686db9d23513f00",
+        "slot": "morning",
+        "quantity": 1,
+        "state": "confirmed",
+        "version": 2,
+        "expiresAt": 1792129695855,
+        "paid": false,
+        "choices": {
+          "option": null,
+          "resource": null,
+          "addons": {}
+        }
+      },
+      "caller": {
+        "id": "studio:1f8f73c8d93d73eade6d102dab66aa72d818ab75a500b169b61196bf534941a7",
+        "owner": false,
+        "roles": {},
+        "client": "https://studio-a.example",
+        "tools": [
+          "studio_availability",
+          "venue_book"
+        ],
+        "studio": {
+          "origin": "https://studio-a.example",
+          "verified": true,
+          "method": "private_key_jwt"
+        },
+        "actingFor": {
+          "assertedHandle": "Alex",
+          "verified": false,
+          "assertedBy": "https://studio-a.example"
+        },
+        "clientAddressKey": "public:2a06:98c0:3600::103"
+      }
+    },
+    "arrival": {
+      "id": "alex-arrival"
+    }
+  },
+  "arrival": {
+    "data": {
+      "booking": "0a1d16dddf8f154c43c2a89447c0c3a7393c6b5a4cc1e697e686db9d23513f00",
+      "minutes": 10
+    },
+    "sender": {
+      "origin": "https://studio-a.example",
+      "verified": true
+    }
+  },
+  "denied": true,
+  "finished": "2026-10-16T05:38:32.446Z"
+}

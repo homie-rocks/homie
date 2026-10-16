@@ -14,10 +14,20 @@ CREATE TRIGGER booking_resource_move BEFORE UPDATE OF slot,quantity ON shop_book
 CREATE TRIGGER booking_resource_edit BEFORE UPDATE OF value ON app_records WHEN EXISTS(SELECT 1 FROM shop_bookings b,json_each(b.allocation) a WHERE b.app=OLD.app AND b.state IN ('held','confirmed') AND json_extract(a.value,'$.resource')=OLD.id AND json_extract(a.value,'$.collection')=OLD.collection) AND NEW.value!=OLD.value BEGIN SELECT RAISE(ABORT,'resource has active bookings; release or finish them before editing'); END;
 CREATE TRIGGER booking_resource_delete BEFORE DELETE ON app_records WHEN EXISTS(SELECT 1 FROM shop_bookings b,json_each(b.allocation) a WHERE b.app=OLD.app AND b.state IN ('held','confirmed') AND json_extract(a.value,'$.resource')=OLD.id AND json_extract(a.value,'$.collection')=OLD.collection) BEGIN SELECT RAISE(ABORT,'resource has active bookings'); END;
 `;
-export async function allocateResources(env,app,spec,slot,args) {
+export async function resourceSnapshot(env,app,spec) {
+ if(!spec.resources)return {resources:new Map(),active:[]};
+ const resources=(await env.DB.prepare('SELECT id,value FROM app_records WHERE app=?1 AND collection=?2').bind(app,spec.resources).all()).results;
+ const active=(await env.DB.prepare("SELECT allocation FROM shop_bookings WHERE app=?1 AND state IN ('held','confirmed')").bind(app).all()).results.flatMap(r=>JSON.parse(r.allocation));
+ return {resources:new Map(resources.map(r=>[r.id,JSON.parse(r.value)])),active};
+}
+export async function loadAndAllocateResources(env,app,spec,slot,args) {
  const row=await env.DB.prepare('SELECT value FROM app_records WHERE app=?1 AND collection=?2 AND id=?3').bind(app,spec.slots,slot).first();
- if(!row)throw new Error('Slot unavailable');
- const data=JSON.parse(row.value),option=args.option===undefined?null:data.options?.find(o=>o.id===args.option);
+ return allocateResources(row?JSON.parse(row.value):null,spec,args,await resourceSnapshot(env,app,spec));
+}
+/** Pure allocation against a page snapshot. Holds still enforce capacity atomically in D1. */
+export function allocateResources(data,spec,args,{resources,active}) {
+ if(!data)throw new Error('Slot unavailable');
+ const option=args.option===undefined?null:data.options?.find(o=>o.id===args.option);
  if(args.option!==undefined&&!option)throw new Error('Choose a declared option');
  if(data.requireOption&&!option)throw new Error('Choose an option');
  const parts=option?.components??(data.resources?[{resources:data.resources,skills:data.skills,attributes:data.attributes}]:[]);
@@ -31,7 +41,6 @@ export async function allocateResources(env,app,spec,slot,args) {
  const start=Date.parse(data.start),end=Date.parse(data.end);
  if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start)throw new Error('Resource slot needs start and end timestamps');
  if(components.length>32)throw new Error('A package supports at most 32 resource components');
- const active=(await env.DB.prepare("SELECT allocation FROM shop_bookings WHERE app=?1 AND state IN ('held','confirmed')").bind(app).all()).results.flatMap(r=>JSON.parse(r.allocation));
  const allocations=[];
  for(const [index,c] of components.entries()) {
   if(!Array.isArray(c.resources)||!c.resources.length||c.resources.length>64)throw new Error('Declare candidate resources');
@@ -41,8 +50,7 @@ export async function allocateResources(env,app,spec,slot,args) {
   if(!Number.isSafeInteger(from)||!Number.isSafeInteger(to)||from<start||to>end||to<=from||!Number.isSafeInteger(units)||units<1)throw new Error('Invalid package resource interval or units');
   let selected,qualified=false;
   for(const resource of candidates) {
-   const record=await env.DB.prepare('SELECT value FROM app_records WHERE app=?1 AND collection=?2 AND id=?3').bind(app,spec.resources,resource).first();
-   if(!record)continue;const r=JSON.parse(record.value);
+   const r=resources.get(resource);if(!r)continue;
    if(!Number.isSafeInteger(r.capacity)||r.capacity<1||(c.skills??[]).some(skill=>!r.skills?.includes(skill))||Object.entries(c.attributes??{}).some(([k,v])=>r.attributes?.[k]!==v))continue;
    qualified=true;const overlapping=[...active,...allocations].filter(a=>a.resource===resource&&a.collection===spec.resources&&a.start<to&&a.end>from);
    if([from,...overlapping.map(a=>a.start).filter(t=>t>=from)].some(at=>units+overlapping.filter(a=>a.start<=at&&a.end>at).reduce((n,a)=>n+a.units,0)>r.capacity))continue;

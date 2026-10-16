@@ -339,3 +339,12 @@ compiler; run `npm install` in the studio first if it is missing. Review the dif
 combined timer/jobs, hand-written routes and business-event mirrors need a semantic
 migration to the APIs above; they are not automatically deleted. The owner's
 words, historical evidence and unresolved integration work remain intact.
+
+## Availability shared with an AI
+
+`studio_availability` and `context.bookings.availability` return paged offers with
+valid booking arguments, checking the existing slots, holds, options and resources.
+Pass that result to `createBookingChoices({container,availability})`; `value()`
+returns the selected offer's booking arguments for the same booking tool an AI
+uses. Availability is a snapshot; authoritative holds still recheck capacity.
+See [the convention](../docs/studio-to-studio.md#availability-convention-v).

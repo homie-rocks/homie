@@ -1,12 +1,21 @@
+import type {BookingAvailability} from '../apps/apps';
 /** A studio tool runs as trusted code in its own Worker. Never import an environment binding. */
 export type Audience = 'public' | 'signed-in' | 'owner' | { app: string; role: string };
+export interface RemoteStudioSource { readonly origin: string; readonly authenticated: boolean }
+export interface UntrustedStudioData { readonly source: RemoteStudioSource; readonly untrusted: true }
 export interface ToolContext {
   readonly purchase?: { readonly id: string };
-  readonly caller: { readonly id: string | null; readonly owner: boolean; readonly client: string | null; readonly roles: Readonly<Record<string, readonly string[]>> };
+  readonly caller: { readonly clientAddressKey?: string; readonly id: string | null; readonly owner: boolean; readonly client: string | null; readonly studio?: {readonly origin: string; readonly verified: true; readonly method: 'private_key_jwt'}; readonly actingFor?: {readonly assertedHandle: string; readonly verified: false; readonly assertedBy: string}; readonly roles: Readonly<Record<string, readonly string[]>> };
   records(args: { app: string; role?: string; collection: string; id?: string; operation?: 'read' | 'create' | 'update' | 'delete'; data?: Record<string, unknown>; version?: number }): Promise<unknown>;
   office(path: string, body?: Record<string, unknown>, query?: Record<string, string>): Promise<unknown>;
   shop(): Promise<unknown>;
+  studios: {
+    send(origin: string, event: string, input: {id: string; data: unknown}): Promise<{id: string}>;
+    listTools(origin: string, options?: {cursor?: string; assertedHandle?: string}): Promise<UntrustedStudioData & {tools: Array<UntrustedStudioData & {name: string; description?: string; inputSchema: Record<string, unknown>}>; nextCursor?: string}>;
+    call(origin: string, tool: string, args?: Record<string, unknown>, options?: {assertedHandle?: string}): Promise<UntrustedStudioData & {isError: boolean; data?: unknown; content: unknown[]}>;
+  };
   bookings: {
+    availability(args: {app: string; collection: string; after?: string; quantity?: number; option?: string; resource?: string; addons?: Record<string,number>}): Promise<BookingAvailability>;
     calendar(args: {app:string;startDate:string;endDate:string;timeZone?:string;time?:string;days?:number;durationMinutes?:number;capacity?:number;weekdays?:number[];resources?:string[];options?:unknown[];prefix?:string}): Array<{id:string;start:string;end:string;capacity:number;date:string;timeZone:string}>;
     hold(args: {app: string; collection: string; slot?: string; time?: string; option?: string; resource?: string; preferredResource?: string; addons?: string[] | Record<string,number>; addOns?: string[] | Record<string,number>; quantity?: number; id: string; token?: string; expiresAt: number}): Promise<BookingHold>;
     get(args: {id: string; token?: string}): Promise<BookingHold>;
@@ -24,6 +33,10 @@ export interface ToolContext {
     append(key: string, value: unknown): Promise<{value: unknown[]; version: number}>;
     list(options?: {prefix?: string; after?: string; limit?: number}): Promise<{items: {key: string; value: unknown; version: number}[]; next: string | null}>;
   };
+  /** Dispatch a custom route with caller identity and local Origin; routes must still authorize. */
+  fetchSelf(path: string, init?: RequestInit): Promise<Response>;
+  /** Opt-in shared Cloudflare Rate Limiting binding. Defaults to studio origin, signed-in identity, or anonymous MCP clientAddressKey. */
+  rateLimit(name: string, key?: string): Promise<{success: boolean}>;
   fetch: typeof fetch;
   fetchWithSecret(name: string, url: string, init?: RequestInit): Promise<Response>;
   ai(model: string, input: unknown): Promise<unknown>;

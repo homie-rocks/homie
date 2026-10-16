@@ -17,6 +17,29 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [Unreleased]
+
+### Fixed
+
+- Studio ingress now limits requests by IP before discovery; failed JWKS fetches and unknown keys share an atomic 60-second per-origin fetch bound. Authentication errors are generic, with stage details only in owner audit logs. Signed events use the exact inbound path rule, honour disabled entries and reject non-object bodies with 400. Removed the unused v1-only webhook production dependency and documented exact manual key rotation steps through stdin.
+
+- Studio-to-studio limits aggregate by proven origin, outbound destinations require explicit configuration, and remote results retain untrusted provenance. Asserted handles never identify local accounts.
+- Availability allocates from a page snapshot in three queries instead of querying per slot, option and resource.
+- Studio identity uses Ed25519 private-key JWT and origin-hosted JWKS; events use Standard Webhooks v1a with the same key. Deploy provisions private keys through stdin. Office Allow/Deny is stored in D1, denied by default, with origin/handle audit entries. Owners exchange no secrets.
+- Studio events and business feed data share an 8,192-byte limit. Discovery and tokens are cached within each request; proof scripts use deploy URLs without reading Wrangler OAuth files.
+
+### Added
+
+- Studio-to-studio tools use the official MCP SDK with bounded HTTPS transport, receiver-owned OAuth client credentials and a verified studio caller distinct from an asserted end-user handle.
+- Booking availability returns paged schema.org offers and exact booking arguments, shared by AI tools and the existing booking choices UI.
+- Signed cross-studio events reuse Standard Webhooks, per-sender allowlists and durable business-event receipts to trigger studio functions.
+- Tools can call their own custom routes with the caller's identity and share opt-in Cloudflare Rate Limiting bindings.
+
+### Upgrade notes
+
+- Configure and deploy explicit peer allowlists and provision secrets on each studio. Existing OAuth browser connections, booking migrations and function delivery remain in use. No version bump or new migration. See `packages/studio/docs/studio-to-studio.md`.
+- The owner action checklist and 3D map/terrain catalogue part are scoped to separate follow-up PRs.
+
 ## [0.56.0] - 2026-10-15
 
 **Plugin 0.56.0**
