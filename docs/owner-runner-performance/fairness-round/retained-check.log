@@ -1,0 +1,15 @@
+Author against toolkit 0.51.1: node_modules/@homie-rocks/studio/guides/game/{SKILL,RULES,REWRITE}.md
+Homie Claude Code plugin 0.25.2 is older than toolkit 0.51.1. Its guidance may be stale. Read node_modules/@homie-rocks/studio/guides/game/{SKILL,RULES,REWRITE}.md. claude plugin update homie@homie.
+computer opened http://127.0.0.1:8791/tiny-platformer/play
+phone opened http://127.0.0.1:8791/tiny-platformer/play
+seated: computer room pub-1 seat 0 replica; phone room pub-1 seat 1 replica
+drawing: computer 61 fps, phone 61 fps (ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version))
+Checked this studio's own build at http://127.0.0.1:8791.
+PASS: two fresh browsers in room pub-1 finished round 1 (2 humans, 2 bots) in 122 s.
+  computer: seat 0 (replica), seated in 0.7 s
+  phone: seat 1 (replica), seated in 0.3 s
+  computer drew 61 fps on ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)
+  phone drew 61 fps on ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)
+  computer ready: the loading cover lifted at 0.2 s (by the auto)
+  phone ready: the loading cover lifted at 0.1 s (by the auto)
+  Connection: uninterrupted (no reconnects: both connections held from the seat to the results)

@@ -1,0 +1,863 @@
+[
+  {
+    "file": "bmargin2fair1-lag300-loss0.05-jitter0-frames.json.gz",
+    "confirmedObserverDeaths": [
+      {
+        "diedAt": 142,
+        "onlookerReceipt": 1792051885188,
+        "onlookerClock": [
+          143.7736155751424,
+          142.18
+        ],
+        "nearestDrawnMonster": [
+          2.0359573364257812,
+          4,
+          32.6,
+          31,
+          34,
+          33.03595733642578
+        ],
+        "noNearbyMonster": true,
+        "serverContact": {
+          "report": 131,
+          "judged": 142,
+          "monster": 3,
+          "born": 1,
+          "sub": 0,
+          "stationary": false,
+          "remote": true,
+          "runnerPos": {
+            "x": 31.983335494995117,
+            "y": 41,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 31.248876571655273,
+            "y": 41,
+            "z": 0
+          },
+          "at": {
+            "x": 60.5,
+            "y": 41.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 142,
+          "received": 1792051885411.5
+        }
+      },
+      {
+        "diedAt": 1010,
+        "onlookerReceipt": 1792051928586.6,
+        "onlookerClock": [
+          1011.7279222691257,
+          1010.18
+        ],
+        "nearestDrawnMonster": [
+          0.39250305175781364,
+          3,
+          32.53,
+          41,
+          32.13749694824219,
+          40.89999771118164
+        ],
+        "noNearbyMonster": false,
+        "serverContact": {
+          "report": 1008,
+          "judged": 1008,
+          "monster": 3,
+          "born": 966,
+          "sub": 2,
+          "stationary": false,
+          "remote": true,
+          "runnerPos": {
+            "x": 32.88749694824219,
+            "y": 40.599666595458984,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 33.54931640625,
+            "y": 41,
+            "z": 0
+          },
+          "at": {
+            "x": 20.5,
+            "y": 31.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 1010,
+          "received": 1792051928812.9001
+        }
+      }
+    ]
+  },
+  {
+    "file": "bmargin2fair2-lag300-loss0.05-jitter0-frames.json.gz",
+    "confirmedObserverDeaths": [
+      {
+        "diedAt": 269,
+        "onlookerReceipt": 1792051965850.5,
+        "onlookerClock": [
+          270.68999998366826,
+          269.04
+        ],
+        "nearestDrawnMonster": [
+          1.0999961853027358,
+          3,
+          30.65,
+          41,
+          31.749996185302734,
+          41
+        ],
+        "noNearbyMonster": false,
+        "serverContact": {
+          "report": 260,
+          "judged": 269,
+          "monster": 3,
+          "born": 1,
+          "sub": 2,
+          "stationary": false,
+          "remote": true,
+          "runnerPos": {
+            "x": 30.999996185302734,
+            "y": 41,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 30.250732421875,
+            "y": 41,
+            "z": 0
+          },
+          "at": {
+            "x": 60.5,
+            "y": 41.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 269,
+          "received": 1792051966070.7
+        }
+      },
+      {
+        "diedAt": 308,
+        "onlookerReceipt": 1792051967799.7998,
+        "onlookerClock": [
+          309.6741293600144,
+          308.08
+        ],
+        "nearestDrawnMonster": [
+          0.4035072326660156,
+          6,
+          56.25,
+          42,
+          56.653507232666016,
+          41.63307571411133
+        ],
+        "noNearbyMonster": false,
+        "serverContact": {
+          "report": 306,
+          "judged": 306,
+          "monster": 6,
+          "born": 1,
+          "sub": 1,
+          "stationary": false,
+          "remote": true,
+          "runnerPos": {
+            "x": 56.92917251586914,
+            "y": 42,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 57.58317184448242,
+            "y": 42,
+            "z": 0
+          },
+          "at": {
+            "x": 10.5,
+            "y": 6.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 308,
+          "received": 1792051968027.2
+        }
+      },
+      {
+        "diedAt": 428,
+        "onlookerReceipt": 1792051973799.2998,
+        "onlookerClock": [
+          429.6580794110718,
+          428.02
+        ],
+        "nearestDrawnMonster": [
+          0.06933723449706974,
+          0,
+          19.39,
+          6,
+          19.45933723449707,
+          6
+        ],
+        "noNearbyMonster": false,
+        "serverContact": {
+          "report": 426,
+          "judged": 426,
+          "monster": 0,
+          "born": 1,
+          "sub": 0,
+          "stationary": false,
+          "remote": true,
+          "runnerPos": {
+            "x": 19.508337020874023,
+            "y": 6,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 20.21126365661621,
+            "y": 6,
+            "z": 0
+          },
+          "at": {
+            "x": 10.5,
+            "y": 6.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 428,
+          "received": 1792051974177.7
+        }
+      },
+      {
+        "diedAt": 480,
+        "onlookerReceipt": 1792051976399.2998,
+        "onlookerClock": [
+          481.38625001890114,
+          480.04
+        ],
+        "nearestDrawnMonster": [
+          0.02333358764648441,
+          0,
+          5.96,
+          6,
+          5.983333587646484,
+          6
+        ],
+        "noNearbyMonster": false,
+        "serverContact": {
+          "report": 478,
+          "judged": 478,
+          "monster": 0,
+          "born": 1,
+          "sub": 1,
+          "stationary": false,
+          "remote": true,
+          "runnerPos": {
+            "x": 5.983333587646484,
+            "y": 6,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 5.249837398529053,
+            "y": 6,
+            "z": 0
+          },
+          "at": {
+            "x": 50.5,
+            "y": 26.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 480,
+          "received": 1792051976628.4001
+        }
+      },
+      {
+        "diedAt": 629,
+        "onlookerReceipt": 1792051983883.0999,
+        "onlookerClock": [
+          631.0555178751008,
+          629.32
+        ],
+        "nearestDrawnMonster": [
+          0.2650022888183585,
+          3,
+          29.96,
+          41,
+          30.22500228881836,
+          41
+        ],
+        "noNearbyMonster": false,
+        "serverContact": {
+          "report": 615,
+          "judged": 629,
+          "monster": 3,
+          "born": 1,
+          "sub": 1,
+          "stationary": false,
+          "remote": true,
+          "runnerPos": {
+            "x": 29.900001525878906,
+            "y": 41,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 29.350391387939453,
+            "y": 41,
+            "z": 0
+          },
+          "at": {
+            "x": 40.5,
+            "y": 38.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 629,
+          "received": 1792051984177.6
+        }
+      },
+      {
+        "diedAt": 818,
+        "onlookerReceipt": 1792051993298.5999,
+        "onlookerClock": [
+          819.3474302907379,
+          818.02
+        ],
+        "nearestDrawnMonster": [
+          0.9150022888183571,
+          3,
+          32.06,
+          41,
+          32.97500228881836,
+          41
+        ],
+        "noNearbyMonster": false,
+        "serverContact": {
+          "report": 805,
+          "judged": 818,
+          "monster": 3,
+          "born": 1,
+          "sub": 1,
+          "stationary": false,
+          "remote": true,
+          "runnerPos": {
+            "x": 32.30833435058594,
+            "y": 41,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 31.650928497314453,
+            "y": 41,
+            "z": 0
+          },
+          "at": {
+            "x": 40.5,
+            "y": 38.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 818,
+          "received": 1792051993526.2
+        }
+      },
+      {
+        "diedAt": 994,
+        "onlookerReceipt": 1792052002114.2998,
+        "onlookerClock": [
+          995.6699918385124,
+          994.3
+        ],
+        "nearestDrawnMonster": [
+          2.456666412353517,
+          3,
+          30.56,
+          41,
+          33.016666412353516,
+          41
+        ],
+        "noNearbyMonster": true,
+        "serverContact": {
+          "report": 989,
+          "judged": 994,
+          "monster": 3,
+          "born": 1,
+          "sub": 2,
+          "stationary": false,
+          "remote": true,
+          "runnerPos": {
+            "x": 30.85000228881836,
+            "y": 41,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 30.150634765625,
+            "y": 41,
+            "z": 0
+          },
+          "at": {
+            "x": 30.5,
+            "y": 41.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 994,
+          "received": 1792052002577.3
+        }
+      }
+    ]
+  },
+  {
+    "file": "bmargin2fair3-lag300-loss0.05-jitter0-frames.json.gz",
+    "confirmedObserverDeaths": [
+      {
+        "diedAt": 82,
+        "onlookerReceipt": 1792052031887.3,
+        "onlookerClock": [
+          83.33386968201498,
+          82
+        ],
+        "nearestDrawnMonster": [
+          0.25,
+          6,
+          61.75,
+          42,
+          62,
+          42
+        ],
+        "noNearbyMonster": false,
+        "serverContact": {
+          "report": 64,
+          "judged": 82,
+          "monster": 6,
+          "born": 1,
+          "sub": 2,
+          "stationary": true,
+          "remote": true,
+          "runnerPos": {
+            "x": 62,
+            "y": 42,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 61.25,
+            "y": 42,
+            "z": 0
+          },
+          "at": {
+            "x": 55.5,
+            "y": 6.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 82,
+          "received": 1792052032137.9
+        }
+      },
+      {
+        "diedAt": 202,
+        "onlookerReceipt": 1792052037887,
+        "onlookerClock": [
+          203.36497101679856,
+          202.04
+        ],
+        "nearestDrawnMonster": [
+          0.010000000000001563,
+          0,
+          21.76,
+          6,
+          21.75,
+          6
+        ],
+        "noNearbyMonster": false,
+        "serverContact": {
+          "report": 200,
+          "judged": 200,
+          "monster": 0,
+          "born": 1,
+          "sub": 0,
+          "stationary": false,
+          "remote": true,
+          "runnerPos": {
+            "x": 21.741666793823242,
+            "y": 5.599666595458984,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 21.08316993713379,
+            "y": 6,
+            "z": 0
+          },
+          "at": {
+            "x": 40.5,
+            "y": 38.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 202,
+          "received": 1792052038114.2
+        }
+      },
+      {
+        "diedAt": 684,
+        "onlookerReceipt": 1792052061985.3,
+        "onlookerClock": [
+          685.350160767646,
+          684.04
+        ],
+        "nearestDrawnMonster": [
+          3.583331298828128,
+          3,
+          35.45,
+          41,
+          31.866668701171875,
+          40.507999420166016
+        ],
+        "noNearbyMonster": true,
+        "serverContact": {
+          "report": 681,
+          "judged": 681,
+          "monster": 3,
+          "born": 670,
+          "sub": 0,
+          "stationary": false,
+          "remote": true,
+          "runnerPos": {
+            "x": 35.116668701171875,
+            "y": 41,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 34.550193786621094,
+            "y": 41,
+            "z": 0
+          },
+          "at": {
+            "x": 10.5,
+            "y": 6.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 684,
+          "received": 1792052062220.2
+        }
+      },
+      {
+        "diedAt": 763,
+        "onlookerReceipt": 1792052065935.7002,
+        "onlookerClock": [
+          764.3517330809285,
+          763.02
+        ],
+        "nearestDrawnMonster": [
+          0.019998664855957138,
+          0,
+          5.87,
+          6,
+          5.850001335144043,
+          6
+        ],
+        "noNearbyMonster": false,
+        "serverContact": {
+          "report": 756,
+          "judged": 763,
+          "monster": 0,
+          "born": 1,
+          "sub": 1,
+          "stationary": true,
+          "remote": true,
+          "runnerPos": {
+            "x": 5.850001335144043,
+            "y": 6,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 6.544596195220947,
+            "y": 6,
+            "z": 0
+          },
+          "at": {
+            "x": 30.5,
+            "y": 41.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 763,
+          "received": 1792052066168
+        }
+      },
+      {
+        "diedAt": 1112,
+        "onlookerReceipt": 1792052083401,
+        "onlookerClock": [
+          1113.6799940538526,
+          1112.26
+        ],
+        "nearestDrawnMonster": [
+          1.4650030517578116,
+          3,
+          28.46,
+          41,
+          29.925003051757812,
+          41
+        ],
+        "noNearbyMonster": true,
+        "serverContact": {
+          "report": 1099,
+          "judged": 1112,
+          "monster": 3,
+          "born": 670,
+          "sub": 1,
+          "stationary": false,
+          "remote": true,
+          "runnerPos": {
+            "x": 28.675003051757812,
+            "y": 40.599666595458984,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 27.950244903564453,
+            "y": 41,
+            "z": 0
+          },
+          "at": {
+            "x": 3.5,
+            "y": 15.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 1112,
+          "received": 1792052083618
+        }
+      }
+    ]
+  },
+  {
+    "file": "bmargin2fair4-lag300-loss0.05-jitter0-frames.json.gz",
+    "confirmedObserverDeaths": [
+      {
+        "diedAt": 84,
+        "onlookerReceipt": 1792052107953.8,
+        "onlookerClock": [
+          85.69967646484963,
+          84.16
+        ],
+        "nearestDrawnMonster": [
+          3.0343360900878906,
+          6,
+          61.94,
+          42,
+          62,
+          38.96566390991211
+        ],
+        "noNearbyMonster": true,
+        "serverContact": {
+          "report": 72,
+          "judged": 84,
+          "monster": 6,
+          "born": 1,
+          "sub": 2,
+          "stationary": false,
+          "remote": true,
+          "runnerPos": {
+            "x": 62,
+            "y": 41.58666229248047,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 62,
+            "y": 42,
+            "z": 0
+          },
+          "at": {
+            "x": 40.5,
+            "y": 38.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 84,
+          "received": 1792052108378.5
+        }
+      },
+      {
+        "diedAt": 246,
+        "onlookerReceipt": 1792052116056.2002,
+        "onlookerClock": [
+          247.38149208240068,
+          246.1
+        ],
+        "nearestDrawnMonster": [
+          1.9641679382324213,
+          3,
+          30.14,
+          41,
+          32.10416793823242,
+          39.89999771118164
+        ],
+        "noNearbyMonster": true,
+        "serverContact": {
+          "report": 236,
+          "judged": 246,
+          "monster": 3,
+          "born": 1,
+          "sub": 2,
+          "stationary": false,
+          "remote": true,
+          "runnerPos": {
+            "x": 27.829166412353516,
+            "y": 41,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 27.04833984375,
+            "y": 41,
+            "z": 0
+          },
+          "at": {
+            "x": 50.5,
+            "y": 26.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 246,
+          "received": 1792052116881.9001
+        }
+      }
+    ]
+  },
+  {
+    "file": "bmargin2fair5-lag300-loss0.05-jitter0-frames.json.gz",
+    "confirmedObserverDeaths": [
+      {
+        "diedAt": 154,
+        "onlookerReceipt": 1792052186236.7998,
+        "onlookerClock": [
+          155.7230607786906,
+          154.3
+        ],
+        "nearestDrawnMonster": [
+          2.366000823974609,
+          3,
+          30.32,
+          41,
+          32.68600082397461,
+          40.90039825439453
+        ],
+        "noNearbyMonster": true,
+        "serverContact": {
+          "report": 137,
+          "judged": 154,
+          "monster": 3,
+          "born": 1,
+          "sub": 2,
+          "stationary": false,
+          "remote": true,
+          "runnerPos": {
+            "x": 28.108333587646484,
+            "y": 41,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 27.4482421875,
+            "y": 41,
+            "z": 0
+          },
+          "at": {
+            "x": 60.5,
+            "y": 41.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 154,
+          "received": 1792052186708.8
+        }
+      },
+      {
+        "diedAt": 833,
+        "onlookerReceipt": 1792052220184.5,
+        "onlookerClock": [
+          834.7084631015765,
+          833.28
+        ],
+        "nearestDrawnMonster": [
+          4.552498092651369,
+          3,
+          34.24,
+          41,
+          29.687501907348633,
+          37.71500015258789
+        ],
+        "noNearbyMonster": true,
+        "serverContact": {
+          "report": 824,
+          "judged": 833,
+          "monster": 3,
+          "born": 704,
+          "sub": 2,
+          "stationary": false,
+          "remote": true,
+          "runnerPos": {
+            "x": 34.1875,
+            "y": 41,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 34.6494140625,
+            "y": 41,
+            "z": 0
+          },
+          "at": {
+            "x": 20.5,
+            "y": 31.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 833,
+          "received": 1792052220408.2
+        }
+      },
+      {
+        "diedAt": 1242,
+        "onlookerReceipt": 1792052240634.5999,
+        "onlookerClock": [
+          1243.709821981572,
+          1242.24
+        ],
+        "nearestDrawnMonster": [
+          0.25833358764648295,
+          4,
+          19.15,
+          31,
+          18.891666412353516,
+          31
+        ],
+        "noNearbyMonster": false,
+        "serverContact": {
+          "report": 1240,
+          "judged": 1240,
+          "monster": 4,
+          "born": 1234,
+          "sub": 2,
+          "stationary": false,
+          "remote": true,
+          "runnerPos": {
+            "x": 18.891666412353516,
+            "y": 31,
+            "z": 0
+          },
+          "monsterPos": {
+            "x": 19.66015625,
+            "y": 31,
+            "z": 0
+          },
+          "at": {
+            "x": 3.5,
+            "y": 15.5,
+            "z": 0
+          },
+          "id": "ei",
+          "tick": 1242,
+          "received": 1792052241258
+        }
+      }
+    ]
+  }
+]

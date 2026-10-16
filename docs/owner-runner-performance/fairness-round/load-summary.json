@@ -1,0 +1,49 @@
+[
+  {
+    "file": "margin2-pairs.log",
+    "starts": [
+      10.90185546875,
+      9.30517578125,
+      12.60888671875,
+      10.20654296875,
+      11.43408203125
+    ],
+    "recordedMin": 9.30517578125,
+    "recordedMax": 13.6982421875
+  },
+  {
+    "file": "margin-switch.log",
+    "starts": [
+      7.40966796875
+    ],
+    "recordedMin": 7.40966796875,
+    "recordedMax": 11.84375
+  },
+  {
+    "file": "final-phone-pairs.log",
+    "starts": [
+      10.1103515625,
+      11.33984375
+    ],
+    "recordedMin": 9.57666015625,
+    "recordedMax": 22.759765625
+  },
+  {
+    "file": "motion-phone-pairs.log",
+    "starts": [
+      7.2900390625,
+      11.54541015625,
+      11.005859375
+    ],
+    "recordedMin": 7.27490234375,
+    "recordedMax": 13.02490234375
+  },
+  {
+    "file": "wrapper-heap-pairs.log",
+    "starts": [
+      8.47802734375
+    ],
+    "recordedMin": 8.22998046875,
+    "recordedMax": 9.767578125
+  }
+]

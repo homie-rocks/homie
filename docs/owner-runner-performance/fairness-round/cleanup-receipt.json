@@ -1,0 +1,25 @@
+[
+  {
+    "removedOwnedTestFixture": "/var/folders/63/1sbmhrlj05g9gvcghc49h8q80000gn/T/homie-studio-rules-view-xKyfI3",
+    "bytes": 74090945,
+    "taskLog": "full-view-tests.log"
+  },
+  {
+    "removedOwnedTestFixture": "/var/folders/63/1sbmhrlj05g9gvcghc49h8q80000gn/T/homie-studio-rules-view-fJ9wWs",
+    "bytes": 74064887,
+    "taskLog": "view-tests-other.log"
+  },
+  {
+    "removedOwnedTestFixture": "/var/folders/63/1sbmhrlj05g9gvcghc49h8q80000gn/T/homie-studio-rules-view-CTkigT",
+    "bytes": 42540728,
+    "taskLog": "view-tests-rest.log"
+  },
+  {
+    "stoppedLocalServer": "branch",
+    "pid": 95170
+  },
+  {
+    "stoppedLocalServer": "live",
+    "pid": 65764
+  }
+]

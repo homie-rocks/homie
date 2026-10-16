@@ -1,0 +1,13 @@
+c-final-drift1.01-lag80-loss0.01-jitter0 pops 0 perMin 0 
+b-final-switch-lag80-loss0.01-jitter0 pops 0 perMin 0 
+b-final-drift.99-lag80-loss0.01-jitter0 pops 0 perMin 0 
+c-final-stall3000-lag80-loss0.01-jitter0 pops 0 perMin 0 
+c-final-reconnect-lag80-loss0.01-jitter0 pops 0 perMin 0 
+c-final-drift.99-lag80-loss0.01-jitter0 pops 0 perMin 0 
+b-final-stall3000-lag80-loss0.01-jitter0 pops 0 perMin 0 
+c-final-switch-lag80-loss0.01-jitter0 pops 1 perMin 0.93 
+b-final-reconnect-lag80-loss0.01-jitter0 pops 0 perMin 0 
+b-final-stall15000-lag80-loss0.01-jitter0 pops 0 perMin 0 
+b-final-drift1.01-lag80-loss0.01-jitter0 pops 0 perMin 0 
+c-final-stall15000-lag80-loss0.01-jitter0 pops 0 perMin 0 
+TOTAL {"runs":12,"frames":55477,"pops":1,"popMax":0.55,"s":925,"perMin":0.06}

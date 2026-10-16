@@ -1,3 +1,4 @@
+import { nearbyMap } from './map-index.ts';
 import { correctionPath } from './correction-path.ts';
 import { disposeMoveContext, sweepMap } from './math.ts';
 import { boundPosition, periodicDelta, blendPosition, relativePoint, wrapPoint } from './topology.mjs';
@@ -149,6 +150,8 @@ export interface PredictContext extends RayQueries {
 }
 export type Predictor = (me: any, input: any, ctx: PredictContext) => void;
 export interface Room<R = unknown> extends RayQueries {
+  /** Last owner input tick in the sampled authoritative scene. */
+  readonly confirmedTick: number;
   readonly viewTick: number;
   /** Where a body was at a tick, from the snapshots this browser holds (0.46.5); `known: false` past the newest one. */
   poseAt(id: string, tick: number): { pos: Vec3; vel: Vec3; known: boolean } | null;
@@ -195,7 +198,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const period = 1000 / tickHz;
   const sendEvery = Math.ceil(tickHz / Math.max(1, schema.settings.inputHz));
   const clock = opts.now ?? ((): number => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
-  const net = createNetplay<unknown, unknown, unknown>({ game: game.id, maxPlayers: schema.seats, snapshotHz: tickHz, interpFloorMs: schema.settings.predict.interpMs ?? period * sendEvery, heartbeatMs: 0, rulesHost: { mode: schema.settings.host, offline: schema.settings.offline, load: current?.load }, ...opts.net, rules: true, rulesLimits: { output: rulesOutput, bytes: rulesCaps(schema.seats), rates: rulesRates(tickHz, schema.seats) } });
+  const net = createNetplay<unknown, unknown, unknown>({ game: game.id, maxPlayers: schema.seats, snapshotHz: tickHz, interpFloorMs: schema.settings.predict.interpMs ?? period * sendEvery, heartbeatMs: 0, rulesHost: { retainAuthority: schema.kinds.some(k=>k.validatedOwner), mode: schema.settings.host, offline: schema.settings.offline, load: current?.load }, ...opts.net, rules: true, rulesLimits: { output: rulesOutput, bytes: rulesCaps(schema.seats), rates: rulesRates(tickHz, schema.seats) } });
   const agents = game.vocab && agentFactory ? agentFactory(net, game.vocab, { roles: ['guide', 'party'], view: () => ({}), manual: true, viewOnly: true }) : null;
   const kindOf = new Map(schema.kinds.map((k) => [k.name, k]));
   const listeners = new Map<string, Set<(e: any) => void>>();
@@ -289,10 +292,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let pressed = new Map<string, number | boolean>();
   let lastSent = '';
   let lastSendAt = 0;
-  let entries: { t: number; row: number[] }[] = [];
+  interface OutgoingEntry { t: number; row: number[]; compactBytes?: number; extraBytes?: number; expanded?: boolean }
+  let entries: OutgoingEntry[] = [];
   let inputSequence = 0;
   let controlChanges: number[][] = [];
-  let sentHistory: { t: number; row: number[] }[] = [];
+  let sentHistory: OutgoingEntry[] = [];
   let hiddenSent = false;
   const history = new Map<number, Mine>();
   let pending: { seq?: number; applied?: number; t: number; input: Readonly<Record<string, unknown>>; pulses?: Record<string, number>; pulseTicks?: Record<string, number> }[] = [];
@@ -394,6 +398,14 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const relayRtt = net.stats().rtt ?? 100;
     return net.offline ? 0 : Math.max(relayRtt, 2 * hostMedian);
   }
+  function ownerArrivalLead(): number {
+    // A queued snapshot's age is not the next packet's transit time. Use its
+    // actual downstream age plus the low end of recent transit observations
+    // for the upstream leg; TCP recovery must not inflate every future stamp.
+    const age = hostAges.at(-1) ?? 0;
+    const transit = hostAges.length ? quantile(hostAges, .05) : authorityRtt() / 2;
+    return Math.max(0, Math.min(tickHz - 2, (age + transit) / period - 1));
+  }
   function phaseAt(at: number): number {
     let p = phases[0];
     for (let i = phases.length - 1; i >= 0; i--) if (phases[i].at <= at) { p = phases[i]; break; }
@@ -401,7 +413,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   }
   const medianLead = (): number => leads.length ? leadMedian + phaseAt(clock()) : 0;
   function steer(now: number): void {
-    if (!base || !leads.length) return;
+    if (!base || !leads.length || myKind()?.validatedOwner) return;
     base = { tick: tickAt(now), at: now };
     // Input replay absorbs delivery jitter. Keep the physical tick cadence close to
     // wall time: aggressive steering makes fixed-step custom renderers bunch ticks.
@@ -409,6 +421,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (phases[phases.length - 1]?.rate !== speed) phases.push({ ...base, rate: speed });
     while (phases.length > 2 && phases[1].at < now - Math.max(1000, 2 * authorityRtt() + period)) phases.shift();
   }
+  let ownerBaseTick = 0;
   function rebase(k: number, reason = 'placement'): void {
     // Recalibrating an input clock is not a placement. Keep the drawn pose while
     // the new prediction catches up, just as for a snapshot reconciliation.
@@ -416,13 +429,22 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const continuousTick = reason === 'placement' && base && tickAt(clock()) >= k && tickAt(clock()) - k <= tickHz ? tickAt(clock()) : null;
     if(reason==='placement' || reason==='epoch')pulseQueue.length=0;
     correction.rebaseReason = reason; correction.rebaseError = medianLead() - targetLead();
+    const validated = myKind()?.validatedOwner;
     const rtt = authorityRtt(); calibratedRtt = rtt;
     // Lead samples refer to the clock which stamped them. Do not mix its offset with this clock's jitter.
     const target = targetLead();
     leads.length = 0; leadTarget = .5; leadMedian = 0;
     leadAfter = clock() + 2 * rtt + period;
     base = { tick: continuousTick ?? k + Math.min(tickHz, Math.ceil(rtt / period + target) + sendEvery - 1), at: clock() };
-    stepped = Math.max(k, Math.floor(base.tick) - (continuousTick === null ? 1 : 0));
+    if (validated) {
+      // A placement arrives one downstream trip after k; its next report takes
+      // another upstream trip. Start the report clock at that arrival time,
+      // without simulating any travel from the placement. The validator checks
+      // one physical step from this fresh baseline, not the skipped clock gap.
+      ownerBaseTick = k + Math.floor(ownerArrivalLead());
+      base = {tick:ownerBaseTick,at:clock()};
+    }
+    stepped = validated ? ownerBaseTick : Math.max(k, Math.floor(base.tick) - (continuousTick === null ? 1 : 0));
     entries = []; sentHistory = []; controlChanges = []; pending = []; history.clear(); replayHeld = {}; serverHeld = {}; held = {}; lastSent = ''; leads.length = 0; leadTarget = .5; leadMedian = 0; pressed = new Map(); pulseNumber = new Map(); heldTrack.clear(); if (reason !== 'lead') dropPredictions();
     speed = 1; phases.length = 0; phases.push({ ...base, rate: 1 }); catchTick = null; offsets = []; headingBlend = null; correction.rebases += 1;
     const u = mine && latest?.ents.get(mine.id); if (u) adopt(u);
@@ -470,7 +492,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // Reconciliation often replays the exact same deterministic movement. Cache
     // its full arguments, including tick, self, motion and collision revision.
     // Stateful physics worlds must execute their operations and are excluded.
-    const key = map.physics ? '' : JSON.stringify([mine?.id,kindName,t,body.pos,body.vel,body.heading,body.grounded,body.motion,input]);
+    const key = map.physics || kindOf.get(kindName)?.validatedOwner ? '' : JSON.stringify([mine?.id,kindName,t,body.pos,body.vel,body.heading,body.grounded,body.motion,input]);
     const cached = key ? movementCache.get(key) : undefined;
     if (cached?.scene === scene) return {...cached.value,motion:motionOf(kindName,cached.value.motion)};
     let failed = false;
@@ -488,6 +510,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   /* ---------------------------------------------------------------- the own actions, predicted (0.46.3) */
 
   const predictors = opts.predict ?? {};
+  const predictionFieldNames = new Map(schema.kinds.map(k => [k.name, new Set(k.fields.map(([name]) => name))]));
   let predicting = false;
   let predictionFrame: Frame | null = null;
   function predictionEach(kind: string, fn: (e: Entity) => void): void {
@@ -557,7 +580,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     finally { predicting = wasPredicting; predictionFrame = previousFrame; }
     // What it wrote is held to the declared types, as the server holds its own writes.
     for (const [name, fd] of kind.fields) fields[name] = coerce(fd, fields[name], dims);
-    for (const key of Object.keys(fields)) if (!kind.fields.some(([name]) => name === key)) delete fields[key];
+    for (const key of Object.keys(fields)) if (!predictionFieldNames.get(kindName)!.has(key)) delete fields[key];
   }
   /** After a snapshot: a ghost or a provisional effect whose tick the server has run without confirming it is taken back. */
   function settlePredictions(f: Frame, before: Frame | null, ack: number): void {
@@ -622,17 +645,25 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (fresh) { pressed = new Map(); pulseNumber = new Map(); }
     held = Object.freeze({ ...input });
     {
-      const body = runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: mine.motion }, held, t);
+      moveTick = t;
+      // A rendered full-tick forecast is already the guarded physics result.
+      // Commit it only when every input and collision revision still agrees.
+      const reuse = kind.validatedOwner && !map.physics && substepKinds.has(kind.name) && forecast && forecast.mine === mine && forecast.pos === mine.pos && forecast.motion === mine.motion && forecast.tick === t - 1 && forecast.key === JSON.stringify(held) && forecast.geometry === geometryAt();
+      const body = reuse ? forecast!.next : runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: mine.motion }, held, t);
+      forecast = null;
       mine.pos = body.pos; mine.vel = body.vel; mine.heading = body.heading; mine.grounded = body.grounded; mine.motion = body.motion;
       runPredict(kind.name, body, mine.fields, held, t, true, false);
       previewKey = '';
     }
-    const claim = kind.owner ? [mine.pos.x, mine.pos.y, mine.pos.z, mine.vel.x, mine.vel.y, mine.vel.z, mine.heading.x, mine.heading.y, mine.heading.z] : [];
-    const sig = JSON.stringify([values, claim]);
-    if (sig !== lastSent || press || controlChanges.length) { entries.push({ t, row: [...values, ...claim, -471, ++inputSequence, controlChanges.length, ...controlChanges.flat()] }); pending.push({ seq: inputSequence, t, input: held, ...(numbered ? { pulses: numbered } : {}) }); lastSent = sig; }
+    const claim = kind.owner ? [mine.pos.x, mine.pos.y, mine.pos.z, mine.vel.x, mine.vel.y, mine.vel.z, mine.heading.x, mine.heading.y, mine.heading.z, ...(kind.validatedOwner ? [ownerBaseTick] : [])] : [];
+    const sig = kind.validatedOwner ? '' : JSON.stringify([values, claim]);
+    if (kind.validatedOwner || sig !== lastSent || press || controlChanges.length) { entries.push({ t, row: [...values, ...claim, -471, ++inputSequence, controlChanges.length, ...controlChanges.flat()] }); pending.push({ seq: inputSequence, t, input: held, ...(numbered ? { pulses: numbered } : {}) }); lastSent = sig; }
+    if (kind.validatedOwner && pending.length>256) pending.splice(0,pending.length-256);
     controlChanges = [];
-    history.set(t, copyMine(mine));
-    for (const k of history.keys()) if (k < t - tickHz && (catchTick === null || k < Math.floor(catchTick))) history.delete(k);
+    if (!kind.validatedOwner) {
+      history.set(t, copyMine(mine));
+      for (const k of history.keys()) if (k < t - tickHz && (catchTick === null || k < Math.floor(catchTick))) history.delete(k);
+    }
   }
   /**
    * The end of a send period (`sendEvery` ticks, counted from tick 0): one frame with the entries made in it, `k` the
@@ -641,8 +672,8 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
    */
   function flush(now: number, t: number): void {
     if (!mine) { entries = []; return; }
-    if (!entries.length && now - lastSendAt >= 250) keepalive(t);
-    const marker = myKind()!.input.length + (myKind()!.owner ? 9 : 0);
+    if (!myKind()?.validatedOwner && !entries.length && now - lastSendAt >= 250) keepalive(t);
+    const marker = myKind()!.input.length + (myKind()!.validatedOwner ? 10 : myKind()!.owner ? 9 : 0);
     // A newer tick's acknowledgement cannot acknowledge a hole in the history.
     if (!entries.length && !sentHistory.some(e => !applications.has(e.row[marker + 1]))) return;
     const k = Math.min(entries[0]?.t ?? t, t - (t % sendEvery));
@@ -655,8 +686,12 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // until they return, without allowing an unbounded packet or retained history.
     const missing = sentHistory.find(e => e.t <= (latest?.k ?? 0) && !applications.has(e.row[marker + 1]));
     const recoveryTicks = missing ? t - missing.t + 2 * sendEvery : 0;
-    const windowTicks = Math.min(64, Math.max(4, recoveryTicks, Math.ceil((2 * authorityRtt() + 250) / period + targetLead())));
-    sentHistory = sentHistory.filter(e => e.t >= t - windowTicks).slice(-64);
+    const historyCap = myKind()?.validatedOwner ? 256 : 64;
+    const windowTicks = Math.min(historyCap, Math.max(4, recoveryTicks, Math.ceil((2 * authorityRtt() + 250) / period + targetLead())));
+    let kept = 0;
+    for (const e of sentHistory) if (e.t >= t - windowTicks) sentHistory[kept++] = e;
+    sentHistory.length = kept;
+    if (kept > historyCap) sentHistory.splice(0, kept - historyCap);
     const first = Math.min(k, sentHistory[0]?.t ?? k);
     // Repeated history must fit the relay's existing byte cap, including its
     // envelope and snapshot acknowledgement. Always carry the newest controls;
@@ -664,27 +699,37 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // Sub-tick samples are optional metadata: the row already contains the held
     // duration integrated by heldMean. Never truncate its values or sequence.
     const budget = LIMITS.in - 128;
-    const selected = new Map<number, StepEntry>();
+    const selected: OutgoingEntry[] = [];
     let bytes = 2;
     const newest = sentHistory.at(-1);
-    const candidates = [...(newest ? [newest] : []),
-      ...sentHistory.filter(e => e !== newest && !applications.has(e.row[marker + 1])),
-      ...sentHistory.filter(e => e !== newest && applications.has(e.row[marker + 1])).reverse()];
-    for (const e of candidates) {
-      const row = [e.t - first, ...e.row.slice(0, marker + 2), 0];
-      const size = JSON.stringify(row).length + (selected.size ? 1 : 0);
-      if (bytes + size > budget) continue;
-      selected.set(e.t, row); bytes += size;
+    const select = (e: OutgoingEntry): void => {
+      // Do not allocate rows for reports the byte budget will discard. The
+      // old path built both compact and expanded copies on every resend.
+      if (e.compactBytes === undefined) {
+        const prefixBytes = JSON.stringify(e.row.slice(0, marker + 2)).length;
+        e.compactBytes = prefixBytes + 3;
+        e.extraBytes = JSON.stringify(e.row).length - prefixBytes - 2;
+      }
+      const size = e.compactBytes + String(e.t - first).length + (selected.length ? 1 : 0);
+      if (bytes + size > budget) return;
+      e.expanded = false; selected.push(e); bytes += size;
+    };
+    if (newest) select(newest);
+    for (const e of sentHistory) if (e !== newest && !applications.has(e.row[marker + 1])) select(e);
+    for (let i = sentHistory.length - 1; i >= 0; i--) {
+      const e = sentHistory[i];
+      if (e !== newest && applications.has(e.row[marker + 1])) select(e);
     }
-    // Use spare bytes for sample metadata only after reserving control history.
-    for (const e of candidates) {
-      const compact = selected.get(e.t);
-      if (!compact) continue;
-      const row = [e.t - first, ...e.row];
-      const extra = JSON.stringify(row).length - JSON.stringify(compact).length;
-      if (bytes + extra <= budget) { selected.set(e.t, row); bytes += extra; }
-    }
-    const rows = [...selected].sort((a, b) => a[0] - b[0]).map(([, row]) => row);
+    // Preserve the same priority for optional sub-tick metadata.
+    for (const e of selected) if (bytes + e.extraBytes! <= budget) { e.expanded = true; bytes += e.extraBytes!; }
+    selected.sort((a, b) => a.t - b.t);
+    const rows: StepEntry[] = selected.map(e => {
+      const length = e.expanded ? e.row.length : marker + 3;
+      const row: StepEntry = new Array(length + 1);
+      row[0] = e.t - first;
+      for (let i = 0; i < length; i++) row[i + 1] = !e.expanded && i === marker + 2 ? 0 : e.row[i];
+      return row;
+    });
     entries = [];
     if (net.steps(epoch, first, rows, mine.r)) lastSendAt = now;
   }
@@ -693,7 +738,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const kind = myKind();
     if (!mine || !kind) return;
     const values = kind.input.map(([name, fd]) => ((fd.t === 'press' || fd.t === 'pulse') ? 0 : fd.t === 'held' ? Number(coerce(fd, heldNumber(sample[name], fd.init), dims)) : Number(coerce(fd, sample[name] ?? fd.init, dims))));
-    const claim = kind.owner ? [mine.pos.x, mine.pos.y, mine.pos.z, mine.vel.x, mine.vel.y, mine.vel.z, mine.heading.x, mine.heading.y, mine.heading.z] : [];
+    const claim = kind.owner ? [mine.pos.x, mine.pos.y, mine.pos.z, mine.vel.x, mine.vel.y, mine.vel.z, mine.heading.x, mine.heading.y, mine.heading.z, ...(kind.validatedOwner ? [ownerBaseTick] : [])] : [];
     entries = [{ t, row: [...values, ...claim, -471, ++inputSequence, controlChanges.length, ...controlChanges.flat()] }]; pending.push({ seq: inputSequence, t, input: Object.fromEntries(kind.input.map(([name, fd], i) => [name, fd.t === 'press' ? false : values[i]])) }); lastSent = JSON.stringify([values, claim]);
   }
   let pumping = false;
@@ -710,11 +755,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const hidden = typeof document !== 'undefined' && document.hidden === true;
     // Effects play for everyone who draws the room: a watcher has no body and still sees them.
     fire();
-    if (!mine || !base || net.seat === null || (!net.connected && !net.rulesHosting)) return;
+    if (!mine || !base || net.seat === null || (net.link === 'closed' || !myKind()?.validatedOwner && !net.connected && !net.rulesHosting)) return;
     if (hidden) {
       // A hidden tab's timers are too slow to keep input alive, and a body must not run on without its player:
       // one neutral entry at once (every field at its init, no press), then no more steps until the tab shows again.
-      if (!hiddenSent) { hiddenSent = true; sample = {}; pressed = new Map(); heldTrack.clear(); const t = Math.floor(tickAt(now)) + 1; keepalive(t); lastSendAt = 0; flush(now, t); }
+      if (!hiddenSent) { hiddenSent = true; sample = {}; pressed = new Map(); heldTrack.clear(); const t = Math.floor(tickAt(now)) + 1; if (!myKind()?.validatedOwner) keepalive(t); lastSendAt = 0; flush(now, t); }
       base = null;
       return;
     }
@@ -724,7 +769,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     steer(now);
     let t = Math.floor(tickAt(now));
     // A frame longer than a quarter of a second: set the clock again from the newest snapshot and carry on from there.
-    if (t - stepped > Math.ceil(tickHz / 4) && latest) { rebase(latest.k, 'frame'); t = Math.floor(tickAt(now)); }
+    if (t - stepped > Math.ceil(tickHz / 4) && latest) {
+      if (myKind()?.validatedOwner) { base={tick:stepped,at:now}; heldTrack.clear(); t=stepped; }
+      else { rebase(latest.k, 'frame'); t = Math.floor(tickAt(now)); }
+    }
     while (stepped < t) {
       stepped += 1;
       step(stepped, stepped === t);
@@ -747,6 +795,29 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const before = latest;
     if (before && before.e === f.e && f.k <= before.k) return;
     latest = f;
+    // Ordinary rooms already use net.sample's bounded history; retain a second
+    // history only when accepted owner reports need the shared scene clock.
+    if (hasValidatedOwners) {
+      if (before && before.e !== f.e) { sceneHistory.length = 0; sceneCursor = null; }
+      for (const [id, q] of ownerHistory) if (q.epoch !== f.e || !f.ents.has(id)) ownerHistory.delete(id);
+      for (const [id, u] of f.ents) {
+        if (!kindOf.get(u.kind)?.validatedOwner || u.driver !== 'person' || u.ownerTick === undefined || u.ownerTick < 0) continue;
+        let q = ownerHistory.get(id);
+        if (!q || q.epoch !== f.e || q.r !== u.r) { q={epoch:f.e,r:u.r,placedAt:f.k,samples:[],...(q?.epoch===f.e?{previous:q}:{})};ownerHistory.set(id,q); }
+        if (sceneCursor !== null && sceneCursor >= q.placedAt) q.previous = undefined;
+        // Retain no more placement history than the bounded scene history can use.
+        let oldestRevision = q;
+        const oldestTick = sceneHistory[0]?.k ?? f.k;
+        while (oldestRevision.previous && oldestRevision.placedAt > oldestTick) oldestRevision = oldestRevision.previous;
+        oldestRevision.previous = undefined;
+        if (!q.samples.length || u.ownerTick > q.samples.at(-1)!.t) q.samples.push({t:u.ownerTick,u});
+        while (q.samples.length > 2 && sceneCursor !== null && q.samples[1].t < sceneCursor - 2) q.samples.shift();
+        if (q.samples.length > 512) q.samples.shift();
+      }
+      sceneHistory.push(s);
+      if (sceneHistory.length > 512) sceneHistory.shift();
+      sceneCached = null;
+    }
     if (before && before.e !== f.e) held2.length = 0;
     held2.push(f); if (held2.length > 2 * tickHz) held2.shift();
     if (!before || before.e !== f.e) collisionHistory = [];
@@ -773,7 +844,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       // A return hands the body back at the server's pose with a new revision. It is the same body, still on the
       // screen: keep drawing it from where it is shown unless the game says it was really placed meanwhile.
       const prior = held2.at(-2)?.ents.get(me.id) ?? null;
-      if (placed && !changedEpoch && returningUntil > clock() && mine?.id === me.id && mine.r !== me.r && presented?.id === me.id && presented.r === mine.r) {
+      if (!kindOf.get(me.kind)?.validatedOwner && placed && !changedEpoch && returningUntil > clock() && mine?.id === me.id && mine.r !== me.r && presented?.id === me.id && presented.r === mine.r) {
         let respawn = false;
         if (opts.respawned && prior) { try { respawn = Boolean(opts.respawned(entityOf(prior, true, false), entityOf(me, true, false))); } catch (err) { console.warn('[room] respawned', err); } }
         if (!respawn) { presented.r = me.r; presented.at = clock(); }
@@ -783,7 +854,18 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         adopt(me); rebase(f.k, changedEpoch ? 'epoch' : 'placement');
         if (placed) emit('placed', entityOf(me, true));
       } else if (kindOf.get(me.kind)?.owner) {
-        mine!.motion = motionOf(me.kind, me.motion);
+        if (kindOf.get(me.kind)?.validatedOwner) {
+          pending = pending.filter(e=>!applications.has(e.seq!));
+          const now = clock();
+          const error = tickAt(now) - (f.k + ownerArrivalLead());
+          // Snapshots acknowledge the room clock even when no input was accepted.
+          // Small drift changes cadence, never the pose. Ahead-of-room reports
+          // outside the validation window cause an explicit placement revision.
+          base = {tick:tickAt(now),at:now};
+          speed = 1 - Math.max(-.02,Math.min(.02,error * .01));
+          if (tickAt(now) < f.k - tickHz && pending.length === 0) rebase(f.k, 'clock');
+        }
+        if (!kindOf.get(me.kind)?.validatedOwner) mine!.motion = motionOf(me.kind, me.motion);
         if (predictors[me.kind]) mine!.fields = thawFields(kindOf.get(me.kind)?.fields ?? [], me.fields);
       } else if (!pending.some(entry => entry.seq !== undefined && entry.t <= f.k && f.k - entry.t < tickHz && (applications.get(entry.seq) ?? Infinity) > f.k)) {
         // This snapshot predates an input we already predicted. Within the rewind
@@ -885,8 +967,8 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
           }
         }
       }
-      if (!latencyCalibrated && authorityRtt() > calibratedRtt + period && !Object.values(sample).some(Boolean) && !pending.some(e=>Object.values(e.input).some(Boolean))) { rebase(f.k, 'lead'); latencyCalibrated = true; }
-      if (row && row[3] !== -128 && base && clock() >= leadAfter) {
+      if (!myKind()?.validatedOwner && !latencyCalibrated && authorityRtt() > calibratedRtt + period && !Object.values(sample).some(Boolean) && !pending.some(e=>Object.values(e.input).some(Boolean))) { rebase(f.k, 'lead'); latencyCalibrated = true; }
+      if (!myKind()?.validatedOwner && row && row[3] !== -128 && base && clock() >= leadAfter) {
         const now = clock(), rtt = authorityRtt();
         // A reported lead describes an input sent roughly one authority round trip ago. Remove that
         // clock's phase before measuring jitter; project the control median onto today's phase. Otherwise
@@ -925,7 +1007,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   /** Effects wait for their authoritative snapshot and the body's drawn tick, including its catch-up path. */
   function fire(): void {
     if (!fxQueue.length) return;
-    const s = net.sample();
+    const s = sceneSample();
     const drawn = s ? lerp(s.a.k, s.b.k, s.alpha) : latest ? latest.k : 0;
     for (let i = 0; i < fxQueue.length;) {
       const x = fxQueue[i];
@@ -942,7 +1024,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   net.on('role', (e) => { if (e.snap) onSnapshot(e.snap); if (net.offline && !net.rulesHosting) setStatus(net.closedWhy ? 'closed' : 'offline'); });
   net.on('link', (e) => {
     if (e.why === 'subscribe') return;
-    if (e.state === 'online') { returningUntil = clock() + 3000; base = null; if (status !== 'playing') setStatus('connecting'); } else if (e.state === 'closed') setStatus('closed'); else if (e.state === 'alone' || e.state === 'offline') setStatus('offline');
+    if (e.state === 'online') { returningUntil = clock() + 3000; if (!myKind()?.validatedOwner) base = null; if (status !== 'playing') setStatus('connecting'); } else if (e.state === 'closed') setStatus('closed'); else if (e.state === 'alone' || e.state === 'offline') setStatus('offline');
   });
   net.on('round', (r) => { if (r.results) { results = r.results; if (round) { round = { ...round, results }; emit('round', roundNow()); } } });
   net.on('event', (e) => {
@@ -993,11 +1075,18 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let route: Vec3[] = [];
   let routeDirection = 0;
   let presentedEntity: Entity | null = null;
+  let ownDescription: {server:Unpacked; fields:Record<string,unknown>; motion:Record<string,unknown>; tick:number; entity:Entity} | null = null;
   let presentationQueued = false;
+  let presentationFrame: number | null = null;
   let forecast: { mine: Mine; pos: Vec3; motion: Record<string, unknown>; tick: number; key: string; geometry: unknown; next: ReturnType<typeof runMove> } | null = null;
   let presented: { id: string; r: number; pos: Vec3; vel: Vec3; at: number } | null = null;
   function meNow(present = false): Entity | null {
-    if (present && presentedEntity) return presentedEntity;
+    // The document timeline is shared by all rAF callbacks in this browser
+    // frame, including callbacks separated by microtasks. Inputs, snapshots and
+    // actual simulation steps still invalidate the cached presentation at once.
+    const timeline = typeof document === 'undefined' ? null : document.timeline?.currentTime;
+    const frame = myKind()?.validatedOwner && typeof timeline === 'number' ? timeline : null;
+    if (present && presentedEntity && (frame === null || frame === presentationFrame)) return presentedEntity;
     if (predicting) { const u = mine && predictionFrame?.ents.get(mine.id); return u ? entityOf(u, true) : null; }
     if (solo) return solo.me;
     if (!mine || !latest) return null;
@@ -1020,28 +1109,38 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       // A recorded substep path needs the whole tick's forecast instead: include
       // the remaining duration of controls held now, then sample its actual steps.
       for (const [name, fd] of kind.input) now[name] = (fd.t === 'press' || fd.t === 'pulse') ? (pressed.get(name) ?? (fd.t === 'pulse' && pulseQueue[0]?.name===name ? pulseQueue[0].value : fd.t === 'press' ? false : 0)) : fd.t === 'held' ? coerce(fd, heldMean(name, fd.init, Math.min(clock(), edgeOf(stepped + 1)), false, substepKinds.has(kind.name) ? edgeOf(stepped + 1) : Math.min(clock(), edgeOf(stepped + 1))), dims) : coerce(fd, sample[name] ?? fd.init, dims);
+      moveTick = stepped + 1;
       const forecastKey = JSON.stringify(now), scene = geometryAt();
       const reuse = !map.physics && substepKinds.has(kind.name) && forecast && forecast.mine === mine && forecast.pos === mine.pos && forecast.motion === mine.motion && forecast.tick === stepped && forecast.key === forecastKey && forecast.geometry === scene;
-      const next = reuse ? forecast!.next : runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: motionOf(mine.kind, mine.motion) }, Object.freeze(now), stepped + 1);
-      forecast = {mine, pos:mine.pos, motion:mine.motion, tick:stepped, key:forecastKey, geometry:scene, next};
-      // A landing does not take the whole tick (0.46.5): the body met the ground part way through it. How far through is
-      // read from the fall it would have made at the speed it entered the tick with; it is drawn down to the ground by
-      // then and standing from then, not sinking until the tick's end.
-      let av = a, landed = false;
-      if (dims === 3 && !mine.grounded && next.grounded && mine.vel.z < 0) {
-        const free = -mine.vel.z / tickHz, contact = free > 1e-6 ? Math.max(0.05, Math.min(1, (mine.pos.z - next.pos.z) / free)) : 1;
-        av = Math.min(1, a / contact); landed = a >= contact;
+      const next = reuse ? forecast!.next : runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: mine.motion }, Object.freeze(now), stepped + 1);
+      if (!reuse) forecast = {mine, pos:mine.pos, motion:mine.motion, tick:stepped, key:forecastKey, geometry:scene, next};
+      if (!next.steps?.length) {
+        // A landing does not take the whole tick (0.46.5): the body met the ground part way through it. How far through is
+        // read from the fall it would have made at the speed it entered the tick with; it is drawn down to the ground by
+        // then and standing from then, not sinking until the tick's end.
+        let av = a, landed = false;
+        if (dims === 3 && !mine.grounded && next.grounded && mine.vel.z < 0) {
+          const free = -mine.vel.z / tickHz, contact = free > 1e-6 ? Math.max(0.05, Math.min(1, (mine.pos.z - next.pos.z) / free)) : 1;
+          av = Math.min(1, a / contact); landed = a >= contact;
+        }
+        pos = vec3({...blendPosition(mine.pos,next.pos,a,map.wrap), z:wrapPoint({x:0,y:0,z:mine.pos.z+periodicDelta(mine.pos.z,next.pos.z,map.wrap?.z)*av},map.wrap).z}, dims);
+        heading = blendHeading(mine.heading, next.heading, a, dims);
+        velocity = vec3({ x: lerp(mine.vel.x, next.vel.x, a), y: lerp(mine.vel.y, next.vel.y, a), z: lerp(mine.vel.z, next.vel.z, a) }, dims);
+        // A takeoff is airborne as soon as it rises; a landing waits for its contact.
+        grounded = landed || mine.grounded && (a === 0 || next.grounded);
       }
-      pos = vec3({...blendPosition(mine.pos,next.pos,a,map.wrap), z:wrapPoint({x:0,y:0,z:mine.pos.z+periodicDelta(mine.pos.z,next.pos.z,map.wrap?.z)*av},map.wrap).z}, dims);
-      heading = blendHeading(mine.heading, next.heading, a, dims);
-      velocity = vec3({ x: lerp(mine.vel.x, next.vel.x, a), y: lerp(mine.vel.y, next.vel.y, a), z: lerp(mine.vel.z, next.vel.z, a) }, dims);
-      // A takeoff is airborne as soon as it rises; a landing waits for its contact.
-      grounded = landed || mine.grounded && (a === 0 || next.grounded);
       if (next.steps?.length) {
         const n = next.steps.length - 1, at = a * n, index = Math.min(n - 1, Math.floor(at)), f = at - index;
         const before = next.steps[index], after = next.steps[index + 1];
         safeOrigin = before.pos;
         pos = vec3(blendPosition(before.pos, after.pos, f, map.wrap), dims);
+        // Some game steps land by lifting onto a tile corner. The straight line
+        // between those valid poses crosses the tile. Opted-in owners show the
+        // actual local physics step at that contact, never an embedded blend.
+        if (kind.validatedOwner && dims === 2 && kind.shape === 'box') {
+          const r = kind.radius;
+          if (nearbyMap(mapAt(stepped),pos,{x:0,y:0,z:0},r,2*r,2).boxes.some(b => pos.x+r>b.min.x+1e-7 && pos.x-r<b.max.x-1e-7 && pos.y+r>b.min.y+1e-7 && pos.y-r<b.max.y-1e-7)) pos = after.pos;
+        }
         heading = blendHeading(before.heading, after.heading, f, dims);
         velocity = vec3({x:lerp(before.vel.x,after.vel.x,f),y:lerp(before.vel.y,after.vel.y,f),z:lerp(before.vel.z,after.vel.z,f)},dims);
         grounded = f === 1 ? after.grounded : before.grounded && after.grounded;
@@ -1049,8 +1148,8 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       preview = next;
       if (predictors[kind.name]) {
         // The own actions between ticks: the predictor on a copy of the fields, for the tick about to be stepped.
-        const key = stepped + JSON.stringify(now);
-        if (key !== previewKey) { previewKey = key; previewFields = thawFields(kind.fields, mine.fields); runPredict(kind.name, next, previewFields, Object.freeze(now), stepped + 1, true, true); }
+        const key = stepped + forecastKey;
+        if (key !== previewKey) { previewKey = key; previewFields = thawFields(kind.fields, mine.fields); runPredict(kind.name, {...next, motion:motionOf(kind.name,next.motion)}, previewFields, Object.freeze(now), stepped + 1, true, true); }
       }
       settled = distance(next.pos, mine.pos) < 0.00001;
     }
@@ -1083,9 +1182,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // and does not add safety. New placements and other body types keep it.
     const hasCursor = present && dims === 2 && kind?.shape === 'box' && !kind.owner && presented?.id === mine.id && presented.r === mine.r;
     if (!hasCursor) pos = constrain(safeOrigin, pos);
-    const offset = visualOffset(clock(), pos, settled);
-    const offsetTarget = wrapPoint({ x: pos.x + offset.x, y: pos.y + offset.y, z: pos.z + offset.z },map.wrap);
-    pos = hasCursor ? offsetTarget : constrain(pos, offsetTarget);
+    if (!kind?.validatedOwner) {
+      const offset = visualOffset(clock(), pos, settled);
+      const offsetTarget = wrapPoint({ x: pos.x + offset.x, y: pos.y + offset.y, z: pos.z + offset.z },map.wrap);
+      pos = hasCursor ? offsetTarget : constrain(pos, offsetTarget);
+    }
     if (present && dims === 2 && kind?.shape === 'box' && !kind.owner) {
       const now = clock();
       if (presented && presented.id === mine.id && presented.r === mine.r) {
@@ -1163,14 +1264,22 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       heading = blendHeading(headingBlend.from, heading, t, dims);
       if (t >= 1) headingBlend = null;
     }
-    const result = entityOf({ ...server, ...(kind && predictors[kind.name] ? { fields: (base ? previewFields : null) ?? mine.fields } : {}), pos, vel: velocity, heading, grounded, motion }, true);
-    // Synchronous readers (HUD, scene, probes) share one presentation. Clear at
-    // the microtask boundary: an rAF clear can run after the next drawing callback,
-    // reusing an old pose and then spending two callbacks' travel at once.
-    // Inputs and snapshots still invalidate immediately.
+    const fields = kind && predictors[kind.name] ? (base ? previewFields : null) ?? mine.fields : server.fields;
+    // Field and motion descriptions change on simulation/input/snapshot edges,
+    // while the interpolated pose changes each animation frame. Reuse the
+    // immutable description without copying every declared field again.
+    let result: Entity;
+    if (kind?.validatedOwner) {
+      if (!ownDescription || ownDescription.server !== server || ownDescription.fields !== fields || ownDescription.motion !== motion || ownDescription.tick !== stepped) ownDescription = {server,fields,motion,tick:stepped,entity:entityOf({...server,fields,motion},true)};
+      result = Object.freeze({...ownDescription.entity,pos,vel:velocity,heading,grounded});
+    } else result = entityOf({...server,fields,pos,vel:velocity,heading,grounded,motion},true);
+    // Readers share one presentation in a browser frame. Without a document
+    // timeline, retain the synchronous cache and clear at the microtask boundary.
+    // Inputs, snapshots and simulation steps still invalidate immediately.
     if (present && typeof window !== 'undefined') {
       presentedEntity = result;
-      if (!presentationQueued) {
+      presentationFrame = frame;
+      if (frame === null && !presentationQueued) {
         presentationQueued = true;
         const clear = () => { presentedEntity = null; presentationQueued = false; };
         queueMicrotask(clear);
@@ -1178,16 +1287,114 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     }
     return result;
   }
-  function drawn(id: string, s = net.sample()): Entity | null {
+  // Accepted owner ticks and server ticks describe the same simulation clock.
+  // Receipt time only decides how much history is available, never where one
+  // body stands relative to another body's hazards.
+  const hasValidatedOwners = schema.kinds.some(k => k.validatedOwner);
+  const sceneHistory: Snapshot<unknown>[] = [];
+  interface OwnerHistory { epoch:number; r:number; placedAt:number; samples:{t:number; u:Unpacked}[]; previous?:OwnerHistory }
+  const ownerHistory = new Map<string, OwnerHistory>();
+  let sceneCursor: number | null = null, sceneAt = 0, sceneFrame: number | null = null;
+  let sceneCached: ReturnType<typeof net.sample> = null;
+  function sceneSample(raw = net.sample()): ReturnType<typeof net.sample> {
+    if (!raw || raw.renderT === undefined || !hasValidatedOwners) return raw;
+    const now = clock();
+    const frame = typeof document === 'undefined' ? now : Number(document.timeline?.currentTime ?? now);
+    if (sceneCached && sceneFrame === frame) return sceneCached;
+    sceneFrame = frame;
+    let target = raw.a.k + (raw.b.k - raw.a.k) * raw.alpha;
+    let newestOwner = Infinity;
+    for (const [id, q] of ownerHistory) {
+      const u = q.samples.at(-1)!.u;
+      if (id === mine?.id || u.away || latest?.ents.get(id)?.driver !== 'person') continue;
+      const previous = q.samples.at(-2)?.u;
+      // A stationary path is still known after its last report. An idle tab's
+      // delayed heartbeat must not stop every moving runner and patrol.
+      if (previous && !u.vel.x && !u.vel.y && !u.vel.z &&
+        u.pos.x === previous.pos.x && u.pos.y === previous.pos.y && u.pos.z === previous.pos.z) continue;
+      // One source cannot supply an interpolated pose beyond its newest report.
+      // Hold the scene there instead of advancing only the monsters.
+      newestOwner = Math.min(newestOwner, q.samples.at(-1)!.t);
+    }
+    // The shared buffer supplies an age, while accepted input ticks supply the
+    // simulation time. Server callbacks may pause without pausing owner input.
+    if (Number.isFinite(newestOwner) && latest) target = newestOwner - Math.max(0, latest.k - target);
+    if (sceneCursor === null || !sceneHistory.length || raw.b.e !== sceneHistory[0].e) sceneCursor = target;
+    else {
+      // A long pause may contain a stationary section before fresh movement.
+      // Drain that backlog faster, bounding actual sampled travel rather than
+      // charging every frame for the body's theoretical maximum fall speed.
+      const rate = target - sceneCursor > tickHz * .25 ? 4 : 1.5;
+      let ticks = Math.max(0, Math.min(.05, (now - sceneAt) / 1000)) * tickHz * rate;
+      for (const [id, q] of ownerHistory) {
+        const u=q.samples.at(-1)!.u;
+        if (id===mine?.id || u.away || latest?.ents.get(id)?.driver!=='person') continue;
+        const limit=kindOf.get(u.kind)!.radius*2.8;
+        // Each revision has its own continuous path; placements still cut.
+        for (let h:OwnerHistory|undefined=q;h;h=h.previous) {
+          for (let i=1;i<h.samples.length;i++) {
+            const a=h.samples[i-1],b=h.samples[i];
+            if(b.t<=sceneCursor)continue;
+            if(a.t>=sceneCursor+ticks)break;
+            const speed=Math.hypot(b.u.pos.x-a.u.pos.x,b.u.pos.y-a.u.pos.y,b.u.pos.z-a.u.pos.z)/(b.t-a.t);
+            if(speed>0)ticks=Math.min(ticks,limit/speed);
+          }
+        }
+      }
+      sceneCursor = Math.max(sceneCursor, Math.min(target, sceneCursor + ticks));
+    }
+    sceneAt = now;
+    while (sceneHistory.length > 2 && sceneHistory[1].k <= sceneCursor) sceneHistory.shift();
+    const a = sceneHistory[0] ?? raw.a, b = sceneHistory[1] ?? a;
+    const alpha = b.k > a.k ? Math.max(0, Math.min(1, (sceneCursor - a.k) / (b.k - a.k))) : 1;
+    return sceneCached = {...raw, a, b, alpha, renderT:a.st+(b.st-a.st)*alpha};
+  }
+  function sceneTick(s: ReturnType<typeof net.sample>): number {
+    return s === sceneCached && sceneCursor !== null ? sceneCursor : s ? s.a.k + (s.b.k-s.a.k)*s.alpha : latest?.k ?? 0;
+  }
+  function ownerDrawn(u: Unpacked, epoch: number, tick: number): Entity {
+    let q = ownerHistory.get(u.id);
+    // A future placement must not discard the reports still being drawn from
+    // the old revision. Switch histories at the scene boundary, not receipt.
+    while (q && q.epoch === epoch && q.r !== u.r) q = q.previous;
+    if (!q || q.epoch !== epoch || q.r !== u.r) return entityOf(u);
+    // Read report time, not the server tick at which that report arrived.
+    let a=q.samples[0], b=a;
+    for (const sample of q.samples) { b=sample; if (sample.t>=tick) break; a=sample; }
+    const alpha=b.t>a.t?Math.max(0,Math.min(1,(tick-a.t)/(b.t-a.t))):1;
+    return Object.freeze({...entityOf(u),pos:vec3(blendPosition(a.u.pos,b.u.pos,alpha,map.wrap),dims),
+      vel:alpha<1?a.u.vel:b.u.vel,heading:blendHeading(a.u.heading,b.u.heading,alpha,dims)});
+  }
+  const drawnFrame = new Map<string, Entity | null>();
+  let drawnAt: number | null = null;
+  let drawnA: unknown = null, drawnB: unknown = null;
+  function drawn(id: string, s = sceneSample()): Entity | null {
     if (solo) return solo.get(id);
     if (mine && id === mine.id) return meNow(true);
+    const at = typeof document === 'undefined' ? null : document.timeline?.currentTime;
+    if (typeof at !== 'number') return drawnRemote(id, s);
+    const a = s?.a ?? latest, b = s?.b ?? latest;
+    if (at !== drawnAt || a !== drawnA || b !== drawnB) {
+      drawnFrame.clear(); drawnAt = at; drawnA = a; drawnB = b;
+    }
+    if (drawnFrame.has(id)) return drawnFrame.get(id)!;
+    const result = drawnRemote(id, s); drawnFrame.set(id, result); return result;
+  }
+  function drawnRemote(id: string, s: ReturnType<typeof net.sample>): Entity | null {
     const a = s ? frameOf(s.a) : latest;
     const b = s ? frameOf(s.b) : latest;
     const ea = a?.ents.get(id); const eb = b?.ents.get(id);
     if (!ea || !eb) return ea ? entityOf(ea) : eb && s && s.alpha >= 1 ? entityOf(eb) : eb && !a?.ents.size ? entityOf(eb) : null;
-    // A placed body jumps: nobody's view glides across a placement.
-    if (ea.r !== eb.r || a?.e !== b?.e || !s) return entityOf(eb);
+    const kind = kindOf.get(eb.kind);
+    // A placed body jumps, never glides across the map. An observer's owner
+    // body must reach that snapshot's time before showing its new revision;
+    // otherwise the respawn precedes the encounter in the interpolated scene.
+    if (ea.r !== eb.r || a?.e !== b?.e || !s) {
+      if (kind?.validatedOwner && s && s.alpha < 1 && a && a.e === b?.e && ea.driver === 'person') return ownerDrawn(ea,a.e,sceneTick(s));
+      return entityOf(eb);
+    }
     const t = s.alpha;
+    if (kind?.validatedOwner && eb.driver === 'person' && a && b) return ownerDrawn(t < 1 ? ea : eb, b.e, sceneTick(s));
     // Static pickups and scenery need no new vectors or wrappers for every HUD,
     // scene and probe traversal. Fields still follow the sampled snapshot.
     if (ea.grounded === eb.grounded && ['pos','vel','heading'].every(key => {
@@ -1195,13 +1402,13 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     })) return entityOf(t < 1 ? ea : eb);
     const h = blendHeading(ea.heading, eb.heading, t, dims);
     // This interpolated key exists for one read only; caching it retains useless weak entries.
-    return entityOf({ ...(t < 1 ? ea : eb), grounded: t >= 1 ? eb.grounded : ea.grounded && (t === 0 || eb.grounded), pos: vec3(blendPosition(ea.pos, eb.pos, t, map.wrap), dims), vel: vec3({ x: lerp(ea.vel.x, eb.vel.x, t), y: lerp(ea.vel.y, eb.vel.y, t), z: lerp(ea.vel.z, eb.vel.z, t) }, dims), heading: h }, false, false);
+    return Object.freeze({ ...entityOf(t < 1 ? ea : eb), grounded: t >= 1 ? eb.grounded : ea.grounded && (t === 0 || eb.grounded), pos: vec3(blendPosition(ea.pos, eb.pos, t, map.wrap), dims), vel: vec3({ x: lerp(ea.vel.x, eb.vel.x, t), y: lerp(ea.vel.y, eb.vel.y, t), z: lerp(ea.vel.z, eb.vel.z, t) }, dims), heading: h });
   }
   function get(id: string): Entity | null { const g = ghosts.get(id); return g ? ghostEntity(g) : drawn(id); }
   function each(kind: string, fn: (e: Entity) => void): void {
     pump();
     if (solo) { solo.each(kind, fn); return; }
-    const s = net.sample();
+    const s = sceneSample();
     const a = s ? frameOf(s.a) : latest;
     const b = s ? frameOf(s.b) : latest;
     const ids = new Set<string>();
@@ -1270,10 +1477,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     });
   }
   const timer = opts.timers === false ? null : setInterval(pump, Math.max(8, period / 2));
-  const onShow = (): void => { if (typeof document !== 'undefined' && !document.hidden) { base = null; if (latest) rebase(latest.k); } };
+  const onShow = (): void => { if (typeof document !== 'undefined' && !document.hidden) { if(myKind()?.validatedOwner) { base={tick:stepped,at:clock()}; heldTrack.clear(); } else { base = null; if (latest) rebase(latest.k); } } };
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onShow);
 
-  function viewTickNow(): number { const s=net.sample();const a=s?frameOf(s.a):latest,b=s?frameOf(s.b):latest;return a&&b?a.k+(b.k-a.k)*(s?.alpha??0):latest?.k??0; }
+  function viewTickNow(): number { return sceneTick(sceneSample()); }
   /*
    * WHERE A BODY WAS, OR WILL BE JUDGED TO BE (0.46.5). The server judges a rewound ray against poses it kept by
    * tick. A browser holds the snapshots it has received: a pose at a tick between two of them is the point between;
@@ -1312,6 +1519,14 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   };
   const viewRay = (from: unknown, direction: unknown, max: number, options?: RayOptions, all=false) => rayQuery(mapAt(latest?.k??0),viewTargets(atTickOf(options)),dims,from,direction,max,options,mine?.id,all);
   return {
+    get confirmedTick() {
+      const raw=net.sample(), source=raw?frameOf(raw.alpha>=1?raw.b:raw.a):latest;
+      const sourceOwn=mine&&source?.ents.get(mine.id);
+      if (!sourceOwn || sourceOwn.r!==mine!.r || source?.e!==epoch) return -1;
+      const s=sceneSample(raw), f=s?frameOf(s.alpha>=1?s.b:s.a):latest;
+      const own = mine && f?.ents.get(mine.id);
+      return own && own.r === mine!.r && f?.e === epoch ? own.ownerTick ?? -1 : -1;
+    },
     get viewTick() { return solo ? solo.viewTick : viewTickNow(); },
     get status() { return solo ? 'offline' : status; },
     get seat() { return solo ? solo.seat : net.seat; },
@@ -1350,7 +1565,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         else if (tr.changes[tr.changes.length - 1][1] !== v) { tr.changes.push([at, v]); if (tr.changes.length > 256) tr.changes.splice(1, tr.changes.length - 256); }
       }
       if (changed) pump();
-      const shown = changed ? meNow()?.pos : null;
+      const shown = changed && !kind?.validatedOwner ? meNow()?.pos : null;
       for (const [name, fd] of kind?.input ?? []) if ((fd.t === 'press' || fd.t === 'pulse') && coerce(fd,s[name],dims)) { const value=coerce(fd,s[name],dims) as number | boolean; if(fd.t==='pulse'){pulseCount+=1;const target=Math.max(stepped+1,(pulseQueue.at(-1)?.t??stepped)+1);pulseQueue.push({name,value:Number(value),n:pulseCount,t:target});net.send('pulse',[epoch,name,value,target,pulseCount]);} else pressed.set(name,value); }
       if (changed) presentedEntity = null;
       sample = next;

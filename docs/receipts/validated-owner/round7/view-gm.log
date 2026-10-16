@@ -1,0 +1,217 @@
+TAP version 13
+# (node:83768) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: local snapshots keep rising when the wall clock moves -10000 ms
+ok 1 - local snapshots keep rising when the wall clock moves -10000 ms
+  ---
+  duration_ms: 1698.174375
+  type: 'test'
+  ...
+# Subtest: local snapshots keep rising when the wall clock moves 30000 ms
+ok 2 - local snapshots keep rising when the wall clock moves 30000 ms
+  ---
+  duration_ms: 1217.635584
+  type: 'test'
+  ...
+# Subtest: movement probes derive stationary controls from the declared player speed 0
+ok 3 - movement probes derive stationary controls from the declared player speed 0
+  ---
+  duration_ms: 767.44325
+  type: 'test'
+  ...
+# Subtest: movement probes derive stationary controls from the declared player speed 100
+ok 4 - movement probes derive stationary controls from the declared player speed 100
+  ---
+  duration_ms: 812.947166
+  type: 'test'
+  ...
+# [netplay] react over 10/s was dropped
+# [netplay] react over 10/s was dropped
+# Subtest: hosting player's react allowance and refusal match a replica
+ok 5 - hosting player's react allowance and refusal match a replica
+  ---
+  duration_ms: 661.22575
+  type: 'test'
+  ...
+# [netplay] say over 4/s was dropped
+# [netplay] say over 4/s was dropped
+# Subtest: hosting player's say allowance and refusal match a replica
+ok 6 - hosting player's say allowance and refusal match a replica
+  ---
+  duration_ms: 1126.081042
+  type: 'test'
+  ...
+# [netplay] no vote is open
+# [netplay] vote over 8/s was dropped
+# [netplay] no vote is open
+# [netplay] vote over 8/s was dropped
+# Subtest: hosting player's vote allowance and refusal match a replica
+ok 7 - hosting player's vote allowance and refusal match a replica
+  ---
+  duration_ms: 715.100625
+  type: 'test'
+  ...
+# [netplay] ping over 8/s was dropped
+# [netplay] ping over 8/s was dropped
+# Subtest: hosting player's ping allowance and refusal match a replica
+ok 8 - hosting player's ping allowance and refusal match a replica
+  ---
+  duration_ms: 1565.802542
+  type: 'test'
+  ...
+# [netplay] in over 60/s was dropped
+# [netplay] in over 60/s was dropped
+# Subtest: hosting player's in allowance and refusal match a replica
+ok 9 - hosting player's in allowance and refusal match a replica
+  ---
+  duration_ms: 965.349833
+  type: 'test'
+  ...
+# [netplay] ev over 10/s was dropped
+# [netplay] ev over 10/s was dropped
+# Subtest: hosting player's ev allowance and refusal match a replica
+ok 10 - hosting player's ev allowance and refusal match a replica
+  ---
+  duration_ms: 2090.099417
+  type: 'test'
+  ...
+# [netplay] unknown over 8/s was dropped
+# [netplay] unknown over 8/s was dropped
+# Subtest: hosting player's unknown allowance and refusal match a replica
+ok 11 - hosting player's unknown allowance and refusal match a replica
+  ---
+  duration_ms: 921.891833
+  type: 'test'
+  ...
+# Subtest: legacy speech keeps its published envelope even with arbitrary extra data
+ok 12 - legacy speech keeps its published envelope even with arbitrary extra data
+  ---
+  duration_ms: 847.138584
+  type: 'test'
+  ...
+# Subtest: live cover 2D outside spatial interest: visible prediction, edits, rejoin and restore
+ok 13 - live cover 2D outside spatial interest: visible prediction, edits, rejoin and restore
+  ---
+  duration_ms: 13943.24175
+  type: 'test'
+  ...
+# Subtest: live cover 2D outside spatial interest: visible prediction, edits, rejoin and restore at 300 ms + 12% loss
+ok 14 - live cover 2D outside spatial interest: visible prediction, edits, rejoin and restore at 300 ms + 12% loss
+  ---
+  duration_ms: 6104.805875
+  type: 'test'
+  ...
+# Subtest: live cover 3D outside spatial interest: visible prediction, edits, rejoin and restore
+ok 15 - live cover 3D outside spatial interest: visible prediction, edits, rejoin and restore
+  ---
+  duration_ms: 4584.881625
+  type: 'test'
+  ...
+# Subtest: live cover 3D outside spatial interest: visible prediction, edits, rejoin and restore at 300 ms + 12% loss
+ok 16 - live cover 3D outside spatial interest: visible prediction, edits, rejoin and restore at 300 ms + 12% loss
+  ---
+  duration_ms: 6491.976708
+  type: 'test'
+  ...
+# Subtest: historical actor queries hit the rendered pose with 300 ms/loss and restore exactly
+ok 17 - historical actor queries hit the rendered pose with 300 ms/loss and restore exactly
+  ---
+  duration_ms: 989.333084
+  type: 'test'
+  ...
+# Subtest: history query declaration passes the strict author build
+ok 18 - history query declaration passes the strict author build
+  ---
+  duration_ms: 16499.060625
+  type: 'test'
+  ...
+# Subtest: low-latency player cannot request a one-second-old target pose, seed 4520
+ok 19 - low-latency player cannot request a one-second-old target pose, seed 4520
+  ---
+  duration_ms: 1274.371958
+  type: 'test'
+  ...
+# Subtest: generated map: atomic collision revision, flow lookup, mid-round regeneration and restore
+ok 20 - generated map: atomic collision revision, flow lookup, mid-round regeneration and restore
+  ---
+  duration_ms: 1951.900958
+  type: 'test'
+  ...
+# {"delayed":false,"mapBytes":1412,"stats":{"handlers":263,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":27821,"worst":"room.on.regenerate","lastError":"","failing":"","lost":0,"held":0,"tickUnits":6600,"maxTickUnits":34433}}
+# Subtest: generated map: atomic collision revision, flow lookup, mid-round regeneration and restore at 300 ms loss
+ok 21 - generated map: atomic collision revision, flow lookup, mid-round regeneration and restore at 300 ms loss
+  ---
+  duration_ms: 1645.007
+  type: 'test'
+  ...
+# {"delayed":true,"mapBytes":1412,"stats":{"handlers":293,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":27821,"worst":"room.on.regenerate","lastError":"","failing":"","lost":0,"held":0,"tickUnits":6600,"maxTickUnits":34433}}
+# Subtest: generated map follows offline fallback and returns to the server revision
+ok 22 - generated map follows offline fallback and returns to the server revision
+  ---
+  duration_ms: 6607.9575
+  type: 'test'
+  ...
+# Subtest: generated map activates immediately when its pending snapshot was lost
+ok 23 - generated map activates immediately when its pending snapshot was lost
+  ---
+  duration_ms: 1095.800791
+  type: 'test'
+  ...
+# Subtest: input history under loss: small, drop, seed 47101
+ok 24 - input history under loss: small, drop, seed 47101
+  ---
+  duration_ms: 36693.434125
+  type: 'test'
+  ...
+# Subtest: input history under loss: small, burst, seed 47101
+ok 25 - input history under loss: small, burst, seed 47101
+  ---
+  duration_ms: 25404.03925
+  type: 'test'
+  ...
+# Subtest: input history under loss: Gates, drop, seed 47101
+ok 26 - input history under loss: Gates, drop, seed 47101
+  ---
+  duration_ms: 51592.394042
+  type: 'test'
+  ...
+# Subtest: input history under loss: Gates, burst, seed 47101
+ok 27 - input history under loss: Gates, burst, seed 47101
+  ---
+  duration_ms: 15046.133
+  type: 'test'
+  ...
+# Subtest: late movement replay equals on-time nonlinear acceleration, seed 47171
+ok 28 - late movement replay equals on-time nonlinear acceleration, seed 47171
+  ---
+  duration_ms: 844.540542
+  type: 'test'
+  ...
+# Subtest: missing receipts widen input history through a loss run beyond the latency window
+ok 29 - missing receipts widen input history through a loss run beyond the latency window
+  ---
+  duration_ms: 444.397083
+  type: 'test'
+  ...
+# Subtest: interpolated remote poses do not fill the snapshot cache with one-use keys
+ok 30 - interpolated remote poses do not fill the snapshot cache with one-use keys
+  ---
+  duration_ms: 143.53325
+  type: 'test'
+  ...
+# Subtest: held correction direction survives zero velocity at contact and neutral input can converge
+ok 31 - held correction direction survives zero velocity at contact and neutral input can converge
+  ---
+  duration_ms: 759.45075
+  type: 'test'
+  ...
+# {"worstReverse":0}
+1..31
+# tests 31
+# suites 0
+# pass 31
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 205780.36475

@@ -1,0 +1,144 @@
+TAP version 13
+# (node:77951) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: twenty ordered pulses a second under 300 ms and 5% stalls: small, seed 47120
+ok 1 - twenty ordered pulses a second under 300 ms and 5% stalls: small, seed 47120
+  ---
+  duration_ms: 1029.849375
+  type: 'test'
+  ...
+# Subtest: twenty ordered pulses a second under 300 ms and 5% stalls: Gates, seed 47120
+ok 2 - twenty ordered pulses a second under 300 ms and 5% stalls: Gates, seed 47120
+  ---
+  duration_ms: 536.847625
+  type: 'test'
+  ...
+# Subtest: a placement projects the body to its own tick without a second correction: small
+ok 3 - a placement projects the body to its own tick without a second correction: small
+  ---
+  duration_ms: 420.139708
+  type: 'test'
+  ...
+# Subtest: a placement projects the body to its own tick without a second correction: Gates
+ok 4 - a placement projects the body to its own tick without a second correction: Gates
+  ---
+  duration_ms: 393.626541
+  type: 'test'
+  ...
+# Subtest: a prior placement cannot inject held controls into the respawned body
+ok 5 - a prior placement cannot inject held controls into the respawned body
+  ---
+  duration_ms: 264.2265
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 0 ms
+ok 6 - validated owner keeps its own trajectory with delayed reports: 0 ms
+  ---
+  duration_ms: 687.577417
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 150 ms
+ok 7 - validated owner keeps its own trajectory with delayed reports: 150 ms
+  ---
+  duration_ms: 809.69575
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 300 ms
+ok 8 - validated owner keeps its own trajectory with delayed reports: 300 ms
+  ---
+  duration_ms: 706.949083
+  type: 'test'
+  ...
+# Subtest: validated owner predicts through an outage, keeps score, and resumes without a wait
+ok 9 - validated owner predicts through an outage, keeps score, and resumes without a wait
+  ---
+  duration_ms: 825.903667
+  type: 'test'
+  ...
+# Subtest: validated owner draws a local corner landing without embedding the interpolated box
+ok 10 - validated owner draws a local corner landing without embedding the interpolated box
+  ---
+  duration_ms: 389.263541
+  type: 'test'
+  ...
+# Subtest: validated owner recovers room clock after 3000 ms server stall
+ok 11 - validated owner recovers room clock after 3000 ms server stall
+  ---
+  duration_ms: 540.782834
+  type: 'test'
+  ...
+# Subtest: validated owner recovers room clock after 15000 ms server stall
+ok 12 - validated owner recovers room clock after 15000 ms server stall
+  ---
+  duration_ms: 931.55475
+  type: 'test'
+  ...
+# Subtest: a delayed owner placement starts fresh reports near arrival time without granting travel
+ok 13 - a delayed owner placement starts fresh reports near arrival time without granting travel
+  ---
+  duration_ms: 551.423042
+  type: 'test'
+  ...
+# Subtest: validated owner clock tracks room at 0.99 clock rate
+ok 14 - validated owner clock tracks room at 0.99 clock rate
+  ---
+  duration_ms: 2496.450208
+  type: 'test'
+  ...
+# Subtest: validated owner clock tracks room at 1.01 clock rate
+ok 15 - validated owner clock tracks room at 1.01 clock rate
+  ---
+  duration_ms: 3035.250917
+  type: 'test'
+  ...
+# Subtest: validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame
+ok 16 - validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame
+  ---
+  duration_ms: 347.531291
+  type: 'test'
+  ...
+# Subtest: remote presentation is shared within a frame and refreshed by snapshots
+ok 17 - remote presentation is shared within a frame and refreshed by snapshots
+  ---
+  duration_ms: 320.5625
+  type: 'test'
+  ...
+# Subtest: an observer switches an owner placement at its sampled time, without interpolating across the map
+ok 18 - an observer switches an owner placement at its sampled time, without interpolating across the map
+  ---
+  duration_ms: 326.717916
+  type: 'test'
+  ...
+# Subtest: a burst cannot buy extra simulation time
+ok 19 - a burst cannot buy extra simulation time
+  ---
+  duration_ms: 11.2545
+  type: 'test'
+  ...
+# Subtest: an early fresh baseline still spends elapsed server time and cannot buy skipped travel
+ok 20 - an early fresh baseline still spends elapsed server time and cannot buy skipped travel
+  ---
+  duration_ms: 4.036459
+  type: 'test'
+  ...
+# Subtest: a fresh baseline after a pause grants one physics step, never skipped travel
+ok 21 - a fresh baseline after a pause grants one physics step, never skipped travel
+  ---
+  duration_ms: 3.140625
+  type: 'test'
+  ...
+# Subtest: owner receive queue overflow explicitly resynchronizes without acknowledging a lost path
+ok 22 - owner receive queue overflow explicitly resynchronizes without acknowledging a lost path
+  ---
+  duration_ms: 6.209209
+  type: 'test'
+  ...
+1..22
+# tests 22
+# suites 0
+# pass 22
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 14835.715792

@@ -1,0 +1,12 @@
+{
+  "oldContact": {
+    "medianCpuMs": 0.731,
+    "p95CpuMs": 4.297,
+    "medianMs": 0.7253330000000915,
+    "p95Ms": 2.6260419999998703,
+    "maxMs": 3.9497499999999945,
+    "peakTickUnits": 39317,
+    "held": 0,
+    "errors": 0
+  }
+}

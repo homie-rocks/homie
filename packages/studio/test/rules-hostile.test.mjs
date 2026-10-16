@@ -504,7 +504,7 @@ test('a room whose ticks run slow or fail ends after seconds of the clock, not a
   const c = L.R.compileRules(L.def, { tune: { public: { speed: 6 } }, map: L.R.compileMap(COIN_MAP), settings: L.R.roomSettings({}).settings, seats: 8 });
   // A tick that takes a second of the clock, every time (the review measured one). The rule is five seconds of it.
   // Counted in ticks, as it was, a room at 20 ticks a second ran a hundred such ticks: a hundred seconds.
-  const slow = hostRig(L, c, { host: { send: (m) => { if (m.t === 'snap') slow.clock.t += 1000; } } });
+  const slow = hostRig(L, c, { host: { onTick: () => { slow.clock.t += 1000; } } });
   slow.join(0);
   slow.clock.advance(60_000);
   assert.deepEqual(slow.ended.map((e) => e.why), ['overrun']);
@@ -512,7 +512,7 @@ test('a room whose ticks run slow or fail ends after seconds of the clock, not a
   assert.ok(slow.ended[0].seconds >= 5 && slow.ended[0].seconds <= 6.5, `the log says how long it ran slow: ${slow.ended[0].seconds} s`);
   assert.equal(slow.clock.timers.length, 0);
   // Ticks of 70 ms at a 50 ms period: late every time, for five seconds. That is seventy-odd ticks, not a hundred.
-  const late = hostRig(L, c, { host: { send: (m) => { if (m.t === 'snap') late.clock.t += 70; } } });
+  const late = hostRig(L, c, { host: { onTick: () => { late.clock.t += 70; } } });
   late.join(0);
   const t0 = late.clock.t;
   late.clock.advance(4800);
@@ -528,7 +528,7 @@ test('a room whose ticks run slow or fail ends after seconds of the clock, not a
   assert.deepEqual(hiccup.ended, []);
   // The budget's rule the same: every tick cut short for two seconds of the clock. Here each such tick also takes
   // 700 ms, so two seconds is three or four ticks, where forty were counted before.
-  const { rig } = await plant({ tick: 'while (true) { self.score += 0; }' }, { host: { send: (m) => { if (m.t === 'snap') rig.clock.t += 700; } } });
+  const { rig } = await plant({ tick: 'while (true) { self.score += 0; }' }, { host: { onTick: () => { rig.clock.t += 700; } } });
   rig.clock.advance(60_000);
   assert.equal(rig.ended.length, 1);
   assert.deepEqual([rig.ended[0].why, rig.ended[0].kind, rig.ended[0].handler], ['budget', 'runner', 'tick']);

@@ -197,6 +197,7 @@ function frame(t: number): void {
   const dt = lab.time.dt(t, 0.1);
   x += T.speed * dt * (held ? 2 : 1);
   lab.track('x', x, 'px'); lab.track('t', t, 'ms'); lab.track('date', Date.now() - Date.UTC(2026, 0, 1), 'ms');
+  lab.track('timeline', Number(document.timeline.currentTime), 'ms');
   lab.track('dice', Math.floor(Math.random() * 1000)); lab.track('fired', fired); lab.track('ticks', ticks); lab.track('keys', keys);
   lab.track('stage', lab.stage === 'dummy' ? 1 : 0);
   ${dice ? "lab.track('crypto', crypto.getRandomValues(new Uint32Array(1))[0] as number);" : ''}
@@ -232,6 +233,7 @@ test('in Chrome: the lab\'s clock, timers, dice and presses replay a take frame 
     assert.deepEqual(sum.deterministic, { new: null, today: null }, 'both builds replay the same');
     assert.equal(n.t.final, Math.round(fps * step * 100) / 100, 'frame f is at f / fps seconds');
     assert.equal(n.date.final, n.t.final, 'Date.now() runs on the same clock from a fixed day');
+    assert.equal(n.timeline.final, n.t.final, 'the document animation timeline uses the replay clock');
     assert.equal(n.fired.final, 100, 'a 100 ms timeout fires at 100 ms on the lab\'s clock');
     assert.equal(n.ticks.final, Math.floor(n.t.final / 50), 'a 50 ms interval');
     assert.equal(n.keys.final, 1, 'the take\'s press reached the game once');

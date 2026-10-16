@@ -17,6 +17,32 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [Unreleased]
+
+### Fixed
+
+- Fresh validated-owner clocks account for transit without granting skipped travel;
+  observer placements wait for the sampled scene to reach their revision.
+
+- A single long scheduler suspension starts the overrun observation window on
+  return; it no longer counts as a sustained run of slow ticks by itself.
+- Validated owners track the room clock through drift and receive an explicit
+  reset for reports beyond the clock window after a stall.
+- `world.movement(id, kind)` exposes every accepted report in a server tick for
+  contact checks. Remote burst travel cuts instead of fast-forwarding, and local
+  box landing checks use the map index instead of scanning every box per frame.
+- Validated-owner HUD, scene and diagnostic readers share the same presentation
+  within a browser animation frame; input and simulation changes invalidate it.
+
+### Added
+
+- Opt-in `body.move: 'validated-owner'`: the owning browser keeps its local
+  movement, while the server validates ordered state reports with the same move
+  function. Invalid reports and server-owned movement events cut to authority.
+  Other games retain their existing prediction and reconciliation behavior.
+- Owner-moved server games keep prediction and authoritative score through a
+  temporary outage. Shared collision and durable entity rows are unchanged.
+
 ## [0.57.0] - 2026-10-16
 
 **Plugin 0.57.0**
@@ -253,6 +279,7 @@ Keep each customer's exact basket through payment, and check that your studio me
 ### Upgrade notes
 
 - Saved baskets are opt-in through `shop.json.basket` and require Stripe with tax-inclusive menu prices. Automatic tax and Managed Payments are refused for basket mode. Staff can use the reported basket total, actual payment and settlement status to collect a shortfall.
+
 
 ## [0.51.5] - 2026-10-14
 

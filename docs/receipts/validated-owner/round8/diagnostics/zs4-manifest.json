@@ -1,0 +1,42 @@
+{
+  "tag": "zs4",
+  "script": "cmp6.mjs",
+  "args": [
+    "--delay",
+    "80",
+    "--loss",
+    ".01",
+    "--seconds",
+    "100",
+    "--obs3",
+    "--stall",
+    "--stall-every",
+    "25",
+    "--stall-ms",
+    "3000"
+  ],
+  "harness_sha256": {
+    "cmp6.mjs": "de151a92e294b09bd0a221b040b78d59fc94a0e86a95d6fc9344a775ce617226",
+    "browser.mjs": "91324a670c171fdb8b583c5d81012789096880b976921e6ac861fbd3b12de736",
+    "barrier.mjs": "f480ad78a22f5eb9f422142139968c6271fb7d4e8c0c8faa74d738d512315cad",
+    "pair.py": "df0b187efa7a76cb0d460c9fdce0627139a4e04984753b08e7410503911d22ec"
+  },
+  "runtime": {
+    "b": {
+      "main": "/tmp/pt9/runtime-b-1792087339/worker.js",
+      "assets": {
+        "directory": "/tmp/pt9/runtime-b-1792087339-assets",
+        "binding": "ASSETS",
+        "run_worker_first": true
+      }
+    },
+    "c": {
+      "main": "/tmp/pt8/runtime-c/worker.js",
+      "assets": {
+        "directory": "/tmp/pt8/assets-c-1792066186",
+        "binding": "ASSETS",
+        "run_worker_first": true
+      }
+    }
+  }
+}

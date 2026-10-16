@@ -1,0 +1,197 @@
+[
+  {
+    "file": "bmotionphone1-profile.json",
+    "bytesBefore": 1264696,
+    "bytesAfter": 291513
+  },
+  {
+    "file": "clifecyclephone1-profile.json",
+    "bytesBefore": 669451,
+    "bytesAfter": 175305
+  },
+  {
+    "file": "cverifiedphone1-frames.json",
+    "bytesBefore": 563001,
+    "bytesAfter": 64912
+  },
+  {
+    "file": "bfinalphone1-frames.json",
+    "bytesBefore": 2035234,
+    "bytesAfter": 260704
+  },
+  {
+    "file": "cfinalphone2-frames.json",
+    "bytesBefore": 642181,
+    "bytesAfter": 66721
+  },
+  {
+    "file": "cmotionphone3-frames.json",
+    "bytesBefore": 656611,
+    "bytesAfter": 66372
+  },
+  {
+    "file": "bmotionphone2-frames.json",
+    "bytesBefore": 2299819,
+    "bytesAfter": 268257
+  },
+  {
+    "file": "bwrapperheap-frames.json",
+    "bytesBefore": 828814,
+    "bytesAfter": 91867
+  },
+  {
+    "file": "cfinalphone2-profile.json",
+    "bytesBefore": 954391,
+    "bytesAfter": 243401
+  },
+  {
+    "file": "blifecycleheap-frames.json",
+    "bytesBefore": 817821,
+    "bytesAfter": 91998
+  },
+  {
+    "file": "bfinalphone1-profile.json",
+    "bytesBefore": 1268823,
+    "bytesAfter": 292243
+  },
+  {
+    "file": "cretainedphone1-frames.json",
+    "bytesBefore": 543231,
+    "bytesAfter": 65332
+  },
+  {
+    "file": "bmotionphone1-frames.json",
+    "bytesBefore": 2159676,
+    "bytesAfter": 266843
+  },
+  {
+    "file": "blifecyclephone1-profile.json",
+    "bytesBefore": 866208,
+    "bytesAfter": 195452
+  },
+  {
+    "file": "cfinalphone1-frames.json",
+    "bytesBefore": 585025,
+    "bytesAfter": 64267
+  },
+  {
+    "file": "bfinalphone2-frames.json",
+    "bytesBefore": 2302764,
+    "bytesAfter": 267809
+  },
+  {
+    "file": "cmotionphone1-profile.json",
+    "bytesBefore": 928265,
+    "bytesAfter": 262654
+  },
+  {
+    "file": "bverifiedheap-frames.json",
+    "bytesBefore": 694332,
+    "bytesAfter": 89000
+  },
+  {
+    "file": "bretainedheap-frames.json",
+    "bytesBefore": 830119,
+    "bytesAfter": 92324
+  },
+  {
+    "file": "bwrapperheap-profile.json",
+    "bytesBefore": 534350,
+    "bytesAfter": 108997
+  },
+  {
+    "file": "bverifiedphone1-profile.json",
+    "bytesBefore": 1235927,
+    "bytesAfter": 286596
+  },
+  {
+    "file": "bfinalphone2-profile.json",
+    "bytesBefore": 1177004,
+    "bytesAfter": 274483
+  },
+  {
+    "file": "cmotionphone3-profile.json",
+    "bytesBefore": 1061678,
+    "bytesAfter": 266968
+  },
+  {
+    "file": "cmotionphone2-frames.json",
+    "bytesBefore": 658537,
+    "bytesAfter": 64973
+  },
+  {
+    "file": "cretainedphone1-profile.json",
+    "bytesBefore": 948662,
+    "bytesAfter": 265083
+  },
+  {
+    "file": "bmotionphone3-frames.json",
+    "bytesBefore": 2323462,
+    "bytesAfter": 269237
+  },
+  {
+    "file": "clifecyclephone1-frames.json",
+    "bytesBefore": 567537,
+    "bytesAfter": 65784
+  },
+  {
+    "file": "cmotionphone2-profile.json",
+    "bytesBefore": 934439,
+    "bytesAfter": 263144
+  },
+  {
+    "file": "bretainedphone1-frames.json",
+    "bytesBefore": 2303798,
+    "bytesAfter": 267917
+  },
+  {
+    "file": "bretainedheap-profile.json",
+    "bytesBefore": 553168,
+    "bytesAfter": 109934
+  },
+  {
+    "file": "bmotionphone2-profile.json",
+    "bytesBefore": 1281009,
+    "bytesAfter": 293092
+  },
+  {
+    "file": "bverifiedheap-profile.json",
+    "bytesBefore": 512388,
+    "bytesAfter": 103490
+  },
+  {
+    "file": "bmotionphone3-profile.json",
+    "bytesBefore": 1302954,
+    "bytesAfter": 298931
+  },
+  {
+    "file": "bverifiedphone1-frames.json",
+    "bytesBefore": 2315510,
+    "bytesAfter": 269704
+  },
+  {
+    "file": "cverifiedphone1-profile.json",
+    "bytesBefore": 908178,
+    "bytesAfter": 258324
+  },
+  {
+    "file": "cmotionphone1-frames.json",
+    "bytesBefore": 567004,
+    "bytesAfter": 64912
+  },
+  {
+    "file": "bretainedphone1-profile.json",
+    "bytesBefore": 1299027,
+    "bytesAfter": 296274
+  },
+  {
+    "file": "blifecyclephone1-frames.json",
+    "bytesBefore": 2068419,
+    "bytesAfter": 263744
+  },
+  {
+    "file": "cfinalphone1-profile.json",
+    "bytesBefore": 1033153,
+    "bytesAfter": 260829
+  }
+]

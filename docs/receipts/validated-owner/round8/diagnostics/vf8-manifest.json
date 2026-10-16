@@ -1,0 +1,34 @@
+{
+  "tag": "vf8",
+  "script": "phone.mjs",
+  "args": [
+    "--cpu",
+    "4",
+    "--seconds",
+    "180"
+  ],
+  "harness_sha256": {
+    "phone.mjs": "e145e04cc0ca3b15e2e3b69ed51e036137597385141372c28f34d5e8ec788253",
+    "browser.mjs": "fdb3993a5a98fc6f6cd82d932a83cef634f89a6950b965f09b9ed2a16fef2fa4",
+    "barrier.mjs": "f480ad78a22f5eb9f422142139968c6271fb7d4e8c0c8faa74d738d512315cad",
+    "pair.py": "55efa9c5c139a85c0b550e7b4870b311665a28ebcd10efad45ed5b23fa85ee4c"
+  },
+  "runtime": {
+    "b": {
+      "main": "/tmp/pt9/runtime-b-1792082641/worker.js",
+      "assets": {
+        "directory": "/tmp/pt9/runtime-b-1792082641-assets",
+        "binding": "ASSETS",
+        "run_worker_first": true
+      }
+    },
+    "c": {
+      "main": "/tmp/pt8/runtime-c/worker.js",
+      "assets": {
+        "directory": "/tmp/pt8/assets-c-1792066186",
+        "binding": "ASSETS",
+        "run_worker_first": true
+      }
+    }
+  }
+}

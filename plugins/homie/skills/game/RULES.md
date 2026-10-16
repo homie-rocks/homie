@@ -50,9 +50,49 @@ Declare `players.max` in game.json (a positive integer, including hundreds); use
 For example, `homie-studio servers new keepers "Practice" --policy beginner --guides 1` creates a beginner server with one guide. Use `homie-studio servers set keepers <server> --policy hybrid --ai 1` to change an existing server through its owner controls.
 
 Server movement is the default and predicts immediately in the local browser using
-its guarded `move`. Bots, AI and away people are always moved on the server.
+its guarded `move`. Bots and AI move on the server. Away people normally do too;
+validated owners retain their accepted state through a transient absence.
 `body.move: 'owner'` is an existing compatibility option that accepts bounded position
 claims and cannot enforce walls against a modified browser; do not use it for new games.
+For opt-in owner simulation, use `body.move: 'validated-owner'`. The browser
+runs and draws its own move, reporting its input tick, baseline tick, position,
+velocity and heading. The server runs the same move from its last accepted state,
+including gravity and game collisions. Numerical tolerance is 0.002 per axis;
+the canonical result remains the next validation baseline, so tolerance cannot
+accumulate into extra movement. Ordinary snapshots update fields, not the owner's
+pose or motion. Other bodies retain normal interpolation.
+
+Reports are ordered, deduplicated and bounded by elapsed server ticks. Missing
+reports wait for redundant delivery; the server never invents missing controls.
+The browser retains up to 256 input ticks for recovery across an outage.
+An impossible report increments the body's revision: the browser cuts to that
+state. `world.place`, server velocity/motion changes and round starts also cut.
+A transient disconnect/reconnect does not replace an owner’s motion. Scores and other rule decisions remain server-owned. Restores
+establish a fresh epoch without changing durable entity row formats.
+
+Use this for deterministic movement against static geometry, with sampled or held
+inputs (`f.held` for jumps/taps). Discrete server actions use commands; press/pulse
+fields are rejected for this mode. Existing restrictions
+on owner bodies and live colliders still apply. The direct, trusted `core.step`
+input API remains available to offline rule tests; network hosts always require
+validated reports for opted-in human bodies. No report grants score or events.
+
+Each snapshot acknowledgement includes the server tick. Validated owners slew
+small clock errors by at most 2%; out-of-window reports reach validation and
+receive a new placement revision instead of being silently dropped. A stalled
+room therefore explicitly resets the owner to its accepted pose and clock.
+
+`world.movement(id, kind)` returns the immutable ordered movement states accepted
+for that entity in this server tick (up to eight): `tick`, `pos`, `vel`, `heading`,
+`grounded` and declared `motion`. It returns an empty list when no reports were
+accepted or a placement invalidated them. Contact rules must check every state,
+including their game's recorded substeps, rather than only the last state in a
+packet burst. It does not replay game handlers or award points automatically.
+Bound any past-time contact allowance in the game's rules; Tiny Platformer uses
+150 ms and judges older reports against current monsters. Scores displayed as
+confirmed must come from server fields, not a prediction callback.
+
+
 A non-player entity may use `world.sweep(self, delta)` instead of a move function.
 Bodies require radius and maxSpeed. In 2D use circle or box (radius is its half-width); in 3D use sphere, capsule or
 axis-aligned box, with full height for capsule/box. `sweep: true` adds automatic map

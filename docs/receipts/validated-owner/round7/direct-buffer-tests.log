@@ -1,0 +1,48 @@
+TAP version 13
+# (node:96736) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: interpolated remote poses do not fill the snapshot cache with one-use keys
+ok 1 - interpolated remote poses do not fill the snapshot cache with one-use keys
+  ---
+  duration_ms: 687.1235
+  type: 'test'
+  ...
+# Subtest: remote presentation is shared within a frame and refreshed by snapshots
+ok 2 - remote presentation is shared within a frame and refreshed by snapshots
+  ---
+  duration_ms: 390.844375
+  type: 'test'
+  ...
+# Subtest: an observer switches an owner placement at its sampled time, without interpolating across the map
+ok 3 - an observer switches an owner placement at its sampled time, without interpolating across the map
+  ---
+  duration_ms: 486.97525
+  type: 'test'
+  ...
+# Subtest: a three-second server stall does not rewind continued valid owner movement
+ok 4 - a three-second server stall does not rewind continued valid owner movement
+  ---
+  duration_ms: 683.79475
+  type: 'test'
+  ...
+# Subtest: remote validated movement stays bounded while an owner catches up from an outage
+ok 5 - remote validated movement stays bounded while an owner catches up from an outage
+  ---
+  duration_ms: 1002.695916
+  type: 'test'
+  ...
+# Subtest: committing a forecast preserves physics across control changes and isolates preview motion
+ok 6 - committing a forecast preserves physics across control changes and isolates preview motion
+  ---
+  duration_ms: 781.145458
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4263.858

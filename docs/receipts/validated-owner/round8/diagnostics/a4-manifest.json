@@ -1,0 +1,30 @@
+{
+  "tag": "a4",
+  "script": "cmp6.mjs",
+  "args": [
+    "--delay",
+    "0",
+    "--seconds",
+    "120",
+    "--obs3"
+  ],
+  "harness_sha256": "91bd8fc414960971ab5838483768d5bcd1fe047c6d9b45082ecd8af51d22f7c0",
+  "runtime": {
+    "b": {
+      "main": "/tmp/pt9/runtime-b-1792078213/worker.js",
+      "assets": {
+        "directory": "/tmp/pt9/runtime-b-1792078213-assets",
+        "binding": "ASSETS",
+        "run_worker_first": true
+      }
+    },
+    "c": {
+      "main": "/tmp/pt8/runtime-c/worker.js",
+      "assets": {
+        "directory": "/tmp/pt8/assets-c-1792066186",
+        "binding": "ASSETS",
+        "run_worker_first": true
+      }
+    }
+  }
+}

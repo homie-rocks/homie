@@ -1,0 +1,600 @@
+{
+  "cb": {
+    "outcomes": {
+      "ok": 72,
+      "exception": 1,
+      "canceled": 20,
+      "responseStreamDisconnected": 1
+    },
+    "events": {
+      "room-unreachable": 5,
+      "ticks": 10,
+      "hello": 3
+    },
+    "ticks": {
+      "samples": 10,
+      "first": {
+        "at": "2026-10-15T05:42:59.180Z",
+        "ev": "ticks",
+        "timing": {
+          "clock": "unavailable-or-below-resolution",
+          "ms": {
+            "rules": null,
+            "frames": null,
+            "snapshot": null,
+            "checkpoint": null,
+            "encode": null,
+            "send": null,
+            "tick": null
+          }
+        },
+        "game": "tiny-platformer",
+        "build": "ec49aee167152cdee1c59afcd194d857",
+        "tick": 1201,
+        "ticks": 200,
+        "late": 0,
+        "slips": 0,
+        "ins": 401,
+        "lateEntries": 0,
+        "dropped": 0,
+        "errors": 0,
+        "budgetStops": 0,
+        "cut": 0,
+        "maxUnits": 961,
+        "worst": "room.start",
+        "maxTickUnits": 12937,
+        "room": "cmp-cb-lag0-mv942wyp"
+      },
+      "last": {
+        "at": "2026-10-15T05:42:49.180Z",
+        "ev": "ticks",
+        "timing": {
+          "clock": "unavailable-or-below-resolution",
+          "ms": {
+            "rules": null,
+            "frames": null,
+            "snapshot": null,
+            "checkpoint": null,
+            "encode": null,
+            "send": null,
+            "tick": null
+          }
+        },
+        "game": "tiny-platformer",
+        "build": "ec49aee167152cdee1c59afcd194d857",
+        "tick": 1001,
+        "ticks": 200,
+        "late": 0,
+        "slips": 0,
+        "ins": 400,
+        "lateEntries": 0,
+        "dropped": 0,
+        "errors": 0,
+        "budgetStops": 0,
+        "cut": 0,
+        "maxUnits": 961,
+        "worst": "room.start",
+        "maxTickUnits": 12410,
+        "room": "cmp-cb-lag0-mv942wyp"
+      },
+      "maxTickUnits": 13055,
+      "late": 0,
+      "errors": 0,
+      "budgetStops": 0
+    },
+    "players": [
+      {
+        "seat": 1,
+        "role": "replica",
+        "link": "online",
+        "reconnects": 0,
+        "round": 6,
+        "wire": {
+          "delay": 0,
+          "loss": 0,
+          "jitter": 0,
+          "lsHold": 0,
+          "lsEvery": 0,
+          "drift": 1,
+          "sent": 14967,
+          "received": 14971,
+          "late": 0,
+          "sockets": 1
+        },
+        "clock": {
+          "count": 0,
+          "max": 0,
+          "last": 0,
+          "catches": 0,
+          "snaps": 0,
+          "rebases": 25,
+          "rebaseReason": "placement",
+          "rebaseError": -0.5,
+          "observedLeadAt": 0,
+          "lastSendAt": 712891,
+          "now": 712939.100000143,
+          "serverTick": 14871,
+          "tick": 14872,
+          "catchTick": null,
+          "lead": 0.5,
+          "medianLead": 0,
+          "rate": 1.0022245305363868,
+          "rtt": 128,
+          "hostAge": 64,
+          "pending": 1
+        }
+      },
+      {
+        "seat": 0,
+        "role": "replica",
+        "link": "online",
+        "reconnects": 4,
+        "round": 6,
+        "wire": {
+          "delay": 0,
+          "loss": 0,
+          "jitter": 0,
+          "lsHold": 0,
+          "lsEvery": 0,
+          "drift": 1,
+          "sent": 15632,
+          "received": 15649,
+          "late": 0,
+          "sockets": 5
+        },
+        "clock": {
+          "count": 0,
+          "max": 0,
+          "last": 0,
+          "catches": 0,
+          "snaps": 0,
+          "rebases": 18,
+          "rebaseReason": "placement",
+          "rebaseError": -0.5,
+          "observedLeadAt": 0,
+          "lastSendAt": 749265.5,
+          "now": 749314.3000001907,
+          "serverTick": 14871,
+          "tick": 14872,
+          "catchTick": null,
+          "lead": 0.5,
+          "medianLead": 0,
+          "rate": 1.0032650696758356,
+          "rtt": 132,
+          "hostAge": 66,
+          "pending": 1
+        }
+      },
+      {
+        "seat": 2,
+        "role": "replica",
+        "link": "online",
+        "reconnects": 0,
+        "round": 6,
+        "wire": {
+          "delay": 40,
+          "loss": 0.01,
+          "jitter": 20,
+          "lsHold": 0,
+          "lsEvery": 0,
+          "drift": 1,
+          "sent": 12955,
+          "received": 12942,
+          "late": 255,
+          "sockets": 1
+        },
+        "clock": {
+          "count": 0,
+          "max": 0,
+          "last": 0,
+          "catches": 0,
+          "snaps": 0,
+          "rebases": 25,
+          "rebaseReason": "placement",
+          "rebaseError": -0.5,
+          "observedLeadAt": 0,
+          "lastSendAt": 616654.5,
+          "now": 616662,
+          "serverTick": 14871,
+          "tick": 14873,
+          "catchTick": null,
+          "lead": 0.5,
+          "medianLead": 0,
+          "rate": 1.0043033019216636,
+          "rtt": 232,
+          "hostAge": 116,
+          "pending": 3
+        }
+      },
+      {
+        "seat": 3,
+        "role": "replica",
+        "link": "online",
+        "reconnects": 0,
+        "round": 6,
+        "wire": {
+          "delay": 80,
+          "loss": 0.01,
+          "jitter": 20,
+          "lsHold": 0,
+          "lsEvery": 0,
+          "drift": 1,
+          "sent": 12922,
+          "received": 12891,
+          "late": 252,
+          "sockets": 1
+        },
+        "clock": {
+          "count": 0,
+          "max": 0,
+          "last": 0,
+          "catches": 0,
+          "snaps": 0,
+          "rebases": 32,
+          "rebaseReason": "placement",
+          "rebaseError": -0.5,
+          "observedLeadAt": 0,
+          "lastSendAt": 614299.4000000954,
+          "now": 614309.2000000477,
+          "serverTick": 14870,
+          "tick": 14873,
+          "catchTick": null,
+          "lead": 0.5,
+          "medianLead": 0,
+          "rate": 1.0017444751798212,
+          "rtt": 317,
+          "hostAge": 115,
+          "pending": 5
+        }
+      },
+      {
+        "seat": 4,
+        "role": "replica",
+        "link": "online",
+        "reconnects": 0,
+        "round": 6,
+        "wire": {
+          "delay": 120,
+          "loss": 0.01,
+          "jitter": 20,
+          "lsHold": 0,
+          "lsEvery": 0,
+          "drift": 1,
+          "sent": 12894,
+          "received": 12841,
+          "late": 258,
+          "sockets": 1
+        },
+        "clock": {
+          "count": 0,
+          "max": 0,
+          "last": 0,
+          "catches": 0,
+          "snaps": 0,
+          "rebases": 26,
+          "rebaseReason": "placement",
+          "rebaseError": -0.5,
+          "observedLeadAt": 0,
+          "lastSendAt": 612211.0999999046,
+          "now": 612235.2999999523,
+          "serverTick": 14869,
+          "tick": 14873,
+          "catchTick": null,
+          "lead": 0.5,
+          "medianLead": 0,
+          "rate": 1.005958762779719,
+          "rtt": 453,
+          "hostAge": 202,
+          "pending": 11
+        }
+      },
+      {
+        "seat": 5,
+        "role": "replica",
+        "link": "online",
+        "reconnects": 0,
+        "round": 6,
+        "wire": {
+          "delay": 160,
+          "loss": 0.01,
+          "jitter": 20,
+          "lsHold": 0,
+          "lsEvery": 0,
+          "drift": 1,
+          "sent": 12874,
+          "received": 12797,
+          "late": 247,
+          "sockets": 1
+        },
+        "clock": {
+          "count": 0,
+          "max": 0,
+          "last": 0,
+          "catches": 0,
+          "snaps": 0,
+          "rebases": 34,
+          "rebaseReason": "placement",
+          "rebaseError": -0.5,
+          "observedLeadAt": 0,
+          "lastSendAt": 609779,
+          "now": 609813,
+          "serverTick": 14868,
+          "tick": 14870,
+          "catchTick": null,
+          "lead": 0.5,
+          "medianLead": 0,
+          "rate": 1.02,
+          "rtt": 451,
+          "hostAge": 225.5,
+          "pending": 8
+        }
+      },
+      {
+        "seat": 6,
+        "role": "replica",
+        "link": "online",
+        "reconnects": 0,
+        "round": 6,
+        "wire": {
+          "delay": 200,
+          "loss": 0.01,
+          "jitter": 20,
+          "lsHold": 0,
+          "lsEvery": 0,
+          "drift": 1,
+          "sent": 12786,
+          "received": 12727,
+          "late": 248,
+          "sockets": 1
+        },
+        "clock": {
+          "count": 0,
+          "max": 0,
+          "last": 0,
+          "catches": 0,
+          "snaps": 0,
+          "rebases": 20,
+          "rebaseReason": "placement",
+          "rebaseError": -0.5,
+          "observedLeadAt": 0,
+          "lastSendAt": 607485.2000000477,
+          "now": 607512.2000000477,
+          "serverTick": 14868,
+          "tick": 14864,
+          "catchTick": null,
+          "lead": 0.5,
+          "medianLead": 0,
+          "rate": 1.02,
+          "rtt": 552,
+          "hostAge": 276,
+          "pending": 9
+        }
+      },
+      {
+        "seat": 7,
+        "role": "replica",
+        "link": "online",
+        "reconnects": 0,
+        "round": 6,
+        "wire": {
+          "delay": 240,
+          "loss": 0.01,
+          "jitter": 20,
+          "lsHold": 0,
+          "lsEvery": 0,
+          "drift": 1,
+          "sent": 12760,
+          "received": 12664,
+          "late": 249,
+          "sockets": 1
+        },
+        "clock": {
+          "count": 0,
+          "max": 0,
+          "last": 0,
+          "catches": 0,
+          "snaps": 0,
+          "rebases": 31,
+          "rebaseReason": "placement",
+          "rebaseError": -0.5,
+          "observedLeadAt": 0,
+          "lastSendAt": 603922.100000143,
+          "now": 603946.600000143,
+          "serverTick": 14866,
+          "tick": 14871,
+          "catchTick": null,
+          "lead": 0.5,
+          "medianLead": 0,
+          "rate": 1.0132043087542297,
+          "rtt": 659,
+          "hostAge": 329.5,
+          "pending": 13
+        }
+      }
+    ],
+    "errors": [
+      "console: Failed to load resource: the server responded with a status of 404 ()",
+      "console: WebSocket connection to 'wss://homie-arcade-runner-1014-perf-test.ryan-d2f.workers.dev/tiny-platformer/__watch?room=cmp-cb-lag0-mv942wyp&b=Y_-Bqhx53QZMfuY3W3633Q' failed: Error during WebSocket handshake: Unexpected response code: 503",
+      "console: WebSocket connection to 'wss://homie-arcade-runner-1014-perf-test.ryan-d2f.workers.dev/tiny-platformer/__net?room=cmp-cb-lag0-mv942wyp&b=Y_-Bqhx53QZMfuY3W3633Q&gv=ec49aee167152cdee1c59afcd194d857' failed: Error during WebSocket handshake: Unexpected response code: 404",
+      "console: WebSocket connection to 'wss://homie-arcade-runner-1014-perf-test.ryan-d2f.workers.dev/tiny-platformer/__net?room=cmp-cb-lag0-mv942wyp&b=Y_-Bqhx53QZMfuY3W3633Q&gv=ec49aee167152cdee1c59afcd194d857' failed: Error during WebSocket handshake: Unexpected response code: 503",
+      "console: WebSocket connection to 'wss://homie-arcade-runner-1014-perf-test.ryan-d2f.workers.dev/tiny-platformer/__net?room=cmp-cb-lag0-mv942wyp&b=Y_-Bqhx53QZMfuY3W3633Q&gv=ec49aee167152cdee1c59afcd194d857' failed: Error during WebSocket handshake: Unexpected response code: 503",
+      "console: WebSocket connection to 'wss://homie-arcade-runner-1014-perf-test.ryan-d2f.workers.dev/tiny-platformer/__watch?room=cmp-cb-lag0-mv942wyp&b=Y_-Bqhx53QZMfuY3W3633Q' failed: Error during WebSocket handshake: Unexpected response code: 503",
+      "console: WebSocket connection to 'wss://homie-arcade-runner-1014-perf-test.ryan-d2f.workers.dev/tiny-platformer/__net?room=cmp-cb-lag0-mv942wyp&b=Y_-Bqhx53QZMfuY3W3633Q&gv=ec49aee167152cdee1c59afcd194d857' failed: Error during WebSocket handshake: Unexpected response code: 503"
+    ]
+  },
+  "cl": {
+    "outcomes": {
+      "ok": 69,
+      "canceled": 23
+    },
+    "events": {
+      "hello": 4
+    },
+    "ticks": {
+      "samples": 0,
+      "first": null,
+      "last": null,
+      "maxTickUnits": 0,
+      "late": 0,
+      "errors": 0,
+      "budgetStops": 0
+    },
+    "players": [
+      {
+        "seat": 1,
+        "role": "replica",
+        "link": "online",
+        "reconnects": 0,
+        "round": 5,
+        "wire": {
+          "delay": 0,
+          "loss": 0,
+          "jitter": 0,
+          "lsHold": 0,
+          "lsEvery": 0,
+          "drift": 1,
+          "sent": 11548,
+          "received": 12540,
+          "late": 0,
+          "sockets": 1
+        }
+      },
+      {
+        "seat": 0,
+        "role": "host",
+        "link": "online",
+        "reconnects": 0,
+        "round": 5,
+        "wire": {
+          "delay": 0,
+          "loss": 0,
+          "jitter": 0,
+          "lsHold": 0,
+          "lsEvery": 0,
+          "drift": 1,
+          "sent": 13185,
+          "received": 78818,
+          "late": 0,
+          "sockets": 1
+        }
+      },
+      {
+        "seat": 2,
+        "role": "replica",
+        "link": "online",
+        "reconnects": 0,
+        "round": 5,
+        "wire": {
+          "delay": 40,
+          "loss": 0.01,
+          "jitter": 20,
+          "lsHold": 0,
+          "lsEvery": 0,
+          "drift": 1,
+          "sent": 11712,
+          "received": 12508,
+          "late": 255,
+          "sockets": 1
+        }
+      },
+      {
+        "seat": 3,
+        "role": "replica",
+        "link": "online",
+        "reconnects": 0,
+        "round": 5,
+        "wire": {
+          "delay": 80,
+          "loss": 0.01,
+          "jitter": 20,
+          "lsHold": 0,
+          "lsEvery": 0,
+          "drift": 1,
+          "sent": 11283,
+          "received": 12468,
+          "late": 241,
+          "sockets": 1
+        }
+      },
+      {
+        "seat": 4,
+        "role": "replica",
+        "link": "online",
+        "reconnects": 0,
+        "round": 5,
+        "wire": {
+          "delay": 120,
+          "loss": 0.01,
+          "jitter": 20,
+          "lsHold": 0,
+          "lsEvery": 0,
+          "drift": 1,
+          "sent": 11753,
+          "received": 12424,
+          "late": 248,
+          "sockets": 1
+        }
+      },
+      {
+        "seat": 5,
+        "role": "replica",
+        "link": "online",
+        "reconnects": 0,
+        "round": 5,
+        "wire": {
+          "delay": 160,
+          "loss": 0.01,
+          "jitter": 20,
+          "lsHold": 0,
+          "lsEvery": 0,
+          "drift": 1,
+          "sent": 11186,
+          "received": 12375,
+          "late": 213,
+          "sockets": 1
+        }
+      },
+      {
+        "seat": 6,
+        "role": "replica",
+        "link": "online",
+        "reconnects": 0,
+        "round": 5,
+        "wire": {
+          "delay": 200,
+          "loss": 0.01,
+          "jitter": 20,
+          "lsHold": 0,
+          "lsEvery": 0,
+          "drift": 1,
+          "sent": 11616,
+          "received": 12329,
+          "late": 208,
+          "sockets": 1
+        }
+      },
+      {
+        "seat": 7,
+        "role": "replica",
+        "link": "online",
+        "reconnects": 0,
+        "round": 5,
+        "wire": {
+          "delay": 240,
+          "loss": 0.01,
+          "jitter": 20,
+          "lsHold": 0,
+          "lsEvery": 0,
+          "drift": 1,
+          "sent": 11564,
+          "received": 12282,
+          "late": 235,
+          "sockets": 1
+        }
+      }
+    ],
+    "errors": [
+      "console: Failed to load resource: the server responded with a status of 404 ()"
+    ]
+  }
+}

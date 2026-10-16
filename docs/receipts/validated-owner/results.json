@@ -1,0 +1,3098 @@
+{
+  "summary": {
+    "b": {
+      "runs": 21,
+      "againstHeldKey": 1,
+      "phantomCatches": 6,
+      "catches": 37,
+      "snaps": 0,
+      "forcedOfflineMessages": 23,
+      "errors": [],
+      "spike": {
+        "runs": 21,
+        "frames": 78453,
+        "pops": 0,
+        "popMax": 0,
+        "s": 1314,
+        "perMin": 0
+      },
+      "spikep": {
+        "runs": 21,
+        "frames": 78453,
+        "pops": 0,
+        "popMax": 0,
+        "s": 1314,
+        "perMin": 0
+      },
+      "spike1": {
+        "runs": 21,
+        "frames": 78453,
+        "pops": 0,
+        "popMax": 0,
+        "s": 1314,
+        "perMin": 0
+      },
+      "stops": {
+        "stops": 65,
+        "stopBack": 0,
+        "stopBackMax": 1.2715657504713818e-7,
+        "turns": 296,
+        "turnBounce": 0,
+        "turnBounceMax": 0,
+        "wobble": 0
+      },
+      "ana4": {
+        "runs": 21,
+        "frames": 78453,
+        "inSolid": 0,
+        "jumps": 1,
+        "jumpMax": 1.64,
+        "skips": 0,
+        "slides": 0,
+        "slidesOver1": 0,
+        "slidesOver3": 0,
+        "slideMaxNet": 0,
+        "respawns": 39,
+        "respawnsGlided": 1,
+        "over33": 13,
+        "over50": 9,
+        "stalls": 0,
+        "stallMs": 0
+      },
+      "postSpawnMultiTileSlides": 0
+    },
+    "c": {
+      "runs": 21,
+      "againstHeldKey": 0,
+      "phantomCatches": 41,
+      "catches": 78,
+      "snaps": 0,
+      "forcedOfflineMessages": 23,
+      "errors": [],
+      "spike": {
+        "runs": 21,
+        "frames": 78442,
+        "pops": 0,
+        "popMax": 0,
+        "s": 1313,
+        "perMin": 0
+      },
+      "spikep": {
+        "runs": 21,
+        "frames": 78442,
+        "pops": 0,
+        "popMax": 0,
+        "s": 1313,
+        "perMin": 0
+      },
+      "spike1": {
+        "runs": 21,
+        "frames": 78442,
+        "pops": 0,
+        "popMax": 0,
+        "s": 1313,
+        "perMin": 0
+      },
+      "stops": {
+        "stops": 88,
+        "stopBack": 0,
+        "stopBackMax": 0,
+        "turns": 320,
+        "turnBounce": 0,
+        "turnBounceMax": 0,
+        "wobble": 0
+      },
+      "ana4": {
+        "runs": 21,
+        "frames": 78442,
+        "inSolid": 0,
+        "jumps": 3,
+        "jumpMax": 5.88,
+        "skips": 3,
+        "slides": 3,
+        "slidesOver1": 3,
+        "slidesOver3": 2,
+        "slideMaxNet": 5.88,
+        "respawns": 77,
+        "respawnsGlided": 0,
+        "over33": 10,
+        "over50": 7,
+        "stalls": 0,
+        "stallMs": 0
+      },
+      "postSpawnMultiTileSlides": 0
+    }
+  },
+  "against": {
+    "b": {
+      "rawAgainst": 1,
+      "unplacedAgainst": 0,
+      "authoritativePlacements": [
+        {
+          "file": "b-rc6-1-lag80-loss0.01-jitter0-frames.json.gz",
+          "seconds": 58.0655,
+          "from": [
+            17.95416831970215,
+            31
+          ],
+          "to": [
+            20,
+            31
+          ],
+          "diedAt": 1176
+        }
+      ]
+    },
+    "c": {
+      "rawAgainst": 0,
+      "unplacedAgainst": 0,
+      "authoritativePlacements": []
+    }
+  },
+  "latency": {
+    "b": {
+      "0": {
+        "batches": [
+          {
+            "run": {
+              "n": 23,
+              "min": 17.4,
+              "median": 27.2,
+              "p90": 31.5,
+              "max": 34.6
+            },
+            "jump": {
+              "n": 10,
+              "min": 19.1,
+              "median": 29.4,
+              "p90": 32.3,
+              "max": 32.3
+            }
+          },
+          {
+            "run": {
+              "n": 24,
+              "min": 12.5,
+              "median": 22.9,
+              "p90": 27.1,
+              "max": 28.2
+            },
+            "jump": {
+              "n": 11,
+              "min": 9.5,
+              "median": 19.7,
+              "p90": 24.4,
+              "max": 24.9
+            }
+          },
+          {
+            "run": {
+              "n": 24,
+              "min": 13.1,
+              "median": 24,
+              "p90": 27.5,
+              "max": 29
+            },
+            "jump": {
+              "n": 12,
+              "min": 9.9,
+              "median": 13.9,
+              "p90": 22.2,
+              "max": 24.9
+            }
+          }
+        ],
+        "medianBatchP90": {
+          "run": 27.5,
+          "jump": 24.4
+        }
+      },
+      "150": {
+        "batches": [
+          {
+            "run": {
+              "n": 24,
+              "min": 9,
+              "median": 24.9,
+              "p90": 31.6,
+              "max": 33
+            },
+            "jump": {
+              "n": 12,
+              "min": 23,
+              "median": 30.7,
+              "p90": 35.1,
+              "max": 36.5
+            }
+          },
+          {
+            "run": {
+              "n": 24,
+              "min": 6.3,
+              "median": 19.2,
+              "p90": 29.5,
+              "max": 32.4
+            },
+            "jump": {
+              "n": 10,
+              "min": 6.5,
+              "median": 17.6,
+              "p90": 22.1,
+              "max": 22.1
+            }
+          },
+          {
+            "run": {
+              "n": 24,
+              "min": 8.6,
+              "median": 29.1,
+              "p90": 34.7,
+              "max": 35.5
+            },
+            "jump": {
+              "n": 12,
+              "min": 17.6,
+              "median": 24,
+              "p90": 26,
+              "max": 31.4
+            }
+          }
+        ],
+        "medianBatchP90": {
+          "run": 31.6,
+          "jump": 26
+        }
+      }
+    },
+    "c": {
+      "0": {
+        "batches": [
+          {
+            "run": {
+              "n": 24,
+              "min": 17,
+              "median": 24.3,
+              "p90": 30.7,
+              "max": 34.1
+            },
+            "jump": {
+              "n": 12,
+              "min": 19.4,
+              "median": 25,
+              "p90": 31.5,
+              "max": 32.3
+            }
+          },
+          {
+            "run": {
+              "n": 24,
+              "min": 15.8,
+              "median": 30.1,
+              "p90": 33.2,
+              "max": 34.1
+            },
+            "jump": {
+              "n": 12,
+              "min": 4,
+              "median": 26.5,
+              "p90": 33.8,
+              "max": 45
+            }
+          },
+          {
+            "run": {
+              "n": 24,
+              "min": 18.1,
+              "median": 25.5,
+              "p90": 30.6,
+              "max": 31.4
+            },
+            "jump": {
+              "n": 11,
+              "min": 16.9,
+              "median": 21.4,
+              "p90": 31.2,
+              "max": 32.6
+            }
+          }
+        ],
+        "medianBatchP90": {
+          "run": 30.7,
+          "jump": 31.5
+        }
+      },
+      "150": {
+        "batches": [
+          {
+            "run": {
+              "n": 24,
+              "min": 17.6,
+              "median": 25.6,
+              "p90": 30.8,
+              "max": 31.2
+            },
+            "jump": {
+              "n": 11,
+              "min": 17.4,
+              "median": 25.3,
+              "p90": 29.5,
+              "max": 30.5
+            }
+          },
+          {
+            "run": {
+              "n": 24,
+              "min": 17.6,
+              "median": 28.9,
+              "p90": 32,
+              "max": 32.5
+            },
+            "jump": {
+              "n": 12,
+              "min": 16,
+              "median": 24.6,
+              "p90": 30.8,
+              "max": 31.6
+            }
+          },
+          {
+            "run": {
+              "n": 23,
+              "min": 18.3,
+              "median": 27.1,
+              "p90": 31.3,
+              "max": 32.7
+            },
+            "jump": {
+              "n": 12,
+              "min": 17,
+              "median": 26.2,
+              "p90": 32.4,
+              "max": 32.4
+            }
+          }
+        ],
+        "medianBatchP90": {
+          "run": 31.3,
+          "jump": 30.8
+        }
+      }
+    }
+  },
+  "dedicatedStops": {
+    "b": {
+      "stops": 70,
+      "stopBack": 0,
+      "stopBackMax": 0,
+      "turns": 35,
+      "turnBounce": 0,
+      "turnBounceMax": 0,
+      "wobble": 0
+    },
+    "c": {
+      "stops": 69,
+      "stopBack": 0,
+      "stopBackMax": 0,
+      "turns": 34,
+      "turnBounce": 0,
+      "turnBounceMax": 0,
+      "wobble": 0
+    }
+  },
+  "preservation": {
+    "b": {
+      "controls": {
+        "controls": {
+          "keys": [
+            {
+              "code": "ArrowLeft",
+              "kind": "left",
+              "feedbackMs": 18.2,
+              "distanceTiles": 0.8
+            },
+            {
+              "code": "ArrowRight",
+              "kind": "right",
+              "feedbackMs": 16.9,
+              "distanceTiles": 0.8
+            },
+            {
+              "code": "KeyA",
+              "kind": "left",
+              "feedbackMs": 16.9,
+              "distanceTiles": 0.8
+            },
+            {
+              "code": "KeyD",
+              "kind": "right",
+              "feedbackMs": 11.1,
+              "distanceTiles": 0.8
+            },
+            {
+              "code": "Space",
+              "kind": "jump",
+              "feedbackMs": 11.2,
+              "heightTiles": 5.107,
+              "airSeconds": 0.83
+            },
+            {
+              "code": "ArrowUp",
+              "kind": "jump",
+              "feedbackMs": 18.8,
+              "heightTiles": 5.107,
+              "airSeconds": 0.83
+            },
+            {
+              "code": "KeyW",
+              "kind": "jump",
+              "feedbackMs": 10.1,
+              "heightTiles": 5.107,
+              "airSeconds": 0.83
+            }
+          ],
+          "touch": [
+            {
+              "what": "stick right",
+              "topSpeedTilesPerSecond": 15.2
+            },
+            {
+              "what": "stick left",
+              "topSpeedTilesPerSecond": -15.2
+            },
+            {
+              "what": "stick right",
+              "topSpeedTilesPerSecond": 15.1
+            },
+            {
+              "what": "stick left",
+              "topSpeedTilesPerSecond": -15.2
+            },
+            {
+              "what": "stick right",
+              "topSpeedTilesPerSecond": 7.1
+            },
+            {
+              "what": "stick left",
+              "topSpeedTilesPerSecond": -15.1
+            },
+            {
+              "what": "JUMP button",
+              "roseTiles": {
+                "rose": 5.11,
+                "caught": false
+              }
+            },
+            {
+              "what": "tap on the right side",
+              "roseTiles": {
+                "rose": 5.11,
+                "caught": false
+              }
+            },
+            {
+              "what": "JUMP button",
+              "roseTiles": {
+                "rose": 5.11,
+                "caught": false
+              }
+            },
+            {
+              "what": "tap on the right side",
+              "roseTiles": {
+                "rose": 5.11,
+                "caught": false
+              }
+            },
+            {
+              "what": "JUMP button",
+              "roseTiles": {
+                "rose": 5.11,
+                "caught": false
+              }
+            },
+            {
+              "what": "tap on the right side",
+              "roseTiles": {
+                "rose": 5.11,
+                "caught": false
+              }
+            }
+          ],
+          "tv": {
+            "seat": null,
+            "role": "screen",
+            "runners": 4,
+            "errors": []
+          },
+          "taps": [
+            {
+              "code": "ArrowLeft",
+              "kind": "left",
+              "feedbackMs": 17.5,
+              "distanceTiles": 0.025
+            },
+            {
+              "code": "ArrowRight",
+              "kind": "right",
+              "feedbackMs": 14.8,
+              "distanceTiles": 0.025
+            },
+            {
+              "code": "ArrowRight",
+              "kind": "right",
+              "feedbackMs": 20.4,
+              "distanceTiles": 0.025
+            },
+            {
+              "code": "ArrowLeft",
+              "kind": "left",
+              "feedbackMs": 23.6,
+              "distanceTiles": 0.025
+            }
+          ],
+          "errors": [],
+          "jumpButton": {
+            "x": 338,
+            "y": 786
+          }
+        },
+        "tag": "b-controls",
+        "base": "http://127.0.0.1:8791",
+        "at": "2026-10-14T23:50:15.304Z"
+      },
+      "reload": {
+        "reload": {
+          "first": {
+            "roleBefore": "replica",
+            "roleAfter": "replica",
+            "otherRoleAfter": "replica",
+            "backInMs": 323,
+            "scoreBefore": 4,
+            "scoreAfter": 4,
+            "scoreKept": true,
+            "scoreOnOtherScreenBefore": 4,
+            "runnersBefore": 4,
+            "runnersAfter": 4,
+            "movedTilesWhileAway": 0,
+            "playsAgain": true,
+            "errors": []
+          },
+          "second": {
+            "roleBefore": "replica",
+            "roleAfter": "replica",
+            "otherRoleAfter": "replica",
+            "backInMs": 349,
+            "scoreBefore": 1,
+            "scoreAfter": 1,
+            "scoreKept": true,
+            "scoreOnOtherScreenBefore": 1,
+            "runnersBefore": 4,
+            "runnersAfter": 4,
+            "movedTilesWhileAway": 0,
+            "playsAgain": true,
+            "errors": []
+          }
+        },
+        "tag": "b-reload",
+        "base": "http://127.0.0.1:8791",
+        "at": "2026-10-14T23:55:54.206Z"
+      },
+      "rounds": {
+        "rounds": {
+          "rounds": [
+            {
+              "n": 2,
+              "leftMsAtStart": 119992,
+              "everyoneAtZero": true,
+              "bothOnSpawnPoints": true,
+              "monstersOnScreen": 8,
+              "goldOnScreen": 8,
+              "myHudScore": 0,
+              "results": [
+                [
+                  "Mellow Comet",
+                  14,
+                  false
+                ],
+                [
+                  "Moth",
+                  14,
+                  true
+                ],
+                [
+                  "Kilo",
+                  8,
+                  true
+                ],
+                [
+                  "Lucky Gecko",
+                  0,
+                  false
+                ]
+              ],
+              "sameOnBothScreens": true,
+              "resultsMatchScores": true,
+              "resultsCard": "ROUND 2 | You — 14 points | Moth (bot) — 14 points | Kilo (bot) — 8 points | Lucky Gecko — 0 points",
+              "clock": "Next round in 5",
+              "myPoints": 14,
+              "catches": 5,
+              "goldTaken": 8,
+              "stomps": 4
+            },
+            {
+              "n": 3,
+              "leftMsAtStart": 119980,
+              "everyoneAtZero": true,
+              "bothOnSpawnPoints": true,
+              "monstersOnScreen": 8,
+              "goldOnScreen": 8,
+              "myHudScore": 0,
+              "results": [
+                [
+                  "Kilo",
+                  14,
+                  true
+                ],
+                [
+                  "Moth",
+                  13,
+                  true
+                ],
+                [
+                  "Mellow Comet",
+                  12,
+                  false
+                ],
+                [
+                  "Lucky Gecko",
+                  0,
+                  false
+                ]
+              ],
+              "sameOnBothScreens": true,
+              "resultsMatchScores": true,
+              "resultsCard": "ROUND 3 | Kilo (bot) — 14 points | Moth (bot) — 13 points | You — 12 points | Lucky Gecko — 0 points",
+              "clock": "Next round in 5",
+              "myPoints": 12,
+              "catches": 0,
+              "goldTaken": 7,
+              "stomps": 1
+            },
+            {
+              "n": 4,
+              "leftMsAtStart": 119948,
+              "everyoneAtZero": true,
+              "bothOnSpawnPoints": true,
+              "monstersOnScreen": 8,
+              "goldOnScreen": 8,
+              "myHudScore": 0,
+              "results": [
+                [
+                  "Kilo",
+                  14,
+                  true
+                ],
+                [
+                  "Moth",
+                  14,
+                  true
+                ],
+                [
+                  "Mellow Comet",
+                  11,
+                  false
+                ],
+                [
+                  "Lucky Gecko",
+                  0,
+                  false
+                ]
+              ],
+              "sameOnBothScreens": true,
+              "resultsMatchScores": true,
+              "resultsCard": "ROUND 4 | Kilo (bot) — 14 points | Moth (bot) — 14 points | You — 11 points | Lucky Gecko — 0 points",
+              "clock": "Next round in 5",
+              "myPoints": 11,
+              "catches": 2,
+              "goldTaken": 5,
+              "stomps": 2
+            }
+          ],
+          "roles": [
+            "replica",
+            "replica"
+          ],
+          "sound": {
+            "computer": {
+              "audioContexts": 0,
+              "oscillators": 0,
+              "buffers": 0,
+              "media": 0
+            },
+            "phone": {
+              "audioContexts": 0,
+              "oscillators": 0,
+              "buffers": 0,
+              "media": 0
+            }
+          },
+          "reconnects": [
+            0,
+            0
+          ],
+          "errors": []
+        },
+        "tag": "b-rounds",
+        "base": "http://127.0.0.1:8791",
+        "at": "2026-10-15T00:25:32.776Z"
+      },
+      "feel": {
+        "feel": {
+          "delayMs": 0,
+          "runKeyFeedbackMs": {
+            "n": 23,
+            "min": 17.4,
+            "median": 27.2,
+            "p90": 31.5,
+            "max": 34.6
+          },
+          "jumpKeyFeedbackMs": {
+            "n": 10,
+            "min": 19.1,
+            "median": 29.4,
+            "p90": 32.3,
+            "max": 32.3
+          },
+          "run150msTiles": {
+            "n": 23,
+            "min": 450,
+            "median": 450,
+            "p90": 558,
+            "max": 558
+          },
+          "jumpHeightTiles": {
+            "n": 10,
+            "min": 5106,
+            "median": 5106,
+            "p90": 5106,
+            "max": 5106
+          },
+          "jumpAirSeconds": {
+            "n": 10,
+            "min": 780,
+            "median": 830,
+            "p90": 830,
+            "max": 830
+          },
+          "tap30msTiles": [
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025
+          ],
+          "tap80msTiles": [
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142
+          ],
+          "tap120msTiles": [
+            0.275,
+            0.275,
+            0.275,
+            0.358,
+            0.275,
+            0.275,
+            0.275,
+            0.275
+          ],
+          "trialsThatFoundNoGround": 3,
+          "errors": []
+        },
+        "tag": "b-feel",
+        "base": "http://127.0.0.1:8791",
+        "at": "2026-10-14T23:53:24.024Z"
+      },
+      "feel150": {
+        "feel150": {
+          "delayMs": 150,
+          "runKeyFeedbackMs": {
+            "n": 24,
+            "min": 9,
+            "median": 24.9,
+            "p90": 31.6,
+            "max": 33
+          },
+          "jumpKeyFeedbackMs": {
+            "n": 12,
+            "min": 23,
+            "median": 30.7,
+            "p90": 35.1,
+            "max": 36.5
+          },
+          "run150msTiles": {
+            "n": 24,
+            "min": 450,
+            "median": 450,
+            "p90": 558,
+            "max": 558
+          },
+          "jumpHeightTiles": {
+            "n": 12,
+            "min": 5105,
+            "median": 5108,
+            "p90": 5108,
+            "max": 5108
+          },
+          "jumpAirSeconds": {
+            "n": 12,
+            "min": 820,
+            "median": 830,
+            "p90": 830,
+            "max": 830
+          },
+          "tap30msTiles": [
+            0.025,
+            0.025,
+            0.05,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025
+          ],
+          "tap80msTiles": [
+            0.2,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.2,
+            0.142,
+            0.142
+          ],
+          "tap120msTiles": [
+            0.275,
+            0.358,
+            0.275,
+            0.358,
+            0.275,
+            0.358,
+            0.275,
+            0.358
+          ],
+          "trialsThatFoundNoGround": 0,
+          "errors": []
+        },
+        "tag": "b-feel150",
+        "base": "http://127.0.0.1:8791",
+        "at": "2026-10-14T23:57:58.262Z"
+      },
+      "feel0-2": {
+        "feel": {
+          "delayMs": 0,
+          "samples": {
+            "run": [
+              24.8,
+              12.7,
+              21.5,
+              26.5,
+              25.7,
+              18.1,
+              25.5,
+              28,
+              17.1,
+              20.2,
+              25.4,
+              26.4,
+              27.1,
+              28.2,
+              12.5,
+              17.7,
+              20.3,
+              20.6,
+              22.9,
+              20.8,
+              14.4,
+              15,
+              27.1,
+              26.1
+            ],
+            "jump": [
+              19.8,
+              24.9,
+              14.9,
+              19.7,
+              24.4,
+              15.8,
+              20.4,
+              9.5,
+              16,
+              21.9,
+              12.5
+            ]
+          },
+          "runKeyFeedbackMs": {
+            "n": 24,
+            "min": 12.5,
+            "median": 22.9,
+            "p90": 27.1,
+            "max": 28.2
+          },
+          "jumpKeyFeedbackMs": {
+            "n": 11,
+            "min": 9.5,
+            "median": 19.7,
+            "p90": 24.4,
+            "max": 24.9
+          },
+          "run150msTiles": {
+            "n": 24,
+            "min": 450,
+            "median": 450,
+            "p90": 450,
+            "max": 558
+          },
+          "jumpHeightTiles": {
+            "n": 11,
+            "min": 5105,
+            "median": 5106,
+            "p90": 5106,
+            "max": 5106
+          },
+          "jumpAirSeconds": {
+            "n": 11,
+            "min": 830,
+            "median": 830,
+            "p90": 830,
+            "max": 830
+          },
+          "tap30msTiles": [
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025
+          ],
+          "tap80msTiles": [
+            0.142,
+            0.142,
+            0.092,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142
+          ],
+          "tap120msTiles": [
+            0.275,
+            0.275,
+            0.358,
+            0.358,
+            0.275,
+            0.275,
+            0.275,
+            0.275
+          ],
+          "trialsThatFoundNoGround": 1,
+          "errors": []
+        },
+        "tag": "b-feel0-2",
+        "base": "http://127.0.0.1:8791",
+        "at": "2026-10-15T00:01:17.206Z"
+      },
+      "feel0-3": {
+        "feel": {
+          "delayMs": 0,
+          "samples": {
+            "run": [
+              21.1,
+              26.7,
+              22.1,
+              17.1,
+              27,
+              21.3,
+              13.1,
+              26.6,
+              26.1,
+              17.9,
+              26,
+              25.5,
+              27.5,
+              29,
+              18.7,
+              18.3,
+              24.6,
+              16.8,
+              28.5,
+              22.5,
+              26.8,
+              24,
+              15.6,
+              21.2
+            ],
+            "jump": [
+              15.6,
+              13.6,
+              12,
+              18.3,
+              9.9,
+              11.3,
+              24.9,
+              13.2,
+              15,
+              13.9,
+              22.2,
+              10
+            ]
+          },
+          "runKeyFeedbackMs": {
+            "n": 24,
+            "min": 13.1,
+            "median": 24,
+            "p90": 27.5,
+            "max": 29
+          },
+          "jumpKeyFeedbackMs": {
+            "n": 12,
+            "min": 9.9,
+            "median": 13.9,
+            "p90": 22.2,
+            "max": 24.9
+          },
+          "run150msTiles": {
+            "n": 24,
+            "min": 450,
+            "median": 450,
+            "p90": 558,
+            "max": 675
+          },
+          "jumpHeightTiles": {
+            "n": 12,
+            "min": 5106,
+            "median": 5106,
+            "p90": 5107,
+            "max": 5107
+          },
+          "jumpAirSeconds": {
+            "n": 12,
+            "min": 830,
+            "median": 830,
+            "p90": 830,
+            "max": 830
+          },
+          "tap30msTiles": [
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.05
+          ],
+          "tap80msTiles": [
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142
+          ],
+          "tap120msTiles": [
+            0.275,
+            0.275,
+            0.358,
+            0.275,
+            0.275,
+            0.275,
+            0.275,
+            0.358
+          ],
+          "trialsThatFoundNoGround": 0,
+          "errors": []
+        },
+        "tag": "b-feel0-3",
+        "base": "http://127.0.0.1:8791",
+        "at": "2026-10-15T00:03:24.943Z"
+      },
+      "feel150-2": {
+        "feel150": {
+          "delayMs": 150,
+          "samples": {
+            "run": [
+              16.8,
+              18.1,
+              19,
+              12.2,
+              6.3,
+              13.1,
+              14.2,
+              21.4,
+              31.4,
+              17.5,
+              20,
+              23.2,
+              17.4,
+              32.4,
+              14.6,
+              28.6,
+              21.9,
+              22.6,
+              19.7,
+              19.2,
+              29.5,
+              26,
+              19.2,
+              15.1
+            ],
+            "jump": [
+              21,
+              22.1,
+              17.6,
+              12.5,
+              6.5,
+              13.8,
+              11.3,
+              12.9,
+              22,
+              18
+            ]
+          },
+          "runKeyFeedbackMs": {
+            "n": 24,
+            "min": 6.3,
+            "median": 19.2,
+            "p90": 29.5,
+            "max": 32.4
+          },
+          "jumpKeyFeedbackMs": {
+            "n": 10,
+            "min": 6.5,
+            "median": 17.6,
+            "p90": 22.1,
+            "max": 22.1
+          },
+          "run150msTiles": {
+            "n": 24,
+            "min": 450,
+            "median": 450,
+            "p90": 558,
+            "max": 558
+          },
+          "jumpHeightTiles": {
+            "n": 10,
+            "min": 5104,
+            "median": 5107,
+            "p90": 5108,
+            "max": 5108
+          },
+          "jumpAirSeconds": {
+            "n": 10,
+            "min": 820,
+            "median": 830,
+            "p90": 830,
+            "max": 830
+          },
+          "tap30msTiles": [
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025
+          ],
+          "tap80msTiles": [
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142
+          ],
+          "tap120msTiles": [
+            0.358,
+            0.275,
+            0.275,
+            0.358,
+            0.275,
+            0.275,
+            0.275,
+            0.275
+          ],
+          "trialsThatFoundNoGround": 2,
+          "errors": []
+        },
+        "tag": "b-feel150-2",
+        "base": "http://127.0.0.1:8791",
+        "at": "2026-10-15T00:18:58.520Z"
+      },
+      "feel150-3": {
+        "feel150": {
+          "delayMs": 150,
+          "samples": {
+            "run": [
+              16.5,
+              26.9,
+              35.4,
+              32.1,
+              29.2,
+              29.1,
+              32.8,
+              29.4,
+              12.8,
+              31.4,
+              29.3,
+              28.6,
+              26.8,
+              20.1,
+              35.5,
+              8.6,
+              34.7,
+              25.1,
+              25.6,
+              34.3,
+              25.9,
+              34.1,
+              26.3,
+              19.3
+            ],
+            "jump": [
+              24.3,
+              18.9,
+              21,
+              17.6,
+              17.6,
+              31.4,
+              24.8,
+              26,
+              24,
+              24,
+              20.2,
+              21.3
+            ]
+          },
+          "runKeyFeedbackMs": {
+            "n": 24,
+            "min": 8.6,
+            "median": 29.1,
+            "p90": 34.7,
+            "max": 35.5
+          },
+          "jumpKeyFeedbackMs": {
+            "n": 12,
+            "min": 17.6,
+            "median": 24,
+            "p90": 26,
+            "max": 31.4
+          },
+          "run150msTiles": {
+            "n": 24,
+            "min": 450,
+            "median": 450,
+            "p90": 558,
+            "max": 675
+          },
+          "jumpHeightTiles": {
+            "n": 12,
+            "min": 5106,
+            "median": 5107,
+            "p90": 5107,
+            "max": 5107
+          },
+          "jumpAirSeconds": {
+            "n": 12,
+            "min": 830,
+            "median": 830,
+            "p90": 830,
+            "max": 830
+          },
+          "tap30msTiles": [
+            0.05,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.092,
+            0.025,
+            0.025
+          ],
+          "tap80msTiles": [
+            0.275,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142
+          ],
+          "tap120msTiles": [
+            0.275,
+            0.358,
+            0.275,
+            0.275,
+            0.275,
+            0.275,
+            0.275,
+            0.275
+          ],
+          "trialsThatFoundNoGround": 0,
+          "errors": []
+        },
+        "tag": "b-feel150-3",
+        "base": "http://127.0.0.1:8791",
+        "at": "2026-10-15T00:21:45.344Z"
+      },
+      "pause": {
+        "pause": {
+          "first": {
+            "stoppedRole": "replica",
+            "otherRole": "replica",
+            "monstersAndBotsOnTheOtherScreenWhileStopped": {
+              "changes": 602,
+              "longestStillMs": 18
+            },
+            "otherPlayer": {
+              "runFeedbackMs": {
+                "n": 0,
+                "min": null,
+                "median": null,
+                "p90": null,
+                "max": null
+              },
+              "jumpFeedbackMs": {
+                "n": 0,
+                "min": null,
+                "median": null,
+                "p90": null,
+                "max": null
+              },
+              "goldOnHudMs": {
+                "n": 2,
+                "min": 133.2,
+                "median": 150,
+                "p90": 150,
+                "max": 150
+              },
+              "unexplainedJumpsOfMyRunner": 0
+            },
+            "stoppedRoleAfter": "replica",
+            "otherRoleAfter": "replica",
+            "reconnects": [
+              0,
+              0
+            ],
+            "stoppedPlaysAgain": true,
+            "stoppedRunnerOnTheOtherScreen": {
+              "before": {
+                "x": 3,
+                "y": 27,
+                "score": 0
+              },
+              "after": {
+                "x": 3,
+                "y": 27,
+                "score": 0
+              },
+              "movedTiles": 0
+            },
+            "errors": []
+          },
+          "second": {
+            "stoppedRole": "replica",
+            "otherRole": "replica",
+            "monstersAndBotsOnTheOtherScreenWhileStopped": {
+              "changes": 602,
+              "longestStillMs": 19
+            },
+            "otherPlayer": {
+              "runFeedbackMs": {
+                "n": 1,
+                "min": 26,
+                "median": 26,
+                "p90": 26,
+                "max": 26
+              },
+              "jumpFeedbackMs": {
+                "n": 0,
+                "min": null,
+                "median": null,
+                "p90": null,
+                "max": null
+              },
+              "goldOnHudMs": {
+                "n": 1,
+                "min": 166,
+                "median": 166,
+                "p90": 166,
+                "max": 166
+              },
+              "unexplainedJumpsOfMyRunner": 0
+            },
+            "stoppedRoleAfter": "replica",
+            "otherRoleAfter": "replica",
+            "reconnects": [
+              0,
+              0
+            ],
+            "stoppedPlaysAgain": true,
+            "stoppedRunnerOnTheOtherScreen": {
+              "before": {
+                "x": 52.92,
+                "y": 26,
+                "score": 0
+              },
+              "after": {
+                "x": 52.92,
+                "y": 26,
+                "score": 0
+              },
+              "movedTiles": 0
+            },
+            "errors": []
+          }
+        },
+        "tag": "b-pause",
+        "base": "http://127.0.0.1:8791",
+        "at": "2026-10-14T23:59:24.725Z"
+      },
+      "phone": {
+        "tag": "b-phone",
+        "base": "http://127.0.0.1:8791",
+        "cpu": 4,
+        "seconds": 180,
+        "lag": {
+          "delay": 60,
+          "loss": 0.01,
+          "jitter": 20
+        },
+        "jumpButton": {
+          "x": 338,
+          "y": 786
+        },
+        "frameOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "steps": 1683,
+        "jumps": 495,
+        "touches": 992,
+        "score": 2,
+        "link": "online",
+        "reconnects": 0,
+        "errors": [],
+        "load": [
+          17.5,
+          15,
+          13.7
+        ]
+      },
+      "check": {
+        "ok": true,
+        "command": "check",
+        "play": "http://127.0.0.1:8791/tiny-platformer/play",
+        "room": "pub-3",
+        "seats": [
+          {
+            "browser": "computer",
+            "seat": 0,
+            "role": "replica",
+            "seatedMs": 1131
+          },
+          {
+            "browser": "phone",
+            "seat": 1,
+            "role": "replica",
+            "seatedMs": 388
+          }
+        ],
+        "round": {
+          "n": 1,
+          "humans": 2,
+          "bots": 2,
+          "results": [
+            {
+              "slot": 5,
+              "seat": null,
+              "name": "Kilo",
+              "score": 15,
+              "bot": true,
+              "place": 1
+            },
+            {
+              "slot": 6,
+              "seat": null,
+              "name": "Moth",
+              "score": 14,
+              "bot": true,
+              "place": 2
+            },
+            {
+              "slot": 0,
+              "seat": 0,
+              "name": "Copper Fox",
+              "score": 11,
+              "bot": false,
+              "place": 3
+            },
+            {
+              "slot": 1,
+              "seat": 1,
+              "name": "Cosmic Spark",
+              "score": 0,
+              "bot": false,
+              "place": 4
+            }
+          ],
+          "overMs": [
+            121000,
+            119995
+          ]
+        },
+        "readiness": [
+          {
+            "browser": "computer",
+            "ready": true,
+            "by": "auto",
+            "liftedMs": 325,
+            "waitedMs": 4,
+            "shot": "computer-playing.png"
+          },
+          {
+            "browser": "phone",
+            "ready": true,
+            "by": "auto",
+            "liftedMs": 246,
+            "waitedMs": 2,
+            "shot": "phone-playing.png"
+          }
+        ],
+        "connection": [
+          {
+            "browser": "computer",
+            "seats": [
+              0
+            ],
+            "reconnects": 0,
+            "closed": null
+          },
+          {
+            "browser": "phone",
+            "seats": [
+              1
+            ],
+            "reconnects": 0,
+            "closed": null
+          }
+        ],
+        "reconnects": 0,
+        "uninterrupted": true,
+        "note": "no reconnects: both connections held from the seat to the results",
+        "frames": [
+          {
+            "browser": "computer",
+            "fps": 61,
+            "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)"
+          },
+          {
+            "browser": "phone",
+            "fps": 60,
+            "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)"
+          }
+        ],
+        "totalMs": 122673
+      },
+      "restart": {
+        "restart": {
+          "serverPid": 92920,
+          "downForMs": 6230,
+          "pagesBackMs": [
+            416,
+            863
+          ],
+          "reloadNeeded": false,
+          "gameFramesReloadedByThePage": 0,
+          "roundBefore": {
+            "n": 1,
+            "phase": "live",
+            "leftMs": 92965
+          },
+          "roundAfter": {
+            "n": 1,
+            "phase": "live",
+            "leftMs": 89951
+          },
+          "sameRound": true,
+          "clockHeldMs": 7546,
+          "myScoreBefore": 3,
+          "myScoreAfter": 3,
+          "myScoreKept": true,
+          "allScoresBefore": 10,
+          "allScoresAfter": 10,
+          "scoresKept": true,
+          "movedTilesWhileDown": 0,
+          "rolesBefore": [
+            "replica",
+            "replica"
+          ],
+          "rolesAfter": [
+            "replica",
+            "replica"
+          ],
+          "playsAgain": true,
+          "movedTilesWhenThePageWasBack": 0,
+          "reconnects": [
+            5,
+            5
+          ]
+        },
+        "tag": "b-restart",
+        "base": "http://127.0.0.1:8791",
+        "at": "2026-10-15T00:26:17.612Z"
+      }
+    },
+    "c": {
+      "controls": {
+        "controls": {
+          "keys": [
+            {
+              "code": "ArrowLeft",
+              "kind": "left",
+              "feedbackMs": 20.7,
+              "distanceTiles": 0.8
+            },
+            {
+              "code": "ArrowRight",
+              "kind": "right",
+              "feedbackMs": 33.6,
+              "distanceTiles": 0.8
+            },
+            {
+              "code": "KeyA",
+              "kind": "left",
+              "feedbackMs": 18.2,
+              "distanceTiles": 1.75
+            },
+            {
+              "code": "KeyD",
+              "kind": "right",
+              "feedbackMs": 18.8,
+              "distanceTiles": 0.942
+            },
+            {
+              "code": "Space",
+              "kind": "jump",
+              "feedbackMs": 18.1,
+              "heightTiles": 5.108,
+              "airSeconds": 0.82
+            },
+            {
+              "code": "ArrowUp",
+              "kind": "jump",
+              "feedbackMs": 22.8,
+              "heightTiles": 5.108,
+              "airSeconds": 0.82
+            },
+            {
+              "code": "KeyW",
+              "kind": "jump",
+              "feedbackMs": 27.9,
+              "heightTiles": 5.108,
+              "airSeconds": 0.82
+            }
+          ],
+          "touch": [
+            {
+              "what": "stick right",
+              "topSpeedTilesPerSecond": 0
+            },
+            {
+              "what": "stick left",
+              "topSpeedTilesPerSecond": -15.4
+            },
+            {
+              "what": "stick right",
+              "topSpeedTilesPerSecond": 15.5
+            },
+            {
+              "what": "stick left",
+              "topSpeedTilesPerSecond": -15.2
+            },
+            {
+              "what": "stick right",
+              "topSpeedTilesPerSecond": 15.3
+            },
+            {
+              "what": "stick left",
+              "topSpeedTilesPerSecond": -15.6
+            },
+            {
+              "what": "JUMP button",
+              "roseTiles": {
+                "rose": 5.11,
+                "caught": false
+              }
+            },
+            {
+              "what": "tap on the right side",
+              "roseTiles": {
+                "rose": 5.11,
+                "caught": false
+              }
+            },
+            {
+              "what": "JUMP button",
+              "roseTiles": {
+                "rose": 5.11,
+                "caught": false
+              }
+            },
+            {
+              "what": "tap on the right side",
+              "roseTiles": {
+                "rose": 5.11,
+                "caught": false
+              }
+            },
+            {
+              "what": "JUMP button",
+              "roseTiles": {
+                "rose": 5.11,
+                "caught": false
+              }
+            },
+            {
+              "what": "tap on the right side",
+              "roseTiles": {
+                "rose": 5.11,
+                "caught": false
+              }
+            }
+          ],
+          "tv": {
+            "seat": null,
+            "role": "screen",
+            "runners": 4,
+            "errors": []
+          },
+          "taps": [
+            {
+              "code": "ArrowLeft",
+              "kind": "left",
+              "feedbackMs": 19.8,
+              "distanceTiles": 0.025
+            },
+            {
+              "code": "ArrowRight",
+              "kind": "right",
+              "feedbackMs": 27.3,
+              "distanceTiles": 0.025
+            },
+            {
+              "code": "ArrowRight",
+              "kind": "right",
+              "feedbackMs": 31.7,
+              "distanceTiles": 0.025
+            },
+            {
+              "code": "ArrowLeft",
+              "kind": "left",
+              "failed": "no clear ground found for the trial"
+            }
+          ],
+          "errors": [],
+          "jumpButton": {
+            "x": 338,
+            "y": 786
+          }
+        },
+        "tag": "c-controls",
+        "base": "http://127.0.0.1:8792",
+        "at": "2026-10-14T23:50:17.627Z"
+      },
+      "reload": {
+        "reload": {
+          "first": {
+            "roleBefore": "host",
+            "roleAfter": "replica",
+            "otherRoleAfter": "host",
+            "backInMs": 381,
+            "scoreBefore": 3,
+            "scoreAfter": 0,
+            "scoreKept": false,
+            "scoreOnOtherScreenBefore": 3,
+            "runnersBefore": 4,
+            "runnersAfter": 4,
+            "movedTilesWhileAway": 0,
+            "playsAgain": true,
+            "errors": []
+          },
+          "second": {
+            "roleBefore": "replica",
+            "roleAfter": "replica",
+            "otherRoleAfter": "host",
+            "backInMs": 410,
+            "scoreBefore": 3,
+            "scoreAfter": 0,
+            "scoreKept": false,
+            "scoreOnOtherScreenBefore": 3,
+            "runnersBefore": 4,
+            "runnersAfter": 4,
+            "movedTilesWhileAway": 0,
+            "playsAgain": true,
+            "errors": []
+          }
+        },
+        "tag": "c-reload",
+        "base": "http://127.0.0.1:8792",
+        "at": "2026-10-14T23:55:54.181Z"
+      },
+      "rounds": {
+        "rounds": {
+          "rounds": [
+            {
+              "n": 2,
+              "leftMsAtStart": 119918,
+              "everyoneAtZero": true,
+              "bothOnSpawnPoints": true,
+              "monstersOnScreen": 8,
+              "goldOnScreen": 8,
+              "myHudScore": 0,
+              "results": [
+                [
+                  "Misty Koi",
+                  13,
+                  false
+                ],
+                [
+                  "Kilo",
+                  13,
+                  true
+                ],
+                [
+                  "Moth",
+                  12,
+                  true
+                ],
+                [
+                  "Static Mantis",
+                  0,
+                  false
+                ]
+              ],
+              "sameOnBothScreens": true,
+              "resultsMatchScores": true,
+              "resultsCard": "ROUND 2 | You — 13 points | Kilo (bot) — 13 points | Moth (bot) — 12 points | Static Mantis — 0 points",
+              "clock": "Next round in 5",
+              "myPoints": 13,
+              "catches": 6,
+              "goldTaken": 0,
+              "stomps": 0
+            },
+            {
+              "n": 3,
+              "leftMsAtStart": 119931,
+              "everyoneAtZero": true,
+              "bothOnSpawnPoints": true,
+              "monstersOnScreen": 8,
+              "goldOnScreen": 8,
+              "myHudScore": 0,
+              "results": [
+                [
+                  "Misty Koi",
+                  17,
+                  false
+                ],
+                [
+                  "Moth",
+                  13,
+                  true
+                ],
+                [
+                  "Kilo",
+                  13,
+                  true
+                ],
+                [
+                  "Static Mantis",
+                  0,
+                  false
+                ]
+              ],
+              "sameOnBothScreens": true,
+              "resultsMatchScores": true,
+              "resultsCard": "ROUND 3 | You — 17 points | Moth (bot) — 13 points | Kilo (bot) — 13 points | Static Mantis — 0 points",
+              "clock": "Next round in 5",
+              "myPoints": 17,
+              "catches": 3,
+              "goldTaken": 3,
+              "stomps": 0
+            },
+            {
+              "n": 4,
+              "leftMsAtStart": 119992,
+              "everyoneAtZero": true,
+              "bothOnSpawnPoints": true,
+              "monstersOnScreen": 8,
+              "goldOnScreen": 8,
+              "myHudScore": 0,
+              "results": [
+                [
+                  "Moth",
+                  17,
+                  true
+                ],
+                [
+                  "Kilo",
+                  15,
+                  true
+                ],
+                [
+                  "Misty Koi",
+                  12,
+                  false
+                ],
+                [
+                  "Static Mantis",
+                  0,
+                  false
+                ]
+              ],
+              "sameOnBothScreens": true,
+              "resultsMatchScores": true,
+              "resultsCard": "ROUND 4 | Moth (bot) — 17 points | Kilo (bot) — 15 points | You — 12 points | Static Mantis — 0 points",
+              "clock": "Next round in 5",
+              "myPoints": 12,
+              "catches": 0,
+              "goldTaken": 0,
+              "stomps": 0
+            }
+          ],
+          "roles": [
+            "host",
+            "replica"
+          ],
+          "sound": {
+            "computer": {
+              "audioContexts": 0,
+              "oscillators": 0,
+              "buffers": 0,
+              "media": 0
+            },
+            "phone": {
+              "audioContexts": 0,
+              "oscillators": 0,
+              "buffers": 0,
+              "media": 0
+            }
+          },
+          "reconnects": [
+            0,
+            0
+          ],
+          "errors": []
+        },
+        "tag": "c-rounds",
+        "base": "http://127.0.0.1:8792",
+        "at": "2026-10-15T00:25:29.201Z"
+      },
+      "feel": {
+        "feel": {
+          "delayMs": 0,
+          "runKeyFeedbackMs": {
+            "n": 24,
+            "min": 17,
+            "median": 24.3,
+            "p90": 30.7,
+            "max": 34.1
+          },
+          "jumpKeyFeedbackMs": {
+            "n": 12,
+            "min": 19.4,
+            "median": 25,
+            "p90": 31.5,
+            "max": 32.3
+          },
+          "run150msTiles": {
+            "n": 24,
+            "min": 450,
+            "median": 450,
+            "p90": 558,
+            "max": 558
+          },
+          "jumpHeightTiles": {
+            "n": 12,
+            "min": 5108,
+            "median": 5108,
+            "p90": 5108,
+            "max": 5108
+          },
+          "jumpAirSeconds": {
+            "n": 12,
+            "min": 820,
+            "median": 820,
+            "p90": 820,
+            "max": 820
+          },
+          "tap30msTiles": [
+            0.025,
+            0.025,
+            0.008,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025
+          ],
+          "tap80msTiles": [
+            0.142,
+            0.142,
+            0.092,
+            0.142,
+            0.142,
+            0.142,
+            0.2,
+            0.142
+          ],
+          "tap120msTiles": [
+            0.275,
+            0.358,
+            0.275,
+            0.358,
+            0.275,
+            0.358,
+            0.358,
+            0.275
+          ],
+          "trialsThatFoundNoGround": 0,
+          "errors": []
+        },
+        "tag": "c-feel",
+        "base": "http://127.0.0.1:8792",
+        "at": "2026-10-14T23:53:24.276Z"
+      },
+      "feel150": {
+        "feel150": {
+          "delayMs": 150,
+          "runKeyFeedbackMs": {
+            "n": 24,
+            "min": 17.6,
+            "median": 25.6,
+            "p90": 30.8,
+            "max": 31.2
+          },
+          "jumpKeyFeedbackMs": {
+            "n": 11,
+            "min": 17.4,
+            "median": 25.3,
+            "p90": 29.5,
+            "max": 30.5
+          },
+          "run150msTiles": {
+            "n": 24,
+            "min": 450,
+            "median": 450,
+            "p90": 558,
+            "max": 1608
+          },
+          "jumpHeightTiles": {
+            "n": 11,
+            "min": 5108,
+            "median": 5108,
+            "p90": 5108,
+            "max": 5108
+          },
+          "jumpAirSeconds": {
+            "n": 11,
+            "min": 820,
+            "median": 820,
+            "p90": 820,
+            "max": 820
+          },
+          "tap30msTiles": [
+            0.025,
+            0.05,
+            0.025,
+            0.05,
+            0.008,
+            0.025,
+            0.025,
+            0.025
+          ],
+          "tap80msTiles": [
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142
+          ],
+          "tap120msTiles": [
+            0.275,
+            0.275,
+            0.275,
+            0.275,
+            0.275,
+            0.358,
+            0.275,
+            0.275
+          ],
+          "trialsThatFoundNoGround": 2,
+          "errors": []
+        },
+        "tag": "c-feel150",
+        "base": "http://127.0.0.1:8792",
+        "at": "2026-10-14T23:58:43.671Z"
+      },
+      "feel0-2": {
+        "feel": {
+          "delayMs": 0,
+          "samples": {
+            "run": [
+              33.2,
+              17.1,
+              20,
+              22.8,
+              20.6,
+              19.5,
+              26.7,
+              25.2,
+              27.5,
+              26.7,
+              29.8,
+              31.5,
+              32.5,
+              30.2,
+              32.8,
+              33.6,
+              30.1,
+              32.5,
+              31.2,
+              15.8,
+              33,
+              34.1,
+              31.2,
+              27.2
+            ],
+            "jump": [
+              30.2,
+              22,
+              9.8,
+              21.1,
+              45,
+              20.4,
+              29.3,
+              33,
+              4,
+              26.5,
+              33.8,
+              8.2
+            ]
+          },
+          "runKeyFeedbackMs": {
+            "n": 24,
+            "min": 15.8,
+            "median": 30.1,
+            "p90": 33.2,
+            "max": 34.1
+          },
+          "jumpKeyFeedbackMs": {
+            "n": 12,
+            "min": 4,
+            "median": 26.5,
+            "p90": 33.8,
+            "max": 45
+          },
+          "run150msTiles": {
+            "n": 24,
+            "min": 450,
+            "median": 450,
+            "p90": 450,
+            "max": 558
+          },
+          "jumpHeightTiles": {
+            "n": 12,
+            "min": 5100,
+            "median": 5108,
+            "p90": 5108,
+            "max": 5108
+          },
+          "jumpAirSeconds": {
+            "n": 12,
+            "min": 800,
+            "median": 820,
+            "p90": 830,
+            "max": 830
+          },
+          "tap30msTiles": [
+            0.025,
+            0.05,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025
+          ],
+          "tap80msTiles": [
+            0.142,
+            0.092,
+            0.142,
+            0.142,
+            0.142,
+            0.092,
+            0.142,
+            0.142
+          ],
+          "tap120msTiles": [
+            0.275,
+            0.358,
+            0.358,
+            0.275,
+            0.358,
+            0.275,
+            0.275,
+            0.358
+          ],
+          "trialsThatFoundNoGround": 0,
+          "errors": []
+        },
+        "tag": "c-feel0-2",
+        "base": "http://127.0.0.1:8792",
+        "at": "2026-10-15T00:01:21.439Z"
+      },
+      "feel0-3": {
+        "feel": {
+          "delayMs": 0,
+          "samples": {
+            "run": [
+              19.1,
+              27.2,
+              21.2,
+              30.6,
+              25.5,
+              31.3,
+              21.7,
+              30.5,
+              25.9,
+              21.9,
+              19.2,
+              19,
+              27.7,
+              26,
+              26.8,
+              23.1,
+              18.6,
+              18.1,
+              30,
+              23.7,
+              23.4,
+              28.1,
+              22.6,
+              31.4
+            ],
+            "jump": [
+              24.9,
+              17.3,
+              21.4,
+              29.6,
+              31.2,
+              20.6,
+              16.9,
+              17.7,
+              32.6,
+              26.6,
+              19.4
+            ]
+          },
+          "runKeyFeedbackMs": {
+            "n": 24,
+            "min": 18.1,
+            "median": 25.5,
+            "p90": 30.6,
+            "max": 31.4
+          },
+          "jumpKeyFeedbackMs": {
+            "n": 11,
+            "min": 16.9,
+            "median": 21.4,
+            "p90": 31.2,
+            "max": 32.6
+          },
+          "run150msTiles": {
+            "n": 24,
+            "min": 450,
+            "median": 450,
+            "p90": 450,
+            "max": 558
+          },
+          "jumpHeightTiles": {
+            "n": 11,
+            "min": 5108,
+            "median": 5108,
+            "p90": 5108,
+            "max": 5108
+          },
+          "jumpAirSeconds": {
+            "n": 11,
+            "min": 820,
+            "median": 820,
+            "p90": 820,
+            "max": 820
+          },
+          "tap30msTiles": [
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025,
+            0.025
+          ],
+          "tap80msTiles": [
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142
+          ],
+          "tap120msTiles": [
+            0.275,
+            0.358,
+            0.275,
+            0.275,
+            0.358,
+            0.358,
+            0.358,
+            0.275
+          ],
+          "trialsThatFoundNoGround": 1,
+          "errors": []
+        },
+        "tag": "c-feel0-3",
+        "base": "http://127.0.0.1:8792",
+        "at": "2026-10-15T00:02:42.226Z"
+      },
+      "feel150-2": {
+        "feel150": {
+          "delayMs": 150,
+          "samples": {
+            "run": [
+              19.7,
+              32.5,
+              32.2,
+              28.9,
+              24.9,
+              31.8,
+              29,
+              17.9,
+              21.5,
+              28.3,
+              30.5,
+              26.9,
+              22.2,
+              31,
+              30.9,
+              31.7,
+              27.5,
+              32,
+              29.2,
+              22.7,
+              17.6,
+              23.5,
+              30.1,
+              26.4
+            ],
+            "jump": [
+              18.7,
+              20.6,
+              16,
+              28.2,
+              21.6,
+              30.4,
+              22.7,
+              24.6,
+              31.6,
+              29.9,
+              23.5,
+              30.8
+            ]
+          },
+          "runKeyFeedbackMs": {
+            "n": 24,
+            "min": 17.6,
+            "median": 28.9,
+            "p90": 32,
+            "max": 32.5
+          },
+          "jumpKeyFeedbackMs": {
+            "n": 12,
+            "min": 16,
+            "median": 24.6,
+            "p90": 30.8,
+            "max": 31.6
+          },
+          "run150msTiles": {
+            "n": 24,
+            "min": 450,
+            "median": 450,
+            "p90": 450,
+            "max": 558
+          },
+          "jumpHeightTiles": {
+            "n": 12,
+            "min": 5108,
+            "median": 5108,
+            "p90": 5108,
+            "max": 5108
+          },
+          "jumpAirSeconds": {
+            "n": 12,
+            "min": 820,
+            "median": 820,
+            "p90": 820,
+            "max": 820
+          },
+          "tap30msTiles": [
+            0.025,
+            0.05,
+            0.05,
+            0.025,
+            0.05,
+            0.025,
+            0.025,
+            0.025
+          ],
+          "tap80msTiles": [
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142
+          ],
+          "tap120msTiles": [
+            0.358,
+            0.358,
+            0.275,
+            0.275,
+            0.275,
+            0.275,
+            0.358,
+            0.358
+          ],
+          "trialsThatFoundNoGround": 0,
+          "errors": []
+        },
+        "tag": "c-feel150-2",
+        "base": "http://127.0.0.1:8792",
+        "at": "2026-10-15T00:19:17.163Z"
+      },
+      "feel150-3": {
+        "feel150": {
+          "delayMs": 150,
+          "samples": {
+            "run": [
+              25.1,
+              26.7,
+              23.1,
+              27.9,
+              28.4,
+              28.2,
+              30.5,
+              21.8,
+              22.7,
+              31.3,
+              23.9,
+              28.3,
+              18.3,
+              27.9,
+              32.7,
+              25.6,
+              28,
+              19.7,
+              27.1,
+              28.9,
+              23,
+              32.4,
+              19.6
+            ],
+            "jump": [
+              27.6,
+              24.2,
+              25.7,
+              26.2,
+              17,
+              32.2,
+              20.3,
+              28.2,
+              32.4,
+              22.3,
+              19.9,
+              32.4
+            ]
+          },
+          "runKeyFeedbackMs": {
+            "n": 23,
+            "min": 18.3,
+            "median": 27.1,
+            "p90": 31.3,
+            "max": 32.7
+          },
+          "jumpKeyFeedbackMs": {
+            "n": 12,
+            "min": 17,
+            "median": 26.2,
+            "p90": 32.4,
+            "max": 32.4
+          },
+          "run150msTiles": {
+            "n": 23,
+            "min": 450,
+            "median": 450,
+            "p90": 558,
+            "max": 800
+          },
+          "jumpHeightTiles": {
+            "n": 12,
+            "min": 5108,
+            "median": 5108,
+            "p90": 5108,
+            "max": 5108
+          },
+          "jumpAirSeconds": {
+            "n": 12,
+            "min": 820,
+            "median": 820,
+            "p90": 820,
+            "max": 820
+          },
+          "tap30msTiles": [
+            0.008,
+            0.025,
+            0.025,
+            0.025,
+            0.05,
+            0.025,
+            0.008,
+            0.008
+          ],
+          "tap80msTiles": [
+            0.092,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142,
+            0.142
+          ],
+          "tap120msTiles": [
+            0.358,
+            0.275,
+            0.358,
+            0.275,
+            0.275,
+            0.358,
+            0.275,
+            0.275
+          ],
+          "trialsThatFoundNoGround": 1,
+          "errors": []
+        },
+        "tag": "c-feel150-3",
+        "base": "http://127.0.0.1:8792",
+        "at": "2026-10-15T00:21:47.386Z"
+      },
+      "pause": {
+        "pause": {
+          "first": {
+            "stoppedRole": "host",
+            "otherRole": "replica",
+            "monstersAndBotsOnTheOtherScreenWhileStopped": {
+              "changes": 509,
+              "longestStillMs": 1568
+            },
+            "otherPlayer": {
+              "runFeedbackMs": {
+                "n": 0,
+                "min": null,
+                "median": null,
+                "p90": null,
+                "max": null
+              },
+              "jumpFeedbackMs": {
+                "n": 0,
+                "min": null,
+                "median": null,
+                "p90": null,
+                "max": null
+              },
+              "goldOnHudMs": {
+                "n": 0,
+                "min": null,
+                "median": null,
+                "p90": null,
+                "max": null
+              },
+              "unexplainedJumpsOfMyRunner": 0
+            },
+            "stoppedRoleAfter": "replica",
+            "otherRoleAfter": "host",
+            "reconnects": [
+              0,
+              0
+            ],
+            "stoppedPlaysAgain": true,
+            "stoppedRunnerOnTheOtherScreen": {
+              "before": {
+                "x": 3,
+                "y": 27,
+                "score": 0
+              },
+              "after": {
+                "x": 3,
+                "y": 27,
+                "score": 0
+              },
+              "movedTiles": 0
+            },
+            "errors": []
+          },
+          "second": {
+            "stoppedRole": "replica",
+            "otherRole": "host",
+            "monstersAndBotsOnTheOtherScreenWhileStopped": {
+              "changes": 602,
+              "longestStillMs": 19
+            },
+            "otherPlayer": {
+              "runFeedbackMs": {
+                "n": 1,
+                "min": 27.1,
+                "median": 27.1,
+                "p90": 27.1,
+                "max": 27.1
+              },
+              "jumpFeedbackMs": {
+                "n": 2,
+                "min": 23.4,
+                "median": 26.1,
+                "p90": 26.1,
+                "max": 26.1
+              },
+              "goldOnHudMs": {
+                "n": 0,
+                "min": null,
+                "median": null,
+                "p90": null,
+                "max": null
+              },
+              "unexplainedJumpsOfMyRunner": 0
+            },
+            "stoppedRoleAfter": "replica",
+            "otherRoleAfter": "host",
+            "reconnects": [
+              0,
+              0
+            ],
+            "stoppedPlaysAgain": true,
+            "stoppedRunnerOnTheOtherScreen": {
+              "before": {
+                "x": 30.55,
+                "y": 41,
+                "score": 0
+              },
+              "after": {
+                "x": 40,
+                "y": 38,
+                "score": 0
+              },
+              "movedTiles": 12.45
+            },
+            "errors": []
+          }
+        },
+        "tag": "c-pause",
+        "base": "http://127.0.0.1:8792",
+        "at": "2026-10-14T23:59:24.647Z"
+      },
+      "phone": {
+        "tag": "c-phone",
+        "base": "http://127.0.0.1:8792",
+        "cpu": 4,
+        "seconds": 180,
+        "lag": {
+          "delay": 60,
+          "loss": 0.01,
+          "jitter": 20
+        },
+        "jumpButton": {
+          "x": 338,
+          "y": 786
+        },
+        "frameOffset": {
+          "x": 0,
+          "y": 0
+        },
+        "steps": 1879,
+        "jumps": 453,
+        "touches": 910,
+        "score": 0,
+        "link": "online",
+        "reconnects": 0,
+        "errors": [],
+        "load": [
+          17.5,
+          15,
+          13.7
+        ]
+      },
+      "check": {
+        "ok": true,
+        "command": "check",
+        "play": "http://127.0.0.1:8792/tiny-platformer/play",
+        "room": "pub-2",
+        "seats": [
+          {
+            "browser": "computer",
+            "seat": 0,
+            "role": "host",
+            "seatedMs": 1114
+          },
+          {
+            "browser": "phone",
+            "seat": 1,
+            "role": "replica",
+            "seatedMs": 322
+          }
+        ],
+        "round": {
+          "n": 1,
+          "humans": 2,
+          "bots": 2,
+          "results": [
+            {
+              "slot": 2,
+              "seat": null,
+              "name": "Moth",
+              "score": 15,
+              "bot": true,
+              "place": 1
+            },
+            {
+              "slot": 3,
+              "seat": null,
+              "name": "Kilo",
+              "score": 15,
+              "bot": true,
+              "place": 2
+            },
+            {
+              "slot": 0,
+              "seat": 0,
+              "name": "Rapid Fox",
+              "score": 12,
+              "bot": false,
+              "place": 3
+            },
+            {
+              "slot": 1,
+              "seat": 1,
+              "name": "Copper Moth",
+              "score": 1,
+              "bot": false,
+              "place": 4
+            }
+          ],
+          "overMs": [
+            120300,
+            119959
+          ]
+        },
+        "readiness": [
+          {
+            "browser": "computer",
+            "ready": true,
+            "by": "auto",
+            "liftedMs": 304,
+            "waitedMs": 1,
+            "shot": "computer-playing.png"
+          },
+          {
+            "browser": "phone",
+            "ready": true,
+            "by": "auto",
+            "liftedMs": 199,
+            "waitedMs": 1,
+            "shot": "phone-playing.png"
+          }
+        ],
+        "connection": [
+          {
+            "browser": "computer",
+            "seats": [
+              0
+            ],
+            "reconnects": 0,
+            "closed": null
+          },
+          {
+            "browser": "phone",
+            "seats": [
+              1
+            ],
+            "reconnects": 0,
+            "closed": null
+          }
+        ],
+        "reconnects": 0,
+        "uninterrupted": true,
+        "note": "no reconnects: both connections held from the seat to the results",
+        "frames": [
+          {
+            "browser": "computer",
+            "fps": 61,
+            "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)"
+          },
+          {
+            "browser": "phone",
+            "fps": 60,
+            "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)"
+          }
+        ],
+        "totalMs": 122377
+      },
+      "restart": {
+        "restart": {
+          "serverPid": 93034,
+          "downForMs": 24637,
+          "pagesBackMs": [
+            3253,
+            3253
+          ],
+          "reloadNeeded": false,
+          "gameFramesReloadedByThePage": 0,
+          "roundBefore": {
+            "n": 1,
+            "phase": "live",
+            "leftMs": 92950
+          },
+          "roundAfter": {
+            "n": 2,
+            "phase": "live",
+            "leftMs": 117435
+          },
+          "sameRound": false,
+          "clockHeldMs": 55788,
+          "myScoreBefore": 2,
+          "myScoreAfter": 0,
+          "myScoreKept": false,
+          "allScoresBefore": 9,
+          "allScoresAfter": 1,
+          "scoresKept": false,
+          "movedTilesWhileDown": 0.03,
+          "rolesBefore": [
+            "host",
+            "replica"
+          ],
+          "rolesAfter": [
+            "host",
+            "replica"
+          ],
+          "playsAgain": true,
+          "movedTilesWhenThePageWasBack": 11.98,
+          "reconnects": [
+            10,
+            10
+          ]
+        },
+        "tag": "c-restart",
+        "base": "http://127.0.0.1:8792",
+        "at": "2026-10-15T00:26:38.755Z"
+      }
+    }
+  },
+  "validation": {
+    "toolkitDistinctTests": 331,
+    "studioTests": 35,
+    "originalStudioTests": 34,
+    "generatedTicks": 18000,
+    "restores": 813,
+    "maxTickUnits": 17959,
+    "budget": 500000,
+    "lateJoinSeats": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  "build": {
+    "at": "2026-10-14T23:55:43.848Z",
+    "toolkitBase": "b44eb52e",
+    "studioBase": "40533b4",
+    "controlCommit": "4b7d42069b61cf51a42180eea801fab36693a49a",
+    "catalog": {
+      "id": "tiny-platformer",
+      "name": "Tiny Platformer Party",
+      "blurb": "Race the pack for gold and stomp monsters on one tiny level.",
+      "players": {
+        "min": 1,
+        "max": 8
+      },
+      "roundSeconds": 120,
+      "movement": null,
+      "cover": "cover.jpg",
+      "room": {
+        "host": "server",
+        "offline": true,
+        "tickHz": 20,
+        "inputHz": 20,
+        "contract": 2,
+        "build": "f31f521c131e0acfb673f9fd21503a4d",
+        "stateHash": "154b9dd3f5b99c357eb4990ce43bb300",
+        "rounds": {
+          "seconds": 120,
+          "breakSeconds": 6
+        }
+      },
+      "netplay": {
+        "version": "f31f521c131e0acfb673f9fd21503a4d"
+      },
+      "screen": {
+        "share": {
+          "desk": "bottom-left",
+          "phone": "top-center"
+        }
+      },
+      "netplayRev": 12,
+      "dates": {
+        "published": "2026-09-30T00:57:46.000Z",
+        "modified": "2026-10-14T22:23:58.000Z"
+      },
+      "landing": {
+        "pitch": "Race the pack for gold and stomp the monsters, all on one tiny level.",
+        "kicker": null,
+        "about": "Jake Gordon's javascript-tiny-platformer as a party race for up to eight on the same level. Gold is a point and a stomped monster is a point. Touch a monster from the side and you are back at a spawn point, blinking and safe, never out. Your camera follows you; the big screen shows the whole map.",
+        "controls": {
+          "phone": "Stick under your left thumb, JUMP at the right edge (or tap)",
+          "computer": "Left and Right (or A and D) to run; Space, Up or W to jump",
+          "tv": "The big screen shows the whole map with a name on every runner."
+        },
+        "how": [
+          "Run and jump through the level.",
+          "Gold is a point, and it comes back ten seconds after someone takes it.",
+          "Land on a monster to stomp it for a point; touch one from the side and you respawn.",
+          "Most points when the clock runs out wins."
+        ],
+        "hero": {
+          "wide": "/games/tiny-platformer/_landing/wide.mp4",
+          "tall": "/games/tiny-platformer/_landing/tall.mp4",
+          "wideImage": "/games/tiny-platformer/_landing/wide.jpg",
+          "tallImage": "/games/tiny-platformer/_landing/tall.jpg",
+          "focus": "40% 60%",
+          "alt": "Bots race along the red platforms for gold on the big screen",
+          "tint": 10
+        },
+        "headline": "Gold, stomps and two minutes.",
+        "cover": "/games/tiny-platformer/cover.jpg",
+        "words": {
+          "one": "runner",
+          "many": "runners"
+        },
+        "credits": {
+          "people": [
+            {
+              "role": "Made multiplayer by",
+              "name": "Homie's port skill",
+              "url": "https://github.com/homie-rocks/homie"
+            }
+          ],
+          "original": {
+            "title": "javascript-tiny-platformer",
+            "author": "Jake Gordon and contributors",
+            "year": "2013-2016",
+            "url": "https://github.com/jakesgordon/javascript-tiny-platformer",
+            "licence": "MIT",
+            "house": false
+          },
+          "parts": [
+            {
+              "what": "FPSMeter 0.3.1 (fpsmeter.min.js, carried over, not loaded)",
+              "author": "Darsain",
+              "url": "https://github.com/Darsain/fpsmeter",
+              "licence": "MIT",
+              "licenceUrl": null,
+              "note": null
+            }
+          ],
+          "texts": 2
+        },
+        "trailer": null,
+        "videos": [],
+        "music": [],
+        "tv": true,
+        "theme": {
+          "accent": "#ff6b5e",
+          "glow": "#ffd23f",
+          "accentInk": "#ffffff"
+        }
+      },
+      "built": {
+        "hash": "36597460105ffeb0",
+        "bundle": "assets/main-FTCQMV3V.js"
+      },
+      "playerImage": {
+        "src": "/games/tiny-platformer/_landing/wide.jpg",
+        "width": 1600,
+        "height": 900,
+        "format": "jpeg",
+        "bytes": 46466
+      }
+    },
+    "sources": {
+      "rules/core.ts": "85731a2f0544d3cd987ccea8770983e96bfef233c05cea6841a95d3403a7d78c",
+      "rules/host.ts": "42eab4adf6cb3cf5118d797894257fcac6c95a608a033d23cbfda13bfcd14e90",
+      "rules/view.ts": "13539a78d85719069a3e403c0c8c6729e029120fb8ee6fe21b9b38f37fc7ea92",
+      "rules/rules.ts": "3503a9cc73d051e96159ef35f4773678986b4f7a85d8023f5f8065c03424b674",
+      "rules/math.ts": "bc31fd55262a0e7066ea0784b9001860791b6cffcc0d67da49e231208f24e05a",
+      "rules/pack.ts": "73258c413671f2a80228375bd86dee1928e950d01590b640527a5562fd1a6e2c",
+      "netplay/netplay.ts": "4d08d9c42562a2ef067779d1541e16ae6da23e794748753713e13520ff604a70"
+    },
+    "unchangedShared": {
+      "rules/math.ts": true,
+      "rules/pack.ts": true,
+      "rules/correction-path.ts": true
+    }
+  }
+}

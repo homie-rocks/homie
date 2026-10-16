@@ -1,0 +1,775 @@
+[
+  {
+    "file": "b25fair1-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 34.616,
+    "from": [
+      35.116668701171875,
+      37.731666564941406
+    ],
+    "to": [
+      41.116668701171875,
+      36.551666259765625
+    ],
+    "nearestMonsterOnObserver": [
+      13.196668701171873,
+      4,
+      21.92,
+      31,
+      35.116668701171875,
+      37.731666564941406,
+      16.800048828125
+    ],
+    "candidateOwnerDeathReceipts": [],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        43.034820556640625,
+        39
+      ],
+      "tick": [
+        711.607874358774,
+        706.04
+      ],
+      "diedAt": 485
+    }
+  },
+  {
+    "file": "b25fair1-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 50.665,
+    "from": [
+      28.67082977294922,
+      36.89833450317383
+    ],
+    "to": [
+      60,
+      41
+    ],
+    "nearestMonsterOnObserver": [
+      4.86917022705078,
+      3,
+      33.54,
+      41,
+      28.67082977294922,
+      36.89833450317383,
+      50.300048828125
+    ],
+    "candidateOwnerDeathReceipts": [
+      [
+        716.900146484375,
+        1034
+      ]
+    ],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        38,
+        40.46157455444336
+      ],
+      "tick": [
+        1032.4961271194925,
+        1026.79
+      ],
+      "diedAt": 814
+    }
+  },
+  {
+    "file": "b25fair1-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 57.781,
+    "from": [
+      55,
+      41
+    ],
+    "to": [
+      59.5,
+      42
+    ],
+    "nearestMonsterOnObserver": [
+      3.270000000000003,
+      6,
+      58.27,
+      42,
+      55,
+      41,
+      49.699951171875
+    ],
+    "candidateOwnerDeathReceipts": [],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        61.26051330566406,
+        42
+      ],
+      "tick": [
+        1172,
+        1167
+      ],
+      "diedAt": 1106
+    }
+  },
+  {
+    "file": "b25fair2-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 2.777,
+    "from": [
+      61.45000076293945,
+      42
+    ],
+    "to": [
+      40,
+      38
+    ],
+    "nearestMonsterOnObserver": [
+      2.690000762939455,
+      6,
+      58.76,
+      42,
+      61.45000076293945,
+      42,
+      16.39990234375
+    ],
+    "candidateOwnerDeathReceipts": [
+      [
+        289.300048828125,
+        77
+      ]
+    ],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        53.502017974853516,
+        41
+      ],
+      "tick": [
+        72.18061938407946,
+        69.9
+      ],
+      "diedAt": 0
+    }
+  },
+  {
+    "file": "b25fair2-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 19.094,
+    "from": [
+      29.020835876464844,
+      37.27399826049805
+    ],
+    "to": [
+      3,
+      15
+    ],
+    "nearestMonsterOnObserver": [
+      5.129164123535155,
+      3,
+      34.15,
+      41,
+      29.020835876464844,
+      37.27399826049805,
+      17.699951171875
+    ],
+    "candidateOwnerDeathReceipts": [
+      [
+        371.89990234375,
+        403
+      ]
+    ],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        43.01520538330078,
+        37.200714111328125
+      ],
+      "tick": [
+        400.6461728898144,
+        388
+      ],
+      "diedAt": 228
+    }
+  },
+  {
+    "file": "b25fair2-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 32.175,
+    "from": [
+      13,
+      36
+    ],
+    "to": [
+      3,
+      15
+    ],
+    "nearestMonsterOnObserver": [
+      5,
+      4,
+      13.79,
+      31,
+      13,
+      36,
+      16.5
+    ],
+    "candidateOwnerDeathReceipts": [
+      [
+        857.199951171875,
+        665
+      ]
+    ],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        17.089101791381836,
+        25.902456283569336
+      ],
+      "tick": [
+        662.4339850314644,
+        654
+      ],
+      "diedAt": 403
+    }
+  },
+  {
+    "file": "b25fair2-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 39.342,
+    "from": [
+      36.16250228881836,
+      32.77299880981445
+    ],
+    "to": [
+      39.91250228881836,
+      38
+    ],
+    "nearestMonsterOnObserver": [
+      6.932502288818359,
+      4,
+      29.23,
+      31,
+      36.16250228881836,
+      32.77299880981445,
+      583.89990234375
+    ],
+    "candidateOwnerDeathReceipts": [],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        37.941856384277344,
+        36.61989974975586
+      ],
+      "tick": [
+        793.5952734349423,
+        796
+      ],
+      "diedAt": 665
+    }
+  },
+  {
+    "file": "b25fair2-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 50.792,
+    "from": [
+      36.67083740234375,
+      37.26966857910156
+    ],
+    "to": [
+      40,
+      38
+    ],
+    "nearestMonsterOnObserver": [
+      4.620837402343753,
+      3,
+      32.05,
+      41,
+      36.67083740234375,
+      37.26966857910156,
+      17.300048828125
+    ],
+    "candidateOwnerDeathReceipts": [
+      [
+        571.39990234375,
+        1037
+      ]
+    ],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        26,
+        37.18574905395508
+      ],
+      "tick": [
+        1027.2095186059078,
+        1030
+      ],
+      "diedAt": 665
+    }
+  },
+  {
+    "file": "b25fair2-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 53.824,
+    "from": [
+      55.641666412353516,
+      41
+    ],
+    "to": [
+      60.141666412353516,
+      42
+    ],
+    "nearestMonsterOnObserver": [
+      6.238333587646487,
+      6,
+      61.88,
+      42,
+      55.641666412353516,
+      41,
+      15.7998046875
+    ],
+    "candidateOwnerDeathReceipts": [
+      [
+        339.900146484375,
+        1099
+      ]
+    ],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        61.62998962402344,
+        37.58092498779297
+      ],
+      "tick": [
+        1087.7139591443452,
+        1090.77
+      ],
+      "diedAt": 1037
+    }
+  },
+  {
+    "file": "b25fair2-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 61.041,
+    "from": [
+      53.079166412353516,
+      41
+    ],
+    "to": [
+      59.079166412353516,
+      42
+    ],
+    "nearestMonsterOnObserver": [
+      7.390833587646483,
+      6,
+      60.47,
+      42,
+      53.079166412353516,
+      41,
+      17.2001953125
+    ],
+    "candidateOwnerDeathReceipts": [
+      [
+        372.5,
+        1244
+      ]
+    ],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        60.954166412353516,
+        42
+      ],
+      "tick": [
+        1239.3389479858533,
+        1230
+      ],
+      "diedAt": 1099
+    }
+  },
+  {
+    "file": "b25fair3-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 55.308,
+    "from": [
+      26.391664505004883,
+      31
+    ],
+    "to": [
+      20.391664505004883,
+      31
+    ],
+    "nearestMonsterOnObserver": [
+      7.001664505004882,
+      4,
+      19.39,
+      31,
+      26.391664505004883,
+      31,
+      583.7998046875
+    ],
+    "candidateOwnerDeathReceipts": [
+      [
+        921.0,
+        1129
+      ]
+    ],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        17.274396896362305,
+        26.045406341552734
+      ],
+      "tick": [
+        1118.199291972249,
+        1120.83
+      ],
+      "diedAt": 880
+    }
+  },
+  {
+    "file": "b25fair3-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 55.357,
+    "from": [
+      20.391664505004883,
+      31
+    ],
+    "to": [
+      30,
+      41
+    ],
+    "nearestMonsterOnObserver": [
+      3.2916645050048814,
+      4,
+      17.1,
+      31,
+      20.391664505004883,
+      31,
+      49.7001953125
+    ],
+    "candidateOwnerDeathReceipts": [
+      [
+        871.2998046875,
+        1129
+      ]
+    ],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        17.48294448852539,
+        26.337608337402344
+      ],
+      "tick": [
+        1119.2270633202868,
+        1121.83
+      ],
+      "diedAt": 880
+    }
+  },
+  {
+    "file": "b25fair4-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 6.909,
+    "from": [
+      33.5,
+      41
+    ],
+    "to": [
+      30.350000381469727,
+      41
+    ],
+    "nearestMonsterOnObserver": [
+      2.4129981994628906,
+      4,
+      31.59,
+      31,
+      34,
+      33.41299819946289,
+      450.199951171875
+    ],
+    "candidateOwnerDeathReceipts": [
+      [
+        524.10009765625,
+        170
+      ]
+    ],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        26,
+        36.619075775146484
+      ],
+      "tick": [
+        163,
+        149
+      ],
+      "diedAt": 0
+    }
+  },
+  {
+    "file": "b25fair4-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 7.142,
+    "from": [
+      29.608333587646484,
+      41
+    ],
+    "to": [
+      3,
+      15
+    ],
+    "nearestMonsterOnObserver": [
+      1.5783335876464832,
+      3,
+      28.03,
+      41,
+      29.608333587646484,
+      41,
+      17
+    ],
+    "candidateOwnerDeathReceipts": [
+      [
+        290.400146484375,
+        170
+      ]
+    ],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        25.784591674804688,
+        36
+      ],
+      "tick": [
+        167.64004908857882,
+        163.54
+      ],
+      "diedAt": 0
+    }
+  },
+  {
+    "file": "b25fair4-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 34.459,
+    "from": [
+      30.172504425048828,
+      41
+    ],
+    "to": [
+      40,
+      38
+    ],
+    "nearestMonsterOnObserver": [
+      1.4125044250488266,
+      3,
+      28.76,
+      41,
+      30.172504425048828,
+      41,
+      16.900146484375
+    ],
+    "candidateOwnerDeathReceipts": [
+      [
+        888.199951171875,
+        717
+      ]
+    ],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        26,
+        38.06138229370117
+      ],
+      "tick": [
+        719.2911640217549,
+        702
+      ],
+      "diedAt": 170
+    }
+  },
+  {
+    "file": "b25fair4-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 41.625,
+    "from": [
+      13,
+      32.50986862182617
+    ],
+    "to": [
+      3,
+      15
+    ],
+    "nearestMonsterOnObserver": [
+      1.5098686218261719,
+      4,
+      13.7,
+      31,
+      13,
+      32.50986862182617,
+      17.300048828125
+    ],
+    "candidateOwnerDeathReceipts": [
+      [
+        823.0,
+        860
+      ]
+    ],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        11.411808967590332,
+        32.51675796508789
+      ],
+      "tick": [
+        856.120179756489,
+        853.28
+      ],
+      "diedAt": 783
+    }
+  },
+  {
+    "file": "b25fair4-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 51.107,
+    "from": [
+      38.84583282470703,
+      34.103336334228516
+    ],
+    "to": [
+      40.912498474121094,
+      38
+    ],
+    "nearestMonsterOnObserver": [
+      7.805832824707032,
+      3,
+      31.04,
+      41,
+      38.84583282470703,
+      34.103336334228516,
+      98.5
+    ],
+    "candidateOwnerDeathReceipts": [],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        34,
+        32.89743423461914
+      ],
+      "tick": [
+        1037,
+        1042.8
+      ],
+      "diedAt": 860
+    }
+  },
+  {
+    "file": "b25fair5-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 6.215,
+    "from": [
+      30.944583892822266,
+      41
+    ],
+    "to": [
+      10,
+      6
+    ],
+    "nearestMonsterOnObserver": [
+      1.4945838928222663,
+      3,
+      29.45,
+      41,
+      30.944583892822266,
+      41,
+      16.2998046875
+    ],
+    "candidateOwnerDeathReceipts": [
+      [
+        868.2001953125,
+        147
+      ]
+    ],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        26,
+        38.51754379272461
+      ],
+      "tick": [
+        144,
+        135
+      ],
+      "diedAt": 0
+    }
+  },
+  {
+    "file": "b25fair5-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 17.864,
+    "from": [
+      41.133331298828125,
+      22.202234268188477
+    ],
+    "to": [
+      55,
+      6
+    ],
+    "nearestMonsterOnObserver": [
+      1.2083332824707043,
+      1,
+      34.72,
+      13,
+      35.9283332824707,
+      12.068053245544434,
+      349.699951171875
+    ],
+    "candidateOwnerDeathReceipts": [
+      [
+        268.60009765625,
+        380
+      ]
+    ],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        48.143394470214844,
+        21.896358489990234
+      ],
+      "tick": [
+        377,
+        362
+      ],
+      "diedAt": 225
+    }
+  },
+  {
+    "file": "b25fair5-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 29.231,
+    "from": [
+      36.36249923706055,
+      38.34299850463867
+    ],
+    "to": [
+      31.112499237060547,
+      41
+    ],
+    "nearestMonsterOnObserver": [
+      10.932499237060547,
+      4,
+      25.43,
+      31,
+      36.36249923706055,
+      38.34299850463867,
+      49.699951171875
+    ],
+    "candidateOwnerDeathReceipts": [],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        26,
+        39.63890838623047
+      ],
+      "tick": [
+        605.5935904313671,
+        590
+      ],
+      "diedAt": 380
+    }
+  },
+  {
+    "file": "b25fair5-lag300-loss0.05-jitter0-frames.json.gz",
+    "s": 55.262,
+    "from": [
+      16.004165649414062,
+      25.96466636657715
+    ],
+    "to": [
+      30,
+      41
+    ],
+    "nearestMonsterOnObserver": [
+      5.035333633422852,
+      4,
+      18.85,
+      31,
+      16.004165649414062,
+      25.96466636657715,
+      598.900146484375
+    ],
+    "candidateOwnerDeathReceipts": [
+      [
+        286.099853515625,
+        1128
+      ]
+    ],
+    "ownerDrawnAtObserverJump": {
+      "runner": [
+        18.811857223510742,
+        27.64951515197754
+      ],
+      "tick": [
+        1127,
+        1120.85
+      ],
+      "diedAt": 859
+    }
+  }
+]

@@ -38,7 +38,21 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
   if (runaway) {
     dir = join(scratch, `variant-${runaway}`); cpSync(COIN_DASH, dir, { recursive: true });
     const file = join(dir, 'src/rules.ts');
-    if (runaway === 'substeps') {
+    if (runaway === 'validated-corner') {
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-10,-10],max:[10,10]},boxes:[{min:[0,1],max:[1,2]}]}));
+      writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';export default defineRules({contract:2,space:{dims:2},move,map:'./map',entities:{runner:{player:true,input:{ax:f.held()},body:{shape:'box',radius:.5,maxSpeed:60,move:'validated-owner'}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:1.6,y:1.2,z:0}};}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){c.substeps(b,60,()=>{if(i.ax){b.pos={x:1.35,y:.5,z:0};b.grounded=true;}});}});`);
+    } else if (runaway === 'validated-owner' || runaway === 'validated-owner-substeps' || runaway === 'validated-scene') {
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-100,-100],max:[100,100]},boxes:[{min:[-100,1],max:[100,3]}]}));
+      writeFileSync(file,`import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
+export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{respawn:{},knock:{},point:{}}},entities:{runner:{player:true,input:{ax:f.held()},fields:{score:f.u16({score:true})},motion:{push:f.u8()},body:{shape:'box',radius:.5,maxSpeed:10,move:'validated-owner'},commands:{respawn(w,s){w.place(s,{x:0,y:.5},{vel:{x:0,y:0}});},knock(w,s){s.motion.push=4;},point(w,s){s.score++;}}}},room:{bots:{keep:0},join(){return{kind:'runner',at:{x:0,y:.5,z:0}};}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:b.motion.push?8:i.ax*4,y:0,z:0};if(b.motion.push)b.motion.push--;c.map.sweep(b,{x:b.vel.x*c.dt,y:0,z:0});}});`);
+      if (runaway === 'validated-scene') {
+        writeFileSync(file,readFileSync(file,'utf8').replace('entities:{runner:',"entities:{monster:{body:{shape:'box',radius:.5,maxSpeed:10}},runner:").replace('room:{bots:',"room:{start(w){w.spawn('monster',{x:0,y:-5,z:0});},bots:"));
+        const m=join(dir,'src/move.ts');writeFileSync(m,readFileSync(m,'utf8').replace('defineMove({runner',"defineMove({monster(b,i,c){b.vel={x:4,y:0,z:0};b.pos={x:b.pos.x+4*c.dt,y:-5,z:0};},runner"));
+      }
+      if (runaway === 'validated-owner-substeps') writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax*4,y:0,z:0};c.substeps(b,60,s=>c.map.sweep(b,{x:b.vel.x*s.dt,y:0,z:0}));}});`);
+    } else if (runaway === 'substeps') {
       writeFileSync(join(dir,'src/view.ts'), "import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.input({ax:1});");
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-20,-20],max:[20,20]}}));
       writeFileSync(file, "import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';export default defineRules({contract:2,space:{dims:2},move,entities:{runner:{player:true,input:{ax:f.i8()},body:{shape:'circle',radius:.2,maxSpeed:6}}},room:{bots:{keep:0},join(c,p){return{kind:'runner',at:{x:0,y:p.seat*2,z:0}};}}});");
@@ -2686,6 +2700,41 @@ for(const respawn of [false,true])test(`a reconnect after an outage ${respawn?'d
  assert.ok(worst<.5,`the reconnect cut the runner ${worst} metres in one frame`);
 });
 
+for (const delay of [0,150,300]) test(`validated owner keeps its own trajectory with delayed reports: ${delay} ms`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),shape=predictionShaper({delay,loss:.03,seed:116,jitter:true}),r=rig(L,compiled,false,shape,shape);
+ const a=openRoom({net:{config:cfg('Owner'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();r.stop();});
+ await clock.wait(4000);const x=a.me.pos.x;let previous=x;
+ a.input({ax:1});
+ for(let i=0;i<300;i++){await clock.wait(16);const p=a.me.pos.x;assert.ok(p>=previous-1e-6,`${previous} -> ${p}`);assert.ok(p-previous<.1,'no correction cut during valid movement');previous=p;}
+ assert.ok(previous-x>18,'local motion stays at four units per second');
+ assert.equal(r.host.core.stats.held,0,'all honest reports accepted');
+ assert.equal(globalThis.__homieNet.probe.prediction().snaps,0);
+ a.input({ax:0});await clock.wait(1500);const stop=a.me.pos.x;await clock.wait(1000);assert.equal(a.me.pos.x,stop,'snapshots cannot slide a stopped owner');
+ a.command('point');await clock.wait(1500);assert.equal(a.me.score,1);
+ let placed=null;a.on('placed',e=>placed=e.pos);a.command('respawn');await clock.wait(1500);assert.deepEqual(placed,{x:0,y:.5,z:0});assert.equal(a.me.pos.x,0);
+ a.command('knock');await clock.wait(1500);assert.ok(a.me.pos.x>0,'server motion event cuts and then simulates locally');
+ assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+});
+test('validated owner predicts through an outage, keeps score, and resumes without a wait',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),r=rig(L,compiled);const observer=openRoom({net:{config:cfg('Observer'),WebSocketImpl:r.socket(),post:null}});await clock.wait(300);const a=openRoom({net:{config:cfg('Owner outage'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();observer.close();r.stop();});
+ await clock.wait(1000);a.command('point');await clock.wait(300);assert.equal(a.me.score,1);a.input({ax:1});await clock.wait(200);
+ r.network.up=false;r.sockets.at(-1).cut();const x=a.me.pos.x;
+ await clock.wait(8000);assert.ok(a.me.pos.x>x+30,'local physics continues');assert.equal(a.me.score,1);assert.equal(a.net.isHost,false,'no offline score authority');
+ r.network.up=true;let prev=a.me.pos.x;for(let i=0;i<220;i++){await clock.wait(16);const x=a.me.pos.x;assert.ok(x>=prev-1e-6 && x-prev<.1,`return changed own trajectory: ${prev} -> ${x}`);prev=x;}assert.equal(a.net.connected,true);assert.equal(a.me.score,1);
+ const resumed=a.me.pos.x;await clock.wait(100);assert.ok(a.me.pos.x>resumed+.3,'input moves immediately after return');
+ assert.equal(r.host.core.stats.held,0);
+});
+
+test('validated owner draws a local corner landing without embedding the interpolated box',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-corner');
+ const clock=virtualTime(t),r=rig(L,compiled),a=openRoom({net:{config:cfg('Corner'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();r.stop();});
+ await clock.wait(1000);assert.ok(a.me.pos.x>1.5);a.input({ax:1});
+ for(let i=0;i<60;i++){await clock.wait(1);const p=a.me.pos;assert.ok(!(p.x-.5<1-1e-7 && p.y+.5>1+1e-7),`embedded local draw ${JSON.stringify(p)}`);}
+ assert.ok(Math.abs(a.me.pos.x-1.35)<1e-6 && Math.abs(a.me.pos.y-.5)<1e-6);assert.equal(r.host.core.stats.held,0);
+});
+
 test('a slow synchronous reader crossing a tick boundary shares the current presentation', async t => {
  const {L,compiled,openRoom}=await coinDashKit('server',false,60,'push-effects');
  const clock=virtualTime(t);
@@ -2698,4 +2747,251 @@ test('a slow synchronous reader crossing a tick boundary shares the current pres
  performance.now=()=>now()+40; // CPU work crosses two ticks without an event-loop/microtask boundary.
  assert.equal(a.me,first);
  await Promise.resolve();assert.notEqual(a.me,first);
+});
+
+for (const stall of [3000,15000]) test(`validated owner recovers room clock after ${stall} ms server stall`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t);let until=0;
+ const r=rig(L,compiled,{enforceOverrun:true,clock:{now:()=>Date.now(),setTimer:(fn,ms)=>{
+   const run=()=>Date.now()<until?setTimeout(run,until-Date.now()):fn();return setTimeout(run,ms);
+ },clearTimer:h=>clearTimeout(h)}});
+ const a=openRoom({net:{config:cfg('Stalled owner'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(1000);a.input({ax:1});await clock.wait(500);
+ until=Date.now()+stall;await clock.wait(stall+2000);
+ const start=r.host.core.listeners()[0].pos.x;await clock.wait(1000);
+ assert.ok(r.host.core.listeners()[0].pos.x>start+3,'others see movement after recovery');
+ a.command('point');await clock.wait(300);assert.equal(a.me.score,1,'score still confirms');
+ assert.ok(Math.abs(globalThis.__homieNet.probe.prediction().tick-r.host.tick)<20,'clock is bounded');
+});
+test('a delayed owner placement starts fresh reports near arrival time without granting travel', async t => {
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),r=rig(L,compiled,false,300,300);
+ const a=openRoom({net:{config:cfg('Contact clock'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(4000);
+ a.input({ax:1});await clock.wait(500);a.input({ax:0});
+ a.command('respawn');await clock.wait(1500);
+ assert.equal(a.me.pos.x,0,'clock lead does not project away from the spawn');
+ a.input({ax:1});const ages=[];
+ for(let i=0;i<40;i++){
+   await clock.wait(50);
+   const id=r.host.core.listeners()[0].id;
+   for(const pose of r.host.core.world.movement(id)) ages.push(r.host.tick-pose.tick);
+ }
+ assert.ok(ages.length>20,'observed accepted movement, not just local predictions');
+ assert.ok(Math.max(...ages)<=3,`honest reports exceed the 150 ms contact window: ${ages}`);
+ assert.ok(Math.min(...ages)>=-3,`reports lead authority excessively: ${ages}`);
+ assert.ok(a.me.pos.x>7.8 && a.me.pos.x<8.2,'clock calibration keeps two seconds of physical travel');
+ assert.equal(r.host.core.stats.held,0);
+ const before=a.me, x=before.pos.x;
+ assert.ok(Object.isFrozen(before) && Object.isFrozen(before.motion));
+ await clock.wait(100);assert.notEqual(a.me.pos.x,before.pos.x);
+ assert.equal(before.pos.x,x,'a retained entity is a snapshot, not a mutable frame slot');
+});
+
+for(const drift of [.99,1.01])test(`validated owner clock tracks room at ${drift} clock rate`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),r=rig(L,compiled),start=clock.now();
+ const a=openRoom({now:()=> (clock.now()-start)*drift,net:{config:cfg('Drifting owner'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(1000);
+ for(let i=0;i<10;i++){a.input({ax:i%2?1:-1});await clock.wait(10000);}
+ assert.equal(r.host.core.stats.held,0,'honest drift never rejected');
+ assert.ok(Math.abs(globalThis.__homieNet.probe.prediction().tick-r.host.tick)<4,'drift stays bounded for 100 seconds');
+ const x=r.host.core.listeners()[0].pos.x;a.input({ax:1});await clock.wait(1000);assert.ok(r.host.core.listeners()[0].pos.x>x+3);
+});
+
+test('validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),r=rig(L,compiled),a=openRoom({net:{config:cfg('Frame cache'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(1000);a.input({ax:1});await clock.wait(100);
+ const oldWindow=Object.getOwnPropertyDescriptor(globalThis,'window'),oldDocument=Object.getOwnPropertyDescriptor(globalThis,'document');
+ globalThis.window={addEventListener(){},removeEventListener(){}};
+ globalThis.document={timeline:{currentTime:1},hidden:false,addEventListener(){},removeEventListener(){}};
+ t.after(()=>{if(oldWindow)Object.defineProperty(globalThis,'window',oldWindow);else delete globalThis.window;if(oldDocument)Object.defineProperty(globalThis,'document',oldDocument);else delete globalThis.document;});
+ const first=a.me;await Promise.resolve();assert.equal(a.me,first,'the second rAF callback reuses the same drawing');
+ document.timeline.currentTime=2;assert.notEqual(a.me,first,'a new browser frame computes a new drawing');
+ const second=a.me;a.input({ax:0});assert.notEqual(a.me,second,'new controls invalidate within the same browser frame');
+ const third=a.me;await clock.wait(100);assert.notEqual(a.me,third,'stepping and snapshots invalidate even if the animation timeline pauses');
+});
+
+test('remote presentation is shared within a frame and refreshed by snapshots',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),r=rig(L,compiled),a=openRoom({net:{config:cfg('Viewer'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const b=openRoom({net:{config:cfg('Mover'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();b.close();r.stop();});await clock.wait(1000);b.input({ax:1});await clock.wait(300);
+ const id=b.me.id,old=Object.getOwnPropertyDescriptor(globalThis,'document');
+ globalThis.document={timeline:{currentTime:1},hidden:false,addEventListener(){},removeEventListener(){}};
+ t.after(()=>{if(old)Object.defineProperty(globalThis,'document',old);else delete globalThis.document;});
+ const first=a.get(id);await Promise.resolve();assert.equal(a.get(id),first);
+ document.timeline.currentTime=2;assert.notEqual(a.get(id),first);
+ const second=a.get(id);await clock.wait(200);assert.notEqual(a.get(id),second);
+ assert.ok(a.get(id).pos.x>second.pos.x);
+});
+
+test('an observer switches an owner placement at its sampled time, without interpolating across the map',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),r=rig(L,compiled),a=openRoom({net:{config:cfg('Placement viewer'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const b=openRoom({net:{config:cfg('Placed owner'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();b.close();r.stop();});await clock.wait(1000);b.input({ax:1});await clock.wait(1000);b.input({ax:0});await clock.wait(300);
+ const id=b.me.id,before=a.net.latest(),x=a.get(id).pos.x;
+ b.command('respawn');await clock.wait(300);const after=a.net.latest(),sample=a.net.sample;
+ t.after(()=>{a.net.sample=sample;});
+ a.net.sample=()=>({a:before,b:after,alpha:.5});assert.equal(a.get(id).pos.x,x,'before the placement tick the old revision remains');
+ a.net.sample=()=>({a:before,b:after,alpha:1});assert.equal(a.get(id).pos.x,0,'at the placement tick jump directly to spawn');
+});
+
+test('a three-second server stall does not rewind continued valid owner movement',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t);let until=0;
+ const r=rig(L,compiled,{enforceOverrun:true,clock:{now:()=>Date.now(),setTimer:(fn,ms)=>{
+   const run=()=>Date.now()<until?setTimeout(run,until-Date.now()):fn();return setTimeout(run,ms);
+ },clearTimer:h=>clearTimeout(h)}});
+ const a=openRoom({net:{config:cfg('Continued owner'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(1000);a.input({ax:1});await clock.wait(500);
+ until=Date.now()+3000;let previous=a.me.pos.x;
+ for(let i=0;i<375;i++){await clock.wait(16);const x=a.me.pos.x;assert.ok(x>=previous-1e-6,`owner rewound ${previous} -> ${x}`);previous=x;}
+ assert.equal(r.host.core.stats.held,0);
+});
+
+test('remote validated movement stays bounded while an owner catches up from an outage',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),r=rig(L,compiled);
+ const viewer=openRoom({net:{config:cfg('Buffered viewer'),WebSocketImpl:r.socket(),post:null}});await clock.wait(300);
+ const owner=openRoom({net:{config:cfg('Buffered owner'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{viewer.close();owner.close();r.stop();});await clock.wait(1000);owner.input({ax:1});
+ const id=owner.me.id;let previous=viewer.get(id).pos.x;
+ for(let i=0;i<60;i++){await clock.wait(16);previous=viewer.get(id).pos.x;}
+ r.network.up=false;r.sockets.at(-1).cut();await clock.wait(3000);r.network.up=true;
+ for(let i=0;i<375;i++){await clock.wait(16);const x=viewer.get(id).pos.x;assert.ok(Math.abs(x-previous)<1.4+1e-6,`observer jumped ${previous} -> ${x}`);previous=x;}
+ assert.ok(previous>8,'bounded drawing still makes progress');
+});
+
+test('committing a forecast preserves physics across control changes and isolates preview motion',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner-substeps');
+ const clock=virtualTime(t),r=rig(L,compiled);let previews=0;
+ const a=openRoom({predict:{runner(me,input,c){if(c.preview){previews++;me.motion.push=250;}}},net:{config:cfg('Forecast commit'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(1000);
+ let resets=0;a.on('placed',()=>resets++);
+ for(let i=0;i<300;i++){a.input({ax:i%37<25?1:-1});await clock.wait(16);assert.equal(a.me.motion.push,0,'preview mutation cannot enter canonical movement');}
+ a.input({ax:0});await clock.wait(500);
+ assert.ok(previews>20);assert.equal(resets,0);assert.equal(r.host.core.stats.held,0);
+ assert.ok(Math.abs(a.me.pos.x-r.host.core.listeners()[0].pos.x)<.01,'committed forecasts agree with separately validated server physics');
+ });
+
+test('remote owners stay on the shared scene timeline when newer reports arrive',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),r=rig(L,compiled),viewer=openRoom({net:{config:cfg('One buffer'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const owner=openRoom({net:{config:cfg('Fresh reports'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{viewer.close();owner.close();r.stop();});await clock.wait(1000);
+ const id=owner.me.id,scene=viewer.net.sample();viewer.net.sample=()=>scene;
+ const start=viewer.get(id).pos.x;owner.input({ax:1});
+ for(let i=0;i<90;i++){await clock.wait(16);viewer.get(id);}
+ assert.equal(viewer.get(id).pos.x,start,'new reports cannot advance the runner beyond the scene containing its hazards');
+});
+
+test('owner confirmations ignore a sampled scene from before the current placement',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),r=rig(L,compiled),a=openRoom({net:{config:cfg('Current acknowledgement'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(1500);
+ assert.ok(a.confirmedTick>0);const sample=a.net.sample.bind(a.net),before=sample();
+ a.command('respawn');for(let i=0;i<20;i++){await clock.wait(16);a.viewTick;}a.net.sample=()=>before;
+ assert.equal(a.confirmedTick,-1,'the old revision cannot acknowledge a new provisional contact');
+ a.net.sample=sample;assert.ok(a.confirmedTick>0);
+});
+
+
+test('runner and monster interpolation use one fraction through a burst of reports',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-scene');
+ const clock=virtualTime(t),r=rig(L,compiled),viewer=openRoom({net:{config:cfg('Scene viewer'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const owner=openRoom({net:{config:cfg('Scene owner'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{viewer.close();owner.close();r.stop();});await clock.wait(1000);owner.input({ax:1});await clock.wait(300);
+ let monster;viewer.each('monster',e=>{monster=e.id;});assert.ok(monster);
+ const id=owner.me.id,sample=viewer.net.sample.bind(viewer.net);
+ const a=viewer.net.latest();await clock.wait(300);const b=viewer.net.latest();await clock.wait(200);
+ const poses=alpha=>{viewer.net.sample=()=>({a,b,alpha});return [viewer.get(id).pos.x,viewer.get(monster).pos.x];};
+ const lo=poses(0),hi=poses(1);assert.ok(hi[0]>lo[0]&&hi[1]>lo[1]);
+ // Fresh reports keep arriving while the chosen scene stays between a and b.
+ for(const alpha of [.1,.3,.7,.9]) {await clock.wait(100);const p=poses(alpha);for(let i=0;i<2;i++)assert.ok(Math.abs(p[i]-(lo[i]+(hi[i]-lo[i])*alpha))<1e-5,`body ${i} at ${alpha}: ${p[i]} expected ${lo[i]+(hi[i]-lo[i])*alpha}`);}
+ viewer.net.sample=sample;
+});
+
+test('accepted runner ticks stay aligned with a patrol when uplink delay changes',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-scene');
+ const clock=virtualTime(t);let delay=0;
+ const r=rig(L,compiled,false,0,(message,link)=>link===1&&message.t==='in'?delay:0);
+ const viewer=openRoom({net:{config:cfg('Shared clock viewer'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const owner=openRoom({net:{config:cfg('Delayed source'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{viewer.close();owner.close();r.stop();});await clock.wait(1000);owner.input({ax:1});
+ let monster;viewer.each('monster',e=>{monster=e.id;});const id=owner.me.id;
+ for(let i=0;i<120;i++){await clock.wait(16);viewer.get(id);viewer.get(monster);}
+ const offset=viewer.get(id).pos.x-viewer.get(monster).pos.x;
+ for(const ms of [80,150,300,0]){delay=ms;for(let i=0;i<120;i++){
+  await clock.wait(16);const x=viewer.get(id).pos.x,m=viewer.get(monster).pos.x;
+  assert.ok(Math.abs(x-m-offset)<.002,`delay ${ms}: runner/patrol separation changed from ${offset} to ${x-m}`);
+ }}
+});
+
+
+test('receiving a placement preserves the moving runner history before its scene boundary',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t),r=rig(L,compiled),viewer=openRoom({net:{config:cfg('Old revision viewer'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const owner=openRoom({net:{config:cfg('Moving placement'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{viewer.close();owner.close();r.stop();});await clock.wait(1000);owner.input({ax:1});await clock.wait(300);
+ const a=viewer.net.latest();await clock.wait(100);const b=viewer.net.latest();await clock.wait(100);
+ viewer.net.sample=()=>({a,b,alpha:.37});const id=owner.me.id,x=viewer.get(id).pos.x;
+ owner.command('respawn');await clock.wait(300);
+ assert.equal(viewer.get(id).pos.x,x,'a newer placement cannot replace the older trajectory with a snapshot endpoint');
+ const c=viewer.net.latest(),tick=b.k+(c.k-b.k)*.05,oldTick=a.k+(b.k-a.k)*.37;
+ viewer.net.sample=()=>({a:b,b:c,alpha:.05});
+ assert.ok(Math.abs(viewer.get(id).pos.x-(x+(tick-oldTick)*.2))<.002,'the last interval before the cut still samples the old input trajectory');
+});
+
+test('a stalled scene reaches fresh movement without replaying a long stationary tail',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t);let until=0;
+ const r=rig(L,compiled,{enforceOverrun:true,clock:{now:()=>Date.now(),setTimer:(fn,ms)=>{
+  const run=()=>Date.now()<until?setTimeout(run,until-Date.now()):fn();return setTimeout(run,ms);
+ },clearTimer:h=>clearTimeout(h)}},80,80);
+ const viewer=openRoom({net:{config:cfg('Paused scene'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const owner=openRoom({net:{config:cfg('Starts during pause'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{viewer.close();owner.close();r.stop();});await clock.wait(1500);
+ const id=owner.me.id,start=viewer.get(id).pos.x;until=Date.now()+3000;
+ for(let i=0;i<188;i++){if(i===100)owner.input({ax:1});await clock.wait(16);viewer.get(id);}
+ let first=null,previous=viewer.get(id).pos.x;
+ for(let i=0;i<125;i++){
+  await clock.wait(16);const x=viewer.get(id).pos.x;
+  assert.ok(Math.abs(x-previous)<1.4+1e-6,`catch-up step exceeded the display bound: ${previous} -> ${x}`);
+  if(first===null&&x>start+.02)first=(i+1)*16;previous=x;
+ }
+ assert.ok(owner.me.pos.x>8,'the owner continued moving during and after the pause');
+ assert.ok(first!==null&&first<700,`observer kept replaying stationary history for ${first} ms after resume`);
+ t.diagnostic({firstMotionAfterResumeMs:first});
+});
+
+test('an idle remote source cannot pin a moving runner and its patrol',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-scene');
+ const clock=virtualTime(t);let delay=0;
+ const r=rig(L,compiled,false,0,(message,link)=>link===0&&message.t==='in'?delay:0);
+ const idle=openRoom({net:{config:cfg('Idle source'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const owner=openRoom({net:{config:cfg('Moving source'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const viewer=openRoom({net:{config:cfg('Third seat watcher'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{idle.close();owner.close();viewer.close();r.stop();});
+ await clock.wait(1000);owner.input({ax:1});
+ for(let i=0;i<90;i++){await clock.wait(16);viewer.viewTick;}
+ let monster;viewer.each('monster',e=>{monster=e.id;});const id=owner.me.id;
+ const start=viewer.get(id).pos.x,offset=start-viewer.get(monster).pos.x;delay=3000;
+ let previous=start;
+ for(let i=0;i<180;i++){
+  await clock.wait(16);const x=viewer.get(id).pos.x;
+  assert.ok(Math.abs(x-previous)<1.4,`moving source jumped ${previous} -> ${x}`);
+  assert.ok(Math.abs(x-viewer.get(monster).pos.x-offset)<.002,'the runner and patrol must retain one clock');previous=x;
+ }
+ assert.ok(previous-start>9,`idle source held fresh movement to ${previous-start} tiles in 2.88 seconds`);
+ delay=0;idle.input({ax:1});
+ const resumed=previous;let idlePrevious=viewer.get(idle.me.id).pos.x;
+ for(let i=0;i<90;i++){
+  await clock.wait(16);const x=viewer.get(id).pos.x,idleX=viewer.get(idle.me.id).pos.x;
+  assert.ok(Math.abs(x-previous)<1.4);assert.ok(Math.abs(idleX-idlePrevious)<1.4,'the returning source must also remain bounded');
+  previous=x;idlePrevious=idleX;
+ }
+ assert.ok(previous-resumed>4,'resuming the idle source cannot freeze the other runner');
 });

@@ -624,7 +624,7 @@ export interface NetplayOptions<C = unknown> {
   /** Shared relay limits supplied by the rules view; legacy vendor copies stay dependency-free. */
   rulesLimits?: { bytes: Record<string, number>; rates: Record<string, number>; output: (opts: { rates: Record<string, number>; send: (frame: Record<string, unknown>) => void; now: () => number }) => RulesOutputSender };
   /** Set by the rules view's build. Server games load this only once playable, or when starting offline. */
-  rulesHost?: { mode: 'server' | 'browser'; offline: boolean; load?: () => Promise<RulesHostFactory> };
+  rulesHost?: { retainAuthority?: boolean; mode: 'server' | 'browser'; offline: boolean; load?: () => Promise<RulesHostFactory> };
   /** Game id, for the relay's logs. */
   game?: string;
   /** Seats in a room (the manifest's players.max). The relay takes it from the first visitor of an empty room. */
@@ -2878,7 +2878,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     const pingHeld = beat - lastPingTick > 2000 + 1500;
     lastPingTick = beat;
     if (!connected) {
-      if (rulesGame && offline && rulesHost && ws && wall() - socketStartedAt >= 2500) { lost(ws, 'connect-timeout'); return; }
+      if (rulesGame && (offline && rulesHost || opts.rulesHost?.retainAuthority && link === 'reconnecting') && ws && wall() - socketStartedAt >= 2500) { lost(ws, 'connect-timeout'); return; }
       // A socket that opened and was never welcomed (a room that is not answering) is as dead as a silent one: drop
       // it and knock again, so a page that gave up and plays alone still finds its room when the room is back.
       if (ws && ws.readyState === 1 && lastMsgAt && wall() - lastMsgAt > Math.max(staleMs, connectOpenMaxMs)) lost(ws, 'stale');
@@ -3026,7 +3026,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       // BOUNDED (section 22): a room that does not come back in reconnectMaxMs is not waited for with a frozen round
       // on screen. The page plays alone with its own bots, says so, and keeps knocking.
       if (reconnectTimer) clearTimeout(reconnectTimer);
-      reconnectTimer = setTimeout(() => { reconnectTimer = null; if (link === 'reconnecting' && !closed) goOfflineHost('reconnect-timeout'); }, reconnectMaxMs);
+      reconnectTimer = setTimeout(() => { reconnectTimer = null; if (link === 'reconnecting' && !closed && !opts.rulesHost?.retainAuthority) goOfflineHost('reconnect-timeout'); }, reconnectMaxMs);
     }
     notifyStats(true);
     retry();
@@ -3061,7 +3061,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     const wait = Math.max(rulesGame ? (attempt < 3 ? Math.random() * Math.min(2000, 500 * 2 ** attempt) : (0.5 + Math.random() * 0.5) * Math.min(60_000, 2000 * 2 ** Math.min(attempt - 2, 5))) : LADDER[Math.min(attempt, LADDER.length - 1)] as number, aloneUntil - wall());
     attempt += 1;
     reconnects += 1;
-    retryTimer = setTimeout(open, rulesGame && offline && rulesHost ? Math.min(wait, 2500) : wait);
+    retryTimer = setTimeout(open, rulesGame && (offline && rulesHost || opts.rulesHost?.retainAuthority && link === 'reconnecting') ? Math.min(wait, 2500) : wait);
   }
 
   if (offline) {

@@ -1,0 +1,24 @@
+Author against toolkit 0.53.0: node_modules/@homie-rocks/studio/guides/game/{SKILL,RULES,REWRITE}.md
+Homie Claude Code plugin 0.25.2 is older than toolkit 0.53.0. Its guidance may be stale. Read node_modules/@homie-rocks/studio/guides/game/{SKILL,RULES,REWRITE}.md. claude plugin update homie@homie.
+Building studio…
+Building tiny-platformer…
+tiny-platformer: checking rules and types
+types: games/tiny-platformer: rules, move and view checked with the toolkit's strict compiler
+tiny-platformer: running generated rules play; use build --quick for an iteration without play checks
+info: games/tiny-platformer/src/rules.ts:36: the generated play covered 18000 ticks (900 seconds of the room's clock), 8 rounds finished, the room rebuilt from its save and compared 813 times, stopped at its allowance of 18000 ticks; it ended holding 24 entities and 0 waiting events in a save of 5658 bytes. `homie-studio build --long-check` plays eight times as much. Play it did not reach is not checked.
+info: rules runtime reference trial: hero-rush-3d, 32 players at 30 Hz for 20 minutes on Node (macOS arm64). Cloudflare capacity and billing are unmeasured.
+tiny-platformer: running rules snapshot smoke check
+built tiny-platformer (bundle, 97 KB + 2 additional chunks, 429 KB)
+tiny-platformer: this game's rules and tunables are sent to players' devices so it can be played offline
+  tiny-platformer: its rules run on the server (checked and guarded, 237 KB, build 262b0877cff3ebb168d28362f5fc0197; 18000 ticks played, the room rebuilt from its save 813 times: the busiest tick used 16321 of 500000 budget units, 1124 of them in one handler; the largest save was 6074 bytes)
+  tiny-platformer: smoke-run largest snapshot 2061 B / 16384 B browser cap; checkpoint 3409 B / 65536 B browser cap (measured, not an upper bound)
+Building site Worker…
+Built tiny-platformer (97 KB) into site/dist
+  tiny-platformer: changed, build cc4b0d1c825979b9 (assets/main-XKHHVVS5.js + 2 additional chunks)
+Landing /2048-race/: hero from its footage, credits
+Landing /asteroids-arena/: hero from its footage, credits
+Landing /bone-burglar/: hero from its footage, credits
+Landing /octree-arena/: hero from its footage, credits
+Landing /tiny-platformer/: hero from its footage, credits
+Posts: /posts/old-games-new-friends/ (feeds: /posts/feed.xml, /posts/feed.json)
+Game Codex (the owner's private pages; codex link <id> opens one): /_studio/codex/tiny-platformer/

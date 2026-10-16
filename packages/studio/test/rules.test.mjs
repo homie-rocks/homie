@@ -433,7 +433,7 @@ test('the overrun check: a room whose ticks keep starting late ends, and a room 
   // One isolate, one clock: a slow room's tick takes 120 ms of it, so the tick after it starts late, whichever room's it is.
   const clock = fakeClock();
   const fast = hostRig(L, c, { clock });
-  const slow = hostRig(L, c, { clock, host: { send: (m) => { if (m.t === 'snap') clock.t += 120; } } });
+  const slow = hostRig(L, c, { clock, host: { onTick: () => { clock.t += 120; } } });
   slow.join(0); fast.join(0);
   assert.ok(slow.host.running && fast.host.running);
   clock.advance(4000);
@@ -457,7 +457,7 @@ test('the overrun check: a room whose ticks keep starting late ends, and a room 
   one.clock.t += 1500;
   one.clock.advance(3000);
   assert.equal(one.ended.length, 0);
-  assert.ok(one.host.tick >= 20 + 60 && one.host.tick <= 20 + 60 + 4, `after a 1.5 s hitch it is on tick ${one.host.tick}: the gap was not run again`);
+  assert.equal(one.host.tick, 110, 'the server catches up the 30 suspended ticks without skipping simulation');
 });
 
 test('world has no way out: everything reachable from it is plain frozen data and functions the runtime made', async () => {
@@ -635,4 +635,30 @@ test('late paired callbacks sustaining 20 Hz do not end a healthy room as an ove
     }
   }
   assert.equal(rig.host.tick,400);assert.deepEqual(rig.ended,[]);rig.host.stop();
+});
+
+ test('sustained scheduler delays retain backlog and catch up in bounded callbacks', async () => {
+  const { L, compile } = await coinDash();
+  const r = hostRig(L, compile({})); r.join(0);
+  for (let i = 0; i < 80; i++) {
+    r.clock.t += 300;
+    const timer = r.clock.timers.shift();
+    const before = r.host.tick; timer.fn();
+    assert.ok(r.host.tick - before <= 4, 'one callback is bounded');
+  }
+  assert.deepEqual(r.ended, [], 'scheduler delay is not game execution');
+  assert.ok(r.sent.filter(m => m.t === 'snap').length <= 81, 'one coalesced snapshot per catch-up slice');
+  r.clock.advance(0);
+  assert.equal(r.host.tick, 480, 'all elapsed simulation ticks eventually execute');
+  assert.equal(r.host.facts().slips, 0);
+  r.host.stop();
+});
+
+ test('one suspension inside a tick does not masquerade as sustained execution overrun', async () => {
+  const {L,compile}=await coinDash();let once=true;const clock=fakeClock();
+  const r=hostRig(L,compile({}),{clock,host:{onTick:()=>{if(once){once=false;clock.t+=15000;}}}});
+  r.join(0);clock.advance(20000);
+  assert.deepEqual(r.ended,[]);
+  assert.equal(r.host.tick,400,'the suspended time is caught up without dropping ticks');
+  r.host.stop();
 });

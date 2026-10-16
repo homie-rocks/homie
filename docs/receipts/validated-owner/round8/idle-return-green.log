@@ -1,0 +1,18 @@
+TAP version 13
+# (node:11969) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: an idle remote source cannot pin a moving runner and its patrol
+ok 1 - an idle remote source cannot pin a moving runner and its patrol
+  ---
+  duration_ms: 1050.255
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1260.506333

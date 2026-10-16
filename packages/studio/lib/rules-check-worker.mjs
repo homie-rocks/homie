@@ -257,7 +257,7 @@ function play(c, companions, allow) {
       (error) => { fault ??= `${G.file}:${G.line} ${k.name}.move: ${fix(diagnostic(String(error?.message ?? error)))} A player's own browser runs this move for its body.${when()}`; });
     G.note = null;
     units += body.used;
-    return L.H.claimOf(body.pos, body.vel, body.heading);
+    return [...L.H.claimOf(body.pos, body.vel, body.heading), ...(k.body.validatedOwner ? [t-1] : [])];
   }
   function sample(fd, n, refs) {
     if (fd.t === 'ref') return n % 2 ? refs[(n >> 1) % refs.length] ?? '' : '';
@@ -277,10 +277,11 @@ function play(c, companions, allow) {
     for (const b of bodies) {
       if (b.driver !== 'person' || !(seated.get(b.seat) > 0)) continue;
       const way = b.seat === 1 ? 'idle' : ['steer', 'hold', 'steer', 'idle'][(b.seat + Math.floor(t / secs(20))) % 4];
-      if (way === 'idle') continue;
       const k = c.kindOf[b.kind];
+      if (way === 'idle' && !k.body?.validatedOwner) continue;
       let values;
-      if (way === 'hold') values = Object.fromEntries(k.input.map(([name, fd]) => [name, ends(fd)[Math.floor(t / secs(2)) % 2]]));
+      if (way === 'idle') values = Object.fromEntries(k.input.map(([name,fd])=>[name,L.P.initOf(fd,c.dims)]));
+      else if (way === 'hold') values = Object.fromEntries(k.input.map(([name, fd]) => [name, ends(fd)[Math.floor(t / secs(2)) % 2]]));
       else {
         let s = steering.get(b.seat);
         if (!s || t >= s.until) steering.set(b.seat, s = { until: t + 1 + Math.floor(dice() * secs(3)), values: Object.fromEntries(k.input.map(([name, fd]) => { const r = dice(); return [name, r < 0.4 ? ends(fd)[0] : r < 0.8 ? ends(fd)[1] : L.P.initOf(fd, c.dims)]; })) });
@@ -318,6 +319,7 @@ function play(c, companions, allow) {
   let peak = 0; let most = 0; let worst = '';   // a restart begins the runtime's own counts again, so the busiest tick and handler are kept here
   const heldBack = () => {
     const k = c.kinds.filter((x) => x.player && x.body?.owner && x.move);
+    if (k.some(x=>x.body.validatedOwner)) return `${siteOf(k[0]?.name, 'move')} validated owner movement rejected a reported pose: it did not match the same move from the last accepted state.${when()}`;
     return `${siteOf(k[0]?.name, 'move')} ${k.map((x) => x.name).join(' or ')}.move: the server held this body back: one step of this move, from where the server has the body, goes further than the server lets a body go in a tick (body.maxSpeed is ${k.map((x) => x.body.maxSpeed).join(', ')} m/s). A player would see their character pulled back. Clamp the speed (a diagonal is longer than either stick axis), or declare the body's real top speed.${when()}`;
   };
   while (!fault) {

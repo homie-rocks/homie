@@ -1,0 +1,328 @@
+{
+  "final-stall3000": {
+    "b": {
+      "seconds": 61.41,
+      "hud": 7,
+      "observerScore": 7,
+      "observerMovingFramesLast5s": 246,
+      "observerFramesLast5s": 300,
+      "clockLeadEnd": 0,
+      "events": [
+        {
+          "what": "stall",
+          "at": 21195.39999985695,
+          "ms": 3000,
+          "back": 24231.599999904633,
+          "hudDuring": [
+            3,
+            3
+          ],
+          "largeRemoteStepsNearReturn": [],
+          "maxConsecutiveLargeRemoteSteps": 0
+        },
+        {
+          "what": "stall",
+          "at": 41199.89999985695,
+          "ms": 3000,
+          "back": 44225.699999809265,
+          "hudDuring": [
+            5,
+            5
+          ],
+          "largeRemoteStepsNearReturn": [],
+          "maxConsecutiveLargeRemoteSteps": 0
+        }
+      ]
+    },
+    "c": {
+      "seconds": 61.4,
+      "hud": 8,
+      "observerScore": 8,
+      "observerMovingFramesLast5s": 130,
+      "observerFramesLast5s": 301,
+      "clockLeadEnd": null,
+      "events": [
+        {
+          "what": "stall",
+          "at": 21200.699999809265,
+          "ms": 3000,
+          "back": 24215,
+          "hudDuring": [
+            5,
+            5
+          ],
+          "largeRemoteStepsNearReturn": [
+            1.58,
+            9.85,
+            9.27,
+            8.42
+          ],
+          "maxConsecutiveLargeRemoteSteps": 3
+        },
+        {
+          "what": "stall",
+          "at": 41194,
+          "ms": 3000,
+          "back": 44209.799999952316,
+          "hudDuring": [
+            7,
+            8
+          ],
+          "largeRemoteStepsNearReturn": [],
+          "maxConsecutiveLargeRemoteSteps": 0
+        }
+      ]
+    }
+  },
+  "final-stall15000": {
+    "b": {
+      "seconds": 62.73,
+      "hud": 3,
+      "observerScore": 3,
+      "observerMovingFramesLast5s": 231,
+      "observerFramesLast5s": 300,
+      "clockLeadEnd": 1,
+      "events": [
+        {
+          "what": "stall",
+          "at": 22540.799999952316,
+          "ms": 15000,
+          "back": 37607.299999952316,
+          "hudDuring": [
+            2,
+            2
+          ],
+          "largeRemoteStepsNearReturn": [
+            3.86
+          ],
+          "maxConsecutiveLargeRemoteSteps": 1
+        },
+        {
+          "what": "stall",
+          "at": 42515.299999952316,
+          "ms": 15000,
+          "back": 57518.700000047684,
+          "hudDuring": [
+            3,
+            3
+          ],
+          "largeRemoteStepsNearReturn": [],
+          "maxConsecutiveLargeRemoteSteps": 0
+        }
+      ]
+    },
+    "c": {
+      "seconds": 62.6,
+      "hud": 1,
+      "observerScore": 1,
+      "observerMovingFramesLast5s": 82,
+      "observerFramesLast5s": 300,
+      "clockLeadEnd": null,
+      "events": [
+        {
+          "what": "stall",
+          "at": 22685.900000095367,
+          "ms": 15000,
+          "back": 37752.200000047684,
+          "hudDuring": [
+            4,
+            4
+          ],
+          "largeRemoteStepsNearReturn": [],
+          "maxConsecutiveLargeRemoteSteps": 0
+        },
+        {
+          "what": "stall",
+          "at": 42678.799999952316,
+          "ms": 15000,
+          "back": 57694.90000009537,
+          "hudDuring": [
+            0,
+            0
+          ],
+          "largeRemoteStepsNearReturn": [
+            1.59,
+            1.52,
+            1.67,
+            1.82,
+            2.5
+          ],
+          "maxConsecutiveLargeRemoteSteps": 1
+        }
+      ]
+    }
+  },
+  "final-drift.99": {
+    "b": {
+      "seconds": 105.33,
+      "hud": 14,
+      "observerScore": 14,
+      "observerMovingFramesLast5s": 218,
+      "observerFramesLast5s": 301,
+      "clockLeadEnd": 1,
+      "events": []
+    },
+    "c": {
+      "seconds": 105.28,
+      "hud": 13,
+      "observerScore": 13,
+      "observerMovingFramesLast5s": 242,
+      "observerFramesLast5s": 300,
+      "clockLeadEnd": null,
+      "events": []
+    }
+  },
+  "final-drift1.01": {
+    "b": {
+      "seconds": 107.66,
+      "hud": 17,
+      "observerScore": 17,
+      "observerMovingFramesLast5s": 257,
+      "observerFramesLast5s": 300,
+      "clockLeadEnd": 16,
+      "events": []
+    },
+    "c": {
+      "seconds": 107.61,
+      "hud": 15,
+      "observerScore": 15,
+      "observerMovingFramesLast5s": 211,
+      "observerFramesLast5s": 301,
+      "clockLeadEnd": null,
+      "events": []
+    }
+  },
+  "final-switch": {
+    "b": {
+      "seconds": 64.31,
+      "hud": 6,
+      "observerScore": 6,
+      "observerMovingFramesLast5s": 24,
+      "observerFramesLast5s": 301,
+      "clockLeadEnd": 1,
+      "events": []
+    },
+    "c": {
+      "seconds": 64.33,
+      "hud": 6,
+      "observerScore": 6,
+      "observerMovingFramesLast5s": 89,
+      "observerFramesLast5s": 301,
+      "clockLeadEnd": null,
+      "events": []
+    }
+  },
+  "final-reconnect": {
+    "b": {
+      "seconds": 61.39,
+      "hud": 9,
+      "observerScore": 9,
+      "observerMovingFramesLast5s": 252,
+      "observerFramesLast5s": 301,
+      "clockLeadEnd": 1,
+      "events": [
+        {
+          "what": "reconnect",
+          "at": 21086.799999952316,
+          "ms": 6000,
+          "backMsAfterNetwork": 1002,
+          "scoreBefore": 3,
+          "scoreAfter": 3,
+          "reconnects": 5,
+          "back": 28092.799999952316,
+          "hudDuring": [
+            3,
+            3
+          ],
+          "largeRemoteStepsNearReturn": [
+            2.31,
+            5.77,
+            11.77
+          ],
+          "maxConsecutiveLargeRemoteSteps": 1
+        },
+        {
+          "what": "reconnect",
+          "at": 41040.89999985695,
+          "ms": 6000,
+          "backMsAfterNetwork": 2491,
+          "scoreBefore": 6,
+          "scoreAfter": 6,
+          "reconnects": 11,
+          "back": 49598.199999809265,
+          "hudDuring": [
+            6,
+            6
+          ],
+          "largeRemoteStepsNearReturn": [
+            2.76,
+            3.54,
+            3.52,
+            3.2,
+            4.31,
+            4.11,
+            3.92,
+            3.13,
+            4.31,
+            3.92,
+            4.31,
+            4.11,
+            2.23,
+            2.76,
+            9.55,
+            3.17,
+            5.5,
+            3.01,
+            2.13,
+            3.83,
+            2.25,
+            4.35
+          ],
+          "maxConsecutiveLargeRemoteSteps": 1
+        }
+      ]
+    },
+    "c": {
+      "seconds": 61.43,
+      "hud": 1,
+      "observerScore": 1,
+      "observerMovingFramesLast5s": 259,
+      "observerFramesLast5s": 301,
+      "clockLeadEnd": null,
+      "events": [
+        {
+          "what": "reconnect",
+          "at": 21125.900000095367,
+          "ms": 6000,
+          "backMsAfterNetwork": 2042,
+          "scoreBefore": 3,
+          "scoreAfter": 3,
+          "reconnects": 5,
+          "back": 29173.5,
+          "hudDuring": [
+            3,
+            3
+          ],
+          "largeRemoteStepsNearReturn": [],
+          "maxConsecutiveLargeRemoteSteps": 0
+        },
+        {
+          "what": "reconnect",
+          "at": 41133,
+          "ms": 6000,
+          "backMsAfterNetwork": 2038,
+          "scoreBefore": 2,
+          "scoreAfter": null,
+          "reconnects": 10,
+          "back": 49181.200000047684,
+          "hudDuring": [
+            2,
+            2
+          ],
+          "largeRemoteStepsNearReturn": [],
+          "maxConsecutiveLargeRemoteSteps": 0
+        }
+      ]
+    }
+  }
+}

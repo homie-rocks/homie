@@ -1,0 +1,124 @@
+TAP version 13
+# Subtest: valid report accepted, duplicate does not move again, missing reports freeze
+ok 1 - valid report accepted, duplicate does not move again, missing reports freeze
+  ---
+  duration_ms: 5.134709
+  type: 'test'
+  ...
+# Subtest: reject forged speed as a cut
+ok 2 - reject forged speed as a cut
+  ---
+  duration_ms: 0.611875
+  type: 'test'
+  ...
+# Subtest: reject forged teleport as a cut
+ok 3 - reject forged teleport as a cut
+  ---
+  duration_ms: 1.027167
+  type: 'test'
+  ...
+# Subtest: reject forged gravity as a cut
+ok 4 - reject forged gravity as a cut
+  ---
+  duration_ms: 0.301875
+  type: 'test'
+  ...
+# Subtest: reject forged wall-pass as a cut
+ok 5 - reject forged wall-pass as a cut
+  ---
+  duration_ms: 0.735875
+  type: 'test'
+  ...
+# Subtest: reject forged NaN as a cut
+ok 6 - reject forged NaN as a cut
+  ---
+  duration_ms: 0.705375
+  type: 'test'
+  ...
+# Subtest: out of order reports wait for missing predecessor
+ok 7 - out of order reports wait for missing predecessor
+  ---
+  duration_ms: 0.370083
+  type: 'test'
+  ...
+# Subtest: transport decodes reports and ignores claims from an old placement
+ok 8 - transport decodes reports and ignores claims from an old placement
+  ---
+  duration_ms: 2.493333
+  type: 'test'
+  ...
+# Subtest: a burst cannot buy extra simulation time
+ok 9 - a burst cannot buy extra simulation time
+  ---
+  duration_ms: 0.942042
+  type: 'test'
+  ...
+# Subtest: an early fresh baseline still spends elapsed server time and cannot buy skipped travel
+ok 10 - an early fresh baseline still spends elapsed server time and cannot buy skipped travel
+  ---
+  duration_ms: 0.445791
+  type: 'test'
+  ...
+# Subtest: a rejected report fences all reports from the old revision
+ok 11 - a rejected report fences all reports from the old revision
+  ---
+  duration_ms: 0.195541
+  type: 'test'
+  ...
+# Subtest: report tolerance cannot accumulate into extra speed
+ok 12 - report tolerance cannot accumulate into extra speed
+  ---
+  duration_ms: 0.138708
+  type: 'test'
+  ...
+# Subtest: wall crossing is rejected even at legal speed and legal one-tick distance
+ok 13 - wall crossing is rejected even at legal speed and legal one-tick distance
+  ---
+  duration_ms: 0.198292
+  type: 'test'
+  ...
+# Subtest: a fresh baseline after a pause grants one physics step, never skipped travel
+ok 14 - a fresh baseline after a pause grants one physics step, never skipped travel
+  ---
+  duration_ms: 0.231875
+  type: 'test'
+  ...
+# Subtest: host replies to an excessive owner clock lead with a new placement instead of dropping forever
+ok 15 - host replies to an excessive owner clock lead with a new placement instead of dropping forever
+  ---
+  duration_ms: 0.532458
+  type: 'test'
+  ...
+# Subtest: every accepted report is available for contact checks and duplicate reports add no paths
+ok 16 - every accepted report is available for contact checks and duplicate reports add no paths
+  ---
+  duration_ms: 0.504416
+  type: 'test'
+  ...
+# Subtest: owner receive queue overflow explicitly resynchronizes without acknowledging a lost path
+ok 17 - owner receive queue overflow explicitly resynchronizes without acknowledging a lost path
+  ---
+  duration_ms: 1.310292
+  type: 'test'
+  ...
+# Subtest: server wall time permits valid continued reports across a stalled simulation
+ok 18 - server wall time permits valid continued reports across a stalled simulation
+  ---
+  duration_ms: 0.209708
+  type: 'test'
+  ...
+# Subtest: a stalled transport batch retains reports beyond the first 64 entries
+ok 19 - a stalled transport batch retains reports beyond the first 64 entries
+  ---
+  duration_ms: 2.368625
+  type: 'test'
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 321.351542

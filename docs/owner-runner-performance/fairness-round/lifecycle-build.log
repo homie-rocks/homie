@@ -1,0 +1,18 @@
+Author against toolkit 0.51.1: node_modules/@homie-rocks/studio/guides/game/{SKILL,RULES,REWRITE}.md
+Homie Claude Code plugin 0.25.2 is older than toolkit 0.51.1. Its guidance may be stale. Read node_modules/@homie-rocks/studio/guides/game/{SKILL,RULES,REWRITE}.md. claude plugin update homie@homie.
+types: games/tiny-platformer: rules, move and view checked with the toolkit's strict compiler
+info: games/tiny-platformer/src/rules.ts:36: the generated play covered 18000 ticks (900 seconds of the room's clock), 8 rounds finished, the room rebuilt from its save and compared 813 times, stopped at its allowance of 18000 ticks; it ended holding 24 entities and 0 waiting events in a save of 5658 bytes. `homie-studio build --long-check` plays eight times as much. Play it did not reach is not checked.
+info: rules runtime reference trial: hero-rush-3d, 32 players at 30 Hz for 20 minutes on Node (macOS arm64). Cloudflare capacity and billing are unmeasured.
+built tiny-platformer (bundle, 93 KB + 2 additional chunks, 429 KB)
+tiny-platformer: this game's rules and tunables are sent to players' devices so it can be played offline
+  tiny-platformer: its rules run on the server (checked and guarded, 237 KB, build db79c5c19470817e9d1be06115a30d51; 18000 ticks played, the room rebuilt from its save 813 times: the busiest tick used 16289 of 500000 budget units, 1124 of them in one handler; the largest save was 6074 bytes)
+  tiny-platformer: smoke-run largest snapshot 2041 B / 16384 B browser cap; checkpoint 3409 B / 65536 B browser cap (measured, not an upper bound)
+Built tiny-platformer (93 KB) into site/dist
+  tiny-platformer: changed, build eef0c2a577662865 (assets/main-WJYSSL7F.js + 2 additional chunks)
+Landing /2048-race/: hero from its footage, credits
+Landing /asteroids-arena/: hero from its footage, credits
+Landing /bone-burglar/: hero from its footage, credits
+Landing /octree-arena/: hero from its footage, credits
+Landing /tiny-platformer/: hero from its footage, credits
+Posts: /posts/old-games-new-friends/ (feeds: /posts/feed.xml, /posts/feed.json)
+Game Codex (the owner's private pages; codex link <id> opens one): /_studio/codex/tiny-platformer/

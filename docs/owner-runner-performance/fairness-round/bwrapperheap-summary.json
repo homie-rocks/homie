@@ -1,0 +1,149 @@
+{
+  "sampleIntervalBytes": 131072,
+  "includesCollectedObjects": true,
+  "frames": 3634,
+  "estimatedAllocatedBytes": 251186444,
+  "estimatedBytesPerFrame": 69121.20088057237,
+  "top": [
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:676 flush",
+      23074444
+    ],
+    [
+      " assign",
+      17343316
+    ],
+    [
+      " getOwnPropertyDescriptor",
+      15730072
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:545 runPredict",
+      14037792
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts:142 info",
+      13371456
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-LAR3FIQL.js g",
+      12583500
+    ],
+    [
+      " next",
+      11142172
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-LAR3FIQL.js ic",
+      10225804
+    ],
+    [
+      "../../../../../../games/tiny-platformer/src/view.ts:94 runner",
+      7078548
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-LAR3FIQL.js h",
+      5898504
+    ],
+    [
+      " set",
+      5515612
+    ],
+    [
+      " sort",
+      5117708
+    ],
+    [
+      "../../../../../../games/tiny-platformer/src/monster-view.ts:19 monsterDrawn",
+      5112976
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:1055 meNow",
+      4719172
+    ],
+    [
+      "../../../../../../games/tiny-platformer/src/sim.ts:30 stepEntity",
+      4718784
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:1292 each",
+      4063560
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:1268 drawnRemote",
+      3932588
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-LAR3FIQL.js Ee",
+      3801520
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:789 applySnapshot",
+      3146400
+    ],
+    [
+      " (V8 API)",
+      2754012
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-LAR3FIQL.js gt",
+      2622000
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-LAR3FIQL.js xl",
+      2621676
+    ],
+    [
+      "../../../../../../games/tiny-platformer/src/monster-view.ts:8 monsterAt",
+      2490816
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-LAR3FIQL.js gl",
+      2490596
+    ],
+    [
+      " slice",
+      2360264
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-LAR3FIQL.js Do",
+      2359800
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:625 heldMean",
+      2359512
+    ],
+    [
+      "../../../../../../games/tiny-platformer/src/view.ts:266 b",
+      2228660
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:1374 poseAt",
+      2228428
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:642 step",
+      2097860
+    ],
+    [
+      "../../../../../../games/tiny-platformer/src/view.ts:392 frame",
+      2097452
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-LAR3FIQL.js tu",
+      2097272
+    ],
+    [
+      " push",
+      1837248
+    ],
+    [
+      "../../../../../../games/tiny-platformer/src/view.ts:294 renderMonsters",
+      1835324
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/chunk-LAR3FIQL.js fc",
+      1835292
+    ]
+  ]
+}

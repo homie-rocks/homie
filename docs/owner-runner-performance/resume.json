@@ -1,0 +1,22 @@
+{
+  "status": "blocked-quiet-window",
+  "toolkitHead": "a04784b98540860aa25953924c474805794b20c2",
+  "studioBase": "1d62525",
+  "start": 1792040793.0971441,
+  "end": 1792041663.791785,
+  "originalWaitStart": 1792040452.46778,
+  "waitSeconds": 1211.3240048885345,
+  "minimumLoad": 9.33,
+  "lastLoad": 10.34,
+  "measurementBatchesStarted": 0,
+  "cloudflareTrialStarted": false,
+  "temporaryWorkersDeployed": false,
+  "toolkitBuild": "passed",
+  "studioBuild": "passed",
+  "studioTests": {
+    "passed": 40,
+    "failed": 0
+  },
+  "broadToolkitTests": "interrupted after 111 reported passing cases, no reported failures; not a suite pass",
+  "localServersStopped": true
+}

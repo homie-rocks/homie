@@ -1,0 +1,149 @@
+{
+  "sampleIntervalBytes": 131072,
+  "includesCollectedObjects": true,
+  "frames": 3634,
+  "estimatedAllocatedBytes": 251186444,
+  "estimatedBytesPerFrame": 69121.20088057237,
+  "top": [
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-JQQRCEQZ.js tr",
+      23074444
+    ],
+    [
+      " assign",
+      17343316
+    ],
+    [
+      " getOwnPropertyDescriptor",
+      15730072
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-JQQRCEQZ.js Nn",
+      14037792
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-JQQRCEQZ.js info",
+      13371456
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/map-index.ts:70 visit",
+      12583500
+    ],
+    [
+      " next",
+      11142172
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/pack.ts:266 stepMove",
+      10225804
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-JQQRCEQZ.js runner",
+      8389440
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-JQQRCEQZ.js ",
+      7078860
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/map-index.ts:62 touches",
+      5898504
+    ],
+    [
+      " set",
+      5515612
+    ],
+    [
+      " sort",
+      5117708
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-JQQRCEQZ.js ss",
+      5112976
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-JQQRCEQZ.js ft",
+      4719172
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-JQQRCEQZ.js bn",
+      4718784
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-JQQRCEQZ.js mr",
+      4063560
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-JQQRCEQZ.js cr",
+      3932588
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/pack.ts:141 coerce",
+      3801520
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-JQQRCEQZ.js Ps",
+      3146400
+    ],
+    [
+      " (V8 API)",
+      2754012
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/pack.ts:84 gt",
+      2622000
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/pack.ts:348 coerceFields",
+      2621676
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-JQQRCEQZ.js rs",
+      2490816
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/pack.ts:239 thawFields",
+      2490596
+    ],
+    [
+      " slice",
+      2360264
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/substeps.ts:8 value",
+      2359800
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-JQQRCEQZ.js er",
+      2359512
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-JQQRCEQZ.js yr",
+      2228428
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-JQQRCEQZ.js Rs",
+      2097860
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-JQQRCEQZ.js xs",
+      2097452
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/guard.ts:254 c",
+      2097272
+    ],
+    [
+      " push",
+      1837248
+    ],
+    [
+      "http://127.0.0.1:8791/tiny-platformer/__game/assets/main-JQQRCEQZ.js ci",
+      1835324
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/pack.ts:389 unpackEntity",
+      1835292
+    ]
+  ]
+}

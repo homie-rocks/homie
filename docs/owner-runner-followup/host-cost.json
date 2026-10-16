@@ -1,0 +1,22 @@
+{
+  "oldContact": {
+    "medianCpuMs": 1.825,
+    "p95CpuMs": 7.277,
+    "medianMs": 2.5502910000004704,
+    "p95Ms": 9.870916999999281,
+    "maxMs": 23.914833000000726,
+    "peakTickUnits": 39317,
+    "held": 0,
+    "errors": 0
+  },
+  "allPaths": {
+    "medianCpuMs": 2.545,
+    "p95CpuMs": 9.702,
+    "medianMs": 3.823958999999377,
+    "p95Ms": 11.234375,
+    "maxMs": 35.21845900000062,
+    "peakTickUnits": 105584,
+    "held": 0,
+    "errors": 0
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "af": {
+    "tests": 82,
+    "fail": 0
+  },
+  "gm": {
+    "tests": 31,
+    "fail": 0
+  },
+  "ns": {
+    "tests": 161,
+    "fail": 0
+  },
+  "tz": {
+    "tests": 31,
+    "fail": 0
+  },
+  "numeric": {
+    "tests": 3,
+    "fail": 0
+  },
+  "view_total": 308
+}

@@ -1,0 +1,32 @@
+--- a/games/tiny-platformer/src/rules.ts
++++ b/games/tiny-platformer/src/rules.ts
+@@ -42,7 +42,7 @@
+   shapes: {
+     events: { stomped: {}, gold: {}, caught: {} },
+     commands: {},
+-    effects: {},
++    effects: { catchTrace: { report: f.tick(), judged: f.tick(), monster: f.u8(), born: f.tick(), sub: f.u8(), stationary: f.bit(), remote: f.bit(), runnerPos: f.vec3(), monsterPos: f.vec3() } },
+   },
+   entities: {
+     runner: {
+@@ -215,6 +215,7 @@
+               const inset = 6 / 32, size = 31 / 32;
+               const sideHit = !remote || (x + size - inset >= mx && x + inset <= mx + size && y + size - inset >= my && y + inset <= my + size);
+               if (sideHit && runner.safeUntil <= world.tick) {
++                world.emit('catchTrace', runner.id, {report:pose.motion.at,judged:at,monster:self.idx,born:self.born,sub:i,stationary,remote,runnerPos:{x,y},monsterPos:{x:mx,y:my}});
+                 caught.push(runner.id); world.dispatch(runner.id, 'caught', {}); break;
+               }
+             }
+--- a/games/tiny-platformer/src/view.ts
++++ b/games/tiny-platformer/src/view.ts
+@@ -368,7 +368,10 @@
+     tapKey: 'Space',
+   });
+ }
++const catchTraces: unknown[] = [];
++room.on('catchTrace', e => { catchTraces.push({...e, received:performance.timeOrigin+performance.now()}); if(catchTraces.length>256)catchTraces.shift(); });
+ room.probe({
++  catchTraces: () => catchTraces,
+   view: () => 'side',
+   score: () => (me ? me.score : null),
+   serverScore: () => { const e = shown.body; return e ? e.score : null; },

@@ -1,0 +1,149 @@
+{
+  "sampleIntervalBytes": 131072,
+  "includesCollectedObjects": true,
+  "frames": 3642,
+  "estimatedAllocatedBytes": 252698360,
+  "estimatedBytesPerFrame": 69384.5030203185,
+  "top": [
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:666 flush",
+      23205492
+    ],
+    [
+      " getOwnPropertyDescriptor",
+      18351792
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/map-index.ts:70 visit",
+      16253652
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:535 runPredict",
+      14430080
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/port/probe.ts:142 info",
+      14289384
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/pack.ts:266 stepMove",
+      9832256
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:270 fe",
+      8655416
+    ],
+    [
+      "../../../../../../games/tiny-platformer/src/view.ts:94 runner",
+      7602968
+    ],
+    [
+      "../../../../../../games/tiny-platformer/src/sim.ts:30 stepEntity",
+      7340352
+    ],
+    [
+      " next",
+      6947544
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/map-index.ts:62 touches",
+      6553884
+    ],
+    [
+      "../../../../../../games/tiny-platformer/src/monster-view.ts:19 monsterDrawn",
+      6030432
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:1282 each",
+      5505452
+    ],
+    [
+      " set",
+      4987904
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:1258 drawnRemote",
+      4457044
+    ],
+    [
+      " sort",
+      4069432
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:779 applySnapshot",
+      3932672
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:1045 meNow",
+      3670476
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:1364 poseAt",
+      3670464
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/view.ts:615 heldMean",
+      3670332
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/pack.ts:141 coerce",
+      3408208
+    ],
+    [
+      " slice",
+      3015760
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/pack.ts:239 thawFields",
+      3015024
+    ],
+    [
+      " add",
+      2654796
+    ],
+    [
+      "../../../../../../games/tiny-platformer/src/view.ts:392 frame",
+      2622056
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/pack.ts:84 gt",
+      2490876
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/substeps.ts:8 value",
+      2359776
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/pack.ts:348 coerceFields",
+      2228400
+    ],
+    [
+      "../../../../../../games/tiny-platformer/src/view.ts:266 b",
+      1966372
+    ],
+    [
+      "../../../../../../games/tiny-platformer/src/view.ts:294 renderMonsters",
+      1966360
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/guard.ts:254 c",
+      1966180
+    ],
+    [
+      " (V8 API)",
+      1836216
+    ],
+    [
+      "../../../../../../games/tiny-platformer/src/move.ts:25 step",
+      1835204
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/netplay/netplay.ts:2351 onMessage",
+      1704396
+    ],
+    [
+      "../../../../../../node_modules/@homie-rocks/studio/rules/pack.ts:389 unpackEntity",
+      1704184
+    ]
+  ]
+}

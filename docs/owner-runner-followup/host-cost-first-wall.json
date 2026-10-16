@@ -1,0 +1,15 @@
+{
+  "oldContact": {
+    "medianMs": 6.688458,
+    "p95Ms": 131.056833,
+    "maxMs": 303.217417,
+    "peakTickUnits": 39317
+  },
+  "allPaths": {
+    "medianMs": 6.069458,
+    "p95Ms": 50.74375,
+    "maxMs": 220.329584,
+    "peakTickUnits": 105584
+  },
+  "note": "Initial wall-only run under shared-machine contention; not a speedup claim."
+}

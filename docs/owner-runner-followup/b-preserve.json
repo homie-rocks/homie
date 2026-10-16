@@ -1,0 +1,396 @@
+{
+  "controls": {
+    "keys": [
+      {
+        "code": "ArrowLeft",
+        "kind": "left",
+        "feedbackMs": 15,
+        "distanceTiles": 0.8
+      },
+      {
+        "code": "ArrowRight",
+        "kind": "right",
+        "feedbackMs": 17.3,
+        "distanceTiles": 0.942
+      },
+      {
+        "code": "KeyA",
+        "kind": "left",
+        "feedbackMs": 27.8,
+        "distanceTiles": 0.8
+      },
+      {
+        "code": "KeyD",
+        "kind": "right",
+        "feedbackMs": 17,
+        "distanceTiles": 0.942
+      },
+      {
+        "code": "Space",
+        "kind": "jump",
+        "feedbackMs": 13,
+        "heightTiles": 5.104,
+        "airSeconds": 0.83
+      },
+      {
+        "code": "ArrowUp",
+        "kind": "jump",
+        "feedbackMs": 28.2,
+        "heightTiles": 5.107,
+        "airSeconds": 0.83
+      },
+      {
+        "code": "KeyW",
+        "kind": "jump",
+        "feedbackMs": 16.1,
+        "heightTiles": 5.107,
+        "airSeconds": 0.85
+      }
+    ],
+    "touch": [
+      {
+        "what": "stick right",
+        "topSpeedTilesPerSecond": 15.5
+      },
+      {
+        "what": "stick left",
+        "topSpeedTilesPerSecond": -15.4
+      },
+      {
+        "what": "stick right",
+        "topSpeedTilesPerSecond": 15.5
+      },
+      {
+        "what": "stick left",
+        "topSpeedTilesPerSecond": -15.6
+      },
+      {
+        "what": "stick right",
+        "topSpeedTilesPerSecond": 15.5
+      },
+      {
+        "what": "stick left",
+        "topSpeedTilesPerSecond": -15.4
+      },
+      {
+        "what": "JUMP button",
+        "roseTiles": {
+          "rose": 5.11,
+          "caught": false
+        }
+      },
+      {
+        "what": "tap on the right side",
+        "roseTiles": {
+          "rose": 5.11,
+          "caught": false
+        }
+      },
+      {
+        "what": "JUMP button",
+        "roseTiles": {
+          "rose": 5.11,
+          "caught": false
+        }
+      },
+      {
+        "what": "tap on the right side",
+        "roseTiles": {
+          "rose": 5.11,
+          "caught": false
+        }
+      },
+      {
+        "what": "JUMP button",
+        "roseTiles": {
+          "rose": 5.11,
+          "caught": false
+        }
+      },
+      {
+        "what": "tap on the right side",
+        "roseTiles": {
+          "rose": 5.11,
+          "caught": false
+        }
+      }
+    ],
+    "tv": {
+      "seat": null,
+      "role": "screen",
+      "runners": 4,
+      "errors": []
+    },
+    "taps": [
+      {
+        "code": "ArrowLeft",
+        "kind": "left",
+        "feedbackMs": 25,
+        "distanceTiles": 0.025
+      },
+      {
+        "code": "ArrowRight",
+        "kind": "right",
+        "feedbackMs": 30.3,
+        "distanceTiles": 0.025
+      },
+      {
+        "code": "ArrowRight",
+        "kind": "right",
+        "feedbackMs": 13.9,
+        "distanceTiles": 0.025
+      },
+      {
+        "code": "ArrowLeft",
+        "kind": "left",
+        "feedbackMs": 27.3,
+        "distanceTiles": 0.008
+      }
+    ],
+    "errors": [],
+    "jumpButton": {
+      "x": 338,
+      "y": 786
+    }
+  },
+  "reload": {
+    "first": {
+      "roleBefore": "replica",
+      "roleAfter": "replica",
+      "otherRoleAfter": "replica",
+      "backInMs": 283,
+      "scoreBefore": 4,
+      "scoreAfter": 4,
+      "scoreKept": true,
+      "scoreOnOtherScreenBefore": 4,
+      "runnersBefore": 4,
+      "runnersAfter": 4,
+      "movedTilesWhileAway": 0,
+      "playsAgain": true,
+      "errors": []
+    },
+    "second": {
+      "roleBefore": "replica",
+      "roleAfter": "replica",
+      "otherRoleAfter": "replica",
+      "backInMs": 407,
+      "scoreBefore": 2,
+      "scoreAfter": 2,
+      "scoreKept": true,
+      "scoreOnOtherScreenBefore": 2,
+      "runnersBefore": 4,
+      "runnersAfter": 4,
+      "movedTilesWhileAway": 0,
+      "playsAgain": true,
+      "errors": []
+    }
+  },
+  "forge": {
+    "windows": [
+      {
+        "mode": "teleport",
+        "at": 4315.799999952316,
+        "end": 8335.600000143051,
+        "scoreBefore": 1,
+        "scoreAfter": 1
+      },
+      {
+        "mode": "wall",
+        "at": 13369.400000095367,
+        "end": 17410.60000014305,
+        "scoreBefore": 1,
+        "scoreAfter": 2
+      },
+      {
+        "mode": "speed",
+        "at": 22453.700000047684,
+        "end": 26490.900000095367,
+        "scoreBefore": 2,
+        "scoreAfter": 3
+      },
+      {
+        "mode": "tol",
+        "at": 31514,
+        "end": 35550.299999952316,
+        "scoreBefore": 3,
+        "scoreAfter": 3
+      },
+      {
+        "mode": "velonly",
+        "at": 40595,
+        "end": 44612.799999952316,
+        "scoreBefore": 3,
+        "scoreAfter": 4
+      },
+      {
+        "mode": "future",
+        "at": 49645.799999952316,
+        "end": 53674.40000009537,
+        "scoreBefore": 4,
+        "scoreAfter": 6
+      },
+      {
+        "mode": "past",
+        "at": 58686.10000014305,
+        "end": 62736.90000009537,
+        "scoreBefore": 6,
+        "scoreAfter": 6
+      }
+    ],
+    "samples": [
+      {
+        "n": 0,
+        "sample": null
+      },
+      {
+        "n": 342,
+        "sample": "{\"t\":\"in\",\"e\":192142175,\"k\":88,\"s\":[[0,1,0,0.17578125,42.36250305175781,38.5,0,-15,-24.020000457763672,0,-1,0,0,12,-471,102,1,2,101,0.8241159452943805,1],[1,1,0,0.75537109375,41.61250305175781,37.347999572753906,0,-15,-21.079999923706055,0,-1,0,0,12,-471,104,1,2,103,0.7553542909247994,0],[2,1,0,0,40.86250305175781,36.34299850463867,0,-15,-18.139999389648438,0,-1,0,0,12,-471,105,0],[3,1,0,0.3803710"
+      }
+    ],
+    "reconnects": 0,
+    "link": "online",
+    "errors": []
+  },
+  "feel": {
+    "delayMs": 0,
+    "runKeyFeedbackMs": {
+      "n": 24,
+      "min": 5.6,
+      "median": 26.1,
+      "p90": 30.7,
+      "max": 35.4
+    },
+    "jumpKeyFeedbackMs": {
+      "n": 12,
+      "min": 21.9,
+      "median": 26.9,
+      "p90": 30.7,
+      "max": 34.8
+    },
+    "run150msTiles": {
+      "n": 24,
+      "min": 450,
+      "median": 450,
+      "p90": 558,
+      "max": 558
+    },
+    "jumpHeightTiles": {
+      "n": 12,
+      "min": 5107,
+      "median": 5108,
+      "p90": 5108,
+      "max": 5108
+    },
+    "jumpAirSeconds": {
+      "n": 12,
+      "min": 820,
+      "median": 830,
+      "p90": 830,
+      "max": 830
+    },
+    "tap30msTiles": [
+      0.025,
+      0.025,
+      0.025,
+      0.025,
+      0.025,
+      0.025,
+      0.025,
+      0.025
+    ],
+    "tap80msTiles": [
+      0.142,
+      0.142,
+      0.142,
+      0.142,
+      0.142,
+      1.092,
+      0.2,
+      0.142
+    ],
+    "tap120msTiles": [
+      0.275,
+      0.358,
+      0.275,
+      0.275,
+      0.275,
+      0.358,
+      0.275,
+      0.275
+    ],
+    "trialsThatFoundNoGround": 0,
+    "errors": []
+  },
+  "feel150": {
+    "delayMs": 150,
+    "runKeyFeedbackMs": {
+      "n": 24,
+      "min": 8.5,
+      "median": 18.6,
+      "p90": 29.8,
+      "max": 34.4
+    },
+    "jumpKeyFeedbackMs": {
+      "n": 11,
+      "min": 12.4,
+      "median": 17.5,
+      "p90": 27.6,
+      "max": 27.6
+    },
+    "run150msTiles": {
+      "n": 24,
+      "min": 450,
+      "median": 450,
+      "p90": 558,
+      "max": 558
+    },
+    "jumpHeightTiles": {
+      "n": 11,
+      "min": 5105,
+      "median": 5106,
+      "p90": 5108,
+      "max": 5108
+    },
+    "jumpAirSeconds": {
+      "n": 11,
+      "min": 820,
+      "median": 830,
+      "p90": 830,
+      "max": 830
+    },
+    "tap30msTiles": [
+      0.025,
+      0.008,
+      0.025,
+      0.025,
+      0.05,
+      0.025,
+      0.025,
+      0.025
+    ],
+    "tap80msTiles": [
+      0.142,
+      0.142,
+      0.142,
+      0.142,
+      0.092,
+      0.142,
+      0.142
+    ],
+    "tap120msTiles": [
+      0.275,
+      0.275,
+      0.358,
+      0.45,
+      0.358,
+      0.358,
+      0.358,
+      0.275
+    ],
+    "trialsThatFoundNoGround": 2,
+    "errors": []
+  },
+  "tag": "b-preserve",
+  "base": "http://127.0.0.1:8791",
+  "at": "2026-10-15T03:10:44.716Z"
+}

@@ -1,0 +1,331 @@
+[
+  {
+    "file": "bverifiedfair1-lag300-loss0.05-jitter0-frames.json.gz",
+    "confirmedObserverDeaths": [
+      {
+        "diedAt": 84,
+        "onlookerReceipt": 1792056270928.2002,
+        "onlookerClock": [
+          85.53881129872362,
+          84.02
+        ],
+        "nearestDrawnMonster": [
+          12.68,
+          2,
+          49.32,
+          26,
+          62,
+          24.734663009643555
+        ],
+        "noNearbyMonster": true,
+        "serverContact": null
+      },
+      {
+        "diedAt": 187,
+        "onlookerReceipt": 1792056276078.5,
+        "onlookerClock": [
+          188.54338950093913,
+          187.04
+        ],
+        "nearestDrawnMonster": [
+          1.0683316802978524,
+          4,
+          25.46,
+          31,
+          24.39166831970215,
+          31
+        ],
+        "noNearbyMonster": false,
+        "serverContact": null
+      },
+      {
+        "diedAt": 1099,
+        "onlookerReceipt": 1792056321677.1,
+        "onlookerClock": [
+          1100.5139862060482,
+          1099
+        ],
+        "nearestDrawnMonster": [
+          0.22333625793456946,
+          3,
+          30.21,
+          41,
+          30.43333625793457,
+          41
+        ],
+        "noNearbyMonster": false,
+        "serverContact": null
+      }
+    ]
+  },
+  {
+    "file": "bverifiedfair2-lag300-loss0.05-jitter0-frames.json.gz",
+    "confirmedObserverDeaths": []
+  },
+  {
+    "file": "bverifiedfair3-lag300-loss0.05-jitter0-frames.json.gz",
+    "confirmedObserverDeaths": [
+      {
+        "diedAt": 80,
+        "onlookerReceipt": 1792056420754.3,
+        "onlookerClock": [
+          81.68699503599174,
+          80.19
+        ],
+        "nearestDrawnMonster": [
+          0.2150000000000034,
+          6,
+          60.91,
+          42,
+          61.125,
+          42
+        ],
+        "noNearbyMonster": false,
+        "serverContact": null
+      },
+      {
+        "diedAt": 113,
+        "onlookerReceipt": 1792056422404.2,
+        "onlookerClock": [
+          114.66260973161783,
+          113.2
+        ],
+        "nearestDrawnMonster": [
+          0.02500152587890625,
+          6,
+          59.75,
+          42,
+          59.724998474121094,
+          42
+        ],
+        "noNearbyMonster": false,
+        "serverContact": null
+      },
+      {
+        "diedAt": 275,
+        "onlookerReceipt": 1792056430503.5,
+        "onlookerClock": [
+          276.6844289396896,
+          275.18
+        ],
+        "nearestDrawnMonster": [
+          0.4416637420654297,
+          4,
+          18.25,
+          31,
+          18.69166374206543,
+          31
+        ],
+        "noNearbyMonster": false,
+        "serverContact": null
+      },
+      {
+        "diedAt": 345,
+        "onlookerReceipt": 1792056434003.2,
+        "onlookerClock": [
+          346.6819030862329,
+          345.14
+        ],
+        "nearestDrawnMonster": [
+          5.614999999999998,
+          1,
+          29.26,
+          13,
+          34.875,
+          13
+        ],
+        "noNearbyMonster": true,
+        "serverContact": null
+      },
+      {
+        "diedAt": 781,
+        "onlookerReceipt": 1792056455886.2,
+        "onlookerClock": [
+          784.351590166795,
+          781.3551904296875
+        ],
+        "nearestDrawnMonster": [
+          0.4508343505859358,
+          0,
+          21.92,
+          6,
+          22.370834350585938,
+          6
+        ],
+        "noNearbyMonster": false,
+        "serverContact": null
+      },
+      {
+        "diedAt": 830,
+        "onlookerReceipt": 1792056458251.9001,
+        "onlookerClock": [
+          831.6699571747209,
+          830.1999658203125
+        ],
+        "nearestDrawnMonster": [
+          1.4966671752929699,
+          7,
+          17.03,
+          6,
+          15.533332824707031,
+          6
+        ],
+        "noNearbyMonster": true,
+        "serverContact": null
+      },
+      {
+        "diedAt": 1086,
+        "onlookerReceipt": 1792056471069.6,
+        "onlookerClock": [
+          1088.065447353162,
+          1086.16
+        ],
+        "nearestDrawnMonster": [
+          0.1508312988281233,
+          3,
+          32.83,
+          41,
+          32.679168701171875,
+          41
+        ],
+        "noNearbyMonster": false,
+        "serverContact": null
+      },
+      {
+        "diedAt": 1138,
+        "onlookerReceipt": 1792056473668.5,
+        "onlookerClock": [
+          1140.0146376993605,
+          1138.09
+        ],
+        "nearestDrawnMonster": [
+          0.5833335876464858,
+          3,
+          33.15,
+          41,
+          33.733333587646484,
+          41
+        ],
+        "noNearbyMonster": false,
+        "serverContact": null
+      }
+    ]
+  },
+  {
+    "file": "bverifiedfair4-lag300-loss0.05-jitter0-frames.json.gz",
+    "confirmedObserverDeaths": []
+  },
+  {
+    "file": "bverifiedfair5-lag300-loss0.05-jitter0-frames.json.gz",
+    "confirmedObserverDeaths": [
+      {
+        "diedAt": 144,
+        "onlookerReceipt": 1792056574326.2,
+        "onlookerClock": [
+          145.66973068700744,
+          144.08
+        ],
+        "nearestDrawnMonster": [
+          1.375,
+          3,
+          30.25,
+          41,
+          31.625,
+          41
+        ],
+        "noNearbyMonster": true,
+        "serverContact": null
+      },
+      {
+        "diedAt": 195,
+        "onlookerReceipt": 1792056576875.9,
+        "onlookerClock": [
+          196.66599944258311,
+          195.16
+        ],
+        "nearestDrawnMonster": [
+          0.6366671752929705,
+          0,
+          19.58,
+          6,
+          20.21666717529297,
+          6
+        ],
+        "noNearbyMonster": false,
+        "serverContact": null
+      },
+      {
+        "diedAt": 352,
+        "onlookerReceipt": 1792056584726.3,
+        "onlookerClock": [
+          353.67997140329624,
+          352.16
+        ],
+        "nearestDrawnMonster": [
+          0.4003334045410156,
+          3,
+          28.05,
+          41,
+          28.44583511352539,
+          40.599666595458984
+        ],
+        "noNearbyMonster": false,
+        "serverContact": null
+      },
+      {
+        "diedAt": 768,
+        "onlookerReceipt": 1792056605592.6,
+        "onlookerClock": [
+          771.0212757824333,
+          768.2865673828124
+        ],
+        "nearestDrawnMonster": [
+          0.2670021057128906,
+          3,
+          32.85,
+          41,
+          32.88750076293945,
+          40.73299789428711
+        ],
+        "noNearbyMonster": false,
+        "serverContact": null
+      },
+      {
+        "diedAt": 858,
+        "onlookerReceipt": 1792056610025.4,
+        "onlookerClock": [
+          859.6839946337637,
+          858.0199951171875
+        ],
+        "nearestDrawnMonster": [
+          1.758332824707031,
+          7,
+          7.35,
+          6,
+          5.591667175292969,
+          6
+        ],
+        "noNearbyMonster": true,
+        "serverContact": null
+      },
+      {
+        "diedAt": 1184,
+        "onlookerReceipt": 1792056626324.5,
+        "onlookerClock": [
+          1185.677998166599,
+          1184.02
+        ],
+        "nearestDrawnMonster": [
+          0.31249771118164205,
+          3,
+          33.15,
+          41,
+          33.46249771118164,
+          41
+        ],
+        "noNearbyMonster": false,
+        "serverContact": null
+      }
+    ]
+  }
+]

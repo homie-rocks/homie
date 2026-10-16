@@ -1,0 +1,30 @@
+{
+  "tag": "p41",
+  "script": "phone.mjs",
+  "args": [
+    "--cpu",
+    "4",
+    "--seconds",
+    "60",
+    "--trace",
+    "--heap"
+  ],
+  "runtime": {
+    "b": {
+      "main": "/tmp/pt9/runtime-b-1792075698/worker.js",
+      "assets": {
+        "directory": "/tmp/pt9/runtime-b-1792075698-assets",
+        "binding": "ASSETS",
+        "run_worker_first": true
+      }
+    },
+    "c": {
+      "main": "/tmp/pt8/runtime-c/worker.js",
+      "assets": {
+        "directory": "/tmp/pt8/assets-c-1792066186",
+        "binding": "ASSETS",
+        "run_worker_first": true
+      }
+    }
+  }
+}

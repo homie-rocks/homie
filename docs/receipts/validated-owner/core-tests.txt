@@ -1,0 +1,214 @@
+TAP version 13
+# Subtest: bake: the triangles in the scene's own space, a grid beside the model, and the plan at true scale
+ok 1 - bake: the triangles in the scene's own space, a grid beside the model, and the plan at true scale
+  ---
+  duration_ms: 131.083417
+  type: 'test'
+  ...
+# Subtest: check: authored routes are walked, a route off the model fails where it fell, and a re-bake keeps what was authored
+ok 2 - check: authored routes are walked, a route off the model fails where it fell, and a re-bake keeps what was authored
+  ---
+  duration_ms: 9.313291
+  type: 'test'
+  ...
+# Subtest: stale: a model whose surface moved fails by name; one that changed without moving does not
+ok 3 - stale: a model whose surface moved fails by name; one that changed without moving does not
+  ---
+  duration_ms: 5.357709
+  type: 'test'
+  ...
+# Subtest: the plan draws proxies, routes and problem marks at 40 px to the metre
+ok 4 - the plan draws proxies, routes and problem marks at 40 px to the metre
+  ---
+  duration_ms: 0.202875
+  type: 'test'
+  ...
+# Subtest: the CLI: collision bake and collision check, in words and as JSON
+ok 5 - the CLI: collision bake and collision check, in words and as JSON
+  ---
+  duration_ms: 595.034
+  type: 'test'
+  ...
+# Subtest: in chat: collision_bake and collision_check are tools, and work in a studio that installed nothing but the toolkit
+ok 6 - in chat: collision_bake and collision_check are tools, and work in a studio that installed nothing but the toolkit
+  ---
+  duration_ms: 791.070583
+  type: 'test'
+  ...
+# Subtest: the maths rules are handed agrees with Math, and is the list the wall knows
+ok 7 - the maths rules are handed agrees with Math, and is the list the wall knows
+  ---
+  duration_ms: 147.201459
+  type: 'test'
+  ...
+# Subtest: a declaration that does not fit the contract is named
+ok 8 - a declaration that does not fit the contract is named
+  ---
+  duration_ms: 2.504875
+  type: 'test'
+  ...
+# Subtest: declared state is held to its type, and packs and unpacks to itself
+ok 9 - declared state is held to its type, and packs and unpacks to itself
+  ---
+  duration_ms: 0.576458
+  type: 'test'
+  ...
+# Subtest: the host runtime steps coin-dash: bots fill, a round is played, results rank the scores
+ok 10 - the host runtime steps coin-dash: bots fill, a round is played, results rank the scores
+  ---
+  duration_ms: 52.93625
+  type: 'test'
+  ...
+# Subtest: two runs on one seed are the same tick by tick, and a room packed to bytes carries on the same
+ok 11 - two runs on one seed are the same tick by tick, and a room packed to bytes carries on the same
+  ---
+  duration_ms: 38.569917
+  type: 'test'
+  ...
+# Subtest: the input protocol: on time, missing, early, too early, late, duplicate, another epoch, silence and the lead
+ok 12 - the input protocol: on time, missing, early, too early, late, duplicate, another epoch, silence and the lead
+  ---
+  duration_ms: 99.817875
+  type: 'test'
+  ...
+# Subtest: more frames buy no extra step, a command runs once, and an owner's claim is held to maxSpeed
+ok 13 - more frames buy no extra step, a command runs once, and an owner's claim is held to maxSpeed
+  ---
+  duration_ms: 3.107
+  type: 'test'
+  ...
+# Subtest: the wall at run time: a handler that never ends is stopped and named, the room carries on, and then the room ends
+ok 14 - the wall at run time: a handler that never ends is stopped and named, the room carries on, and then the room ends
+  ---
+  duration_ms: 95.329083
+  type: 'test'
+  ...
+# Subtest: the wall at run time: a slow handler and one that grabs memory are stopped and named; one that throws is counted
+ok 15 - the wall at run time: a slow handler and one that grabs memory are stopped and named; one that throws is counted
+  ---
+  duration_ms: 887.507458
+  type: 'test'
+  ...
+# Subtest: the overrun check: a room whose ticks keep starting late ends, and a room that only ran after a slow one does not
+ok 16 - the overrun check: a room whose ticks keep starting late ends, and a room that only ran after a slow one does not
+  ---
+  duration_ms: 19.310917
+  type: 'test'
+  ...
+# Subtest: world has no way out: everything reachable from it is plain frozen data and functions the runtime made
+ok 17 - world has no way out: everything reachable from it is plain frozen data and functions the runtime made
+  ---
+  duration_ms: 1.115834
+  type: 'test'
+  ...
+# Subtest: the room with the server as host: no browser hosts, and a forged score, state or round frame changes nothing
+ok 18 - the room with the server as host: no browser hosts, and a forged score, state or round frame changes nothing
+  ---
+  duration_ms: 5.621625
+  type: 'test'
+  ...
+# Subtest: the life of a server-hosted room: it pauses with the last person, resumes on the tick it paused on, and is forgotten when nobody returns
+ok 19 - the life of a server-hosted room: it pauses with the last person, resumes on the tick it paused on, and is forgotten when nobody returns
+  ---
+  duration_ms: 47.419958
+  type: 'test'
+  ...
+# Subtest: rules that cannot start refuse joins and say why, and a room never falls back to a browser by itself
+ok 20 - rules that cannot start refuse joins and say why, and a room never falls back to a browser by itself
+  ---
+  duration_ms: 0.424375
+  type: 'test'
+  ...
+# Subtest: late paired callbacks sustaining 20 Hz do not end a healthy room as an overrun
+ok 21 - late paired callbacks sustaining 20 Hz do not end a healthy room as an overrun
+  ---
+  duration_ms: 6.697041
+  type: 'test'
+  ...
+# Subtest: valid report accepted, duplicate does not move again, missing reports freeze
+ok 22 - valid report accepted, duplicate does not move again, missing reports freeze
+  ---
+  duration_ms: 4.533084
+  type: 'test'
+  ...
+# Subtest: reject forged speed as a cut
+ok 23 - reject forged speed as a cut
+  ---
+  duration_ms: 0.517667
+  type: 'test'
+  ...
+# Subtest: reject forged teleport as a cut
+ok 24 - reject forged teleport as a cut
+  ---
+  duration_ms: 1.02275
+  type: 'test'
+  ...
+# Subtest: reject forged gravity as a cut
+ok 25 - reject forged gravity as a cut
+  ---
+  duration_ms: 0.297042
+  type: 'test'
+  ...
+# Subtest: reject forged wall-pass as a cut
+ok 26 - reject forged wall-pass as a cut
+  ---
+  duration_ms: 0.749291
+  type: 'test'
+  ...
+# Subtest: reject forged NaN as a cut
+ok 27 - reject forged NaN as a cut
+  ---
+  duration_ms: 0.646375
+  type: 'test'
+  ...
+# Subtest: out of order reports wait for missing predecessor
+ok 28 - out of order reports wait for missing predecessor
+  ---
+  duration_ms: 0.267292
+  type: 'test'
+  ...
+# Subtest: transport decodes reports and ignores claims from an old placement
+ok 29 - transport decodes reports and ignores claims from an old placement
+  ---
+  duration_ms: 2.485666
+  type: 'test'
+  ...
+# Subtest: a burst cannot buy extra simulation time
+ok 30 - a burst cannot buy extra simulation time
+  ---
+  duration_ms: 1.017792
+  type: 'test'
+  ...
+# Subtest: a rejected report fences all reports from the old revision
+ok 31 - a rejected report fences all reports from the old revision
+  ---
+  duration_ms: 0.412584
+  type: 'test'
+  ...
+# Subtest: report tolerance cannot accumulate into extra speed
+ok 32 - report tolerance cannot accumulate into extra speed
+  ---
+  duration_ms: 0.2365
+  type: 'test'
+  ...
+# Subtest: wall crossing is rejected even at legal speed and legal one-tick distance
+ok 33 - wall crossing is rejected even at legal speed and legal one-tick distance
+  ---
+  duration_ms: 0.225916
+  type: 'test'
+  ...
+# Subtest: a fresh baseline after a pause grants one physics step, never skipped travel
+ok 34 - a fresh baseline after a pause grants one physics step, never skipped travel
+  ---
+  duration_ms: 0.189625
+  type: 'test'
+  ...
+1..34
+# tests 34
+# suites 0
+# pass 34
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1580.844875

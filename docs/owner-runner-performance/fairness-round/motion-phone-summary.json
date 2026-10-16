@@ -1,0 +1,86 @@
+[
+  {
+    "tag": "bmotionphone1",
+    "frames": 10830,
+    "over33": 6,
+    "over50": 2,
+    "gcMs": 783.648,
+    "gcMsPerFrame": 0.07236,
+    "p99Ms": 21.5,
+    "loadEnd": [
+      11.8,
+      10.3,
+      10.4
+    ]
+  },
+  {
+    "tag": "bmotionphone2",
+    "frames": 10829,
+    "over33": 9,
+    "over50": 1,
+    "gcMs": 848.948,
+    "gcMsPerFrame": 0.0784,
+    "p99Ms": 20.3,
+    "loadEnd": [
+      12.1,
+      10.9,
+      10.6
+    ]
+  },
+  {
+    "tag": "bmotionphone3",
+    "frames": 10833,
+    "over33": 8,
+    "over50": 1,
+    "gcMs": 777.294,
+    "gcMsPerFrame": 0.07175,
+    "p99Ms": 20.9,
+    "loadEnd": [
+      11.5,
+      10.7,
+      10.5
+    ]
+  },
+  {
+    "tag": "cmotionphone1",
+    "frames": 10836,
+    "over33": 1,
+    "over50": 1,
+    "gcMs": 301.314,
+    "gcMsPerFrame": 0.02781,
+    "p99Ms": 18.8,
+    "loadEnd": [
+      11.8,
+      10.3,
+      10.4
+    ]
+  },
+  {
+    "tag": "cmotionphone2",
+    "frames": 10834,
+    "over33": 2,
+    "over50": 2,
+    "gcMs": 362.878,
+    "gcMsPerFrame": 0.03349,
+    "p99Ms": 18.9,
+    "loadEnd": [
+      12.1,
+      10.9,
+      10.6
+    ]
+  },
+  {
+    "tag": "cmotionphone3",
+    "frames": 10838,
+    "over33": 3,
+    "over50": 0,
+    "gcMs": 339.712,
+    "gcMsPerFrame": 0.03134,
+    "p99Ms": 19.5,
+    "loadEnd": [
+      11.5,
+      10.7,
+      10.5
+    ]
+  }
+]

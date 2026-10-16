@@ -90,7 +90,8 @@ export const ANSWER_MAX = 256;
 export type Driver = 'person' | 'bot' | 'ai';
 export interface SeatInfo { seat: number; driver: Driver; owner: string; character?: import('./rules.ts').Character | null }
 /** One seat's step for a tick: its input values (already held to their types) and, for an owner-moved body, its claim. */
-export interface StepInput { values: Record<string, unknown>; claim?: { pos: Vec3; vel: Vec3; heading: Vec3; r: number } | null }
+export interface OwnerReport { tick: number; base: number; values: Record<string, unknown>; pos: Vec3; vel: Vec3; heading: Vec3; r: number }
+export interface StepInput { reports?: OwnerReport[]; values: Record<string, unknown>; claim?: { pos: Vec3; vel: Vec3; heading: Vec3; r: number } | null }
 export interface ResultRow { seat: number; id: string; driver: Driver; score: number; place: number }
 export type CoreOut =
   | { t: 'round'; n: number; phase: 'live' | 'over'; endsAt: number; startedAt: number; results?: ResultRow[] }
@@ -158,6 +159,7 @@ export interface Core {
   readonly tick: number;
   readonly epoch: number;
   step(inputs?: ReadonlyMap<number, StepInput>, guides?: () => void): void;
+  resyncOwner(seat: number): void;
   reviseMovement(seat: number, at: number, values: Record<string, unknown>): boolean;
   guide(seat: number, floor?: unknown): Record<string, unknown> | null;
   vocabulary(value: Vocabulary | null): void;
@@ -201,7 +203,7 @@ export interface Core {
  * `noted`: told, as it happens, of a value the rules wrote that the runtime changed to make it fit, or dropped (pack.ts
  * `Adjusted`; also `effect`, `think` and `decision`): the handler, what was done, the field's name and what was written.
  */
-export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number) => import('./rules.ts').Character | null | undefined; characterSaved?: (seat: number, character: import('./rules.ts').Character) => void; rewindTicks?: (seat: number)=>number; label?: (seat:number,driver:Driver)=>string; moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes, id: string) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
+export function createCore(c: Compiled, opts: { ownerTime?: () => number; validateOwners?: boolean; characterForSeat?: (seat: number) => import('./rules.ts').Character | null | undefined; characterSaved?: (seat: number, character: import('./rules.ts').Character) => void; rewindTicks?: (seat: number)=>number; label?: (seat:number,driver:Driver)=>string; moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes, id: string) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
   if (opts.restore && (c.map.physics !== undefined) !== (opts.restore.physics !== undefined)) throw new Error('physics: save and game differ');
   const physics = physicsWorld(c.map.physics, opts.restore?.physics);
   let currentMap=c.map;
@@ -708,6 +710,15 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       found.sort((a, b) => a.d - b.d || a.e.n - b.e.n);
       return Object.freeze(found.map((x) => viewOf(x.e)));
     },
+    movement: (id: unknown, kind?: unknown): readonly unknown[] => {
+      charge(16);
+      const e = typeof id === 'string' ? ents.get(id) : undefined;
+      if (!e || e.dead || typeof kind === 'string' && e.kind.name !== kind) return Object.freeze([]);
+      const path = acceptedMovement.get(e.id);
+      if (!path || path.r !== e.r) return Object.freeze([]);
+      charge(path.steps.length * (32 + e.kind.motion.length));
+      return path.steps;
+    },
     inBox: (box: unknown, kind?: unknown): readonly unknown[] => {
       charge(20 + 2 * ents.size);
       const min = V(own(box, 'min')); const max = V(own(box, 'max')); const k = kindFilter(kind);
@@ -951,8 +962,9 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
         const e = s?.id ? ents.get(s.id) : null;
         if (!s || !e || s.driver === 'bot' || s.away === op.away) continue;
         s.away = op.away; e.away = op.away;
-        // Back at the wheel: the browser starts from where the server has the body.
-        if (!op.away) { e.r = (e.r + 1) & 0xffff; e.allow = 0; }
+        // Legacy return hands back the server body. Validated owners keep their
+        // report baseline through a transient absence; only game events fence it.
+        if (!op.away && !e.kind.body?.validatedOwner) { e.r = (e.r + 1) & 0xffff; e.allow = 0; }
         out.push({ t: 'seats' });
         roomEvent('seatAway', Object.freeze({ seat: s.seat, id: e.id, away: op.away }));
       } else if (op.op === 'leave') {
@@ -1104,9 +1116,69 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     e.pos=b.pos;e.vel=b.vel;e.heading=b.heading;e.grounded=b.grounded;
     Object.assign(e.m,b.motion);
   }
+  // Validation state is transient. A restored epoch establishes a new baseline;
+  // durable entity rows keep their existing format.
+  const owners = new Map<string, {r:number; last:number|null; since:number; started:number; used:number; pending:Map<number,OwnerReport>}>();
+  const acceptedMovement = new Map<string, {r:number; steps:readonly Readonly<MovementState & {tick:number}>[]}>();
+  function validateOwner(e: Ent, reports: OwnerReport[]): void {
+    const body = e.kind.body!;
+    let state = owners.get(e.id);
+    if (!state || state.r !== e.r) {
+      state = {r:e.r,last:null,since:tick,started:opts.ownerTime?.() ?? tick,used:0,pending:new Map()}; owners.set(e.id,state);
+    }
+    const elapsed = Math.max(tick - state.since, Math.floor((opts.ownerTime?.() ?? tick) - state.started));
+    const reject = () => { stats.held++; e.r = (e.r+1)&0xffff; owners.delete(e.id); };
+    for (const report of reports.slice(0,256)) {
+      if (report.r !== e.r) continue;
+      // A report and its baseline may arrive early after transit improves.
+      // Both remain inside the report's existing future window; the elapsed
+      // simulation allowance below is independent of these clock labels.
+      if (!Number.isSafeInteger(report.tick) || !Number.isSafeInteger(report.base) || report.base < state.since-1 || report.tick <= report.base || report.tick > state.since + elapsed + tickHz ||
+          ![report.pos,report.vel,report.heading].every(v => v && [v.x,v.y,v.z].every(Number.isFinite))) { reject(); return; }
+      // A fresh snapshot baseline can restart the input clock after a pause.
+      // It grants no travel: the next report must still be exactly one move
+      // from the accepted body, and remains bounded by elapsed server time.
+      if (state.last === null || report.base > state.last) {
+        state.last = report.base;
+        for (const t of state.pending.keys()) if (t <= report.base) state.pending.delete(t);
+      }
+      if (report.tick <= state.last) continue;
+      if (state.pending.size >= 256) { reject(); return; }
+      state.pending.set(report.tick,report);
+    }
+    // Missing reports wait for redundant delivery. Never infer omitted controls.
+    for (let count=0; count<8 && state.last !== null; count++) {
+      const report = state.pending.get(state.last+1);
+      if (!report) break;
+      if (state.used >= elapsed+1) break;
+      const before = movementState(e), serverTick = tick;
+      const input = Object.freeze(coerceFields(e.kind.input,report.values,dims));
+      const b = {pos:e.pos,vel:e.vel,heading:e.heading,grounded:e.grounded,motion:e.mself};
+      moveShape = body;
+      tick = report.tick;
+      let ok = false;
+      try { ok = run(e.kind.name,'move',e,'move',()=>e.kind.move!(b,input,moveCtx),'body'); }
+      finally { tick = serverTick; }
+      const expectedPos = clampIn(V(b.pos),body.radius,body.height || 2*body.radius), expectedVel = V(b.vel);
+      // Float packing tolerance is numerical, not a per-report movement allowance.
+      // Keep the canonical result as the next validation baseline so a client
+      // cannot accumulate the tolerance into speed or wall penetration.
+      const close = (a:Vec3,b:Vec3) => Math.abs(a.x-b.x)<=0.002 && Math.abs(a.y-b.y)<=0.002 && Math.abs(a.z-b.z)<=0.002;
+      if (!ok || !close(expectedPos,report.pos) || !close(expectedVel,report.vel) || !close(dir(b.heading,dims),dir(report.heading,dims))) {
+        putMovement(e,before); reject(); return;
+      }
+      e.pos=expectedPos; e.vel=expectedVel; e.heading=dir(b.heading,dims); e.grounded=b.grounded; e.input=input;
+      state.pending.delete(report.tick); state.last=report.tick; state.used++;
+      const path = acceptedMovement.get(e.id);
+      left -= 32 + COPY * e.kind.motion.reduce((sum,[,fd])=>sum+cellsOf(fd),0);
+      const pose = deepFreeze({...movementState(e),motion:coerceFields(e.kind.motion,e.m,dims),tick:report.tick});
+      acceptedMovement.set(e.id,{r:e.r,steps:Object.freeze([...(path?.steps ?? []),pose])});
+    }
+    if (state.pending.size && Math.max(...state.pending.keys())-(state.last ?? 0)>256) reject();
+  }
   function reviseMovement(seat: number, at: number, values: Record<string, unknown>): boolean {
     const id=seats.get(seat)?.id, e=id?ents.get(id):null;
-    if(!e || !e.kind.move || e.kind.body?.owner || e.away || e.driver!=='person') return false;
+    if(!e || !e.kind.move || (e.kind.body?.owner && !e.kind.body?.validatedOwner || owners.has(e.id)) || e.away || e.driver!=='person') return false;
     const frames=movementHistory.get(e.id), start=frames?.findIndex(f=>f.tick===at)??-1;
     if(!frames || start<0 || frames.at(-1)!.tick!==tick || frames[start].r!==e.r || !sameMovement(frames.at(-1)!.after,movementState(e)))return false;
     const control=e.kind.player?.control;
@@ -1133,6 +1205,8 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     finally {tick=savedTick;moveGeometry=geometry;currentMap=map;}
   }
   function step(inputs: ReadonlyMap<number, StepInput> = new Map(), guides?: () => void): void {
+    acceptedMovement.clear();
+    for(const id of owners.keys())if(!ents.has(id))owners.delete(id);
     for(const id of movementHistory.keys())if(!ents.has(id))movementHistory.delete(id);
     tick = (tick + 1) >>> 0;
     if(pendingMap&&pendingMap[0]<=tick){currentMap=pendingGeometry!;mapRevision=pendingMap;currentMapCells=pendingMapCells;mapCells=currentMapCells;pendingMapCells=0;pendingMap=null;pendingGeometry=null;moveGeometry=currentMap;}
@@ -1203,7 +1277,8 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
         let claim: StepInput['claim'] = null;
         if (k.player) {
           const permitted = !k.player.control || Boolean(e.m[k.player.control]);
-          const driven = permitted && (e.driver === 'person' || (e.driver === 'ai' && inputs.has(e.seat))) && !e.away;
+          const validatingOwner = body.validatedOwner && (opts.validateOwners || inputs.get(e.seat)?.reports !== undefined);
+          const driven = permitted && (e.driver === 'person' || (e.driver === 'ai' && inputs.has(e.seat))) && (!e.away || validatingOwner && e.driver === 'person');
           if (driven) {
             const s = inputs.get(e.seat);
             e.input = Object.freeze(s ? coerceFields(k.input, s.values, dims) : initFields(k.input, dims));
@@ -1223,7 +1298,11 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
             }, 'body');
             e.input = Object.freeze(stepIn ?? initFields(k.input, dims));
           } else e.input = Object.freeze(initFields(k.input, dims));
-          if (driven && body.owner) {
+          if (driven && validatingOwner) {
+            validateOwner(e, inputs.get(e.seat)?.reports ?? []);
+            continue;
+          }
+          if (driven && body.owner && !body.validatedOwner) {
             // Owner movement: the browser says where its body is, and the server holds the claim to maxSpeed.
             e.allow = Math.min(e.allow + body.maxSpeed * dt * 1.02, body.maxSpeed * 0.25 + 0.05);
             if (claim && claim.r === e.r) {
@@ -1245,6 +1324,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
             continue;
           }
         }
+        owners.delete(e.id);
         if (!k.move) continue;
         const b = { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: e.mself };
         const rewindBefore = k.player && e.driver === 'person' && !e.away ? movementState(e) : null;
@@ -1265,6 +1345,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
         }
         if (beforeMove) opts.moved!(k.name, tick, e.input, beforeMove, { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: { ...e.m } }, moveGeometry, e.id);
       }
+      const ownerBefore = new Map([...ents.values()].filter(e=>e.kind.body?.validatedOwner && owners.has(e.id)).map(e=>[e.id,{r:e.r,state:movementState(e)}]));
       // Phase 2: for every entity, its commands and then its tick, starting from a different entity each tick.
       const list = [...ents.values()];
       for (let i = 0; i < list.length; i += 1) {
@@ -1303,6 +1384,10 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       for (const a of areas) for (const e of ents.values()) if (inArea(a.shape, e.pos)) { if (queue.length >= QUEUE_MAX) stats.lost += 1; else queue.push({ due: tick + 1, from: a.from, fromId: a.fromId, seq: a.seq, to: e.id, kind: 'ev', ev: a.ev, data: a.data, at: tick }); }
       areas = [];
       if (finishing) finishMatch();
+      for (const [id,before] of ownerBefore) {
+        const e=ents.get(id);
+        if(e && e.r===before.r && !sameMovement(before.state,movementState(e))) { e.r=(e.r+1)&0xffff; owners.delete(id); }
+      }
     }
     if(historyTicks){const rows:[string,number,number,number,number][]=[];for(const e of ents.values())if(e.kind.body&&!e.kind.collider&&!e.dead)rows.push([e.id,e.pos.x,e.pos.y,e.pos.z,e.r]);left-=16*rows.length;poseHistory.push([tick,rows]);while(poseHistory.length>historyTicks+1)poseHistory.shift();}
     if (fx.length) { out.push({ t: 'fx', tick, list: fx }); fx = []; }
@@ -1601,6 +1686,12 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
       return value;
     },
     seatJoin: (info) => { ops.push({ op: 'join', info: { seat: info.seat, driver: info.driver, owner: String(info.owner ?? '').slice(0, 128), ...(info.character !== undefined ? { character: info.character } : {}) } }); },
+    resyncOwner: (seat) => {
+      const id = seats.get(seat)?.id, e = id ? ents.get(id) : undefined;
+      if (!e?.kind.body?.validatedOwner) return;
+      e.r = (e.r + 1) & 0xffff;
+      owners.delete(e.id); acceptedMovement.delete(e.id);
+    },
     seatAway: (seat, away) => { ops.push({ op: 'away', seat, away }); },
     seatLeave: (seat) => { ops.push({ op: 'leave', seat }); },
     setPolicy: (p) => { policy = normalizeCorePolicy(p); },
@@ -1613,7 +1704,11 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
     },
     snapshot: () => {
       packed.n = 0;
-      const list = [...ents.values()].map((e) => packEntity(e.kind, e, dims));
+      const list = [...ents.values()].map((e) => {
+        const row = packEntity(e.kind, e, dims), owner = owners.get(e.id);
+        if (e.kind.player && e.kind.body?.validatedOwner) { row.push(owner?.last ?? null); packed.n++; }
+        return row;
+      });
       // Include all three components of position, velocity and heading in a 3D snapshot.
       snapCells = packed.n + (dims === 3 ? 13 : 10) * list.length;
       const collision = hasColliders||mapRevision||pendingMap ? collisionState() : currentMap.wrap ? [0,0,[],{wrap:currentMap.wrap}] : null;

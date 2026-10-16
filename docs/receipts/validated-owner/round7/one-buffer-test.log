@@ -1,0 +1,18 @@
+TAP version 13
+# (node:97495) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: remote owner buffering consumes fresh reports without waiting in the shared scene buffer twice
+ok 1 - remote owner buffering consumes fresh reports without waiting in the shared scene buffer twice
+  ---
+  duration_ms: 554.233417
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 688.776

@@ -1,0 +1,12 @@
+{
+  "allPaths": {
+    "medianCpuMs": 0.708,
+    "p95CpuMs": 5.61,
+    "medianMs": 0.7286669999998594,
+    "p95Ms": 3.173332999999957,
+    "maxMs": 7.502917000000025,
+    "peakTickUnits": 46872,
+    "held": 0,
+    "errors": 0
+  }
+}

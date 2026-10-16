@@ -2058,7 +2058,7 @@ through a wall. New Coin Dash and Gem Rush use authoritative server movement ins
 | Moment | What happens |
 |---|---|
 | The first person joins | The `Table` has made the relay room and the host runtime. The epoch is a fresh random number. `room.start` has run; the tick loop starts |
-| People are playing | A timer chain inside the object runs one tick at a time, each timed against the moment it is due. One snapshot a tick |
+| People are playing | A timer chain inside the object runs one tick at a time, each timed against the moment it is due. One snapshot a tick normally; catch-up coalesces intermediate ephemeral-room snapshots |
 | A player's socket closes | The seat is held 60 s (`holdMs`). The body stays and is `away`: its input is neutral, or its kind's `think` steers it |
 | The seat's hold runs out | The body is removed, or stays as a bot (`player: { leave: 'bot' }`) |
 | The last person's socket closes | **The room pauses.** The tick timer is cleared and the clock stops. Watchers and AI seats never keep it ticking |
@@ -2191,7 +2191,7 @@ Browser simulation uses `performance.now()`. The helper converts outgoing timest
 the room's wall clock with rising snapshot stamps. Clock corrections republish the round deadline. A callback up to a tenth of a second late (two tick periods, if that is longer) is caught up, as on the server; a later one rebases the simulation clock without blaming rules, so a browser whose timers are that late runs slow and yields to a faster one.
 Hidden local hosts pause; visible hosts resume at the same tick. With another player present,
 the hidden host checkpoints and yields as before. Server isolate overrun enforcement is
-explicitly enabled only by the server adapter.
+explicitly enabled only by the server adapter. Servers retain elapsed ticks and catch up in slices of at most four ticks (also yielding after 8 ms on an advancing clock). Callback delays never count as execution time. Ephemeral rooms send only the last useful snapshot in a catch-up slice; events remain ordered and persistent rooms retain their per-tick commits. On deployed Workers, where the clock freezes within a turn, runaway code is bounded by the metered instruction budget and repeated-fault guards.
 
 Server-hosted games with offline enabled fetch a separate rules entry after playable.
 Private games (`offline: false`) have no local rules import. Local play sends no snapshots,

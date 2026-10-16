@@ -1,0 +1,30 @@
+[
+  {
+    "tag": "bverifiedphone1",
+    "frames": 10833,
+    "over33": 5,
+    "over50": 2,
+    "gcMs": 748.337,
+    "gcMsPerFrame": 0.06908,
+    "p99Ms": 20.6,
+    "loadEnd": [
+      13.5,
+      15.5,
+      14
+    ]
+  },
+  {
+    "tag": "cverifiedphone1",
+    "frames": 10838,
+    "over33": 3,
+    "over50": 1,
+    "gcMs": 296.28,
+    "gcMsPerFrame": 0.02734,
+    "p99Ms": 19.3,
+    "loadEnd": [
+      13.5,
+      15.5,
+      14
+    ]
+  }
+]

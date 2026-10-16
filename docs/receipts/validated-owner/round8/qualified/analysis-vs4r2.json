@@ -1,0 +1,65 @@
+{
+  "vs4r2": {
+    "peakLoad": 16.42041015625,
+    "manifest": {
+      "tag": "vs4r2",
+      "script": "cmp6.mjs",
+      "args": [
+        "--delay",
+        "80",
+        "--loss",
+        ".01",
+        "--seconds",
+        "100",
+        "--obs3",
+        "--stall",
+        "--stall-every",
+        "25",
+        "--stall-ms",
+        "3000"
+      ],
+      "harness_sha256": {
+        "cmp6.mjs": "9b93c88e29a13200d8f75d89c5e15f837afb904c8fbeb64f6162ba1e3dacea70",
+        "browser.mjs": "fdb3993a5a98fc6f6cd82d932a83cef634f89a6950b965f09b9ed2a16fef2fa4",
+        "barrier.mjs": "f480ad78a22f5eb9f422142139968c6271fb7d4e8c0c8faa74d738d512315cad",
+        "pair.py": "6a898b4d753db8751177e78ff0b828895eef4cfced6fc8426c5660546d275383"
+      },
+      "runtime": {
+        "b": {
+          "main": "/tmp/pt9/runtime-b-1792082641/worker.js",
+          "assets": {
+            "directory": "/tmp/pt9/runtime-b-1792082641-assets",
+            "binding": "ASSETS",
+            "run_worker_first": true
+          }
+        },
+        "c": {
+          "main": "/tmp/pt8/runtime-c/worker.js",
+          "assets": {
+            "directory": "/tmp/pt8/assets-c-1792066186",
+            "binding": "ASSETS",
+            "run_worker_first": true
+          }
+        }
+      }
+    },
+    "sides": {
+      "b": {
+        "owner": "b-vs4r2-lag80-loss0.01-jitter0 {\"s\":100.81,\"frames\":6049,\"cpu\":0,\"load\":13.6,\"late\":37,\"socks\":1,\"inSolid\":0,\"jumps\":0,\"jumpMax\":0,\"skips\":0,\"slides\":0,\"slidesOver1\":0,\"slideMaxNet\":0,\"respawns\":4,\"respawnsNotCut\":1,\"respawnLeadMax\":0,\"stalls\":0,\"stallMs\":0,\"over33\":1,\"over50\":0,\"dtP99\":18,\"dtMax\":33,\"ev\":\"stall,stall,stall\"}\nTOTAL {\"runs\":1,\"frames\":6049,\"inSolid\":0,\"jumps\":0,\"jumpMax\":0,\"skips\":0,\"slides\":0,\"slidesOver1\":0,\"slidesOver3\":0,\"slideMaxNet\":0,\"respawns\":4,\"respawnsGlided\":1,\"over33\":1,\"over50\":0,\"stalls\":0,\"stallMs\":0}",
+        "fair": "b-vs4r2 {\"sec\":101,\"catches\":3,\"sidePass\":3,\"sidePassDeep\":0,\"sideTouch\":4,\"goldTouch\":6,\"goldBack\":1,\"goldMiss\":0,\"stompBack\":0,\"seenFrames\":6064,\"seenResp\":4,\"seenPass\":3,\"seenPassDeep\":1,\"seenSideTouch\":5,\"seenCatchNoMonster\":0,\"seenTeleport\":0,\"seenTeleportMax\":0,\"seenStall\":4,\"seenStallMsMax\":5683.300048828125,\"leadMed\":6.3,\"leadMin\":4.3,\"leadEnd\":6.8}\nTOTAL {\"sec\":100.81259999990463,\"catches\":3,\"sidePass\":3,\"sidePassDeep\":0,\"sideTouch\":4,\"goldTouch\":6,\"goldBack\":1,\"goldMiss\":0,\"stompBack\":0,\"seenFrames\":6064,\"seenResp\":4,\"seenPass\":3,\"seenPassDeep\":1,\"seenSideTouch\":5,\"seenCatchNoMonster\":0,\"seenTeleport\":0,\"seenTeleportMax\":0,\"seenStall\":4,\"seenStallMsMax\":5683.300048828125}",
+        "observerJumps": "/tmp/pt9/runs/b-vs4r2 0 0.0",
+        "stomps": "TOTAL {\"runs\":1,\"vanish\":1,\"reshow\":0,\"reshowFrames\":[]}",
+        "observerFreezes": "b-vs4r2 [[25.4,2650,19.7],[49.8,3549,40.1],[67.4,1533,3.9],[72.5,5683,43],[100.3,766,\"end\"]]",
+        "stallRecovery": "b-vs4r2-lag80-loss0.01-jitter0-frames.json.gz [{\"stallMs\":3000,\"ownerPath\":103.34,\"observerFirstMotionMs\":60,\"ownNonPlacementJumpsOver1_5\":0,\"observerNonSpawnJumpsOver3\":0,\"postResumeMovingOwnerFreezes\":[]},{\"stallMs\":3000,\"ownerPath\":109.62,\"observerFirstMotionMs\":61,\"ownNonPlacementJumpsOver1_5\":0,\"observerNonSpawnJumpsOver3\":0,\"postResumeMovingOwnerFreezes\":[]},{\"stallMs\":3000,\"ownerPath\":131.69,\"observerFirstMotionMs\":140,\"ownNonPlacementJumpsOver1_5\":0,\"observerNonSpawnJumpsOver3\":0,\"postResumeMovingOwnerFreezes\":[]}]"
+      },
+      "c": {
+        "owner": "c-vs4r2-lag80-loss0.01-jitter0 {\"s\":100.78,\"frames\":6048,\"cpu\":0,\"load\":13.6,\"late\":30,\"socks\":1,\"inSolid\":0,\"jumps\":0,\"jumpMax\":0,\"skips\":0,\"slides\":0,\"slidesOver1\":0,\"slideMaxNet\":0,\"respawns\":2,\"respawnsNotCut\":0,\"respawnLeadMax\":0,\"stalls\":0,\"stallMs\":0,\"over33\":0,\"over50\":0,\"dtP99\":18,\"dtMax\":25,\"ev\":\"stall,stall,stall\"}\nTOTAL {\"runs\":1,\"frames\":6048,\"inSolid\":0,\"jumps\":0,\"jumpMax\":0,\"skips\":0,\"slides\":0,\"slidesOver1\":0,\"slidesOver3\":0,\"slideMaxNet\":0,\"respawns\":2,\"respawnsGlided\":0,\"over33\":0,\"over50\":0,\"stalls\":0,\"stallMs\":0}",
+        "fair": "c-vs4r2 {\"sec\":101,\"catches\":2,\"sidePass\":3,\"sidePassDeep\":2,\"sideTouch\":4,\"goldTouch\":5,\"goldBack\":0,\"goldMiss\":0,\"stompBack\":0,\"seenFrames\":6054,\"seenResp\":0,\"seenPass\":1,\"seenPassDeep\":0,\"seenSideTouch\":1,\"seenCatchNoMonster\":0,\"seenTeleport\":5,\"seenTeleportMax\":16.471969332976094,\"seenStall\":2,\"seenStallMsMax\":3216.300048828125}\nTOTAL {\"sec\":100.77879999995231,\"catches\":2,\"sidePass\":3,\"sidePassDeep\":2,\"sideTouch\":4,\"goldTouch\":5,\"goldBack\":0,\"goldMiss\":0,\"stompBack\":0,\"seenFrames\":6054,\"seenResp\":0,\"seenPass\":1,\"seenPassDeep\":0,\"seenSideTouch\":1,\"seenCatchNoMonster\":0,\"seenTeleport\":5,\"seenTeleportMax\":16.471969332976094,\"seenStall\":2,\"seenStallMsMax\":3216.300048828125}",
+        "observerJumps": "/tmp/pt9/runs/c-vs4r2 2 16.5",
+        "stomps": "TOTAL {\"runs\":1,\"vanish\":0,\"reshow\":0,\"reshowFrames\":[]}",
+        "observerFreezes": "c-vs4r2 [[25.1,3083,47.2],[50.3,3449,26.6],[75.1,3216,36.8]]",
+        "stallRecovery": "c-vs4r2-lag80-loss0.01-jitter0-frames.json.gz [{\"stallMs\":3000,\"ownerPath\":88.69,\"observerFirstMotionMs\":191,\"ownNonPlacementJumpsOver1_5\":0,\"observerNonSpawnJumpsOver3\":1,\"postResumeMovingOwnerFreezes\":[]},{\"stallMs\":3000,\"ownerPath\":99.11,\"observerFirstMotionMs\":557,\"ownNonPlacementJumpsOver1_5\":0,\"observerNonSpawnJumpsOver3\":0,\"postResumeMovingOwnerFreezes\":[]},{\"stallMs\":3000,\"ownerPath\":90.47,\"observerFirstMotionMs\":254,\"ownNonPlacementJumpsOver1_5\":0,\"observerNonSpawnJumpsOver3\":1,\"postResumeMovingOwnerFreezes\":[]}]"
+      }
+    }
+  }
+}

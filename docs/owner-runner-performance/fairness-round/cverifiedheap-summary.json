@@ -1,0 +1,149 @@
+{
+  "sampleIntervalBytes": 131072,
+  "includesCollectedObjects": true,
+  "frames": 3635,
+  "estimatedAllocatedBytes": 33453624,
+  "estimatedBytesPerFrame": 9203.19779917469,
+  "top": [
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js L",
+      9703048
+    ],
+    [
+      " push",
+      2755296
+    ],
+    [
+      " (V8 API)",
+      2754092
+    ],
+    [
+      " Map",
+      2228960
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js info",
+      1573100
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js sample",
+      1310928
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js ",
+      1310876
+    ],
+    [
+      " loop",
+      1048820
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js ia",
+      917764
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js Wr",
+      655896
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js renderPlayers",
+      655392
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js b",
+      524500
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js frame",
+      524336
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js renderTreasure",
+      524316
+    ],
+    [
+      " sort",
+      393828
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js self",
+      393272
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js Po",
+      393244
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js updateCamera",
+      393240
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js renderMap",
+      393240
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js To",
+      262256
+    ],
+    [
+      " Set",
+      262200
+    ],
+    [
+      " window.__me",
+      262196
+    ],
+    [
+      " exec",
+      262184
+    ],
+    [
+      " map",
+      262176
+    ],
+    [
+      " window.__mons",
+      262176
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js N",
+      262168
+    ],
+    [
+      " next",
+      262160
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js qa",
+      262160
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js Vr",
+      262156
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js updateEntity",
+      262152
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/platformer.js render",
+      262152
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js Ke",
+      147480
+    ],
+    [
+      " window.__myScore",
+      132784
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/play?room=perf-cverifiedhea-mv9bzi91 ws.onmessage",
+      131144
+    ],
+    [
+      "http://127.0.0.1:8792/tiny-platformer/__game/homie-port.js Pn",
+      131104
+    ]
+  ]
+}

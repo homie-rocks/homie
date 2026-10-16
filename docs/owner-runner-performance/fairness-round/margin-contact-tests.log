@@ -1,0 +1,46 @@
+TAP version 13
+# Subtest: a future endpoint gets only bounded presentation time (3 ticks); silence remains vulnerable
+ok 1 - a future endpoint gets only bounded presentation time (3 ticks); silence remains vulnerable
+  ---
+  duration_ms: 13.484416
+  type: 'test'
+  ...
+# Subtest: a future endpoint gets only bounded presentation time (20 ticks); silence remains vulnerable
+ok 2 - a future endpoint gets only bounded presentation time (20 ticks); silence remains vulnerable
+  ---
+  duration_ms: 2.700583
+  type: 'test'
+  ...
+# Subtest: the live remote-human margin keeps shallow network contacts safe, deep contacts lethal, and trusted timing unchanged
+ok 3 - the live remote-human margin keeps shallow network contacts safe, deep contacts lethal, and trusted timing unchanged
+  ---
+  duration_ms: 5.321
+  type: 'test'
+  ...
+# Subtest: a gold crossed by an intermediate lag-switch report counts once even when the final report is beyond it
+ok 4 - a gold crossed by an intermediate lag-switch report counts once even when the final report is beyond it
+  ---
+  duration_ms: 18.248375
+  type: 'test'
+  ...
+# Subtest: an old intermediate side touch uses the current monster and catches before the last report can skip it
+ok 5 - an old intermediate side touch uses the current monster and catches before the last report can skip it
+  ---
+  duration_ms: 4.342375
+  type: 'test'
+  ...
+# Subtest: a silent owner does not repeat old substeps behind its stationary endpoint
+ok 6 - a silent owner does not repeat old substeps behind its stationary endpoint
+  ---
+  duration_ms: 1.115125
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 614.264959

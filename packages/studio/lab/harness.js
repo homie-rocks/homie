@@ -62,6 +62,9 @@
   var vt = 0; // ms since the page started, on the lab's clock
   var frame = 0;
   performance.now = function () { return vt; };
+  // Render caches use this shared rAF timestamp too. Leaving it on wall time
+  // makes a replay depend on which virtual frames fit inside a native frame.
+  Object.defineProperty(document.timeline, 'currentTime', { configurable: true, get: function () { return vt; } });
   var RealDate = real.Date;
   function LabDate() {
     var a = Array.prototype.slice.call(arguments);

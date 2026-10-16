@@ -1,0 +1,202 @@
+TAP version 13
+# (node:59578) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: two views in one server-hosted room: own bodies, the roster and the round, input that the server follows, and a full round nobody can forge
+ok 1 - two views in one server-hosted room: own bodies, the roster and the round, input that the server follows, and a full round nobody can forge
+  ---
+  duration_ms: 4125.0235
+  type: 'test'
+  ...
+# Subtest: two equally slow browsers keep one host after measuring both
+ok 2 - two equally slow browsers keep one host after measuring both
+  ---
+  duration_ms: 3887.205917
+  type: 'test'
+  ...
+# Subtest: the browser online event retries a pending offline connection immediately
+ok 3 - the browser online event retries a pending offline connection immediately
+  ---
+  duration_ms: 4049.670209
+  type: 'test'
+  ...
+# Subtest: valued one-frame input survives sampling and private fields stay off every recipient wire
+ok 4 - valued one-frame input survives sampling and private fields stay off every recipient wire
+  ---
+  duration_ms: 945.989125
+  type: 'test'
+  ...
+# Subtest: valued one-frame input survives sampling and private fields stay off every recipient wire under seeded latency/loss
+ok 5 - valued one-frame input survives sampling and private fields stay off every recipient wire under seeded latency/loss
+  ---
+  duration_ms: 1111.651708
+  type: 'test'
+  ...
+# Subtest: the server's word that arrives before the tick is predicted confirms the prediction instead of leaving it to be retracted, seed 4616: a small room
+ok 6 - the server's word that arrives before the tick is predicted confirms the prediction instead of leaving it to be retracted, seed 4616: a small room
+  ---
+  duration_ms: 2888.016125
+  type: 'test'
+  ...
+# Subtest: the server's word that arrives before the tick is predicted confirms the prediction instead of leaving it to be retracted, seed 4616: Gates
+ok 7 - the server's word that arrives before the tick is predicted confirms the prediction instead of leaving it to be retracted, seed 4616: Gates
+  ---
+  duration_ms: 13826.437334
+  type: 'test'
+  ...
+# Subtest: wrapped world 2D: two spatial views, seam interpolation, replay and restore
+ok 8 - wrapped world 2D: two spatial views, seam interpolation, replay and restore
+  ---
+  duration_ms: 6327.186125
+  type: 'test'
+  ...
+# {"dims":2,"delayed":false,"maxDrawStep":0.08275413513183594,"stats":{"handlers":452,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":167,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":444,"maxTickUnits":504}}
+# Subtest: wrapped world 2D: two spatial views, seam interpolation, replay and restore with 300 ms loss
+ok 9 - wrapped world 2D: two spatial views, seam interpolation, replay and restore with 300 ms loss
+  ---
+  duration_ms: 15398.61375
+  type: 'test'
+  ...
+# {"dims":2,"delayed":true,"maxDrawStep":0.06774520874023438,"stats":{"handlers":474,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":167,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":444,"maxTickUnits":504}}
+# Subtest: wrapped world 3D: two spatial views, seam interpolation, replay and restore
+ok 10 - wrapped world 3D: two spatial views, seam interpolation, replay and restore
+  ---
+  duration_ms: 2094.855417
+  type: 'test'
+  ...
+# {"dims":3,"delayed":false,"maxDrawStep":0.08275260925293537,"stats":{"handlers":452,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":319,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":652,"maxTickUnits":772}}
+# Subtest: wrapped world 3D: two spatial views, seam interpolation, replay and restore with 300 ms loss
+ok 11 - wrapped world 3D: two spatial views, seam interpolation, replay and restore with 300 ms loss
+  ---
+  duration_ms: 453.364416
+  type: 'test'
+  ...
+# {"dims":3,"delayed":true,"maxDrawStep":0.07045845031738907,"stats":{"handlers":474,"errors":0,"budgetStops":0,"skipped":0,"ticksCut":0,"maxUnits":319,"worst":"runner.move","lastError":"","failing":"","lost":0,"held":0,"tickUnits":652,"maxTickUnits":772}}
+# Subtest: taken pulses use explicit hold policy
+ok 12 - taken pulses use explicit hold policy
+  ---
+  duration_ms: 326.201166
+  type: 'test'
+  ...
+# Subtest: taken pulses use explicit drop policy
+ok 13 - taken pulses use explicit drop policy
+  ---
+  duration_ms: 325.288458
+  type: 'test'
+  ...
+# Subtest: twenty ordered pulses a second under 300 ms and 5% stalls: small, seed 47120
+ok 14 - twenty ordered pulses a second under 300 ms and 5% stalls: small, seed 47120
+  ---
+  duration_ms: 448.957542
+  type: 'test'
+  ...
+# Subtest: twenty ordered pulses a second under 300 ms and 5% stalls: Gates, seed 47120
+ok 15 - twenty ordered pulses a second under 300 ms and 5% stalls: Gates, seed 47120
+  ---
+  duration_ms: 432.186459
+  type: 'test'
+  ...
+# Subtest: vertical travel cannot blend a horizontal correction against the held direction
+ok 16 - vertical travel cannot blend a horizontal correction against the held direction
+  ---
+  duration_ms: 453.713083
+  type: 'test'
+  ...
+# Subtest: wide input preserves sub-tick held durations: 0 ms each way, seed 48302
+ok 17 - wide input preserves sub-tick held durations: 0 ms each way, seed 48302
+  ---
+  duration_ms: 959.895042
+  type: 'test'
+  ...
+# Subtest: wide input preserves sub-tick held durations: 75 ms each way, seed 48302
+ok 18 - wide input preserves sub-tick held durations: 75 ms each way, seed 48302
+  ---
+  duration_ms: 1036.7195
+  type: 'test'
+  ...
+# Subtest: wide input preserves every numbered swap exactly once under repeated history, seed 48303
+ok 19 - wide input preserves every numbered swap exactly once under repeated history, seed 48303
+  ---
+  duration_ms: 678.105583
+  type: 'test'
+  ...
+# Subtest: unchanged substep forecasts execute once across repeated view reads and refresh on input
+ok 20 - unchanged substep forecasts execute once across repeated view reads and refresh on input
+  ---
+  duration_ms: 327.643041
+  type: 'test'
+  ...
+# Subtest: unchanged delta snapshot rows reuse their immutable unpacked view
+ok 21 - unchanged delta snapshot rows reuse their immutable unpacked view
+  ---
+  duration_ms: 76.960167
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 0 ms
+ok 22 - validated owner keeps its own trajectory with delayed reports: 0 ms
+  ---
+  duration_ms: 561.441917
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 150 ms
+ok 23 - validated owner keeps its own trajectory with delayed reports: 150 ms
+  ---
+  duration_ms: 699.832708
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 300 ms
+ok 24 - validated owner keeps its own trajectory with delayed reports: 300 ms
+  ---
+  duration_ms: 699.413667
+  type: 'test'
+  ...
+# Subtest: validated owner predicts through an outage, keeps score, and resumes without a wait
+ok 25 - validated owner predicts through an outage, keeps score, and resumes without a wait
+  ---
+  duration_ms: 626.685917
+  type: 'test'
+  ...
+# Subtest: validated owner draws a local corner landing without embedding the interpolated box
+ok 26 - validated owner draws a local corner landing without embedding the interpolated box
+  ---
+  duration_ms: 296.401416
+  type: 'test'
+  ...
+# Subtest: validated owner recovers room clock after 3000 ms server stall
+ok 27 - validated owner recovers room clock after 3000 ms server stall
+  ---
+  duration_ms: 445.0725
+  type: 'test'
+  ...
+# Subtest: validated owner recovers room clock after 15000 ms server stall
+ok 28 - validated owner recovers room clock after 15000 ms server stall
+  ---
+  duration_ms: 819.214
+  type: 'test'
+  ...
+# Subtest: validated owner clock tracks room at 0.99 clock rate
+ok 29 - validated owner clock tracks room at 0.99 clock rate
+  ---
+  duration_ms: 2526.21225
+  type: 'test'
+  ...
+# Subtest: validated owner clock tracks room at 1.01 clock rate
+ok 30 - validated owner clock tracks room at 1.01 clock rate
+  ---
+  duration_ms: 3395.652625
+  type: 'test'
+  ...
+# Subtest: validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame
+ok 31 - validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame
+  ---
+  duration_ms: 399.039333
+  type: 'test'
+  ...
+1..31
+# tests 31
+# suites 0
+# pass 31
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 70957.28
