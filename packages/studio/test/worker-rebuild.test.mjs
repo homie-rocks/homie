@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,readdirSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,readdirSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {devConfig} from '../lib/dev.mjs';
@@ -59,4 +59,47 @@ test('dev loads root local secrets beside its generated config and removes stale
  assert.equal(readFileSync(join(root,'.wrangler/.dev.vars'),'utf8'),'LOCAL_VALUE="local # value"\n');
  rmSync(join(root,'.dev.vars'));devConfig(root,false);
  assert.equal(readdirSync(join(root,'.wrangler')).includes('.dev.vars'),false);
+});
+
+for (const name of ['codex-studio-by-homie', 'shop-trial', 'homie-arcade', 'homie-official']) {
+ test(`${name}: generated entry preserves fetch and provides queue/scheduled handlers`, async t=>{
+  const root=mkdtempSync(join(tmpdir(),'homie-consumer-'));
+  t.after(()=>rmSync(root,{recursive:true,force:true}));
+  const src=join(root,'site/src');mkdirSync(src,{recursive:true});
+  writeFileSync(join(root,'studio.json'),JSON.stringify({name,slug:name,cloudflare:{worker:name,d1:name+'-db'}}));
+  // Copperwind wraps only fetch; the other studio shapes re-export the toolkit.
+  const custom=name==='codex-studio-by-homie';
+  if(name==='shop-trial')writeFileSync(join(root,'shop.json'),'{}');
+  mkdirSync(join(root,'node_modules/@homie-rocks'),{recursive:true});
+  symlinkSync(new URL('..',import.meta.url).pathname,join(root,'node_modules/@homie-rocks/studio'));
+  const source=custom ? `export default {fetch(){return Response.json({custom:true,queue:typeof this.queue,scheduled:typeof this.scheduled})}}` : `export {default,Table,Lobby} from '@homie-rocks/studio/worker'`;
+  writeFileSync(join(src,'worker.mjs'),source);
+  // Stub event implementations, not the generated entry: exercise bundling and
+  // the exported Worker's event contract without databases or network services.
+  const builder={build:opts=>esbuild.build({...opts,plugins:[{name:'event-fixture',setup(b){b.onLoad({filter:/\/worker\/(?:selling\/)?index\.mjs$/},()=>({contents:`export class Table {}; export class Lobby {}; export default {queue(){},scheduled(){},fetch(){return Response.json({queue:typeof this.queue,scheduled:typeof this.scheduled})}}`,loader:'js'}));}},...opts.plugins]})};
+  await buildWorker(root,builder);
+  const config=readConfig(root);
+  assert.equal(config.name,name);
+  assert.equal(config.durable_objects.bindings[0].name,'TABLE');
+  assert.equal(config.queues.consumers[0].queue,name+'-background');
+  assert.equal(config.queues.consumers[0].dead_letter_queue,name+'-background-dlq');
+  const main=workerEntry(root),dir=join(main,'..'),modules={};
+  for(const file of readdirSync(dir).filter(f=>f.endsWith('.js')))modules[file]={type:'esm',contents:readFileSync(join(dir,file),'utf8')};
+  const mf=new Miniflare({telemetry:{enabled:false},workers:[{config:{name,compatibilityDate:'2026-09-01',manifest:{mainModule:'worker.js',modules}}}]});
+  t.after(()=>mf.dispose());
+  assert.deepEqual(await (await mf.dispatchFetch('http://localhost/')).json(),{...(custom?{custom:true}:{}),queue:'function',scheduled:'function'});
+  assert.equal(readFileSync(join(src,'worker.mjs'),'utf8'),source);
+ });
+}
+
+test('generated entry keeps explicitly customized event handlers',async t=>{
+ const root=mkdtempSync(join(tmpdir(),'homie-custom-events-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ mkdirSync(join(root,'site/src'),{recursive:true});
+ writeFileSync(join(root,'studio.json'),JSON.stringify({name:'custom',slug:'custom',cloudflare:{worker:'custom',d1:'custom-db'}}));
+ writeFileSync(join(root,'site/src/worker.mjs'),`export default {queue(){return 'custom queue'},scheduled(){return 'custom scheduled'},fetch(){return Response.json([this.queue(),this.scheduled()])}}`);
+ await buildWorker(root,esbuild);
+ const dir=join(workerEntry(root),'..'),modules={};
+ for(const file of readdirSync(dir).filter(f=>f.endsWith('.js')))modules[file]={type:'esm',contents:readFileSync(join(dir,file),'utf8')};
+ const mf=new Miniflare({telemetry:{enabled:false},workers:[{config:{name:'custom',compatibilityDate:'2026-09-01',manifest:{mainModule:'worker.js',modules}}}]});t.after(()=>mf.dispose());
+ assert.deepEqual(await (await mf.dispatchFetch('http://localhost/')).json(),['custom queue','custom scheduled']);
 });

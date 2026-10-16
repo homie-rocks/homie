@@ -17,6 +17,13 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## Unreleased
+
+### Fixed
+
+- Custom studio Workers that wrap only `fetch` now inherit missing toolkit queue and scheduled handlers in the generated entry, so background queue consumers attach during deploy. Custom handlers remain intact.
+- Deploy failures retain Wrangler's real error and context with secrets redacted, instead of showing only the last six lines.
+
 ## [0.55.0] - 2026-10-15
 
 **Plugin 0.55.0**

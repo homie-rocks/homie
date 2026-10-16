@@ -1139,3 +1139,15 @@ test('explicit publish opts an unlisted studio in without an extra deploy', asyn
  assert.equal(readStudio(dir).homie.directory,'https://homie.rocks');
  assert.equal(requests.at(-1)[0],'https://homie.rocks/api/studio/publish');
 });
+
+test('local and CI deploy preserve the consumer error above Wrangler footer lines',async()=>{
+ const {ciDeploy}=await import('../lib/cloudflare.mjs');
+ const message='X [ERROR] Queue handler is missing. [code: 11001]\n'+
+  'Authorization: Bearer '+ 'private123'.repeat(5)+'\n'+
+  '\n'.repeat(8)+'To learn more about this error, visit: https://developers.cloudflare.com/queues/configuration/javascript-apis/#consumer\nSuccessful trigger changes were not rolled back.';
+ const dir=studio('missing-queue-handler');account(dir,{deployOut:message,deployCode:1});
+ const local=await deploy(dir);
+ assert.equal(local.ok,false);assert.match(local.why,/Queue handler is missing/);assert.doesNotMatch(local.why,/private123/);
+ const ci=await ciDeploy(dir,{wrangler:args=>args[0]==='deploy'?{code:1,out:message}:{code:0,out:'ok'}});
+ assert.equal(ci.ok,false);assert.match(ci.why,/Queue handler is missing/);assert.doesNotMatch(ci.why,/private123/);
+});
