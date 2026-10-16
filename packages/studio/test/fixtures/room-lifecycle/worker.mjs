@@ -25,7 +25,7 @@ export class Table extends BaseTable {
   fetch(request) {
     const path=new URL(request.url).pathname;
     if(path==='/proof-restart'){setTimeout(()=>this.ctx.abort('throwaway proof restart'),25);return Response.json({ok:true});}
-    if(path==='/proof-stall'){const start=Date.now();while(Date.now()-start<1200){}return Response.json({stalled:Date.now()-start});}
+    if(path==='/proof-stall')return this.ctx.blockConcurrencyWhile(async()=>{const start=Date.now();await new Promise(resolve=>setTimeout(resolve,1200));return Response.json({stalled:Date.now()-start});});
     if(path==='/proof-control'){return Promise.resolve(this.room.control('announce',{text:'break control',seconds:300})).then(result=>{this.officeSaved=this.room.officeSaved();return this.ctx.storage.put('office',this.officeSaved).then(()=>Response.json(result));});}
     if (path === '/proof-status') return Response.json({
       version: this.env.PROOF_VERSION, boot: this.proofBoot, tick: this.hostRt?.tick,
@@ -48,7 +48,7 @@ export class Gate extends BaseGate {
 }
 export default {fetch(request, env, ctx) {
   const url = new URL(request.url);
-  if(url.pathname==='/proof-match')return lobbyFor(env,'proof-matches',url.searchParams.get('id')).fetch('https://lobby/join?max=1',{method:'POST'});
+  if(url.pathname==='/proof-match')return (async()=>{const lobby=lobbyFor(env,'proof-matches',url.searchParams.get('id'));const result=await (await lobby.fetch('https://lobby/join?max=1',{method:'POST'})).json();await lobby.fetch('https://lobby/report?game=proof-matches',{method:'POST',body:JSON.stringify({room:result.room,players:1})});return Response.json(result);})();
   if(url.pathname==='/proof-count')return lobbyFor(env,'proof-matches').fetch('https://lobby/rooms');
   if(url.pathname==='/proof-watch') {
     const game=url.searchParams.get('game')??'gated',room=url.searchParams.get('room');

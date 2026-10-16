@@ -49,7 +49,8 @@ test('the room goes into the address, and the room button shares it: Invite, Big
   assert.match(html, /← Rock &lt;Race&gt;/);
   // A stranger pressing Play: the lobby's room is written into the address and into the share sheet.
   const a = await shell('');
-  assert.deepEqual(a.fetched, [['/rock-race/api/lobby', 'POST']]);
+  assert.equal(a.fetched.length,1);assert.equal(a.fetched[0][1],'POST');
+  assert.match(a.fetched[0][0],/^\/rock-race\/api\/lobby\?b=[A-Za-z0-9_-]{16,43}$/);
   assert.deepEqual(a.replaced, ['/rock-race/play?room=pub-3']);
   // 0.13.0: the browser's room key (what an owner's kick holds out) rides along.
   // Revision 9: `pf=1` says this page keeps net.prefs for the frame.
@@ -180,7 +181,7 @@ test('on a server: the pill shares the room button\'s band, a server room says "
   const server = { id: 'night-shift', name: 'Night Shift', badge: 'Hybrid · 2', line: 'Hybrid: 2 seats in every room are AI companions.', policy: 'hybrid', levelMax: 5 };
   const a = await shell('', { lobby: 's-night-shift-2', server });
   assert.equal(a.el('[data-room-code]').textContent, 'Room 2', 'the pill beside it names the server');
-  assert.deepEqual(a.fetched[0], ['/rock-race/api/lobby?server=night-shift', 'POST']);
+  assert.equal(a.fetched[0][1],'POST');assert.match(a.fetched[0][0],/^\/rock-race\/api\/lobby\?b=[A-Za-z0-9_-]{16,43}&server=night-shift$/);
   // One band: both buttons in one row at the room button's place, the room button at the edge on a right corner.
   assert.match(a.html, /<div class="pills"><button class="pill" type="button" data-share-toggle[^]*?<button class="pill spill" type="button" data-server-toggle[^]*?<\/button><\/div>\s*<div class="sheet ssheet"/);
   assert.match(a.html, /\.room \.pills \{ display: flex; align-items: center; gap: 8px; \}/);
