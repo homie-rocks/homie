@@ -19,7 +19,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [Unreleased]
 
-- Recently lost retained-authority connections use a bounded 30-second burst of short jittered retries, reducing recovery delay after a server stall; initial joins and prolonged-outage backoff keep their existing behavior.
+- Retained-authority clients keep an open transport through up to 20 seconds of server silence, avoiding reconnect churn during short server stalls. Explicit close/error events still retry immediately; explicit stale timeouts and bounded prolonged-outage handling remain supported.
 
 - Validated owners retain 512 input ticks for outage recovery keep unacknowledged reports even while the server clock is stopped, retire acknowledged prefixes, and deduplicate pending reports by tick, preventing honest 15-second server stalls from triggering a cut back to an old pose. Packet byte limits, per-tick validation work, physics and overflow guards remain bounded.
 

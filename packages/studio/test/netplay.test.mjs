@@ -1847,18 +1847,16 @@ test('rules reconnects spread the first attempts and back off through a prolonge
   } finally { net.close(); }
 });
 
-test('retained authority retries a recent loss promptly, then backs off',async t=>{
- const {createNetplay}=await netplayKit(),clock=virtualTime(t),r=rig();
- r.room.setServerHost({frame(){},facts:()=>({})});t.mock.method(Math,'random',()=>.5);
- let available=true;const starts=[],Base=r.socket();
- class Socket{constructor(){starts.push(Date.now());if(available)return new Base();queueMicrotask(()=>this.onerror?.({}));}close(){}send(){}}
- const net=createNetplay({rules:true,rulesHost:{mode:'server',offline:false,retainAuthority:true},config:cfg('retained'),WebSocketImpl:Socket,post:null,game:'x',linkOverlay:false});
+test('retained authority preserves an open socket through a short server stall but bounds silence',async t=>{
+ const {createNetplay}=await netplayKit(),clock=virtualTime(t),r=rig();r.room.setServerHost({frame(){},facts:()=>({})});
+ const net=createNetplay({rules:true,rulesHost:{mode:'server',offline:false,retainAuthority:true},config:cfg('retained'),WebSocketImpl:r.socket(),post:null,game:'x',linkOverlay:false});
  try{
-  await clock.wait(100);assert.equal(net.link,'online');const down=Date.now();available=false;r.sockets[0].cut();await clock.wait(36000);
-  const early=starts.filter(at=>at>down&&at<down+30000);
-  assert.ok(early.length>20,'a short outage cannot leave a long retry sleep');
-  assert.ok(early.slice(1).every((at,i)=>at-early[i]<=250),'recent recovery is bounded to 250 ms between refused attempts');
-  assert.ok(starts.slice(1).some((at,i)=>at>down+30000&&at-starts[i]>=1000),'long outages regain the existing backoff');
+  await clock.wait(100);assert.equal(net.link,'online');const sock=r.sockets[0],hear=sock.onmessage;let muted=true;
+  sock.onmessage=e=>{if(!muted)hear(e);};await clock.wait(15000);
+  assert.equal(r.sockets.length,1,'a stalled server must not destroy its still-open transport');
+  muted=false;await clock.wait(2500);assert.equal(net.link,'online');
+  muted=true;await clock.wait(24000);assert.ok(r.sockets.length>1,'a truly silent connection still reconnects within a bounded interval');
+  const count=r.sockets.length;r.sockets.at(-1).cut();await clock.wait(1000);assert.ok(r.sockets.length>count,'an actual close does not wait for the silence grace');
  }finally{net.close();r.stop();}
 });
 

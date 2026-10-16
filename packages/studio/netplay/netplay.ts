@@ -1512,7 +1512,9 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   const connectOpenMaxMs = Math.max(2000, Math.min(120_000, Number(opts.connectOpenMaxMs) || CONNECT_OPEN_MAX_MS));
   const reconnectMaxMs = Math.max(5000, Math.min(300_000, Number(opts.reconnectMaxMs) || (opts.rules && (opts.rulesHost?.offline || opts.rulesHost?.mode === 'browser') ? 5000 : RECONNECT_MAX_MS)));
   const heartbeatMs = opts.rules === true || opts.heartbeatMs === 0 ? 0 : Math.max(200, Math.min(2000, Number(opts.heartbeatMs) || HEARTBEAT_MS));
-  const staleMs = Math.max(2500, opts.staleMs ?? 6000);
+  // Retained authority can resume on the same open transport after a server pause.
+  // Explicit close/error still reconnects immediately; silence remains bounded.
+  const staleMs = Math.max(2500, opts.staleMs ?? (opts.rulesHost?.retainAuthority ? 20_000 : 6000));
   // Revisions (section 23): the game's revision (the page's word, or the game's own) and what this build can do.
   const version = cleanVersion(opts.version ?? cfg?.ver);
   const features = cleanFeatures(opts.features);
@@ -3061,13 +3063,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     const wait = Math.max(rulesGame ? (attempt < 3 ? Math.random() * Math.min(2000, 500 * 2 ** attempt) : (0.5 + Math.random() * 0.5) * Math.min(60_000, 2000 * 2 ** Math.min(attempt - 2, 5))) : LADDER[Math.min(attempt, LADDER.length - 1)] as number, aloneUntil - wall());
     attempt += 1;
     reconnects += 1;
-    // An established authoritative room may merely be resuming a stalled
-    // process. Do not add seconds of idle backoff once it is reachable again.
-    // Keep a short jittered recovery burst bounded to 30 seconds; initial joins
-    // and prolonged failures retain their existing backoff.
-    const retained = opts.rulesHost?.retainAuthority && link === 'reconnecting';
-    const recoveryCap = retained && downSince && wall()-downSince<30_000 ? 125+125*Math.random() : 2500;
-    retryTimer = setTimeout(open, rulesGame && (offline && rulesHost || retained) ? Math.min(wait, recoveryCap) : wait);
+    retryTimer = setTimeout(open, rulesGame && (offline && rulesHost || opts.rulesHost?.retainAuthority && link === 'reconnecting') ? Math.min(wait, 2500) : wait);
   }
 
   if (offline) {

@@ -1664,7 +1664,7 @@ used at once; only the giving-up waits for `net.start()` (or for 60 s, so a game
 is not left without a role).
 
 **A page that was blocked is not a dead socket.** The helper drops a socket that delivered
-nothing for `staleMs` (6 s) and knocks again. A heavy boot blocks the page for longer than that,
+nothing for `staleMs` (6 s, or 20 s for retained authority) and knocks again. Retained authority keeps a still-open transport across a short server pause; actual close/error events reconnect immediately, and an explicit `staleMs` still overrides this default. A heavy boot blocks the page for longer than that,
 and when it wakes its ping timer runs before the frames queued behind it: a healthy socket was
 dropped and every long hitch became a reconnect. A ping that itself runs more than 3.5 s late now
 gives the socket 2.5 s to be heard from first; one that is really dead is still dropped.
