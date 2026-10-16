@@ -79,12 +79,26 @@ export function runner(root, env) {
   };
 }
 
+/** Retry with fresh Wrangler processes: another studio may be rotating shared OAuth credentials. */
+export function checkWranglerLogin(root, env = {}, {run = null, sleep = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)} = {}) {
+  const w = run ?? runner(root, env);
+  let res, data;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt) sleep([200, 600, 1400][attempt - 1] + Math.floor(Math.random() * 100));
+    res = w(['whoami', '--json'], {cwd: root});
+    try { data = JSON.parse(res.stdout ?? ''); } catch { data = null; }
+    if (res.code === 0 && data?.loggedIn === true) return {ok:true, who:{accounts:(data.accounts ?? []).map(a => ({id:a.id,name:a.name})),authType:data.authType}};
+  }
+  const detail = String(res.out ?? '').trim();
+  const expired = data?.loggedIn === false || /(?:refresh token.*(?:expired|invalid)|invalid_grant|not (?:logged|signed) in|authentication error|authenticate request)/i.test(detail);
+  return {ok:false, needs:expired ? 'cloudflare-login' : 'cloudflare-auth-check', why: (expired
+    ? 'Wrangler could not authenticate after four attempts. Run `npx wrangler login`, then retry.'
+    : 'Wrangler could not check sign-in after four attempts. Another process may be refreshing credentials, or Cloudflare may be unreachable. Retry shortly.') + (detail ? '\nWrangler: '+detail : '')};
+}
+
 /** Who Wrangler is signed in as, or null. Never prints a token. */
 export function whoami(root, env = {}) {
-  const w = runner(root, env);
-  const res = w(['whoami', '--json'], { cwd: root });
-  if (res.code !== 0) return null;
-  try { const d = JSON.parse(res.stdout); return d.loggedIn ? { accounts: (d.accounts ?? []).map((a) => ({ id: a.id, name: a.name })), authType: d.authType } : null; } catch { return null; }
+  return checkWranglerLogin(root, env).who ?? null;
 }
 
 function parseJson(text) {
@@ -262,12 +276,13 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   const wide = wideRouteRefusal(readConfig(root), studio);
   if (wide) return { ok: false, command: 'deploy', ...wide };
   let routes = keptRoutes(root, studio);
-  const who = whoami(root);
-  if (!who) {
+  const login = checkWranglerLogin(root);
+  const who = login.who;
+  if (!login.ok) {
     if (cf.auth === 'stripe-projects') {
-      return { ok: false, command: 'deploy', needs: 'cloudflare-login', why: 'Wrangler did not accept the Cloudflare token Stripe Projects keeps for this studio (studio.json "auth": "stripe-projects"). Run `stripe projects env --pull` in the studio folder (it rewrites the git-ignored .env from Projects\' vault), then `npm run deploy` again; or sign in the usual way (`npx wrangler login`) and remove "auth" from studio.json.' };
+      return { ok: false, command: 'deploy', needs: 'cloudflare-login', why: login.why + '\nWrangler did not accept the Cloudflare token Stripe Projects keeps for this studio (studio.json "auth": "stripe-projects"). Run `stripe projects env --pull` in the studio folder (it rewrites the git-ignored .env from Projects\' vault), then `npm run deploy` again; or sign in the usual way (`npx wrangler login`) and remove "auth" from studio.json.' };
     }
-    return { ok: false, command: 'deploy', needs: 'cloudflare-login', why: 'Wrangler is not signed in to Cloudflare. Run `npx wrangler login` in the studio folder: it opens Cloudflare in the browser and the person approves once (a free account works, no payment method). Then run `npm run deploy` again.' };
+    return { ...login, command: 'deploy' };
   }
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || cf.accountId || (who.accounts.length === 1 ? who.accounts[0].id : null);
   if (!accountId) {
@@ -683,8 +698,9 @@ export async function storageAdd(root, { log = () => {} } = {}) {
   if (created.has(`r2:${bucket}`)) {
     return { ok: true, command: 'storage add', bucket, already: true, next: ['npm run deploy   (binds it as MEDIA if the live site does not have it yet)'] };
   }
-  const who = whoami(root);
-  if (!who) return { ok: false, command: 'storage add', needs: 'cloudflare-login', why: 'Wrangler is not signed in to Cloudflare. Run `npx wrangler login` first (one approval in the browser).' };
+  const login = checkWranglerLogin(root);
+  if (!login.ok) return {...login, command:'storage add'};
+  const who = login.who;
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || cf.accountId || (who.accounts.length === 1 ? who.accounts[0].id : null);
   if (!accountId) return { ok: false, command: 'storage add', needs: 'cloudflare-account', why: 'This login reaches several Cloudflare accounts; put the studio\'s in studio.json (cloudflare.accountId) first.', accounts: who.accounts };
   const w = runner(root, { CLOUDFLARE_ACCOUNT_ID: accountId });
