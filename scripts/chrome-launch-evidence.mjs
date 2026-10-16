@@ -5,13 +5,13 @@ import { syncBuiltinESMExports } from 'node:module';
 import { appendFileSync, mkdirSync, statfsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { ciLaunchOptions } from './chrome-launch-options.mjs';
+import { ciLaunchOptions, launchWithDeadline } from './chrome-launch-options.mjs';
 
 const directory = process.env.HOMIE_CHROME_EVIDENCE;
 if (directory) {
   const { default: puppeteer } = await import('puppeteer-core');
   const launch = puppeteer.launch.bind(puppeteer);
-  puppeteer.launch = options => launch(ciLaunchOptions(options));
+  puppeteer.launch = options => launchWithDeadline(launch, ciLaunchOptions(options));
   mkdirSync(directory, { recursive: true });
   const output = resolve(directory, `chrome-${process.pid}.jsonl`);
   const original = childProcess.spawn;
