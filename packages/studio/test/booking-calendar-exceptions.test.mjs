@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {calendarSlots} from '../worker/booking-calendar.mjs';
-const series={startDate:'2026-10-23',endDate:'2026-11-13',timeZone:'America/Vancouver',time:'19:00',weekdays:[5],capacity:12,prefix:'supper'};
+const series={startDate:'2026-10-23',endDate:'2026-11-13',timeZone:'America/Los_Angeles',time:'19:00',weekdays:[5],capacity:12,prefix:'supper'};
 test('weekly occurrences cross DST, skip holidays and preserve exception identity',()=>{
  const base=calendarSlots(series);
  const slots=calendarSlots({...series,exceptions:{'2026-10-30':null,'2026-11-06':{time:'18:00',capacity:8,durationMinutes:90}}});
