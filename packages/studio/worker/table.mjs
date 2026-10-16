@@ -736,8 +736,9 @@ export class Table {
 
   /** Chat's counts into D1 (stats_daily): lines, reactions, held by why, reviews and neurons. Never a message or a sender. */
   flushChat() {
+    if (this.chatFlushAt && Date.now()-this.chatFlushAt<60_000) return Promise.resolve();
     if (this.chatFlush) return this.chatFlush;
-    this.chatFlush = this.flushChatPending().finally(() => { this.chatFlush = null; });
+    this.chatFlush = this.flushChatPending().then(() => { this.chatFlushAt=Date.now(); }).finally(() => { this.chatFlush = null; });
     return this.chatFlush;
   }
 
@@ -891,6 +892,7 @@ export class Table {
     // A brain that throws never takes the room with it: the alarm is not retried, the guides answer from the floor.
     try { if (this.house) await this.house.onAlarm(); } catch (error) { try { console.log(JSON.stringify({ ev: 'brain-alarm-failed', room: this.code, error: String(error?.stack ?? error).slice(0, 400) })); } catch { /* no console */ } }
     try { await this.flushBrain(); } catch { /* counted next time */ }
+    try { await this.keepIdleChat(); } catch (error) { this.say({ev:"chat-flush-failed",error:errorLine(error)}); }
     try { await this.roomAlarm(); } catch (error) { this.say({ ev: 'failed', op: 'room-alarm', error: errorLine(error) }); }
     if(this.hibernationReady)await expireIdleChat(this.ctx.storage);
     if(this.canSleep())await this.sleepRoom();
@@ -1100,7 +1102,11 @@ export class Table {
     const account = holders(url.searchParams.get('via')).find(p => p.startsWith('p-'))?.slice(2) ?? null;
     if (hostedBuild(game)?.settings.characters && url.pathname !== '/__watch') {
       if (!account || url.searchParams.get('acct') !== '1') return new Response('Sign in to keep your character', { status: 401 });
-      try { await this.acquireCharacter(account); }
+      try {
+        const held=transport?.resume && this.hostRt?.characters.get(account);
+        if(held && !held.returning)this.characterGrants.set(account,held);
+        else await this.acquireCharacter(account);
+      }
       catch (error) { return new Response(String(error.message), { status: 409 }); }
     }
     const [client, accepted] = transport ? [null, transport] : Object.values(new WebSocketPair());

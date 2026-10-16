@@ -2889,7 +2889,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     // Dropping a healthy socket there turned every long hitch into a reconnect.
     const oldestPing = pingsOut.values().next().value;
     if (ws && oldestPing !== undefined && Date.now() - oldestPing >= 30_000 && !pingHeld) { lost(ws, 'stale'); return; }
-    const silence = idlePing && roundInfo?.phase !== 'live' ? Math.max(staleMs, 60_000) : staleMs;
+    const silence = idlePing && (roundInfo?.phase !== 'live' || wall() - lastClockPing > staleMs) ? Math.max(staleMs, 60_000) : staleMs;
     if (ws && lastMsgAt && wall() - lastMsgAt > silence) {
       if (!pingHeld) { lost(ws, 'stale'); return; }
       // Two and a half seconds to be heard from (a pong answers the ping below): a socket that is really dead is

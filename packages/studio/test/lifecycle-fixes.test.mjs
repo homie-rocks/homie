@@ -37,3 +37,38 @@ test('a failed Gate presence query does not stop another Gate or the round alarm
  Object.assign(table,{relays:new Map([['0',{url:'https://room/?game=g&room=r&gate=0',clients:new Map()}],['1',{url:'https://room/?game=g&room=r&gate=1',clients:new Map()}]]),env:{GATE:{idFromName:x=>x,get:()=>({fetch:async()=>{if(++asked===1)throw Error('restarted');return Response.json([]);}})}},hostRt:{wakeRound:()=>woke++},say(){},flushRoundRecords:async()=>{},flushFunctionEvents:async()=>{},flushBrain:async()=>{},roomAlarm:async()=>{},canSleep:()=>false});
  await table.alarm();assert.equal(woke,1);assert.equal(asked,2);
 });
+
+import {DatabaseSync} from 'node:sqlite';
+import {roomSessions} from '../worker/room-sessions.mjs';
+function storage(t) {
+ const db=new DatabaseSync(':memory:');t.after(()=>db.close());let writes=0;
+ return {db,get writes(){return writes;},sql:{exec(query,...args){const stmt=db.prepare(query);if(!query.startsWith('SELECT')){if(query.startsWith('INSERT')){writes++;assert.ok(args.every(x=>typeof x!=='string'||Buffer.byteLength(x)<2*1024*1024),'SQLite value limit');}stmt.run(...args);}return {toArray:()=>stmt.all(...args)};}},transactionSync:fn=>fn(),getAlarm:async()=>Date.now()+60000};
+}
+test('crowd sessions store one relay client per row, share Gate URL, and exclude snapshots',t=>{
+ const st=storage(t),store=roomSessions(st);store.read();const room=new NetRoom({code:'crowd'});
+ const url='https://room/__net?chat='+ 'a'.repeat(16000);
+ for(let i=0;i<300;i++)room.clients.set(String(i),{id:String(i),lastSeen:1,conn:{}});
+ room.lastSnap='s'.repeat(3*1024*1024);room.unexpected='private';
+ store.write(room,{relayDescriptors:[{url,clients:[...room.clients.keys()].map(id=>[id,id,url,null,null]),pings:[]}]});
+ const saved=roomSessions(st).read();assert.equal(saved.table.relayDescriptors[0].clients.length,300);
+ assert.equal(saved.fields.has('lastSnap'),false);assert.equal(saved.fields.has('unexpected'),false);
+ assert.ok(st.db.prepare('SELECT sum(length(value)) n FROM room_sessions').get().n<150000);
+});
+test('only meaningful client changes rewrite idle session rows',t=>{
+ const st=storage(t),store=roomSessions(st);store.read();const room=new NetRoom({code:'idle'});
+ room.clients.set('a',{id:'a',lastSeen:1,conn:{}});store.write(room);const before=st.writes;
+ room.clients.get('a').lastSeen=2000;store.write(room);assert.equal(st.writes,before);
+ room.clients.get('a').hidden=true;store.write(room);assert.equal(st.writes,before+1);
+});
+
+import {writeIdleChat} from '../worker/idle-chat.mjs';
+test('unchanged chat does not rewrite storage or read its alarm',async t=>{
+ const st=storage(t);let reads=0;st.getAlarm=async()=>{reads++;return Date.now()+60000;};
+ await writeIdleChat(st,{at:1,log:[]});const before=st.writes;
+ await writeIdleChat(st,{at:2000,log:[]});assert.equal(st.writes,before);assert.equal(reads,1);
+ await writeIdleChat(st,{at:3000,log:[{text:'new'}]});assert.equal(st.writes,before+1);
+});
+test('chat statistics flush at most once per minute',async()=>{
+ const table=Object.create(Table.prototype);let flushes=0;table.flushChatPending=async()=>flushes++;
+ await table.flushChat();await table.flushChat();assert.equal(flushes,1);
+});
