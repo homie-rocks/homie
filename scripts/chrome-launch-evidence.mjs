@@ -1,12 +1,17 @@
 // CI-only preload: observe the actual child, including failures before Puppeteer
-// returns a Browser. Keep the existing transport, flags and launch deadline.
+// returns a Browser. Pipe transport is confined to this CI preload.
 import childProcess from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { appendFileSync, mkdirSync, statfsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { ciLaunchOptions } from './chrome-launch-options.mjs';
+
 const directory = process.env.HOMIE_CHROME_EVIDENCE;
 if (directory) {
+  const { default: puppeteer } = await import('puppeteer-core');
+  const launch = puppeteer.launch.bind(puppeteer);
+  puppeteer.launch = options => launch(ciLaunchOptions(options));
   mkdirSync(directory, { recursive: true });
   const output = resolve(directory, `chrome-${process.pid}.jsonl`);
   const original = childProcess.spawn;
