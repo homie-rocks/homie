@@ -393,18 +393,26 @@ export class NetRoom {
    * bodies, so re-announce missing connected seats until it acknowledges them.
    * Use the existing join protocol for games bundling older netplay clients.
    * Snapshot traffic retries even if the boot roster was published too early;
-   * each peer is bounded to one retry per second, and never sent to replicas.
+   * retries back off from 1 to 30 seconds and stop after eight attempts.
+   * An exhausted peer is logged once; retries are never sent to replicas.
    */
   retryBrowserSeats(host) {
     if (!host || this.server || this.rules || host.id !== this.hostId || !this.lastRoster) return;
-    const seated = new Set(this.lastRoster.filter(s => !s.bot || s.agent).map(s => s.seat));
+    const seated = new Set(this.lastRoster.filter(s => !s.bot || s.agent).flatMap(s => [s.seat, s.agent?.seat]));
     const now = this.now();
     for (const peer of this.live()) {
       if (peer.id === host.id || peer.seat === null || peer.watch) continue;
       if (seated.has(peer.seat)) { peer.seatRetry = null; continue; }
-      const retry = peer.seatRetry;
-      if (retry?.host === host.id && now - retry.at < 1000) continue;
-      peer.seatRetry = { host: host.id, at: now };
+      const retry = peer.seatRetry?.host === host.id ? peer.seatRetry : null;
+      if (retry && now - retry.at < Math.min(1000 * 2 ** (retry.tries - 1), 30000)) continue;
+      if (retry?.tries >= 8) {
+        if (!retry.exhausted) {
+          retry.exhausted = true;
+          this.log({ ev: 'seat-retry-exhausted', room: this.code, id: peer.id, seat: peer.seat, host: host.id, tries: retry.tries });
+        }
+        continue;
+      }
+      peer.seatRetry = { host: host.id, at: now, tries: (retry?.tries ?? 0) + 1 };
       this.send(host, { t: 'join', peer: this.peer(peer) });
     }
   }
