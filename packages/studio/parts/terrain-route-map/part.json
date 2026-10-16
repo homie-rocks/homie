@@ -32,8 +32,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "10826c959cea68e8ca41bc3097e4d6b3d366b969f6067b5f81213c842274b1f0",
-      "bytes": 4170
+      "sha256": "2cddd8172fafb31f126e2d7930a90376797cc169d8f5bcf33efc859ad290c8a4",
+      "bytes": 4628
     },
     {
       "path": "THIRD-PARTY-LICENSE",
@@ -45,8 +45,8 @@
     },
     {
       "path": "preview/demo.js",
-      "sha256": "562ea2b1d2abce55b03398a805ae261a378617a196d814b7df06ad5691a0acd1",
-      "bytes": 578718,
+      "sha256": "8f0c03e5e84e8eda9175c891afe889a0e86bb8241f0fa58ae67da963a5470544",
+      "bytes": 580288,
       "rights": {
         "license": "Apache-2.0 AND MIT"
       }
@@ -73,13 +73,13 @@
     },
     {
       "path": "src/data.mjs",
-      "sha256": "0072825db914a1acfc1568e662d5cfd25beb2b63907eebe4cc174f6d2400c3f9",
-      "bytes": 2936
+      "sha256": "740608c324ccbe7a75d2d61831f5d266e6c5def7508f03f8c3013508d8c8658c",
+      "bytes": 5470
     },
     {
       "path": "src/index.mjs",
-      "sha256": "c45b952153aaa48d31644bf79c7228194569abff13830c45e7abcbff94e54cd9",
-      "bytes": 13824
+      "sha256": "5a17552670519c28a818e6ffa849da930f785f9599af7de75342b43207452ef1",
+      "bytes": 13814
     },
     {
       "path": "src/style.css",
@@ -109,7 +109,7 @@
     "collision": null
   },
   "cost": {
-    "bytes": 668030
+    "bytes": 672582
   },
   "provenance": {
     "source": "original",

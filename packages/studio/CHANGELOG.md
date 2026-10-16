@@ -29,6 +29,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ### Fixed
 
+- Public checklist proposals now require per-action staff authorization, validate tokens, retain retry keys and use separate expiring undo grants. Terrain heightmaps restrict origins and PNG types and enforce byte/dimension budgets before decoding.
+
 - The MCP Events workerd conformance test now parses SSE frames across HTTP chunks, including combined event/heartbeat frames and split UTF-8. Its former one-chunk-per-event assumption caused the intermittent 0.57.0 publish-gate JSON parse failure; production delivery and webhook formats are unchanged. PR CI adds a path-filtered Events/webhook gate covering protocol, push, durable delivery and signed studio events.
 
 ## [0.57.0] - 2026-10-16

@@ -1,4 +1,5 @@
-export function validateMap(data) {
+export function validateMap(data, {baseURL = globalThis.location?.href, allowedOrigins = []} = {}) {
+  validateHeightmapURL(data.heightmap, {baseURL, allowedOrigins});
   const {bounds, route, markers = [], height = 28, seaLevel = 6} = data;
   if (!Array.isArray(bounds) || bounds.length !== 4 || !bounds.every(Number.isFinite) || bounds[2] <= bounds[0] || bounds[3] <= bounds[1]) throw new Error('bounds must be [minX,minZ,maxX,maxZ]');
   const point = p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite) && p[0]>=bounds[0] && p[0]<=bounds[2] && p[1]>=bounds[1] && p[1]<=bounds[3];
@@ -39,4 +40,42 @@ export function placeLabels(points, width, height) {
 export function qualityMonitor({threshold=28,samples=90}={}) {
   let count=0,slow=0;
   return dt=>{if(dt<=0||dt>250)return false;count++;if(dt>threshold)slow++;return count>=samples&&slow/count>.25;};
+}
+
+/** PNG only: verify signature and IHDR dimensions before invoking an image decoder. */
+export function heightmapDimensions(bytes) {
+  const signature = [137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82];
+  if (bytes.length < 24 || signature.some((value,i) => bytes[i] !== value)) throw new Error('Expected a PNG heightmap');
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const width = view.getUint32(16), height = view.getUint32(20);
+  if (width < 2 || height < 2 || width > 2048 || height > 2048) throw new Error('Heightmap dimensions must be 2–2048 pixels');
+  return {width, height};
+}
+export function validateHeightmapURL(value, {baseURL, allowedOrigins = []} = {}) {
+  if (typeof value !== 'string' || !value.trim()) throw new Error('Invalid heightmap URL');
+  // Without a browser origin, validation permits relative paths only by default.
+  const base = new URL(baseURL || 'https://relative.invalid/');
+  const url = new URL(value, base);
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || !/\.png$/i.test(url.pathname) ||
+      (url.origin !== base.origin && !allowedOrigins.includes(url.origin)) ||
+      (!baseURL && /^(?:[a-z][a-z0-9+.-]*:|[\/\\]{2})/i.test(value) && !allowedOrigins.includes(url.origin))) throw new Error('Heightmap must be a same-origin or explicitly allowed PNG URL');
+  return url.href;
+}
+export async function loadHeightmap(value, options = {}) {
+  const url = validateHeightmapURL(value, options);
+  const response = await fetch(url, {redirect:'error', credentials:'same-origin'});
+  if (!response.ok || response.headers.get('content-type')?.split(';')[0].trim() !== 'image/png') throw new Error('Expected a PNG response');
+  const reader = response.body.getReader(), chunks = []; let size = 0;
+  try {
+    for (;;) {
+      const {done, value:chunk} = await reader.read(); if (done) break;
+      size += chunk.byteLength;
+      if (size > 16 * 1024 * 1024) throw new Error('Heightmap exceeds download budget');
+      chunks.push(chunk);
+    }
+  } catch (error) {await reader.cancel(); throw error;}
+  const bytes = new Uint8Array(size); let offset = 0;
+  for (const chunk of chunks) {bytes.set(chunk,offset); offset += chunk.length;}
+  const {width,height} = heightmapDimensions(bytes);
+  return createImageBitmap(new Blob([bytes], {type:'image/png'}), {resizeWidth:width, resizeHeight:height});
 }

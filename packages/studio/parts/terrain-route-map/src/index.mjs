@@ -1,19 +1,19 @@
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
-import {validateMap, heightSampler, placeLabels, qualityMonitor} from './data.mjs';
+import {validateMap, loadHeightmap, heightSampler, placeLabels, qualityMonitor} from './data.mjs';
 /** Owns only its canvas, controls and GPU resources. Call dispose when leaving the view. */
-export async function mountTerrainMap(root, input, {segments=192, pixelRatio=1.5, quality='auto'}={}) {
+export async function mountTerrainMap(root, input, {segments=192, pixelRatio=1.5, quality='auto', allowedOrigins=[]}={}) {
   if(!['auto','full','lite'].includes(quality))throw new Error('Invalid quality');
-  const data=validateMap(input);
+  const imageOptions={baseURL:location.href, allowedOrigins};
+  const data=validateMap(input,imageOptions);
   if (!Number.isInteger(segments)||segments<8||segments>256||!Number.isFinite(pixelRatio)||pixelRatio<.5||pixelRatio>2) throw new Error('Invalid rendering budget');
   const spanBudget=Math.max(data.bounds[2]-data.bounds[0],data.bounds[3]-data.bounds[1]);
   const estimatedPoints=data.route.coordinates.slice(1).reduce((sum,b,i)=>{const a=data.route.coordinates[i];return sum+Math.max(1,Math.ceil(Math.hypot(b[0]-a[0],b[1]-a[1])/(spanBudget/segments/2)));},1);
   if(estimatedPoints>8192) throw new Error('Route exceeds rendering budget');
-  const image = new Image(); image.crossOrigin='anonymous'; image.src=data.heightmap;
-  await image.decode();
-  if(image.width>2048||image.height>2048) throw new Error('Heightmap exceeds 2048 pixels');
+  const image = await loadHeightmap(data.heightmap,imageOptions);
   const sampling=document.createElement('canvas'); sampling.width=image.width; sampling.height=image.height;
   const context=sampling.getContext('2d',{willReadFrequently:true}); context.drawImage(image,0,0);
+  image.close();
   const rawSample=heightSampler(context.getImageData(0,0,image.width,image.height),data.bounds,data.height);
   const sample=(x,z)=>(rawSample(x,z)*4+rawSample(x-.5,z)+rawSample(x+.5,z)+rawSample(x,z-.5)+rawSample(x,z+.5))/8;
   const [x0,z0,x1,z1]=data.bounds, width=x1-x0, depth=z1-z0, span=Math.max(width,depth);

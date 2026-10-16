@@ -57,3 +57,11 @@ Original analytic heightmap and route, no survey data, imagery or third-party pa
 three.js 0.185.1 (MIT), OrbitControls (MIT). Part source/data Apache-2.0; preserve LICENSE,
 NOTICE, THIRD-PARTY-LICENSE and attribution. See `proof/parts-161/README.md` in the
 repository for measured device-emulation costs and limitations.
+
+### Heightmap security
+
+Heightmaps must be PNG files, 2–2048 pixels per axis, served as `image/png`, at most
+16 MiB compressed. The loader validates the PNG header before decoding. URLs must use
+HTTP(S), have a `.png` pathname, and be same-origin; explicitly trusted CDN origins can
+be passed in `mountTerrainMap` options as `allowedOrigins`. Credentials in URLs and
+redirects are rejected. Keep this allowlist in application code, not imported map data.

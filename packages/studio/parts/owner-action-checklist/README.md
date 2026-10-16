@@ -17,7 +17,7 @@ Each item has unique string `id`, opaque string `revision`, `title`, `consequenc
 irreversibility where applicable. All labels render as text, never HTML. Limit: 100 items.
 
 `execute` receives `{id, revision, operation: 'confirm'|'undo', key, token?}`.
-A successful durable commit returns `{ok:true, message, undoToken?}`. `message` describes
+A successful durable commit returns `{ok:true, message, undoToken?, undoRevision?, undoExpiresAt?}`. `message` describes
 what actually happened (past tense); it appears after “Done —”. `irreversible: true`
 always labels the consequence before confirmation and suppresses undo even if a token arrives.
 The visible states are Pending → Confirming → Done → Undone. During execution, the button
@@ -27,19 +27,28 @@ the disabled button says “Undone”. The undo message should name the restored
 “Saturday’s booking is back to pending.” Never return a pending proposal before restoration commits. Return an undo token
 only for an operation your server can reverse; never show a refund as reversible. A token
 must be bound to the authenticated actor, original action and deadline on the server.
-The UI disables duplicate taps. An uncertain failure locks that revision for the lifetime
-of the mounted component: reconcile from server state, returning a new revision only when
-safe to act again. Do not automatically retry a financial/publication mutation.
+Undo uses a distinct revision and an absolute millisecond deadline; the UI hides it at expiry.
+The UI disables duplicate taps. Refresh reconciles an uncertain failure; if the server
+still lists that proposal revision, a manual retry reuses its original idempotency key
+for the lifetime of the mounted component. The server must deduplicate by proposal revision
+as well as key across remounts and clients. Do not automatically retry a financial/publication mutation.
 
 ### Worker integration
 
 Import `createChecklistHandler` from the part's `src/handler.mjs`. Mount it at an exact
-route in the studio Worker, supplying `{app:'your-app', list, act}`. It calls the existing
+route in the studio Worker, supplying `{app:'your-app', list, load, act}`. It calls the existing
 `isOwner(request,env)`, `hasRole(request,env,app,'staff')`, and `requireSameOrigin(request)`
 from `@homie-rocks/studio/worker`. POST is checked for same-origin evidence before roles;
 responses are not cached. No new roles, sessions, cross-origin bypass or tool router.
 
 `list({request,env,owner,staff})` must filter to the actor's allowed proposals.
+`load(context,id)` must return the server-owned proposal (including completed proposals
+needed for retry lookup), or null. The handler permits staff only when that specific
+proposal has `allowStaff: true`; otherwise only owners may act. Undo requires a stored
+`undo: {token, revision, expiresAt, used:false}` grant, whose revision differs from the
+confirm revision. The server sets the deadline from the proposal's undo window at commit;
+never accept a client deadline. Tokens are 1–1000 URL-safe characters (letters, digits,
+`._~-`). Return the grant as `undoToken`, `undoRevision`, `undoExpiresAt` to the UI.
 `act(context,input)` MUST reload the server-owned proposal and check its action-specific
 permission (staff membership does not grant refunds or publishing), compare revision,
 consume the proposal and persist the result/idempotency key atomically in the studio's

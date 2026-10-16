@@ -26,7 +26,7 @@ test('checklist rejects duplicate and unclear proposals',()=>{
 });
 test('worker boundary uses origin and role checks before any tool call',async()=>{
  let calls=0,seen; const auth={isOwner:async()=>false,hasRole:async(_r,_e,app,role)=>app==='desk'&&role==='staff',requireSameOrigin};
- const handler=createChecklistHandler({app:'desk',auth,list:async()=>[],act:async(ctx,input)=>{calls++;seen={ctx,input};return {ok:true};}});
+ const handler=createChecklistHandler({app:'desk',auth,load:async()=>({id:'a',revision:'1',allowStaff:true}),list:async()=>[],act:async(ctx,input)=>{calls++;seen={ctx,input};return {ok:true};}});
  const request=(origin,body={id:'a',revision:'1',operation:'confirm',key:'one'})=>new Request('https://studio.example/actions',{method:'POST',headers:{Origin:origin},body:JSON.stringify(body)});
  assert.equal((await handler(request('https://other.example'),{})).status,403);assert.equal(calls,0);
  assert.equal((await handler(request('https://studio.example',{id:'a'}),{})).status,400);assert.equal(calls,0);
