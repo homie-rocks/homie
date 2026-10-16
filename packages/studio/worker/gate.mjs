@@ -441,7 +441,7 @@ export class Gate {
   }
   async connect(request, server) {
     const link = await this.upstream(new URL(request.url));
-    const id = server.gateState?.id ?? crypto.randomUUID();
+    const id = server.gateState?.id ?? (server.rememberGate ? crypto.randomUUID() : String(++this.sequence));
     if (server.gateState) Object.assign(server, server.gateState);
     server.gateState ??= {id,opened:false};
     server.rememberGate?.(server.gateState);

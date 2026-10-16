@@ -255,7 +255,9 @@ export class Table {
           const account = room.clients.get(peer.id)?.player;
           return account ? this.characterGrants.get(account) ?? null : null;
         } } : {}),
-        onRoundIdle: until => { room.tellWatchers(); this.report(); this.recordRound(); this.armRoom(until); this.ctx.waitUntil(this.sleepRoom()); },
+        // Alarm-driven suspension requires the native hibernation lifecycle.
+        // Legacy adapters keep their host clock, as browser hosts do.
+        ...(this.ctx.acceptWebSocket ? { onRoundIdle: until => { room.tellWatchers(); this.report(); this.recordRound(); this.armRoom(until); this.ctx.waitUntil(this.sleepRoom()); } } : {}),
         onTick: () => {
           if (!saved) return;
           ticks += 1;
