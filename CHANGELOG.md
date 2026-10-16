@@ -19,7 +19,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [Unreleased]
 
-- Validated owners retain 512 input ticks for outage recovery and deduplicate pending reports by tick, preventing honest 15-second server stalls from triggering a cut back to an old pose. Packet byte limits, per-tick validation work, physics and overflow guards remain bounded.
+- Validated owners retain 512 input ticks for outage recovery keep unacknowledged reports even while the server clock is stopped, retire acknowledged prefixes, and deduplicate pending reports by tick, preventing honest 15-second server stalls from triggering a cut back to an old pose. Packet byte limits, per-tick validation work, physics and overflow guards remain bounded.
 
 - Rules handlers can read bounded relay-measured round-trip time with `world.latency(id)` to apply game-defined contact-history limits. Unknown and non-human connections return zero; client timestamps do not set this measurement.
 

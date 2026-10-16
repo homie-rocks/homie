@@ -2766,6 +2766,19 @@ for (const stall of [3000,15000]) test(`validated owner recovers room clock afte
  a.command('point');await clock.wait(300);assert.equal(a.me.score,1,'score still confirms');
  assert.ok(Math.abs(globalThis.__homieNet.probe.prediction().tick-r.host.tick)<20,'clock is bounded');
 });
+test('validated owner retains unacknowledged reports while the server tick is stopped',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t);let until=0;
+ const r=rig(L,compiled,{enforceOverrun:true,clock:{now:()=>Date.now(),setTimer:(fn,ms)=>{
+  const run=()=>Date.now()<until?setTimeout(run,until-Date.now()):fn();return setTimeout(run,ms);
+ },clearTimer:h=>clearTimeout(h)}},0,m=>m.t==='in'&&Date.now()<until?null:0);
+ const a=openRoom({net:{config:cfg('Retained stalled owner'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(1000);a.input({ax:1});await clock.wait(500);
+ const revision=r.host.core.bodies()[0].r;until=Date.now()+15000;await clock.wait(18000);
+ assert.equal(r.host.core.bodies()[0].r,revision,'no authority cut after packet loss during a stall');
+ assert.equal(r.host.core.stats.held,0);
+ assert.ok(Math.abs(a.me.pos.x-r.host.core.listeners()[0].pos.x)<1,'authority must catch up, not wait on an evicted report');
+});
 test('a delayed owner placement starts fresh reports near arrival time without granting travel', async t => {
  const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
  const clock=virtualTime(t),r=rig(L,compiled,false,300,300);

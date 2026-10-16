@@ -684,7 +684,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // Cover an authority round trip and jitter. Missing application receipts measure
     // recovery delay (whether a dropped frame or a TCP stall): widen the history
     // until they return, without allowing an unbounded packet or retained history.
-    const missing = sentHistory.find(e => e.t <= (latest?.k ?? 0) && !applications.has(e.row[marker + 1]));
+    const missing = sentHistory.find(e => (myKind()?.validatedOwner || e.t <= (latest?.k ?? 0)) && !applications.has(e.row[marker + 1]));
     const recoveryTicks = missing ? t - missing.t + 2 * sendEvery : 0;
     const historyCap = myKind()?.validatedOwner ? OWNER_REPORT_LIMIT : 64;
     const windowTicks = Math.min(historyCap, Math.max(4, recoveryTicks, Math.ceil((2 * authorityRtt() + 250) / period + targetLead())));
@@ -855,7 +855,13 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         if (placed) emit('placed', entityOf(me, true));
       } else if (kindOf.get(me.kind)?.owner) {
         if (kindOf.get(me.kind)?.validatedOwner) {
-          pending = pending.filter(e=>!applications.has(e.seq!));
+          const accepted = me.ownerTick ?? -1;
+          pending = pending.filter(e=>e.t>accepted && !applications.has(e.seq!));
+          // A contiguous accepted tick or an explicit receipt retires its report.
+          // Otherwise a long recovery can forget an old receipt and resend that
+          // acknowledged prefix ahead of the missing path forever.
+          const marker = kindOf.get(me.kind)!.input.length + 10;
+          sentHistory = sentHistory.filter(e=>e.t>accepted && !applications.has(e.row[marker+1]));
           const now = clock();
           const error = tickAt(now) - (f.k + ownerArrivalLead());
           // Snapshots acknowledge the room clock even when no input was accepted.

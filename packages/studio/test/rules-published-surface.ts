@@ -4,12 +4,13 @@ import { openRoom } from '@homie-rocks/studio/rules/view';
 export function inspectWorld(w: GameWorld, s: GameSelf<'pawn'>, g: GameGoal, a: GameRequest) {
   const members: Record<keyof GameWorld, true> = {
     tick:true,dt:true,unitsLeft:true,ticks:true,math:true,tune:true,map:true,stage:true,level:true,levelMax:true,guideLevel:true,guideSeats:true,kids:true,levelSet:true,shared:true,round:true,
-    random:true,label:true,route:true,send:true,dispatch:true,sendRoom:true,sendArea:true,after:true,emit:true,spawn:true,near:true,inBox:true,ray:true,rayAll:true,rays:true,ask:true,
+    random:true,label:true,latency:true,route:true,send:true,dispatch:true,sendRoom:true,sendArea:true,after:true,emit:true,spawn:true,near:true,inBox:true,ray:true,rayAll:true,rays:true,ask:true,
     goalDone:true,despawn:true,place:true,sweep:true,physics:true,movement:true,
   };
   w.physics.ray({x:0,y:0,z:1},{x:0,y:0,z:-1},3)?.distance;w.physics.step(w.dt);
   w.movement(s.id,'pawn').map(m=>m.tick+m.pos.x+m.vel.x);
   w.movement(s.id).map(m=>m.tick+m.pos.x);
+  const measuredLatency:number=w.latency(s.id);
   const time:number=w.tick+w.dt+w.ticks(1)+w.random()+w.level+w.levelMax+w.round.n+w.round.endsAt;
   const stage:string=w.stage+w.map.name+w.round.phase;
   const guideLevel:number=w.guideLevel;const guideSeats:readonly number[]=w.guideSeats;const policy:boolean=w.kids||w.levelSet;
