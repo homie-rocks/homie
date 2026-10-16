@@ -66,3 +66,13 @@ Tokens are bound to this origin, limited to the exact named tools, expire after 
 ## Deployment
 
 Cloudflare's official MCP request interface cannot authorize new static-asset uploads with an upload JWT; deploy with Wrangler, Cloudflare's own CLI using browser OAuth.
+
+### Weekly calendar exceptions
+
+`calendarSlots` (also exposed by `ctx.bookings.calendar`) accepts `exceptions`,
+keyed by local `YYYY-MM-DD`. Use `null` to omit a holiday or an object containing
+`time`, `capacity` and/or `durationMinutes` to override that occurrence. Dates
+must belong to the declared range and weekdays. The occurrence ID remains based
+on the original series time when an exception changes its start time. DST gaps
+and ambiguous times refuse rather than silently changing the booking. Publishing
+new calendar data does not itself move existing reservations or change payments.
