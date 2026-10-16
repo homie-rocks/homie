@@ -18,3 +18,7 @@ test('missing CI queue permission has an actionable diagnostic',async t=>{
 test('another Worker queue cannot be adopted',async t=>{
  await assert.rejects(async()=>ensureBackgroundQueues(root(t),()=>({code:1,out:'localized'}),{headers:{authorization:'Bearer test'},fetchFn:async url=>Response.json({success:true,result:[{queue_name:new URL(url).searchParams.get('name'),producers:[{type:'worker',script:'other'}],consumers:[]}]})}),/another|exclusively/);
 });
+import {explainCloudflare} from '../lib/cloudflare.mjs';
+test('deploy diagnostics explain a revoked queue permission on an existing CI token',()=>{
+ assert.match(explainCloudflare('Queue binding: authentication error (10000)')?.why??'',/Queues.*Edit/);
+});

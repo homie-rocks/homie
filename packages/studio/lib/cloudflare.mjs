@@ -103,6 +103,9 @@ function parseJson(text) {
 export function explainCloudflare(out, accountId = null) {
   const text = String(out ?? '');
   const dash = accountId ? `https://dash.cloudflare.com/${accountId}` : 'https://dash.cloudflare.com';
+  if (/queue.*(?:permission|authentication|forbidden|unauthori)|(?:permission|authentication|forbidden|unauthori).*queue/is.test(text)) {
+    return {needs:'queues-permission',why:'The deployment token needs Account > Queues > Edit on this account. Update the CI/Workers Builds token permissions, then retry deploy.'};
+  }
   if (/(?:cron|schedule).*?(?:limit|maximum|exceed)|(?:limit|maximum|exceed).*?(?:cron|schedule)/i.test(text)) {
     return { needs: 'cron-limit', why: 'This account has reached its Cron Trigger limit (5 on Workers Free). Remove unused triggers from other Workers in the Cloudflare dashboard, or upgrade the account plan, then retry deploy. Required studio schedules have been retained.' };
   }

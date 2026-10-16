@@ -7,7 +7,7 @@ import worker from '../worker/index.mjs';
 import {requestFixture} from './request-budget.test.mjs';
 test('an idle studio needs no cron; scheduled studios retain their ticks',()=>{
  assert.deepEqual(JSON.parse(wranglerConfig({worker:'idle',name:'Idle',d1:'idle'}).replace(/^\s*\/\/.*$/gm,'')).triggers.crons,[]);
- assert.deepEqual(JSON.parse(wranglerConfig({triggers:{crons:['* * * * *']}}).replace(/^\s*\/\/.*$/gm,'')).triggers.crons,['* * * * *']);
+ assert.deepEqual(JSON.parse(wranglerConfig({worker:'scheduled',name:'Scheduled',d1:'scheduled',triggers:{crons:['* * * * *']}}).replace(/^\s*\/\/.*$/gm,'')).triggers.crons,['* * * * *']);
  assert.match(explainCloudflare('maximum number of cron triggers exceeded').why,/unused.*triggers|remove.*triggers/i);
 });
 test('concept static pages traverse the banner and static headers forbid indexing',()=>{
