@@ -26,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       paths: ${{ steps.diff.outputs.paths }}
+      events: ${{ steps.events.outputs.needed }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - id: diff
@@ -36,6 +37,31 @@ jobs:
           git fetch --depth=1 origin "$BASE_SHA" "$HEAD_SHA"
           git diff --name-only "$BASE_SHA" "$HEAD_SHA" > changed-paths.txt
           echo "paths=$(node -e 'console.log(JSON.stringify(require("fs").readFileSync("changed-paths.txt","utf8").trim().split("\n")))')" >> "$GITHUB_OUTPUT"
+      - id: events
+        env:
+          CI_CHANGED_PATHS: ${{ steps.diff.outputs.paths }}
+        run: echo "needed=$(node scripts/ci-events.mjs --needed)" >> "$GITHUB_OUTPUT"
+
+  mcp-events:
+    needs: changes
+    name: MCP Events and webhooks
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        if: needs.changes.outputs.events == 'true'
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        if: needs.changes.outputs.events == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        if: needs.changes.outputs.events == 'true'
+      - name: Protocol, SSE framing, durable delivery and signed webhooks
+        if: needs.changes.outputs.events == 'true'
+        run: node scripts/ci-events.mjs
 
   package-shards:
     needs: changes
@@ -134,7 +160,7 @@ jobs:
   packages:
     name: Packages (Node ${{ matrix.node }})
     if: always() && github.event_name == 'pull_request'
-    needs: [package-shards, packaging, plugin, studio-scenarios]
+    needs: [package-shards, packaging, plugin, studio-scenarios, mcp-events]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     strategy:
