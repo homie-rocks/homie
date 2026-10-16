@@ -1,0 +1,128 @@
+TAP version 13
+# (node:20641) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: validated owner keeps its own trajectory with delayed reports: 0 ms
+ok 1 - validated owner keeps its own trajectory with delayed reports: 0 ms
+  ---
+  duration_ms: 395.604541
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 150 ms
+ok 2 - validated owner keeps its own trajectory with delayed reports: 150 ms
+  ---
+  duration_ms: 351.112834
+  type: 'test'
+  ...
+# Subtest: validated owner keeps its own trajectory with delayed reports: 300 ms
+ok 3 - validated owner keeps its own trajectory with delayed reports: 300 ms
+  ---
+  duration_ms: 346.981625
+  type: 'test'
+  ...
+# Subtest: validated owner predicts through an outage, keeps score, and resumes without a wait
+ok 4 - validated owner predicts through an outage, keeps score, and resumes without a wait
+  ---
+  duration_ms: 312.822125
+  type: 'test'
+  ...
+# Subtest: validated owner draws a local corner landing without embedding the interpolated box
+ok 5 - validated owner draws a local corner landing without embedding the interpolated box
+  ---
+  duration_ms: 92.639542
+  type: 'test'
+  ...
+# Subtest: validated owner recovers room clock after 3000 ms server stall
+ok 6 - validated owner recovers room clock after 3000 ms server stall
+  ---
+  duration_ms: 201.953875
+  type: 'test'
+  ...
+# Subtest: validated owner recovers room clock after 15000 ms server stall
+ok 7 - validated owner recovers room clock after 15000 ms server stall
+  ---
+  duration_ms: 388.680084
+  type: 'test'
+  ...
+# Subtest: validated owner retains unacknowledged reports while the server tick is stopped
+ok 8 - validated owner retains unacknowledged reports while the server tick is stopped
+  ---
+  duration_ms: 380.3815
+  type: 'test'
+  ...
+# Subtest: a delayed owner placement starts fresh reports near arrival time without granting travel
+ok 9 - a delayed owner placement starts fresh reports near arrival time without granting travel
+  ---
+  duration_ms: 209.7915
+  type: 'test'
+  ...
+# Subtest: validated owner clock tracks room at 0.99 clock rate
+ok 10 - validated owner clock tracks room at 0.99 clock rate
+  ---
+  duration_ms: 1645.388667
+  type: 'test'
+  ...
+# Subtest: validated owner clock tracks room at 1.01 clock rate
+ok 11 - validated owner clock tracks room at 1.01 clock rate
+  ---
+  duration_ms: 1649.70425
+  type: 'test'
+  ...
+# Subtest: validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame
+ok 12 - validated owner shares presentation across microtasks within one browser frame and invalidates on input and the next frame
+  ---
+  duration_ms: 96.881292
+  type: 'test'
+  ...
+# Subtest: an observer switches an owner placement at its sampled time, without interpolating across the map
+ok 13 - an observer switches an owner placement at its sampled time, without interpolating across the map
+  ---
+  duration_ms: 124.698542
+  type: 'test'
+  ...
+# Subtest: a three-second server stall does not rewind continued valid owner movement
+ok 14 - a three-second server stall does not rewind continued valid owner movement
+  ---
+  duration_ms: 211.060041
+  type: 'test'
+  ...
+# Subtest: a stalled scene reaches fresh movement without replaying a long stationary tail
+ok 15 - a stalled scene reaches fresh movement without replaying a long stationary tail
+  ---
+  duration_ms: 198.334333
+  type: 'test'
+  ...
+# [object Object]
+# Subtest: an idle remote source cannot pin a moving runner and its patrol
+ok 16 - an idle remote source cannot pin a moving runner and its patrol
+  ---
+  duration_ms: 227.110541
+  type: 'test'
+  ...
+# Subtest: a placement after a long server pause does not replay a stationary spawn tail
+not ok 17 - a placement after a long server pause does not replay a stationary spawn tail
+  ---
+  duration_ms: 530.568542
+  type: 'test'
+  location: '/Users/ryan/.homie/worktrees/runner-error-smoothing/packages/studio/test/rules-view.test.mjs:3015:1'
+  failureType: 'testCodeFailure'
+  error: 'observer froze at the placement for 400 ms'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///Users/ryan/.homie/worktrees/runner-error-smoothing/packages/studio/test/rules-view.test.mjs:3031:49)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# {"longest":400}
+1..17
+# tests 17
+# suites 0
+# pass 16
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7447.912041

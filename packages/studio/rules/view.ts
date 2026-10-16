@@ -1330,7 +1330,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       // A long pause may contain a stationary section before fresh movement.
       // Drain that backlog faster, bounding actual sampled travel rather than
       // charging every frame for the body's theoretical maximum fall speed.
-      const rate = target - sceneCursor > tickHz * .25 ? 4 : 1.5;
+      // Scale recovery to the backlog so a multi-second stationary tail does
+      // not impose seconds of extra latency. Sampled travel below still bounds
+      // every continuous body step, including while this clock drains quickly.
+      const backlog = target - sceneCursor;
+      const rate = backlog > tickHz ? Math.max(4, backlog / (tickHz * .1)) : backlog > tickHz * .25 ? 4 : 1.5;
       let ticks = Math.max(0, Math.min(.05, (now - sceneAt) / 1000)) * tickHz * rate;
       for (const [id, q] of ownerHistory) {
         const u=q.samples.at(-1)!.u;

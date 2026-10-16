@@ -3011,3 +3011,22 @@ test('an idle remote source cannot pin a moving runner and its patrol',async t=>
  }
  assert.ok(previous-resumed>4,'resuming the idle source cannot freeze the other runner');
 });
+
+test('a placement after a long server pause does not replay a stationary spawn tail',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'validated-owner');
+ const clock=virtualTime(t);let until=0;
+ const r=rig(L,compiled,{enforceOverrun:true,clock:{now:()=>Date.now(),setTimer:(fn,ms)=>{
+  const run=()=>Date.now()<until?setTimeout(run,until-Date.now()):fn();return setTimeout(run,ms);
+ },clearTimer:h=>clearTimeout(h)}},80,80);
+ const viewer=openRoom({net:{config:cfg('Placement observer'),WebSocketImpl:r.socket(),post:null}});
+ await clock.wait(300);const owner=openRoom({net:{config:cfg('Moving placed owner'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{viewer.close();owner.close();r.stop();});await clock.wait(1500);owner.input({ax:1});
+ const id=owner.me.id;until=Date.now()+15000;
+ for(let i=0;i<950;i++){if(i===900)owner.command('respawn');await clock.wait(16);viewer.get(id);}
+ let prior=viewer.get(id).pos.x,still=0,longest=0;
+ for(let i=0;i<500;i++){
+  await clock.wait(16);const x=viewer.get(id).pos.x;
+  still=Math.abs(x-prior)<1e-8?still+16:0;longest=Math.max(longest,still);prior=x;
+ }
+ t.diagnostic(JSON.stringify({longest}));assert.ok(longest<=400,`observer froze at the placement for ${longest} ms`);
+});

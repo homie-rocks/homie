@@ -21,6 +21,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ### Fixed
 
+- Observer recovery drains long stationary history in proportion to its backlog, while retaining the existing sampled movement bound. A placement queued during a 15-second server pause no longer adds seconds of frozen replay.
+
 - New validated-owner placements no longer advertise an accepted movement tick from the previous body revision.
 
 - A server timer resuming after a long pause gives recently active sockets 2.5 seconds to deliver queued traffic before silence eviction; abandoned sockets still expire.
