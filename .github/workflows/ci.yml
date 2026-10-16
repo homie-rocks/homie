@@ -40,7 +40,9 @@ jobs:
       - id: events
         env:
           CI_CHANGED_PATHS: ${{ steps.diff.outputs.paths }}
-        run: echo "needed=$(node scripts/ci-events.mjs --needed)" >> "$GITHUB_OUTPUT"
+        run: |
+          needed=$(node scripts/ci-events.mjs --needed)
+          echo "needed=$needed" >> "$GITHUB_OUTPUT"
 
   mcp-events:
     needs: changes
