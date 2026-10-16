@@ -17,7 +17,11 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
-## Unreleased
+## [0.55.0] - 2026-10-15
+
+**Plugin 0.55.0**
+
+Studios start faster and serve files straight from Cloudflare, background work and Stripe events go through retrying queues so nothing is lost, and the runtime follows Cloudflare's published practice.
 
 - Weight Analytics Engine page counts by the sample interval, preserving historical totals and retry-safe corrections under sampling.
 
