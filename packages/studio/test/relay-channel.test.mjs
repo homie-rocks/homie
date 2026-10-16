@@ -50,3 +50,12 @@ test('a stalled Table accepts more than eight input batches without dropping the
  for(let i=0;i<40;i++)assert.doesNotThrow(()=>channel.send(JSON.stringify([['data','p',String(i)]])));
  release();await Promise.all(pending);assert.equal(received.length,40);
 });
+
+test('a live socket closed during HTTP drain falls back without dropping the Gate',async()=>{
+ let release,posts=0;const pending=[],held=new Promise(r=>release=r),listeners=new Map();
+ const channel=relayChannel({waitUntil:p=>pending.push(p)},async()=>{posts++;await held;return new Response(null,{status:204});});
+ channel.send('[]');
+ const socket={readyState:1,addEventListener:(name,fn)=>listeners.set(name,fn),send(){assert.equal(this.readyState,1,'must not send on detached socket');},close(){this.readyState=3;}};
+ const attached=channel.attachLive(socket);socket.close();listeners.get('close')();release();await attached;
+ assert.doesNotThrow(()=>channel.send('[]'));await Promise.all(pending);assert.equal(posts,2);assert.equal(channel.isLive(),false);
+});

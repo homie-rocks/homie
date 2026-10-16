@@ -14,13 +14,14 @@ export function relayChannel(ctx, deliver) {
       socket.addEventListener('error',()=>{if(live===socket){live=null;emit('detached',{});}});
       await chain;
       if(closed){socket.close(1000,'closed');return;}
+      if(socket.readyState!==1)return;
       live=socket;
       emit('drain',{});
     },
     isLive:()=>Boolean(live),
     canSend(size) { return Boolean(live) || pendingBytes+size<=4*1024*1024; },
     send(data) {
-      if(live){live.send(data);return;}
+      if(live){try{if(live.readyState===1){live.send(data);return;}}catch{ /* Retry over the idle transport. */ }live=null;}
       if (closed) throw new Error('Relay channel closed');
       const size=data.length;
       if (pendingBytes+size>4*1024*1024) throw new Error('Relay channel queue limit');
@@ -54,7 +55,7 @@ export function relayStream(ctx, wake) {
     accept() {}, emit,
     addEventListener(name, fn) { const list=listeners.get(name)??[];list.push(fn);listeners.set(name,list); },
     send(data) {
-      if(live){live.send(data);return;}
+      if(live){try{if(live.readyState===1){live.send(data);return;}}catch{ /* Retry over the idle transport. */ }live=null;}
       const chunk = encoder.encode(data+'\n');
       if (chunk.byteLength + (controller ? limit-controller.desiredSize : bytes) > limit) throw new Error('Relay output queue limit');
       if (controller) controller.enqueue(chunk);
