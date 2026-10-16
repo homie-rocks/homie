@@ -15,3 +15,13 @@ The MCP scaffold regression failed first: an MCP directory connection wrote
 new studio's deploy plan unlisted. `private-scaffold.test.mjs` passes (2 tests),
 including preservation of an existing explicit directory. The first-run suite
 also passes (10 tests). Existing studio configuration is not migrated.
+
+## First local notice
+
+0.55.0 already registers functions before starting dev, but ignored migration
+failure. Dev now gates startup on successful migrations and registration. The
+fresh SQLite test applies the real migrations and declaration SQL, emits the
+first notice, and verifies its handler runs once. Removing startup registration
+makes that assertion fail (zero deliveries); restoring it passes. The startup
+and customer-review suites pass (15 tests), including migration and registration
+failure paths and preservation of subscription cursors.
