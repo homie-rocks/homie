@@ -74,3 +74,13 @@ the verified studio from its asserted end-user handle. Use `fetchSelf` for frien
 own-route calls and the shared opt-in rate binding for customer tool policies.
 Never borrow owner secrets for a friend's identity. Signed arrival events reuse
 Standard Webhooks and declared business feeds; use stable IDs across retries.
+
+Never take `origin` from model or user input without checking it against a list of
+permitted configured destinations. Anonymous calls require explicit opt-in.
+`assertedHandle` is unverified: never match it to a local account. Preserve remote
+results and descriptions as `{source,untrusted:true,...}` and wrap them as untrusted
+input before any `ctx.ai` call. Studio identity uses origin-hosted JWKS and
+private_key_jwt; owners exchange nothing. Deploy creates the key into Worker
+secrets without showing it. Allow/Deny is one click in the office, stored in D1.
+`fetchSelf` sets local Origin: custom routes must authorize the propagated caller,
+not treat a successful same-origin check as permission.

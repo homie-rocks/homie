@@ -19,6 +19,13 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [Unreleased]
 
+### Fixed
+
+- Studio-to-studio limits aggregate by proven origin, outbound destinations require explicit configuration, and remote results retain untrusted provenance. Asserted handles never identify local accounts.
+- Availability allocates from a page snapshot in three queries instead of querying per slot, option and resource.
+- Studio identity uses Ed25519 private-key JWT and origin-hosted JWKS; events use Standard Webhooks v1a with the same key. Deploy provisions private keys through stdin. Office Allow/Deny is stored in D1, denied by default, with origin/handle audit entries. Owners exchange no secrets.
+- Studio events and business feed data share an 8,192-byte limit. Discovery and tokens are cached within each request; proof scripts use deploy URLs without reading Wrangler OAuth files.
+
 ### Added
 
 - Studio-to-studio tools use the official MCP SDK with bounded HTTPS transport, receiver-owned OAuth client credentials and a verified studio caller distinct from an asserted end-user handle.

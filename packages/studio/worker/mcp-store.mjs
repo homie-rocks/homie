@@ -42,7 +42,7 @@ export async function rateLimit(env, caller, limit = null) {
   return row.n <= limit;
 }
 export async function audit(env, caller, tool, outcome) {
-  await env.DB.prepare('INSERT INTO mcp_audit(person,client,tool,at,outcome) VALUES(?1,?2,?3,?4,?5)').bind(caller.id ?? null,caller.client ?? null,tool,Date.now(),outcome).run();
+  await env.DB.prepare('INSERT INTO mcp_audit(person,client,tool,at,outcome) VALUES(?1,?2,?3,?4,?5)').bind(caller.studio?(caller.actingFor?.assertedHandle??null):caller.id ?? null,caller.studio?.origin??caller.client ?? null,tool,Date.now(),outcome).run();
   // Bounded storage, and no cleanup timer or writes on ordinary page traffic.
   await env.DB.batch([
     env.DB.prepare('DELETE FROM mcp_audit WHERE id <= (SELECT MAX(id)-10000 FROM mcp_audit)'),

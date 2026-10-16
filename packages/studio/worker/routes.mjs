@@ -56,7 +56,7 @@ export default async function route(request, env, ctx) {
 
   if (path === '/_studio/office/functions') return (await import('./functions.mjs')).functionsRoute(request,env,await getAll());
 
-  if (path === '/mcp' || path === '/mcp/auth' || path.startsWith('/hooks/tools/') || path.startsWith('/hooks/studios/') || path.startsWith('/oauth/') || path.startsWith('/.well-known/oauth-') || path === '/_studio/office/connections') {
+  if (path === '/.well-known/jwks.json' || path === '/mcp' || path === '/mcp/auth' || path.startsWith('/hooks/tools/') || path.startsWith('/hooks/studios/') || path.startsWith('/oauth/') || path.startsWith('/.well-known/oauth-') || path === '/_studio/office/connections') {
     const { remoteMcp } = await import('./mcp.mjs');
     return remoteMcp(request, env, ctx, { catalogueOf: getAll, definitions: await studioTools() });
   }

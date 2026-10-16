@@ -18,94 +18,89 @@ if (available.isError) throw new Error('Availability could not be read');
 // Inspect available.data.items, choose an offer, then:
 const booked = await ctx.studios.call(origin, 'studio_book', {
   ...chosenOffer.booking, id: stableBookingId, expiresAt: Date.now() + 600000
-}, {actingFor: 'guest-42'});
+}, {assertedHandle: 'guest-42'});
 if (booked.isError) throw new Error('Reservation was refused');
 ```
 
 The official MCP TypeScript client owns initialization, Streamable HTTP/SSE,
 OAuth discovery, client authentication, schema validation and protocol errors.
-`call` returns `{isError,data?,content}`. Structured content is preserved; the
-kit's legacy `untrusted-tool-data` envelope is decoded in the kit. Content and
+`call` returns `{source:{origin,authenticated},untrusted:true,isError,data?,content}`. Structured content is preserved; the
+kit's legacy `untrusted-tool-data` envelope is decoded while retaining the untrusted marker and provenance. `listTools` and each description are also labelled untrusted. Before any `ctx.ai` call, wrap remote data and descriptions as untrusted input, preserving `source` and `untrusted`; never concatenate them into system instructions. Content and
 `data` remain untrusted business data, never instructions or verified claims.
 Transport failures reject; tool failures return `isError:true`. No automatic
 booking or payment retries are introduced. Use stable business IDs for retries.
 
 Each operation has a ten-second deadline including discovery, a 1 MiB response
 limit before SDK parsing, and a 64 KiB argument limit. Origins must be bare HTTPS
-origins. All redirects are refused. Every fetch, including OAuth metadata and token
+origins on port 443 with public DNS names. IP literals (including IPv6, mapped and integer forms), localhost, .localhost, .local and .internal are refused unless that exact outbound entry explicitly sets `allowPrivate:true`. Config keys are normalized; duplicate normalized keys or mismatched `origin` fields fail. Never take an origin from model or user input without checking it against a list of permitted origins. All redirects are refused. Every fetch, including OAuth metadata and token
 requests, must stay on the chosen origin. Credentials are issuer-pinned. A client
-and its transport close after each operation; tool listing is cursor-paged.
+and its transport close after each operation; discovery and tokens are cached per origin within the request; tool listing is cursor-paged.
 Keep the toolkit's `global_fetch_strictly_public` compatibility flag for
-Worker-to-Worker HTTP calls. Public calls work without configured credentials. Studio code is trusted Worker
+Worker-to-Worker HTTP calls. Every destination must be configured and delegated to the calling tool. Public anonymous calls require `anonymous:true` on that exact outbound entry. An unknown origin never falls back to anonymous. Studio code is trusted Worker
 code: these safeguards are not a sandbox for imported JavaScript. Choose trusted
 remote operators; this does not implement DNS address pinning.
 
 ## Studio identity and allowlists (u)
 
-The receiving owner provisions a confidential OAuth client through their existing
-studio configuration. Establish the studio-origin association with the other owner
-out of band; a client cannot self-register an origin or manufacture an account.
-Generate at least 32 random secret bytes and put the shared value in both studios'
-Worker secrets through authorized tooling. Secret values never go in studio.json,
-source, tool arguments or chat. For example, B declares:
+Each studio deploy generates its own Ed25519 key into the `STUDIO_SIGNING_KEY`
+Worker secret via stdin. Private keys never appear in model output, source or
+studio.json. Existing keys survive redeploys. Owners exchange nothing.
+The caller publishes only public keys at `https://<origin>/.well-known/jwks.json`.
+The receiver fetches that exact origin with bounded responses and no redirects.
+
+B declares permitted capabilities:
 
 ```json
 {"mcp":{"studios":{"inbound":{"concierge":{
   "origin":"https://concierge.example",
-  "secret":"CONCIERGE_OAUTH_SECRET",
-  "tools":["studio_availability","studio_book"],
-  "enabled":true
+  "tools":["studio_availability","studio_book"]
 }}}}}
 ```
 
-A declares the matching destination and delegates it to explicit local tools or
-function names:
+A delegates the outbound destination:
 
 ```json
 {"mcp":{"studios":{"outbound":{"https://venue.example":{
-  "clientId":"concierge","secret":"VENUE_OAUTH_SECRET",
   "tools":["plan_drive"]
 }}}}}
 ```
 
-B's `/oauth/token` supports RFC 6749 `client_credentials` with
-`client_secret_basic`, `scope=studio` and `resource=https://venue.example/mcp`.
-The existing OAuth metadata advertises the grant. Five-minute opaque access tokens
-are hashed in the existing OAuth D1 store and validated by the existing provider's
-`resolveExternalToken` hook. Browser OAuth remains unchanged. This is an optional
-MCP authorization extension, not a change to core MCP authorization.
+B's owner opens **Office → AI connections** and clicks **Allow** for the
+configured calling origin. All start denied. Allow/Deny is stored in D1 and takes
+effect on every dispatch without redeploying, including existing tokens. Tool and
+event capability declarations remain in configuration. Audit entries show the
+calling origin and the asserted handle, not a misleading local account name.
 
-A receiving tool sees:
+`/oauth/token` accepts `client_credentials` with RFC 7523 `private_key_jwt`,
+`scope=studio`, and the receiver's `/mcp` resource. The client ID, issuer and subject
+are the caller's canonical origin; audience is the exact receiver token endpoint.
+Assertions have short expiry, `kid`, and a one-use `jti` checked atomically in D1.
+The receiver accepts Ed25519/EdDSA keys. Five-minute opaque access tokens are hashed
+in D1. Browser OAuth continues using the existing provider.
+
+JWKS cache lifetime is five minutes. An unknown `kid` refreshes the cache, with a
+one-second refresh throttle. Rotate by generating a new Ed25519 private JWK and
+unique `kid` directly into Worker secrets, retaining the prior **public** JWK in
+`STUDIO_PREVIOUS_PUBLIC_KEYS` (JSON array) for at least ten minutes. Deploy the two
+bindings together; never expose private material to the model. Remove the old
+public key after the overlap. Deny the origin immediately if compromised.
 
 ```ts
 ctx.caller.studio // {origin:'https://concierge.example', verified:true,
-                  //  method:'oauth-client-credentials'}
-ctx.caller.actingFor // {handle:'guest-42', verified:false,
+                  //  method:'private_key_jwt'}
+ctx.caller.actingFor // {assertedHandle:'guest-42', verified:false,
                      //  assertedBy:'https://concierge.example'}
 ```
 
-Verified means possession of the credential bound by B's owner to that studio
-origin. It is not automated domain verification. The optional end-user handle is
-asserted by A, not authenticated by B. It grants no person, staff or owner role.
-The studio and asserted handle form a stable, opaque booking actor. Different
-handles are partitioned, but B trusts A to assert the correct handle; A can
-impersonate any handle within its own studio identity. A studio caller can only
-use its allowlisted **public** tools; it never satisfies `signed-in` or app roles.
-Tools needing an actual B account use that person's existing browser OAuth flow.
+Verified means the caller proved possession of a key published by that HTTPS
+origin. It does not verify any person. `assertedHandle` permits only
+`[A-Za-z0-9._@-]`, 1–128 characters. Never match it to a local account or grant
+roles from it. It only separates bookings within the calling studio. A studio can
+assert any handle within its own origin; all handles share origin-level rate
+limits. Studio callers use only allowlisted public tools, never signed-in roles.
 
-Remove the inbound entry, set `enabled:false`, or reduce its tools and redeploy to
-deny it. Every dispatch rechecks policy. Rotating the secret invalidates old tokens
-as soon as the new receiver configuration is deployed. These are configuration
-allowlists, not a second owner identity directory or new approval UI.
-
-**Why OAuth:** the [MCP client credentials extension](https://github.com/modelcontextprotocol/ext-auth/blob/main/specification/draft/oauth-client-credentials.mdx)
-fits explicit bilateral studio relationships and the toolkit already has an OAuth
-provider and official client support. [HTTP Message Signatures / Web Bot Auth](https://developers.cloudflare.com/bots/reference/bot-verification/web-bot-auth/)
-is useful for independently verifiable public agent identities, but adds a signing
-key directory and request-signature policy that these pre-provisioned connections
-do not need. The MCP extension is a draft; this implementation uses its supported
-client-secret method, not its recommended private-key JWT method. References were
-checked on 2026-10-15.
+References: [RFC 7523](https://www.rfc-editor.org/rfc/rfc7523) and the
+[MCP client credentials extension](https://github.com/modelcontextprotocol/ext-auth/blob/main/specification/draft/oauth-client-credentials.mdx).
 
 ## Availability convention (v)
 
@@ -122,7 +117,7 @@ and `ctx.bookings.availability(...)` return:
  "next":null}
 ```
 
-The snapshot reads declared slots and active reservations, and uses the same
+The snapshot loads a page of slots, resource records and active allocations in three queries regardless of slot × option count (plus access-policy checks), and uses the same
 resource/option allocator as `studio_book`. It checks app visibility and slot-read
 grants. A page scans at most 50 slots and supports at most 64 alternatives per
 slot; `next` can be non-null even when no offers on this page are available.
@@ -154,18 +149,14 @@ does not invent checkout, represent a payment approval, or claim ACP conformance
 
 ## Signed arrival events (o)
 
-Use the existing Standard Webhooks signing transport and the MCP Events webhook
-envelope `{eventId,name,timestamp,data}`. On A's outbound destination, add:
+Use Standard Webhooks asymmetric `v1a` Ed25519 signatures with the same studio key and the envelope `{eventId,name,timestamp,source,data}`. On A's outbound destination, add:
 
 ```json
-{"eventSecret":"VENUE_EVENTS_SECRET",
- "eventPath":"/hooks/studios/concierge","events":["arrival"]}
+{"eventPath":"/hooks/studios/concierge","events":["arrival"]}
 ```
 
 On B's inbound `concierge` entry, add
-`"webhookSecret":"CONCIERGE_EVENTS_SECRET","events":{"arrival":"arrivals"}`.
-Provision a distinct shared `whsec_` secret containing 32 random bytes encoded as
-base64. B's `mcp.events.arrivals` declares `event:"guest.arriving"`, an audience,
+`"events":{"arrival":"arrivals"}`. No shared event secret is needed. B's `mcp.events.arrivals` declares `event:"guest.arriving"`, an audience,
 and a schema for `{sender:{origin,verified:true},data:{booking,minutes}}`.
 Only mapped names can publish to local feeds. Define a function with
 `event:'guest.arriving'` to consume `event.data.data` and its verified
@@ -177,8 +168,7 @@ await ctx.studios.send('https://venue.example', 'arrival', {
 });
 ```
 
-The receiver verifies the raw bytes with `standardwebhooks`, including its
-five-minute timestamp window, and accepts at most 64 KiB. IDs are 1–128 letters,
+The receiver verifies Standard Webhooks `id.timestamp.body` signatures with Web Crypto Ed25519, including a five-minute timestamp window. Both studio event envelopes and business-feed data are limited to **8,192 UTF-8 bytes**; oversized events return a clear 413 error. `webhook-key-id` selects the origin JWKS key; `webhook-origin` must match the configured sender and signed body. IDs are 1–128 letters,
 digits, underscores or hyphens. A receipt is committed atomically with the event
 using existing business-event publication. Identical retries return 204 without
 running the function again; a signed changed payload under the same ID returns
@@ -196,7 +186,7 @@ studio's registered `useRoutes` handler in-process. It carries the caller throug
 the existing internal identity mechanism. `isOwner`, `hasRole`, and the studio's
 player lookup still perform their normal checks. Explicit cookies/Authorization
 headers, URL credentials and other origins are refused. A missing custom route
-returns 404. It does not borrow `fetchWithSecret` or mint an owner credential.
+returns 404. `fetchSelf` sets `Origin` to the local studio origin, so a custom route’s same-origin/CSRF check will pass; that check is not authorization. Routes must still check the propagated identity and roles. It does not borrow `fetchWithSecret` or mint an owner credential.
 
 `await ctx.rateLimit('friends')` uses a declared Cloudflare Rate Limiting binding,
 sharing the same namespace and account key between delegated tools:
@@ -208,16 +198,8 @@ sharing the same namespace and account key between delegated tools:
 In wrangler.jsonc, configure `ratelimits` with a stable `namespace_id`, name
 `FRIEND_RATE` and `simple:{limit:30,period:60}`. The helper returns `{success}`;
 the tool chooses its refusal response. No policy is enabled by default. Signed-in
-callers default to their identity key; anonymous callers require a deliberate key
-argument. Do not let customers select keys to bypass your policy.
+callers default to their identity key; studio callers default to `studio:<origin>` regardless of asserted handle. Public MCP callers expose `ctx.caller.clientAddressKey` and use that address-based key by default. Do not let customers select keys to bypass your policy.
 [Cloudflare's binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)
 is an approximate per-location limiter, not a globally strict quota or booking
 capacity mechanism. Existing authoritative booking/database checks remain necessary.
 
-## Follow-ups (w, r)
-
-The owner one-tap action checklist and a 3D coastline/heightmap, route-tube and
-labels catalogue part are separate follow-up PRs. Both need their own interaction,
-visual and device proof. This change adds neither part nor a placeholder catalogue
-entry. Existing owner confirmations and terrain/render packages remain their
-starting points.

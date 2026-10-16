@@ -1,3 +1,4 @@
+import {ensureStudioSigningKey} from './studios-keys.mjs';
 import {redactText} from './redact.mjs';
 import {enableReadReplication} from './read-replication.mjs';
 import {ensureBackgroundQueues,backgroundQueues} from './background-queue.mjs';
@@ -440,6 +441,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
     dep = w(['deploy', ...(workerEntry(root) ? [workerEntry(root)] : []), ...repoVar(root)]);
   }
   if (dep.code !== 0) return refuse(`wrangler deploy failed: ${wranglerDeployError(dep.out)}`, dep.out);
+  try{await ensureStudioSigningKey(readStudio(root),w);}catch(error){return refuse(error.message);}
   if (paidReleases(root).length) {
     const bin = wranglerBin(root);
     const uploadOptions = { cwd: workerDir(root), env: { ...process.env, CLOUDFLARE_ACCOUNT_ID: accountId, WRANGLER_SEND_METRICS: 'false', CI: '1' } };
@@ -664,6 +666,7 @@ export async function ciDeploy(root, { log = () => {}, wrangler = null } = {}) {
   const started = Date.now();
   const dep = w(['deploy', ...(workerEntry(root) ? [workerEntry(root)] : []), ...repoVar(root)]);
   if (dep.code !== 0) return refuse(`wrangler deploy failed: ${wranglerDeployError(dep.out)}`, dep.out);
+  try{await ensureStudioSigningKey(readStudio(root),w);}catch(error){return refuse(error.message);}
   step(`deployed ${names.worker ?? 'the Worker'} in ${Math.round((Date.now() - started) / 1000)} s`);
   const repo = repoOf(root);
   step(repo ? `the live site knows its GitHub repository (${repo}), for the Claude app's hand-off` : 'no GitHub repository found here (no HOMIE_REPO, studio.json "github" or git remote): the Claude app\'s card asks the person which it is');
