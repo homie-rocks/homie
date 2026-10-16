@@ -290,6 +290,13 @@ at once, with bots filling the slots (Gem Rush: 1 human + 2 bots).
 - A human who leaves turns back into a bot in the same body.
 - `trim()` removes surplus bots between rounds.
 - After every change the host calls `net.roster(slots)`.
+- A browser host may receive `join` before its world is ready. Once it publishes a roster,
+  snapshot traffic makes the relay retry any connected replica seat missing from that roster,
+  with delays doubling from 1 second to a 30-second cap, for at most eight retries per peer
+  and host. A roster seat (including `agent.seat` for host-driven AI) acknowledges the claim.
+  If still unacknowledged after the final wait, the relay logs once and stops retrying. Treat a repeated `join` for an
+  already claimed seat as idempotent; keep its body and score. This uses the existing wire
+  message, including for older bundled clients. Rules hosts reconcile seats separately.
 
 **Join in progress.**
 1. The `welcome` carries the last snapshot, round, roster and **all keyed state**. The

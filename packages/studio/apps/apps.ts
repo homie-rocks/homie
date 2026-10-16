@@ -78,7 +78,25 @@ export function createAppContext() {
 }
 
 /** Native accessible choices; submit value() to the same booking tool used by an AI. */
-export function createBookingChoices({container,options=[],resources=[]}:{container:HTMLElement;options?:Array<{id:string;name:string}>;resources?:Array<{id:string;name:string}>}) {
+export interface BookingAvailability {
+  convention: 'studio.booking-availability/1';
+  bookingTool: string;
+  items: Array<{identifier: string; name?: string; availabilityStarts?: string; booking: {app: string; collection: string; slot: string; quantity: number; option?: string; resource?: string; addons?: Record<string,number>}}>;
+  next: string|null;
+}
+export function createBookingChoices({container,options=[],resources=[],availability}:{container:HTMLElement;options?:Array<{id:string;name:string}>;resources?:Array<{id:string;name:string}>;availability?:BookingAvailability}) {
+  if(availability){
+    if(availability.convention!=='studio.booking-availability/1')throw new Error('Unsupported booking availability convention');
+    const label=document.createElement('label');label.textContent='Available bookings';
+    const select=document.createElement('select');select.name='booking';
+    const empty=document.createElement('option');empty.value='';empty.textContent='Choose a booking';select.append(empty);
+    const bookings=availability.items.map(item=>structuredClone(item.booking));
+    for(const [index,item] of availability.items.entries()){
+      const option=document.createElement('option');option.value=String(index);option.textContent=[item.name??item.booking.slot,item.availabilityStarts].filter(Boolean).join(' · ');select.append(option);
+    }
+    label.append(select);container.append(label);
+    return {value:():Partial<BookingAvailability['items'][number]['booking']>=>select.value===''?{}:structuredClone(bookings[Number(select.value)]),dispose:()=>label.remove()};
+  }
   const fields=new Map<string,HTMLSelectElement>();
   const group=document.createElement('fieldset');
   const legend=document.createElement('legend');legend.textContent='Choose an option';group.append(legend);

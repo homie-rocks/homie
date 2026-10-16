@@ -48,6 +48,50 @@ function relay(opts = {}, pol = null) {
   return { room, join, agent, feed, advance: (ms) => { t += ms; }, now: () => t };
 }
 
+test('browser seat recovery acknowledges a host-driven agent through agent.seat', () => {
+  const { room, join, agent, advance, now } = relay({}, POL({ kind: 'hybrid', aiSeats: 2 }));
+  const host = join({}, { caps: ['agents'] });
+  const ai = agent({ hands: 'host' });
+  const seat = ai.last('welcome').seat;
+  assert.equal(typeof seat, 'number');
+  host.say({ t: 'roster', slots: [{ slot: 0, seat: 0, bot: false }, { slot: 1, seat: null, bot: true, agent: { seat, hands: 'host' } }] });
+  assert.equal(room.lastRoster[1].seat, null);
+  assert.equal(room.lastRoster[1].agent.seat, seat);
+  const joins = host.all('join').length;
+  for (let k = 1; k <= 180; k++) {
+    advance(1000);
+    host.say({ t: 'snap', k, st: now(), d: {} });
+  }
+  assert.equal(host.all('join').length, joins, 'the acknowledged AI never receives another join');
+});
+
+test('browser seat recovery backs off, caps the delay and logs exhaustion only once', async () => {
+  const { Roster } = await netplayModule();
+  const roster = new Roster({ min: 1, max: 1 });
+  roster.claim(0, 'Host');
+  assert.equal(roster.claim(1, 'Replica'), null);
+  const logs = [];
+  const { join, advance, now } = relay({ log: line => logs.push(line) });
+  const host = join();
+  join();
+  // A game with only one body cannot acknowledge the second relay seat.
+  host.say({ t: 'roster', slots: roster.toJSON() });
+  const attempts = [];
+  let joins = host.all('join').length;
+  for (let second = 0; second <= 300; second++) {
+    host.say({ t: 'snap', k: second + 1, st: now(), d: {} });
+    const count = host.all('join').length;
+    if (count > joins) attempts.push(second);
+    joins = count;
+    advance(1000);
+  }
+  assert.deepEqual(attempts, [0, 1, 3, 7, 15, 31, 61, 91]);
+  const exhausted = logs.filter(line => line.ev === 'seat-retry-exhausted');
+  assert.equal(exhausted.length, 1);
+  assert.equal(exhausted[0].seat, 1);
+  assert.equal(exhausted[0].tries, 8);
+});
+
 /* ------------------------------------------------------------------ names and the dial */
 
 test('every agent is "<label> · AI"; a person\'s name never ends in an AI or bot mark', () => {

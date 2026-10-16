@@ -17,6 +17,33 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.57.0] - 2026-10-16
+
+**Plugin 0.57.0**
+
+Studios can book at each other on behalf of a person, with proven studio identity and signed events, and friends joining a browser-hosted game at the same moment always get their seat.
+
+### Fixed
+
+- Browser-hosted games retry connected players’ seat claims when the host’s roster has no player body for them. Friends joining while the host is still loading now become seated players when its world is ready, including games with older bundled netplay clients. Fixes the 0.56.0 regression where Kart Royale replicas stayed bots across rounds; the two-browser check retains its original early-join timing. Host-driven AI seats count as acknowledged; missing-seat retries use capped exponential backoff and stop after eight attempts with one diagnostic, avoiding repeated joins when a game has no available body.
+- Studio ingress now limits requests by IP before discovery; failed JWKS fetches and unknown keys share an atomic 60-second per-origin fetch bound. Authentication errors are generic, with stage details only in owner audit logs. Signed events use the exact inbound path rule, honour disabled entries and reject non-object bodies with 400. Removed the unused v1-only webhook production dependency and documented exact manual key rotation steps through stdin.
+
+- Studio-to-studio limits aggregate by proven origin, outbound destinations require explicit configuration, and remote results retain untrusted provenance. Asserted handles never identify local accounts.
+- Availability allocates from a page snapshot in three queries instead of querying per slot, option and resource.
+- Studio identity uses Ed25519 private-key JWT and origin-hosted JWKS; events use Standard Webhooks v1a with the same key. Deploy provisions private keys through stdin. Office Allow/Deny is stored in D1, denied by default, with origin/handle audit entries. Owners exchange no secrets.
+- Studio events and business feed data share an 8,192-byte limit. Discovery and tokens are cached within each request; proof scripts use deploy URLs without reading Wrangler OAuth files.
+
+### Added
+
+- Studio-to-studio tools use the official MCP SDK with bounded HTTPS transport, receiver-owned OAuth client credentials and a verified studio caller distinct from an asserted end-user handle.
+- Booking availability returns paged schema.org offers and exact booking arguments, shared by AI tools and the existing booking choices UI.
+- Signed cross-studio events reuse Standard Webhooks, per-sender allowlists and durable business-event receipts to trigger studio functions.
+- Tools can call their own custom routes with the caller's identity and share opt-in Cloudflare Rate Limiting bindings.
+
+### Upgrade notes
+
+- Studios that call or accept calls from other studios list them in studio.json (outbound) and allow them in the office (inbound); the deploy provisions each studio's signing key — nothing is exchanged between owners. Existing OAuth browser connections, booking migrations and function delivery remain in use. No version bump or new migration. See `packages/studio/docs/studio-to-studio.md`.
+
 ## [0.56.0] - 2026-10-15
 
 **Plugin 0.56.0**

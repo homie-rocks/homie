@@ -1,5 +1,5 @@
 import {calendarSlots} from './booking-calendar.mjs';
-import {allocateResources} from './booking-resources.mjs';
+import {loadAndAllocateResources} from './booking-resources.mjs';
 import {normalizeBookingArgs} from './booking-options.mjs';
 import {BOOKINGS_MIGRATION} from './booking-store.mjs';
 import {linkConfig,hasStripeKey} from './shop-links.mjs';
@@ -74,7 +74,7 @@ export function bookingHolds(env,caller,cat){
      if(previous.app!==scope||previous.collection!==collection||previous.slot!==slot||previous.quantity!==quantity||JSON.stringify({...choices,...JSON.parse(previous.choices??'{}')})!==JSON.stringify(choices))throw refusal('Booking id reused with different request',409);
      return result(previous);
    }
-   let allocation;try{allocation=await allocateResources(env,scope,spec,slot,args);}catch(error){throw refusal(error.message,409);}
+   let allocation;try{allocation=await loadAndAllocateResources(env,scope,spec,slot,args);}catch(error){throw refusal(error.message,409);}
    const secret=token?await hash(token):null;
    try {await env.DB.prepare(`INSERT INTO shop_bookings(id,app,collection,slots,slot,quantity,order_id,state,updated_at,actor,token_hash,hold_until,allocation,choices)
     SELECT ?1,?2,?3,?4,?5,?6,'hold:'||?1,'held',?7,?8,?9,?10,?11,?12 WHERE NOT EXISTS(SELECT 1 FROM shop_bookings WHERE id=?1)`).bind(id,scope,collection,spec.slots,slot,quantity,Date.now(),caller.id??null,secret,expiresAt,JSON.stringify(allocation),JSON.stringify(choices)).run();}catch(error){if(/booking capacity unavailable|resource capacity unavailable/.test(error.message))throw refusal('That slot or resource capacity is unavailable. No place has been taken.',409);throw error;}

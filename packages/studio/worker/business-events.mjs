@@ -1,4 +1,5 @@
 import {canonicalJson} from './canonical-json.mjs';
+export const BUSINESS_EVENT_MAX_BYTES=8192;
 export const BUSINESS_EVENTS_MIGRATION_FILE='0028_business_events.sql';
 export const BUSINESS_EVENTS_MIGRATION=`
 ALTER TABLE studio_events ADD COLUMN scope TEXT;
@@ -19,7 +20,7 @@ export async function publishBusinessEvent(env,caller,definition,namespace,{feed
  if(typeof id!=='string'||!id.length||id.length>128)throw new Error('Event id must contain 1–128 characters');
  const {CfWorkerJsonSchemaValidator}=await import('@modelcontextprotocol/server/validators/cf-worker');
  if(!new CfWorkerJsonSchemaValidator().getValidator(declaration.schema)(data).valid)throw new Error('Event data does not match feed schema');
- const text=canonicalJson(data);if(text.length>8192)throw new Error('Event exceeds 8192 characters');
+ const text=canonicalJson(data);if(new TextEncoder().encode(text).length>BUSINESS_EVENT_MAX_BYTES)throw new Error('Event exceeds 8192 bytes');
  const key=JSON.stringify([namespace,feed,id]),digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(declaration.event+'\n'+text))),b=>b.toString(16).padStart(2,'0')).join('');
  await env.DB.batch([
   env.DB.prepare('INSERT OR IGNORE INTO studio_events(id,type,data,at,scope) SELECT ?1,?2,?3,?4,?5 WHERE NOT EXISTS (SELECT 1 FROM event_publications WHERE id=?1)').bind(key,declaration.event,text,Date.now(),caller.testScope??null),
