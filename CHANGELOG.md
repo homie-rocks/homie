@@ -21,7 +21,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ### Fixed
 
-- `homie-studio check` waits for a browser host to publish its world before opening the second browser in the same room. This prevents startup joins from arriving before the host initializes its player bodies, which caused Kart Royale checks on 0.56.0 to finish rounds with the replica listed as a bot without a seat. Server-hosted checks continue as soon as the first browser connects.
+- Browser-hosted games retry connected players’ seat claims when the host’s roster has no player body for them. Friends joining while the host is still loading now become seated players when its world is ready, including games with older bundled netplay clients. Fixes the 0.56.0 regression where Kart Royale replicas stayed bots across rounds; the two-browser check retains its original early-join timing.
 
 ## [0.56.0] - 2026-10-15
 

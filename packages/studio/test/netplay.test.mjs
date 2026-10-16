@@ -35,8 +35,6 @@ import { fileURLToPath } from 'node:url';
 import { NET_REVISION, NetRoom, STALL, departure, featuresOf, stallOf, versionOf } from '../worker/room.mjs';
 import { PLAY_PARAMS, PREFS_LIMITS, netplayRow, paramsFrom, playParams } from '../worker/seats.mjs';
 import { virtualTime } from './virtual-time.mjs';
-import { runInNewContext } from 'node:vm';
-import { pairedPlayTarget } from '../lib/check.mjs';
 
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO_NM = join(PKG, '..', '..', 'node_modules');
@@ -109,54 +107,48 @@ const bodyGame = (extra = {}) => ({
 /** Run every room's host loop on the virtual clock (a frame every 50 ms). */
 const loop = (...rooms) => { const id = setInterval(() => { for (const r of rooms) r.update(); }, 50); return () => clearInterval(id); };
 
-test('the paired check waits for a browser host to boot: the replica finishes as a seated player, not a bot', async (t) => {
+test('an early replica is seated after browser host boot, without delaying its connection', async (t) => {
   const { createNetplay, Roster } = await netplayKit();
   const clock = virtualTime(t), r = rig();
   t.after(r.stop);
   const host = createNetplay({ config: cfg('computer'), WebSocketImpl: r.socket(), post: null, game: 'x', heartbeatMs: 0 });
   t.after(() => host.close());
   const roster = new Roster({ min: 3, max: 4 });
-  let booted = false, welcome;
+  let booted = false, welcome, joins = 0;
   host.on('role', (e) => { welcome = e; });
   host.on('join', (p) => {
+    joins++;
     if (booted && p.seat !== null) { roster.claim(p.seat, p.name); host.roster(roster.toJSON()); }
   });
-  // A browser game can receive its role while loading, then initialize its
-  // bodies from that welcome. Its join handler cannot create bodies yet.
-  setTimeout(() => {
-    booted = true;
-    roster.reconcile(welcome.peers);
-    host.roster(roster.toJSON());
-    host.round({ n: 1, phase: 'live', startedAt: Date.now(), endsAt: Date.now() + 5000 });
-  }, 1000);
-  const frames = setInterval(() => {
-    if (booted) host.snapshot({ b: roster.toJSON().map((s) => [s.slot, s.seat, s.bot ? 1 : 0]) });
-  }, 50);
-  t.after(() => clearInterval(frames));
-  const shell = () => ({ room: 'r', stats: host.stats() });
-  const first = {
-    async waitForFunction(predicate) {
-      while (!runInNewContext(`(${predicate})()`, { window: { __shell: shell() } })) await new Promise((resolve) => setTimeout(resolve, 10));
-    },
-    async evaluate(read) { return runInNewContext(`(${read})()`, { window: { __shell: shell() } }); },
-  };
-  let replica;
-  const joining = pairedPlayTarget(first, 'https://studio.test/x/play').then((url) => {
-    assert.equal(new URL(url).searchParams.get('room'), 'r');
-    replica = createNetplay({ config: cfg('phone'), WebSocketImpl: r.socket(), post: null, game: 'x', heartbeatMs: 0 });
-    t.after(() => replica.close());
-  });
-  await clock.wait(2000);
-  assert.ok(replica, 'the initialized host admits the second browser without a fixed delay');
-  await joining;
+  await clock.wait(100);
+  const replica = createNetplay({ config: cfg('phone'), WebSocketImpl: r.socket(), post: null, game: 'x', heartbeatMs: 0 });
+  t.after(() => replica.close());
+  await clock.wait(100);
   assert.equal(host.role, 'host');
   assert.equal(replica.role, 'replica');
   assert.equal(replica.seat, 1);
-  host.round({ n: 1, phase: 'over', startedAt: 1001000, endsAt: Date.now(), results: roster.toJSON().map((s, i) => ({ ...s, score: 3 - i, place: i + 1 })) });
+  assert.equal(joins, 1, 'the real join arrives while the world is unavailable');
+  assert.equal(welcome.peers.length, 1, 'the saved welcome predates the replica');
+  // Some games publish a boot roster before their handlers can create bodies.
+  roster.reconcile(welcome.peers);
+  host.roster(roster.toJSON());
+  host.snapshot({ b: [] });
   await clock.wait(100);
-  const body = replica.roundInfo.results.find((s) => s.seat === replica.seat);
-  assert.ok(body, 'the replica has a body carrying its seat in the finished round');
-  assert.equal(body.bot, false);
+  const ignored = joins;
+  booted = true;
+  for (let i = 0; i < 30; i++) {
+    host.snapshot({ b: roster.toJSON().map((s) => [s.slot, s.seat, s.bot ? 1 : 0]) });
+    await clock.wait(50);
+  }
+  for (let n = 1; n <= 3; n++) {
+    host.round({ n, phase: 'over', startedAt: Date.now() - 1000, endsAt: Date.now(), results: roster.toJSON().map((s, i) => ({ ...s, score: 3 - i, place: i + 1 })) });
+    await clock.wait(100);
+    const body = replica.roundInfo.results.find((s) => s.seat === replica.seat);
+    assert.ok(body, 'the replica has a body carrying its seat in every finished round');
+    assert.equal(body.bot, false);
+  }
+  assert.equal(ignored, 2, 'the first retry also arrived before boot');
+  assert.equal(joins, ignored + 1, 'retry stops once the host acknowledges the seat in its roster');
 });
 
 /** A document small enough for the line over the game: `lines()` is what a player reads on it right now. */

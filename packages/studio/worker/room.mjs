@@ -272,6 +272,7 @@ export class NetRoom {
     this.lastSnap = snap;
     if (!c) { const sentAt = (this.snapAt ??= new Map()); sentAt.set(snap.k, now); if (sentAt.size > 128) sentAt.delete(sentAt.keys().next().value); }
     if (c) c.lastSnapAt = now;
+    this.retryBrowserSeats(c);
     this.stats.snaps += 1;
     this.snapTimes.push(now);
     while (this.snapTimes.length && this.snapTimes[0] < now - 1000) this.snapTimes.shift();
@@ -386,6 +387,26 @@ export class NetRoom {
     const text = JSON.stringify(frame);
     for (const o of (c && this.rules && c.rules ? this.live() : this.others(c))) this.sendText(o.conn, text);
     this.tellWatchers();
+  }
+
+  /** A browser can hear joins before its world exists. Its roster acknowledges
+   * bodies, so re-announce missing connected seats until it acknowledges them.
+   * Use the existing join protocol for games bundling older netplay clients.
+   * Snapshot traffic retries even if the boot roster was published too early;
+   * each peer is bounded to one retry per second, and never sent to replicas.
+   */
+  retryBrowserSeats(host) {
+    if (!host || this.server || this.rules || host.id !== this.hostId || !this.lastRoster) return;
+    const seated = new Set(this.lastRoster.filter(s => !s.bot || s.agent).map(s => s.seat));
+    const now = this.now();
+    for (const peer of this.live()) {
+      if (peer.id === host.id || peer.seat === null || peer.watch) continue;
+      if (seated.has(peer.seat)) { peer.seatRetry = null; continue; }
+      const retry = peer.seatRetry;
+      if (retry?.host === host.id && now - retry.at < 1000) continue;
+      peer.seatRetry = { host: host.id, at: now };
+      this.send(host, { t: 'join', peer: this.peer(peer) });
+    }
   }
 
   hostCaps(c, m) {

@@ -14,23 +14,13 @@ import assert from 'node:assert/strict';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { CHECK_STEPS, LAUNCH_TIMEOUT_MS, arrivalReadiness, connectionSummary, judgeRounds, pairedPlayTarget } from '../lib/check.mjs';
-import { runInNewContext } from 'node:vm';
+import { CHECK_STEPS, LAUNCH_TIMEOUT_MS, arrivalReadiness, connectionSummary, judgeRounds } from '../lib/check.mjs';
 import { isLoopbackUrl } from '../lib/chrome.mjs';
 import { judgeTv, roomContinued, needsRunway, judgeHold } from '../lib/port-check.mjs';
 
 const round = (n, rows) => ({ n, endsAt: 1000 * n, results: rows, ms: 5000 * n });
 const seen = (...rounds) => new Map(rounds.map((r) => [`${r.n}:${r.endsAt}`, r]));
 const bots = (k) => Array.from({ length: k }, (_, i) => ({ slot: 10 + i, seat: null, name: `Bot ${i}`, bot: true, score: 0 }));
-
-test('a server-hosted paired check does not wait for its replica to send snapshots', async () => {
-  const shell = { room: 'pub-123', stats: { role: 'replica', connected: true, snapHzOut: 0 } };
-  const page = {
-    async waitForFunction(fn) { assert.equal(runInNewContext(`(${fn})()`, { window: { __shell: shell } }), true); },
-    async evaluate(fn) { return runInNewContext(`(${fn})()`, { window: { __shell: shell } }); },
-  };
-  assert.equal(await pairedPlayTarget(page, 'https://studio.test/gem/play?hand=phone'), 'https://studio.test/gem/play?hand=phone&room=pub-123');
-});
 
 test('a round with both seats counts, even when the game lists an idle person as a bot', () => {
   const r1 = round(1, [{ slot: 0, seat: 0, name: 'Brass Badger', bot: false }, { slot: 5, seat: 1, name: 'Cosmic Pilot', bot: true }, ...bots(6)]);
