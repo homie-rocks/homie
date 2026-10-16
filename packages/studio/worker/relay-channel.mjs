@@ -10,7 +10,7 @@ export function relayChannel(ctx, deliver) {
     emit,
     async attachLive(socket) {
       socket.addEventListener('message',event=>emit('message',event));
-      socket.addEventListener('close',()=>{if(live===socket){live=null;emit('detached',{});}});
+      socket.addEventListener('close',()=>{try{socket.close(1000,'detached');}catch{}if(live===socket){live=null;emit('detached',{});}});
       socket.addEventListener('error',()=>{if(live===socket){live=null;emit('detached',{});}});
       await chain;
       if(closed){socket.close(1000,'closed');return;}
@@ -33,7 +33,7 @@ export function relayChannel(ctx, deliver) {
       }).catch(error => { if (!closed) { closed = true; emit('error', {error}); } }).finally(() => { pending--;pendingBytes-=size;emit('drain',{}); });
       ctx.waitUntil(chain);
     },
-    close(code, reason) { if (!closed) { closed = true; emit('close', {code, reason}); } },
+    close(code, reason) { if (!closed) { closed = true;live?.close(code,reason);live=null;emit('close', {code, reason}); } },
   };
 }
 
@@ -63,7 +63,7 @@ export function relayStream(ctx, wake) {
     attachLive(socket) {
       controller?.close();controller=null;live?.close(1000,'replaced');live=socket;waking=false;
       for(const chunk of queued)socket.send(new TextDecoder().decode(chunk).trimEnd());queued=[];bytes=0;
-      socket.addEventListener('close',()=>{if(live===socket)live=null;});
+      socket.addEventListener('close',()=>{try{socket.close(1000,'detached');}catch{}if(live===socket)live=null;});
       socket.addEventListener('error',()=>{if(live===socket)live=null;});
     },
     open() {

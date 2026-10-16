@@ -16,8 +16,8 @@ welcomes, closes, decoded snapshots, and round frames.
 
 After round 1 settles, read `/proof-status?key=<game>/<room>` (and, for the gated
 room, `&kind=GATE` with key `<game>/<room>/0`). Leave both sockets connected and
-**do not poll the objects for 26 seconds**. Read status again, then observe round
-2. Constructor IDs must change, the idle tick must remain 22, and each client
+**do not poll the objects for 40 seconds**. Read status again, then observe round
+2. Constructor IDs must change, the idle tick must remain unchanged, and each client
 must receive round 2 and its own body without another welcome, a close, or an
 undecodable snapshot. Check the deployment marker on every observation. A
 forced abort or redeploy is not idle eviction evidence.

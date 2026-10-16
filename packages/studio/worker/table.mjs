@@ -1016,7 +1016,7 @@ export class Table {
     const rows=JSON.parse(data);
     for(const row of rows)if(row[0]==='close')relay.clients.delete(row[1]);
     if(this.canSleep())await this.sleepRoom();
-    else if(rows.some(row=>row[0]==='open'||row[0]==='close'))this.saveSessions();
+    else if(rows.some(row=>row[0]==='open'||row[0]==='close'||row[0]==='data'&&/\"t\"\s*:\s*\"hello\"/.test(row[2])))this.saveSessions();
   }
 
   async connect(request, transport = null) {

@@ -92,3 +92,12 @@ test('room summaries paginate beyond 500 games and aggregate shards',async()=>{
  const DB={prepare(sql){let after='';return {bind(value){after=value;return this;},async all(){queries++;assert.match(sql,/ORDER BY game/);return {results:rows.filter(r=>r.game>after).slice(0,500)};}};}};
  const result=await liveRoomSummaries({DB,BACKGROUND:{}});assert.equal(result.size,1201);assert.equal(result.get('g1200').length,2);assert.equal(queries,3);
 });
+
+test('legacy and hidden JSON pings do not rewrite an idle client',t=>{
+ const st=storage(t),store=roomSessions(st);store.read();let now=1000;
+ const room=new NetRoom({code:'idle',now:()=>now});const h=room.attach({send(){}});
+ h.onMessage(JSON.stringify({t:'hello',v:1,rev:12,want:'play'}));
+ h.onMessage(JSON.stringify({t:'ping',c:now,hid:true}));store.write(room);const before=st.writes;
+ for(let i=0;i<20;i++){now+=2000;h.onMessage(JSON.stringify({t:'ping',c:now,hid:true}));store.write(room);}
+ assert.equal(st.writes,before);
+});

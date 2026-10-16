@@ -2,6 +2,7 @@
  * request in DO storage and a small attachment on the socket; listeners are
  * rebuilt after hibernation without trusting anything supplied by the client.
  */
+import {isQa} from './stats.mjs';
 export class WatchSockets {
   constructor(ctx) {
     this.ctx = ctx;
@@ -30,7 +31,7 @@ export class WatchSockets {
     const ip = request.headers.get('cf-connecting-ip');
     // A digest retains per-address admission limits without persisting raw addresses.
     const address = ip ? [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ip)))].map(n => n.toString(16).padStart(2, '0')).join('') : null;
-    await this.ctx.storage.put('watch:' + id, {url: request.url, headers: address ? [['cf-connecting-ip', address]] : []});
+    await this.ctx.storage.put('watch:' + id, {url: request.url, headers: [...(address ? [['cf-connecting-ip', address]] : []),...(isQa(request)?[['user-agent','homie-house-qa']]:[])]});
     socket.serializeAttachment({v: 1, id});
     this.ctx.acceptWebSocket(socket, [new URL(request.url).pathname==='/__watch'?'watch':'net']);
     return Object.assign(this.transport(socket), {address});

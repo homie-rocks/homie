@@ -205,7 +205,7 @@ export function multiplexSession(socket, connect, { onMetrics = () => {}, delay 
           client.ready = new Promise((resolve, reject) => {
             const admit = async () => {
               if (closed || !clients.has(id)) { resolve(); return; }
-              try { await connect(new Request(value, { headers: { Upgrade: 'websocket', ...(ip ? { 'cf-connecting-ip': ip } : {}), ...(agent ? { 'user-agent': agent } : {}) } }), client); client.attached = true; resolve(); }
+              try { const response=await connect(new Request(value, { headers: { Upgrade: 'websocket', ...(ip ? { 'cf-connecting-ip': ip } : {}), ...(agent ? { 'user-agent': agent } : {}) } }), client); if(response!=null)client.close(1012,'room restore rejected');else client.attached = true; resolve(); }
               catch (error) { reject(error); }
             };
             admit.cancel = resolve; admissions.push(admit);
@@ -473,7 +473,7 @@ export class Gate {
         server.rememberGate?.(server.gateState);
         // Logical creation and the first frame share a batch: admission time at
         // the Table excludes the public handshake and relay transit.
-        link.send(['open', id, request.url, request.headers.get('cf-connecting-ip'), request.headers.get('user-agent')]);
+        link.send(['open', id, request.url, server.address ?? request.headers.get('cf-connecting-ip'), request.headers.get('user-agent')]);
       }
       const now = Date.now();
       const said = REPORTED_TICK.exec(event.data);

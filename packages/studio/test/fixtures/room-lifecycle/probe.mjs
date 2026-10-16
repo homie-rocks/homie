@@ -26,7 +26,7 @@ try {
  try {
   for(let i=0;i<100&&!peers.every(p=>p.frames.some(m=>m.t==='round'&&m.round.phase==='over'));i++)await sleep(100);
   const before=await status();
-  await sleep(26000);
+  await sleep(40000);
   const after=await status();
   for(let i=0;i<400&&!peers.every(p=>p.frames.some(m=>m.t==='round'&&m.round.n>=2&&m.round.phase==='live'));i++)await sleep(100);
   const continued=await status();
