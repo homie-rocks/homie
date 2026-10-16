@@ -2,6 +2,7 @@ import {LobbyPeak} from './lobby-peak.mjs';
 import {MatchRouter} from './match-router.mjs';
 import {LOBBY_SHARDS,SHARDED_ROOM_BASE} from './lobby-shards.mjs';
 import {json} from './responses.mjs';
+import {readOnlyEnv} from './read-only.mjs';
 import {lobbyStore} from './lobby-store.mjs';
 import { errorLine, versionOf } from './room-protocol.mjs';
 import { ROOM_ID } from './page-policy.mjs';
@@ -16,7 +17,7 @@ export {LOBBY_APP_VERSIONS, LOBBY_ROOMS_MAX} from './lobby-limits.mjs';
 export class Lobby {
   constructor(ctx, env) {
     this.ctx = ctx;
-    this.env = env;
+    this.env = readOnlyEnv(env); // read-only: matchmaking goes on, its D1 counters wait (worker/read-only.mjs)
     this.store = lobbyStore(ctx.storage);
     this.rooms = new Map();
     this.reservations=new Map();

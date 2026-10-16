@@ -19,6 +19,7 @@ import { isLoungePath, loungeRoutes } from './lounge.mjs';
 import { doorPage, serverPage, serversPage } from './site.mjs';
 import { isLocalOrigin, qrSvg } from './qr.mjs';
 import { gateFor } from './gate-routing.mjs';
+import { isReadOnly } from './read-only.mjs';
 
 import { SITE_JS, atomFeed, creditsPage, customPage, gameCover, gameLanding, gamesPage, homeLd, homePage, jsonFeed, landingLd, mediaIndexPage, notFoundPage, postPage, postsPage, roomsPage, sectionsOf, songPage, videoPage, watchOf } from './site.mjs';
 import { cookieValues, countVisit, onlyOf, ownerAllowed, playedByGame, playedThisWeek, rangeOf, readStats } from './stats.mjs';
@@ -158,7 +159,8 @@ export default async function route(request, env, ctx) {
   }
   if (path === '/api/games') {
     const cat = await getCat();
-    return json({ studio: cat.studio, games: (cat.games ?? []).map(g => g.room?.host === 'server' && !hostedGame(g.id) ? { ...g, rulesError: RULES_WIRING_MESSAGE } : g), live: (await roomsOf(env, cat.games ?? [])).live });
+    // readOnly: the owner's switch (worker/read-only.mjs), here so a tool can check it without sending a write.
+    return json({ studio: cat.studio, readOnly: isReadOnly(env), games: (cat.games ?? []).map(g => g.room?.host === 'server' && !hostedGame(g.id) ? { ...g, rulesError: RULES_WIRING_MESSAGE } : g), live: (await roomsOf(env, cat.games ?? [])).live });
   }
   if (path === '/api/rooms') {
     if(!read)return json({ok:false,error:'method'},405);

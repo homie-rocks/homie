@@ -11,6 +11,7 @@ import { appCors, isAppOrigin } from './standalone.mjs';
 
 
 import {json,finish} from './responses.mjs';
+import {isReadOnly,readOnlyAccess,readOnlyDatabase,readOnlyResponse,markReadOnly,heldBatch,ReadOnlyError} from './read-only.mjs';
 
 export {useRoutes} from './custom-routes.mjs';
 export {isOwner,hasRole,requireSameOrigin} from './route-auth.mjs';
@@ -30,10 +31,17 @@ export {AppRecordHub, EventHub} from './stream-objects.mjs';
 export {directoryOf,useTools,getStudioTools} from './tool-registry.mjs';
 const route = async (...args) => (await import('./routes.mjs')).default(...args);
 export default {
-  async queue(batch,env) {return (await import('./background-queue.mjs')).consumeBackground(batch,await loadShopLinks(env));},
+  async queue(batch,env) {
+    // Read-only (worker/read-only.mjs): Stripe events are fulfilled now, the rest is retried after the window.
+    if(isReadOnly(env))batch=heldBatch(batch);
+    if(!batch.messages.length)return;
+    return (await import('./background-queue.mjs')).consumeBackground(batch,await loadShopLinks(env));
+  },
   async scheduled(event, env, ctx) {
     env=await loadShopLinks(env);
-    const analytics=event.cron === '17 * * * *' ? (await import('./analytics.mjs')).rollupAnalytics(env) : Promise.resolve();
+    const readOnly=isReadOnly(env);
+    if(readOnly)console.log(JSON.stringify({at:new Date().toISOString(),ev:'scheduled-read-only',cron:event.cron,why:'the studio is read-only: this tick only recovers Stripe events'}));
+    const analytics=event.cron === '17 * * * *' && !readOnly ? (await import('./analytics.mjs')).rollupAnalytics(env) : Promise.resolve();
     ctx.waitUntil(analytics);
     const maintenance=(async () => {
       const [{notifyTools},{reconcileOrders,shopOf}]=await Promise.all([import('./runtime-support.mjs'),import('./shop.mjs')]);
@@ -49,7 +57,8 @@ export default {
         ['Stripe recovery',async()=>{if(env.BACKGROUND && event.cron==='17 * * * *')await (await import('./stripe-intake.mjs')).sweepStripeEvents(env,cat);}],
         ['owner functions',async()=> (await import('./functions.mjs')).scheduleFunctions(event,env,cat,cat.studio?.url??'https://studio.invalid')],
       ];
-      await Promise.all(tasks.map(async([name,run])=>{try{await run();}catch(error){console.error('Scheduled '+name+' failed:',error.message);}}));
+      // Read-only: only payment fulfilment runs; every other task does its work on its next tick.
+      await Promise.all(tasks.filter(([name])=>!readOnly||name==='Stripe recovery').map(async([name,run])=>{try{await run();}catch(error){console.error('Scheduled '+name+' failed:',error.message);}}));
     })();
     ctx.waitUntil(maintenance);
     await Promise.all([maintenance,analytics]);
@@ -58,8 +67,13 @@ export default {
     const staticPath=new URL(request.url).pathname;
     if(['GET','HEAD'].includes(request.method)&&staticPath==='/_homie/site.js')return finish(await route(request,env,ctx),staticPath);
     env=await loadShopLinks(env,new URL(request.url).origin);
-    env={...env,DB:requestDatabase(env.DB,request,{mutated:false,summaries:Boolean(env.BACKGROUND)})};
     const url = new URL(request.url);
+    // Read-only (worker/read-only.mjs): a change is refused before anything runs; a read gets a D1 that refuses writes.
+    const readOnly=isReadOnly(env),access=readOnly?readOnlyAccess(request,url.pathname):'write';
+    if(access==='refuse')return isAppOrigin(request)&&/^\/[^/]+\/api\/app\/records\//.test(url.pathname)?appCors(request,readOnlyResponse()):readOnlyResponse();
+    let refusedWrite=false;
+    env={...env,DB:requestDatabase(env.DB,request,{mutated:false,summaries:Boolean(env.BACKGROUND)})};
+    if(access==='read')env={...env,DB:readOnlyDatabase(env.DB,()=>{refusedWrite=true;})};
     if(env.HOMIE_CONCEPT==='1' && url.pathname==='/robots.txt')return new Response('User-agent: *\nDisallow: /\n',{headers:{'content-type':'text/plain','x-robots-tag':'noindex, nofollow'}});
     if(env.HOMIE_CONCEPT==='1' && url.pathname==='/.well-known/homie-studio.json')return json({ok:false,error:'concept-unlisted'},404,{'x-robots-tag':'noindex, nofollow'});
     const dispatch=()=>import('./background-queue.mjs').then(m=>m.enqueueChanges(env,url.origin));
@@ -86,9 +100,12 @@ export default {
     const appLobby = isAppOrigin(request) && /^\/[^/]+\/api\/lobby\/?$/.test(url.pathname);
     let res;
     try { res = finish(await route(request, env, requestCtx), url.pathname); } catch (error) {
-      if (!appLobby) throw error;
-      try { console.error(JSON.stringify({ at: new Date().toISOString(), ev: 'lobby-route-failed', path: url.pathname, error: errorLine(error) })); } catch { /* no console */ }
-      res = json({ ok: false, error: 'failed' }, 500);
+      if (error instanceof ReadOnlyError) res = readOnlyResponse();
+      else if (!appLobby) throw error;
+      else {
+        try { console.error(JSON.stringify({ at: new Date().toISOString(), ev: 'lobby-route-failed', path: url.pathname, error: errorLine(error) })); } catch { /* no console */ }
+        res = json({ ok: false, error: 'failed' }, 500);
+      }
     } finally {
       // A route can commit a write and then fail. Its outbox still needs delivery.
       if(env.DB) {
@@ -108,6 +125,9 @@ export default {
       }
       res=new Response(body,{status:res.status,headers});
     }
+    // A read that needed its write, and failed for want of it, says why.
+    if(readOnly&&refusedWrite&&res.status>=500)res=readOnlyResponse();
+    if(readOnly)res=await markReadOnly(res);
     const bookmark=env.DB?.getBookmark?.();
     if(bookmark&&res.status!==101){const headers=new Headers(res.headers);headers.set('x-studio-bookmark',bookmark);res=new Response(res.body,{status:res.status,statusText:res.statusText,headers});}
     if (appLobby || appRecords) return appCors(request, res);

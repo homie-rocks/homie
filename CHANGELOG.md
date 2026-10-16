@@ -179,6 +179,10 @@ A room nobody is playing rests, and the next touch wakes it with that input stil
 - Rebuild your games. Set `room.rest` to `"never"` (or `restSeconds` to 0) for a turn timer or a show that must keep
   going while people are present. A lasting world never rests.
 
+### Added
+
+- A read-only switch for a studio: `homie-studio read-only on|off|status` (and the local MCP tool `studio_read_only`) freezes the live studio for a few minutes, for a move to another host or maintenance, without losing anything. It sets the Worker secret `STUDIO_READ_ONLY` with the studio's own Cloudflare sign-in, live in seconds with no deploy. While on, changes answer 503 with `Retry-After` and `x-studio-read-only: 1`; pages, games, live rooms and the Stripe webhook keep working, D1 takes no other write, room records wait in each room, scheduled and queued work waits, and `/api/games` reports `readOnly`.
+
 ## [0.58.0] - 2026-10-16
 
 **Plugin 0.58.0**
