@@ -9,13 +9,21 @@ import {KEY_PERMISSIONS,SHOP_KEY_PERMISSIONS} from '../lib/shop.mjs';
 const resources={checkout:'Checkout Sessions',refunds:'Charges',charges:'Charges',payment_intents:'PaymentIntents',disputes:'Disputes',webhook_endpoints:'Webhook Endpoints',subscriptions:'Subscriptions',subscription_items:'Subscriptions',invoices:'Invoices',invoice_payments:'Invoices',billing_portal:'Customer portal',payment_method_configurations:'Payment method configurations',crypto:'Crypto Deposit Addresses',network:'Business Profiles'};
 const expansions={product:'Products',price:'Prices',payment_intent:'PaymentIntents',latest_charge:'Charges',latest_invoice:'Invoices',invoice:'Invoices'};
 test('every worker Stripe endpoint and expansion is covered by its restricted key',()=>{
- let calls=0;
+ let calls=0,sdkCalls=0;
  for(const file of readdirSync(new URL('../worker/',import.meta.url)).filter(f=>f.endsWith('.mjs'))){
   const source=ts.createSourceFile(file,readFileSync(new URL('../worker/'+file,import.meta.url),'utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
   const shop=file.startsWith('shop')||file==='stripe.mjs';
   const maps=[new Map(KEY_PERMISSIONS.map(([k,v])=>[k,v])),...(shop?[new Map(SHOP_KEY_PERMISSIONS.map(([k,v])=>[k,v]))]:[])];
   const check=(permission,level)=>{assert.ok(permission,`${file}: unmapped Stripe resource`);for(const permissions of maps)assert.ok(permissions.get(permission)==='Write'||level==='Read'&&permissions.get(permission)==='Read',`${file}: needs ${permission} ${level}`);};
   function visit(node){
+   // The machine-payment recording adapter also uses the Stripe SDK directly,
+   // including a bound create method. Inspect member references, not just calls.
+   if(file==='purchase-machine.mjs'&&ts.isPropertyAccessExpression(node)&&ts.isPropertyAccessExpression(node.expression)&&node.expression.expression.getText(source)==='providerClient'){
+    const resource=node.expression.name.text,method=node.name.text;
+    assert.equal(resource,'paymentIntents','review newly used SDK resource');
+    assert.ok(['create','retrieve','cancel'].includes(method),'review newly used SDK method');
+    check('PaymentIntents',method==='retrieve'?'Read':'Write');sdkCalls++;
+   }
    if(ts.isCallExpression(node)&&['stripeCall','allPages','call'].includes(node.expression.getText(source))){
     const name=node.expression.getText(source),offset=name==='call'?0:1;
     const method=name==='allPages'?'GET':node.arguments[offset]?.text;
@@ -42,4 +50,5 @@ test('every worker Stripe endpoint and expansion is covered by its restricted ke
   visit(source);
  }
  assert.ok(calls>40,'inventory includes all worker Stripe calls');
+ assert.equal(sdkCalls,3,'inventory includes bound SDK create, retrieve and cancel');
 });
