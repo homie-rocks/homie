@@ -19,6 +19,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [Unreleased]
 
+- Rules handlers can read bounded relay-measured round-trip time with `world.latency(id)` to apply game-defined contact-history limits. Unknown and non-human connections return zero; client timestamps do not set this measurement.
+
 ### Fixed
 
 - Fresh validated-owner clocks account for transit without granting skipped travel;

@@ -1,0 +1,148 @@
+TAP version 13
+# Subtest: contact latency comes only from trusted relay measurements and is bounded
+ok 1 - contact latency comes only from trusted relay measurements and is bounded
+  ---
+  duration_ms: 11.862917
+  type: 'test'
+  ...
+# Subtest: offline cores default to zero and refuse nonfinite latency
+ok 2 - offline cores default to zero and refuse nonfinite latency
+  ---
+  duration_ms: 2.2675
+  type: 'test'
+  ...
+# Subtest: settled stationary round freezes and resumes once after restoring its deadline
+ok 3 - settled stationary round freezes and resumes once after restoring its deadline
+  ---
+  duration_ms: 17.973167
+  type: 'test'
+  ...
+# Subtest: settled validated-owner catch-up round freezes and resumes once after restoring its deadline
+ok 4 - settled validated-owner catch-up round freezes and resumes once after restoring its deadline
+  ---
+  duration_ms: 2.646833
+  type: 'test'
+  ...
+# Subtest: valid report accepted, duplicate does not move again, missing reports freeze
+ok 5 - valid report accepted, duplicate does not move again, missing reports freeze
+  ---
+  duration_ms: 6.810167
+  type: 'test'
+  ...
+# Subtest: reject forged speed as a cut
+ok 6 - reject forged speed as a cut
+  ---
+  duration_ms: 1.549833
+  type: 'test'
+  ...
+# Subtest: reject forged teleport as a cut
+ok 7 - reject forged teleport as a cut
+  ---
+  duration_ms: 3.118792
+  type: 'test'
+  ...
+# Subtest: reject forged gravity as a cut
+ok 8 - reject forged gravity as a cut
+  ---
+  duration_ms: 0.641292
+  type: 'test'
+  ...
+# Subtest: reject forged wall-pass as a cut
+ok 9 - reject forged wall-pass as a cut
+  ---
+  duration_ms: 0.8795
+  type: 'test'
+  ...
+# Subtest: reject forged NaN as a cut
+ok 10 - reject forged NaN as a cut
+  ---
+  duration_ms: 0.856208
+  type: 'test'
+  ...
+# Subtest: out of order reports wait for missing predecessor
+ok 11 - out of order reports wait for missing predecessor
+  ---
+  duration_ms: 0.44375
+  type: 'test'
+  ...
+# Subtest: transport decodes reports and ignores claims from an old placement
+ok 12 - transport decodes reports and ignores claims from an old placement
+  ---
+  duration_ms: 3.312625
+  type: 'test'
+  ...
+# Subtest: a burst cannot buy extra simulation time
+ok 13 - a burst cannot buy extra simulation time
+  ---
+  duration_ms: 1.738916
+  type: 'test'
+  ...
+# Subtest: an early fresh baseline still spends elapsed server time and cannot buy skipped travel
+ok 14 - an early fresh baseline still spends elapsed server time and cannot buy skipped travel
+  ---
+  duration_ms: 0.786833
+  type: 'test'
+  ...
+# Subtest: a rejected report fences all reports from the old revision
+ok 15 - a rejected report fences all reports from the old revision
+  ---
+  duration_ms: 0.274958
+  type: 'test'
+  ...
+# Subtest: report tolerance cannot accumulate into extra speed
+ok 16 - report tolerance cannot accumulate into extra speed
+  ---
+  duration_ms: 0.163958
+  type: 'test'
+  ...
+# Subtest: wall crossing is rejected even at legal speed and legal one-tick distance
+ok 17 - wall crossing is rejected even at legal speed and legal one-tick distance
+  ---
+  duration_ms: 0.237666
+  type: 'test'
+  ...
+# Subtest: a fresh baseline after a pause grants one physics step, never skipped travel
+ok 18 - a fresh baseline after a pause grants one physics step, never skipped travel
+  ---
+  duration_ms: 0.194042
+  type: 'test'
+  ...
+# Subtest: host replies to an excessive owner clock lead with a new placement instead of dropping forever
+ok 19 - host replies to an excessive owner clock lead with a new placement instead of dropping forever
+  ---
+  duration_ms: 0.574541
+  type: 'test'
+  ...
+# Subtest: every accepted report is available for contact checks and duplicate reports add no paths
+ok 20 - every accepted report is available for contact checks and duplicate reports add no paths
+  ---
+  duration_ms: 0.664875
+  type: 'test'
+  ...
+# Subtest: owner receive queue overflow explicitly resynchronizes without acknowledging a lost path
+ok 21 - owner receive queue overflow explicitly resynchronizes without acknowledging a lost path
+  ---
+  duration_ms: 2.427291
+  type: 'test'
+  ...
+# Subtest: server wall time permits valid continued reports across a stalled simulation
+ok 22 - server wall time permits valid continued reports across a stalled simulation
+  ---
+  duration_ms: 1.325375
+  type: 'test'
+  ...
+# Subtest: a stalled transport batch retains reports beyond the first 64 entries
+ok 23 - a stalled transport batch retains reports beyond the first 64 entries
+  ---
+  duration_ms: 4.492375
+  type: 'test'
+  ...
+1..23
+# tests 23
+# suites 0
+# pass 23
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 401.449042
