@@ -20,9 +20,7 @@ import { seatCount, perAddress } from './seats.mjs';
 import { count, counter, isQa, today } from './stats.mjs';
 import { holders, regateArgs, verifyControl } from './office.mjs';
 
-const json = (body, status = 200, extra = {}) => new Response(`${JSON.stringify(body)}\n`, {
-  status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...extra },
-});
+import {json} from './responses.mjs';
 
 import {ROOM_ALARM_MS,ROOM_PAUSE_MS,roomEndAt} from './room-lifecycle.mjs';
 
@@ -1109,7 +1107,7 @@ export class Table {
     if (!hibernating) server.accept();
     const via = url.searchParams.get('via');
     const conn = {
-      ip: request.headers.get('cf-connecting-ip'),
+      ip: server.address ?? request.headers.get('cf-connecting-ip'),
       // The browser's room key (what a kick holds out), and who the play page's ticket named (o, i-<invite>, p-<player>).
       browser: url.searchParams.get('b') || null,
       via: via || null,
@@ -1147,11 +1145,12 @@ export class Table {
       // (room chat, 0.23.0: another site's page can open one too).
       const same = conn.ip ? [...room.watchers].filter((x) => x.ip === conn.ip).length : 0;
       if (room.watchers.size >= 256 || same >= 24) { try { server.close(1013, 'too many watching'); } catch { /* gone */ } return transport ? null : new Response(null, { status: 101, webSocket: client }); }
-      const w = room.watch(conn);
+      const w = room.watch(conn, this.restoringSockets ? server.watchState ?? {rate: []} : null);
+      server.rememberWatch?.(w.state);
       // The play page's vote card speaks on this socket (section 17); nothing else it says is read.
       server.addEventListener('message', (e) => {
         if (typeof e.data !== 'string') return;
-        try { w.onMessage(e.data); } catch (error) { this.say({ ev: 'failed', op: 'watch-message', error: errorLine(error) }); }
+        try { w.onMessage(e.data); server.rememberWatch?.(w.state); } catch (error) { this.say({ ev: 'failed', op: 'watch-message', error: errorLine(error) }); }
       });
       server.addEventListener('close', () => w.onClose());
       server.addEventListener('error', (e) => { this.socketError('watch', e); w.onClose(); });

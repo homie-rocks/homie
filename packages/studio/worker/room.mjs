@@ -456,18 +456,19 @@ export class NetRoom {
    * The shell's watch socket: the room's facts, and (revision 6) the party's vote from the play page's card. A vote
    * from it counts as the seat of the client in this room with the same browser key (`conn.browser`).
    */
-  watch(conn) {
+  watch(conn, restored = null) {
     this.watchers.add(conn);
-    this.sendText(conn, JSON.stringify(this.facts()));
+    if (!restored) this.sendText(conn, JSON.stringify(this.facts()));
     // A shell that comes back to a room it was kicked from (or that is closed) hears so at once.
     const held = this.heldNotice(conn);
-    if (held) this.sendText(conn, JSON.stringify(held));
+    if (!restored && held) this.sendText(conn, JSON.stringify(held));
     // Room chat (section 19): the last few minutes, so a page that just opened has the conversation (never to a page the
     // studio holds out of the room, or a room it closed).
     // A line of this browser's or this account's own says so (`mine`), on this page's copy only: it may take it down.
-    if ((!held || held.t === 'muted') && (!conn.hub || this.chatRules().hub)) this.sendText(conn, JSON.stringify({ t: 'lines', lines: this.recentChat().map((r) => (this.ownLine(r, conn) ? { ...this.wireLine(r), mine: true } : this.wireLine(r))) }));
-    const rate = [];
+    if (!restored && (!held || held.t === 'muted') && (!conn.hub || this.chatRules().hub)) this.sendText(conn, JSON.stringify({ t: 'lines', lines: this.recentChat().map((r) => (this.ownLine(r, conn) ? { ...this.wireLine(r), mine: true } : this.wireLine(r))) }));
+    const rate = restored?.rate ?? [];
     return {
+      state: {rate},
       onClose: () => this.watchers.delete(conn),
       onMessage: (text) => {
         const now = this.now();
