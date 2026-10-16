@@ -1,3 +1,4 @@
+import {studioOrigin} from './studios-client.mjs';
 import {studioToken,studioCaller,setStudioPolicy,studioRegistration} from './studios-auth.mjs';
 import {tokenCaller,toolInScope} from './connector-token.mjs';
 import {eventMethods,eventsCapability} from './mcp-events-wire.mjs';
@@ -243,12 +244,13 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
         }
         const page=Math.max(0,Math.min(100,Number.parseInt(u.searchParams.get('page')??'0',10)||0)),offset=page*100;
         const rows=(await env.DB.prepare(owner?'SELECT c.*,p.name FROM mcp_connections c LEFT JOIN players p ON p.id=c.person ORDER BY c.created DESC LIMIT 100 OFFSET ?1':'SELECT c.*,p.name FROM mcp_connections c LEFT JOIN players p ON p.id=c.person WHERE c.person=?1 ORDER BY c.created DESC LIMIT 100 OFFSET ?2').bind(...(owner?[offset]:[person,offset])).all()).results;
-        const events=owner?(await env.DB.prepare('SELECT a.*,p.name FROM mcp_audit a LEFT JOIN players p ON p.id=a.person AND a.client NOT LIKE 'https://%' ORDER BY a.id DESC LIMIT 100 OFFSET ?1').bind(offset).all()).results:[];
+        const events=owner?(await env.DB.prepare("SELECT a.*,p.name FROM mcp_audit a LEFT JOIN players p ON p.id=a.person AND (a.client IS NULL OR a.client NOT LIKE 'https://%') ORDER BY a.id DESC LIMIT 100 OFFSET ?1").bind(offset).all()).results:[];
         const names=new Map(await Promise.all([...new Set([...rows,...events].map(r=>r.client).filter(Boolean))].map(async id=>[id,(await oauth.lookupClient(id).catch(()=>null))?.clientName??id])));
         const studioRows=[];
         if(owner)for(const rule of Object.values((await catalogueOf()).studio?.mcp?.studios?.inbound??{})){
-          const policy=await oauthStorage(env.DB).get('studio-policy:'+rule.origin,'json');
-          studioRows.push(`<li>${esc(rule.origin)} · ${policy?.allow?'Allowed':'Denied'}<form method="post"><input type="hidden" name="studioOrigin" value="${esc(rule.origin)}"><input type="hidden" name="allow" value="${policy?.allow?'false':'true'}"><button>${policy?.allow?'Deny':'Allow'}</button></form></li>`);
+          let peer;try{peer=studioOrigin(rule.origin,{allowPrivate:rule.allowPrivate===true});}catch{continue;}
+          const policy=await oauthStorage(env.DB).get('studio-policy:'+peer,'json');
+          studioRows.push(`<li>${esc(peer)} · ${policy?.allow?'Allowed':'Denied'}<form method="post"><input type="hidden" name="studioOrigin" value="${esc(peer)}"><input type="hidden" name="allow" value="${policy?.allow?'false':'true'}"><button>${policy?.allow?'Deny':'Allow'}</button></form></li>`);
         }
         return html(`${owner?'<h2>Studio connections</h2><p>Denied by default. Allow only origins you trust for their declared tools and events.</p><ul>'+studioRows.join('')+'</ul>':''}<h1>Your studio's AI connections</h1><p>Signed-in MCP address: <code>${esc(origin)}/mcp/auth</code> · Public: <code>${esc(origin)}/mcp</code></p><ul>${rows.map(r=>`<li>${esc(r.name??(r.person.startsWith('office-')?'Owner browser':r.person))} · ${esc(names.get(r.client))} · ${r.revoked?'Revoked':`<form method="post"><input type="hidden" name="connection" value="${esc(r.id)}"><button>Revoke</button></form>`}</li>`).join('')}</ul><h2>Recent tool calls</h2><ul>${events.map(r=>`<li>${esc(new Date(r.at).toISOString())} · ${esc(r.client?.startsWith('https://')?'Asserted handle: '+(r.person??'(none)'):(r.name??(r.person?.startsWith('office-')?'Owner browser':r.person)??'Public'))} · ${esc(names.get(r.client)??'Anonymous')} · ${esc(r.tool)} · ${esc(r.outcome)}</li>`).join('')}</ul><nav>${page?`<a href="?page=${page-1}">Newer</a>`:''}${rows.length===100||events.length===100?`<a href="?page=${page+1}">Older</a>`:''}</nav>`);
       }

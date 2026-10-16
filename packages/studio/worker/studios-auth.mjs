@@ -17,6 +17,7 @@ export function studioRegistration(cat,origin){
  return null;
 }
 export async function setStudioPolicy(env,origin,allow){
+ origin=studioOrigin(origin,{allowPrivate:true});
  await oauthStorage(env.DB).put('studio-policy:'+origin,JSON.stringify({allow:allow===true}));
 }
 export async function studioPolicy(env,cat,origin){
@@ -40,7 +41,7 @@ export async function studioToken(request,env,cat,options={}) {
   const rule=await studioPolicy(env,cat,origin);if(!rule)throw Error();
   if(studioOrigin(origin,{allowPrivate:rule.allowPrivate===true})!==origin||form.get('client_id')!==origin||claims.sub!==origin||claims.aud!==receiver+'/oauth/token'||header.alg!=='EdDSA'||header.jku||header.jwk||header.crit)throw Error();
   const now=Math.floor(Date.now()/1000);
-  if(!Number.isSafeInteger(claims.exp)||!Number.isSafeInteger(claims.iat)||claims.iat>now+30||claims.iat<now-300||claims.exp<=now||claims.exp>claims.iat+300||typeof claims.jti!=='string'||! /^[A-Za-z0-9_-]{1,128}$/.test(claims.jti))throw Error();
+  if(!Number.isSafeInteger(claims.exp)||!Number.isSafeInteger(claims.iat)||claims.iat>now+30||claims.iat<now-300||claims.exp<=now||claims.exp>claims.iat+300||claims.nbf!==undefined&&(!Number.isSafeInteger(claims.nbf)||claims.nbf>now)||typeof claims.jti!=='string'||! /^[A-Za-z0-9_-]{1,128}$/.test(claims.jti))throw Error();
   const key=await originKey(env,origin,header.kid,{...options,allowPrivate:rule.allowPrivate===true});
   if(!await verifyBytes(key,parts[2],parts.slice(0,2).join('.')))throw Error();
   const used=await env.DB.prepare('INSERT OR IGNORE INTO mcp_kv(key,value,expires) VALUES(?1,?2,?3) RETURNING key').bind('studio-jti:'+await hash(JSON.stringify([origin,claims.jti])),'1',claims.exp).first();if(!used)throw Error();
