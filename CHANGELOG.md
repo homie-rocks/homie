@@ -19,13 +19,34 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [Unreleased]
 
+## [0.58.0] - 2026-10-16
+
+**Plugin 0.58.0**
+
+Two new shared parts — an owner action checklist and a 3D terrain route map — and booking calendars that can skip or change single dates in a weekly series.
+
+### Added
+
+- Two Apache-2.0 shared building blocks: an owner action checklist with visible consequences, one-tap confirmation, server-authorized undo and existing studio role/origin checks; and a three.js terrain route map with a local heightmap coastline, route tube, markers and phone/TV camera controls. Both include standard part manifests, catalogue entries, AI integration docs, self-contained previews and fast logic checks. No tile service is required.
+- Weekly booking calendars can omit individual dates or override an occurrence's time, capacity and duration. Occurrence IDs stay stable when a start time changes; undefined overrides, off-series or invalid dates and ambiguous DST times are refused, and a date that already has reservations cannot be silently removed.
+
+### Changed
+
+- Shared terrain map: smooth high-resolution coast, lit terrain with cavity shading, animated depth-coloured water and foam, sky/haze, flowing elevated route, collision-aware leader labels, intro camera and measured-frame lite fallback. Owner checklist distinguishes pending, confirming, done and undone, announces actual consequences, labels irreversible actions and restores fresh pending actions after undo.
+
 ### Fixed
 
-- The MCP Events workerd conformance test now parses SSE frames across HTTP chunks, including combined event/heartbeat frames and split UTF-8. Its former one-chunk-per-event assumption caused the intermittent 0.57.0 publish-gate JSON parse failure; production delivery and webhook formats are unchanged. PR CI adds a path-filtered Events/webhook gate covering protocol, push, durable delivery and signed studio events.
+- Public checklist proposals require per-action staff authorization, validate tokens, retain retry keys and use separate expiring undo grants. Terrain heightmaps restrict origins and PNG types and enforce byte/dimension budgets before decoding.
+- The MCP Events workerd conformance test parses SSE frames across HTTP chunks, including combined event/heartbeat frames and split UTF-8 (the intermittent 0.57.0 publish-gate failure); production delivery and webhook formats are unchanged. PR CI adds a path-filtered Events/webhook gate.
+- CI Chrome launches keep each caller's protocol timeout.
+
+### Upgrade notes
+
+- No migration and nothing to change. Studios use the new parts by asking their AI to add them from the catalogue; existing weekly calendars keep working, and dated exceptions are optional (see "Weekly calendar exceptions" in `packages/studio/docs/toolkit-place-patterns.md`).
 
 ## [0.57.0] - 2026-10-16
 
-**Plugin 0.57.0**
+**Plugin 0.57.0** · [release-2026-10-16-studio-0.57.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-16-studio-0.57.0)
 
 Studios can book at each other on behalf of a person, with proven studio identity and signed events, and friends joining a browser-hosted game at the same moment always get their seat.
 
@@ -52,7 +73,7 @@ Studios can book at each other on behalf of a person, with proven studio identit
 
 ## [0.56.0] - 2026-10-15
 
-**Plugin 0.56.0**
+**Plugin 0.56.0** · [release-2026-10-15-studio-0.56.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-15-studio-0.56.0)
 
 Studios scale with hibernating rooms, add custom routes with built-in access checks, and deploy reliably with background queue handlers.
 
