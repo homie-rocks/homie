@@ -64,3 +64,13 @@ and use `/api/custom/*` (game/app IDs cannot claim `api`). App handoff cookies a
 scoped to `/<app>/` and do not reach `/custom-api/...`; use built-in app record
 endpoints or app tools for role-authorized mutations. Use direct `/api/` endpoints
 for function `self` calls, which use `redirect:'error'`.
+
+## Studio-to-studio work
+
+Read `docs/studio-to-studio.md` in the installed toolkit. Use `ctx.studios` and the
+official MCP client for remote tools, `studio_availability` before booking, and
+receiver-owned OAuth client allowlists for studio identity. Clearly distinguish
+the verified studio from its asserted end-user handle. Use `fetchSelf` for friends'
+own-route calls and the shared opt-in rate binding for customer tool policies.
+Never borrow owner secrets for a friend's identity. Signed arrival events reuse
+Standard Webhooks and declared business feeds; use stable IDs across retries.

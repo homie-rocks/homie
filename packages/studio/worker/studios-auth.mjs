@@ -2,7 +2,7 @@ import {timingSafeEqual} from 'node:crypto';
 import {oauthStorage} from './mcp-store.mjs';
 import {studioOrigin} from './studios-client.mjs';
 const hash=async text=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))),b=>b.toString(16).padStart(2,'0')).join('');
-const json=(data,status=200)=>Response.json(data,{status,headers:{'cache-control':'no-store','pragma':'no-cache'}});
+const json=(data,status=200)=>Response.json(data,{status,headers:{'cache-control':'no-store','pragma':'no-cache',...(status===401?{'www-authenticate':'Basic realm="studio"'}:{})}});
 export async function boundedBody(request,maxBytes=65536) {
  const reader=request.body?.getReader();if(!reader)return '';
  const chunks=[];let bytes=0;

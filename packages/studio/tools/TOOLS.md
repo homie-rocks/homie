@@ -193,3 +193,13 @@ Use `/mcp/auth` for owner and staff connectors. Its anonymous 401 includes the
 Both transports use the same `/mcp` OAuth resource; `/mcp` remains public without a
 token. An approved connection retains the account’s current app grants, not a copy
 of its old permissions. Manage connections at `/_studio/office/connections`.
+
+## Acting at another studio
+
+Use `context.studios.listTools`, `call` and `send` for another studio. The official
+MCP SDK handles transport and OAuth. Configure receiver-owned studio allowlists;
+a named person's handle is an assertion, not the receiver's authenticated account.
+Discover `studio_availability` before `studio_book`. For your own registered routes,
+use `fetchSelf` to preserve the caller. Opt-in `rateLimit` shares a declared
+Cloudflare binding between tools. See [studio-to-studio](../docs/studio-to-studio.md)
+for configuration, trust boundaries, signed events and examples.

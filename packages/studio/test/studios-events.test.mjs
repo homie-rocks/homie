@@ -15,5 +15,10 @@ test('Standard Webhooks acceptance triggers a function once, survives replay and
  assert.equal((await receive(request.clone())).status,204);await runFunctions(env,cat,'https://b.example');assert.equal(called,1);
  const stored=JSON.parse(DB.sql.prepare("SELECT value FROM tool_data WHERE key='arrived'").get().value);assert.deepEqual(stored.sender,{origin:'https://a.example',verified:true});assert.equal(stored.data.minutes,10);
  const changed=new Request(request.url,{method:'POST',headers:request.headers,body:'{}'});assert.equal((await receive(changed)).status,401);
+ let signed;
+ const sign=async(data,now=Date.now)=>{await signedWebhook(request.url,{id:'arrival-1',body:{eventId:'arrival-1',name:'arrival',timestamp:new Date().toISOString(),data},secrets:[secret]},{now,fetchFn:async(url,init)=>{signed=new Request(url,init);return new Response(null,{status:204});}});return signed;};
+ assert.equal((await receive(await sign({minutes:11}))).status,409);
+ assert.equal((await receive(await sign({minutes:10},()=>Date.now()-301000))).status,401);
+ assert.equal((await receive(new Request(request.url,{method:'POST',headers:request.headers,body:'x'.repeat(65537)}))).status,413);
  cat.studio.mcp.studios.inbound.concierge.enabled=false;assert.equal((await receive(request.clone())).status,403);
 });

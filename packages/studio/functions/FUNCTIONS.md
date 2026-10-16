@@ -424,3 +424,12 @@ or declared webhook; functions never send email/SMS themselves.
 Apply `0028_business_events.sql` on upgrade. Local proof publications carry their
 scope and do not appear in production feed reads. Event feeds retain their declared
 type; give different business feeds distinct types when their content differs.
+
+## Events from another studio
+
+An explicitly allowed studio can send a Standard Webhooks arrival event to
+`/hooks/studios/<connection>`. The receiver maps allowed names to declared business
+feeds and commits their existing durable receipt before acknowledging. Functions
+receive the verified sender origin separately from the sender's untrusted data.
+Use `context.studios.send` inside a durable function when sending needs retries.
+See [studio-to-studio](../docs/studio-to-studio.md) for setup and replay semantics.

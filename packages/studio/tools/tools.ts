@@ -1,3 +1,4 @@
+import type {BookingAvailability} from '../apps/apps';
 /** A studio tool runs as trusted code in its own Worker. Never import an environment binding. */
 export type Audience = 'public' | 'signed-in' | 'owner' | { app: string; role: string };
 export interface ToolContext {
@@ -12,7 +13,7 @@ export interface ToolContext {
     call(origin: string, tool: string, args?: Record<string, unknown>, options?: {actingFor?: string}): Promise<{isError: boolean; data?: unknown; content: unknown[]}>;
   };
   bookings: {
-    availability(args: {app: string; collection: string; after?: string; quantity?: number; option?: string; resource?: string; addons?: Record<string,number>}): Promise<{convention: 'studio.booking-availability/1'; bookingTool: string; items: Array<Record<string,unknown>>; next: string|null}>;
+    availability(args: {app: string; collection: string; after?: string; quantity?: number; option?: string; resource?: string; addons?: Record<string,number>}): Promise<BookingAvailability>;
     calendar(args: {app:string;startDate:string;endDate:string;timeZone?:string;time?:string;days?:number;durationMinutes?:number;capacity?:number;weekdays?:number[];resources?:string[];options?:unknown[];prefix?:string}): Array<{id:string;start:string;end:string;capacity:number;date:string;timeZone:string}>;
     hold(args: {app: string; collection: string; slot?: string; time?: string; option?: string; resource?: string; preferredResource?: string; addons?: string[] | Record<string,number>; addOns?: string[] | Record<string,number>; quantity?: number; id: string; token?: string; expiresAt: number}): Promise<BookingHold>;
     get(args: {id: string; token?: string}): Promise<BookingHold>;

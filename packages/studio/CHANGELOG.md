@@ -17,6 +17,20 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [Unreleased]
+
+### Added
+
+- Studio-to-studio tools use the official MCP SDK with bounded HTTPS transport, receiver-owned OAuth client credentials and a verified studio caller distinct from an asserted end-user handle.
+- Booking availability returns paged schema.org offers and exact booking arguments, shared by AI tools and the existing booking choices UI.
+- Signed cross-studio events reuse Standard Webhooks, per-sender allowlists and durable business-event receipts to trigger studio functions.
+- Tools can call their own custom routes with the caller's identity and share opt-in Cloudflare Rate Limiting bindings.
+
+### Upgrade notes
+
+- Configure and deploy explicit peer allowlists and provision secrets on each studio. Existing OAuth browser connections, booking migrations and function delivery remain in use. No version bump or new migration. See `packages/studio/docs/studio-to-studio.md`.
+- The owner action checklist and 3D map/terrain catalogue part are scoped to separate follow-up PRs.
+
 ## [0.56.0] - 2026-10-15
 
 **Plugin 0.56.0**
