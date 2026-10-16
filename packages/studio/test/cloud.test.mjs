@@ -166,12 +166,13 @@ test('Workers Builds: `npm run deploy` only migrates and deploys (by binding nam
   assert.equal(done.ci, true);
   assert.equal(done.url, 'https://test-studio.acct.workers.dev');
   const registration=`d1 execute DB --remote --command ${functionDeploymentSQL(dir)}`;
-  assert.deepEqual(cf.calls(), ['queues info test-studio-background-dlq','queues create test-studio-background-dlq','queues info test-studio-background','queues create test-studio-background','d1 migrations apply DB --remote', `deploy ${workerEntry(dir)}`, 'd1 migrations apply DB --remote',registration], 'no whoami, no create, no refusals: the Deploy flow made the resources');
+  assert.deepEqual(cf.calls(), ['queues create test-studio-background-dlq','queues create test-studio-background','d1 migrations apply DB --remote', `deploy ${workerEntry(dir)}`, 'd1 migrations apply DB --remote',registration], 'create queue reservations, then migrate and deploy without interactive account discovery');
   assert.deepEqual(JSON.parse(readFileSync(join(dir,'studio.json'),'utf8')).cloudflare.created,['queue:test-studio-background','queue:test-studio-background-dlq']);
+  const firstCallCount=cf.calls().length;
   const again = out(run(['deploy'], dir, env));
   assert.equal(again.ok, true);
   const brains = "d1 execute DB --remote --json --command SELECT COUNT(*) AS n FROM servers WHERE brain = 'workers-ai' AND state = 'open'";
-  assert.deepEqual(cf.calls().slice(8), ['d1 migrations apply DB --remote', registration, brains, `deploy ${workerEntry(dir)}`], 'later deploys: migrations first, whether a server thinks with Workers AI, then the Worker');
+  assert.deepEqual(cf.calls().slice(firstCallCount), ['d1 migrations apply DB --remote', registration, brains, `deploy ${workerEntry(dir)}`], 'later deploys: migrations first, whether a server thinks with Workers AI, then the Worker');
   assert.ok(!/"ai"/.test(readFileSync(join(dir, 'wrangler.jsonc'), 'utf8')), 'no server thinks with Workers AI: no AI binding');
   // A server whose AI guides think with Workers AI (agents_brain workers-ai): the deploy binds AI (0.17.0).
   writeFileSync(join(dir, '.fake-cf', 'ai'), '1');
