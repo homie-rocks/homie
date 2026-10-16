@@ -339,7 +339,8 @@ export class Gate {
       let socket;
       if ((url.searchParams.get('relay') === '1' || url.searchParams.get('host') === 'server')) {
         target.pathname = '/__relay';
-        socket = relayChannel(this.ctx, (data,sequence) => this.env.TABLE.get(this.env.TABLE.idFromName(name)).fetch(target, {method:'POST',headers:{'x-homie-relay-epoch':this.relayEpoch,'x-homie-relay-sequence':String(sequence)},body:data}));
+        const epoch = this.relayEpoch = crypto.randomUUID();
+        socket = relayChannel(this.ctx, (data,sequence) => this.env.TABLE.get(this.env.TABLE.idFromName(name)).fetch(target, {method:'POST',headers:{'x-homie-relay-epoch':epoch,'x-homie-relay-sequence':String(sequence)},body:data}));
         this.relaySocket = socket;
         socket.addEventListener('detached',()=>{ /* The next input or room alarm crosses the idle boundary. */ });
       } else {

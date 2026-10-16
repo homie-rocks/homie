@@ -2899,7 +2899,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     }
     // An idle hibernatable room can answer this at the edge. Keep a regular
     // clock/visibility sample on visibility changes, and every heartbeat during play.
-    if (idlePing && roundInfo?.phase !== 'live' && !force) {
+    if (idlePing && roundInfo?.phase !== 'live' && !(roundInfo?.phase === 'over' && now() >= roundInfo.endsAt) && !force) {
       try { ws?.send('homie-ping'); } catch { if(ws)lost(ws,'send'); }
       return;
     }

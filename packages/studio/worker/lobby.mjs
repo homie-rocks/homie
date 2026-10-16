@@ -202,6 +202,7 @@ export class Lobby {
         if (fill >= max) continue;
         if (!best || fill > best.fill || (fill === best.fill && r.name < best.r.name)) best = { r, fill };
       }
+      if(url.searchParams.get('peek')==='1')return json({room:best?.r.name??null});
       let room = best?.r;
       let full = false;
       const fullest = (list) => list.reduce((a, b) => (b.players + b.pending.length > a.players + a.pending.length ? b : a), list[0]);
