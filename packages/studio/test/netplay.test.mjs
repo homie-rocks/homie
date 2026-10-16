@@ -1935,3 +1935,14 @@ test('edge pongs cannot hide a dead room with an unanswered clock ping',async t=
  await clock.wait(1000);assert.equal(net.link,'online');net.round({n:1,phase:'live',start:Date.now(),end:Date.now()+120000});dead=true;
  await clock.wait(64000);assert.ok(r.sockets.length>1,'unanswered room clock ping must reconnect despite edge replies');
 });
+
+test('a missed round start probes the Table despite healthy edge pongs',async t=>{
+ const {createNetplay}=await netplayKit(),clock=virtualTime(t),r=rig();t.after(r.stop);
+ let dead=false,lastPing=0;const Base=r.socket({conn:{idlePing:true,lastPing:()=>lastPing}});
+ class EdgeSocket extends Base {send(text){if(text==='homie-ping'){this.sent.push(text);lastPing=Date.now();this.onmessage?.({data:'homie-pong'});}else if(!dead)super.send(text);else this.sent.push(text);}}
+ const net=createNetplay({config:cfg('idle'),WebSocketImpl:EdgeSocket,post:null,game:'x'});t.after(()=>net.close());
+ await clock.wait(1000);assert.equal(net.link,'online');net.round({n:1,phase:'over',startedAt:Date.now()-10000,endsAt:Date.now()+10000});dead=true;
+ const socket=r.sockets[0],from=socket.sent.length;
+ await clock.wait(8000);assert.equal(socket.sent.slice(from).some(x=>x.startsWith('{"t":"ping"')),false);
+ await clock.wait(36000);assert.ok(r.sockets.length>1,'missed start must cause a room probe and reconnect within 34 seconds');
+});
