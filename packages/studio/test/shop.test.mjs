@@ -2975,7 +2975,7 @@ for (const keyless of [false, true]) test(`real Chrome: visible Shop and app/gam
   const cat = await (await originalAssets.fetch(new Request('https://owls.example/games.json'))).json();
   const meta = cat.games.find(g => g.id === 'owl-run');
   s.env.ASSETS = { fetch: req => new URL(req.url).pathname === '/games.json' ? Response.json(cat) : originalAssets.fetch(req) };
-  const client = await build({ stdin: { contents: `import { createShop } from './packages/studio/shop/shop.ts'; const shop = createShop(); document.querySelector('#own-shop').onclick = () => shop.open(); document.querySelector('#own-item').onclick = () => shop.open('supporter');`, resolveDir: process.cwd() }, bundle: true, write: false });
+  const client = await build({ stdin: { contents: `import { createShop } from './packages/studio/shop/shop.ts'; const shop = createShop(); document.querySelector('#own-shop').onclick = () => shop.open(); document.querySelector('#own-item').onclick = () => shop.open('supporter');`, resolveDir: fileURLToPath(new URL('../../../',import.meta.url)) }, bundle: true, write: false });
   const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, headless: true });
   try {
     for (const kind of ['game', 'app']) for (const [width, height] of [[390,844], [358,201], [1280,720]]) {

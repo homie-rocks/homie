@@ -1,3 +1,4 @@
+import {fileURLToPath} from 'node:url';
 import assert from 'node:assert/strict';
 import { runInNewContext } from 'node:vm';
 import { SHOP_SHELL_JS } from '../worker/shop-page.mjs';
@@ -91,7 +92,7 @@ for (const kind of ['game', 'app']) test(`Chrome: ${kind} cross-origin sandbox, 
   const compiled = await build({ stdin: { contents: `import { createNetplay } from './packages/studio/netplay/netplay.ts';
     window.net = createNetplay({game:'test', rules:true});
     document.querySelector('#step').onclick = () => { net.steps(1, 1, [[1,1]], 0); };
-    net.on('snapshot', e => { document.querySelector('#result').textContent = String(e.d.position); });`, resolveDir: process.cwd() }, bundle: true, write: false, format: 'iife' });
+    net.on('snapshot', e => { document.querySelector('#result').textContent = String(e.d.position); });`, resolveDir: fileURLToPath(new URL('../../../',import.meta.url)) }, bundle: true, write: false, format: 'iife' });
   const env = fixture(cat, { HOMIE_EMBED_PREVIEW: '1' });
   const server = createServer(async (req, res) => {
     try {
