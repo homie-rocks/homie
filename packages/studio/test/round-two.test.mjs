@@ -273,14 +273,14 @@ test('session encoding preserves arbitrary checkpoint keys without mistaking the
 
 test('an expired empty room does not keep a recurring hibernation alarm',async()=>{
  const {Table}=await import('../worker/table.mjs');let alarms=0,clears=0;
- const table=Object.create(Table.prototype);table.canSleep=()=>true;
+ const table=Object.create(Table.prototype);table.relays=new Map();table.canSleep=()=>true;
  table.room={clients:new Map(),watchers:new Set(),emptySince:Date.now()-2000,forgetMs:1000};
  table.sessionStore={clear:()=>clears++};table.ctx={storage:{getAlarm:async()=>null,setAlarm:async()=>alarms++}};
  await table.sleepRoom();assert.equal(clears,1);assert.equal(alarms,0);
 });
 
 test('legacy snapshot traffic stays active without writing a hibernation snapshot per frame',async()=>{
- const {Table}=await import('../worker/table.mjs');const table=Object.create(Table.prototype);
+ const {Table}=await import('../worker/table.mjs');const table=Object.create(Table.prototype);table.relays=new Map();
  Object.assign(table,{hibernationReady:true,sessionStore:{},ctx:{storage:{sql:{}},acceptWebSocket(){}},room:{clients:new Map([['player',{}]]),lastSnap:null,lastRound:null}});
  assert.ok(table.canSleep());
  table.room.lastSnap={x:1};assert.equal(Boolean(table.canSleep()),false);
@@ -293,7 +293,7 @@ test('idle controls checkpoint changes and retain failed office writes for resto
  const [{Table},{NetRoom}]=await Promise.all([import('../worker/table.mjs'),import('../worker/room.mjs')]);
  const table=Object.create(Table.prototype),room=new NetRoom({code:'idle'}),snapshots=[];let writes=0,failures=0;
  room.clients.set('player',{helloed:true,lastSeen:Date.now(),conn:{}});
- Object.assign(table,{room,canSleep:()=>true,storageProblem:()=>failures++,sessionStore:{write:r=>snapshots.push({dirty:r.officeDirty,agentsOut:r.agentsOut})},ctx:{storage:{put:async()=>{if(++writes===1)throw new Error('retry');},getAlarm:async()=>null,setAlarm:async()=>{}}}});
+ Object.assign(table,{relays:new Map(),room,canSleep:()=>true,storageProblem:()=>failures++,sessionStore:{write:r=>snapshots.push({dirty:r.officeDirty,agentsOut:r.agentsOut})},ctx:{storage:{put:async()=>{if(++writes===1)throw new Error('retry');},getAlarm:async()=>null,setAlarm:async()=>{}}}});
  table.fetchRequest=async()=>{room.agentsOut={until:Date.now()+30000};room.officeDirty=true;return new Response(null,{status:204});};
  assert.equal((await table.fetch(new Request('https://room/__office'))).status,204);
  assert.equal(failures,1);assert.equal(snapshots[0].dirty,true);

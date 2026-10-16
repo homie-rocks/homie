@@ -1,3 +1,5 @@
+import {WatchSockets} from './watch-sockets.mjs';
+import {relayChannel,readRelay} from './relay-channel.mjs';
 import { STUDIO_BUILD } from './build-id.mjs';
 import { stageTimings } from '../rules/timing.mjs';
 import { crowdView, crowdWorlds, scheduledView, snapshotEncoder, snapshotText } from '../rules/interest.mjs';
@@ -124,6 +126,7 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
       if (inMs !== null && !closed) { if (timer !== null) clearTimer(timer); timer = setTimer(flush, Math.max(0, inMs)); }
       else schedule();
     },
+    reset() { pending.clear(); sequence=0; receipt=0; inFlightBytes=0; blockedByBytes=false; schedule(); },
     flush, close, forget: id => views.delete(id), buffered: () => bytes,
     /** This link's recent round trip, ms: the newest receipt's, or a larger recent one fading out. */
     rtt: () => stats.rttMs,
@@ -133,12 +136,12 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
 }
 
 /** Adapt one upstream socket into the same transport the Table accepts locally. */
-export function multiplexSession(socket, connect, { onMetrics = () => {}, delay = 60, source = worldSource(), onCount = () => {} } = {}) {
+export function multiplexSession(socket, connect, { onMetrics = () => {}, delay = 60, source = worldSource(), onCount = () => {}, receipts = true, resume = () => null, remember = () => {} } = {}) {
   // Eight frames may be unacknowledged: 400 ms of 20 Hz worlds. Past that the newest world replaces an unsent one.
   // This link's Gate has every world up to `synced`, and holds the players in these seats.
   let synced = 0; const seats = new Map();
   const world = Object.assign((row) => { const w = source.encode(row[2]); return w ? { row: ['world', '*', source.header(w, synced, seats.values()), row[3], row[4], w.block], seq: w.seq } : null; }, { sent(seq) { synced = seq; } });
-  const out = batchLink(socket, { receipts: true, delay, maxFrames: 8, autoReceipt: false, world, onWritable: () => scheduleAdmission() }), clients = new Map();
+  const out = batchLink(socket, { receipts, delay, maxFrames: 8, autoReceipt: false, world, onWritable: () => scheduleAdmission() }), clients = new Map();
   let chain = Promise.resolve(), closed = false;
   const group = { snapshot(snap, settings, hz) { out.send(['world', '*', snap, settings, hz]); out.flush(); }, subscribe(id, seat) { seats.set(id, seat); out.send(['seat', id, seat]); }, facts: () => out.facts() };
   const pending = new Set(), admissions = [];
@@ -176,12 +179,15 @@ export function multiplexSession(socket, connect, { onMetrics = () => {}, delay 
       if (!Array.isArray(rows)) throw new Error('invalid multiplex batch');
       heard.frames += 1; heard.rows += rows.length; heard.bytes += event.data.length;
       for (const [op, id, value, ip, agent] of expandBatch(rows)) {
+        if (op === 'resync') { synced=0; continue; }
         if (op === 'metrics') { onMetrics(id, value); continue; }
         if (op === 'open') {
           if (clients.has(id)) throw new Error('duplicate multiplex client');
           const handlers = new Map();
           const client = {
             accept() {},
+            resume: resume(id),
+            remember(clientId) { remember(id, clientId, value, ip, agent); },
             addEventListener(name, fn) { const list = handlers.get(name) ?? []; list.push(fn); handlers.set(name, list); },
             emit(name, event) { for (const fn of handlers.get(name) ?? []) fn(event); },
             send(text) { out.send(['data', id, text]); },
@@ -227,7 +233,7 @@ export function multiplexSession(socket, connect, { onMetrics = () => {}, delay 
   });
   socket.addEventListener('close', shutdown);
   socket.addEventListener('error', shutdown);
-  return { group, shutdown, settled: async () => { await chain; await Promise.allSettled([...pending]); } };
+  return { group, shutdown, flush:out.flush, reset() { synced=0;out.reset();for(const [id,seat] of seats)out.send(['seat',id,seat]); }, settled: async () => { await chain; await Promise.allSettled([...pending]); } };
 }
 export function acceptMultiplex(request, connect, options) {
   const [client, server] = Object.values(new WebSocketPair());
@@ -285,7 +291,16 @@ const COASTS = /^\{"t":"hello".{0,2000}?"coast":1[,}]/;
 const percentile = (sorted, p) => sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] : null;
 
 export class Gate {
-  constructor(ctx, env) { this.ctx = ctx; this.env = env; this.clients = new Map(); this.admissions = new Map(); this.sequence = 0; this.link = null; this.opening = null; this.timing = stageTimings(); this.metricsAt = 0; this.window = this.freshWindow(); this.worldTick = null; this.behind = new Set(); this.idle = null; }
+  constructor(ctx, env) { this.ctx = ctx; this.env = env; this.clients = new Map(); this.admissions = new Map(); this.sequence = 0; this.link = null; this.opening = null; this.timing = stageTimings(); this.metricsAt = 0; this.window = this.freshWindow(); this.worldTick = null; this.behind = new Set(); this.idle = null;
+    this.relayEpoch = crypto.randomUUID();
+    this.watchSockets = new WatchSockets(ctx);
+    ctx.blockConcurrencyWhile?.(async () => {
+      await this.watchSockets.restore(async (request, transport, attachment) => {
+        transport.gateState = attachment.gate;
+        await this.connect(request, transport);
+      });
+    });
+  }
   freshWindow() { return { worlds: 0, frames: 0, bytes: 0, skipped: 0, inputs: 0, worldAge: [], tickFrom: null, tickFromAt: 0, tickAt: 0, gapMax: 0, gaps: [0, 0, 0], late: 0, busy: 0 }; }
   /** This Gate's own lateness: a timer every 20 ms, and how long past it each one came. A Gate that is out of time is late to its own timer. */
   watchLoop() {
@@ -317,17 +332,26 @@ export class Gate {
       // and was the first object to fall behind; sixteen channels of one frame
       // a tick each way are cheaper for the room than two of hundreds.
       const target = new URL(url); target.pathname = '/__multiplex';
-      const response = await this.env.TABLE.get(this.env.TABLE.idFromName(name)).fetch(new Request(target, { headers: { Upgrade: 'websocket' } }));
-      if (!response.webSocket) throw new Error('room link refused');
-      const socket = response.webSocket; socket.accept();
+      let socket;
+      if ((url.searchParams.get('relay') === '1' || url.searchParams.get('host') === 'server')) {
+        target.pathname = '/__relay';
+        socket = relayChannel(this.ctx, data => this.env.TABLE.get(this.env.TABLE.idFromName(name)).fetch(target, {method:'POST',headers:{'x-homie-relay-epoch':this.relayEpoch},body:data}));
+        this.relaySocket = socket;
+      } else {
+        const response = await this.env.TABLE.get(this.env.TABLE.idFromName(name)).fetch(new Request(target, { headers: { Upgrade: 'websocket' } }));
+        if (!response.webSocket) throw new Error('room link refused');
+        socket = response.webSocket; socket.accept();
+      }
       // What players send leaves this Gate as one frame at most every 50 ms: at once when the channel has been
       // quiet, else with whatever arrived since the last. The room's one thread is spent by the message, so a
       // Gate costs it one a tick each way. (Timing that frame to land just before the room's tick was tried twice
       // and failed twice on Cloudflare: the round trip to the room varies by more than the window it aims for.)
-      const link = batchLink(socket, { receipts: true, delay: 50, maxFrames: 8, autoReceipt: false, onAck: (waited, clock) => { if (clock) this.roomClock(clock); } });
-      const sink = worldSink();
+      const link = batchLink(socket, { receipts: socket !== this.relaySocket, delay: 50, maxFrames: 8, autoReceipt: false, onAck: (waited, clock) => { if (clock) this.roomClock(clock); } });
+      let sink = worldSink(), worldReady = false;
+      socket.addEventListener('reset',()=>{link.reset();sink=worldSink();worldReady=false;this.worlds=null;for(const client of this.clients.values()){client.snapEncoder=null;client.crowd=null;}link.send(['resync']);});
       const lost = (event = {}) => {
         if (this.link !== link) return;
+        this.linkFailure = {reason:event.reason,error:event.error?.message};
         console.log(JSON.stringify({ ev: 'room-link-lost', room: name, gate: url.searchParams.get('gate'), layer: 'gate', code: event.code ?? null, reason: event.reason ?? null, error: event.error?.message ?? null, clients: this.clients.size, transport: link.facts() }));
         this.link = null; this.worlds = null; link.close();
         for (const timer of this.admissions.values()) clearTimeout(timer); this.admissions.clear();
@@ -340,16 +364,21 @@ export class Gate {
         try {
           const rows = parseFrame(event); let hz = null;
           for (const row of rows) {
-            if (row[0] === 'world') { hz = row[4]; const snap = row[2].w ? sink.decode(row[2], row[5]) : row[2]; this.deliver(snap, row[3], row[4], drop); continue; }
+            if(row[0]==='link-close'){lost({code:row[1],reason:row[2]});return;}
+            if (row[0] === 'world') { hz = row[4]; if(row[2].w && !worldReady && !row[2].w.ids){link.send(['resync']);continue;} worldReady=true; const snap = row[2].w ? sink.decode(row[2], row[5]) : row[2]; this.deliver(snap, row[3], row[4], drop); continue; }
             for (const [op, id, value, reason, settings, rate] of expandBatch([row])) {
               const client = this.clients.get(id);
-              if (op === 'seat') { if (client) { client.seat = value; client.subscribed = true; } }
+              if (op === 'seat') { if (client) { client.seat = value; client.subscribed = true; client.rememberGate?.({...client.gateState,seat:value,subscribed:true}); } }
               else if (op === 'view') { if (client) this.deliverOne(id, client, value, reason, settings, rate, drop); }
               else if (op === 'data') { try { client?.send(value); } catch { if (client) drop(id, client); } }
               else if (op === 'close') { this.clients.delete(id); try { client?.close(value, reason); } catch { /* The peer already closed; local shutdown still runs. */ } }
             }
           }
           link.consumed(rows);
+          if(socket===this.relaySocket)for(const [id,client] of this.clients){
+            const ping=client.lastPing?.()??0;
+            if(ping>(client.forwardedPing??0)){client.forwardedPing=ping;link.send(['data',id,JSON.stringify({t:'ping',c:ping})]);}
+          }
           if (hz && Date.now() - this.metricsAt >= 1000) this.publishMetrics(url, link);
         } catch (error) { lost({ error, reason: 'invalid room frame' }); try { socket.close(1011, 'room link failed'); } catch { /* The peer already closed; local shutdown still runs. */ } }
       });
@@ -361,7 +390,7 @@ export class Gate {
         this.link = null; this.worlds = null; link.close();
         try { socket.close(1000, 'no players'); } catch { /* gone */ }
       };
-      this.link = link; return link;
+      this.link = link; if(socket===this.relaySocket)this.openRelay(url,socket); return link;
     })();
     try { return await this.opening; } finally { this.opening = null; }
   }
@@ -412,14 +441,17 @@ export class Gate {
   }
   async connect(request, server) {
     const link = await this.upstream(new URL(request.url));
-    const id = String(++this.sequence);
+    const id = server.gateState?.id ?? crypto.randomUUID();
+    if (server.gateState) Object.assign(server, server.gateState);
+    server.gateState ??= {id,opened:false};
+    server.rememberGate?.(server.gateState);
     this.clients.set(id, server); clearTimeout(this.idle); this.idle = null;
-    let opened = false;
+    let opened = server.gateState?.opened === true;
     const deadline = setTimeout(() => {
       this.admissions.delete(id);
       if (!opened && this.clients.delete(id)) { try { server.close(4000, 'no-hello'); } catch { /* The peer already closed; local shutdown still runs. */ } }
     }, 5000);
-    deadline?.unref?.(); this.admissions.set(id, deadline);
+    deadline?.unref?.(); if (opened) clearTimeout(deadline); else this.admissions.set(id, deadline);
     server.addEventListener('message', event => {
       if (!this.clients.has(id) || typeof event.data !== 'string') return;
       // No legal public frame exceeds the largest checkpoint allowance
@@ -434,6 +466,8 @@ export class Gate {
       if (!opened) {
         opened = true; clearTimeout(deadline); this.admissions.delete(id);
         server.coasts = COASTS.test(event.data);
+        server.gateState = {id,opened:true,coasts:server.coasts};
+        server.rememberGate?.(server.gateState);
         // Logical creation and the first frame share a batch: admission time at
         // the Table excludes the public handshake and relay transit.
         link.send(['open', id, request.url, request.headers.get('cf-connecting-ip'), request.headers.get('user-agent')]);
@@ -512,13 +546,39 @@ export class Gate {
     const gates = [...(this.gateDiagnostics?.values() ?? [])].sort((a, b) => a.id.localeCompare(b.id, 'en', { numeric: true }));
     return Response.json({ toolkit: STUDIO_BUILD, room: url.searchParams.get('room'), ...this.diagnostics, gates, diagnostics: { cached: true, at: this.diagnostics?.st ?? null, ageMs: this.diagnostics ? at - this.diagnostics.st : null } });
   }
+  openRelay(url,socket) {
+    if(this.readingRelay){this.relayAgain=true;return;}
+    const target=new URL(url);target.pathname='/__relay-stream';
+    const key=`${url.searchParams.get('game')}/${url.searchParams.get('room')}`;
+    this.readingRelay=(async()=>{
+      const response=await this.env.TABLE.get(this.env.TABLE.idFromName(key)).fetch(target,{headers:{'x-homie-relay-epoch':this.relayEpoch}});
+      const epoch=response.headers.get('x-homie-relay-epoch');
+      if(this.remoteRelayEpoch!==epoch){this.remoteRelayEpoch=epoch;socket.emit('reset',{});}
+      await readRelay(response,socket);
+    })().catch(error=>socket.emit('error',{error})).finally(()=>{
+      this.readingRelay=null;
+      if(this.relayAgain&&this.link){this.relayAgain=false;this.openRelay(url,socket);}
+    });
+    this.ctx.waitUntil(this.readingRelay);
+  }
+  webSocketMessage(socket, message) { this.watchSockets.message(socket,message); }
+  webSocketClose(socket) { return this.watchSockets.close(socket); }
+  webSocketError(socket,error) { return this.watchSockets.close(socket,error); }
   async fetch(request) {
     const url = new URL(request.url);
     if (url.pathname === '/__diagnostics') return this.diagnosticsFetch(request, url);
+    if (url.pathname === '/__relay-presence') {
+      return Response.json([...this.clients].map(([id,client])=>[id,client.lastPing?.()??0]));
+    }
+    if (url.pathname === '/__relay-wake') {
+      if(this.link)this.openRelay(url,this.relaySocket);else await this.upstream(url);
+      return new Response(null,{status:204});
+    }
     if (url.pathname === '/__multiplex') return acceptMultiplex(request, (req, socket) => this.connect(req, socket));
     const [client, server] = Object.values(new WebSocketPair());
-    server.accept();
-    await this.connect(request, server);
+    const transport = (url.searchParams.get('relay') === '1' || url.searchParams.get('host') === 'server') && this.ctx.acceptWebSocket ? await this.watchSockets.accept(server, request) : server;
+    transport.accept();
+    await this.connect(request, transport);
     return new Response(null, { status: 101, webSocket: client });
   }
 }

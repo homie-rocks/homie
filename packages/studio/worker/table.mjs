@@ -1,3 +1,4 @@
+import {relayStream} from './relay-channel.mjs';
 import {roomSessions,restoreRoomFields} from './room-sessions.mjs';
 import {idleChatSnapshot,restoreIdleChat,readIdleChat,writeIdleChat,expireIdleChat} from './idle-chat.mjs';
 import {WatchSockets} from './watch-sockets.mjs';
@@ -13,7 +14,7 @@ import { CLEF, DECIDE, clefRun, costOf, localAiOf, picksOf, talks } from './brai
 import { reviewChat } from './chat.mjs';
 import { chatDay } from './chat-store.mjs';
 import { forgetLines, historyOf, keepLines, keptLine } from './lounge-store.mjs';
-import { acceptMultiplex, diagnosticsOf, gatePlayers, nextGate } from './gate.mjs';
+import { multiplexSession, acceptMultiplex, diagnosticsOf, gatePlayers, nextGate } from './gate.mjs';
 import { worldSource } from './world-wire.mjs';
 import { seatCount, perAddress } from './seats.mjs';
 import { count, counter, isQa, today } from './stats.mjs';
@@ -66,6 +67,8 @@ export class Table {
     this.accountTokens = {};
     this.inputTransit = [];
     this.relayed = false;
+    this.relays = new Map();
+    this.relayEpoch = crypto.randomUUID();
     this.gateHeld = new Map();
     this.gatePromised = new Map();
     this.roomAlarmAt = 0;
@@ -109,6 +112,12 @@ export class Table {
       // The last socket can close while an office write is being retried. An
       // alarm must restore that room even when there is no transport to attach.
       if(!this.room&&this.sessionSnapshot&&this.game&&this.code)this.roomFor(this.game,this.code,this.sessionSnapshot.fields.get('seatCap')??8);
+      for (const descriptor of this.relayDescriptors ?? []) {
+        this.relayed = true;
+        const relay = this.relayFor(new URL(descriptor.url), descriptor);
+        relay.socket.emit('message', {data:JSON.stringify(descriptor.clients.map(([id, clientId, url, ip, agent]) => ['open',id,url,ip,agent]))});
+        await relay.session.settled();
+      }
       this.restoringSockets=false;
       if(this.sessionSnapshot)this.say({ev:"sessions-restored",clients:this.room?.clients.size??0});
       this.sessionSnapshot=null;
@@ -246,6 +255,7 @@ export class Table {
           const account = room.clients.get(peer.id)?.player;
           return account ? this.characterGrants.get(account) ?? null : null;
         } } : {}),
+        onRoundIdle: until => { room.tellWatchers(); this.report(); this.recordRound(); this.armRoom(until); this.ctx.waitUntil(this.sleepRoom()); },
         onTick: () => {
           if (!saved) return;
           ticks += 1;
@@ -859,6 +869,19 @@ export class Table {
 
   /** The alarm: the house guides' brains decide (worker/agents.mjs), then the day's usage is written. */
   async alarm() {
+    for (const relay of this.relays.values()) {
+      const url = new URL(relay.url); url.pathname='/__relay-presence';
+      const key = `${url.searchParams.get('game')}/${url.searchParams.get('room')}/${url.searchParams.get('gate')}`;
+      const response = await this.env.GATE.get(this.env.GATE.idFromName(key)).fetch(url);
+      if (!response.ok) throw new Error('Gate presence unavailable');
+      const presence = new Map(await response.json());
+      for (const [id, clientId] of relay.clients.values()) {
+        const client = this.room?.clients.get(clientId);
+        if (client && presence.has(id)) client.lastSeen = Math.max(client.lastSeen,presence.get(id));
+      }
+    }
+    this.hostRt?.wakeRound();
+    if (this.hostRt?.running) this.start();
     if (this.room && (!this.room.clients.size || this.canSleep())) { this.room.tick(Boolean(this.canSleep())); this.room.tellWatchers(); this.report(); }
     await this.flushRoundRecords();
     await this.flushFunctionEvents();
@@ -941,6 +964,27 @@ export class Table {
       if (!this.gatePromised.has(gate)) this.gatePromised.set(gate, []);
       this.gatePromised.get(gate).push(now + 10_000);
       return json({ gate });
+    }
+    if (path === '/__relay-stream') {
+      this.relayed=true;
+      const relay=this.relayFor(new URL(request.url));
+      relay.remoteEpoch=request.headers.get('x-homie-relay-epoch');relay.session.reset();
+      const response=new Response(relay.socket.open(),{headers:{'content-type':'application/x-ndjson','x-homie-relay-epoch':this.relayEpoch}});
+      if(this.canSleep())this.ctx.waitUntil(this.sleepRoom());
+      return response;
+    }
+    if (path === '/__relay') {
+      this.relayed = true;
+      const relay = this.relayFor(new URL(request.url));
+      const epoch=request.headers.get('x-homie-relay-epoch');
+      if(relay.remoteEpoch!==epoch){relay.remoteEpoch=epoch;relay.session.reset();}
+      const data = await request.text();
+      relay.socket.emit('message',{data});
+      await relay.session.settled();
+      for (const row of JSON.parse(data)) if (row[0] === 'close') relay.clients.delete(row[1]);
+      if (this.canSleep()) await this.sleepRoom();
+      else if (JSON.parse(data).some(row=>row[0]==='open'||row[0]==='close')) this.saveSessions();
+      return new Response(null,{status:204});
     }
     if (path === '/__multiplex') {
       this.relayed = true;
@@ -1111,6 +1155,7 @@ export class Table {
     } else {
       const h = room.attach(conn,server.resume);
       server.remember?.(h.id);
+      if (server.resume && room.server) room.joinServer(room.clients.get(h.id));
       // A room is OPENED when the first seat is taken in an empty one (a room restored after a deploy keeps its
       // seats, so it is not counted twice). One counter write per room.
       const fresh = room.seats.size === 0;
@@ -1171,12 +1216,34 @@ export class Table {
   async webSocketClose(socket) { await this.watchSockets.close(socket); if(this.canSleep())await this.sleepRoom(); }
   async webSocketError(socket, error) { await this.watchSockets.close(socket, error); if(this.canSleep())await this.sleepRoom(); }
 
+  relayFor(url, descriptor = null) {
+    const gate = url.searchParams.get('gate');
+    if (this.relays.has(gate)) return this.relays.get(gate);
+    const target = new URL(url); target.pathname = '/__relay-wake';
+    const key = `${url.searchParams.get('game')}/${url.searchParams.get('room')}/${gate}`;
+    const socket = relayStream(this.ctx,async()=>{const response=await this.env.GATE.get(this.env.GATE.idFromName(key)).fetch(target);if(!response.ok)throw new Error('Gate wake failed');await response.body?.cancel();});
+    const clients = new Map((descriptor?.clients??[]).map(row=>[row[0],row]));
+    const relay = {url:url.toString(),socket,clients};
+    relay.session = multiplexSession(socket,(request,transport)=>this.connect(request,transport),{
+      receipts:false,
+      source:(this.worldSource??=worldSource()),
+      resume:id=>this.sessionSnapshot?.clients.get(clients.get(id)?.[1]),
+      remember:(id,clientId,url,ip,agent)=>clients.set(id,[id,clientId,url,ip,agent]),
+      onCount:n=>{const index=Number(gate);if(n>(this.gateHeld.get(index)??0))this.gatePromised.get(index)?.shift();if(n)this.gateHeld.set(index,n);else this.gateHeld.delete(index);},
+    });
+    this.relays.set(gate,relay);return relay;
+  }
+  saveSessions() {
+    this.relayDescriptors = [...this.relays.values()].map(relay=>({url:relay.url,clients:[...relay.clients.values()].filter(row=>this.room.clients.has(row[1]))}));
+    const keys=['game','code','lastReport','lastPeople','lastAgents','lastAi','lastReportAt','openCounted','launchReadFor','relayDescriptors'];
+    this.sessionStore.write(this.room,Object.fromEntries(keys.map(key=>[key,this[key]])));
+  }
   canSleep() {
     // Older ports publish snapshots without a round protocol. Once play starts,
     // treat them as active until empty: persisting every frame would turn their
     // ordinary network traffic into a stream of SQLite writes.
-    const active = this.room?.lastRound?.phase === 'live' || (!this.room?.lastRound && this.room?.lastSnap != null && this.room?.clients.size > 0);
-    return this.room && this.hibernationReady && this.sessionStore && this.ctx.storage.sql && this.ctx.acceptWebSocket && !this.relayed && !this.hostRt && !active && !this.restoringSockets;
+    const active = this.hostRt ? this.hostRt.running : this.room?.lastRound?.phase === 'live' || (!this.room?.lastRound && this.room?.lastSnap != null && this.room?.clients.size > 0);
+    return this.room && this.hibernationReady && this.sessionStore && this.ctx.storage.sql && this.ctx.acceptWebSocket && (!this.relayed || this.relays.size > 0) && (!this.hostRt || this.hostRt.roundIdleUntil !== null || !this.hostRt.running) && !active && !this.restoringSockets;
   }
   async sleepRoom() {
     if(!this.canSleep())return;
@@ -1188,17 +1255,18 @@ export class Table {
       catch(error) {room.officeDirty=true;this.storageProblem(error);}
     }
     if(!room.clients.size&&!room.watchers.size&&!room.officeDirty) {
+      for(const relay of this.relays.values()){relay.session.flush();relay.socket.sleep();}
       this.sessionStore.clear();
       // Empty rooms get one final expiry pass, never a permanent minute alarm.
       const until=room.emptySince+room.forgetMs;
       if(Number.isFinite(until)&&until>now){const alarm=await this.ctx.storage.getAlarm();if(alarm==null||alarm>until)await this.ctx.storage.setAlarm(until);}
       return;
     }
-    const keys=['game','code','lastReport','lastPeople','lastAgents','lastAi','lastReportAt','openCounted','launchReadFor'];
-    this.sessionStore.write(this.room,Object.fromEntries(keys.map(key=>[key,this[key]])));
+    this.saveSessions();
+    for(const relay of this.relays.values()){relay.session.flush();relay.socket.sleep();}
     // Edge-answered heartbeats need only a minute's liveness sweep. A legacy
     // client still keeps its original hello/heartbeat deadline.
-    const due=[now+(room.officeDirty?1000:60000),...[...room.clients.values()].map(c=>{const ping=c.conn.lastPing?.()??0;return c.helloed?Math.max(c.lastSeen,ping)+(ping?Math.max(room.idleMs,60000):room.idleMs):c.joinedAt+5000;})];
+    const due=[...(this.hostRt?.roundIdleUntil != null ? [this.hostRt.roundIdleUntil] : []),now+(room.officeDirty?1000:60000),...[...room.clients.values()].map(c=>{const ping=c.conn.lastPing?.()??0;return c.helloed?Math.max(c.lastSeen,ping)+(ping?Math.max(room.idleMs,60000):room.idleMs):c.joinedAt+5000;})];
     for(const control of [room.vote?.open?room.vote:null,room.regate,room.agentsOut])if(control?.until)due.push(control.until);
     const at=Math.max(now+1,Math.min(...due)),alarm=await this.ctx.storage.getAlarm();
     if(alarm==null||alarm>at)await this.ctx.storage.setAlarm(at);
@@ -1206,7 +1274,7 @@ export class Table {
   start() {
     if(this.restoringSockets)return;
     if(this.canSleep()){this.ctx.waitUntil(this.sleepRoom());return;}
-    if(this.sessionStore&&this.room?.lastRound?.phase==='live')this.sessionStore.clear();
+    if(this.sessionStore&&!this.relays.size&&this.room?.lastRound?.phase==='live')this.sessionStore.clear();
     if (this.timer) return;
     let n = 0;
     this.timer = setInterval(() => {

@@ -600,7 +600,7 @@ export function createHost(o: HostOptions): Host {
           core.seatLeave(held.seat);
           tick(o.clock.now());
         } else core.seatAway(m.seat as number, true);
-        if (running && people() === 0) pause();
+        if ((running || roundIdleUntil !== null) && people() === 0) pause();
         return;
       }
       case 'free': {
@@ -942,21 +942,24 @@ export function createHost(o: HostOptions): Host {
     } catch (error) { fault('start', error); } finally { keepTime(); }
   }
   function pause(): void {
-    if (!running) return;
+    if (!running) {
+      if (roundIdleUntil !== null && !paused) { paused = true; checkpoint(true); o.onPause?.(); }
+      return;
+    }
     running = false; paused = true;
     // A pending timer would keep the object in memory and billed: the pause clears it.
     disarm();
     log({ ev: 'host-pause', game: o.game, tick: core.tick });
     try { checkpoint(true); o.onPause?.(); } catch (error) { fault('onPause', error); if (persistent) { stop(); o.onEnd?.('storage-or-tick-failed', { tick: core.tick }); } }
   }
-  function resume(): void {
+  function resume(announceRound = true): void {
     if (running || ended || !paused || roundIdleUntil !== null) return;
     running = true; paused = false;
     try {
       // The room resumes at the tick it paused on: no tick is skipped and no timer fires for the gap.
       base = { ms: o.clock.now() + (firstTick ? o.startDelayMs ?? 0 : 0), tick: core.tick };
       overSince = null; blamed = false; failingSince = null; lastStart = base.ms;
-      handle([core.round()], base.ms);
+      if (announceRound) handle([core.round()], base.ms);
       for (const q of queues.values()) q.lastFrameTick = core.tick;
       log({ ev: 'host-resume', game: o.game, tick: core.tick });
       o.onResume?.();
@@ -967,7 +970,7 @@ export function createHost(o: HostOptions): Host {
     if (!core.resumeRound()) throw new Error('Round is not settled');
     roundIdleUntil = null;
     handle(core.drain(), o.clock.now());
-    if (people() > 0) { paused = true; resume(); }
+    if (people() > 0) { paused = true; resume(false); }
     else { paused = true; checkpoint(true); }
   }
   /** What a relay keeps for whoever joins next, said again: the round with its results, the roster, the shared state, the capabilities. */
@@ -1046,7 +1049,7 @@ export function createHost(o: HostOptions): Host {
       held.character = core.character(held.seat) ?? held.character; held.returning = true;
       present.delete(held.seat); queues.delete(held.seat); names.delete(held.seat);
       if (held.seat >= 0) core.seatLeave(held.seat); tick(o.clock.now());
-      if (running && people() === 0) pause();
+      if ((running || roundIdleUntil !== null) && people() === 0) pause();
     },
     characterReturned(account, lease) { if (characters.get(account)?.returning && characters.get(account)?.lease === lease) characters.delete(account); },
     get viewSettings() { return c.settings.view; },
