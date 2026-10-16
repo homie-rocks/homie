@@ -19,6 +19,14 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [Unreleased]
 
+### Fixed
+
+- Custom route role checks enforce fresh app launch gates. Custom Worker asset routes preserve generated authorization paths; same-origin mutation protection is exported and documented with reserved `/api/custom/*` paths and app cookie scope.
+- Late link subscriptions no longer trigger rules-view reconnect recovery; throwing listeners still return their unsubscribe function.
+- MCP publishing and its preflight use the connector's directory. Wrangler sign-in checks stop immediately when logged out and retry refresh collisions without blocking the event loop, including CLI status.
+- Scaffold, local database and login regression tests use OS temporary directories and work from the package test command.
+
+
 ### Added
 - Studio Worker `useRoutes` hook for custom APIs, well-known files and callbacks, after Homie's matched routes and before Worker asset fallback, with response security headers.
 - Public `isOwner(request, env)` and `hasRole(request, env, app, role)` authorization helpers using existing live session and app access checks.

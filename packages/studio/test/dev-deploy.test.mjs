@@ -685,7 +685,8 @@ test('publish from the command line and the MCP tool: the count is in what a per
   assert.deepEqual(posts, ['POST /api/studio/publish {"site":"https://test-studio.acct.workers.dev"}']);
 
   // The MCP tool, spoken to as a host does.
-  const child = spawn(process.execPath, [CLI, 'mcp', '--studios', scratch, '--no-install'], { cwd: scratch, env: { ...process.env, HOME: scratch, HOMIE_MCP_WAIT_MS: '20000' }, stdio: ['pipe', 'pipe', 'pipe'] });
+  writeStudio(dir, {...readStudio(dir), homie:{directory:'http://127.0.0.1:1'}});
+  const child = spawn(process.execPath, [CLI, 'mcp', '--studios', scratch, '--no-install', '--homie', homie], { cwd: scratch, env: { ...process.env, HOME: scratch, HOMIE_MCP_WAIT_MS: '20000' }, stdio: ['pipe', 'pipe', 'pipe'] });
   started.push(child);
   let buf = ''; let seq = 0; const waiting = new Map();
   child.stdout.on('data', (d) => {

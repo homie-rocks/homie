@@ -57,3 +57,10 @@ approval uses the existing studio account and current app grants. The auth route
 a protected transport of that same resource. `<site>/mcp` continues to expose public
 tools anonymously. Neither path adds studio limits.
 See the [MCP authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization).
+
+For studio-owned HTTP routes, read
+`node_modules/@homie-rocks/studio/docs/custom-routes.md`. Register with `useRoutes`
+and use `/api/custom/*` (game/app IDs cannot claim `api`). App handoff cookies are
+scoped to `/<app>/` and do not reach `/custom-api/...`; use built-in app record
+endpoints or app tools for role-authorized mutations. Use direct `/api/` endpoints
+for function `self` calls, which use `redirect:'error'`.
