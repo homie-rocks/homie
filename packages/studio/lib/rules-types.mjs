@@ -117,7 +117,7 @@ export type Room<R = never> = Omit<BaseRoom<R>, 'me' | 'each' | 'get' | 'on' | '
  readonly shared: ReadonlyState<${fields(s.shared)}>;
  readonly tune: ReadonlyState<${value(checked.publicTune)}>;
  each<K extends keyof Entities>(kind: K, fn: (entity: Entities[K]) => void): void;
- get(id: string): Entity | null;
+ get(id: string, options?: { latest?: boolean }): Entity | null;
  on<K extends keyof Effects>(name: K, fn: (event: Effects[K]) => void): () => void;
  input(sample: ${input}, options?: {at?: number}): void;
  command<K extends keyof Commands>(name: K, ...data: {} extends Commands[K] ? [data?: Commands[K]] : [data: Commands[K]]): void;
