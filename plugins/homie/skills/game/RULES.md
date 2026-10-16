@@ -1514,3 +1514,28 @@ same body and draws on from where it was shown, gliding and routing around solid
 was really placed while the player was away (a respawn, a new round) should still be drawn at once: say so with
 `openRoom({ respawned: (before, after) => after.diedAt !== before.diedAt })`, where `before` and `after` are the own
 body as the server last had it before and after the outage.
+
+
+### Ticked lifecycle presentation
+
+`room.get(id, {latest: true})` reads an immutable entity from the latest received
+server snapshot. Ordinary `get` and `each` remain buffered; `me` remains predicted.
+Use latest fields only for decisions with an explicit simulation timestamp, such
+as a confirmed destruction at a past contact tick. Apply that decision when the
+drawn scene reaches its timestamp. Keep positions on `room.viewTick`; mixing a
+latest position with buffered hazards puts them on different clocks. Latest
+reads do not include provisional entities or advance the drawing clock.
+
+
+For deterministic 2D movement against a static map, a view may opt into
+`openRoom({remoteInput: {runner: entity => ({...heldControls})}})`. The callback
+must derive controls from confirmed movement state (for example, declared last
+held-key bits). The toolkit runs the guarded move for remote bodies on the local
+input clock; `room.viewTick` uses that same clock for deterministic patrols.
+Forecasts run movement only, never predictors, actions, points or damage. Press
+and pulse fields are zero. They stop after one second without fresh authority;
+a changed report corrects the remote presentation by at most 1.4 body widths per
+frame, and placements discard the old forecast immediately. This is opt-in:
+ordinary rooms retain buffered interpolation. Do not opt in for a physics world
+or stateful moving geometry. Unknown remote control changes remain predictions;
+measure their correction, contacts and phone cost before adopting this mode.
