@@ -39,6 +39,8 @@ of 16 and starts heartbeats before admission, then waits for the settled break
 before measuring its 40-second hibernation interval.
 
 `match-probe.mjs <fixture-url> <output.json>` checks 16 quiet pairs, then 2,048
-unique players with duplicate concurrent joins. It asserts unique allocations,
+unique players at 128 concurrent join pairs. It asserts unique allocations,
 all 16 matching shards used, and bounded per-object request counts. The fixture's
 `/proof-lobby` counters are observation-only and never ship in the toolkit router.
+
+`/proof-capacity?game=<fresh-name>` measures 1,024 durable allocations against one coordinator with 32 concurrent callers. `/proof-peak?game=<fresh-name>` accepts timestamped shard totals; `/proof-lobby` exposes peak write counts. `/proof-miss-start?key=<game>/<room>` removes the scheduled wake for a break recovery probe. Status includes accepted room input counts and the Gate link epoch. These failure and observation routes are fixture-only.
