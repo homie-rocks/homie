@@ -628,12 +628,13 @@ export async function portCheck({ url, game, root, only = null, shots = null, lo
       }
     }
 
-    /* ---- two fresh browsers meet through the lobby and finish a round */
+    /* ---- a public join and an invited browser finish a round */
     if (want.has('round') && await gate('round')) {
       try {
         const A = await launch('desk');
         const B = await launch('phone');
-        const [oa, ob] = [await open(A, `${base}/${game}/play?name=Desk`), await open(B, `${base}/${game}/play?name=Phone`)];
+        const oa = await open(A, `${base}/${game}/play?name=Desk`);
+        const ob = await open(B, `${base}/${game}/play?name=Phone${oa.shell?.room ? `&room=${encodeURIComponent(oa.shell.room)}` : ''}`);
         if (!oa.ok || !ob.ok) row('round', false, { why: `a browser was never seated (${!oa.ok ? `computer: ${oa.why}` : ''} ${!ob.ok ? `phone: ${ob.why}` : ''})` });
         else if (oa.shell.room !== ob.shell.room) row('round', false, { why: `the two browsers landed in different rooms (${oa.shell.room}, ${ob.shell.room})` });
         else {
