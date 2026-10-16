@@ -46,7 +46,7 @@ Two new shared parts — an owner action checklist and a 3D terrain route map �
 
 ## [0.57.0] - 2026-10-16
 
-**Plugin 0.57.0**
+**Plugin 0.57.0** · [release-2026-10-16-studio-0.57.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-16-studio-0.57.0)
 
 Studios can book at each other on behalf of a person, with proven studio identity and signed events, and friends joining a browser-hosted game at the same moment always get their seat.
 
@@ -73,7 +73,7 @@ Studios can book at each other on behalf of a person, with proven studio identit
 
 ## [0.56.0] - 2026-10-15
 
-**Plugin 0.56.0**
+**Plugin 0.56.0** · [release-2026-10-15-studio-0.56.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-15-studio-0.56.0)
 
 Studios scale with hibernating rooms, add custom routes with built-in access checks, and deploy reliably with background queue handlers.
 
