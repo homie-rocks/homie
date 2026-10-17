@@ -175,8 +175,17 @@ export async function credential(action,input,{fetcher=fetch,dir=TOKENS_DIR()}={
  }
  return '';
 }
-/** How Git runs this helper: this exact toolkit version, so it can be updated and never drifts. */
-export function helperCommand(version){return `!npx --yes --package=@homie-rocks/studio@${version} homie-studio git-credential`;}
+/**
+ * How Git runs this helper. In a studio, its own installed toolkit (node_modules/.bin), so Git's sign-in needs neither
+ * the network nor npx's cache; before `npm ci` has run there, or outside a studio, this exact toolkit version via npx.
+ */
+const shQuote=s=>`'${String(s).replace(/'/g,`'\\''`)}'`;
+export function helperCommand(version,studioRoot=null){
+ const npx=`npx --yes --package=@homie-rocks/studio@${version} homie-studio git-credential`;
+ if(!studioRoot)return `!${npx}`;
+ const bin=shQuote(join(studioRoot,'node_modules','.bin','homie-studio'));
+ return `!f() { if [ -x ${bin} ]; then ${bin} git-credential "$@"; else ${npx} "$@"; fi; }; f`;
+}
 
 /* ------------------------------------------------------------------ connect, push, publish */
 // Asynchronous on purpose: Git may call back into this process's own helpers and servers.
@@ -189,12 +198,13 @@ const git=(args,{cwd,env={}}={})=>new Promise((resolve,reject)=>{
  * `homie-studio hosted connect <git url> [folder]`: sign in once, clone, point Git's credential
  * helper at this toolkit for that remote only, and mark the studio as hosted.
  */
-export async function connectHosted(gitURL,folder,{version,helper=helperCommand(version),install=true,log=()=>{},fetcher=fetch,approve=openBrowser,device=false,dir=TOKENS_DIR()}={}){
+export async function connectHosted(gitURL,folder,{version,helper=null,install=true,log=()=>{},fetcher=fetch,approve=openBrowser,device=false,dir=TOKENS_DIR()}={}){
  const remote=new URL(gitURL).href.replace(/\/$/,'');
  const entry=(await accessFor(remote,{fetcher,dir}))??await signIn(remote,{fetcher,approve,log,device,dir});
  const target=resolve(folder??basename(new URL(remote).pathname).replace(/\.git$/,''));
  if(existsSync(target)&&readdirSync(target).length)throw Error(`${target} is not empty`);
  const key=`credential.${prefixOf(remote)}`;
+ helper??=helperCommand(version,target);
  await git(['-c',`${key}.helper=`,'-c',`${key}.helper=${helper}`,'-c',`${key}.useHttpPath=true`,'clone','-q',remote,target]);
  await git(['config','--replace-all',`${key}.helper`,''],{cwd:target});await git(['config','--add',`${key}.helper`,helper],{cwd:target});await git(['config',`${key}.useHttpPath`,'true'],{cwd:target});
  const file=join(target,'studio.json');let marked=false;
@@ -205,13 +215,29 @@ export async function connectHosted(gitURL,folder,{version,helper=helperCommand(
  if(install&&existsSync(join(target,'package-lock.json'))){const r=spawnSync('npm',['ci','--no-audit','--no-fund'],{cwd:target,stdio:'ignore'});if(r.status!==0)log('npm ci did not finish; run it in the studio before building');}
  return {ok:true,command:'hosted connect',folder:target,remote,resource:entry.resource,marked,next:[`cd ${target}`,'Make changes with the toolkit as usual, commit, then git push origin HEAD:main (or homie-studio deploy): the host builds a private preview.',marked?'studio.json now says the studio is hosted; commit it with your first change.':null].filter(Boolean)};
 }
-/** A minimal MCP client (Streamable HTTP, JSON answers) for the host's own tools, same sign-in. */
-export async function hostTool(hosting,name,args,{fetcher=fetch,dir=TOKENS_DIR()}={}){
- if(!hosting.mcp)return null;
- const entry=await accessFor(hosting.git,{fetcher,dir});
- if(!entry)throw Error(`Not signed in to ${hosting.name}: run homie-studio hosted connect ${hosting.git}`);
+/**
+ * The clone's own remote and the sign-in that covers it. studio.json is repository content that any change can
+ * edit, so it never decides where the source is pushed or where the token goes: the push goes to the remote this clone
+ * was made from, and the token only to the resource it was issued for (RFC 8707). A studio.json that names anything
+ * else is refused before anything is sent.
+ */
+export async function verifiedHost(root,hosting,{dir=TOKENS_DIR()}={}){
+ let remote;try{remote=await git(['remote','get-url','origin'],{cwd:root});}catch{remote=null;}
+ if(!remote)throw Error('This studio has no origin remote: clone it from its host with homie-studio hosted connect <git url>.');
+ const entry=savedFor(remote,{dir});
+ if(!entry||entry.prefix!==prefixOf(remote))throw Error(`Not signed in to ${new URL(remote).host} for ${remote}: run homie-studio hosted connect ${remote}`);
+ if(hosting?.git&&prefixOf(hosting.git)!==entry.prefix)throw Error(`studio.json says the studio is hosted at ${hosting.git}, but this clone's remote is ${remote}. Nothing was pushed or sent: check the hosting block in studio.json (it can only name this clone's own host).`);
+ if(hosting?.mcp&&hosting.mcp!==entry.resource)throw Error(`studio.json names ${hosting.mcp} as the host's MCP server, but the sign-in for ${new URL(remote).host} is for ${entry.resource}. Nothing was sent: the token goes only to the server it was issued for.`);
+ return {remote,entry};
+}
+/** A minimal MCP client (Streamable HTTP, JSON answers) for the host's own tools: the sign-in's own resource only. */
+export async function hostTool(root,hosting,name,args,{fetcher=fetch,dir=TOKENS_DIR()}={}){
+ const {remote,entry:signedIn}=await verifiedHost(root,hosting,{dir});
+ const entry=await accessFor(remote,{fetcher,dir});
+ if(!entry)throw Error(`Not signed in to ${new URL(remote).host}: run homie-studio hosted connect ${remote}`);
+ const server=signedIn.resource;
  const headers={authorization:'Bearer '+entry.access_token,'content-type':'application/json',accept:'application/json, text/event-stream'};
- const send=async(body,extra={})=>{const r=await fetcher(hosting.mcp,{method:'POST',headers:{...headers,...extra},body:JSON.stringify(body)});const text=await r.text();const raw=text.startsWith('event:')||text.startsWith('data:')?text.split('\n').find(l=>l.startsWith('data: '))?.slice(6):text;return {r,body:raw?JSON.parse(raw):null};};
+ const send=async(body,extra={})=>{const r=await fetcher(server,{method:'POST',headers:{...headers,...extra},body:JSON.stringify(body)});const text=await r.text();const raw=text.startsWith('event:')||text.startsWith('data:')?text.split('\n').find(l=>l.startsWith('data: '))?.slice(6):text;return {r,body:raw?JSON.parse(raw):null};};
  const init=await send({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-11-25',capabilities:{},clientInfo:{name:'homie-studio',version:'1'}}});
  const session=init.r.headers.get('mcp-session-id');const extra={...(session?{'mcp-session-id':session}:{}),'mcp-protocol-version':init.body?.result?.protocolVersion??'2025-11-25'};
  await send({jsonrpc:'2.0',method:'notifications/initialized'},extra);
@@ -222,16 +248,17 @@ export async function hostTool(hosting,name,args,{fetcher=fetch,dir=TOKENS_DIR()
 const resultText=result=>(result?.content??[]).filter(c=>c.type==='text').map(c=>c.text).join('\n');
 /** `deploy` for a hosted studio: push main; the host builds the preview. */
 export async function pushHosted(root,hosting,{log=()=>{},fetcher=fetch,dir=TOKENS_DIR()}={}){
+ let verified;try{verified=await verifiedHost(root,hosting,{dir});}catch(error){return {ok:false,command:'deploy',hosted:true,why:error.message};}
  if(await git(['status','--porcelain'],{cwd:root}))log('Uncommitted changes are not pushed: commit them first.');
  const commit=await git(['rev-parse','HEAD'],{cwd:root});
- await git(['push','-q',hosting.git,'HEAD:refs/heads/main'],{cwd:root});
- let progress=null;try{progress=resultText(await hostTool(hosting,'build_progress',{commit},{fetcher,dir}));}catch{}
- return {ok:true,command:'deploy',hosted:true,host:hosting.name,commit,progress,url:null,next:`${hostedWords(hosting)} ${hosting.mcp?'build_progress on the host shows when the preview is ready.':''}`.trim()};
+ // The clone's own, verified remote: never a URL read from studio.json.
+ await git(['push','-q','origin','HEAD:refs/heads/main'],{cwd:root});
+ let progress=null;try{progress=resultText(await hostTool(root,hosting,'build_progress',{commit},{fetcher,dir}));}catch{}
+ return {ok:true,command:'deploy',hosted:true,host:hosting.name,remote:verified.remote,commit,progress,url:null,next:`${hostedWords(hosting)} build_progress on the host shows when the preview is ready.`};
 }
 /** The host's publish, for this commit, with the live commit the AI reviewed. */
 export async function publishHosted(root,hosting,{expected=null,fetcher=fetch,dir=TOKENS_DIR()}={}){
- if(!hosting.mcp)return {ok:false,command:'publish',why:`${hostedWords(hosting)} It names no MCP server, so publish on the host itself.`};
  const commit=await git(['rev-parse','HEAD'],{cwd:root});
- const result=await hostTool(hosting,'studio_publish',{commit,expected},{fetcher,dir});
+ let result;try{result=await hostTool(root,hosting,'studio_publish',{commit,expected},{fetcher,dir});}catch(error){return {ok:false,command:'publish',hosted:true,commit,why:error.message};}
  return {ok:!result?.isError,command:'publish',hosted:true,commit,answer:resultText(result),why:result?.isError?resultText(result):undefined};
 }

@@ -107,7 +107,7 @@ export function sharePlaces(value) {
  * the edge (game.json `screen.share`, per device: sharePlaces) opens Invite, Big screen and the room code; nothing
  * covers the middle of the screen or a thumb.
  */
-export function playPage(cat, g, { test = false, embed = false, origin = '', preview = false, screen = false, joinUrl = null, qr = null, local = false, room = null, ticket = null, owner = false, launch = 'public', server = null, acct = false, member = false, shop = null } = {}) {
+export function playPage(cat, g, { test = false, embed = false, origin = '', linkQuery = '', preview = false, screen = false, joinUrl = null, qr = null, local = false, room = null, ticket = null, owner = false, launch = 'public', server = null, acct = false, member = false, shop = null } = {}) {
   const shopControl = Boolean(shop && !screen && g.screen?.shop !== false);
   const accent = cat?.studio?.theme?.accent ?? '#ffcf5a';
   const corner = (name, fallback) => (['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(g.screen?.[name]) ? g.screen[name] : fallback);
@@ -199,7 +199,7 @@ ${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${shop ? SHO
   // game.json "agents": { "vote": "game" } draws its own vote card; false turns the vote off (section 17).
   const vote = g.agents?.vote === 'game' || g.agents?.vote === false ? g.agents.vote : 'shell';
   // The address's switches the game's frame is handed (NETPLAY.md section 24): the defaults and the game's own names.
-  const boot = { ...(g.kind === 'app' ? { kind: 'app', test, appWords: appWords(g) } : {}), embed, game: g.id, name: g.name, screen: Boolean(screen), share: places, params: playParams(g), paramValue: PARAM_VALUE, prefs: PREFS_LIMITS, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}), sh: shellKey(g), ...(owner ? { owner: true, launch } : {}), ...(srv ? { server: srv } : {}), vote, skills: SKILLS.map((k) => ({ level: k.level, name: k.name, card: k.card })), words: POLICY_WORDS, kidsLine: KIDS_LINE, ...(shop ? { shop } : {}) };
+  const boot = { ...(g.kind === 'app' ? { kind: 'app', test, appWords: appWords(g) } : {}), embed, game: g.id, name: g.name, screen: Boolean(screen), share: places, params: playParams(g), paramValue: PARAM_VALUE, prefs: PREFS_LIMITS, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}), ...(linkQuery ? { linkQuery } : {}), sh: shellKey(g), ...(owner ? { owner: true, launch } : {}), ...(srv ? { server: srv } : {}), vote, skills: SKILLS.map((k) => ({ level: k.level, name: k.name, card: k.card })), words: POLICY_WORDS, kidsLine: KIDS_LINE, ...(shop ? { shop } : {}) };
   // game.json "screen": { "join": "top-left" | "top-right" | "bottom-left" | "bottom-right" } keeps the card off the game's own HUD.
   const joinCorner = corner('join', 'bottom-right');
   const first = places.desk;
@@ -474,7 +474,8 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
   }
   function shareReady(room) {
     if (!ui) return;
-    var link = location.origin + '/' + boot.game + (boot.kind === 'app' ? '/open?room=' : '/play?room=') + encodeURIComponent(room);
+    // The host's required query (a private preview's room pass) rides on every shared link.
+    var link = location.origin + '/' + boot.game + (boot.kind === 'app' ? '/open?room=' : '/play?room=') + encodeURIComponent(room) + (boot.linkQuery ? '&' + boot.linkQuery : '');
     state.link = link;
     ui.querySelector('[data-room-code]').textContent = labelOf(room) + (boot.embed ? ' \u00b7 Site' : '');
     ui.querySelector('[data-room-label]').textContent = labelOf(room);

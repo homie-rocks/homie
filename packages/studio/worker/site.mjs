@@ -12,6 +12,7 @@ import { appWords, openPath } from './app-format.mjs';
  */
 import { playerProperties } from './embed.mjs';
 import { isLocalOrigin, qrSvg } from './qr.mjs';
+import { withLinkQuery } from './link-query.mjs';
 import { STUDIO_VERSION_TAG } from './version.mjs';
 import { basedOnRow, licenseLabel } from './license.mjs';
 import { POLICY_WORDS, policyWords } from './servers.mjs';
@@ -1167,7 +1168,7 @@ export function jsonFeed(cat, posts, origin) {
  * The landing every game gets: a full-bleed hero from its own footage or art, the pitch, a big Play button into a
  * public room, phone / computer / TV (with the join code), live rooms, how to play and credits. A studio's site/pages/<id>/index.html replaces it; site/partials/game.html and game-<id>.html add a band.
  */
-export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week = null, servers = null, listed = true, shop = null } = {}) {
+export function gameLanding(cat, g, { origin = '', linkQuery = '', rooms = [], playing = 0, week = null, servers = null, listed = true, shop = null } = {}) {
   const name = studioName(cat);
   const L = g.landing ?? {};
   // A game made from another studio's game, while a game could be handed over whole (remix, retired), still owes
@@ -1184,7 +1185,7 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
   let qr = '';
   // Local development: no code a phone cannot open; the landing says to deploy instead of naming this computer's address.
   const local = isLocalOrigin(origin);
-  if (!local) try { qr = qrSvg(playUrl, { title: `Play ${g.name} on your phone` }); } catch { qr = ''; }
+  if (!local) try { qr = qrSvg(withLinkQuery(playUrl, linkQuery), { title: `Play ${g.name} on your phone` }); } catch { qr = ''; }
   const tvOn = L.tv !== false;
   const max = g.players?.max ?? 8;
   const words = { ...appWords(g), ...L.words };

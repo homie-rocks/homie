@@ -18,6 +18,7 @@ import { REPORT_REASONS, chatOf, chatRowsOf, fileReport } from './chat-store.mjs
 import { isLoungePath, loungeRoutes } from './lounge.mjs';
 import { doorPage, serverPage, serversPage } from './site.mjs';
 import { isLocalOrigin, qrSvg } from './qr.mjs';
+import { linkQuery, withLinkQuery } from './link-query.mjs';
 import { gateFor } from './gate-routing.mjs';
 
 import { SITE_JS, atomFeed, creditsPage, customPage, gameCover, gameLanding, gamesPage, homeLd, homePage, jsonFeed, landingLd, mediaIndexPage, notFoundPage, postPage, postsPage, roomsPage, sectionsOf, songPage, videoPage, watchOf } from './site.mjs';
@@ -381,7 +382,7 @@ export default async function route(request, env, ctx) {
       const week = cat.studio?.stats?.share ? await weekOf(env, game) : null;
       const band = servers.some((x) => x.id !== 'public' && x.listed && x.state === 'open') ? await serverLive(env, meta, servers, url.origin, lobby) : null;
       // GAME PARTS: the landing's "Parts from this game" band (shared parts only).
-      return withPartsBand(gameLanding(cat, meta, { origin: url.origin, rooms, playing: live[game] ?? 0, week, servers: band, listed: launch === 'public', shop: launch === 'public' ? await sellingShop(env, cat) : null }), env, url, meta);
+      return withPartsBand(gameLanding(cat, meta, { origin: url.origin, linkQuery: linkQuery(request), rooms, playing: live[game] ?? 0, week, servers: band, listed: launch === 'public', shop: launch === 'public' ? await sellingShop(env, cat) : null }), env, url, meta);
     }
     if (sub === 'live') {
       if (!door.ok) return json({ ok: false, error: 'not-found' }, 404);
@@ -478,16 +479,17 @@ export default async function route(request, env, ctx) {
         // Local development: no phone can open this computer's own address, so no code for it; the card says to deploy.
         const local = isLocalOrigin(url.origin);
         let qr = null;
-        if (!local) try { qr = qrSvg(joinUrl, { title: `Join ${meta.name ?? game}` }); } catch { /* too long for a QR: the address shows as text */ }
+        // The code carries what the host requires on links (a private preview's room pass, worker/link-query.mjs).
+        if (!local) try { qr = qrSvg(withLinkQuery(joinUrl, linkQuery(request)), { title: `Join ${meta.name ?? game}` }); } catch { /* too long for a QR: the address shows as text */ }
         // Television checkout and kids-server visibility follow the studio shop policy.
         const sh = await availableShellShop(env, cat, game, { kids: pol.kids });
         let shopQr = null;
         if (sh && !local) try { shopQr = qrSvg(`${url.origin}/shop/?game=${encodeURIComponent(game)}`, { title: `Shop: ${meta.name ?? game}` }); } catch { shopQr = null; }
-        return appRoleSession((await import('./pages.mjs')).playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, screen: true, joinUrl, qr, local, room, ticket, owner: d.owner, launch, server, shop: sh ? { ...sh, qr: shopQr, url: `${url.origin}/shop/?game=${game}` } : null }),request,env,meta,launch);
+        return appRoleSession((await import('./pages.mjs')).playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, screen: true, joinUrl, qr, local, room, linkQuery: linkQuery(request), ticket, owner: d.owner, launch, server, shop: sh ? { ...sh, qr: shopQr, url: `${url.origin}/shop/?game=${game}` } : null }),request,env,meta,launch);
       }
       await countVisit(request, env, ctx, game, 'play');
       shareDaily(cat, url, ctx);
-      const page=await appRoleSession((await import('./pages.mjs')).playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, embed, preview: env.HOMIE_EMBED_PREVIEW === '1', ticket: embed ? null : ticket, owner: !embed && d.owner, launch, server, ...(embed ? {} : await chatWho(env, game, srv, d.acct)), shop: await availableShellShop(env, cat, game, { kids: pol.kids }) }),request,env,meta,launch);
+      const page=await appRoleSession((await import('./pages.mjs')).playPage(cat, meta, { test: Boolean(await (await import('./local-test.mjs')).localSession(request,env)), origin: url.origin, linkQuery: linkQuery(request), embed, preview: env.HOMIE_EMBED_PREVIEW === '1', ticket: embed ? null : ticket, owner: !embed && d.owner, launch, server, ...(embed ? {} : await chatWho(env, game, srv, d.acct)), shop: await availableShellShop(env, cat, game, { kids: pol.kids }) }),request,env,meta,launch);
       for(const cookie of recordsGuest?.cookies??[])page.headers.append('set-cookie',cookie);return page;
     }
     if (sub === 'watch') {

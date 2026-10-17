@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdtempSync, readFileSync, writeFileSync, statSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, chmodSync, readFileSync, writeFileSync, statSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -129,4 +129,46 @@ test('a hosted studio deploys by pushing main, publishes on the host, and never 
   const login = await tools.find((x) => x.name === 'cloudflare_login').run({});
   assert.equal(login.isError, true); assert.match(login.content[0].text, /hosted by/);
   assert.match((await tools.find((x) => x.name === 'studio_deploy').run({ plan: true })).content[0].text, /push of this studio's main/);
+});
+
+test('studio.json never decides where the source or the token goes: only the clone\'s own remote and the sign-in\'s resource', async (t) => {
+  const h = await host(t);
+  const folder = join(h.root, 'clone');
+  await connectHosted(h.remote, folder, { version: '0.0.0-test', helper: `!"${process.execPath}" "${CLI}" git-credential`, install: false, approve });
+  // An attacker's server: anything that reaches it is a leak.
+  const reached = [];
+  const evil = createServer((req, res) => { reached.push({ path: req.url, auth: req.headers.authorization ?? null }); res.writeHead(401); res.end(); });
+  await new Promise((r) => evil.listen(0, '127.0.0.1', r)); t.after(() => evil.close());
+  const attacker = `http://127.0.0.1:${evil.address().port}`;
+  const studioFile = join(folder, 'studio.json'), honest = readFileSync(studioFile, 'utf8');
+  writeFileSync(join(folder, 'index.html'), '<h1>Next</h1>\n'); git(['add', 'index.html'], folder); git(['commit', '-qm', 'Next'], folder);
+  const before = git(['rev-parse', 'main'], h.bare);
+  for (const hosting of [{ mcp: attacker + '/mcp' }, { git: attacker + '/git/studio.git' }]) {
+    // A change any write-scoped AI could commit: the hosting block points somewhere else.
+    writeFileSync(studioFile, JSON.stringify({ ...JSON.parse(honest), hosting: { ...JSON.parse(honest).hosting, ...hosting } }, null, 2));
+    for (const cmd of ['deploy', 'publish']) {
+      const r = JSON.parse((await run(process.execPath, [CLI, cmd, '--json'], { cwd: folder })).out);
+      assert.equal(r.ok, false, cmd); assert.match(r.why, /Nothing was (pushed or )?sent/, cmd);
+    }
+  }
+  assert.deepEqual(reached, [], 'neither the token nor the source reached the other server');
+  assert.equal(git(['rev-parse', 'main'], h.bare), before, 'nothing was pushed anywhere');
+  // With the honest file, deploy pushes to the clone's own remote and the host's MCP gets the token.
+  writeFileSync(studioFile, honest);
+  const deployed = JSON.parse((await run(process.execPath, [CLI, 'deploy', '--json'], { cwd: folder })).out);
+  assert.equal(deployed.ok, true); assert.equal(deployed.remote, h.remote); assert.equal(git(['rev-parse', 'main'], h.bare), git(['rev-parse', 'HEAD'], folder));
+});
+
+test('Git signs in with the studio\'s own installed toolkit, and with npx only before npm ci has run', async () => {
+  const { helperCommand } = await import('../lib/hosted.mjs');
+  const root = mkdtempSync(join(tmpdir(), "hm-test-hosted-helper-it's-"));
+  try {
+    const say = (helper) => spawnSync('sh', ['-c', `${helper.slice(1)} "$@"`, 'sh', 'get'], { encoding: 'utf8', env: { ...process.env, PATH: `${join(root, 'bin')}:${process.env.PATH}` } }).stdout.trim();
+    // A stand-in npx on PATH, to see which one Git would run.
+    mkdirSync(join(root, 'bin'), { recursive: true }); writeFileSync(join(root, 'bin', 'npx'), '#!/bin/sh\necho "npx $*"\n'); chmodSync(join(root, 'bin', 'npx'), 0o755);
+    assert.equal(say(helperCommand('1.2.3', root)), 'npx --yes --package=@homie-rocks/studio@1.2.3 homie-studio git-credential get');
+    mkdirSync(join(root, 'node_modules', '.bin'), { recursive: true });
+    writeFileSync(join(root, 'node_modules', '.bin', 'homie-studio'), '#!/bin/sh\necho "local $*"\n'); chmodSync(join(root, 'node_modules', '.bin', 'homie-studio'), 0o755);
+    assert.equal(say(helperCommand('1.2.3', root)), 'local git-credential get');
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

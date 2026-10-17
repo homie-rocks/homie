@@ -11,7 +11,12 @@ toolkit works with any host that does this with published standards; nothing her
 ```
 
 `git` is the HTTPS remote (http is accepted only for `localhost` and `127.0.0.1`). `mcp` is the host's MCP server, when
-it has one. With `hosting` set:
+it has one.
+
+studio.json is repository content, which any change can edit, so it never decides where things go. `deploy` pushes to
+the remote this clone was made from (`origin`), and the access token goes only to the resource it was issued for
+(RFC 8707). If the `hosting` block names a different remote or MCP server, `deploy` and `publish` refuse, and nothing is
+pushed or sent. With `hosting` set:
 
 | | What it does |
 | --- | --- |
@@ -32,14 +37,22 @@ it has one. With `hosting` set:
    `127.0.0.1` (RFC 8252), opens the authorization page, and exchanges the code with its PKCE verifier (RFC 7636),
    naming the resource (RFC 8707). With `--device` and a server that offers it, the device flow (RFC 8628) is used
    instead, for computers with no browser.
-4. It clones the studio, sets `credential.<remote>.helper` to this toolkit's `git-credential` (pinned to the toolkit
-   version that set it up; run `hosted connect` again to move it) for that remote only, and writes the `hosting` block
-   into studio.json if it was not there.
+4. It clones the studio, and sets `credential.<remote>.helper` for that remote only, in the clone's own Git config. The
+   helper is the studio's own installed toolkit (`node_modules/.bin/homie-studio git-credential`), so Git's sign-in
+   needs neither the network nor npx's cache; until `npm ci` has run, it is the toolkit version that set it up, run
+   through npx. It writes the `hosting` block into studio.json if it was not there.
 
 The access token is short-lived and refreshed with the refresh token. Git asks `homie-studio git-credential get` for it
 and gets `username=oauth`, `password=<access token>` and `password_expiry_utc`; `erase` (after a 401) forgets the access
 token so the next request refreshes. The same token is used for the host's MCP server, which is the resource it was
-issued for.
+issued for, and for nothing else.
+
+## Links on a host that requires a pass
+
+A host in front of the studio may require a query on the studio's own links: a private preview, for one, lets in only
+requests that carry its pass. It says so in the `homie-link-query` request header (one `name=value`). The studio's
+shared room links, the television's join code and the landing page's phone code then carry it, so a phone that scans
+the code gets in too. A host that requires nothing sends nothing, and every link stays as it was.
 
 ## What a host needs to offer
 
