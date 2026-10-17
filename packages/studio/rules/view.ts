@@ -637,14 +637,16 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   /**
    * The end of a send period (`sendEvery` ticks, counted from tick 0): one frame with the entries made in it, `k` the
    * period's first tick. A period with no entry sends nothing; after 250 ms without a frame the held values are sent
-   * again as an ordinary entry on the current tick.
+   * again as an ordinary entry on the current tick. A resting room (nobody played for a while) is sent nothing until
+   * an entry changes: that first change is what wakes it.
    */
   function flush(now: number, t: number): void {
     if (!mine) { entries = []; return; }
-    if (!entries.length && now - lastSendAt >= 250) keepalive(t);
+    const resting = net.resting();
+    if (!entries.length && now - lastSendAt >= 250 && !resting) keepalive(t);
     const marker = myKind()!.input.length + (myKind()!.owner ? 9 : 0);
     // A newer tick's acknowledgement cannot acknowledge a hole in the history.
-    if (!entries.length && !sentHistory.some(e => !applications.has(e.row[marker + 1]))) return;
+    if (!entries.length && (resting || !sentHistory.some(e => !applications.has(e.row[marker + 1])))) return;
     const k = Math.min(entries[0]?.t ?? t, t - (t % sendEvery));
     for (const entry of entries) {
       const old = sentHistory.findIndex(e => e.t === entry.t);

@@ -191,9 +191,10 @@ export class NetRoom {
     try { this.server.frame(m); } catch (error) { this.stats.failed = (this.stats.failed ?? 0) + 1; this.log({ ev: 'failed', room: this.code, op: 'host-frame', frame: m.t, error: errorLine(error) }); }
   }
 
-  joinServer(c) {
+  /** `restored`: the same socket, back after the room hibernated (a resting room rests on), not somebody arriving. */
+  joinServer(c, restored = false) {
     this.hosted.set(c.seat, this.seats.get(c.seat)?.occ ?? null);
-    this.toServer({ t: 'join', peer: this.peer(c) });
+    this.toServer({ t: 'join', peer: this.peer(c), ...(c.rest ? { rest: true } : {}), ...(c.hidden ? { hidden: true } : {}), ...(restored ? { restored: true } : {}) });
   }
 
   /** A seat the host runtime knows that is no longer held (its hold ran out, the owner removed its player): its body's seat is given up. */
@@ -220,6 +221,12 @@ export class NetRoom {
       case 'roster': return this.hostRoster(null, m);
       case 'caps': return this.hostCaps(null, m);
       case 'decide': return this.onDecide(null, m, true);
+      case 'rest': {
+        // Nobody is playing (or somebody is again): every rules browser hears it, and pings the edge meanwhile.
+        const line = JSON.stringify({ t: 'rest', on: m.on === true });
+        for (const o of this.live()) if (o.rules) this.sendText(o.conn, line);
+        return;
+      }
       case 'ev': {
         const kind = String(m.k ?? '').slice(0, 64);
         if (SPEECH.test(kind) && (this.policy.speech === 'off' || (this.policy.speech === 'lines' && /^chat/i.test(kind)))) { this.stats.speechDrops += 1; return; }
@@ -809,6 +816,8 @@ export class NetRoom {
         const wasHidden = c.hidden;
         c.hidden = m.hid === true;
         this.send(c, { t: 'pong', c: m.c, st: now });
+        // The server's host rests a room whose pages are all in the background, and wakes it when one comes back.
+        if (this.server && c.seat !== null && c.hidden !== Boolean(wasHidden)) this.toServer({ t: 'hidden', seat: c.seat, on: c.hidden });
         if(this.server && (!c.probe || now-c.probe.at>10000)){c.probe={n:crypto.randomUUID(),at:now};this.send(c,{t:'probe',n:c.probe.n});}
         // A host whose tab went to the background will stop ticking: hand the round on now.
         if (c.id === this.hostId && c.hidden && !wasHidden) this.yieldHost(c, 'host-hidden');
@@ -918,6 +927,8 @@ export class NetRoom {
     if (this.perIp && c.ip && live.filter((o) => o.ip === c.ip).length >= this.perIp) return refuse('too-many', `at most ${this.perIp} sockets per address in one room`);
     if (live.length >= this.maxPlayers + this.maxScreens) return refuse('room-full', 'this room is full; try another');
     c.rules = m.rules === true;
+    // A browser that understands a resting room (rules/host.ts): only a room of them rests.
+    c.rest = c.rules && m.rest === 1;
     c.device = m.device === 'phone' || m.device === 'tv' ? m.device : 'desk';
     // A watcher is a screen that never takes a seat, whatever else its hello says. An agent always plays.
     c.watch = watching;

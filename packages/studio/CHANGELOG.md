@@ -19,6 +19,16 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [Unreleased]
 
+### Changed
+
+- Idle rooms sleep, so a studio pays only for rooms in use. A server-hosted room whose people have all stopped
+  playing (nothing held, pressed or commanded for a minute, or every page in the background for ten seconds) now
+  rests: its clock stops with everybody still connected and the room hibernates, so Cloudflare charges it no duration.
+  The first touch, command, returning page or new arrival starts it again on the tick it stopped on, and a phone
+  that reconnects keeps its seat. Set `room.restSeconds` in game.json to change the minute, or 0 to never rest
+  while somebody is there. Rebuild your games to get it: rooms rest only when every browser in them is on this
+  version.
+
 ## [0.58.0] - 2026-10-16
 
 **Plugin 0.58.0**

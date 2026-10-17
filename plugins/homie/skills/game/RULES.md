@@ -780,7 +780,10 @@ score and other shared outcomes still arrive with the network. The studio choose
 Room state is saved automatically (default movementSeconds: 1, plus round end,
 pause and finish; a lasting world instead journals its durable fields at once and
 checkpoints the rest every 30 seconds). After 60 seconds with no person the room ends even if screens or
-AI remain. Use browser createSaves for player-owned character progress; it is not
+AI remain. A room whose people have all stopped playing rests: after `room.restSeconds`
+(default 60; 0 never rests) with nothing held, pressed or commanded, or ten seconds with every page in the
+background, its clock stops with everybody still connected, and the first input, command or returning page starts
+it again on the tick it rested on. A resting room is not charged for its time. A lasting world never rests. Use browser createSaves for player-owned character progress; it is not
 server-verified money. Entity fields default to public. Declare visibility explicitly for private information (below); shared state and motion remain public. Use declared server round records for verified match history.
 
 

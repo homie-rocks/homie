@@ -216,7 +216,9 @@ export class Table {
       // A restore's provisional pause is not a recorded departure. A stored alarm,
       // even one now due, has not yet confirmed expiry. The alarm handler owns that decision.
       const restorePause = saved?.pauseFromRestore === true && Date.now() >= saved.pausedAt + ROOM_PAUSE_MS && this.recoveredAlarmAt !== null ? null : saved?.pausedAt;
-      const restoredEnd = saved ? roomEndAt({ people: 0, pausedAt: restorePause, restoredAt: Date.now(), savedAt: saved.at, alarmAt: this.recoveredAlarmAt }) : Infinity;
+      // A resting room was saved with its people still here, and hibernated on purpose: its age is no absence.
+      const rested = saved?.resting === true && saved.pausedAt === null;
+      const restoredEnd = saved ? roomEndAt({ people: 0, pausedAt: restorePause, restoredAt: Date.now(), savedAt: saved.at, alarmAt: rested ? Date.now() : this.recoveredAlarmAt }) : Infinity;
       const expired = Date.now() >= restoredEnd;
       if (saved && persistent && saved.stateHash !== build.stateHash) throw new Error('This lasting world needs its previous state schema. Restore the compatible build; the saved world has been retained.');
       if (saved && !persistent && (saved.stateHash !== build.stateHash || boot.count >= 2 || expired)) {
@@ -234,8 +236,8 @@ export class Table {
         // The seat map and the world came from one transaction. No unrelated net write can take a body from its token.
         room.seats.clear(); room.state.clear(); room.stateBytes = 0;
         room.restore({ ...saved.net, savedAt: Date.now(), durable: true });
-        this.pausedAt = persistent ? Date.now() : restoredEnd - ROOM_PAUSE_MS;
-        this.pauseFromRestore = saved.pauseFromRestore = saved.pausedAt === null || saved.pauseFromRestore === true;
+        this.pausedAt = persistent ? Date.now() : rested ? null : restoredEnd - ROOM_PAUSE_MS;
+        this.pauseFromRestore = saved.pauseFromRestore = !rested && (saved.pausedAt === null || saved.pauseFromRestore === true);
         saved.pausedAt = this.pausedAt;
         // A failed pause write must never be mistaken for an invalid host save.
         try { this.durable.write(saved); } catch (error) { if (persistent) throw error; pauseWriteFailed = true; this.storageProblem(error); }
@@ -257,6 +259,13 @@ export class Table {
         // Alarm-driven suspension requires the native hibernation lifecycle.
         // Legacy adapters keep their host clock, as browser hosts do.
         ...(this.ctx.acceptWebSocket ? { onRoundIdle: until => { room.tellWatchers(); this.report(); this.recordRound(); this.armRoom(until); this.ctx.waitUntil(this.sleepRoom()); } } : {}),
+        // A room nobody is playing rests with its people connected (rules/host.ts), and hibernates like a round break.
+        // A deliberate rest is a clean stop: the restore-loop count starts again, so waking it is never a crash.
+        ...(this.ctx.acceptWebSocket && this.ctx.storage.sql ? { onRest: on => {
+          if (!on) { this.armRoom(Date.now() + ROOM_ALARM_MS); this.start(); return; }
+          try { this.durable?.boot({ epoch: this.hostRt?.epoch ?? epoch, count: 0 }); this.pendingBoot = null; } catch (error) { this.storageProblem(error); }
+          room.tellWatchers(); this.report(); this.ctx.waitUntil(this.sleepRoom());
+        } } : {}),
         onTick: () => {
           if (!saved) return;
           ticks += 1;
@@ -315,7 +324,7 @@ export class Table {
         const tokens = new Set((net.seats ?? []).map(seat => seat[1]));
         for (const [account, token] of Object.entries(this.accountTokens)) if (!tokens.has(token)) delete this.accountTokens[account];
       }
-      const saved = { ...(build.settings.characters ? { accountTokens: { ...this.accountTokens } } : {}), v: 1, game: this.game, room: this.code, at: now, pauseFromRestore: this.hostRt?.paused === true && this.pauseFromRestore === true, pausedAt: this.hostRt?.paused ? this.pausedAt ?? now : null, stateHash: build.stateHash, buildHash: build.build, host, net };
+      const saved = { ...(build.settings.characters ? { accountTokens: { ...this.accountTokens } } : {}), v: 1, game: this.game, room: this.code, at: now, pauseFromRestore: this.hostRt?.paused === true && this.pauseFromRestore === true, pausedAt: this.hostRt?.paused ? this.pausedAt ?? now : null, ...(this.hostRt?.resting ? { resting: true } : {}), stateHash: build.stateHash, buildHash: build.build, host, net };
       const clearing = this.cleanupPending;
       if (clearing) this.durable.clear();
       if (this.isPersistent()) {
@@ -370,7 +379,7 @@ export class Table {
       if (saved.v !== 1 || typeof saved.game !== 'string' || typeof saved.room !== 'string' ||
           this.game && saved.game !== this.game || this.code && saved.room !== this.code ||
           !Number.isFinite(saved.at) || saved.at < 0 || saved.at > Date.now() + 5000 || saved.pausedAt !== null && (!Number.isFinite(saved.pausedAt) || saved.pausedAt < 0 || saved.pausedAt > Date.now() + 5000) ||
-          saved.pauseFromRestore !== undefined && typeof saved.pauseFromRestore !== 'boolean' ||
+          saved.pauseFromRestore !== undefined && typeof saved.pauseFromRestore !== 'boolean' || saved.resting !== undefined && saved.resting !== true ||
           saved.host?.v !== 1 || !saved.net || typeof saved.stateHash !== 'string' || typeof saved.buildHash !== 'string') throw new Error('save envelope does not fit this room');
       saved.at = Math.min(saved.at, Date.now());
       if (saved.pausedAt !== null) saved.pausedAt = Math.min(saved.pausedAt, Date.now());
@@ -1191,7 +1200,7 @@ export class Table {
     } else {
       const h = room.attach(conn,server.resume);
       server.remember?.(h.id);
-      if (server.resume && room.server) room.joinServer(room.clients.get(h.id));
+      if (server.resume && room.server) room.joinServer(room.clients.get(h.id), true);
       // A room is OPENED when the first seat is taken in an empty one (a room restored after a deploy keeps its
       // seats, so it is not counted twice). One counter write per room.
       const fresh = room.seats.size === 0;
@@ -1304,9 +1313,10 @@ export class Table {
     }
     this.saveSessions();
     for(const relay of this.relays.values()){relay.session.flush();relay.socket.sleep();}
-    // Edge-answered heartbeats need only a minute's liveness sweep. A legacy
-    // client still keeps its original hello/heartbeat deadline.
-    const due=[...(this.hostRt?.roundIdleUntil != null ? [this.hostRt.roundIdleUntil] : []),now+(room.officeDirty?1000:60000),...[...room.clients.values()].map(c=>{const ping=c.conn.lastPing?.()??0;return c.helloed?Math.max(c.lastSeen,ping)+(ping?Math.max(room.idleMs,60000):room.idleMs):c.joinedAt+5000;})];
+    // Edge-answered heartbeats need only a minute's liveness sweep: a browser that has pinged the edge, or one that
+    // understands a resting room (it pings the edge from the moment it rests). A legacy client still keeps its
+    // original hello/heartbeat deadline.
+    const due=[...(this.hostRt?.roundIdleUntil != null ? [this.hostRt.roundIdleUntil] : []),now+(room.officeDirty?1000:60000),...[...room.clients.values()].map(c=>{const ping=c.conn.lastPing?.()??0;return c.helloed?Math.max(c.lastSeen,ping)+(ping||c.rest&&c.conn.idlePing?Math.max(room.idleMs,60000):room.idleMs):c.joinedAt+5000;})];
     for(const control of [room.vote?.open?room.vote:null,room.regate,room.agentsOut])if(control?.until)due.push(control.until);
     const at=Math.max(now+1,Math.min(...due)),alarm=await this.ctx.storage.getAlarm();
     if(alarm==null||alarm>at)await this.ctx.storage.setAlarm(at);

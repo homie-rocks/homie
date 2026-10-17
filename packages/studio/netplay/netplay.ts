@@ -938,6 +938,11 @@ export interface Netplay<S = unknown, A = unknown, C = unknown> {
   readonly chatShown: boolean;
   /** Server time in ms (relay clock). Offline: Date.now(). */
   now(): number;
+  /**
+   * A server-hosted room is resting: nobody here has played for a while (or every page is in the background), so its
+   * clock is stopped and it sends nothing. Send input only when it changes: the first change wakes the room.
+   */
+  resting(): boolean;
   /** Host: true when the next `snapshot()` would be sent. Build the state only then. */
   snapshotDue(): boolean;
   /** Host: broadcast fast state (live bodies, projectiles); throttled to snapshotHz (1 Hz while alone). */
@@ -1714,6 +1719,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   let heldPeers: Peer[] = [];
   let roundInfo: RoundInfo | null = null;
   let idlePing = false, lastClockPing = -Infinity;
+  /** The server's room is resting (`rest` frames): pings go to the edge and silence is expected, as between rounds. */
+  let resting = false;
   let slots: Slot[] | null = null;
   let lastCkpt: Checkpoint<C> | null = null;
 
@@ -2363,6 +2370,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     switch (m['t']) {
       case 'welcome': return onWelcome(m);
       case 'snap': return onSnap(m, text.length);
+      case 'rest': resting = rulesGame && m.on === true; return;
       case 'free': if (![...peers.values()].some((p) => p.seat === m.seat)) rulesFrame(m); return;
       case 'in': if (rulesFrame(m)) return; return onInput(m);
       case 'ev': {
@@ -2585,7 +2593,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   }
 
   function onWelcome(m: Record<string, unknown>): void {
-    idlePing = m.idlePing === true; lastClockPing = -Infinity;
+    idlePing = m.idlePing === true; lastClockPing = -Infinity; resting = false;
     post?.({ what: 'build', ver: version });
     clearTimeout(connectTimer);
     const next = m['role'] as Role;
@@ -2890,7 +2898,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     // Dropping a healthy socket there turned every long hitch into a reconnect.
     const oldestPing = pingsOut.values().next().value;
     if (ws && oldestPing !== undefined && Date.now() - oldestPing >= 30_000 && !pingHeld) { lost(ws, 'stale'); return; }
-    const silence = idlePing && (roundInfo?.phase !== 'live' || wall() - lastClockPing > staleMs) ? Math.max(staleMs, 60_000) : staleMs;
+    const silence = idlePing && (resting || roundInfo?.phase !== 'live' || wall() - lastClockPing > staleMs) ? Math.max(staleMs, 60_000) : staleMs;
     if (ws && lastMsgAt && wall() - lastMsgAt > silence) {
       if (!pingHeld) { lost(ws, 'stale'); return; }
       // Two and a half seconds to be heard from (a pong answers the ping below): a socket that is really dead is
@@ -2899,7 +2907,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     }
     // An idle hibernatable room can answer this at the edge. Keep a regular
     // clock/visibility sample on visibility changes, and every heartbeat during play.
-    if (idlePing && roundInfo?.phase !== 'live' && !(roundInfo?.phase === 'over' && now() >= roundInfo.endsAt) && !force) {
+    if (idlePing && (resting || roundInfo?.phase !== 'live' && !(roundInfo?.phase === 'over' && now() >= roundInfo.endsAt)) && !force) {
       try { ws?.send('homie-ping'); } catch { if(ws)lost(ws,'send'); }
       return;
     }
@@ -3042,7 +3050,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       pingsOut.clear();
       raw({
         t: 'hello', rules: rulesGame, v: NETPLAY_VERSION, rev: NETPLAY_REVISION, token, name: name || undefined, device, want, canHost: asAgent && asAgent.hands === 'host' ? false : canHost, game: opts.game, max: opts.maxPlayers,
-        ...(rulesGame ? { coast: 1 } : {}),
+        // A browser that understands a resting room (the server's `rest` frames) says so; an older relay ignores it.
+        ...(rulesGame ? { coast: 1, rest: 1 } : {}),
         ...(watching ? { watch: true } : {}), ...(caps.size ? { caps: [...caps] } : {}), ...(asAgent ? { agent: asAgent } : {}),
         // Revision 9 (an older relay ignores both): the game's revision and what this build can do.
         ...(version ? { ver: version } : {}), ...(features.length ? { feat: features } : {}),
@@ -3433,6 +3442,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     },
     stateOf<T = unknown>(key: string) { return stateMap.get(key) as T | undefined; },
     stateKeys() { return [...stateMap.keys()]; },
+    resting: () => resting,
     input(a, held) {
       if (rulesGame) return;
       pendingA = a;

@@ -31,6 +31,13 @@ import { stageTimings } from './timing.mjs';
  * timer would keep the `Table` in memory and billed), the clock stops, and a person who returns finds the tick it
  * paused on. Watchers and AI seats never keep the world ticking.
  *
+ * A ROOM NOBODY IS PLAYING RESTS. When every person here has stopped playing (nothing held, pressed or commanded for
+ * the game's `room.restSeconds`, 60 by default, or every page in the background for ten seconds), the clock stops as
+ * it does for an empty room, with everybody still connected: no timer is pending, so the `Table` hibernates and its
+ * time costs nothing. The first input that holds or presses something, a command, a page coming to the front or a new arrival
+ * starts it again at the tick it rested on. Only browsers that said they understand resting (`rest` in their hello)
+ * let a room rest, and only when the caller asks for it (`onRest`). A lasting world never rests.
+ *
  * THE CHAIN CANNOT BREAK. One rule holds whenever this module hands control back to its caller: A ROOM THAT IS RUNNING
  * HAS EXACTLY ONE TIMER PENDING, AND A ROOM THAT IS PAUSED OR ENDED HAS NONE. A running room with no timer would stand
  * still for good with its players connected and its object billed. So every way in (`wake`, `frame`, `start`,
@@ -89,6 +96,8 @@ export interface HostOptions {
   onTick?(): void;
   /** Suspend settled round breaks; the owner persists and wakes this deadline. */
   onRoundIdle?(until: number): void;
+  /** Rest a room nobody is playing (`true`), and start it again (`false`). Without it a room never rests. */
+  onRest?(resting: boolean): void;
   /** Only the shared server isolate can attribute timer lateness to another tick. */
   enforceOverrun?: boolean;
   log?(line: Record<string, unknown>): void;
@@ -115,6 +124,8 @@ export interface Host {
   readonly paused: boolean;
   readonly roundIdleUntil: number | null;
   wakeRound(): void;
+  /** Nobody is playing: the clock is stopped with people still here (see A ROOM NOBODY IS PLAYING RESTS). */
+  readonly resting: boolean;
   readonly people: number;
   readonly viewRadiusM: number | null;
   readonly privateDelivery: boolean;
@@ -157,6 +168,10 @@ interface SeatIn {
 
 /** Every tick failing (cut short by the budget, or faulted) for this long ends the room. */
 export const FAIL_MS = 2000;
+/** How long a room plays on with nobody playing before it rests, unless the game says otherwise (`room.restSeconds`). */
+export const REST_SECONDS = 60;
+/** How long a room plays on with every page in the background before it rests (never longer than `restSeconds`). */
+export const REST_HIDDEN_MS = 10_000;
 /** Every tick blamed for running longer than a period for this long ends the room. */
 export const OVERRUN_MS = 5000;
 
@@ -203,12 +218,13 @@ export function createHost(o: HostOptions): Host {
   // A log that throws takes nothing down with it.
   const log = (line: Record<string, unknown>): void => { try { o.log?.(line); } catch { /* nothing to say it with */ } };
   const random = o.random ?? Math.random;
-  const saved = o.restore ? fromBytes(o.restore) as { v: number; roundIdleUntil?: number; characters?: CharacterLease[]; core: SavedCore; names: [number, string][]; agents?: AgentsSaved; guideViews?: [number, { id: string; at: number; value: Record<string, unknown> }][]; queues: [number, Record<string, unknown>, StepInput['claim'], number, number][]; inputs?: [number, SeatIn][] } : null;
+  const saved = o.restore ? fromBytes(o.restore) as { v: number; roundIdleUntil?: number; rest?: { on: boolean; at: [number, number][] }; characters?: CharacterLease[]; core: SavedCore; names: [number, string][]; agents?: AgentsSaved; guideViews?: [number, { id: string; at: number; value: Record<string, unknown> }][]; queues: [number, Record<string, unknown>, StepInput['claim'], number, number][]; inputs?: [number, SeatIn][] } : null;
   if (o.restore && (!saved || typeof saved !== 'object' || Array.isArray(saved))) throw new Error('saved host is not an object');
   if (saved) {
     const check = (ok: unknown): void => { if (!ok) throw new Error('saved host inputs are invalid'); };
     const uint = (n: unknown): boolean => Number.isSafeInteger(n) && (n as number) >= 0;
-    check(Object.keys(saved).every(k => ['v', 'core', 'names', 'agents', 'guideViews', 'queues', 'inputs', 'characters', 'roundIdleUntil'].includes(k)));
+    check(Object.keys(saved).every(k => ['v', 'core', 'names', 'agents', 'guideViews', 'queues', 'inputs', 'characters', 'roundIdleUntil', 'rest'].includes(k)));
+    if (saved.rest !== undefined) check(saved.rest && typeof saved.rest.on === 'boolean' && Array.isArray(saved.rest.at) && saved.rest.at.length <= c.seats && saved.rest.at.every(row => Array.isArray(row) && row.length === 2 && uint(row[0]) && row[0] < c.seats && Number.isFinite(row[1])));
     check(saved.core && Array.isArray(saved.names) && Array.isArray(saved.queues));
     if (saved.roundIdleUntil !== undefined) check(Number.isFinite(saved.roundIdleUntil) && saved.roundIdleUntil >= 0 && saved.core.round[1] === 0 && !saved.core.overAt);
     if (saved.characters !== undefined) {
@@ -402,8 +418,20 @@ export function createHost(o: HostOptions): Host {
     }
   }
   let roundIdleUntil: number | null = o.onRoundIdle && Number.isFinite(saved?.roundIdleUntil) ? saved!.roundIdleUntil! : null;
+  /*
+   * Resting (A ROOM NOBODY IS PLAYING RESTS): how long a room plays on with nobody playing (0: never rests), whether it
+   * rests now, when each person last played, since when each page has been in the background, which browsers can rest,
+   * and when an AI with its own hands last played. A restored room that was resting rests on.
+   */
+  const restMs = o.onRest && !persistent ? Math.max(0, c.settings.restSeconds ?? REST_SECONDS) * 1000 : 0;
+  let resting = restMs > 0 && saved?.rest?.on === true && roundIdleUntil === null;
+  const playedAt = new Map<number, number>(restMs ? saved?.rest?.at ?? [] : []);
+  const hiddenSince = new Map<number, number>();
+  const restful = new Set<number>();
+  let handsAt = -Infinity;
+  let restCheckAt = 0;
   let running = false;
-  let paused = Boolean(saved && (o.startPaused ?? o.restoreEpoch !== undefined));
+  let paused = !resting && Boolean(saved && (o.startPaused ?? o.restoreEpoch !== undefined));
   let ended = false;
   /** The pending timer, and whether there is one. `armed` is the truth: a clock may hand back any value as its handle. */
   let timer: unknown = null;
@@ -471,12 +499,81 @@ export function createHost(o: HostOptions): Host {
   }
   const people = (): number => { let n = 0; for (const person of present.values()) if (person) n += 1; return n; };
 
+  /* ---------------------------------------------------------------- resting */
+
+  /** Each kind's inputs at rest, one text a field: nothing held, nothing pressed. */
+  const restingInput = new Map<KindTable, string[]>();
+  /** Whether an input frame holds or presses anything (its newest entry's values, and a press in any entry). */
+  function engaged(kind: KindTable, rows: unknown[]): boolean {
+    let idle = restingInput.get(kind);
+    if (!idle) { const v = neutral(kind); idle = kind.input.map(([name]) => JSON.stringify(v[name])); restingInput.set(kind, idle); }
+    const last = rows.length - 1;
+    for (let n = 0; n < rows.length && n < 64; n += 1) {
+      const raw = rows[n];
+      if (!Array.isArray(raw)) return false;
+      for (let i = 0; i < kind.input.length; i += 1) {
+        const fd = kind.input[i][1];
+        if (fd.t === 'press') { if (raw[i + 1] === 1) return true; }
+        else if (n === last && fd.t !== 'pulse' && JSON.stringify(coerce(fd, raw[i + 1], c.dims)) !== idle[i]) return true;
+      }
+    }
+    return false;
+  }
+  /** Somebody played: a person (their seat) or an AI with its own hands. A resting room wakes. */
+  function played(seat: number, driver: Driver, now: number): void {
+    if (driver === 'person') playedAt.set(seat, now); else handsAt = now;
+    if (resting) wakeUp('played');
+  }
+  /** Nobody is playing: every person here has a resting browser and has not played for `restMs` (or hid their page). */
+  function quiet(now: number): boolean {
+    if (now - handsAt < restMs) return false;
+    let anyone = false;
+    for (const [seat, person] of present) {
+      if (!person) continue;
+      anyone = true;
+      if (!restful.has(seat)) return false;
+      const hid = hiddenSince.get(seat);
+      if (hid !== undefined && now - hid >= Math.min(restMs, REST_HIDDEN_MS)) continue;
+      if (now - (playedAt.get(seat) ?? now) < restMs) return false;
+    }
+    return anyone;
+  }
+  /** The clock stops with everybody still here. The room is saved first, so the object may be put away at once. */
+  function rest(): void {
+    resting = true; running = false;
+    disarm();
+    log({ ev: 'host-rest', game: o.game, tick: core.tick, people: people() });
+    try { o.send({ t: 'rest', on: true }); checkpoint(true); o.onRest?.(true); } catch (error) { fault('rest', error); }
+  }
+  /** Somebody plays again: the room carries on from the tick it rested on, on a clock started now. */
+  function wakeUp(why: string): void {
+    if (!resting || ended) return;
+    resting = false; running = true; paused = false;
+    try {
+      const now = o.clock.now();
+      base = { ms: now, tick: core.tick };
+      overSince = null; blamed = false; failingSince = null; lastStart = now;
+      for (const q of queues.values()) q.lastFrameTick = core.tick;
+      o.send({ t: 'rest', on: false });
+      roundRebaseAt = -Infinity; publishRebase(now);
+      log({ ev: 'host-wake', game: o.game, tick: core.tick, why });
+      o.onRest?.(false);
+    } catch (error) { fault('wake', error); } finally { keepTime(); }
+  }
+
   /* ---------------------------------------------------------------- frames in */
 
   function onIn(m: Record<string, unknown>): void {
     const seat = m.from;
-    if (!Number.isInteger(seat) || m.e !== epoch || !Array.isArray(m.s)) { stats.dropped += 1; return; }
+    if (!Number.isInteger(seat) || !Array.isArray(m.s)) { stats.dropped += 1; return; }
     const body = core.bodyOf(seat as number);
+    // Somebody playing is seen before the epoch is: the first touch after a rest (which a restore may have given a new
+    // epoch) wakes the room even when the frame itself is from before it. Read at most once a second a seat.
+    if (restMs && body && hasHands(seat as number, body.driver)) {
+      const now = o.clock.now();
+      if ((resting || now - (playedAt.get(seat as number) ?? -Infinity) >= 1000) && engaged(body.kind, m.s as unknown[])) played(seat as number, body.driver, now);
+    }
+    if (m.e !== epoch) { stats.dropped += 1; return; }
     if (!body || !hasHands(seat as number, body.driver)) return;
     const kind = body.kind;
     const q = queueOf(seat as number, kind);
@@ -585,7 +682,12 @@ export function createHost(o: HostOptions): Host {
         core.seatAway(seat, false);
         if (!previous || previous.driver !== driver || previous.owner !== owner) queues.delete(seat);
         rosterText = '';
-        if (people() > 0) { if (!running && !paused) start(); else if (paused) resume(); }
+        // A socket the room restored after hibernating is the same person, still resting; anybody else has just come.
+        const now = o.clock.now();
+        if (m.rest === true) restful.add(seat); else restful.delete(seat);
+        if (m.hidden === true) { if (!hiddenSince.has(seat)) hiddenSince.set(seat, now); } else hiddenSince.delete(seat);
+        if (m.restored !== true || !playedAt.has(seat)) playedAt.set(seat, now);
+        if (people() > 0) { if (resting) { if (m.restored !== true) wakeUp('join'); } else if (!running && !paused) start(); else if (paused) resume(); }
         return;
       }
       case 'leave': {
@@ -600,7 +702,8 @@ export function createHost(o: HostOptions): Host {
           core.seatLeave(held.seat);
           tick(o.clock.now());
         } else core.seatAway(m.seat as number, true);
-        if ((running || roundIdleUntil !== null) && people() === 0) pause();
+        playedAt.delete(m.seat as number); hiddenSince.delete(m.seat as number); restful.delete(m.seat as number);
+        if ((running || resting || roundIdleUntil !== null) && people() === 0) pause();
         return;
       }
       case 'free': {
@@ -609,6 +712,7 @@ export function createHost(o: HostOptions): Host {
         for (const [id, p] of peers) if (p.seat === m.seat) peers.delete(id);
         present.delete(m.seat as number);
         queues.delete(m.seat as number);
+        playedAt.delete(m.seat as number); hiddenSince.delete(m.seat as number); restful.delete(m.seat as number);
         const held = [...characters.values()].find(c => c.seat === m.seat && !c.returning);
         if (held) { held.character = core.character(held.seat) ?? held.character; held.returning = true; }
         core.seatLeave(m.seat as number);
@@ -616,9 +720,19 @@ export function createHost(o: HostOptions): Host {
         rosterText = '';
         return;
       }
+      case 'hidden': {
+        // A page went to the background, or came back (the relay hears it on the page's clock pings). Coming back wakes a
+        // resting room: somebody is looking at it again.
+        if (!Number.isInteger(m.seat) || !present.get(m.seat as number)) return;
+        const now = o.clock.now();
+        if (m.on === true) { if (!hiddenSince.has(m.seat as number)) hiddenSince.set(m.seat as number, now); }
+        else if (hiddenSince.delete(m.seat as number)) played(m.seat as number, 'person', now);
+        return;
+      }
       case 'ev': {
         // What a player sends is read as what it is: a kind or a command's name that is not a text is no kind and no command.
         const kind = typeof m.k === 'string' ? m.k : '';
+        if (restMs && Number.isInteger(m.from)) { const b = core.bodyOf(m.from as number); if (b && (present.get(m.from as number) || hasHands(m.from as number, b.driver))) played(m.from as number, present.get(m.from as number) ? 'person' : b.driver, o.clock.now()); }
         if (!Number.isInteger(m.from)) {
           if (m.from === null && SPEECH.test(kind)) o.send({ t: 'ev', from: null, k: kind, d: cleanSpeech(m.d) });
           return;
@@ -846,6 +960,9 @@ export function createHost(o: HostOptions): Host {
         running = false; disarm();
         try { o.store?.save(save()); o.onRoundIdle(roundIdleUntil); }
         catch (error) { fault('round-idle', error); stop(); o.onEnd?.('storage-or-tick-failed', { tick: core.tick }); }
+      } else if (restMs && running && now >= restCheckAt) {
+        restCheckAt = now + 1000;
+        if (quiet(now)) rest();
       }
       return;
     }
@@ -929,7 +1046,7 @@ export function createHost(o: HostOptions): Host {
   const self = { blame: (): void => { blamed = true; } };
 
   function start(): void {
-    if (running || ended || roundIdleUntil !== null) return;
+    if (running || resting || ended || roundIdleUntil !== null) return;
     running = true; paused = false;
     try {
       base = { ms: o.clock.now() + (firstTick ? o.startDelayMs ?? 0 : 0), tick: core.tick };
@@ -943,6 +1060,8 @@ export function createHost(o: HostOptions): Host {
   }
   function pause(): void {
     if (!running) {
+      // Everybody left a resting room: it is an empty room now, paused like one.
+      if (resting) { resting = false; paused = true; log({ ev: 'host-pause', game: o.game, tick: core.tick }); try { checkpoint(true); o.onPause?.(); } catch (error) { fault('onPause', error); } return; }
       if (roundIdleUntil !== null && !paused) { paused = true; checkpoint(true); o.onPause?.(); }
       return;
     }
@@ -953,7 +1072,7 @@ export function createHost(o: HostOptions): Host {
     try { checkpoint(true); o.onPause?.(); } catch (error) { fault('onPause', error); if (persistent) { stop(); o.onEnd?.('storage-or-tick-failed', { tick: core.tick }); } }
   }
   function resume(announceRound = true): void {
-    if (running || ended || !paused || roundIdleUntil !== null) return;
+    if (running || resting || ended || !paused || roundIdleUntil !== null) return;
     running = true; paused = false;
     try {
       // The room resumes at the tick it paused on: no tick is skipped and no timer fires for the gap.
@@ -986,7 +1105,7 @@ export function createHost(o: HostOptions): Host {
     } catch (error) { fault('announce', error); }
   }
   function stop(): void {
-    running = false; paused = false; ended = true;
+    running = false; paused = false; resting = false; ended = true;
     core.dispose();
     disarm();
     agents?.stop();
@@ -1002,7 +1121,7 @@ export function createHost(o: HostOptions): Host {
 
   function save(): Uint8Array {
     const reserved = new Set(core.bodies().filter(b => b.owner === 'reserved').map(b => b.seat));
-    return toBytes({ v: 1, ...(roundIdleUntil !== null ? { roundIdleUntil } : {}), ...(characters.size ? { characters: [...characters.values()] } : {}), core: core.save(), guideViews: [...guideViews], ...(agents ? { agents: agents.save() } : savedAgents ? { agents: savedAgents } : {}), names: [...names].filter(([seat]) => !reserved.has(seat)), queues: [...queues].map(([seat, q]) => [seat, q.held, q.claim, q.newest, q.ack]), inputs: [...queues] });
+    return toBytes({ v: 1, ...(roundIdleUntil !== null ? { roundIdleUntil } : {}), ...(restMs ? { rest: { on: resting, at: [...playedAt] } } : {}), ...(characters.size ? { characters: [...characters.values()] } : {}), core: core.save(), guideViews: [...guideViews], ...(agents ? { agents: agents.save() } : savedAgents ? { agents: savedAgents } : {}), names: [...names].filter(([seat]) => !reserved.has(seat)), queues: [...queues].map(([seat, q]) => [seat, q.held, q.claim, q.newest, q.ack]), inputs: [...queues] });
   }
   function checkpoint(force = false): void {
     if (persistent) {
@@ -1061,6 +1180,7 @@ export function createHost(o: HostOptions): Host {
     get paused() { return paused; },
     get roundIdleUntil() { return roundIdleUntil; },
     wakeRound,
+    get resting() { return resting; },
     get people() { return people(); },
     frame, start, pause, resume, announce,
     // An orderly stop of a lasting world folds what moved since the last checkpoint. One that follows a failed write, or arrives during one, writes nothing.
@@ -1071,7 +1191,7 @@ export function createHost(o: HostOptions): Host {
       try { now = o.clock.now(); tick(now); } catch (error) { fault('tickNow', error); } finally { keepTime(); }
     },
     save,
-    facts: () => ({ timing: timing.facts(), tick: core.tick, epoch, running, paused, ended, armed, people: people(), tickHz, ...stats, core: { ...core.stats } }),
+    facts: () => ({ timing: timing.facts(), tick: core.tick, epoch, running, paused, resting, ended, armed, people: people(), tickHz, ...stats, core: { ...core.stats } }),
     core,
   };
 }
