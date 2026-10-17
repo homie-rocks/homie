@@ -17,7 +17,38 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
-## [Unreleased]
+## [0.58.1] - 2026-10-17
+
+**Plugin 0.58.1**
+
+A room nobody is playing rests, and the next touch wakes it with that input still applied.
+
+### Changed
+
+- Idle rooms sleep. A room whose people have all stopped playing now rests: nothing held, pressed or sent for a
+  minute (`room.restSeconds`), or every page in the background for ten seconds. Its clock stops with everybody still
+  connected and the room hibernates, so it is not charged for duration while it sleeps. It still wakes about once a
+  minute for a liveness alarm (one request, and the CPU of that short wake). A deliberate rest is restored as the
+  same world, under the same epoch, without rewriting the save. The first touch, command, AI command, returning page
+  or new arrival starts it again on the tick it stopped on, and a phone that reconnects keeps its seat. By default
+  (`room.rest: "quiet"`) a room rests only when its world has nothing of its own to do: no round clock, no event,
+  timer, spawn or ask waiting, nothing moving, and no AI command for that minute. `"idle"` rests anyway and pauses
+  round clocks, timers, bots and AI with it; Coin Dash, Ember Vale, Gem Rush, Gem Rush 3D and Hero Rush 3D use it.
+  `"never"` keeps a room going while anybody is there (a turn timer, a show). Browser-hosted rules games rest the
+  same way. A spectator or agent on an older build keeps pinging the room itself, so the object stays in memory
+  while that socket is open. Rebuild your games to get it: a room rests only when every seated browser is on this
+  version.
+
+### Fixed
+
+- A browser-hosted rest stays asleep when the hosting tab is hidden or sends no snapshots. The next browser takes
+  the same checkpoint and does not run until somebody plays. A backgrounded tab no longer ends the rest while people
+  are still in the room. Waking writes a new checkpoint, so a later handoff does not put the room back to sleep.
+
+### Upgrade notes
+
+- Rebuild your games. Set `room.rest` to `"never"` (or `restSeconds` to 0) for a turn timer or a show that must keep
+  going while people are present. A lasting world never rests.
 
 ## [0.58.0] - 2026-10-16
 

@@ -131,7 +131,11 @@ export async function prepareRuntimeFixture(esbuild, root, g) {
   const { def, R } = await loadRules(esbuild, root, g.id, guarded.code);
   const read = (name, fallback) => existsSync(join(g.dir, name)) ? JSON.parse(readFileSync(join(g.dir, name), 'utf8')) : fallback;
   const tune = read('tunables.json', {}), map = { ...read('map/main.json', {}), name: 'main' };
-  const settings = R.roomSettings(g.room).settings, seats = g.players?.max ?? 8;
+  // The game's own room settings (game.json), then the caller's overrides. A caller that only names the host still
+  // keeps the game's rest mode: Gem Rush asks to pause when nobody is playing, and a test of that must see it.
+  const declared = read('game.json', {});
+  const fromFile = declared.room && typeof declared.room === 'object' && !Array.isArray(declared.room) ? declared.room : {};
+  const settings = R.roomSettings({ ...fromFile, ...(g.room && typeof g.room === 'object' ? g.room : {}) }).settings, seats = g.players?.max ?? 8;
   const compiled = R.compileRules(def, { tune, map: R.compileMap(map, map.name), settings, seats });
   return { code: guarded.code, tune, map, settings, seats, schema: R.schemaOf(compiled), publicTune: compiled.publicTune,
     files: guarded.files, rounds: compiled.rounds, stateHash: stateHash(compiled),

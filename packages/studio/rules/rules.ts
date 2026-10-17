@@ -214,6 +214,19 @@ export interface RoomSettings {
   predict: { idleHold?: boolean; catchM: number | null; catchUp: number; snapM: number | null; blendMs: number; interpMs: number | null };
   /** The studio's own pace on what one player sends, messages a second by frame kind (`in`, `ev`, ...). Absent: none. */
   rates?: Record<string, number>;
+  /**
+   * When a room with people in it rests (rules/host.ts): its clock stops, its people keep their sockets and seats, and
+   * the first input, command, AI command or returning page starts it again where it stopped.
+   *   'quiet' (absent): nobody has played for `restSeconds`, and the world has nothing of its own to do: no round clock
+   *                     running, no event, timer, spawn or ask waiting, nothing moving (bots, physics, tick handlers).
+   *   'idle':           nobody has played for `restSeconds`, whatever the world is doing: round clocks, timers, bots
+   *                     and AI pause with it (an away-from-keyboard pause, for arcade games where that is right).
+   *   'never':          never rests while somebody is here.
+   * Every page in the background counts as nobody playing after ten seconds. A lasting world never rests.
+   */
+  rest?: 'quiet' | 'idle' | 'never';
+  /** How long nobody plays before a room rests (`rest`). Absent: 60. 0: never rests. */
+  restSeconds?: number;
 }
 /**
  * The default `budget.tick`: 500,000 units at 20 ticks a second or fewer, and less at a faster rate, so a second of
@@ -247,8 +260,8 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
     if (!Number.isFinite(n) || n < 0) { problems.push(`"room.${name}" is a number, zero or more; using its default`); return d; }
     return n;
   };
-  const known = new Set(['host', 'offline', 'tickHz', 'inputHz', 'durability', 'budget', 'predict', 'view', 'lifetime', 'characters', 'rates']);
-  for (const key of Object.keys(r)) if (!known.has(key)) problems.push(`"room.${key}" is not a setting (host, offline, tickHz, inputHz, durability, budget, predict, view, rates)`);
+  const known = new Set(['host', 'offline', 'tickHz', 'inputHz', 'durability', 'budget', 'predict', 'view', 'lifetime', 'characters', 'rates', 'rest', 'restSeconds']);
+  for (const key of Object.keys(r)) if (!known.has(key)) problems.push(`"room.${key}" is not a setting (host, offline, tickHz, inputHz, durability, budget, predict, view, rates, rest, restSeconds)`);
   let rates: Record<string, number> | undefined;
   if (r.rates !== undefined) {
     if (!r.rates || typeof r.rates !== 'object' || Array.isArray(r.rates)) problems.push('"room.rates" is an object of messages a second per player by kind ({ "in": 60 }); using none');
@@ -275,7 +288,7 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
   const p = r.predict && typeof r.predict === 'object' ? r.predict : {};
   return {
     settings: {
-      host, offline, tickHz, inputHz, ...(rates ? { rates } : {}), ...(r.lifetime === 'persistent' ? { lifetime: 'persistent' as const } : {}), ...(r.characters === true ? { characters: true } : {}),
+      host, offline, tickHz, inputHz, ...(rates ? { rates } : {}), ...(r.rest !== undefined ? { rest: ['quiet', 'idle', 'never'].includes(r.rest) ? r.rest : (problems.push('"room.rest" is "quiet", "idle" or "never"; using "quiet"'), 'quiet') } : {}), ...(r.restSeconds !== undefined ? { restSeconds: whole('restSeconds', r.restSeconds, 0, 3600, 60) } : {}), ...(r.lifetime === 'persistent' ? { lifetime: 'persistent' as const } : {}), ...(r.characters === true ? { characters: true } : {}),
       view: { radiusM: r.view?.radiusM === null ? null : num('view.radiusM', r.view?.radiusM, null), ...(r.view?.precisionM !== undefined ? { precisionM: num('view.precisionM', r.view.precisionM, 0) as number } : {}), ...(r.view?.nearM !== undefined ? { nearM: num('view.nearM', r.view.nearM, null) } : {}), ...(r.view?.farHz !== undefined ? { farHz: whole('view.farHz', r.view.farHz, 1, tickHz, tickHz) } : {}) },
       durability: { movementSeconds: whole('durability.movementSeconds', r.durability?.movementSeconds, 1, 60, r.lifetime === 'persistent' ? 30 : 1) },
       budget: { tick: Math.max(1, Math.floor(num('budget.tick', r.budget?.tick, budgetFor(tickHz)) as number)) },

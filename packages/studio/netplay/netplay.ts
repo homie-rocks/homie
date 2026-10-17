@@ -590,7 +590,7 @@ export interface RulesHost {
   readonly tick: number;
   facts(): Record<string, unknown>;
 }
-export type RulesHostFactory = (o: { now(): number; send(m: Record<string, unknown>): void; restore: unknown; peers?: Peer[]; held?: Peer[]; policy?: Policy; onEnd(why: string): void }) => RulesHost;
+export type RulesHostFactory = (o: { now(): number; send(m: Record<string, unknown>): void; restore: unknown; peers?: Peer[]; held?: Peer[]; policy?: Policy; onEnd(why: string): void; onRest?(on: boolean): void }) => RulesHost;
 
 export interface RulesOutputSender {
   push(frame: Record<string, unknown>): void;
@@ -938,6 +938,11 @@ export interface Netplay<S = unknown, A = unknown, C = unknown> {
   readonly chatShown: boolean;
   /** Server time in ms (relay clock). Offline: Date.now(). */
   now(): number;
+  /**
+   * A server-hosted room is resting: nobody here has played for a while (or every page is in the background), so its
+   * clock is stopped and it sends nothing. Send input only when it changes: the first change wakes the room.
+   */
+  resting(): boolean;
   /** Host: true when the next `snapshot()` would be sent. Build the state only then. */
   snapshotDue(): boolean;
   /** Host: broadcast fast state (live bodies, projectiles); throttled to snapshotHz (1 Hz while alone). */
@@ -1626,7 +1631,9 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         rulesPace = null;
         if (!opts.rulesLimits) throw new Error('Rules output limits are missing');
         rulesSender = opts.rulesLimits.output({ rates: opts.rulesLimits.rates, send: raw, now: () => performance.now() });
-        const options = { now: () => performance.now(), restore, peers: rulesPeers(), held: offline ? [] : heldPeers, policy: offline ? DEFAULT_POLICY : policy, send: rulesOut, onEnd: (why: string) => endRules(why) };
+        // A browser host rests its room as the server does (rules/host.ts): its own page then pings the edge and holds
+        // its clock like everybody else's, and its relay can sleep. Never offline: nobody pays for a page alone.
+        const options = { now: () => performance.now(), restore, peers: rulesPeers(), held: offline ? [] : heldPeers, policy: offline ? DEFAULT_POLICY : policy, send: rulesOut, onEnd: (why: string) => endRules(why), ...(offline ? {} : { onRest: (on: boolean) => { if (on) sendCheckpoint(); resting = on; if (!on) sendCheckpoint(); } }) };
         try { rulesHost = make(options); }
         catch (error) {
           if (!restore) throw error;
@@ -1714,6 +1721,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   let heldPeers: Peer[] = [];
   let roundInfo: RoundInfo | null = null;
   let idlePing = false, lastClockPing = -Infinity;
+  /** The server's room is resting (`rest` frames): pings go to the edge and silence is expected, as between rounds. */
+  let resting = false;
   let slots: Slot[] | null = null;
   let lastCkpt: Checkpoint<C> | null = null;
 
@@ -2363,6 +2372,9 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     switch (m['t']) {
       case 'welcome': return onWelcome(m);
       case 'snap': return onSnap(m, text.length);
+      case 'rest': resting = rulesGame && m.on === true; return;
+      // A browser host hears which pages went to the background, as the server's host does.
+      case 'hidden': rulesFrame(m); return;
       case 'free': if (![...peers.values()].some((p) => p.seat === m.seat)) rulesFrame(m); return;
       case 'in': if (rulesFrame(m)) return; return onInput(m);
       case 'ev': {
@@ -2585,7 +2597,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   }
 
   function onWelcome(m: Record<string, unknown>): void {
-    idlePing = m.idlePing === true; lastClockPing = -Infinity;
+    // A room that rests when this page arrives (a watcher, a page back after a rest) says so in its welcome.
+    idlePing = m.idlePing === true; lastClockPing = -Infinity; resting = rulesGame && m.rest === true;
     post?.({ what: 'build', ver: version });
     clearTimeout(connectTimer);
     const next = m['role'] as Role;
@@ -2890,7 +2903,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     // Dropping a healthy socket there turned every long hitch into a reconnect.
     const oldestPing = pingsOut.values().next().value;
     if (ws && oldestPing !== undefined && Date.now() - oldestPing >= 30_000 && !pingHeld) { lost(ws, 'stale'); return; }
-    const silence = idlePing && (roundInfo?.phase !== 'live' || wall() - lastClockPing > staleMs) ? Math.max(staleMs, 60_000) : staleMs;
+    const silence = idlePing && (resting || roundInfo?.phase !== 'live' || wall() - lastClockPing > staleMs) ? Math.max(staleMs, 60_000) : staleMs;
     if (ws && lastMsgAt && wall() - lastMsgAt > silence) {
       if (!pingHeld) { lost(ws, 'stale'); return; }
       // Two and a half seconds to be heard from (a pong answers the ping below): a socket that is really dead is
@@ -2899,7 +2912,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     }
     // An idle hibernatable room can answer this at the edge. Keep a regular
     // clock/visibility sample on visibility changes, and every heartbeat during play.
-    if (idlePing && roundInfo?.phase !== 'live' && !(roundInfo?.phase === 'over' && now() >= roundInfo.endsAt) && !force) {
+    if (idlePing && (resting || roundInfo?.phase !== 'live' && !(roundInfo?.phase === 'over' && now() >= roundInfo.endsAt)) && !force) {
       try { ws?.send('homie-ping'); } catch { if(ws)lost(ws,'send'); }
       return;
     }
@@ -2912,7 +2925,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   }
 
   function sendCheckpoint(): void {
-    if (role !== 'host' || (!opts.checkpoint && !rulesHost) || offline || !connected) return;
+    // A resting room's world does not change: its last checkpoint is still the room.
+    if (role !== 'host' || (!opts.checkpoint && !rulesHost) || offline || !connected || resting) return;
     let d: C;
     try { d = (rulesHost ? rulesHost.save() : opts.checkpoint!()) as C; } catch (err) { console.warn('[netplay] checkpoint()', err); return; }
     const c: Checkpoint<C> = { k: rulesHost?.tick ?? tick, st: now(), d, c: ctlWire() };
@@ -3042,7 +3056,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       pingsOut.clear();
       raw({
         t: 'hello', rules: rulesGame, v: NETPLAY_VERSION, rev: NETPLAY_REVISION, token, name: name || undefined, device, want, canHost: asAgent && asAgent.hands === 'host' ? false : canHost, game: opts.game, max: opts.maxPlayers,
-        ...(rulesGame ? { coast: 1 } : {}),
+        // A browser that understands a resting room (the server's `rest` frames) says so; an older relay ignores it.
+        ...(rulesGame ? { coast: 1, rest: 1 } : {}),
         ...(watching ? { watch: true } : {}), ...(caps.size ? { caps: [...caps] } : {}), ...(asAgent ? { agent: asAgent } : {}),
         // Revision 9 (an older relay ignores both): the game's revision and what this build can do.
         ...(version ? { ver: version } : {}), ...(features.length ? { feat: features } : {}),
@@ -3109,11 +3124,16 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   try {
     g.document?.addEventListener('visibilitychange', () => {
       if (disposed) return;
-      if (hidden()) rulesHost?.pause(); else rulesHost?.resume();
+      // A rest already stopped this clock. Hiding records the page; showing it is somebody looking, which wakes
+      // the room. Pausing here would tell everyone the room is awake while the next host restores the rest and sleeps.
+      if (rulesHost && resting && seat !== null) rulesHost.frame({ t: 'hidden', seat, on: hidden() });
+      else if (hidden()) rulesHost?.pause();
+      else rulesHost?.resume();
       if (!hidden() && waitingVisible) { waitingVisible = false; attempt = 0; open(); return; }
       if (!connected) return;
       if (hidden()) {
-        // A hidden phone tab loses its timers and rAF: hand the round on before it stalls.
+        // A hidden phone tab loses its timers and rAF: hand the round on before it stalls. A rest goes with
+        // that handoff; the next host restores the checkpoint and stays asleep until somebody plays.
         if (role === 'host' && peers.size > 1) yieldHost();
         ping(true);
       } else ping(true);
@@ -3433,6 +3453,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     },
     stateOf<T = unknown>(key: string) { return stateMap.get(key) as T | undefined; },
     stateKeys() { return [...stateMap.keys()]; },
+    resting: () => resting,
     input(a, held) {
       if (rulesGame) return;
       pendingA = a;

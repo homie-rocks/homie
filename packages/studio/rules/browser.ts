@@ -71,6 +71,8 @@ export function browserHost(def: RulesDef, game: BrowserGame): RulesHostFactory 
       stage: lab.stage ?? undefined, startPaused: false, restoreEpoch: (Math.floor(Math.random() * 4294967296) >>> 0) || 1,
       clock: { now: o.now, setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>) },
       onEnd: o.onEnd,
+      // Online, the page rests its room as the server does; offline nobody is charged for it, and it never rests.
+      ...(o.onRest ? { onRest: o.onRest } : {}),
     });
     if (game.vocab) host.frame({ t: 'vocabulary', vocab: game.vocab });
     const present = new Set<number>();

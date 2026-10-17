@@ -175,6 +175,8 @@ export interface Core {
   round(): Extract<CoreOut, { t: 'round' }>;
   /** End a settled wall-clock break without simulating its idle ticks. */
   resumeRound(): boolean;
+  /** What the world has waiting on its own clock: events and timers on the queue, bodies yet to spawn, asks unanswered, and a running round's deadline. */
+  waiting(): number;
   bodies(): Body[];
   /** Every person's body with where it stands: who an effect with an audience reaches (0.46.3). */
   listeners(): { seat: number; id: string; pos: Vec3 }[];
@@ -1539,6 +1541,7 @@ export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number
   }
   return {
     round: () => ({ t: 'round', ...round, ...(round.phase === 'over' && !overAt ? { results: results() } : {}) }),
+    waiting: () => queue.length + spawns.length + pendingAsks.length + (round.phase === 'live' ? (round.endsAt > 0 ? 1 : 0) : (round.endsAt > tick ? 1 : 0)) + (restartAt > tick ? 1 : 0),
     resumeRound() {
       if (round.phase !== 'over' || overAt) return false;
       // Preserve queued events and their simulation-time deadlines. Nothing

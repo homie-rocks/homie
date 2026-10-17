@@ -57,6 +57,8 @@ export class AgentSeat {
     this.errors = [];
     this.vocab = null;
     this.ping = null;
+    /** The room said it is resting (welcome or `{ t: 'rest' }`). Pings then stay at the edge and do not wake it. */
+    this.resting = false;
     /** brain 'local': Clef on this computer ({ base, model }) decides; its last decisions, and who said no thanks. */
     this.brain = brain === 'local' && local ? 'local' : null;
     this.local = local;
@@ -97,7 +99,7 @@ export class AgentSeat {
     this.ws = ws;
     const welcome = await new Promise((done) => {
       const timer = setTimeout(() => done({ t: 'timeout' }), 12_000);
-      ws.onopen = () => ws.send(JSON.stringify({ ...sat.hello, device: 'desk' }));
+      ws.onopen = () => ws.send(JSON.stringify({ ...sat.hello, device: 'desk', rest: 1 }));
       ws.onmessage = (e) => {
         let m; try { m = JSON.parse(String(e.data)); } catch { return; }
         if (m.t === 'welcome' || (m.t === 'error' && !this.seat)) { clearTimeout(timer); done(m); }
@@ -107,7 +109,9 @@ export class AgentSeat {
       ws.onerror = () => {};
     });
     if (welcome.t !== 'welcome') { this.close(); await this.revoke(); return { ok: false, why: welcome.message ?? `no seat (${welcome.code ?? welcome.t})`, error: welcome.code ?? welcome.t }; }
-    this.ping = setInterval(() => { try { ws.send(JSON.stringify({ t: 'ping', c: Date.now() })); } catch { /* closed */ } }, 2000);
+    this.ping = setInterval(() => {
+      try { ws.send(this.resting ? 'homie-ping' : JSON.stringify({ t: 'ping', c: Date.now() })); } catch { /* closed */ }
+    }, 2000);
     // The host shows a guide the game every 2 s: wait for the first look (up to 6 s).
     for (let i = 0; i < 30 && !this.view && !this.closed; i += 1) await wait(200);
     if (this.brain === 'local') this.autopilot();
@@ -122,6 +126,8 @@ export class AgentSeat {
   autopilot() {
     const tick = async () => {
       if (this.closed) { this.stopAuto(); return; }
+      // A resting room paused its AI with the people. The next decision waits until somebody plays.
+      if (this.resting) return;
       const now = Date.now();
       const a = this.auto;
       const asks = this.asks.filter((x) => now - x.at < 30_000);
@@ -162,7 +168,8 @@ export class AgentSeat {
 
   onFrame(m) {
     switch (m.t) {
-      case 'welcome': this.seat = m.seat; this.name = m.name; this.policy = m.policy ?? null; return;
+      case 'welcome': this.seat = m.seat; this.name = m.name; this.policy = m.policy ?? null; this.resting = m.rest === true; return;
+      case 'rest': this.resting = m.on === true; return;
       case 'policy': this.policy = m.policy ?? this.policy; return;
       case 'error': this.errors = [...this.errors, { code: m.code, message: m.message, at: Date.now() }].slice(-6); if (['agents-alone', 'agents-off', 'kicked', 'room-closed', 'agent-yield'].includes(m.code)) this.closed = m.code; return;
       case 'ev': {

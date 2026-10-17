@@ -3,7 +3,7 @@
  */
 // Only protocol identity, admission, controls and round deadlines survive here.
 // World snapshots/checkpoints belong to the existing host/room save, not sessions.
-const fields = new Set(`rawVocab vocab snapAt rates agentsAloneMs voteMs voteCooldownMs autoVoteMs policy level levelBy caps vote lastVoteOpen lastAutoVote lastHumanAt agentsOut officeDirty endedMatch code rules tickHz seatCap maxPlayers maxScreens perIp stallMs silentMs idleMs holdMs forgetMs persistMs gameVer currentVer occSeq seats hostId hostSince lastJoinAt lastRound lastRoster emptySince preferHost seatsDirty persistDirty lastPersistAt bans mutes announcement closedUntil closedWhy openedAt askedMax regate decideTimes defaultChat`.split(' '));
+const fields = new Set(`rawVocab vocab snapAt rates agentsAloneMs voteMs voteCooldownMs autoVoteMs policy level levelBy caps vote lastVoteOpen lastAutoVote lastHumanAt agentsOut officeDirty endedMatch code rules tickHz seatCap maxPlayers maxScreens perIp stallMs silentMs idleMs holdMs forgetMs persistMs gameVer currentVer occSeq seats hostId hostSince lastJoinAt lastRound lastRoster emptySince preferHost seatsDirty persistDirty lastPersistAt bans mutes announcement closedUntil closedWhy openedAt askedMax regate decideTimes defaultChat resting`.split(' '));
 function urlDelta(base, value) {
   const a=new URL(base),b=new URL(value),changes=[];
   for(const key of new Set([...a.searchParams.keys(),...b.searchParams.keys()])) {
