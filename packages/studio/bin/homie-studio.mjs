@@ -7,6 +7,13 @@
  *   homie-studio new <folder> --name "<Studio Name>" [--homie <directory url>] [--no-install] [--template]
  *                                         (--template: the public "Deploy to Cloudflare" template, with a Connect band;
  *                                          a new studio has no game: its home says "First game coming soon")
+ *   homie-studio hosted connect <git url> [<folder>] [--device] [--no-install]
+ *                                         a studio a git host keeps and builds (studio.json "hosting"): sign in once
+ *                                          in the browser with the host's OAuth (no key), clone it, and set this
+ *                                          toolkit as Git's credential helper for that remote only. Then `deploy`
+ *                                          pushes main (the host builds a private preview) and `publish` asks the
+ *                                          host to put it live; nothing is deployed to your own Cloudflare
+ *   homie-studio git-credential get|store|erase   Git's credential protocol on stdin (git runs this itself)
  *   homie-studio starters
  *   homie-studio demo                     a live multiplayer game to try now (Homie Arcade), nothing copied into the studio
  *   homie-studio mcp [--studios <folder>] [--skills <folder>]
@@ -505,7 +512,11 @@ function print(result) {
     case 'tool list':
       lines.push(JSON.stringify(result.result, null, 2));
       break;
+    case 'hosted connect':
+      lines.push(`Connected: ${result.folder} (from ${result.remote})`, ...result.next.map((n) => `  ${n}`));
+      break;
     case 'deploy':
+      if (result.hosted) { lines.push(`Pushed ${result.commit.slice(0, 7)} to ${result.host}.`, ...(result.progress ? [result.progress] : []), result.next); break; }
       if (result.mcp) lines.push(`Connect your AI: ${result.mcp}/auth (approve in your studio's browser page; no key)`);
       if (result.ci) {
         lines.push(`Live: ${result.url ?? '(Wrangler printed no address)'}${result.commit ? ` (commit ${result.commit.slice(0, 7)}${result.branch ? ` on ${result.branch}` : ''})` : ''}`, ...result.steps.map((x) => `  ${x.what}`), ...result.games.map((g) => `  ${g.id}: ${g.open ?? g.play}${g.hash ? `  [${deployWords(g)}]` : ''}${g.wall ? `  wall: ${g.wall}` : ''}`));
@@ -521,6 +532,7 @@ function print(result) {
         ...(result.standalone?.length ? ['', ...result.standalone] : []));
       break;
     case 'deploy plan':
+      if (result.hosted) { lines.push(...result.lines); break; }
       lines.push(`What \`npm run deploy\` does for ${result.studio}, on the Cloudflare account the person approves:`, '',
         ...result.cloudflare.map((r) => `  ${r.kind}${r.name ? ` ${r.name}` : ''}: ${r.what} [${r.state}${r.plan ? `; ${r.plan}` : ''}]`), '',
         ...(result.cost ? [`Cost: ${result.cost}`] : []), `Sign-in: ${result.login}`, `Address: ${result.address}`,
@@ -536,6 +548,7 @@ function print(result) {
       lines.push(...result.lines);
       break;
     case 'publish':
+      if (result.hosted) { lines.push(result.answer); break; }
       lines.push(`Listed in the directory: ${result.studioPage ?? result.directory}`, ...(result.games ?? []).map((g) => `  ${g.name}: ${g.play}`), ...(result.publishes?.line ? [result.publishes.line] : []),
         // The parts in what was listed, in the deploy plan's own lines (lib/parts-build.mjs).
         ...(result.parts && partsPlanLines(result.parts, { at: 'publish' }).length ? ['', ...partsPlanLines(result.parts, { at: 'publish' })] : []));
@@ -826,7 +839,8 @@ function print(result) {
  * the command alone. Commands that only read, or only change files in this folder, are not in this table.
  */
 const OUTWARD_FLAGS = {
-  publish: ['homie', 'site', 'before'],
+  'hosted connect': ['device', 'no-install'],
+  publish: ['homie', 'site', 'before', 'expected'],
   deploy: ['plan', 'ci', 'homie', 'own-route'],
   'storage add': [],
   'media put': ['as'],
@@ -911,6 +925,18 @@ async function main() {
   }
   // The starter library and the optimiser work anywhere; the rest of style and assets inside a studio (lib/art-cli.mjs).
   if (cmd === 'assets' && ['find', 'optimise', 'optimize'].includes(sub)) return assetsCommand(null, sub, positional, flags, { log });
+  if (cmd === 'hosted' && sub === 'connect') {
+    if (!positional[2]) return { ok: false, command: 'hosted connect', why: 'usage: homie-studio hosted connect <git url> [<folder>]' };
+    const { connectHosted } = await import('../lib/hosted.mjs');
+    return connectHosted(positional[2], positional[3], { version: STUDIO_VERSION, install: !flags.has('no-install'), device: flags.has('device'), log });
+  }
+  if (cmd === 'git-credential') {
+    // Git's own protocol: key=value lines on stdin, the answer on stdout and nothing else there.
+    const { credential } = await import('../lib/hosted.mjs');
+    const input = await new Promise((r) => { let t = ''; process.stdin.setEncoding('utf8'); process.stdin.on('data', (d) => { t += d; }); process.stdin.on('end', () => r(t)); });
+    process.stdout.write(await credential(sub ?? 'get', input));
+    return { ok: true, command: 'help' };
+  }
   if(cmd==='fork')return (await import('../lib/fork.mjs')).forkStudio(positional[1],positional[2],{name:flags.get('name'),slug:flags.get('slug'),ids:flags.get('ids')?JSON.parse(flags.get('ids')):{}});
   const root = requireStudio();
   // Keep guidance visible to AI callers using --json as well as human output.
@@ -1037,6 +1063,15 @@ async function main() {
     }
     const only = flags.get('only') ? String(flags.get('only')).split(',').filter((d) => ['computer', 'phone', 'sideways'].includes(d)) : undefined;
     return look({ url, paths, shots: flags.get('shots') ? resolve(flags.get('shots')) : join(root, '.studio', 'look'), devices: only, log });
+  }
+  // A studio a git host keeps: deploy is a push, publish asks the host, and no Cloudflare is touched (lib/hosted.mjs).
+  const hosting = ['deploy', 'publish', 'storage'].includes(cmd) ? (await import('../lib/hosted.mjs')).hostingOf(readStudio(root)) : null;
+  if (hosting) {
+    const hosted = await import('../lib/hosted.mjs');
+    if (cmd === 'deploy' && flags.has('plan')) return { ok: true, command: 'deploy plan', hosted: true, host: hosting.name, studio: readStudio(root).name, lines: [`${hosted.hostedWords(hosting)}`, `Deploy pushes this folder's main to ${hosting.git}.`] };
+    if (cmd === 'deploy') return hosted.pushHosted(root, hosting, { log });
+    if (cmd === 'publish' && !flags.has('before')) return hosted.publishHosted(root, hosting, { expected: flags.has('expected') ? String(flags.get('expected')) : null });
+    return { ok: false, command: cmd, why: hosted.hostedWords(hosting) };
   }
   if (cmd === 'deploy' && flags.has('plan')) {
     // On a custom domain the plan also reads the domain's Worker routes (lib/routes.mjs): a read, nothing changes.
