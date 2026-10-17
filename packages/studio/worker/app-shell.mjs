@@ -47,7 +47,7 @@ export const APP_SHELL_JS = String.raw`(function () {
     if(boot.screen&&!q.has('role'))q.set('surface','wall');
     return q;
   }
-  function context() {var room=new URLSearchParams(location.search).get('room');return {app:boot.game,origin:location.origin,url:location.origin+'/'+boot.game+'/open'+(room&&/^[A-Za-z0-9_-]{1,32}$/.test(room)?'?room='+encodeURIComponent(room)+(boot.linkQuery?'&'+boot.linkQuery:''):(boot.linkQuery?'?'+boot.linkQuery:'')),presence:presence,now:clock};}
+  function context() {var room=new URLSearchParams(location.search).get('room');return {app:boot.game,origin:location.origin,url:location.origin+(boot.linkBase||'')+'/'+boot.game+'/open'+(room&&/^[A-Za-z0-9_-]{1,32}$/.test(room)?'?room='+encodeURIComponent(room):''),presence:presence,now:clock};}
   function sendContext(){frame?.contentWindow?.postMessage({type:'homie-app-context',context:context()},'*');}
   function connect(){
     live?.close();

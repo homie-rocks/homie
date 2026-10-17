@@ -47,12 +47,14 @@ and gets `username=oauth`, `password=<access token>` and `password_expiry_utc`; 
 token so the next request refreshes. The same token is used for the host's MCP server, which is the resource it was
 issued for, and for nothing else.
 
-## Links on a host that requires a pass
+## Addresses on a host that requires a pass
 
-A host in front of the studio may require a query on the studio's own links: a private preview, for one, lets in only
-requests that carry its pass. It says so in the `homie-link-query` request header (one `name=value`). The studio's
-shared room links, the television's join code and the landing page's phone code then carry it, so a phone that scans
-the code gets in too. A host that requires nothing sends nothing, and every link stays as it was.
+A host in front of the studio may serve it, for one viewer, under a path of its own: a private preview, for one, lets
+in only addresses under its pass path. It says so in the `homie-link-base` request header (an absolute path). The
+studio's shared room links, the television's join code, the landing's phone code, the game frame and its room sockets
+then start with that path. The game frame runs at an opaque origin and sends no cookie, so a pass held in a cookie
+would never reach its assets or sockets; one in the path does, and every relative address in the frame keeps it. A
+host that requires nothing sends nothing, and every address stays as it was.
 
 ## What a host needs to offer
 

@@ -1,4 +1,5 @@
 import {lobbyFor} from './lobby-shards.mjs';
+import { linkBase } from './link-base.mjs';
 import {studioTools,directoryOf} from './tool-registry.mjs';
 export {useTools,getStudioTools} from './tool-registry.mjs';
 import {json,finish} from './responses.mjs';
@@ -319,7 +320,7 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
   const cfg = {
     ...(meta.kind === 'app' ? {kind: 'app'} : {}),
     v: 1,
-    url: `${wsBase}/${game}/__net?room=${encodeURIComponent(room)}${b ? `&b=${b}` : ''}${t ? `&t=${encodeURIComponent(t)}` : ''}${watching ? '&w=1' : ''}${ver ? `&gv=${encodeURIComponent(ver)}` : ''}`,
+    url: `${wsBase}${linkBase(request)}/${game}/__net?room=${encodeURIComponent(room)}${b ? `&b=${b}` : ''}${t ? `&t=${encodeURIComponent(t)}` : ''}${watching ? '&w=1' : ''}${ver ? `&gv=${encodeURIComponent(ver)}` : ''}`,
     room,
     ...(ver ? { ver } : {}),
     ...(Object.keys(params).length ? { params } : {}),
