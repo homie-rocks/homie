@@ -1,0 +1,201 @@
+{
+  "where": "local workerd (miniflare)",
+  "game": "Gem Rush starter (60 s rounds, 7 s breaks, bots keep 3), built with homie-studio build",
+  "idleMinutes": 10,
+  "before": {
+    "toolkit": "main at 165507e",
+    "at": "2026-10-17T02:40:02.845Z",
+    "runs": [
+      {
+        "room": "idle-1",
+        "name": "one phone, page open, nobody touching it",
+        "phones": 1,
+        "mode": "idle",
+        "idle": {
+          "ms": 599946,
+          "constructedDuring": 0,
+          "timerHeldShare": 0.896,
+          "timerFires": 12887,
+          "objectEvents": 2940,
+          "snapshotsPerPhonePerSecond": 17.93,
+          "framesToObjectPerSecond": 4.88,
+          "resting": false
+        },
+        "wake": {
+          "seatKept": true,
+          "firstSnapshotMs": 49,
+          "snapshotsPerPhonePerSecond": 20,
+          "resting": false,
+          "constructedAtWake": 0
+        }
+      },
+      {
+        "room": "idle-4",
+        "name": "four phones, pages open, nobody touching them",
+        "phones": 4,
+        "mode": "idle",
+        "idle": {
+          "ms": 599944,
+          "constructedDuring": 0,
+          "timerHeldShare": 0.896,
+          "timerFires": 12887,
+          "objectEvents": 11730,
+          "snapshotsPerPhonePerSecond": 17.93,
+          "framesToObjectPerSecond": 19.53,
+          "resting": false
+        },
+        "wake": {
+          "seatKept": true,
+          "firstSnapshotMs": 50,
+          "snapshotsPerPhonePerSecond": 20,
+          "resting": false,
+          "constructedAtWake": 0
+        }
+      },
+      {
+        "room": "hidden-1",
+        "name": "one phone, page in the background",
+        "phones": 1,
+        "mode": "hidden",
+        "idle": {
+          "ms": 599946,
+          "constructedDuring": 0,
+          "timerHeldShare": 0.896,
+          "timerFires": 12887,
+          "objectEvents": 550,
+          "snapshotsPerPhonePerSecond": 17.93,
+          "framesToObjectPerSecond": 0.9,
+          "resting": false
+        },
+        "wake": {
+          "seatKept": true,
+          "firstSnapshotMs": 101,
+          "snapshotsPerPhonePerSecond": 20,
+          "resting": false,
+          "constructedAtWake": 0
+        }
+      },
+      {
+        "room": "play-1",
+        "name": "one phone playing the whole time",
+        "phones": 1,
+        "mode": "play",
+        "idle": {
+          "ms": 599945,
+          "constructedDuring": 0,
+          "timerHeldShare": 0.896,
+          "timerFires": 12887,
+          "objectEvents": 2940,
+          "snapshotsPerPhonePerSecond": 17.93,
+          "framesToObjectPerSecond": 4.88,
+          "resting": false
+        },
+        "wake": {
+          "seatKept": true,
+          "firstSnapshotMs": 49,
+          "snapshotsPerPhonePerSecond": 19.95,
+          "resting": false,
+          "constructedAtWake": 0
+        }
+      }
+    ]
+  },
+  "after": {
+    "toolkit": "this change",
+    "at": "2026-10-17T02:40:02.803Z",
+    "runs": [
+      {
+        "room": "idle-1",
+        "name": "one phone, page open, nobody touching it",
+        "phones": 1,
+        "mode": "idle",
+        "idle": {
+          "ms": 599947,
+          "constructedDuring": 8,
+          "timerHeldShare": 0.092,
+          "timerFires": 1322,
+          "objectEvents": 313,
+          "snapshotsPerPhonePerSecond": 1.84,
+          "framesToObjectPerSecond": 0.51,
+          "resting": true
+        },
+        "wake": {
+          "seatKept": true,
+          "firstSnapshotMs": 101,
+          "snapshotsPerPhonePerSecond": 19.99,
+          "resting": false,
+          "constructedAtWake": 1
+        }
+      },
+      {
+        "room": "idle-4",
+        "name": "four phones, pages open, nobody touching them",
+        "phones": 4,
+        "mode": "idle",
+        "idle": {
+          "ms": 599946,
+          "constructedDuring": 8,
+          "timerHeldShare": 0.092,
+          "timerFires": 1322,
+          "objectEvents": 1222,
+          "snapshotsPerPhonePerSecond": 1.84,
+          "framesToObjectPerSecond": 2.02,
+          "resting": true
+        },
+        "wake": {
+          "seatKept": true,
+          "firstSnapshotMs": 101,
+          "snapshotsPerPhonePerSecond": 20,
+          "resting": false,
+          "constructedAtWake": 1
+        }
+      },
+      {
+        "room": "hidden-1",
+        "name": "one phone, page in the background",
+        "phones": 1,
+        "mode": "hidden",
+        "idle": {
+          "ms": 599948,
+          "constructedDuring": 10,
+          "timerHeldShare": 0.012,
+          "timerFires": 173,
+          "objectEvents": 18,
+          "snapshotsPerPhonePerSecond": 0.24,
+          "framesToObjectPerSecond": 0.01,
+          "resting": true
+        },
+        "wake": {
+          "seatKept": true,
+          "firstSnapshotMs": 101,
+          "snapshotsPerPhonePerSecond": 20,
+          "resting": false,
+          "constructedAtWake": 0
+        }
+      },
+      {
+        "room": "play-1",
+        "name": "one phone playing the whole time",
+        "phones": 1,
+        "mode": "play",
+        "idle": {
+          "ms": 599948,
+          "constructedDuring": 0,
+          "timerHeldShare": 0.896,
+          "timerFires": 12887,
+          "objectEvents": 2937,
+          "snapshotsPerPhonePerSecond": 17.93,
+          "framesToObjectPerSecond": 4.88,
+          "resting": false
+        },
+        "wake": {
+          "seatKept": true,
+          "firstSnapshotMs": 100,
+          "snapshotsPerPhonePerSecond": 20,
+          "resting": false,
+          "constructedAtWake": 0
+        }
+      }
+    ]
+  }
+}
