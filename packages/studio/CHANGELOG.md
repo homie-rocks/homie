@@ -17,7 +17,11 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
-## [Unreleased]
+## [0.58.1] - 2026-10-17
+
+**Plugin 0.58.1**
+
+A room nobody is playing rests, and the next touch wakes it with that input still applied.
 
 ### Changed
 
@@ -34,6 +38,17 @@ file) and what the upgrade would change, and changes nothing until you agree.
   same way. A spectator or agent on an older build keeps pinging the room itself, so the object stays in memory
   while that socket is open. Rebuild your games to get it: a room rests only when every seated browser is on this
   version.
+
+### Fixed
+
+- A browser-hosted rest stays asleep when the hosting tab is hidden or sends no snapshots. The next browser takes
+  the same checkpoint and does not run until somebody plays. A backgrounded tab no longer ends the rest while people
+  are still in the room. Waking writes a new checkpoint, so a later handoff does not put the room back to sleep.
+
+### Upgrade notes
+
+- Rebuild your games. Set `room.rest` to `"never"` (or `restSeconds` to 0) for a turn timer or a show that must keep
+  going while people are present. A lasting world never rests.
 
 ## [0.58.0] - 2026-10-16
 

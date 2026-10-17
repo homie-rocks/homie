@@ -793,7 +793,8 @@ it; Coin Dash, Ember Vale, Gem Rush, Gem Rush 3D and Hero Rush 3D use it, as an 
 `"never"` (or `restSeconds: 0`): never while somebody is here, for a world that must keep going untouched, such as a
 turn timer that skips an absent player or a show people watch. A lasting world never rests. A spectator or agent on
 an older build keeps pinging the room itself, so the object stays in memory while that socket is open. Browser-hosted
-rules games rest the same way. Use browser createSaves for player-owned character progress; it is not
+rules games rest the same way. A resting host's silence is not a stall. If its tab is hidden, another browser takes
+the same rest and stays asleep until somebody plays. Use browser createSaves for player-owned character progress; it is not
 server-verified money. Entity fields default to public. Declare visibility explicitly for private information (below); shared state and motion remain public. Use declared server round records for verified match history.
 
 

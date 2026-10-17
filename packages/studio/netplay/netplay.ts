@@ -1633,7 +1633,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         rulesSender = opts.rulesLimits.output({ rates: opts.rulesLimits.rates, send: raw, now: () => performance.now() });
         // A browser host rests its room as the server does (rules/host.ts): its own page then pings the edge and holds
         // its clock like everybody else's, and its relay can sleep. Never offline: nobody pays for a page alone.
-        const options = { now: () => performance.now(), restore, peers: rulesPeers(), held: offline ? [] : heldPeers, policy: offline ? DEFAULT_POLICY : policy, send: rulesOut, onEnd: (why: string) => endRules(why), ...(offline ? {} : { onRest: (on: boolean) => { if (on) sendCheckpoint(); resting = on; } }) };
+        const options = { now: () => performance.now(), restore, peers: rulesPeers(), held: offline ? [] : heldPeers, policy: offline ? DEFAULT_POLICY : policy, send: rulesOut, onEnd: (why: string) => endRules(why), ...(offline ? {} : { onRest: (on: boolean) => { if (on) sendCheckpoint(); resting = on; if (!on) sendCheckpoint(); } }) };
         try { rulesHost = make(options); }
         catch (error) {
           if (!restore) throw error;
@@ -3124,11 +3124,16 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   try {
     g.document?.addEventListener('visibilitychange', () => {
       if (disposed) return;
-      if (hidden()) rulesHost?.pause(); else rulesHost?.resume();
+      // A rest already stopped this clock. Hiding records the page; showing it is somebody looking, which wakes
+      // the room. Pausing here would tell everyone the room is awake while the next host restores the rest and sleeps.
+      if (rulesHost && resting && seat !== null) rulesHost.frame({ t: 'hidden', seat, on: hidden() });
+      else if (hidden()) rulesHost?.pause();
+      else rulesHost?.resume();
       if (!hidden() && waitingVisible) { waitingVisible = false; attempt = 0; open(); return; }
       if (!connected) return;
       if (hidden()) {
-        // A hidden phone tab loses its timers and rAF: hand the round on before it stalls.
+        // A hidden phone tab loses its timers and rAF: hand the round on before it stalls. A rest goes with
+        // that handoff; the next host restores the checkpoint and stays asleep until somebody plays.
         if (role === 'host' && peers.size > 1) yieldHost();
         ping(true);
       } else ping(true);

@@ -1090,8 +1090,10 @@ export function createHost(o: HostOptions): Host {
   }
   function pause(): void {
     if (!running) {
-      // Everybody left a resting room: it is an empty room now, paused like one.
-      if (resting) { resting = false; paused = true; log({ ev: 'host-pause', game: o.game, tick: core.tick }); try { o.send({ t: 'rest', on: false }); checkpoint(true); o.onPause?.(); } catch (error) { fault('onPause', error); } return; }
+      // Everybody left a resting room: it is an empty room now, paused like one. People still here (a tab
+      // went to the background) stay resting. Ending it would start every clock while the next host restores
+      // the rest save and stays asleep, so the input that should wake the room is dropped.
+      if (resting) { if (people() > 0) return; resting = false; paused = true; log({ ev: 'host-pause', game: o.game, tick: core.tick }); try { o.send({ t: 'rest', on: false }); checkpoint(true); o.onPause?.(); } catch (error) { fault('onPause', error); } return; }
       if (roundIdleUntil !== null && !paused) { paused = true; checkpoint(true); o.onPause?.(); }
       return;
     }

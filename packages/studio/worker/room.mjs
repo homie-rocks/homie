@@ -837,7 +837,8 @@ export class NetRoom {
           else if (this.rules && this.host()?.rules && this.host() !== c) this.send(this.host(), { t: 'hidden', seat: c.seat, on: c.hidden });
         }
         if(this.server && (!c.probe || now-c.probe.at>10000)){c.probe={n:crypto.randomUUID(),at:now};this.send(c,{t:'probe',n:c.probe.n});}
-        // A host whose tab went to the background will stop ticking: hand the round on now.
+        // A host whose tab went to the background will stop running: hand the round on now. A rest goes with
+        // the checkpoint, so the next host stays asleep until somebody plays.
         if (c.id === this.hostId && c.hidden && !wasHidden) this.yieldHost(c, 'host-hidden');
         return;
       }
@@ -1006,6 +1007,11 @@ export class NetRoom {
     let role = c.seat === null ? 'screen' : 'replica';
     let why = 'joined';
     let deposed = null;
+    // An edge ping is answered without a message, so lastSeen lags it between ticks. A fresh ping is the host still here.
+    for (const o of live) {
+      const ping = o.conn.lastPing?.() ?? 0;
+      if (ping > 0) o.lastSeen = Math.max(o.lastSeen, ping);
+    }
     const h = this.host();
     const preferred = this.preferHost && now < this.preferHost.until ? this.preferHost.seat : undefined;
     // A watcher hosts only a room nobody else can host (a player who can is elected first), and never deposes one;
@@ -1030,6 +1036,8 @@ export class NetRoom {
       }
     }
     if (role === 'host') {
+      // A rest with no rest checkpoint would leave this host running and everyone else holding their clock.
+      if (this.resting && !this.restSaved(this.lastCkpt)) this.rest(null, false);
       // Welcome contains the current holders; old occupancy notices must precede it.
       this.hosted = new Map([...this.seats].map(([seat, s]) => [seat, s.occ ?? null]));
       this.hostId = c.id;
@@ -1357,6 +1365,15 @@ export class NetRoom {
       Math.min(candidate.rulesSpeed ?? 1, candidate.readySpeed ?? 0) > (current?.rulesSpeed ?? 0) * 1.5 + 0.1;
   }
 
+  /** The checkpoint a browser host sent while resting: its save says `rest.on`. */
+  restSaved(ckpt) {
+    const d = ckpt?.d;
+    if (!d || typeof d !== 'object') return false;
+    const data = d.data && typeof d.data === 'object' ? d.data : d;
+    const rest = data.rest;
+    return Boolean(rest && typeof rest === 'object' && rest.on === true);
+  }
+
   /**
    * Choose a host. Visible and responsive first; then tenure in 30 s steps (a newcomer cannot jump the queue by
    * calling itself a desktop); then desk > tv > phone as a tie-break; then whoever came first. The chosen browser
@@ -1392,8 +1409,9 @@ export class NetRoom {
     // What the room's game reads (the dial, agent bodies) is what its new host's build says.
     this.caps = new Set(next.caps);
     next.lastSnapAt = 0;
-    // A rest belongs to the host that took it: the new one runs.
-    if (this.resting) this.rest(null, false);
+    // A rest stays with the room when the checkpoint the new host restores is that rest: it stays asleep.
+    // With no such save the new host would run while everyone else still holds their clock, so the rest ends.
+    if (this.resting && !this.restSaved(this.lastCkpt)) this.rest(null, false);
     this.stats.promotions += 1;
     this.stats.elections.push({ at: now, id: next.id, seat: next.seat, why });
     if (this.stats.elections.length > 32) this.stats.elections.shift();
@@ -1427,9 +1445,9 @@ export class NetRoom {
       // A loopback (the Table's own house agent) cannot be half-open: it is never closed for silence.
       if (now - c.lastSeen > this.idleMs && !c.conn.loopback) this.kick(c, 'silent', 4000);
     }
-    // A host that stopped sending snapshots while others are present.
+    // A host that stopped sending snapshots while others are present. A resting host sends none on purpose.
     const h = this.host();
-    if (!idle && h && this.live().length > 1) {
+    if (!idle && !this.resting && h && this.live().length > 1) {
       const since = Math.max(h.lastSnapAt, this.hostSince, this.lastJoinAt);
       if (now - since > this.stallMs) {
         const next = this.elect(h.id, 'host-stalled');
