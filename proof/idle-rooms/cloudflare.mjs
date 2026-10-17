@@ -1,20 +1,22 @@
 /**
- * Idle rooms on Cloudflare: the same rooms and phones as measure.mjs, deployed as two throwaway Workers (the toolkit
- * before and after the change, side by side), with what Cloudflare itself recorded for each room object read from
- * its GraphQL Analytics API (`durableObjectsPeriodicGroups`: active time, GB-seconds of duration, CPU, socket
- * messages, rows written). Both Workers are deleted at the end, and the deletion is checked.
+ * Idle rooms on Cloudflare: the rooms of measure.mjs, deployed as two throwaway Workers (the toolkit before and after
+ * the change, side by side, each with its own Gem Rush and its own client), played by the real client (phones.mjs),
+ * with what Cloudflare itself recorded for each room object read from its GraphQL Analytics API: active time, GB-s of
+ * duration, CPU and rows written (`durableObjectsPeriodicGroups`), and the requests by kind, alarms among them
+ * (`durableObjectsInvocationsAdaptiveGroups`). Both Workers are deleted at the end, and the deletion is checked.
  *
  *   CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... \
- *   node proof/idle-rooms/cloudflare.mjs <built studio> <toolkit before> <toolkit after> <minutes idle> <out.json> <worker name prefix>
+ *   node proof/idle-rooms/cloudflare.mjs <toolkit before> <toolkit after> <minutes idle> <out.json> <worker name prefix> <scratch dir>
  *
  * The token needs Workers Scripts edit and Account Analytics read. It is read from the environment and never printed.
  */
 import { writeFileSync } from 'node:fs';
-import { roomWorker, phone, wake, SCENARIOS } from './rig.mjs';
+import { join } from 'node:path';
+import { gemRush, roomWorker, phones, SCENARIOS } from './rig.mjs';
 
-const [studio, before, after, minutesArg, out, prefix] = process.argv.slice(2);
+const [before, after, minutesArg, out, prefix, scratch] = process.argv.slice(2);
 const account = process.env.CLOUDFLARE_ACCOUNT_ID, token = process.env.CLOUDFLARE_API_TOKEN;
-if (!account || !token || !prefix) throw new Error('needs CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN and a worker name prefix');
+if (!account || !token || !prefix || !scratch) throw new Error('needs CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, a worker name prefix and a scratch directory');
 const IDLE_MS = Number(minutesArg) * 60_000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const api = async (path, init = {}) => {
@@ -24,8 +26,7 @@ const api = async (path, init = {}) => {
 };
 const say = (line) => console.log(`${new Date().toISOString()} ${line}`);
 
-async function deploy(name, toolkit) {
-  const bundle = await roomWorker({ studio, toolkit });
+async function deploy(name, bundle) {
   const form = new FormData();
   form.append('metadata', new Blob([JSON.stringify({
     main_module: 'entry.mjs', compatibility_date: '2026-06-01', compatibility_flags: ['nodejs_compat'],
@@ -51,88 +52,84 @@ async function namespaces() {
   return (r.body.result ?? []).filter((n) => String(n.script ?? '').startsWith(prefix));
 }
 
-async function usage(namespaceId, since, until) {
-  const query = `query($a: String!, $f: AccountDurableObjectsPeriodicGroupsFilter_InputObject!) { viewer { accounts(filter: { accountTag: $a }) {
-    durableObjectsPeriodicGroups(limit: 10000, filter: $f) { dimensions { name datetimeMinute } sum { activeTime cpuTime duration inboundWebsocketMsgCount outboundWebsocketMsgCount rowsWritten rowsRead } } } } }`;
-  let body;
+async function graphql(query, variables) {
   for (let tries = 0; ; tries++) {
-    try { body = await (await fetch('https://api.cloudflare.com/client/v4/graphql', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ query, variables: { a: account, f: { namespaceId, datetimeMinute_geq: since, datetimeMinute_lt: until } } }) })).json(); break; }
-    catch (error) { if (tries >= 4) throw error; await sleep(5000); }
+    try {
+      const body = await (await fetch('https://api.cloudflare.com/client/v4/graphql', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ query, variables }) })).json();
+      if (body.errors?.length) throw new Error(`analytics: ${body.errors[0].message}`);
+      return body.data.viewer.accounts[0];
+    } catch (error) { if (tries >= 4) throw error; await sleep(5000); }
   }
-  if (body.errors?.length) throw new Error(`analytics: ${body.errors[0].message}`);
-  return body.data.viewer.accounts[0].durableObjectsPeriodicGroups;
 }
+const usage = (namespaceId, since, until) => graphql(`query($a: String!, $f: AccountDurableObjectsPeriodicGroupsFilter_InputObject!, $i: AccountDurableObjectsInvocationsAdaptiveGroupsFilter_InputObject!) { viewer { accounts(filter: { accountTag: $a }) {
+  periodic: durableObjectsPeriodicGroups(limit: 10000, filter: $f) { dimensions { name datetimeMinute } sum { activeTime cpuTime duration rowsWritten } }
+  invocations: durableObjectsInvocationsAdaptiveGroups(limit: 10000, filter: $i) { dimensions { name type } sum { requests } } } } }`,
+  { a: account, f: { namespaceId, datetimeMinute_geq: since, datetimeMinute_lt: until }, i: { namespaceId, datetimeMinute_geq: since, datetimeMinute_lt: until } });
 
 const variants = [{ label: 'before', toolkit: before }, { label: 'after', toolkit: after }].map((v) => ({ ...v, name: `${prefix}-${v.label}` }));
 const result = { where: 'Cloudflare (two throwaway Workers, deleted afterwards)', idleMinutes: Number(minutesArg), variants: {} };
-const phones = [];
+const groups = [];
 try {
-  for (const v of variants) await deploy(v.name, v.toolkit);
+  for (const v of variants) { v.game = await gemRush({ toolkit: v.toolkit, scratch: join(scratch, v.label) }); await deploy(v.name, await roomWorker({ toolkit: v.toolkit, game: v.game })); }
   const subdomain = (await api('/workers/subdomain')).body.result.subdomain;
   for (const v of variants) {
     v.host = `${v.name}.${subdomain}.workers.dev`;
     for (let i = 0; i < 60; i++) { try { if ((await fetch(`https://${v.host}/`)).ok) break; } catch { /* not yet */ } await sleep(2000); }
   }
-  const open = (v, room) => (i) => new Promise((resolve, reject) => {
-    const ws = new WebSocket(`wss://${v.host}/__net?room=${room}&b=phone${i}`);
-    ws.addEventListener('open', () => resolve(ws), { once: true });
-    ws.addEventListener('error', () => reject(new Error(`socket to ${v.host}/${room} failed`)), { once: true });
-  });
+  const minute = 60_000, joinedAt = Date.now();
   const rooms = [];
   for (const v of variants) for (const s of SCENARIOS) {
-    const list = Array.from({ length: s.phones }, (_, i) => phone(open(v, s.room), i, s.mode));
-    for (const p of list) { await p.connect(); p.start(); phones.push(p); }
-    rooms.push({ v, s, list });
+    const g = await phones({ game: v.game, socketUrl: `wss://${v.host}/__net?room=${s.room}`, count: s.phones, mode: s.mode });
+    groups.push(g); rooms.push({ v, s, g });
   }
-  say(`${phones.length} phones connected; idle for ${minutesArg} minutes`);
-  await sleep(5000);
-  const t0 = Date.now();
+  say(`${rooms.length} rooms connected; idle for ${minutesArg} minutes`);
   await sleep(IDLE_MS);
+  const restingAtEnd = await Promise.all(rooms.map(async (r) => (await r.g.ask('facts')).every((f) => f.resting)));
   const t1 = Date.now();
-  const restingAtEnd = rooms.map((r) => r.list.every((p) => p.resting));
-  const woke = await Promise.all(rooms.map((r) => wake(r.list)));
-  for (const p of phones) p.stop();
+  const woke = await Promise.all(rooms.map((r) => r.g.ask('wake')));
+  for (const r of rooms) { await r.g.ask('close').catch(() => {}); r.g.kill(); }
   say('woken and closed; waiting for Cloudflare analytics');
-  // Whole minutes inside the idle stretch only.
-  const minute = 60_000, since = new Date(Math.ceil(t0 / minute) * minute).toISOString(), until = new Date(Math.floor(t1 / minute) * minute).toISOString();
+  // Every whole minute from the one the phones joined in (a room plays on for restSeconds before it rests, and
+  // Cloudflare reports that stretch under the minute it began) to the end of the idle stretch.
+  const since = new Date(Math.floor(joinedAt / minute) * minute).toISOString(), until = new Date(Math.floor(t1 / minute) * minute).toISOString();
   const windowS = (Date.parse(until) - Date.parse(since)) / 1000;
   const spaces = await namespaces();
-  // Analytics arrive minutes late. A room that never sleeps reports every minute; wait until each of those has,
-  // then read once more a minute later so the late rows of the others are in too.
   const read = async () => {
     const rows = {};
-    for (const v of variants) { const ns = spaces.find((n) => n.script === v.name && n.class === 'Table'); rows[v.label] = ns ? await usage(ns.id, since, until) : []; }
+    for (const v of variants) { const ns = spaces.find((n) => n.script === v.name && n.class === 'Table'); rows[v.label] = ns ? await usage(ns.id, since, until) : { periodic: [], invocations: [] }; }
     return rows;
   };
+  // Analytics arrive minutes late. A room that never sleeps reports every minute: wait until each has, then read once
+  // more two minutes later so the late rows of the others are in too.
   const awake = [...variants.map((v) => [v.label, 'play-1']), ...SCENARIOS.map((s) => ['before', s.room])];
   let rows = null;
   for (let tries = 0; tries < 40; tries++) {
     await sleep(30_000);
     rows = await read();
-    if (awake.every(([label, room]) => rows[label].filter((g) => g.dimensions.name === `gem-rush/${room}`).length >= windowS / 60)) break;
+    if (awake.every(([label, room]) => rows[label].periodic.filter((g) => g.dimensions.name === `gem-rush/${room}`).length >= windowS / 60)) break;
   }
-  await sleep(60_000);
+  await sleep(120_000);
   rows = await read();
   rooms.forEach((r, n) => {
-    const groups = rows[r.v.label].filter((g) => g.dimensions.name === `gem-rush/${r.s.room}`);
-    const sum = (k) => groups.reduce((a, g) => a + (Number(g.sum[k]) || 0), 0);
-    (result.variants[r.v.label] ??= { worker: r.v.name, since, until, windowSeconds: windowS, rooms: [] }).rooms.push({
+    const periodic = rows[r.v.label].periodic.filter((g) => g.dimensions.name === `gem-rush/${r.s.room}`);
+    const sum = (k) => periodic.reduce((a, g) => a + (Number(g.sum[k]) || 0), 0);
+    const requests = Object.fromEntries(rows[r.v.label].invocations.filter((g) => g.dimensions.name === `gem-rush/${r.s.room}`).map((g) => [g.dimensions.type, g.sum.requests]));
+    (result.variants[r.v.label] ??= { worker: r.v.name, room: r.v.game.room, since, until, windowSeconds: windowS, rooms: [] }).rooms.push({
       room: r.s.room, name: r.s.name, phones: r.s.phones, mode: r.s.mode,
-      minutesReported: groups.length,
+      minutesReported: periodic.length,
       activeSeconds: Math.round(sum('activeTime') / 1e4) / 100,
       activeShare: Math.round(1000 * sum('activeTime') / 1e6 / windowS) / 1000,
       durationGbSeconds: Math.round(100 * sum('duration')) / 100,
       cpuMs: Math.round(sum('cpuTime') / 1000),
-      socketMessagesIn: sum('inboundWebsocketMsgCount'),
-      socketMessagesOut: sum('outboundWebsocketMsgCount'),
       rowsWritten: sum('rowsWritten'),
-      perMinuteActiveMs: groups.map((g) => [g.dimensions.datetimeMinute.slice(11, 16), Math.round(g.sum.activeTime / 1000)]).sort(),
+      requests,
+      perMinuteActiveMs: periodic.map((g) => [g.dimensions.datetimeMinute.slice(11, 16), Math.round(g.sum.activeTime / 1000)]).sort(),
       restingAtEndOfIdle: restingAtEnd[n],
       wake: woke[n],
     });
   });
 } finally {
-  for (const p of phones) p.stop();
+  for (const g of groups) g.kill();
   result.cleanup = {};
   for (const v of variants) result.cleanup[v.name] = await remove(v.name);
   result.cleanup.namespacesLeft = (await namespaces()).map((n) => ({ script: n.script, class: n.class }));

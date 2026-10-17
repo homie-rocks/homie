@@ -154,6 +154,10 @@ export class NetRoom {
      * room forgets everything (`onForget`: it ends the host runtime).
      */
     this.server = null;
+    /** The room's host has rested it (rules/host.ts): nobody is playing, its clock is stopped and it sends nothing. */
+    this.resting = false;
+    /** The Table hears a rest too (its house guides share the object's alarm). Null where nothing is listening. */
+    this.onRest = null;
     this.hosted = new Map();
     this.hostFailed = null;
     this.onForget = null;
@@ -162,7 +166,7 @@ export class NetRoom {
   /* ------------------------------------------------------------ the server as host (revision 10, section 29) */
 
   /** The host runtime of a server-hosted room (`{ frame(m), facts() }`), or null. Seats already here are said as joins. */
-  setServerHost(h) {
+  setServerHost(h, { restored = false } = {}) {
     this.server = h;
     if (h?.rates) this.rates = h.rates;
     this.hostFailed = null;
@@ -175,7 +179,7 @@ export class NetRoom {
     for (const [seat, s] of this.seats) this.hosted.set(seat, s.occ ?? null);
     this.toServer({ t: 'policy', policy: this.policyOut() });
     if (this.rawVocab) this.toServer({ t: 'vocabulary', vocab: this.rawVocab });
-    for (const c of this.live()) if (c.seat !== null && !c.watch) this.joinServer(c);
+    for (const c of this.live()) if (c.seat !== null && !c.watch) this.joinServer(c, restored);
   }
 
   /** The rules could not start: the room refuses joins and says why. It never falls back to a browser by itself. */
@@ -195,6 +199,22 @@ export class NetRoom {
   joinServer(c, restored = false) {
     this.hosted.set(c.seat, this.seats.get(c.seat)?.occ ?? null);
     this.toServer({ t: 'join', peer: this.peer(c), ...(c.rest ? { rest: true } : {}), ...(c.hidden ? { hidden: true } : {}), ...(restored ? { restored: true } : {}) });
+  }
+
+  /**
+   * The host (the server's, or a browser host `c`) rested the room or woke it. Everybody hears it, and a page that
+   * arrives meanwhile is told in its welcome; browsers then ping the edge and send nothing until somebody plays. A
+   * browser host's snapshots stop while it rests, so its silence is not a stall.
+   */
+  rest(c, on) {
+    if (on === this.resting) return;
+    this.resting = on;
+    if (c && !on) c.lastSnapAt = this.now();
+    const line = JSON.stringify({ t: 'rest', on });
+    for (const o of this.live()) if (o !== c) this.sendText(o.conn, line);
+    // A browser host rests in the page, so the Table's own `onRest` (the server host) never runs. The guides still
+    // have to stop: their think alarm would wake the object, and the command it sent would wake the room.
+    try { this.onRest?.(on); } catch { /* a listener that throws does not keep the room awake */ }
   }
 
   /** A seat the host runtime knows that is no longer held (its hold ran out, the owner removed its player): its body's seat is given up. */
@@ -221,12 +241,7 @@ export class NetRoom {
       case 'roster': return this.hostRoster(null, m);
       case 'caps': return this.hostCaps(null, m);
       case 'decide': return this.onDecide(null, m, true);
-      case 'rest': {
-        // Nobody is playing (or somebody is again): every rules browser hears it, and pings the edge meanwhile.
-        const line = JSON.stringify({ t: 'rest', on: m.on === true });
-        for (const o of this.live()) if (o.rules) this.sendText(o.conn, line);
-        return;
-      }
+      case 'rest': return this.rest(null, m.on === true);
       case 'ev': {
         const kind = String(m.k ?? '').slice(0, 64);
         if (SPEECH.test(kind) && (this.policy.speech === 'off' || (this.policy.speech === 'lines' && /^chat/i.test(kind)))) { this.stats.speechDrops += 1; return; }
@@ -542,7 +557,7 @@ export class NetRoom {
   peer(c) {
     // Revision 9: which stay in the seat this is (`occ`), the peer's game revision and what its build can do.
     const occ = c.seat !== null ? this.seats.get(c.seat)?.occ : undefined;
-    return { id: c.id, seat: c.seat, name: c.name, colour: c.colour, device: c.device, want: c.want, role: this.roleOf(c), ...(c.watch ? { watch: true } : {}), ...(c.agent ? { agent: { ...c.agent } } : {}), ...(this.muteOf(c) ? { muted: true } : {}), ...(c.badge && !c.agent ? { badge: c.badge } : {}), ...(Number.isInteger(occ) ? { occ } : {}), ...(c.ver ? { ver: c.ver } : {}), ...(c.feat.length ? { feat: [...c.feat] } : {}) };
+    return { id: c.id, seat: c.seat, name: c.name, colour: c.colour, device: c.device, want: c.want, role: this.roleOf(c), ...(c.watch ? { watch: true } : {}), ...(c.agent ? { agent: { ...c.agent } } : {}), ...(this.muteOf(c) ? { muted: true } : {}), ...(c.badge && !c.agent ? { badge: c.badge } : {}), ...(Number.isInteger(occ) ? { occ } : {}), ...(c.ver ? { ver: c.ver } : {}), ...(c.feat.length ? { feat: [...c.feat] } : {}), ...(c.rest ? { rest: true } : {}) };
   }
   /** A hands-`host` agent (section 17): no game client of its own, so no snapshots, checkpoints or state. */
   lite(c) { return Boolean(c.agent && c.agent.hands === 'host'); }
@@ -817,10 +832,18 @@ export class NetRoom {
         c.hidden = m.hid === true;
         this.send(c, { t: 'pong', c: m.c, st: now });
         // The server's host rests a room whose pages are all in the background, and wakes it when one comes back.
-        if (this.server && c.seat !== null && c.hidden !== Boolean(wasHidden)) this.toServer({ t: 'hidden', seat: c.seat, on: c.hidden });
+        if (c.seat !== null && c.hidden !== Boolean(wasHidden)) {
+          if (this.server) this.toServer({ t: 'hidden', seat: c.seat, on: c.hidden });
+          else if (this.rules && this.host()?.rules && this.host() !== c) this.send(this.host(), { t: 'hidden', seat: c.seat, on: c.hidden });
+        }
         if(this.server && (!c.probe || now-c.probe.at>10000)){c.probe={n:crypto.randomUUID(),at:now};this.send(c,{t:'probe',n:c.probe.n});}
         // A host whose tab went to the background will stop ticking: hand the round on now.
         if (c.id === this.hostId && c.hidden && !wasHidden) this.yieldHost(c, 'host-hidden');
+        return;
+      }
+      case 'rest': {
+        // A browser host rested its room, or woke it (rules/host.ts, run in the page).
+        if (!this.server && this.rules && c.rules && c.id === this.hostId) this.rest(c, m.on === true);
         return;
       }
       case 'yield': {
@@ -928,7 +951,8 @@ export class NetRoom {
     if (live.length >= this.maxPlayers + this.maxScreens) return refuse('room-full', 'this room is full; try another');
     c.rules = m.rules === true;
     // A browser that understands a resting room (rules/host.ts): only a room of them rests.
-    c.rest = c.rules && m.rest === 1;
+    // A rules browser, or an agent, that says it understands resting. An older socket keeps its own pings, and the bill.
+    c.rest = m.rest === 1 && (c.rules || Boolean(c.agent));
     c.device = m.device === 'phone' || m.device === 'tv' ? m.device : 'desk';
     // A watcher is a screen that never takes a seat, whatever else its hello says. An agent always plays.
     c.watch = watching;
@@ -1020,7 +1044,7 @@ export class NetRoom {
     const behind = !lite && this.currentVer !== undefined && c.ver !== this.currentVer;
     if (behind) c.staleTold = true;
     this.send(c, {
-      t: 'welcome', v: NET_VERSION, rev: NET_REVISION, ...(c.conn.idlePing ? {idlePing:true} : {}), id: c.id, room: this.code, seat: c.seat, token: c.token, name: c.name, colour: c.colour,
+      t: 'welcome', v: NET_VERSION, rev: NET_REVISION, ...(c.conn.idlePing ? {idlePing:true} : {}), ...(this.resting ? { rest: true } : {}), id: c.id, room: this.code, seat: c.seat, token: c.token, name: c.name, colour: c.colour,
       ...(this.gameVer ? { ver: this.gameVer } : {}), ...(behind ? { stale: { ver: this.currentVer } } : {}), stall: this.stallMs,
       role, why, host: this.hostRef(), peers: this.peers(), ...(this.rules ? { held: this.heldPeers() } : {}), st: now, max: this.maxPlayers,
       round: this.lastRound, roster: this.lastRoster, snap: lite ? null : this.playerSnapshot(c, this.lastSnap, true), state: lite ? {} : this.stateObject(),
@@ -1368,6 +1392,8 @@ export class NetRoom {
     // What the room's game reads (the dial, agent bodies) is what its new host's build says.
     this.caps = new Set(next.caps);
     next.lastSnapAt = 0;
+    // A rest belongs to the host that took it: the new one runs.
+    if (this.resting) this.rest(null, false);
     this.stats.promotions += 1;
     this.stats.elections.push({ at: now, id: next.id, seat: next.seat, why });
     if (this.stats.elections.length > 32) this.stats.elections.shift();

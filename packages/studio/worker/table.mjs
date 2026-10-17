@@ -71,6 +71,8 @@ export class Table {
     this.gateHeld = new Map();
     this.gatePromised = new Map();
     this.roomAlarmAt = 0;
+    /** The alarm a house guide asked for. A rest replaces it with the room's own deadline, or the guide would wake the object every few seconds. */
+    this.guideAlarmAt = 0;
     this.durable = null;
     this.roomSave = null;
     this.endedRoom = null;
@@ -175,6 +177,8 @@ export class Table {
     this.room.onUnsaid = (ids) => this.keptQueue(() => forgetLines(this.env, this.game, this.code, ids));
     // A game's own decisions (section 20): the host's typed questions, for a game whose game.json opts in.
     this.room.decider = (state, questions, opts) => this.decide(state, questions, opts);
+    // Server and browser hosts both rest through the relay. Guides stop here, including when the host is a page.
+    this.room.onRest = (on) => { this.house?.rest(on); };
     // A server-hosted room that forgets everything (nobody came back, or the owner closed it) ends its host runtime.
     this.room.onForget = () => { if (this.hostRt) this.finishRoom('forgotten'); };
     if (this.isPersistent()) this.room.forgetMs = Infinity;
@@ -236,14 +240,21 @@ export class Table {
         // The seat map and the world came from one transaction. No unrelated net write can take a body from its token.
         room.seats.clear(); room.state.clear(); room.stateBytes = 0;
         room.restore({ ...saved.net, savedAt: Date.now(), durable: true });
-        this.pausedAt = persistent ? Date.now() : rested ? null : restoredEnd - ROOM_PAUSE_MS;
-        this.pauseFromRestore = saved.pauseFromRestore = !rested && (saved.pausedAt === null || saved.pauseFromRestore === true);
-        saved.pausedAt = this.pausedAt;
-        // A failed pause write must never be mistaken for an invalid host save.
-        try { this.durable.write(saved); } catch (error) { if (persistent) throw error; pauseWriteFailed = true; this.storageProblem(error); }
+        if (rested) {
+          // Rebuilt after hibernating on purpose: this save is exactly the world every browser holds. It comes back under
+          // the same epoch, so the input that wakes it applies, and nothing is written (the room wakes about once a minute).
+          this.pausedAt = null; this.pauseFromRestore = false;
+        } else {
+          this.pausedAt = persistent ? Date.now() : restoredEnd - ROOM_PAUSE_MS;
+          this.pauseFromRestore = saved.pauseFromRestore = saved.pausedAt === null || saved.pauseFromRestore === true;
+          saved.pausedAt = this.pausedAt;
+          // A failed pause write must never be mistaken for an invalid host save.
+          try { this.durable.write(saved); } catch (error) { if (persistent) throw error; pauseWriteFailed = true; this.storageProblem(error); }
+        }
       }
-      const epoch = saved ? Math.max(saved.host.core.epoch, boot.epoch) + 1 : undefined;
-      if (saved) this.durable.boot({ epoch, count: boot.count });
+      // A rested save is replayed under its own epoch; any other restore (a crash, a deploy) takes a new one.
+      const epoch = saved ? (rested ? saved.host.core.epoch : Math.max(saved.host.core.epoch, boot.epoch) + 1) : undefined;
+      if (saved && !rested) this.durable.boot({ epoch, count: boot.count });
       this.hostCreatedAt = Date.now();
       let ticks = 0;
       this.hostRt = startHost(this.game, {
@@ -262,12 +273,14 @@ export class Table {
         // A room nobody is playing rests with its people connected (rules/host.ts), and hibernates like a round break.
         // A deliberate rest is a clean stop: the restore-loop count starts again, so waking it is never a crash.
         ...(this.ctx.acceptWebSocket && this.ctx.storage.sql ? { onRest: on => {
+          // Guides stop with the room: a think alarm would wake the object, and the command it sent would wake the sim.
+          this.house?.rest(on);
           if (!on) { this.armRoom(Date.now() + ROOM_ALARM_MS); this.start(); return; }
           try { this.durable?.boot({ epoch: this.hostRt?.epoch ?? epoch, count: 0 }); this.pendingBoot = null; } catch (error) { this.storageProblem(error); }
           room.tellWatchers(); this.report(); this.ctx.waitUntil(this.sleepRoom());
         } } : {}),
         onTick: () => {
-          if (!saved) return;
+          if (!saved || rested) return;
           ticks += 1;
           if (ticks === 1) this.pendingBoot = { epoch, count: saved.buildHash !== build.build ? 0 : boot.count + 1 };
           if (ticks === 10 * build.settings.tickHz) this.pendingBoot = { epoch, count: 0 };
@@ -805,7 +818,10 @@ export class Table {
       this.house = new HouseAgents({
         room, env: this.env,
         // The room's own alarm (a paused server-hosted room ends on it) is never pushed back by a guide's.
-        setAlarm: (at) => { this.ctx.storage.setAlarm(this.roomAlarmAt > Date.now() ? Math.min(at, this.roomAlarmAt) : at).catch(error => this.say({ev:'background-failed',error:errorLine(error)})); },
+        setAlarm: (at) => {
+          this.guideAlarmAt = at;
+          this.ctx.storage.setAlarm(this.roomAlarmAt > Date.now() ? Math.min(at, this.roomAlarmAt) : at).catch(error => this.say({ev:'background-failed',error:errorLine(error)}));
+        },
         budget: { left: (kind) => this.brainCap[kind] - this.brainUsed[kind], spend: (c) => this.brainSpend(c) },
         log: (line) => { try { console.log(JSON.stringify(line)); } catch { /* no console */ } },
       });
@@ -1290,7 +1306,8 @@ export class Table {
     // Older ports publish snapshots without a round protocol. Once play starts,
     // treat them as active until empty: persisting every frame would turn their
     // ordinary network traffic into a stream of SQLite writes.
-    const active = this.hostRt ? this.hostRt.running : this.room?.lastRound?.phase === 'live' || (!this.room?.lastRound && this.room?.lastSnap != null && this.room?.clients.size > 0);
+    // A browser host that rested its room (rules/host.ts in the page) sends nothing until somebody plays: it sleeps.
+    const active = this.hostRt ? this.hostRt.running : !this.room?.resting && (this.room?.lastRound?.phase === 'live' || (!this.room?.lastRound && this.room?.lastSnap != null && this.room?.clients.size > 0));
     return this.room && this.hibernationReady && this.sessionStore && this.ctx.storage.sql && this.ctx.acceptWebSocket && (!this.relayed || this.relays.size > 0) && (!this.hostRt || this.hostRt.roundIdleUntil !== null || !this.hostRt.running) && !active && !this.restoringSockets;
   }
   async sleepRoom() {
@@ -1319,7 +1336,13 @@ export class Table {
     const due=[...(this.hostRt?.roundIdleUntil != null ? [this.hostRt.roundIdleUntil] : []),now+(room.officeDirty?1000:60000),...[...room.clients.values()].map(c=>{const ping=c.conn.lastPing?.()??0;return c.helloed?Math.max(c.lastSeen,ping)+(ping||c.rest&&c.conn.idlePing?Math.max(room.idleMs,60000):room.idleMs):c.joinedAt+5000;})];
     for(const control of [room.vote?.open?room.vote:null,room.regate,room.agentsOut])if(control?.until)due.push(control.until);
     const at=Math.max(now+1,Math.min(...due)),alarm=await this.ctx.storage.getAlarm();
-    if(alarm==null||alarm>at)await this.ctx.storage.setAlarm(at);
+    // A guide's think is sooner than the liveness sweep, and sleep only moves an alarm earlier. While the host rests,
+    // that think must not survive: it would wake the object every few seconds and its command would start the room.
+    // A spectator's own shorter deadline stays, because `at` is already the soonest real one.
+    const roomResting=this.hostRt?.resting===true||this.room?.resting===true;
+    const guideSoon=roomResting && this.guideAlarmAt && alarm!=null && alarm<=this.guideAlarmAt+1000;
+    if(alarm==null||alarm>at||guideSoon)await this.ctx.storage.setAlarm(at);
+    if(guideSoon)this.guideAlarmAt=0;
   }
   start() {
     if(this.restoringSockets)return;

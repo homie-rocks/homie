@@ -9,7 +9,8 @@
   "entry": "src/view.ts",
   "example": true,
   "room": {
-    "host": "server"
+    "host": "server",
+    "rest": "idle"
   },
   "landing": {
     "pitch": "Run for the coins. First one there takes it.",

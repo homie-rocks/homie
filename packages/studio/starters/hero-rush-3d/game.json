@@ -21,6 +21,7 @@
     }
   },
   "room": {
-    "host": "server"
+    "host": "server",
+    "rest": "idle"
   }
 }

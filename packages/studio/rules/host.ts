@@ -31,12 +31,18 @@ import { stageTimings } from './timing.mjs';
  * timer would keep the `Table` in memory and billed), the clock stops, and a person who returns finds the tick it
  * paused on. Watchers and AI seats never keep the world ticking.
  *
- * A ROOM NOBODY IS PLAYING RESTS. When every person here has stopped playing (nothing held, pressed or commanded for
- * the game's `room.restSeconds`, 60 by default, or every page in the background for ten seconds), the clock stops as
- * it does for an empty room, with everybody still connected: no timer is pending, so the `Table` hibernates and its
- * time costs nothing. The first input that holds or presses something, a command, a page coming to the front or a new arrival
- * starts it again at the tick it rested on. Only browsers that said they understand resting (`rest` in their hello)
- * let a room rest, and only when the caller asks for it (`onRest`). A lasting world never rests.
+ * A ROOM NOBODY IS PLAYING RESTS. When every person here has stopped playing (nothing held, pressed or sent for the
+ * game's `room.restSeconds`, 60 by default, or every page in the background for ten seconds) and, unless the game
+ * asked for an away-from-keyboard pause, no AI has sent a command for as long, the clock stops as it does for an
+ * empty room, with everybody still connected: no timer is pending, so the `Table` hibernates. It is not charged for
+ * duration while it sleeps; a liveness alarm still wakes it about once a minute (one request, and the CPU of that
+ * short wake). A deliberate rest is restored under the same epoch and does not rewrite its save. With `room.rest:
+ * 'quiet'` (the default) the world must also have nothing of its own to do (no round clock, nothing waiting on the
+ * queue, nothing moving). `'idle'` rests regardless and pauses round clocks, timers, bots and AI with it.
+ * `'never'` never rests. The first input that holds or presses something, a command, an AI's command, a page coming
+ * to the front or a new arrival starts it again at the tick it rested on.
+ * Only browsers that said they understand resting (`rest` in their hello) let a room rest, and only when the caller
+ * asks for it (`onRest`: the server's Table, or an online browser host). A lasting world never rests.
  *
  * THE CHAIN CANNOT BREAK. One rule holds whenever this module hands control back to its caller: A ROOM THAT IS RUNNING
  * HAS EXACTLY ONE TIMER PENDING, AND A ROOM THAT IS PAUSED OR ENDED HAS NONE. A running room with no timer would stand
@@ -423,7 +429,10 @@ export function createHost(o: HostOptions): Host {
    * rests now, when each person last played, since when each page has been in the background, which browsers can rest,
    * and when an AI with its own hands last played. A restored room that was resting rests on.
    */
-  const restMs = o.onRest && !persistent ? Math.max(0, c.settings.restSeconds ?? REST_SECONDS) * 1000 : 0;
+  const restMode = c.settings.rest ?? 'quiet';
+  const restMs = o.onRest && !persistent && restMode !== 'never' ? Math.max(0, c.settings.restSeconds ?? REST_SECONDS) * 1000 : 0;
+  /** The world as the last rest check saw it (a quiet room must also be a still one). */
+  let stillAs = '';
   let resting = restMs > 0 && saved?.rest?.on === true && roundIdleUntil === null;
   const playedAt = new Map<number, number>(restMs ? saved?.rest?.at ?? [] : []);
   const hiddenSince = new Map<number, number>();
@@ -524,9 +533,17 @@ export function createHost(o: HostOptions): Host {
     if (driver === 'person') playedAt.set(seat, now); else handsAt = now;
     if (resting) wakeUp('played');
   }
-  /** Nobody is playing: every person here has a resting browser and has not played for `restMs` (or hid their page). */
+  /**
+   * Nobody is playing: every person here has a resting browser and has not played for `restMs` (or hid their page),
+   * and, unless this is an away-from-keyboard pause, no AI has played for as long. A `quiet` room (the default)
+   * must also have nothing of its own to do: no running round clock, no event, timer, spawn or ask waiting, and a
+   * world that stood still since the last check (bots, physics and anything a `tick` handler moves keep it running).
+   * An `idle` room rests regardless, pausing all of that, guides included, until somebody plays.
+   */
   function quiet(now: number): boolean {
-    if (now - handsAt < restMs) return false;
+    // A command already sent keeps a quiet room awake. An idle room pauses AI with the people, so that command does
+    // not keep the pause from starting. A command that arrives while the room rests still wakes it (`played`).
+    if (restMode !== 'idle' && now - handsAt < restMs) return false;
     let anyone = false;
     for (const [seat, person] of present) {
       if (!person) continue;
@@ -536,7 +553,11 @@ export function createHost(o: HostOptions): Host {
       if (hid !== undefined && now - hid >= Math.min(restMs, REST_HIDDEN_MS)) continue;
       if (now - (playedAt.get(seat) ?? now) < restMs) return false;
     }
-    return anyone;
+    if (!anyone || restMode === 'idle') { stillAs = ''; return anyone; }
+    if (core.waiting() > 0) { stillAs = ''; return false; }
+    const was = stillAs;
+    stillAs = JSON.stringify([core.snapshot(), core.shared()]);
+    return was === stillAs;
   }
   /** The clock stops with everybody still here. The room is saved first, so the object may be put away at once. */
   function rest(): void {
@@ -556,6 +577,9 @@ export function createHost(o: HostOptions): Host {
       for (const q of queues.values()) q.lastFrameTick = core.tick;
       o.send({ t: 'rest', on: false });
       roundRebaseAt = -Infinity; publishRebase(now);
+      // The save on disk says it rests, and a rested save comes back under its own epoch. Once the room moves on it
+      // must not: a restart now restores this save, under a new epoch, as any crash does.
+      checkpoint(true);
       log({ ev: 'host-wake', game: o.game, tick: core.tick, why });
       o.onRest?.(false);
     } catch (error) { fault('wake', error); } finally { keepTime(); }
@@ -601,7 +625,9 @@ export function createHost(o: HostOptions): Host {
       if (seq && r !== body.r && !action) continue;
       if (seq ? q.received?.includes(seq) : j <= q.newest) continue;
       // Too early: more than a second ahead. This entry and the rest of the frame are dropped.
-      if (j > K + tickHz) { stats.dropped += 1; break; }
+      // An entry more than a second ahead is still reported, as the furthest lead there is: a browser whose clock ran on
+      // (a rest, a stalled host clock) sets its clock again instead of being dropped without a word.
+      if (j > K + tickHz) { stats.dropped += 1; q.lead = Math.min(q.lead, 126); break; }
       if(j >= q.newest && lead < q.lead)q.lead=lead;
       q.newest = Math.max(q.newest,j);
       if(seq){q.received??=[];q.received.push(seq);if(q.received.length>256)q.received.shift();}
@@ -684,7 +710,8 @@ export function createHost(o: HostOptions): Host {
         rosterText = '';
         // A socket the room restored after hibernating is the same person, still resting; anybody else has just come.
         const now = o.clock.now();
-        if (m.rest === true) restful.add(seat); else restful.delete(seat);
+        // The relay says whether the browser understands resting: on the server's join, or on the peer a browser host hears.
+        if (m.rest === true || (p as { rest?: unknown }).rest === true) restful.add(seat); else restful.delete(seat);
         if (m.hidden === true) { if (!hiddenSince.has(seat)) hiddenSince.set(seat, now); } else hiddenSince.delete(seat);
         if (m.restored !== true || !playedAt.has(seat)) playedAt.set(seat, now);
         if (people() > 0) { if (resting) { if (m.restored !== true) wakeUp('join'); } else if (!running && !paused) start(); else if (paused) resume(); }
@@ -700,7 +727,7 @@ export function createHost(o: HostOptions): Host {
           held.character = core.character(held.seat) ?? held.character;
           held.returning = true;
           core.seatLeave(held.seat);
-          tick(o.clock.now());
+          if (!resting) tick(o.clock.now());
         } else core.seatAway(m.seat as number, true);
         playedAt.delete(m.seat as number); hiddenSince.delete(m.seat as number); restful.delete(m.seat as number);
         if ((running || resting || roundIdleUntil !== null) && people() === 0) pause();
@@ -716,8 +743,9 @@ export function createHost(o: HostOptions): Host {
         const held = [...characters.values()].find(c => c.seat === m.seat && !c.returning);
         if (held) { held.character = core.character(held.seat) ?? held.character; held.returning = true; }
         core.seatLeave(m.seat as number);
-        if (held) tick(o.clock.now());
+        if (held && !resting) tick(o.clock.now());
         rosterText = '';
+        if (resting && people() === 0) pause();
         return;
       }
       case 'hidden': {
@@ -732,7 +760,9 @@ export function createHost(o: HostOptions): Host {
       case 'ev': {
         // What a player sends is read as what it is: a kind or a command's name that is not a text is no kind and no command.
         const kind = typeof m.k === 'string' ? m.k : '';
-        if (restMs && Number.isInteger(m.from)) { const b = core.bodyOf(m.from as number); if (b && (present.get(m.from as number) || hasHands(m.from as number, b.driver))) played(m.from as number, present.get(m.from as number) ? 'person' : b.driver, o.clock.now()); }
+        // Anything a seated person sends (a command, a pulse, a line of chat) is somebody playing, and so is an AI's
+        // command, whichever hands it plays with: a resting room wakes for a guide as for a person.
+        if (restMs && Number.isInteger(m.from)) { const b = core.bodyOf(m.from as number); if (b && (present.get(m.from as number) || hasHands(m.from as number, b.driver) || kind === 'agent:do' || /^ask:/.test(kind))) played(m.from as number, present.get(m.from as number) ? 'person' : b.driver, o.clock.now()); }
         if (!Number.isInteger(m.from)) {
           if (m.from === null && SPEECH.test(kind)) o.send({ t: 'ev', from: null, k: kind, d: cleanSpeech(m.d) });
           return;
@@ -1061,7 +1091,7 @@ export function createHost(o: HostOptions): Host {
   function pause(): void {
     if (!running) {
       // Everybody left a resting room: it is an empty room now, paused like one.
-      if (resting) { resting = false; paused = true; log({ ev: 'host-pause', game: o.game, tick: core.tick }); try { checkpoint(true); o.onPause?.(); } catch (error) { fault('onPause', error); } return; }
+      if (resting) { resting = false; paused = true; log({ ev: 'host-pause', game: o.game, tick: core.tick }); try { o.send({ t: 'rest', on: false }); checkpoint(true); o.onPause?.(); } catch (error) { fault('onPause', error); } return; }
       if (roundIdleUntil !== null && !paused) { paused = true; checkpoint(true); o.onPause?.(); }
       return;
     }
@@ -1167,8 +1197,10 @@ export function createHost(o: HostOptions): Host {
       if (!held || held.returning || ended) return;
       held.character = core.character(held.seat) ?? held.character; held.returning = true;
       present.delete(held.seat); queues.delete(held.seat); names.delete(held.seat);
-      if (held.seat >= 0) core.seatLeave(held.seat); tick(o.clock.now());
-      if ((running || roundIdleUntil !== null) && people() === 0) pause();
+      playedAt.delete(held.seat); hiddenSince.delete(held.seat); restful.delete(held.seat);
+      if (held.seat >= 0) core.seatLeave(held.seat);
+      if (!resting) tick(o.clock.now());
+      if ((running || resting || roundIdleUntil !== null) && people() === 0) pause();
     },
     characterReturned(account, lease) { if (characters.get(account)?.returning && characters.get(account)?.lease === lease) characters.delete(account); },
     get viewSettings() { return c.settings.view; },

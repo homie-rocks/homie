@@ -363,6 +363,7 @@ export class HouseAgents {
     this.agents = [];
     this.decisions = [];
     this.alarmAt = null;
+    this.resting = false;
     this.lastAlarmAt = -Infinity;
     this.backoffUntil = 0;
     /** pass id → until: a guide the owner kicked stays out until its hold ends. */
@@ -423,7 +424,7 @@ export class HouseAgents {
     };
     this.agents.push(a);
     a.h = this.room.attach(a.conn);
-    a.h.onMessage(JSON.stringify({ t: 'hello', v: 1, rev: 7, device: 'desk', want: 'play', canHost: false, agent: { hands: 'host', role: 'guide' } }));
+    a.h.onMessage(JSON.stringify({ t: 'hello', v: 1, rev: 7, device: 'desk', want: 'play', canHost: false, rest: 1, agent: { hands: 'host', role: 'guide' } }));
     return !a.closed;
   }
 
@@ -449,7 +450,8 @@ export class HouseAgents {
     try { m = JSON.parse(text); } catch { return; }
     const now = this.now();
     switch (m.t) {
-      case 'welcome': a.seat = m.seat; if (typeof m.name === 'string') a.name = m.name; return;
+      case 'welcome': a.seat = m.seat; if (typeof m.name === 'string') a.name = m.name; if (m.rest === true) this.rest(true); return;
+      case 'rest': this.rest(m.on === true); return;
       case 'error':
         if (m.code === 'kicked') this.held.set(a.pass, Number(m.until) || now + 10 * 60_000);
         else if (['agents-off', 'agents-unsupported', 'agent-pass', 'room-closed', 'room-full', 'too-many'].includes(m.code)) this.backoffUntil = now + 60_000;
@@ -524,8 +526,19 @@ export class HouseAgents {
     return Math.max(a.lastCallAt + BRAIN_CADENCE.gapMs, cap);
   }
 
+  /**
+   * The room rested, or woke. While it rests, no guide thinks and none keeps an alarm: a think would be a command,
+   * and a command would wake the room. The next decision waits until somebody plays.
+   */
+  rest(on) {
+    this.resting = on === true;
+    if (this.resting) { this.alarmAt = null; return; }
+    this.schedule();
+  }
+
   /** One alarm for the room: the earliest due guide, never sooner than 3 s after the last alarm. */
   schedule() {
+    if (this.resting) return null;
     const now = this.now();
     let next = Infinity;
     for (const a of this.live()) if (a.seat !== null && a.dueAt !== Infinity && !a.inFlight) next = Math.min(next, Math.max(a.dueAt, this.readyAt(a, now)));
@@ -539,6 +552,7 @@ export class HouseAgents {
 
   /** The Durable Object's alarm: every guide due by now (or within 1.5 s) decides, then the next alarm is set. */
   async onAlarm() {
+    if (this.resting) { this.alarmAt = null; return 0; }
     const now = this.now();
     this.lastAlarmAt = now;
     this.alarmAt = null;
@@ -568,7 +582,7 @@ export class HouseAgents {
     const goalNow = a.view?.goal && typeof a.view.goal === 'object' ? a.view.goal : null;
     if (!asks.length && a.carry && now < a.carry.until && (!goalNow || (goalNow.goal === a.carry.goal && goalNow.state === 'active'))) {
       a.inFlight = false;
-      if (this.near(a) && !a.closed) this.due(a, now + BRAIN_CADENCE.everyMs, 'every 12 s');
+      if (!this.resting && this.near(a) && !a.closed) this.due(a, now + BRAIN_CADENCE.everyMs, 'every 12 s');
       return null;
     }
     if (a.carry && (now >= a.carry.until || (goalNow && (goalNow.goal !== a.carry.goal || goalNow.state !== 'active')))) a.carry = null;
@@ -584,6 +598,8 @@ export class HouseAgents {
     const newHere = [...a.seen].filter(([seat, at]) => now - at < 20_000 && players.includes(seat)).map(([seat]) => seat);
     const ctx = { view: a.view, me: { seat: a.seat }, goal: a.view?.goal ?? null, asks, party: a.party, speech: this.room.policy.speech, kids: this.room.policy.kids, quiet, players, avoid, said, newHere };
     const t = await think(vocab, { mode, brain: p, ctx, ms: BRAIN_CADENCE.timeoutMs, now: this.now });
+    // The room rested while the brain was thinking: drop the decision. Sending it would wake the room.
+    if (this.resting || a.closed) { a.inFlight = false; return null; }
     const { decision, provider, why, ms, cost } = t;
     if (t.engine) {
       this.calls += 1;
@@ -606,7 +622,7 @@ export class HouseAgents {
       ...(t.own && /\+floor$/.test(provider) ? { own: { goal: t.own.goal, args: t.own.args } } : {}), ...(t.p ? { p: t.p } : {}), ...(t.model ? { model: t.model } : {}),
     }].slice(-LOG_MAX);
     a.inFlight = false;
-    if (this.near(a) && !a.closed) this.due(a, now + BRAIN_CADENCE.everyMs, 'every 12 s');
+    if (!this.resting && this.near(a) && !a.closed) this.due(a, now + BRAIN_CADENCE.everyMs, 'every 12 s');
     return decision;
   }
 

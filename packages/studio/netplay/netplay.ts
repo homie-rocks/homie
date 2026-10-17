@@ -590,7 +590,7 @@ export interface RulesHost {
   readonly tick: number;
   facts(): Record<string, unknown>;
 }
-export type RulesHostFactory = (o: { now(): number; send(m: Record<string, unknown>): void; restore: unknown; peers?: Peer[]; held?: Peer[]; policy?: Policy; onEnd(why: string): void }) => RulesHost;
+export type RulesHostFactory = (o: { now(): number; send(m: Record<string, unknown>): void; restore: unknown; peers?: Peer[]; held?: Peer[]; policy?: Policy; onEnd(why: string): void; onRest?(on: boolean): void }) => RulesHost;
 
 export interface RulesOutputSender {
   push(frame: Record<string, unknown>): void;
@@ -1631,7 +1631,9 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         rulesPace = null;
         if (!opts.rulesLimits) throw new Error('Rules output limits are missing');
         rulesSender = opts.rulesLimits.output({ rates: opts.rulesLimits.rates, send: raw, now: () => performance.now() });
-        const options = { now: () => performance.now(), restore, peers: rulesPeers(), held: offline ? [] : heldPeers, policy: offline ? DEFAULT_POLICY : policy, send: rulesOut, onEnd: (why: string) => endRules(why) };
+        // A browser host rests its room as the server does (rules/host.ts): its own page then pings the edge and holds
+        // its clock like everybody else's, and its relay can sleep. Never offline: nobody pays for a page alone.
+        const options = { now: () => performance.now(), restore, peers: rulesPeers(), held: offline ? [] : heldPeers, policy: offline ? DEFAULT_POLICY : policy, send: rulesOut, onEnd: (why: string) => endRules(why), ...(offline ? {} : { onRest: (on: boolean) => { if (on) sendCheckpoint(); resting = on; } }) };
         try { rulesHost = make(options); }
         catch (error) {
           if (!restore) throw error;
@@ -2371,6 +2373,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       case 'welcome': return onWelcome(m);
       case 'snap': return onSnap(m, text.length);
       case 'rest': resting = rulesGame && m.on === true; return;
+      // A browser host hears which pages went to the background, as the server's host does.
+      case 'hidden': rulesFrame(m); return;
       case 'free': if (![...peers.values()].some((p) => p.seat === m.seat)) rulesFrame(m); return;
       case 'in': if (rulesFrame(m)) return; return onInput(m);
       case 'ev': {
@@ -2593,7 +2597,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   }
 
   function onWelcome(m: Record<string, unknown>): void {
-    idlePing = m.idlePing === true; lastClockPing = -Infinity; resting = false;
+    // A room that rests when this page arrives (a watcher, a page back after a rest) says so in its welcome.
+    idlePing = m.idlePing === true; lastClockPing = -Infinity; resting = rulesGame && m.rest === true;
     post?.({ what: 'build', ver: version });
     clearTimeout(connectTimer);
     const next = m['role'] as Role;
@@ -2920,7 +2925,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   }
 
   function sendCheckpoint(): void {
-    if (role !== 'host' || (!opts.checkpoint && !rulesHost) || offline || !connected) return;
+    // A resting room's world does not change: its last checkpoint is still the room.
+    if (role !== 'host' || (!opts.checkpoint && !rulesHost) || offline || !connected || resting) return;
     let d: C;
     try { d = (rulesHost ? rulesHost.save() : opts.checkpoint!()) as C; } catch (err) { console.warn('[netplay] checkpoint()', err); return; }
     const c: Checkpoint<C> = { k: rulesHost?.tick ?? tick, st: now(), d, c: ctlWire() };

@@ -20,13 +20,15 @@ export const EV_RATES = Object.freeze({ host: 30, replica: 10, screen: 2 });
 /** The keyed state channel: at most this many keys and bytes per room. */
 export const STATE_CAPS = Object.freeze({ keys: 64, bytes: 65536 });
 /** Runtime output only. Player allowances above remain unchanged. */
-export const RULES_FRAMES = Object.freeze(['snap', 'ckpt', 'state', 'ev', 'round', 'roster', 'decide', 'caps', 'rules-end']);
+export const RULES_FRAMES = Object.freeze(['snap', 'ckpt', 'state', 'ev', 'round', 'roster', 'decide', 'caps', 'rules-end', 'rest']);
 export const rulesRates = (tickHz = 20, seats = 8) => ({
   // A snapshot a tick, as the server sends, and a quarter over for the ticks a late timer runs together.
   snap: Math.max(30, Math.ceil(tickHz * 1.25)), ckpt: 4, state: tickHz + 64,
   ev: Math.ceil((tickHz + seats * EV_RATES.replica + 32) / 0.8), round: 8,
   // A decision a tick is what one declared ask can make (the next waits for the answer), as on a server host.
   roster: seats * 2 + 8, decide: Math.ceil((tickHz + seats * 5 + 8) / 0.8), caps: 4, 'rules-end': 4,
+  // A browser host rests its room and wakes it: at most a few times a second.
+  rest: 4,
 });
 export const rulesCaps = seats => Object.fromEntries(RULES_FRAMES.map(t => [t, capOf(t, seats)]));
 /** Two seconds of headroom absorb timer stalls and transport batching. */

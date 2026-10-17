@@ -5,11 +5,19 @@ Before this change every server-hosted room ran its tick (a timer chain at the g
 pending timer cannot hibernate, so the room was charged for every second a page stayed open. Only the short break
 between rounds slept.
 
-Now a room whose people have all stopped playing rests: after `room.restSeconds` (60) with nothing held, pressed or
-commanded, or ten seconds with every page in the background, the host saves the room, tells the browsers
-(`{ t: 'rest', on: true }`) and clears every timer. The browsers ping the edge (`homie-ping`, answered without waking
-the object) and send nothing else until a control changes. The object hibernates. The first input, command, page
-brought back or new arrival wakes it on the tick it stopped at; a phone that reconnects with its token keeps its seat.
+A room whose people have all stopped playing now rests: after `room.restSeconds` (60) with nothing held, pressed or
+sent, or ten seconds with every page in the background, the host saves the room, tells the browsers
+(`{ t: 'rest', on: true }`) and clears every timer. The browsers stop their input clock, ping the edge (`homie-ping`,
+answered without waking the object) and send nothing else until a control is held or pressed. The object hibernates.
+It is not charged for duration while it sleeps. A liveness alarm still wakes it about once a minute (one request, and
+the CPU of that short wake). A deliberate rest is restored under the same epoch and does not rewrite its save. The
+first input, command, AI command, page brought back or new arrival wakes it on the tick it stopped at; a phone that
+reconnects with its token keeps its seat.
+
+With `room.rest: "quiet"` (the default) the world must also have nothing of its own to do. Gem Rush now sets
+`"idle"`, which rests anyway and pauses its round clocks and bots. The figures below were taken on the first cut,
+before that, and before the browser held its input clock across a rest. They are the scripted-phone run, not a later
+one.
 
 ## The rooms
 
@@ -33,8 +41,14 @@ afterwards; the script lookup answers 404 and no Durable Object namespace of the
 | 1 phone playing | 752 s (89%) | 752 s (89%) | 96.2 | 96.2 | 5,546 | 7,739 |
 
 The remaining 11% before is the round breaks, which already slept. A resting room still wakes for a moment about
-once a minute (its liveness sweep, an alarm), which is the 0.1 to 0.5% left. The playing room is unchanged: it ticks
-the whole time. Every woken room gave the returning phone its own seat and snapshots resumed at the tick rate.
+once a minute (its liveness sweep, an alarm), which is the 0.1 to 0.5% left. On this first cut each of those wakes
+also rewrote the save and bumped the epoch. A deliberate rest now comes back under the same epoch and does not
+rewrite the save. The playing room never rested: its active time is unchanged. Its CPU sample rose from 5,546 ms to
+7,739 ms in this one 14-minute run, and this run does not explain that rise. Every woken room gave the returning
+phone its own seat and snapshots resumed at the tick rate. The scripted phones re-anchored their own clock, so these
+figures do not show that a returning player's stick moves the body. That is
+`packages/studio/test/idle-rooms-wake.test.mjs` and `packages/studio/test/critic-1-wake-input.test.mjs`, which drive
+the real view. `phones.mjs` now drives that view too. It has not been re-measured here.
 
 The minute in which the phones joined is not in the table: a room plays on for `restSeconds` before it rests, by
 design, and Cloudflare reports that first minute under the joining minute. A 3-minute check run showed it at about

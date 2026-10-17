@@ -294,6 +294,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let controlChanges: number[][] = [];
   let sentHistory: { t: number; row: number[] }[] = [];
   let hiddenSent = false;
+  /** The room rests (net.resting): when this page last sent the change that wakes it, and whether its clock is held. */
+  let restWokeAt = -Infinity;
+  let restHeld = false;
   const history = new Map<number, Mine>();
   let pending: { seq?: number; applied?: number; t: number; input: Readonly<Record<string, unknown>>; pulses?: Record<string, number>; pulseTicks?: Record<string, number> }[] = [];
   /** Valued pulses sent, numbered: the server's control row names the newest it has acted on (0.46.3). */
@@ -423,7 +426,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     leadAfter = clock() + 2 * rtt + period;
     base = { tick: continuousTick ?? k + Math.min(tickHz, Math.ceil(rtt / period + target) + sendEvery - 1), at: clock() };
     stepped = Math.max(k, Math.floor(base.tick) - (continuousTick === null ? 1 : 0));
-    entries = []; sentHistory = []; controlChanges = []; pending = []; history.clear(); replayHeld = {}; serverHeld = {}; held = {}; lastSent = ''; leads.length = 0; leadTarget = .5; leadMedian = 0; pressed = new Map(); pulseNumber = new Map(); heldTrack.clear(); if (reason !== 'lead') dropPredictions();
+    entries = []; sentHistory = []; controlChanges = []; pending = []; history.clear(); replayHeld = {}; serverHeld = {}; held = {}; lastSent = ''; leads.length = 0; leadTarget = .5; leadMedian = 0; pressed = new Map(); pulseNumber = new Map(); heldTrack.clear(); if (reason !== 'lead' && reason !== 'rest') dropPredictions();
     speed = 1; phases.length = 0; phases.push({ ...base, rate: 1 }); catchTick = null; offsets = []; headingBlend = null; correction.rebases += 1;
     const u = mine && latest?.ents.get(mine.id); if (u) adopt(u);
     if (mine) {
@@ -712,7 +715,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const hidden = typeof document !== 'undefined' && document.hidden === true;
     // Effects play for everyone who draws the room: a watcher has no body and still sees them.
     fire();
-    if (!mine || !base || net.seat === null || (!net.connected && !net.rulesHosting)) return;
+    if (!mine || net.seat === null || (!net.connected && !net.rulesHosting)) return;
+    if (!hidden && net.resting()) { restPump(now); return; }
+    if (!base) return;
     if (hidden) {
       // A hidden tab's timers are too slow to keep input alive, and a body must not run on without its player:
       // one neutral entry at once (every field at its init, no press), then no more steps until the tab shows again.
@@ -736,6 +741,28 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       presentedEntity = null;
       if (stepped % sendEvery === sendEvery - 1) flush(now, stepped);
     }
+  }
+
+  /**
+   * A resting room (nothing is simulated until somebody plays): this page's input clock stops with it, so what it
+   * sends next is stamped on the tick the room rested on, never seconds ahead of it. Nothing is stepped or sent until
+   * a control is held or pressed; then that input goes at once, as one entry on the next tick (again a second later
+   * if the room has not woken yet), and it wakes the room. The first snapshot after the room wakes sets the clock
+   * again (applySnapshot: no base), keeping what is predicted.
+   */
+  function restPump(now: number): void {
+    const kind = myKind();
+    base = null; restHeld = true;
+    if (!kind || now - restWokeAt < 1000) return;
+    const engaged = pressed.size > 0 || pulseQueue.length > 0 || kind.input.some(([name, fd]) => fd.t !== 'press' && fd.t !== 'pulse' && Number(coerce(fd, fd.t === 'held' ? heldNumber(sample[name], fd.init) : sample[name] ?? fd.init, dims)) !== Number(coerce(fd, fd.init, dims)));
+    if (!engaged) return;
+    restWokeAt = now;
+    const t = stepped + 1;
+    const values = kind.input.map(([name, fd]) => fd.t === 'press' ? (pressed.get(name) ? 1 : 0) : fd.t === 'pulse' ? 0 : fd.t === 'held' ? Number(coerce(fd, heldNumber(sample[name], fd.init), dims)) : Number(coerce(fd, sample[name] ?? fd.init, dims)));
+    pressed = new Map();
+    const claim = kind.owner ? [mine!.pos.x, mine!.pos.y, mine!.pos.z, mine!.vel.x, mine!.vel.y, mine!.vel.z, mine!.heading.x, mine!.heading.y, mine!.heading.z] : [];
+    entries = [{ t, row: [...values, ...claim, -471, ++inputSequence, 0] }]; lastSent = JSON.stringify([values, claim]);
+    lastSendAt = 0; flush(now, t);
   }
 
   function onSnapshot(s: Snapshot<unknown>): void {
@@ -782,7 +809,8 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         returningUntil = 0;
       }
       if (placed || !base) {
-        adopt(me); rebase(f.k, changedEpoch ? 'epoch' : 'placement');
+        const rested = restHeld && !placed; restHeld = false;
+        adopt(me); rebase(f.k, changedEpoch ? 'epoch' : rested ? 'rest' : 'placement');
         if (placed) emit('placed', entityOf(me, true));
       } else if (kindOf.get(me.kind)?.owner) {
         mine!.motion = motionOf(me.kind, me.motion);
@@ -888,7 +916,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         }
       }
       if (!latencyCalibrated && authorityRtt() > calibratedRtt + period && !Object.values(sample).some(Boolean) && !pending.some(e=>Object.values(e.input).some(Boolean))) { rebase(f.k, 'lead'); latencyCalibrated = true; }
-      if (row && row[3] !== -128 && base && clock() >= leadAfter) {
+      // The furthest lead there is: this clock is more than a second ahead of the room (its input is being dropped).
+      if (row && row[3] >= 126 && base && clock() >= leadAfter) rebase(f.k, 'lead');
+      else if (row && row[3] !== -128 && base && clock() >= leadAfter) {
         const now = clock(), rtt = authorityRtt();
         // A reported lead describes an input sent roughly one authority round trip ago. Remove that
         // clock's phase before measuring jitter; project the control median onto today's phase. Otherwise

@@ -21,12 +21,18 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ### Changed
 
-- Idle rooms sleep, so a studio pays only for rooms in use. A server-hosted room whose people have all stopped
-  playing (nothing held, pressed or commanded for a minute, or every page in the background for ten seconds) now
-  rests: its clock stops with everybody still connected and the room hibernates, so Cloudflare charges it no duration.
-  The first touch, command, returning page or new arrival starts it again on the tick it stopped on, and a phone
-  that reconnects keeps its seat. Set `room.restSeconds` in game.json to change the minute, or 0 to never rest
-  while somebody is there. Rebuild your games to get it: rooms rest only when every browser in them is on this
+- Idle rooms sleep. A room whose people have all stopped playing now rests: nothing held, pressed or sent for a
+  minute (`room.restSeconds`), or every page in the background for ten seconds. Its clock stops with everybody still
+  connected and the room hibernates, so it is not charged for duration while it sleeps. It still wakes about once a
+  minute for a liveness alarm (one request, and the CPU of that short wake). A deliberate rest is restored as the
+  same world, under the same epoch, without rewriting the save. The first touch, command, AI command, returning page
+  or new arrival starts it again on the tick it stopped on, and a phone that reconnects keeps its seat. By default
+  (`room.rest: "quiet"`) a room rests only when its world has nothing of its own to do: no round clock, no event,
+  timer, spawn or ask waiting, nothing moving, and no AI command for that minute. `"idle"` rests anyway and pauses
+  round clocks, timers, bots and AI with it; Coin Dash, Ember Vale, Gem Rush, Gem Rush 3D and Hero Rush 3D use it.
+  `"never"` keeps a room going while anybody is there (a turn timer, a show). Browser-hosted rules games rest the
+  same way. A spectator or agent on an older build keeps pinging the room itself, so the object stays in memory
+  while that socket is open. Rebuild your games to get it: a room rests only when every seated browser is on this
   version.
 
 ## [0.58.0] - 2026-10-16
