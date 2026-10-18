@@ -65,6 +65,7 @@ export class AppRecordStreams {
   for(const row of await this.revisions(s))s.seen.set(row.collection,row.revision);
   const cookie=headers?.cookie??headers?.Cookie;
   if(this.ctx.storage?.put)await this.ctx.storage.put('app-live:'+s.id,{app:s.app,room:s.room,collections:s.collections,seen:[...s.seen],url:String(s.url),headers:cookie?{cookie}:{},meta});
+  await this.attachHibernated();
   const hello=()=>{this.streams.add(s);this.send(s,{collections:s.collections,presence:this.count(s),reset:true});for(const other of this.streams)if(other!==s)this.send(other,{presence:this.count(other)});};
   // A hibernating socket sleeps while the page is open. The browser renews the short role cookie on its own request, not from this object.
   if(typeof WebSocketPair!=='undefined'&&this.ctx.acceptWebSocket){
@@ -82,7 +83,8 @@ export class AppRecordStreams {
    const changed=new Set();
    for(const row of await this.revisions(s)){if(s.seen.get(row.collection)!==row.revision){if(row.collection==='*')for(const c of s.collections)changed.add(c);else if(s.collections.includes(row.collection))changed.add(row.collection);}s.seen.set(row.collection,row.revision);}
    if(!changed.size&&!recheck)return;
-   if(!await this.authorized(s)){s.deny=true;this.close(s);return;}
+   // 1000, not 4403. The stored handoff expires; the page opens a new socket with the cookie it just renewed.
+   if(!await this.authorized(s)){this.close(s);return;}
    this.send(s,{collections:[...changed],presence:this.count(s)});
   }catch{this.close(s);}finally{s.busy=false;if(s.dirty){s.dirty=false;await this.pump(s);}}
  }

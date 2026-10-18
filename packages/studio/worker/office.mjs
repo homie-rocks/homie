@@ -1471,8 +1471,9 @@ export async function appRoleSession(response,request,env,meta,launch) {
  if(ticket) {
   const secure=new URL(request.url).protocol==='https:'?'; Secure':'';
   const cookie=`studio_app_${meta.id}_${role}=${ticket}; Path=/${meta.id}/; Max-Age=300; HttpOnly${secure}; SameSite=Strict`;
-  // Rebuilding a 101 drops the hibernating socket. Append the cookie on the response the object returned.
-  if(response.status===101&&response.webSocket){response.headers.append('set-cookie',cookie);return response;}
+  // The upgrade response's headers are immutable, and appending throws before the browser receives the socket.
+  // The document and the renew request already set this cookie. Return the socket unchanged.
+  if(response.status===101&&response.webSocket)return response;
   response=new Response(response.body,{status:response.status,statusText:response.statusText,headers:response.headers});
   response.headers.append('set-cookie',cookie);
  }

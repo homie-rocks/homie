@@ -17,6 +17,22 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.5] - 2026-10-18
+
+**Plugin 0.58.2**
+
+A signed-in app gets its live socket. Leaving that page open no longer wakes the records object.
+
+### Fixed
+
+- The live upgrade is returned as the records object sent it. Writing the role cookie onto that response threw, so the browser never received the socket and tried again about every two minutes.
+- When the stored role cookie no longer works, the socket closes and the page opens a new one with the cookie it renewed. The page does not give up.
+- Someone who opens the app is counted with the people whose sockets are already asleep.
+
+### Upgrade notes
+
+- Upgrade the studio to pick this up.
+
 ## [0.58.4] - 2026-10-18
 
 **Plugin 0.58.2**

@@ -139,7 +139,7 @@ jobs:
           RUN_ID: ${{ github.run_id }}
         run: |
           for i in $(seq 1 24); do
-            state=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" --jq '.jobs[] | select(.name == "publish") | .status')
+            state=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100" --jq '[.jobs[] | select(.name == "publish") | .status][0] // ""')
             if [ "$state" = in_progress ] || [ "$state" = completed ]; then exit 0; fi
             sleep 10
           done

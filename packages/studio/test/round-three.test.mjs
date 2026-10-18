@@ -74,6 +74,32 @@ test('an open app keeps its socket and renews the handoff without waking the rec
  assert.equal(renew.status,204);assert.ok(renew.headers.get('set-cookie'));assert.equal(streams.streams.size,1);
  env.DB.sql.exec('DELETE FROM stats_keys');res=await open();assert.equal(res.status,403);assert.equal(res.headers.get('set-cookie'),null);
 });
+test('a stale handoff on the next change closes with 1000 so the page reconnects',async t=>{
+ const {env}=setup(t),streams=new AppRecordStreams(env,{storage:{}});
+ const codes=[];const socket={readyState:1,close(code){codes.push(code);this.readyState=3;},send(){}};
+ const s={id:'live',meta,url:new URL('https://place.test/cafe/api/app/live?role=staff'),request:new Request('https://place.test/cafe/api/app/live?role=staff'),collections:['notes'],seen:new Map([['notes',0]]),socket,app:'cafe',room:'main'};
+ streams.streams.add(s);
+ env.DB.sql.exec("INSERT INTO app_record_revisions(app,collection,revision) VALUES('cafe','notes',1)");
+ await streams.pump(s);
+ assert.deepEqual(codes,[1000]);
+});
+test('a new live socket counts one that is already hibernating',async t=>{
+ const {env,token}=setup(t);
+ const sent=[];
+ const existing={readyState:1,deserializeAttachment(){return {v:1,id:'old'};},send(text){sent.push(text);},close(){this.readyState=3;}};
+ const saved={app:'cafe',room:'main',collections:['notes'],seen:[],url:'https://place.test/cafe/api/app/live?role=staff&collection=notes',headers:{},meta};
+ const ctx={getWebSockets(){return [existing];},acceptWebSocket(){},storage:{async get(key){return key==='app-live:old'?saved:null;},async put(){},async delete(){}}};
+ const streams=new AppRecordStreams(env,ctx);
+ const pair=[{},{serializeAttachment(){},send(){}}];
+ const previous=globalThis.WebSocketPair;
+ globalThis.WebSocketPair=function WebSocketPair(){return pair;};
+ try{
+  await streams.open({meta,url:'https://place.test/cafe/api/app/live?role=staff&collection=notes',headers:{cookie:'studio_owner='+token},collections:['notes']});
+ }catch(error){
+  assert.match(error.message,/status/);
+ }finally{if(previous===undefined)delete globalThis.WebSocketPair;else globalThis.WebSocketPair=previous;}
+ assert.ok(sent.some(text=>JSON.parse(text).presence===2));
+});
 test('tools API renews handoffs and refuses revoked player grants',async t=>{
  t.mock.timers.enable({apis:['Date'],now:Date.now()});
  const {env}=setup(t),token='b'.repeat(43);
