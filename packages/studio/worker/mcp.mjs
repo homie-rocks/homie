@@ -9,7 +9,7 @@ function freshErrorMessage(error,env,caller) {
   return message;
 }
 import {localCaller} from './local-test.mjs';
-import {eventFeeds,feedUri,readableFeed,feedEvents,matchesFeed,subscribeFeed,eventHub,pushToolList} from './event-resources.mjs';
+import {eventFeeds,feedUri,readableFeed,feedEvents,matchesFeed,subscribeFeed,pushToolList} from './event-resources.mjs';
 import { selling } from './extensions.mjs';
 import OAuthProvider from '@cloudflare/workers-oauth-provider';
 import { createMcpHandler } from 'agents/mcp/server';
@@ -73,11 +73,9 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
     const refresh=pushToolList(env,cat,tools,origin);
     if(ctx?.waitUntil)ctx.waitUntil(refresh);
     else await refresh;
-    if(request.method==='GET'&&env.LOBBY) {
-      if(!request.headers.get('accept')?.includes('text/event-stream'))return json({error:'Accept text/event-stream required'},406);
-      const connection=caller.connection??'public:'+crypto.randomUUID();
-      return eventHub(env,connection).fetch('https://events/__studio_events',{method:'POST',body:JSON.stringify({op:'stream',connection,lastId:request.headers.get('last-event-id'),cat,origin,tools:tools.map(({name,description,inputSchema,audience,kind})=>({name,description,inputSchema,audience,kind}))})});
-    }
+    // A standing GET is the MCP SSE stream. Holding it pins the event object for as long as the client stays connected.
+    // 405 tells the client there is no stream, and it does not reconnect. Events stay on resources/read and events/poll.
+    if(request.method==='GET')return new Response(null,{status:405,headers:{allow:'POST, DELETE','cache-control':'no-store'}});
     if(request.method==='POST') {
       const body=await request.clone().json().catch(()=>null);
       if(eventMethods.has(body?.method))return eventsRequest(request,env,ctx,cat,caller,body);

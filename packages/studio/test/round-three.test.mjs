@@ -34,7 +34,7 @@ test('records-only pages set the handoff before the shell strips access',async t
 });
 test('phone shell removes access from address, records, tools and EventSource URLs',async()=>{
  const urls=[],replaced=[],handlers={},source={postMessage(){}};
- vm.runInNewContext(APP_SHELL_JS,{window:{__HOMIE_PLAY:{kind:'app',game:'cafe'}},document:{querySelector:()=>({contentWindow:source})},location:{search:'?role=staff&access=secret&room=lobby',pathname:'/cafe/open',hash:'#hello'},history:{replaceState:(_a,_b,url)=>replaced.push(url)},URLSearchParams,fetch:async url=>{urls.push(url);return {status:200,json:async()=>({ok:true})}},EventSource:class{constructor(url){urls.push(url)}close(){}},addEventListener:(name,fn)=>handlers[name]=fn,Map,Set,Date,Promise,JSON,AbortSignal});
+ vm.runInNewContext(APP_SHELL_JS,{window:{__HOMIE_PLAY:{kind:'app',game:'cafe'}},document:{querySelector:()=>({contentWindow:source})},location:{search:'?role=staff&access=secret&room=lobby',pathname:'/cafe/open',hash:'#hello'},history:{replaceState:(_a,_b,url)=>replaced.push(url)},URLSearchParams,fetch:async url=>{urls.push(url);return {status:200,json:async()=>({ok:true})}},WebSocket:class{constructor(url){urls.push(url)}close(){}},addEventListener:(name,fn)=>handlers[name]=fn,Map,Set,Date,Promise,JSON,AbortSignal});
  for(const type of ['homie-app','homie-app-tool','homie-app-subscribe'])await handlers.message({source,data:{type,id:'a'.repeat(32),collection:'notes',collections:['notes'],method:'GET',name:'hello'}});
  assert.equal(urls.length,3);assert.ok(urls.every(url=>!url.includes('access=')&&!url.includes('secret')));assert.deepEqual(replaced,['/cafe/open?role=staff&room=lobby#hello']);
 });
@@ -63,17 +63,15 @@ test('test-kind assets require the same still-valid test session on use',async t
 });
 
 import {AppRecordStreams} from '../worker/app-streams.mjs';
-test('idle live streams reconnect before handoff expiry and renew on open',async t=>{
- t.mock.timers.enable({apis:['Date','setInterval','setTimeout'],now:Date.now()});
+test('an open app keeps its socket and renews the handoff without waking the records object',async t=>{
  const {env,token}=setup(t),streams=new AppRecordStreams(env,{waitUntil(){}});t.after(()=>streams.dispose());
  env.LOBBY={idFromName:x=>x,get:()=>({fetch:async(_url,init)=>streams.open(JSON.parse(init.body))})};
  let cookie='studio_owner='+token;
  const open=()=>worker.fetch(new Request('https://place.test/cafe/api/app/live?role=staff&collection=notes'+(cookie.startsWith('studio_owner')?'&access=secret':''),{headers:{cookie}}),env,{});
  let res=await open();assert.equal(res.status,200);assert.ok(res.headers.get('set-cookie'));cookie=res.headers.get('set-cookie').split(';')[0];
- for(let i=0;i<3;i++){
-  t.mock.timers.tick(240000);assert.equal(streams.streams.size,0,'server closes idle SSE before the 300-second handoff expires');
-  res=await open();assert.equal(res.status,200);assert.ok(res.headers.get('set-cookie'));cookie=res.headers.get('set-cookie').split(';')[0];
- }
+ assert.equal(streams.streams.size,1);
+ const renew=await worker.fetch(new Request('https://place.test/cafe/api/app/live?renew=1&role=staff',{headers:{cookie}}),env,{});
+ assert.equal(renew.status,204);assert.ok(renew.headers.get('set-cookie'));assert.equal(streams.streams.size,1);
  env.DB.sql.exec('DELETE FROM stats_keys');res=await open();assert.equal(res.status,403);assert.equal(res.headers.get('set-cookie'),null);
 });
 test('tools API renews handoffs and refuses revoked player grants',async t=>{

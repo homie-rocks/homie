@@ -23,8 +23,7 @@ export class McpEventStreams {
       const stream={...input,registryKey,source:eventSource(feed),cursor:cursorOf(input.params.name,start.after),closed:false,busy:false};
       const body=new ReadableStream({start:controller=>{stream.controller=controller;controller.enqueue(sseFrame(notification('active',{cursor:stream.cursor,truncated:start.truncated},stream.id)));},pull:()=>{const resume=stream.resume;stream.resume=null;resume?.();},cancel:()=>this.close(stream)});
       this.streams.add(stream);
-      // One heartbeat is enough to recheck authorization. A repeating timer, shorter than eviction, pins this lobby for as long as the page holds the stream.
-      stream.timer=setTimeout(()=>this.pump(stream),180000);
+      // The open body is this request. Cap it so a client that never cancels cannot hold the object past five minutes, and do not wake it again to write heartbeats.
       stream.life=setTimeout(()=>this.close(stream),300000);
       this.pump(stream);
       return new Response(body,{headers:{'content-type':'text/event-stream','cache-control':'no-store'}});

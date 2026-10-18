@@ -14,16 +14,20 @@ test('real Lobby streams push tool-created records to two clients without a rule
  const DB=await mf.getD1Database('DB'),dir=new URL('../../../template/site/migrations/',import.meta.url);
  for(const file of readdirSync(dir).sort())for(const sql of readFileSync(new URL(file,dir),'utf8').replace(/^--.*$/gm,'').match(/\s*CREATE TRIGGER[\s\S]*?END;|[^;]+;/g)??[])if(sql.trim())await DB.prepare(sql).run();
  const origin=(await mf.ready).origin;
- const open=async()=>{const abort=new AbortController();t.after(()=>abort.abort());const res=await fetch(origin+'/place/api/app/live?collection=spots',{signal:abort.signal});assert.equal(res.status,200);return res.body.getReader();};
- const a=await open();assert.match(new TextDecoder().decode((await a.read()).value),/"reset":true/);
- const b=await open();assert.match(new TextDecoder().decode((await b.read()).value),/"presence":2/);
+ const plain=await mf.dispatchFetch(origin+'/place/api/app/live?collection=spots');assert.equal(plain.status,426);
+ const open=async()=>{
+  const res=await mf.dispatchFetch(origin+'/place/api/app/live?collection=spots',{headers:{upgrade:'websocket'}});
+  assert.equal(res.status,101,await (res.status===101?Promise.resolve(''):res.text()));const ws=res.webSocket;const messages=[];let wake;ws.addEventListener('message',event=>{messages.push(String(event.data));wake?.();wake=null;});ws.accept();t.after(()=>ws.close());
+  return {next:()=>messages.length?messages.shift():new Promise(resolve=>{wake=()=>resolve(messages.shift());})};
+ };
+ const a=await open();assert.match(await a.next(),/"reset":true/);
+ const b=await open();assert.match(await b.next(),/"presence":2/);
  const waitChange=async reader=>{
-  for(;;){const {done,value}=await reader.read();assert.equal(done,false);const text=new TextDecoder().decode(value);if(text.includes('"collections":["spots"]')&&!text.includes('"reset":true'))return;}
+  for(;;){const text=await reader.next();assert.equal(typeof text,'string');if(text.includes('"collections":["spots"]')&&!text.includes('"reset":true'))return;}
  };
  const changed=Promise.all([waitChange(a),waitChange(b)]);
  const response=await fetch(origin+'/place/api/app/tools',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({name:'reserve',input:{id:'one'}})});
  assert.equal(response.status,200,await response.text());
  let timer;try{await Promise.race([changed,new Promise((_,reject)=>timer=setTimeout(()=>reject(new Error('push did not arrive before the recovery heartbeat')),4000))]);}finally{clearTimeout(timer);}
  const rows=await (await fetch(origin+'/place/api/app/records/spots')).json();assert.equal(rows.records[0].data.name,'Ada');
- await a.cancel();await b.cancel();
 });

@@ -325,7 +325,18 @@ export default async function route(request, env, ctx) {
       };
       if(sub==='api/app/live') {
         if(request.method!=='GET')return new Response('GET required',{status:405});
+        // Cookie renewal is a Worker response. It must not wake the records object.
+        if(url.searchParams.get('renew')==='1')return apiSession(new Response(null,{status:204,headers:{'cache-control':'no-store'}}));
         const {appHub}=await import('./app-streams.mjs');
+        if(typeof WebSocketPair!=='undefined'){
+          if(request.headers.get('upgrade')?.toLowerCase()!=='websocket')return new Response('websocket required',{status:426,headers:{'cache-control':'no-store'}});
+          // The object has to answer the upgrade itself. A JSON subrequest cannot carry the socket back.
+          const headers=new Headers(request.headers);
+          headers.set('x-homie-live-page',request.url);
+          headers.set('x-homie-app-meta',JSON.stringify({id:meta.id,kind:meta.kind,roles:meta.roles,records:meta.records,surfaces:meta.surfaces,launch:meta.launch}));
+          const target=new URL('https://app/__app_records');target.search=new URL(request.url).search;
+          return apiSession(await appHub(env,meta.id).fetch(new Request(target,{headers})));
+        }
         return apiSession(await appHub(env,meta.id).fetch('https://app/__app_records',{method:'POST',body:JSON.stringify({op:'open',meta,url:request.url,headers:Object.fromEntries(request.headers),collections:url.searchParams.getAll('collection')})}));
       }
       if(sub==='api/app/tools')return apiSession(await (await import('./app-tools.mjs')).appToolsRoute(request,env,meta,url,cat,await studioTools()));

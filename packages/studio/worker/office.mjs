@@ -1469,10 +1469,12 @@ export async function appRoleSession(response,request,env,meta,launch) {
  const handoff=cookieValues(request,`studio_app_${meta.id}_${role}`)[0];
  const ticket=(handoff&&await appAssetTicket(env,meta.id,handoff,{request,meta,launch,purpose:'handoff',expectedRole:role,renew:true}))||await appAssetTicket(env,meta.id,undefined,{request,meta,launch,purpose:'handoff'});
  if(ticket) {
-  response=new Response(response.body,{status:response.status,statusText:response.statusText,headers:response.headers});
-  // LAN dev uses HTTP: a Secure cookie is discarded before the shell removes access.
   const secure=new URL(request.url).protocol==='https:'?'; Secure':'';
-  response.headers.append('set-cookie',`studio_app_${meta.id}_${role}=${ticket}; Path=/${meta.id}/; Max-Age=300; HttpOnly${secure}; SameSite=Strict`);
+  const cookie=`studio_app_${meta.id}_${role}=${ticket}; Path=/${meta.id}/; Max-Age=300; HttpOnly${secure}; SameSite=Strict`;
+  // Rebuilding a 101 drops the hibernating socket. Append the cookie on the response the object returned.
+  if(response.status===101&&response.webSocket){response.headers.append('set-cookie',cookie);return response;}
+  response=new Response(response.body,{status:response.status,statusText:response.statusText,headers:response.headers});
+  response.headers.append('set-cookie',cookie);
  }
  return response;
 }

@@ -49,14 +49,22 @@ export const APP_SHELL_JS = String.raw`(function () {
   }
   function context() {var room=new URLSearchParams(location.search).get('room');return {app:boot.game,origin:location.origin,url:location.origin+'/'+boot.game+'/open'+(room&&/^[A-Za-z0-9_-]{1,32}$/.test(room)?'?room='+encodeURIComponent(room):''),presence:presence,now:clock};}
   function sendContext(){frame?.contentWindow?.postMessage({type:'homie-app-context',context:context()},'*');}
+  var delay=5000,stopped=false,renewTimer=null;
   function connect(){
-    live?.close();
+    if(stopped)return;
+    try{if(live){live.onclose=null;live.close();}}catch(e){}
     var q=query();collections.forEach(function(c){q.append('collection',c);});
-    live=new EventSource((boot.site||'')+'/'+boot.game+'/api/app/live?'+q);
+    var origin=boot.site||location.origin||'';
+    var http=(origin?origin:'')+'/'+boot.game+'/api/app/live?'+q;
+    // A hibernating socket. An idle page does not poll this object. The role cookie is renewed by an ordinary request.
+    live=new WebSocket(/^https?:/.test(http)?http.replace(/^http/,'ws'):http);
+    live.onopen=function(){delay=5000;};
     live.onmessage=function(e){var value=JSON.parse(e.data);if(presence!==value.presence){presence=value.presence;sendContext();}if(value.collections?.length){share({invalidate:true});Promise.allSettled([...pending.values()]).then(function(){share({invalidate:true});frame?.contentWindow?.postMessage({type:'homie-app-changed',collections:value.collections},'*');});}};
+    live.onclose=function(e){if(stopped||(e&&e.code===4403))return;if(typeof setTimeout==='function'){setTimeout(connect,delay);delay=Math.min(delay*2,120000);}};
+    if(!renewTimer&&typeof setInterval==='function')renewTimer=setInterval(function(){fetch((boot.site||'')+'/'+boot.game+'/api/app/live?renew=1&'+query()).catch(function(){});},240000);
   }
   window.homieApp=Object.freeze({get context(){return context();},setTestClock:function(value){if(!boot.test)throw new Error('Local proof session required');if(value!==null&&!Number.isFinite(value))throw new Error('Invalid clock');clock=value;sendContext();}});
-  addEventListener('pagehide',function(){live?.close();});
+  addEventListener('pagehide',function(){stopped=true;if(renewTimer)clearInterval(renewTimer);try{live&&live.close();}catch(e){}});
   addEventListener('message', async function (e) {
     var m = e.data;
     if(frame&&e.source===frame.contentWindow&&m?.type==='homie-app-context'){sendContext();return;}

@@ -16,6 +16,9 @@ export class Lobby {
   }
   async fetch(request) {await this.ready;return this.lobby.fetch(request);}
   async alarm() {await this.ready;return this.lobby.alarm();}
+  async webSocketMessage(...args) {await this.ready;return this.lobby.webSocketMessage(...args);}
+  async webSocketClose(...args) {await this.ready;return this.lobby.webSocketClose(...args);}
+  async webSocketError(...args) {await this.ready;return this.lobby.webSocketError(...args);}
 }
 
 export class Gate {
@@ -34,6 +37,9 @@ export class AppRecordHub {
     this.ready=ctx.blockConcurrencyWhile(async()=>{this.hub=new (await import('./stream-objects.mjs')).AppRecordHub(ctx,env);});
   }
   async fetch(request) {await this.ready;return this.hub.fetch(request);}
+  async webSocketMessage(...args) {await this.ready;return this.hub.webSocketMessage(...args);}
+  async webSocketClose(...args) {await this.ready;return this.hub.webSocketClose(...args);}
+  async webSocketError(...args) {await this.ready;return this.hub.webSocketError(...args);}
 }
 export class EventHub {
   constructor(ctx,env) {

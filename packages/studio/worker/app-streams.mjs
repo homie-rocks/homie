@@ -32,10 +32,22 @@ export async function pushAppRecords(env,cat){
 export class AppRecordStreams {
  constructor(env,ctx){this.env=env;this.ctx=ctx;this.streams=new Set();}
  dispose(){for(const s of [...this.streams])this.close(s);}
- close(s){if(!this.streams.delete(s))return;clearTimeout(s.timer);clearTimeout(s.reconnect);try{s.controller.close();}catch{/* The reader already cancelled or the stream already closed. */}this.presence();}
+ close(s){if(!s||s.closed||!this.streams.delete(s))return;s.closed=true;clearTimeout(s.timer);clearTimeout(s.reconnect);try{s.controller?.close();}catch{/* The reader already cancelled or the stream already closed. */}try{if(s.socket&&s.socket.readyState!==3)s.socket.close(s.deny?4403:1000,'closed');}catch{/* already closed */}if(s.id)void this.ctx.storage?.delete?.('app-live:'+s.id);this.presence();}
+ async closeSocket(socket){await this.attachHibernated();const id=socket?.deserializeAttachment?.()?.id;const s=[...this.streams].find(x=>x.socket===socket||(id&&x.id===id));if(s)this.close(s);else if(id){void this.ctx.storage?.delete?.('app-live:'+id);this.presence();}}
  count(s){return [...this.streams].filter(x=>x.app===s.app&&x.room===s.room).length;}
- send(s,data){if(s.controller.desiredSize<=0){this.close(s);return;}try{s.controller.enqueue(frame(data));}catch{this.close(s);}}
+ send(s,data){const text=JSON.stringify(data);if(s.socket){try{s.socket.send(text);}catch{this.close(s);}return;}if(!s.controller||s.controller.desiredSize<=0){this.close(s);return;}try{s.controller.enqueue(frame(data));}catch{this.close(s);}}
  presence(){for(const s of this.streams)this.send(s,{presence:this.count(s)});}
+ async attachHibernated(){
+  if(!this.ctx.getWebSockets)return;
+  for(const socket of this.ctx.getWebSockets()){
+   const attachment=socket.deserializeAttachment?.();
+   if(!attachment||attachment.v!==1||[...this.streams].some(s=>s.id===attachment.id))continue;
+   const saved=await this.ctx.storage?.get?.('app-live:'+attachment.id);
+   if(!saved){try{socket.close(1011,'missing');}catch{/* already closed */}continue;}
+   const headers=saved.headers??{};
+   this.streams.add({...saved,seen:new Map(saved.seen??[]),socket,id:attachment.id,url:new URL(saved.url),request:new Request(saved.url,{headers}),meta:saved.meta});
+  }
+ }
  async authorized(s){
   const access=await appAccess(s.request,this.env,s.meta,s.url);
   if(!access.ok||s.collections.some(c=>!access.can.includes('read:'+c)))return false;
@@ -45,19 +57,23 @@ export class AppRecordStreams {
  async revisions(s){return (await this.env.DB.prepare("SELECT collection,revision FROM app_record_revisions WHERE app=?1 UNION ALL SELECT '*',COALESCE(SUM(r.revision),0) FROM app_tool_namespaces a JOIN tool_data_revisions r ON r.namespace=a.namespace WHERE a.app=?1").bind(s.app).all()).results;}
  async open({meta,url,headers,collections=[]}){
   if(!Array.isArray(collections)||collections.some(c=>typeof c!=='string'||!Object.hasOwn(meta.records?.collections??{},c)))return new Response('unknown collection',{status:400});
-  const s={meta,url:new URL(url),request:new Request(url,{headers}),collections,seen:new Map()};
+  const s={id:crypto.randomUUID(),meta,url:new URL(url),request:new Request(url,{headers}),collections,seen:new Map()};
   if(!await this.authorized(s))return new Response('role cannot read collections',{status:403});
   const session=await localSession(s.request,this.env);
   s.app=session?.app===meta.id&&session.scope?`${meta.id}:check:${session.scope}`:meta.id;
   s.room=s.url.searchParams.get('room')??'main';
   for(const row of await this.revisions(s))s.seen.set(row.collection,row.revision);
+  const cookie=headers?.cookie??headers?.Cookie;
+  if(this.ctx.storage?.put)await this.ctx.storage.put('app-live:'+s.id,{app:s.app,room:s.room,collections:s.collections,seen:[...s.seen],url:String(s.url),headers:cookie?{cookie}:{},meta});
+  const hello=()=>{this.streams.add(s);this.send(s,{collections:s.collections,presence:this.count(s),reset:true});for(const other of this.streams)if(other!==s)this.send(other,{presence:this.count(other)});};
+  // A hibernating socket sleeps while the page is open. The browser renews the short role cookie on its own request, not from this object.
+  if(typeof WebSocketPair!=='undefined'&&this.ctx.acceptWebSocket){
+   const pair=new WebSocketPair(),client=pair[0]??Object.values(pair)[0],server=pair[1]??Object.values(pair)[1];
+   s.socket=server;server.serializeAttachment?.({v:1,id:s.id});this.ctx.acceptWebSocket(server);hello();
+   return new Response(null,{status:101,webSocket:client,headers:{'cache-control':'no-store'}});
+  }
   const body=new ReadableStream({start:controller=>{s.controller=controller;},cancel:()=>this.close(s)});
-  this.streams.add(s);this.send(s,{collections:s.collections,presence:this.count(s),reset:true});
-  for(const other of this.streams)if(other!==s)this.send(other,{presence:this.count(other)});
-  // A fresh HTTP response renews the role cookie; SSE frames cannot set cookies.
-  s.reconnect=setTimeout(()=>this.close(s),240000);
-  // One recovery check, past eviction, so an open app does not pin its object. The screen reconnects after the cap below.
-  s.timer=setTimeout(()=>this.ctx.waitUntil(this.pump(s,true)),180000);
+  hello();
   return new Response(body,{headers:{'content-type':'text/event-stream','cache-control':'no-store'}});
  }
  async pump(s,recheck=false){
@@ -66,9 +82,9 @@ export class AppRecordStreams {
    const changed=new Set();
    for(const row of await this.revisions(s)){if(s.seen.get(row.collection)!==row.revision){if(row.collection==='*')for(const c of s.collections)changed.add(c);else if(s.collections.includes(row.collection))changed.add(row.collection);}s.seen.set(row.collection,row.revision);}
    if(!changed.size&&!recheck)return;
-   if(!await this.authorized(s)){this.close(s);return;}
+   if(!await this.authorized(s)){s.deny=true;this.close(s);return;}
    this.send(s,{collections:[...changed],presence:this.count(s)});
   }catch{this.close(s);}finally{s.busy=false;if(s.dirty){s.dirty=false;await this.pump(s);}}
  }
- async wake(meta){for(const s of this.streams)if(meta)s.meta=meta;await Promise.all([...this.streams].map(s=>this.pump(s)));return new Response('ok');}
+ async wake(meta){await this.attachHibernated();for(const s of this.streams)if(meta)s.meta=meta;await Promise.all([...this.streams].map(s=>this.pump(s)));return new Response('ok');}
 }

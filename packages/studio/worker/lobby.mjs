@@ -88,10 +88,14 @@ export class Lobby {
     if(new URL(request.url).pathname==='/peak')return (this.peakStore??=new LobbyPeak(this.ctx,this.env)).fetch(request);
     if(['/match','/match-policy'].includes(new URL(request.url).pathname))return (this.matchRouter??=new MatchRouter(this.ctx,this.env)).fetch(request);
     if(new URL(request.url).pathname==='/__app_records') {
-      const {AppRecordStreams}=await import('./app-streams.mjs');
-      this.appStreams??=new AppRecordStreams(this.env,this.ctx);
+      const streams=await this.liveStreams();
+      if(request.headers.get('upgrade')?.toLowerCase()==='websocket'){
+        const meta=JSON.parse(request.headers.get('x-homie-app-meta')||'{}');
+        const page=request.headers.get('x-homie-live-page')||request.url;
+        return streams.open({meta,url:page,headers:Object.fromEntries(request.headers),collections:new URL(request.url).searchParams.getAll('collection')});
+      }
       const input=await request.json();
-      return input.op==='open'?this.appStreams.open(input):this.appStreams.wake(input.meta);
+      return input.op==='open'?streams.open(input):streams.wake(input.meta);
     }
     if(new URL(request.url).pathname==='/__studio_events') {
       const {EventStreams}=await import('./event-resources.mjs');
@@ -121,6 +125,10 @@ export class Lobby {
     for(const [name,until] of this.closed)if(until>at&&!rooms.some(r=>r.name===name))rooms.push({name,players:0,agents:0,ai:0,server:roomServer(name),at,closedUntil:until});
     await this.env.BACKGROUND.send({v:1,type:'lobby.snapshot',game,shard,at,rooms});
   }
+  async liveStreams(){const {AppRecordStreams}=await import('./app-streams.mjs');return this.appStreams??=new AppRecordStreams(this.env,this.ctx);}
+  webSocketMessage(){}
+  async webSocketClose(socket){return (await this.liveStreams()).closeSocket(socket);}
+  async webSocketError(socket){return (await this.liveStreams()).closeSocket(socket);}
   async alarm() {
     if(this.matchRouter)return this.matchRouter.alarm();
     if((await this.ctx.storage.list?.({prefix:'match:',limit:1}))?.size)return (this.matchRouter??=new MatchRouter(this.ctx,this.env)).alarm();

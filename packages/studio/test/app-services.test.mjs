@@ -47,10 +47,12 @@ test('live changes survive delete/recreate and isolate signed local proof scopes
  const a=await open('one');await a.read();const b=await open('two');await b.read();
  assert.match(new TextDecoder().decode((await a.read()).value),/"presence":1/);
  DB.sql.exec(`INSERT INTO app_records VALUES('place:check:one','spots','one','{}',1,100);DELETE FROM app_records;INSERT INTO app_records VALUES('place:check:one','spots','one','{}',1,100)`);
+ let other='';const pending=b.read().then(frame=>{other=new TextDecoder().decode(frame.value??new Uint8Array());});
  await hub.wake();
  assert.match(new TextDecoder().decode((await a.read()).value),/"collections":\["spots"\]/);
- assert.match(new TextDecoder().decode((await b.read()).value),/"collections":\[\]/);
- await a.cancel();await b.cancel();
+ await Promise.resolve();
+ assert.equal(other,'','a different proof scope is not told about this change');
+ await a.cancel();await b.cancel();await pending;
 });
 test('place guide examples bundle against toolkit exports',async()=>{
  const {build}=await import('esbuild');

@@ -93,8 +93,7 @@ export class EventStreams {
       stream.toolSignature=await this.toolSignature(input.tools??[],caller);
       stream.eventSignature=JSON.stringify(await listEvents(this.env,input.cat,caller));
       await this.env.DB.prepare('INSERT INTO mcp_kv(key,value,expires) VALUES(?1,?2,?3) ON CONFLICT(key) DO UPDATE SET value=excluded.value,expires=excluded.expires').bind('tools-stream:'+connection,JSON.stringify({connection}),Math.floor(Date.now()/1000)+300).run();
-      stream.reconnect=setTimeout(()=>this.close(stream),240000);
-      stream.reconnect?.unref?.();
+      // No timer. Production MCP GET never opens this. A caller that does is holding its own request.
       // Replay and later wakes share one ordered pump. Backpressure must not
       // hold up the writer's request or a function handler.
       this.background(input);

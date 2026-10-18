@@ -17,6 +17,22 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.4] - 2026-10-18
+
+**Plugin 0.58.2**
+
+An open app rests while nobody is changing it. The live connection sleeps with the records object, and a studio MCP client no longer holds an event stream open.
+
+### Fixed
+
+- The open app keeps a hibernating WebSocket. The page renews its role cookie on the Worker every four minutes, so an idle app does not keep the records object awake.
+- A GET of the studio MCP endpoint answers 405. The client treats that as no event stream and does not reconnect. Asking for `events/stream` still works for that one request, and it no longer sends a heartbeat that would wake the object again.
+- 0.58.3 stopped the 15 second heartbeat. The open stream itself still held the object awake for as long as the page was open. This version closes that hold.
+
+### Upgrade notes
+
+- Upgrade the studio to pick this up. A page left open on the older app shell keeps asking for the old stream. The Worker answers 426 and does not wake the records object. Reload the page to open the socket.
+
 ## [0.58.3] - 2026-10-18
 
 **Plugin 0.58.2**

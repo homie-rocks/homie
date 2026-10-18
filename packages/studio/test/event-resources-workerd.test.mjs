@@ -5,9 +5,8 @@ import {Miniflare} from 'miniflare';
 import {readFileSync,readdirSync} from 'node:fs';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import {ResourceUpdatedNotificationSchema} from '@modelcontextprotocol/sdk/types.js';
 
-test('subscribed MCP client gets bookings without polling; replay and current role checks',{timeout:30000},async()=>{
+test('MCP client reads bookings without a standing event stream; current role checks still hold',{timeout:30000},async()=>{
  const bundled=await build({stdin:{resolveDir:new URL('../worker/',import.meta.url).pathname,contents:`
   import worker,{Lobby} from './index.mjs';export {Lobby};
   const cat={studio:{name:'Bookings'},games:[{id:'cafe',kind:'app',roles:{customer:{can:['create:bookings']},staff:{signIn:true,can:['read:bookings','delete:bookings']}},records:{persist:true,collections:{bookings:{fields:{name:{type:'string'}}},private:{fields:{name:{type:'string'}}}}}}]};
@@ -30,33 +29,25 @@ test('subscribed MCP client gets bookings without polling; replay and current ro
   await db.prepare("INSERT INTO app_roles VALUES('cafe','staff','staff')").run();
   const fetcher=connection=>async(input,init)=>{const req=new Request(input,init);const headers=new Headers(req.headers);if(connection)headers.set('x-test-connection',connection);return mf.dispatchFetch(req.url,{method:req.method,headers:Object.fromEntries(headers),...(req.body?{body:await req.arrayBuffer()}: {})});};
   const client=new Client({name:'booking-ai',version:'1'});clients.push(client);
-  // The SDK automatically opens its standalone GET stream.
-  const received=[];let notify;
-  client.setNotificationHandler(ResourceUpdatedNotificationSchema,n=>{received.push(n);notify?.(n);});
   await client.connect(new StreamableHTTPClientTransport(new URL('http://localhost/mcp'),{fetch:fetcher('staff')}));
+  const idle=await fetcher('staff')('http://localhost/mcp',{headers:{accept:'text/event-stream'}});assert.equal(idle.status,405);await idle.body?.cancel();
   assert.ok((await client.listResources()).resources.some(r=>r.uri==='studio://events/bookings'));
   await client.subscribeResource({uri:'studio://events/bookings'});
   const booking=async id=>{
     const r=await mf.dispatchFetch('http://localhost/cafe/api/app/records/bookings/'+id,{method:'POST',headers:{origin:'http://localhost','content-type':'application/json'},body:JSON.stringify({data:{name:id}})});
     assert.equal(r.status,200,await r.text());
   };
-  const next=()=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('No push notification')),3000);notify=n=>{clearTimeout(timer);notify=null;resolve(n);};});
-  let pending=next();await booking('first');const notification=await pending;
-  assert.equal(notification.params._meta['studio/event'].data.record,'first');
-  assert.equal(notification.params.uri,'studio://events/bookings');
+  await booking('first');
   await client.close();
-  // Raw SSE exposes the standard event ID used to resume the same connection.
-  const stream=await fetcher('staff')('http://localhost/mcp',{headers:{accept:'text/event-stream'}});assert.equal(stream.status,200);reader=stream.body.getReader();
-  let text='';while(!text.includes('id: '))text+=new TextDecoder().decode((await reader.read()).value);
-  const lastId=/id: ([^\n]+)/.exec(text)[1];await reader.cancel();reader=null;
+  const again=await fetcher('staff')('http://localhost/mcp',{headers:{accept:'text/event-stream'}});assert.equal(again.status,405);await again.body?.cancel();
   await booking('second');
-  const resumed=await fetcher('staff')('http://localhost/mcp',{headers:{accept:'text/event-stream','last-event-id':lastId}});assert.equal(resumed.status,200);reader=resumed.body.getReader();text='';while(!text.includes('"record":"second"'))text+=new TextDecoder().decode((await reader.read()).value);
-  assert.doesNotMatch(text,/"record":"first"/);await reader.cancel();reader=null;
   const rpc=async(connection,method,params)=>{
     const response=await fetcher(connection)('http://localhost/mcp',{method:'POST',headers:{'content-type':'application/json',accept:'application/json,text/event-stream'},body:JSON.stringify({jsonrpc:'2.0',id:99,method,params})});
     const text=await response.text();return text.startsWith('{')?JSON.parse(text):text.split('\n').filter(l=>l.startsWith('data: ')).map(l=>JSON.parse(l.slice(6))).find(m=>m.id===99);
   };
   const tool=(connection,name,args)=>rpc(connection,'tools/call',{name,arguments:args});
+  const read=await rpc('staff','resources/read',{uri:'studio://events/bookings'});
+  assert.ok(JSON.parse(read.result.contents[0].text).events.some(event=>event.data.record==='second'));
   const conflict=await tool(null,'app_records',{app:'cafe',collection:'bookings',id:'first',operation:'create',data:{name:'Again'}});
   assert.equal(conflict.result.isError,true);assert.match(conflict.result.content[0].text,/record changed or already exists; reload/);
   assert.doesNotMatch(conflict.result.content[0].text,/Tool failed/);
@@ -77,13 +68,8 @@ test('subscribed MCP client gets bookings without polling; replay and current ro
   const grant=await tool('owner','app_role',{app:'cafe',role:'staff',signIn:'staff'});assert.equal(grant.result.isError,undefined);
   assert.ok(await db.prepare("SELECT player FROM app_roles WHERE player='staff'").first());
   await tool('owner','app_role',{app:'cafe',role:'staff',signIn:'staff',revoke:true});
-  // Replaying after the grant is removed must not leak retained records.
-  const filtered=await fetcher('staff')('http://localhost/mcp',{headers:{accept:'text/event-stream','last-event-id':lastId}});
-  reader=filtered.body.getReader();assert.match(new TextDecoder().decode((await reader.read()).value),/: connected/);
   await db.prepare("UPDATE mcp_connections SET revoked=1 WHERE id='staff'").run();
   await booking('third');
-  assert.equal((await reader.read()).done,true,'revocation closes the stream without delivering hidden replay');reader=null;
-
   const denied=await fetcher('staff')('http://localhost/mcp',{method:'POST',headers:{'content-type':'application/json',accept:'application/json,text/event-stream'},body:JSON.stringify({jsonrpc:'2.0',id:10,method:'resources/read',params:{uri:'studio://events/bookings'}})});
   assert.match(await denied.text(),/error/);
   const anonymous=new Client({name:'public',version:'1'});clients.push(anonymous);await anonymous.connect(new StreamableHTTPClientTransport(new URL('http://localhost/mcp'),{fetch:fetcher(null)}));
