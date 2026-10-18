@@ -11,7 +11,7 @@ const meta={id:'cafe',name:'Cafe',kind:'app',launch:'public',roles:{staff:{signI
 function setup(t){
  const DB=database(t);DB.batch=xs=>Promise.all(xs.map(x=>x.all()));const token='a'.repeat(64);
  DB.sql.prepare('INSERT INTO stats_keys(hash,kind,expires_at) VALUES(?,?,?)').run(hash(token),'session',Date.now()+3600000);
- DB.sql.exec("INSERT INTO app_role_links VALUES('cafe','staff','secret')");
+ DB.sql.exec("INSERT INTO app_role_links (app, role, token) VALUES('cafe','staff','secret')");
  const env={DB,ASSETS:{fetch:async r=>new URL(r.url).pathname==='/games.json'?Response.json({studio:{name:'Test'},games:[meta]}):new Response('asset')}};
  return {env,token};
 }

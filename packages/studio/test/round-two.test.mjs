@@ -98,7 +98,7 @@ test('short-lived same-origin role session opens Big screen without the shared r
  const {appRoleSession}=await import('../worker/office.mjs'),{appAccess}=await import('../worker/app-records.mjs');
  const DB=database(t),env={DB},token='d'.repeat(48),m={...meta,kind:'app',roles:{staff:{signIn:true,can:['read:notes']},other:{signIn:true,can:['read:notes']}},surfaces:{phone:'staff'}};
  DB.sql.prepare('INSERT INTO stats_keys(hash,kind,expires_at) VALUES(?,?,?)').run(hash(token),'session',Date.now()+60000);
- DB.sql.exec("INSERT INTO app_role_links VALUES('cafe','staff','shared-secret')");
+ DB.sql.exec("INSERT INTO app_role_links (app, role, token) VALUES('cafe','staff','shared-secret')");
  const response=await appRoleSession(new Response('page'),new Request('https://place.test/cafe/open?role=staff&access=shared-secret',{headers:{cookie:'studio_owner='+token}}),env,m,'public');
  const cookie=response.headers.get('set-cookie');assert.match(cookie,/Max-Age=300; HttpOnly; Secure; SameSite=Strict/);assert.ok(!cookie.includes('shared-secret'));
  const url=new URL('https://place.test/cafe/tv?role=staff'),request=new Request(url,{headers:{cookie:cookie.split(';')[0]}});

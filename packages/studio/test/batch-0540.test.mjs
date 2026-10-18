@@ -59,7 +59,7 @@ test('player asset capability rechecks role grants, role-link rotation and sessi
  DB.sql.prepare("INSERT INTO players(id,name,created_at,seen_at) VALUES('p','Staff',0,0)").run();
  DB.sql.prepare("INSERT INTO player_sessions(hash,player,expires_at) VALUES(?,'p',?)").run(hash,Date.now()+60000);
  DB.sql.prepare("INSERT INTO app_roles VALUES('cafe','staff','p')").run();
- DB.sql.prepare("INSERT INTO app_role_links VALUES('cafe','staff','original')").run();
+ DB.sql.prepare("INSERT INTO app_role_links (app, role, token) VALUES('cafe','staff','original')").run();
  const meta={id:'cafe',roles:{staff:{signIn:true,can:['read:notes']}},surfaces:{phone:'staff'}},request=new Request('https://place.test/cafe/open?role=staff',{headers:{cookie:'studio_player='+token}});
  const ticket=await appAssetTicket(env,'cafe',undefined,{request,meta});assert.ok(ticket);assert.equal(await appAssetTicket(env,'cafe',ticket,{meta}),true);
  DB.sql.prepare("DELETE FROM app_roles WHERE player='p'").run();assert.equal(await appAssetTicket(env,'cafe',ticket,{meta}),false);
@@ -68,7 +68,7 @@ test('player asset capability rechecks role grants, role-link rotation and sessi
  const next=await appAssetTicket(env,'cafe',undefined,{request,meta});assert.ok(next);
  DB.sql.prepare('DELETE FROM app_role_links').run();
  const unlinked=await appAssetTicket(env,'cafe',undefined,{request,meta});assert.ok(unlinked);
- DB.sql.prepare("INSERT INTO app_role_links VALUES('cafe','staff','new-restriction')").run();assert.equal(await appAssetTicket(env,'cafe',unlinked,{meta}),false,'adding a role link invalidates the former context too');
+ DB.sql.prepare("INSERT INTO app_role_links (app, role, token) VALUES('cafe','staff','new-restriction')").run();assert.equal(await appAssetTicket(env,'cafe',unlinked,{meta}),false,'adding a role link invalidates the former context too');
  DB.sql.prepare('UPDATE player_sessions SET expires_at=0').run();assert.equal(await appAssetTicket(env,'cafe',next,{meta}),false);
  DB.sql.prepare('DELETE FROM player_sessions').run();assert.equal(await appAssetTicket(env,'cafe',next,{meta}),false);
 });

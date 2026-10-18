@@ -23,7 +23,7 @@ export default {fetch(request,env,ctx){return worker.fetch(request,{...env,ASSET
   const db=await mf.getD1Database('DB');
   await db.prepare('CREATE TABLE stats_keys(hash TEXT PRIMARY KEY, kind TEXT, expires_at INTEGER)').run();
   await db.prepare('CREATE TABLE app_role_links(app TEXT, role TEXT, token TEXT)').run();
-  await db.prepare("INSERT INTO app_role_links VALUES('desk','staff','private-link')").run();
+  await db.prepare("INSERT INTO app_role_links (app, role, token) VALUES('desk','staff','private-link')").run();
   const token='b'.repeat(64),hash=createHash('sha256').update(token).digest('hex');
   await db.prepare("INSERT INTO stats_keys VALUES(?1,'session',?2)").bind(hash,Date.now()+60000).run();
   const get=async(path,cookie=true)=>(await mf.dispatchFetch('http://localhost'+path,{headers:cookie?{cookie:'studio_owner='+token}:{}})).json();

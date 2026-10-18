@@ -16,7 +16,7 @@ for (const origin of ['http://192.168.1.20:8787', 'https://studio.example']) {
       surfaces:{phone:'customer',tablet:'staff'},
       records:{persist:true,collections:{queue:{fields:{label:{type:'string'}}}}}};
     const token = 'b'.repeat(43);
-    DB.sql.exec("INSERT INTO players(id,name,guest,created_at,seen_at) VALUES('staff','Staff',0,0,0); INSERT INTO app_roles VALUES('welcome','staff','staff'); INSERT INTO app_role_links VALUES('welcome','staff','secret')");
+    DB.sql.exec("INSERT INTO players(id,name,guest,created_at,seen_at) VALUES('staff','Staff',0,0,0); INSERT INTO app_roles VALUES('welcome','staff','staff'); INSERT INTO app_role_links (app, role, token) VALUES('welcome','staff','secret')");
     DB.sql.prepare("INSERT INTO player_sessions(hash,player,kind,expires_at) VALUES(?,'staff','session',?)")
       .run(createHash('sha256').update(token).digest('hex'), Date.now()+3600000);
     const env = {DB, ASSETS:{fetch:async () => Response.json({studio:{name:'Test'},games:[meta]})}};
