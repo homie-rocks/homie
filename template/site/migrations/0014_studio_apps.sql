@@ -8,6 +8,6 @@ CREATE TABLE IF NOT EXISTS app_roles (
   PRIMARY KEY (app, role, player)
 );
 CREATE TABLE IF NOT EXISTS app_role_links (
-  app TEXT NOT NULL, role TEXT NOT NULL, token TEXT NOT NULL,
+  app TEXT NOT NULL, role TEXT NOT NULL, token TEXT NOT NULL, expires_at INTEGER,
   PRIMARY KEY (app, role)
 );

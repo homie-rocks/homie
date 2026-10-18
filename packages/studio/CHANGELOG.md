@@ -17,6 +17,21 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.2] - 2026-10-17
+
+**Plugin 0.58.2**
+
+The studio owner opens a private app role. A staff link can expire, and it can be listed or revoked on its own.
+
+### Added
+
+- A signed-in studio owner opens a private app role with the owner session. Everyone else still needs that role's link.
+- `homie-studio app role <id> --list` lists each private role's link and expiry. `--expires` takes a day count (`30d`) or a unix time in milliseconds. `--revoke-link` revokes the link and leaves a player's own grant as it was.
+
+### Upgrade notes
+
+- Upgrade the studio to pick this up. A link issued before this version has no expiry until one is set.
+
 ## [0.58.1] - 2026-10-17
 
 **Plugin 0.58.1**

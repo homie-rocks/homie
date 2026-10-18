@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS app_roles (
   PRIMARY KEY (app, role, player)
 );
 CREATE TABLE IF NOT EXISTS app_role_links (
-  app TEXT NOT NULL, role TEXT NOT NULL, token TEXT NOT NULL,
+  app TEXT NOT NULL, role TEXT NOT NULL, token TEXT NOT NULL, expires_at INTEGER,
   PRIMARY KEY (app, role)
 );
 `;
@@ -34,6 +34,35 @@ async function bodyOf(request) {
   const bytes = new Uint8Array(size); let at = 0;
   for (const chunk of chunks) { bytes.set(chunk, at); at += chunk.length; }
   return JSON.parse(new TextDecoder().decode(bytes) || '{}');
+}
+const ROLE_LINK_YEAR = 366 * 24 * 60 * 60 * 1000;
+const roleLinkReady = new WeakSet();
+/** Old studios have no expires_at. One ALTER per database; a duplicate column is the column already being there. */
+async function ensureRoleLinkExpiry(db) {
+  if (!db || roleLinkReady.has(db)) return true;
+  try {
+    await db.prepare('ALTER TABLE app_role_links ADD COLUMN expires_at INTEGER').run();
+    roleLinkReady.add(db);
+    return true;
+  } catch (error) {
+    if (/duplicate column/i.test(String(error?.message ?? error))) { roleLinkReady.add(db); return true; }
+    return false;
+  }
+}
+async function roleLink(env, app, role) {
+  if (await ensureRoleLinkExpiry(env.DB)) {
+    try { return await env.DB.prepare('SELECT token, expires_at FROM app_role_links WHERE app = ?1 AND role = ?2').bind(app, role).first(); } catch { /* column still absent */ }
+  }
+  const row = await env.DB.prepare('SELECT token FROM app_role_links WHERE app = ?1 AND role = ?2').bind(app, role).first();
+  return row ? { token: row.token, expires_at: null } : null;
+}
+const linkLive = (row) => !!row && (row.expires_at == null || Number(row.expires_at) > Date.now());
+const linkUrl = (url, meta, role, token) => `${url.origin.replace('127.0.0.1', 'localhost')}/${meta.id}/open?role=${role}&access=${token}`;
+function expiryOf(value) {
+  if (value == null) return null;
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isSafeInteger(n) || n <= Date.now() || n > Date.now() + ROLE_LINK_YEAR) return undefined;
+  return n;
 }
 /** Private links conceal staff addresses; a signed-in grant is still required on every request. */
 export async function appAccess(request, env, meta, url) {
@@ -54,8 +83,10 @@ export async function appAccess(request, env, meta, url) {
   }
   const handoff=cookieValues(request,`studio_app_${meta.id}_${role}`)[0];
   if(handoff&&await appAssetTicket(env,meta.id,handoff,{meta,purpose:'handoff',expectedRole:role,launch:launchOf(meta,await settingsOf(env),env)}))return {ok:true,role,can:declared.can};
-  const link = await env.DB.prepare('SELECT token FROM app_role_links WHERE app = ?1 AND role = ?2').bind(meta.id, role).first();
-  if (!link || link.token !== url.searchParams.get('access')) return { ok: false, status: 404, error: 'private role link required' };
+  // The studio owner already signed in. A managed office session arrives as this same short-lived owner session.
+  if (await isOwner(request, env)) return { ok: true, role, can: declared.can };
+  const link = await roleLink(env, meta.id, role);
+  if (!linkLive(link) || link.token !== url.searchParams.get('access')) return { ok: false, status: 404, error: 'private role link required' };
   if (await isOwner(request, env)) return { ok: true, role, can: declared.can };
   const person = await players.of(request, env);
   if (!person || person.guest) return { ok: false, status: 401, error: 'sign in to this studio' };
@@ -72,6 +103,17 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
       if (request.method !== 'POST') return fail(405, 'POST required');
       if (!key && !sameOrigin(request, url)) return fail(403, 'same origin required');
       const b = await bodyOf(request);
+      await ensureRoleLinkExpiry(env.DB);
+      if (b.list === true) {
+        const roles = [];
+        for (const [role, declared] of Object.entries(meta.roles ?? {})) {
+          if (!declared?.signIn) continue;
+          const row = await roleLink(env, meta.id, role);
+          const live = linkLive(row);
+          roles.push({ role, expiresAt: row?.expires_at == null ? null : Number(row.expires_at), link: live ? linkUrl(url, meta, role, row.token) : null });
+        }
+        return json({ ok: true, roles });
+      }
       if (!Object.hasOwn(meta.roles, b.role) || !meta.roles[b.role].signIn) return fail(400, 'name a sign-in role');
       if (b.player !== undefined) {
         if (!ID.test(b.player)) return fail(400, 'invalid account');
@@ -79,11 +121,21 @@ export async function appRecordsRoute(request, env, meta, url, sub) {
         if (!p || p.guest) return fail(400, 'role grants require an existing signed-in account');
         await env.DB.prepare(b.revoke === true ? 'DELETE FROM app_roles WHERE app = ?1 AND role = ?2 AND player = ?3' : 'INSERT OR IGNORE INTO app_roles (app, role, player) VALUES (?1, ?2, ?3)').bind(b.studio === true ? '*' : meta.id, b.role, b.player).run();
       }
+      if (b.revokeLink === true) {
+        await env.DB.prepare('DELETE FROM app_role_links WHERE app = ?1 AND role = ?2').bind(meta.id, b.role).run();
+        return json({ ok: true, role: b.role, revoked: true });
+      }
+      let expires;
+      if (Object.hasOwn(b, 'expires')) {
+        expires = expiryOf(b.expires);
+        if (expires === undefined) return fail(400, 'expiry must be a future time within 366 days');
+      }
       const token = crypto.randomUUID().replaceAll('-', '');
       if (b.rotate === true) await env.DB.prepare('DELETE FROM app_role_links WHERE app = ?1 AND role = ?2').bind(meta.id, b.role).run();
       await env.DB.prepare('INSERT OR IGNORE INTO app_role_links (app, role, token) VALUES (?1, ?2, ?3)').bind(meta.id, b.role, token).run();
-      const row = await env.DB.prepare('SELECT token FROM app_role_links WHERE app = ?1 AND role = ?2').bind(meta.id, b.role).first();
-      return json({ ok: true, link: `${url.origin.replace('127.0.0.1','localhost')}/${meta.id}/open?role=${b.role}&access=${row.token}`, role: b.role });
+      if (expires !== undefined) await env.DB.prepare('UPDATE app_role_links SET expires_at = ?3 WHERE app = ?1 AND role = ?2').bind(meta.id, b.role, expires).run();
+      const row = await roleLink(env, meta.id, b.role);
+      return json({ ok: true, link: linkUrl(url, meta, b.role, row.token), role: b.role, expiresAt: row.expires_at == null ? null : Number(row.expires_at) });
     }
     const match = /^api\/app\/records\/([a-z][a-z0-9-]{0,39})(?:\/([A-Za-z0-9_-]{1,64}))?$/.exec(sub);
     if(!match && /^api\/app\/records\/[^/]+\//.test(sub))return fail(400,'record id: 1–64 letters, digits, underscore or hyphen');

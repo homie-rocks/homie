@@ -162,7 +162,7 @@ Use `createAppRecords` from `@homie-rocks/studio/apps` for lasting records. Decl
 
 Public collections reach everyone allowed to read them. A ticket number or filtering the HUD is not privacy. Keep personal/private records in a different collection whose read permission excludes customers and walls. Do not put contact details in the starter's public queue.
 
-`homie-studio app role <id> staff --player <account-id> --url <site>` grants an existing signed-in account and returns its private role address. Without `--player` it returns the owner's role address. The existing owner check protects issuance; the link alone grants nothing. `--revoke` removes a named account's grant. Staff use the studio's existing account/passkey sign-in. Keep these links private.
+`homie-studio app role <id> staff --player <account-id> --url <site>` grants an existing signed-in account and returns its private role address. Without `--player` it returns the owner's role address. The existing owner check protects issuance; the link alone grants nothing. `--revoke` removes a named account's grant. `--list` lists links, `--revoke-link` deletes one, and `--expires 7d` (or a unix millisecond time) sets an expiry within 366 days. A signed-in studio owner opens their own private roles without a link. Staff use the studio's existing account/passkey sign-in. Keep these links private.
 
 The complete helper and limits are in `node_modules/@homie-rocks/studio/apps/APPS.md`. Import `appLink`, `qrSvg`, and `randomId` from `@homie-rocks/studio/links` for a ticket URL with parameters. Build customer links from a clean public address, never by copying a staff URL. `randomId` works on plain HTTP.
 

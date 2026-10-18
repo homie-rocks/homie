@@ -14,7 +14,7 @@
  *                                          extension, Claude Code or any MCP client builds in the same chat that shows
  *                                          the cards (lib/mcp.mjs); --studios: the folder the studios live in
  *   homie-studio app new <id> [--from welcome|gathering|giving|quiz|jobs] [--name "<App Name>"]
- *   homie-studio app role <id> <role> [--player <account>] [--revoke] [--url <site>]
+ *   homie-studio app role <id> [--list] | <id> <role> [--player <account>] [--revoke] [--revoke-link] [--expires <ms|Nd>] [--url <site>]
  *   homie-studio game new <id> [--from gem-rush] [--name "<Game Name>"]
  *   homie-studio games
  *   homie-studio build [<id>] [--maps] [--types] [--long-check] [--quick]   (--maps: also keep each bundle's source map and
@@ -382,7 +382,7 @@ import { standaloneDeployNotes } from '../lib/standalone.mjs';
 const argv = process.argv.slice(2);
 const flags = new Map();
 // build --quick keeps compilation and type checks, skips rules generated play/smoke checks.
-const BOOL_FLAGS = ['webgl-failure', 'quick', 'public', 'lan', 'off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'giving', 'managed', 'live', 'manual', 'renew', 'send', 'accept-tos', 'quiet', 'no-local-ai', 'timestamps', 'overwrite', 'own-route', 'before', 'release', 'device'];
+const BOOL_FLAGS = ['webgl-failure', 'quick', 'public', 'lan', 'off', 'revoke', 'revoke-link', 'list', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'giving', 'managed', 'live', 'manual', 'renew', 'send', 'accept-tos', 'quiet', 'no-local-ai', 'timestamps', 'overwrite', 'own-route', 'before', 'release', 'device'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -950,8 +950,18 @@ async function main() {
   if (cmd === 'app' && sub === 'role') {
     const { withKey } = await import('../lib/office.mjs');
     const id = positional[2]; const role = positional[3];
-    if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id ?? '') || !/^[a-z][a-z0-9-]{0,39}$/.test(role ?? '')) throw new Error('app role <id> <role> [--player <account>] [--revoke] [--url <site>]');
-    return withKey(root, flags.get('url'), (call) => call(`/${id}/api/app/roles`, { role, studio:flags.has('studio'), ...(flags.get('player') ? { player: flags.get('player') } : {}), revoke: flags.has('revoke') }));
+    const usage = 'app role <id> --list | app role <id> <role> [--player <account>] [--revoke] [--revoke-link] [--expires <ms|Nd>] [--url <site>]';
+    if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id ?? '')) throw new Error(usage);
+    if (flags.has('list')) return withKey(root, flags.get('url'), (call) => call(`/${id}/api/app/roles`, { list: true }));
+    if (!/^[a-z][a-z0-9-]{0,39}$/.test(role ?? '')) throw new Error(usage);
+    let expires;
+    if (flags.has('expires')) {
+      const raw = String(flags.get('expires') ?? '');
+      const days = /^(\d{1,3})d$/.exec(raw);
+      expires = days ? Date.now() + Number(days[1]) * 86400000 : Number(raw);
+      if (!Number.isSafeInteger(expires) || (days && (Number(days[1]) < 1 || Number(days[1]) > 366))) throw new Error(usage);
+    }
+    return withKey(root, flags.get('url'), (call) => call(`/${id}/api/app/roles`, { role, studio:flags.has('studio'), ...(flags.get('player') ? { player: flags.get('player') } : {}), revoke: flags.has('revoke'), ...(flags.has('revoke-link') ? { revokeLink: true } : {}), ...(expires !== undefined ? { expires } : {}) }));
   }
   if (cmd === 'app' && sub === 'new') return newApp(root, positional[2], { name: flags.get('name'), from: flags.get('from') ?? 'welcome' });
   if (cmd === 'game' && sub === 'new') return newGame(root, positional[2], { from: flags.get('from') ?? 'gem-rush', name: flags.get('name') });

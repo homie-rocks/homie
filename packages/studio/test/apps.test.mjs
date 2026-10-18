@@ -77,7 +77,7 @@ test('records require account grants, survive room lifetimes, validate and compa
   const issued = await call('/welcome/api/app/roles', 'POST', { role: 'staff' }, owner);
   assert.equal(issued.status, 200); const link = (await issued.json()).link; const query = new URL(link).search;
   let a = await appAccess(request('/welcome/open' + query), env, meta, new URL(link)); assert.equal(a.status, 401);
-  a = await appAccess(request('/welcome/open?role=staff', 'GET', null, owner), env, meta, new URL(origin + '/welcome/open?role=staff')); assert.equal(a.status, 404);
+  a = await appAccess(request('/welcome/open?role=staff', 'GET', null, owner), env, meta, new URL(origin + '/welcome/open?role=staff')); assert.equal(a.ok, true, 'the studio owner opens a private role without a link');
   const id = 'pl_' + 'a'.repeat(22), session = 'b'.repeat(43), now = Date.now();
   DB.sql.prepare('INSERT INTO players (id,name,named,guest,owner,created_at,seen_at) VALUES (?,?,1,0,0,?,?)').run(id,'Test staff',now,now);
   DB.sql.prepare("INSERT INTO player_sessions (hash, player, kind, expires_at) VALUES (?, ?, 'session', ?)").run(hash(session), id, now+30*86400000);
@@ -99,6 +99,33 @@ test('records require account grants, survive room lifetimes, validate and compa
   assert.equal((await call(path+query,'DELETE',{version:2},staff)).status,403);
   assert.equal((await call(path+query,'DELETE',{version:2},owner)).status,200);
   assert.deepEqual((await (await call(path)).json()).records,[]);
+  DB.sql.close();
+});
+
+test('owner opens a private role without a link; list, expiry and revoke-link follow the role address', async () => {
+  const root = studio('Role links'); await newApp(root, 'welcome'); const meta = listApps(root)[0];
+  const DB = database(root); const env = { DB }; const origin = 'https://example.test';
+  const token = 'c'.repeat(64); DB.sql.prepare('INSERT INTO stats_keys (hash, kind, expires_at) VALUES (?, ?, ?)').run(hash(token), 'session', Date.now() + 3600000);
+  const owner = `studio_owner=${token}`;
+  const request = (path, method = 'GET', body, cookie = '') => new Request(origin + path, { method, headers: { origin, cookie, 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
+  const call = async (body) => { const req = request('/welcome/api/app/roles', 'POST', body, owner); return appRecordsRoute(req, env, meta, new URL(req.url), 'api/app/roles'); };
+  const open = (search, cookie = '') => { const req = request('/welcome/open' + search, 'GET', null, cookie); return appAccess(req, env, meta, new URL(req.url)); };
+  assert.equal((await open('?role=staff', owner)).ok, true);
+  assert.equal((await open('?role=staff')).status, 404);
+  const issued = await call({ role: 'staff', expires: Date.now() + 86400000 });
+  assert.equal(issued.status, 200);
+  const link = new URL((await issued.json()).link);
+  assert.equal((await open(link.search)).status, 401);
+  const listed = await (await call({ list: true })).json();
+  assert.equal(listed.roles.find((r) => r.role === 'staff').link, link.href.replace('127.0.0.1', 'localhost'));
+  DB.sql.prepare('UPDATE app_role_links SET expires_at = ?').run(Date.now() - 1000);
+  assert.equal((await open(link.search)).status, 404);
+  assert.equal((await open(link.search, owner)).ok, true);
+  assert.equal((await (await call({ list: true })).json()).roles.find((r) => r.role === 'staff').link, null);
+  assert.equal((await call({ role: 'staff', expires: Date.now() - 1000 })).status, 400);
+  assert.equal((await call({ role: 'staff', revokeLink: true })).status, 200);
+  assert.equal((await open(link.search)).status, 404);
+  assert.equal((await open('?role=staff', owner)).ok, true);
   DB.sql.close();
 });
 
