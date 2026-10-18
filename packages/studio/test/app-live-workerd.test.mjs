@@ -49,4 +49,40 @@ test('a signed-in app receives the live socket',{timeout:30000},async t=>{
  assert.ok(res.webSocket);
  res.webSocket.accept();
  t.after(()=>res.webSocket.close());
+ const closed=await new Promise(resolve=>{res.webSocket.addEventListener('close',event=>resolve(event.code));setTimeout(()=>resolve('open'),500);});
+ assert.equal(closed,'open');
+});
+test('a signed-in app without access closes with 4403',{timeout:30000},async t=>{
+ const meta={id:'place',kind:'app',roles:{staff:{signIn:true,can:['read:spots']}},surfaces:{phone:'staff'},records:{persist:true,collections:{spots:{fields:{name:{type:'string'}}}}}};
+ const bundled=await build({stdin:{resolveDir:new URL('../worker/',import.meta.url).pathname,contents:`
+ import worker from './index.mjs';export {Lobby} from './index.mjs';
+ export default {fetch(request,env,ctx){env.ASSETS={fetch:async()=>Response.json({studio:{name:'Place'},games:[${JSON.stringify(meta)}]})};return worker.fetch(request,env,ctx);}};
+ `},bundle:true,write:false,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*']});
+ const mf=new Miniflare({telemetry:{enabled:false},workers:[{config:{name:'live',compatibilityDate:'2026-10-07',compatibilityFlags:['nodejs_compat'],manifest:{mainModule:'entry.mjs',modules:{'entry.mjs':{type:'esm',contents:bundled.outputFiles[0].text}}},exports:{Lobby:{type:'durable-object',storage:'sqlite'}},env:{DB:{type:'d1',id:'live-denied'},LOBBY:{type:'durable-object',worker:'live',exportName:'Lobby'}}}}]});t.after(()=>mf.dispose());
+ const DB=await mf.getD1Database('DB'),dir=new URL('../../../template/site/migrations/',import.meta.url);
+ for(const file of readdirSync(dir).sort())for(const sql of readFileSync(new URL(file,dir),'utf8').replace(/^--.*$/gm,'').match(/\s*CREATE TRIGGER[\s\S]*?END;|[^;]+;/g)??[])if(sql.trim())await DB.prepare(sql).run();
+ const origin=(await mf.ready).origin;
+ const res=await mf.dispatchFetch(origin+'/place/api/app/live?role=staff&collection=spots',{headers:{upgrade:'websocket'}});
+ assert.equal(res.status,101,await (res.status===101?Promise.resolve(''):res.text()));
+ const ws=res.webSocket;assert.ok(ws);ws.accept();
+ const code=await new Promise(resolve=>{ws.addEventListener('close',event=>resolve(event.code));setTimeout(()=>resolve('open'),1000);});
+ assert.equal(code,4403);
+});
+test('a signed-in app that cannot read the collection closes with 4403',{timeout:30000},async t=>{
+ const meta={id:'place',kind:'app',roles:{staff:{signIn:true,can:['read:notes']}},surfaces:{phone:'staff'},records:{persist:true,collections:{spots:{fields:{name:{type:'string'}}},notes:{fields:{body:{type:'string'}}}}}};
+ const bundled=await build({stdin:{resolveDir:new URL('../worker/',import.meta.url).pathname,contents:`
+ import worker from './index.mjs';export {Lobby} from './index.mjs';
+ export default {fetch(request,env,ctx){env.ASSETS={fetch:async()=>Response.json({studio:{name:'Place'},games:[${JSON.stringify(meta)}]})};return worker.fetch(request,env,ctx);}};
+ `},bundle:true,write:false,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*']});
+ const mf=new Miniflare({telemetry:{enabled:false},workers:[{config:{name:'live',compatibilityDate:'2026-10-07',compatibilityFlags:['nodejs_compat'],manifest:{mainModule:'entry.mjs',modules:{'entry.mjs':{type:'esm',contents:bundled.outputFiles[0].text}}},exports:{Lobby:{type:'durable-object',storage:'sqlite'}},env:{DB:{type:'d1',id:'live-collection'},LOBBY:{type:'durable-object',worker:'live',exportName:'Lobby'}}}}]});t.after(()=>mf.dispose());
+ const DB=await mf.getD1Database('DB'),dir=new URL('../../../template/site/migrations/',import.meta.url);
+ for(const file of readdirSync(dir).sort())for(const sql of readFileSync(new URL(file,dir),'utf8').replace(/^--.*$/gm,'').match(/\s*CREATE TRIGGER[\s\S]*?END;|[^;]+;/g)??[])if(sql.trim())await DB.prepare(sql).run();
+ const token='c'.repeat(64);
+ await DB.prepare('INSERT INTO stats_keys(hash,kind,expires_at) VALUES(?1,?2,?3)').bind(createHash('sha256').update(token).digest('hex'),'session',Date.now()+3600000).run();
+ const origin=(await mf.ready).origin;
+ const res=await mf.dispatchFetch(origin+'/place/api/app/live?role=staff&collection=spots',{headers:{upgrade:'websocket',cookie:'studio_owner='+token}});
+ assert.equal(res.status,101,await (res.status===101?Promise.resolve(''):res.text()));
+ const ws=res.webSocket;assert.ok(ws);ws.accept();
+ const code=await new Promise(resolve=>{ws.addEventListener('close',event=>resolve(event.code));setTimeout(()=>resolve('open'),1000);});
+ assert.equal(code,4403);
 });

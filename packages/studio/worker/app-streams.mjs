@@ -11,6 +11,14 @@ END;`;}).join('\n')}
 `;
 const frame=value=>new TextEncoder().encode('data: '+JSON.stringify(value)+'\n\n');
 export const appHub=(env,app)=>{const ns=env.APP_RECORDS??env.LOBBY;return ns.get(ns.idFromName('@app-records/'+app));};
+/** A refused upgrade must be a socket the page can see close with 4403. A bare 403 never becomes one, so the page retries inside the eviction window and the records object stays awake. accept() plus an immediate close ends with the response. acceptWebSocket would keep a hibernating socket whose close the browser does not see. */
+export function deniedLiveSocket(){
+ if(typeof WebSocketPair==='undefined')return new Response('role cannot read collections',{status:403});
+ const pair=new WebSocketPair(),client=pair[0]??Object.values(pair)[0],server=pair[1]??Object.values(pair)[1];
+ server.accept();
+ try{server.close(4403,'closed');}catch{/* already closed */}
+ return new Response(null,{status:101,webSocket:client,headers:{'cache-control':'no-store'}});
+}
 const pushedRevisions=new WeakMap();
 export async function pushAppRecords(env,cat){
  const apps=(cat.games??[]).filter(g=>g.kind==='app');
@@ -58,7 +66,7 @@ export class AppRecordStreams {
  async open({meta,url,headers,collections=[]}){
   if(!Array.isArray(collections)||collections.some(c=>typeof c!=='string'||!Object.hasOwn(meta.records?.collections??{},c)))return new Response('unknown collection',{status:400});
   const s={id:crypto.randomUUID(),meta,url:new URL(url),request:new Request(url,{headers}),collections,seen:new Map()};
-  if(!await this.authorized(s))return new Response('role cannot read collections',{status:403});
+  if(!await this.authorized(s))return deniedLiveSocket();
   const session=await localSession(s.request,this.env);
   s.app=session?.app===meta.id&&session.scope?`${meta.id}:check:${session.scope}`:meta.id;
   s.room=s.url.searchParams.get('room')??'main';

@@ -327,9 +327,12 @@ export default async function route(request, env, ctx) {
         if(request.method!=='GET')return new Response('GET required',{status:405});
         // Cookie renewal is a Worker response. It must not wake the records object.
         if(url.searchParams.get('renew')==='1')return apiSession(new Response(null,{status:204,headers:{'cache-control':'no-store'}}));
-        const {appHub}=await import('./app-streams.mjs');
+        const {appHub,deniedLiveSocket}=await import('./app-streams.mjs');
         if(typeof WebSocketPair!=='undefined'){
           if(request.headers.get('upgrade')?.toLowerCase()!=='websocket')return new Response('websocket required',{status:426,headers:{'cache-control':'no-store'}});
+          // Check before the records object. A refused upgrade is one Worker socket, closed 4403, and the page stops.
+          const access=await appAccess(request,env,meta,url);
+          if(!access.ok)return deniedLiveSocket();
           // The object has to answer the upgrade itself. A JSON subrequest cannot carry the socket back.
           const headers=new Headers(request.headers);
           headers.set('x-homie-live-page',request.url);

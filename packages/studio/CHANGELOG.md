@@ -17,6 +17,21 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.6] - 2026-10-18
+
+**Plugin 0.58.2**
+
+A page that no longer has access stops. It does not keep waking the records object.
+
+### Fixed
+
+- A live upgrade that is not allowed closes with 4403, and the page stops. A bare refusal was not a socket, so the page tried again about every two minutes and the records object stayed awake.
+- When the role itself is refused, that close happens before the records object is woken.
+
+### Upgrade notes
+
+- Upgrade the studio to pick this up.
+
 ## [0.58.5] - 2026-10-18
 
 **Plugin 0.58.2**
