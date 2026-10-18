@@ -8,6 +8,10 @@ Ask: *"Make a game for my pub and put it online."* Your AI chooses the technical
 details; you can change them by asking. Cloudflare opens for your approval when it is time
 to go live. Listing on homie.rocks is optional. Homie for studios is in beta.
 
+The source of this repository is Cloudflare Artifacts (`homie-prod/homie`). This GitHub
+repository is a read-only mirror of `main`, so issues and stars stay here. npm publish
+stays on GitHub Actions, which is what signs provenance.
+
 Apps live beside games in `apps/`: **one transforming screen, its roles, and its parts**. They use the same engines, live rooms and standalone builds, with lasting records and staff permissions. Ask for a welcome board, repair queue or customer app; no rounds or scores are required. [Build an app](packages/studio/apps/APPS.md).
 
 
