@@ -65,7 +65,7 @@ function expiryOf(value) {
   return n;
 }
 /** Private links conceal staff addresses; a signed-in grant is still required on every request. */
-export async function appAccess(request, env, meta, url) {
+export async function appAccess(request, env, meta, url, options = {}) {
   const role = appRole(meta, url);
   const declared = Object.hasOwn(meta.roles ?? {}, role) ? meta.roles[role] : null;
   if (!declared) return { ok: false, status: 404, error: 'unknown role' };
@@ -83,8 +83,8 @@ export async function appAccess(request, env, meta, url) {
   }
   const handoff=cookieValues(request,`studio_app_${meta.id}_${role}`)[0];
   if(handoff&&await appAssetTicket(env,meta.id,handoff,{meta,purpose:'handoff',expectedRole:role,launch:launchOf(meta,await settingsOf(env),env)}))return {ok:true,role,can:declared.can};
-  // The studio owner already signed in. A managed office session arrives as this same short-lived owner session.
-  if (await isOwner(request, env)) return { ok: true, role, can: declared.can };
+  // Opening the app: the signed-in studio owner needs no link. hasRole passes owner:false so a custom route still requires that role's own link.
+  if (options.owner !== false && await isOwner(request, env)) return { ok: true, role, can: declared.can };
   const link = await roleLink(env, meta.id, role);
   if (!linkLive(link) || link.token !== url.searchParams.get('access')) return { ok: false, status: 404, error: 'private role link required' };
   if (await isOwner(request, env)) return { ok: true, role, can: declared.can };

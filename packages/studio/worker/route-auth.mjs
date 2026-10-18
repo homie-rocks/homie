@@ -13,7 +13,7 @@ export async function hasRole(request, env, app, role) {
   const launch = launchOf(meta, await settingsOf(env, {fresh:true}), env);
   if (launch !== 'public' && !(await accessOf(request, env, app, launch)).ok) return false;
   url.searchParams.set('role', role);
-  return (await (await import('./app-records.mjs')).appAccess(request, env, meta, url)).ok === true;
+  return (await (await import('./app-records.mjs')).appAccess(request, env, meta, url, { owner: false })).ok === true;
 }
 
 /** Return a refusal response, or null when the browser supplied same-origin evidence. */

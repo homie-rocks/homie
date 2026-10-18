@@ -136,7 +136,9 @@ test('app home, landing, manifest and shared watch shell use app language and pu
     ASSETS: { fetch: async (req) => { try { const path = new URL(req.url).pathname; return new Response(readFileSync(join(root, 'site/dist', path)), { headers: { 'content-type': path.endsWith('.json') ? 'application/json' : 'application/octet-stream' } }); } catch { return new Response('missing', { status: 404 }); } } },
     LOBBY: { idFromName: (id) => id, get: () => ({ fetch: async () => new Response(JSON.stringify({ rooms: [], players: 0 })) }) },
   };
-  const get = (path) => worker.fetch(new Request('https://apps.example' + path), env, { waitUntil() {} });
+  const pending = [];
+  const ctx = { waitUntil(p) { pending.push(p); } };
+  const get = (path) => worker.fetch(new Request('https://apps.example' + path), env, ctx);
   const manifest = await (await get('/.well-known/homie-studio.json')).json();
   assert.deepEqual(manifest.games, []); assert.equal(manifest.apps[0].open, 'https://apps.example/welcome/open');
   assert.equal(manifest.apps[0].wall, 'https://apps.example/welcome/tv'); assert.equal(JSON.stringify(manifest).includes('access='), false);
@@ -155,14 +157,15 @@ test('app home, landing, manifest and shared watch shell use app language and pu
   assert.match(explicitRole, /"params":\{[^}]*"role":"customer"/);
   for (const origin of ['app://game', 'capacitor://localhost', 'https://localhost', 'https://evil.example']) {
     const request = (method, suffix = '') => new Request('https://apps.example/welcome/api/app/records/queue/native' + suffix, { method, headers: { origin, 'content-type': 'application/json' }, ...(method === 'POST' ? { body: JSON.stringify({ data: { label: 'Native', status: 'waiting' } }) } : {}) });
-    const preflight = await worker.fetch(request('OPTIONS'), env, { waitUntil() {} });
+    const preflight = await worker.fetch(request('OPTIONS'), env, ctx);
     const allowed = origin !== 'https://evil.example';
     assert.equal(preflight.headers.get('access-control-allow-origin'), allowed ? origin : null);
     assert.equal(preflight.headers.get('access-control-allow-credentials'), null);
-    const create = await worker.fetch(request('POST'), env, { waitUntil() {} });
+    const create = await worker.fetch(request('POST'), env, ctx);
     assert.equal(create.status, allowed ? origin === 'app://game' ? 200 : 409 : 403);
-    const staff = await worker.fetch(request('GET', '?role=staff'), env, { waitUntil() {} }); assert.equal(staff.status, 404);
+    const staff = await worker.fetch(request('GET', '?role=staff'), env, ctx); assert.equal(staff.status, 404);
   }
+  await Promise.all(pending);
   DB.sql.close();
 });
 
