@@ -1,4 +1,19 @@
 import {roomServer} from './servers.mjs';
+import {liveRoomSummaries} from './lobby-summary.mjs';
+/** Today's high water, from the counter the peak object already wrote. A read must not wake that object. */
+async function peakFromStats(env,game){
+ const peak={players:0,room:0};
+ if(!env.DB)return peak;
+ try{
+  const day=new Date().toISOString().slice(0,10);
+  const {results}=await env.DB.prepare("SELECT metric, MAX(n) AS n FROM stats_daily WHERE day=?1 AND subject=?2 AND metric IN ('peak','peak-room') GROUP BY metric").bind(day,game).all();
+  for(const row of results??[]){
+   if(row.metric==='peak')peak.players=Number(row.n)||0;
+   if(row.metric==='peak-room')peak.room=Number(row.n)||0;
+  }
+ }catch{/* before the stats table, the number is zero and the peak object stays asleep */}
+ return peak;
+}
 export const LOBBY_SHARDS=16;
 export const SHARDED_ROOM_BASE=100000000;
 export function lobbyShard(key) {
@@ -27,6 +42,19 @@ export function lobbyFor(env,game,identity='') {
     if(url.pathname==='/report') {
       const body=JSON.parse(init?.body??await input.clone().text());
       return send(roomShard(body.room),url,init??{method:'POST',body:JSON.stringify(body)});
+    }
+    // A read must not wake every shard. The shards write lobby_summaries when they take a report; one D1 read answers the office, the stats page and the lounge. /busiest still asks the shards: a watcher is matched on the live build, which the summary does not carry.
+    if(url.pathname==='/now'||url.pathname==='/rooms'||url.pathname==='/office') {
+      const summaries=await liveRoomSummaries(env);
+      if(summaries){
+        const list=summaries.get(game)??[];
+        if(url.pathname==='/rooms')return Response.json({rooms:list});
+        if(url.pathname==='/office'){
+          const rooms=list.map(r=>({room:r.name??r.room,players:r.players||0,people:r.people??r.players??0,agents:r.agents??0,ai:r.ai??0,at:r.at,server:r.server??roomServer(r.name??r.room),...(r.closedUntil?{closedUntil:r.closedUntil}:{})})).filter(r=>(r.players||0)>0||r.closedUntil).sort((a,b)=>b.players-a.players).slice(0,100);
+          return Response.json({rooms});
+        }
+        return Response.json({players:list.reduce((n,r)=>n+(Number(r.players)||0),0),rooms:list.filter(r=>(r.players||0)>0).length,peak:await peakFromStats(env,game)});
+      }
     }
     const rows=await Promise.all(Array.from({length:LOBBY_SHARDS},async(_,shard)=>{
       const response=await send(shard,url,init);if(!response.ok)throw Error('Lobby shard unavailable');return response.json();

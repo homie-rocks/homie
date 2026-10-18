@@ -17,6 +17,24 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.3] - 2026-10-18
+
+**Plugin 0.58.2**
+
+An idle studio no longer keeps its lobby awake. Reading who is playing uses the summary already stored for the lounge, and a room that is merely sitting there lets its lobby shard hibernate.
+
+### Fixed
+
+- Who is playing, the office and the room list read the lobby summary instead of waking all 16 lobby shards.
+- A lobby shard publishes that summary in the report itself. It no longer sets a 10 second alarm, which had kept the shard awake for as long as anyone was seated.
+- A room with nobody new arriving reports again after two and a half minutes, which is long enough for the shard to sleep and short enough that "playing now" still includes it.
+- An open event stream or app stream no longer heartbeats every 15 seconds. That heartbeat was shorter than eviction, so the lobby stayed awake for as long as the page was open.
+- The live count on a game page reads today's peak from the stats table. It no longer wakes the peak object every 15 seconds.
+
+### Upgrade notes
+
+- Upgrade the studio to pick this up. Until then, an open office or stats page still wakes every lobby shard.
+
 ## [0.58.2] - 2026-10-17
 
 **Plugin 0.58.2**

@@ -429,8 +429,12 @@ async function serverLive(env, meta, servers, origin, lobby) {
 async function weekOf(env, game) {
   const w = await playedThisWeek(env, game);
   if (!w) return null;
+  // Today's high water is already in stats_daily. Reading the peak object here woke it on every 15s live poll, which is shorter than eviction, so the object never slept while a game page was open.
   let peak = 0;
-  try { peak = (await (await lobbyFor(env,game).fetch('https://lobby/now')).json()).peak?.players ?? 0; } catch { peak = 0; }
+  try {
+    const row = await env.DB.prepare("SELECT MAX(n) AS n FROM stats_daily WHERE day = ?1 AND metric = 'peak' AND subject = ?2").bind(today(), String(game)).first();
+    peak = Number(row?.n) || 0;
+  } catch { peak = 0; }
   return { plays: w.plays, rounds: w.rounds, ...(peak ? { peak } : {}) };
 }
 

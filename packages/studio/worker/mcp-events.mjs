@@ -45,7 +45,7 @@ export async function pollEvents(env,cat,caller,params,now=Date.now()){
   const hasMore=rows.length>max,page=rows.slice(0,max);
   const events=page.map(row=>{const data=JSON.parse(row.data);if((env.HOMIE_LOCAL_TEST_SECRET||caller.remoteTest)&&caller.localTest&&caller.testScope&&feed.event==='record.changed')data.app=feed.app;return occurrence(params.name,{...row,data},cursorOf(params.name,row.seq));});
   const after=hasMore?page.at(-1).seq:start.through;
-  return {events,cursor:cursorOf(params.name,after),truncated:start.truncated,hasMore,nextPollMs:5000};
+  return {events,cursor:cursorOf(params.name,after),truncated:start.truncated,hasMore,nextPollMs:180000};
 }
 async function subId(caller,params,url){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify([caller.id,url,params.name,{}])));return 'sub_'+Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('');}
 async function stored(env,id){const row=await env.DB.prepare('SELECT value FROM mcp_kv WHERE key=?1').bind(prefix+id).first();return row?JSON.parse(row.value):null;}

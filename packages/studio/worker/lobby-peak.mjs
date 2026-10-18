@@ -1,4 +1,5 @@
 import {counter,today} from './stats.mjs';
+import {PRESENCE_MS} from './lobby-summary.mjs';
 
 // One total per bookkeeping shard, never a sum of independent historical peaks.
 // Reports carry their observation time so a delayed request cannot rewind a shard.
@@ -32,7 +33,7 @@ export class LobbyPeak {
       if(!Number.isInteger(row.shard)||row.shard<0||row.shard>=16||!Number.isFinite(row.at)||!Number.isFinite(row.players)||row.players<0)return Response.json({error:'report'},{status:400});
       if(!prior||row.at>prior.at){
         state.shards[row.shard]={players:row.players,at:row.at};
-        const concurrent=Object.values(state.shards).filter(r=>r.at>Date.now()-180000).reduce((n,r)=>n+r.players,0);
+        const concurrent=Object.values(state.shards).filter(r=>r.at>Date.now()-PRESENCE_MS).reduce((n,r)=>n+r.players,0);
         const players=Math.max(state.players,concurrent),room=Math.max(state.room,Number(row.room)||0);
         if(players>state.players||room>state.room)this.dirty=true;
         state.players=players;state.room=room;this.subject=new URL(request.url).searchParams.get('game');

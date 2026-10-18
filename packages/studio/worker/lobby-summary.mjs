@@ -1,3 +1,5 @@
+/** How long a room still counts as live after its last report. Longer than the lobby heartbeat, so a quiet room stays listed while its shard hibernates. */
+export const PRESENCE_MS=240000;
 export const LIVE_ROOMS_QUERY='SELECT game,rooms,updated FROM lobby_summaries ORDER BY game LIMIT 500';
 /** Queue order is not guaranteed. An older snapshot must never replace a newer one. */
 export async function storeLobbySummary(env, message) {
@@ -10,7 +12,7 @@ export async function storeLobbySummary(env, message) {
 }
 export async function liveRoomSummaries(env) {
   if(!env.BACKGROUND||!env.DB)return null; // Older wrappers still query their Lobby.
-  const result=new Map(),since=Date.now()-180000;
+  const result=new Map(),since=Date.now()-PRESENCE_MS;
   let cursor=null;
   for(;;){
     const query=cursor===null?env.DB.prepare(LIVE_ROOMS_QUERY):env.DB.prepare('SELECT game,rooms,updated FROM lobby_summaries WHERE game>? ORDER BY game LIMIT 500').bind(cursor);

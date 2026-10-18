@@ -4,7 +4,7 @@ import {EVENT_ERRORS,terminalEventError,EventsError,eventError,notification,sseF
 /** Connection-scoped push subscriptions hosted by the existing per-connection Lobby. */
 export class McpEventStreams {
   constructor(env,ctx){this.env=env;this.ctx=ctx;this.streams=new Set();}
-  close(stream){if(stream.closed)return;stream.closed=true;clearInterval(stream.timer);stream.resume?.();try{stream.controller.close();}catch{/* The reader already cancelled or the stream already closed. */}this.streams.delete(stream);if(stream.registryKey)this.ctx.waitUntil(this.env.DB.prepare('DELETE FROM mcp_kv WHERE key=?1').bind(stream.registryKey).run().catch(error=>console.warn("MCP stream cleanup deferred to expiry:",error.message)));}
+  close(stream){if(stream.closed)return;stream.closed=true;clearTimeout(stream.timer);clearTimeout(stream.life);stream.resume?.();try{stream.controller.close();}catch{/* The reader already cancelled or the stream already closed. */}this.streams.delete(stream);if(stream.registryKey)this.ctx.waitUntil(this.env.DB.prepare('DELETE FROM mcp_kv WHERE key=?1').bind(stream.registryKey).run().catch(error=>console.warn("MCP stream cleanup deferred to expiry:",error.message)));}
   async write(stream,value,authorize){
     if(stream.closed)return false;
     if(stream.controller.desiredSize<=0)await new Promise(resolve=>{stream.resume=resolve;});
@@ -23,8 +23,9 @@ export class McpEventStreams {
       const stream={...input,registryKey,source:eventSource(feed),cursor:cursorOf(input.params.name,start.after),closed:false,busy:false};
       const body=new ReadableStream({start:controller=>{stream.controller=controller;controller.enqueue(sseFrame(notification('active',{cursor:stream.cursor,truncated:start.truncated},stream.id)));},pull:()=>{const resume=stream.resume;stream.resume=null;resume?.();},cancel:()=>this.close(stream)});
       this.streams.add(stream);
-      // Heartbeats also recheck authorization, catch missed wakes and renew discovery.
-      stream.timer=setInterval(()=>this.pump(stream),15000);
+      // One heartbeat is enough to recheck authorization. A repeating timer, shorter than eviction, pins this lobby for as long as the page holds the stream.
+      stream.timer=setTimeout(()=>this.pump(stream),180000);
+      stream.life=setTimeout(()=>this.close(stream),300000);
       this.pump(stream);
       return new Response(body,{headers:{'content-type':'text/event-stream','cache-control':'no-store'}});
     }catch(error){return Response.json({jsonrpc:'2.0',id:input.id,error:eventError(error)});}

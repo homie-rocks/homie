@@ -1,4 +1,5 @@
 import {lobbyFor} from './lobby-shards.mjs';
+import {liveRoomSummaries} from './lobby-summary.mjs';
 import {writePageMetric,analyticsStatus} from './analytics.mjs';
 /**
  * STUDIO METRICS: count, don't track (@homie-rocks/studio 0.6.0).
@@ -251,8 +252,17 @@ export async function playersNow(env) {
   } catch { return null; }
 }
 
-/** The Lobby's count of people in every room of each game, right now. */
+/** People in every room of each game, right now. The summary table when this worker has one, so a stats read does not wake a lobby shard. */
 async function playingNow(env, games) {
+  const summaries = await liveRoomSummaries(env).catch(() => null);
+  if (summaries) {
+    const out = {};
+    for (const g of games) {
+      const list = summaries.get(g.id) ?? [];
+      out[g.id] = { players: list.reduce((n, r) => n + (Number(r.players) || 0), 0), rooms: list.filter((r) => (r.players || 0) > 0).length };
+    }
+    return out;
+  }
   const out = {};
   await Promise.all(games.map(async (g) => {
     try {

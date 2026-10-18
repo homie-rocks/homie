@@ -8,6 +8,7 @@ import { ROOM_ID } from './page-policy.mjs';
 import { SERVER_ID, pooledRoom, roomCode, roomServer } from './servers.mjs';
 import { seatCount } from './seats.mjs';
 import { counter, today } from './stats.mjs';
+import { PRESENCE_MS } from './lobby-summary.mjs';
 
 import {LOBBY_APP_VERSIONS, LOBBY_ROOMS_MAX} from './lobby-limits.mjs';
 export {LOBBY_APP_VERSIONS, LOBBY_ROOMS_MAX} from './lobby-limits.mjs';
@@ -34,7 +35,7 @@ export class Lobby {
         this.current = saved.current ?? null;
         this.next = typeof saved.next === 'number' ? { public: saved.next } : saved.next && typeof saved.next === 'object' ? { public: 1, ...saved.next } : { public: 1 };
         for (const r of saved.rooms ?? []) this.rooms.set(r.name, { ...r, server: r.server ?? roomServer(r.name), agents: r.agents ?? 0, ai: r.ai ?? 0, ver: typeof r.ver === 'string' ? r.ver : '', pending: [], agentPending: [] });
-        for(const r of this.rooms.values())if(r.players>0&&r.at>Date.now()-180000)this.live.set(r.name,{players:r.players,at:r.at});
+        for(const r of this.rooms.values())if(r.players>0&&r.at>Date.now()-PRESENCE_MS)this.live.set(r.name,{players:r.players,at:r.at});
         if(ctx.storage.sql)for(const row of ctx.storage.sql.exec('SELECT body,expires FROM matchmaking_reservations WHERE expires>?',Date.now()).toArray()) {
           const reservation=JSON.parse(row.body),room=this.rooms.get(reservation.room);
           if(room && reservation.pending!==false)room.pending.push(row.expires-20000);
@@ -51,7 +52,7 @@ export class Lobby {
   notePeak(room, players, game) {
     const now = Date.now();
     if (players > 0) this.live.set(room, { players, at: now }); else this.live.delete(room);
-    for (const [name, r] of this.live) if (now - r.at > 180_000) this.live.delete(name); // a room that stopped reporting
+    for (const [name, r] of this.live) if (now - r.at > PRESENCE_MS) this.live.delete(name); // a room that stopped reporting
     const day = today();
     if (this.peak.day !== day) this.peak = { day, players: 0, room: 0 };
     let all = 0;
@@ -99,7 +100,11 @@ export class Lobby {
     }
     try {
       const response=await this.answer(request),url=new URL(request.url);
-      if(response.ok && request.method==='POST' && url.pathname==='/report' && this.env?.BACKGROUND && url.searchParams.get('game')) await this.scheduleSummary(url.searchParams.get('game'),Number(url.searchParams.get('shard'))||0);
+      if(response.ok && request.method==='POST' && url.pathname==='/report' && this.env?.BACKGROUND && url.searchParams.get('game')) {
+        const game=url.searchParams.get('game'),shard=Number(url.searchParams.get('shard'))||0;
+        // Publish in this wake. A +10s alarm restarts the idle clock and, with a heartbeat inside the eviction window, pins the shard for as long as anyone is seated.
+        this.ctx.waitUntil(this.publishSummary(game,shard).catch(error=>console.error(JSON.stringify({ev:'lobby-summary-failed',error:errorLine(error)}))));
+      }
       return response;
     } catch (error) {
       let path = '';
@@ -109,24 +114,22 @@ export class Lobby {
     }
   }
 
-  async scheduleSummary(game,shard=0) {
-    this.summaryShard=shard;
-    if(this.summaryGame!==game) {await this.ctx.storage.put('summary-game',{game,shard});this.summaryGame=game;}
-    if(!this.summaryDue) {
-      this.summaryDue=Date.now()+10000;
-      try {await this.ctx.storage.setAlarm(this.summaryDue);} catch(error) {this.summaryDue=null;throw error;}
-    }
+  async publishSummary(game,shard=0) {
+    if(!game||!this.env?.BACKGROUND)return;
+    const at=Date.now();
+    const rooms=[...this.rooms.values()].filter(r=>r.players>0&&r.at>at-PRESENCE_MS).map(({name,players,agents,ai,server,at:reported})=>({name,players,agents:agents??0,ai:ai??0,server:server??roomServer(name),at:reported}));
+    for(const [name,until] of this.closed)if(until>at&&!rooms.some(r=>r.name===name))rooms.push({name,players:0,agents:0,ai:0,server:roomServer(name),at,closedUntil:until});
+    await this.env.BACKGROUND.send({v:1,type:'lobby.snapshot',game,shard,at,rooms});
   }
   async alarm() {
     if(this.matchRouter)return this.matchRouter.alarm();
     if((await this.ctx.storage.list?.({prefix:'match:',limit:1}))?.size)return (this.matchRouter??=new MatchRouter(this.ctx,this.env)).alarm();
+    // A summary alarm armed by an older build. Publish once and do not arm another: an idle shard has to be able to hibernate.
     this.summaryDue=null;
     const saved=await this.ctx.storage.get('summary-game');
     const game=this.summaryGame??(typeof saved==='string'?saved:saved?.game),shard=this.summaryShard??saved?.shard??0;
-    if(!game||!this.env.BACKGROUND)return;
-    const at=Date.now();
-    const rooms=[...this.rooms.values()].filter(r=>r.players>0&&r.at>at-180000).map(({name,players,agents,ai,server,at})=>({name,players,agents:agents??0,ai:ai??0,server:server??roomServer(name),at}));
-    await this.env.BACKGROUND.send({v:1,type:'lobby.snapshot',game,shard,at,rooms});
+    if(saved)await this.ctx.storage.delete('summary-game').catch(()=>{});
+    await this.publishSummary(game,shard);
   }
 
   reservation(key,result) {
@@ -303,7 +306,7 @@ export class Lobby {
     }
     if (url.pathname === '/office') {
       // The owner's office: every room with somebody seated in the last 3 minutes, public or named, and closed ones.
-      for (const [name, r] of this.seen) if (now - r.at > 180_000) this.seen.delete(name);
+      for (const [name, r] of this.seen) if (now - r.at > PRESENCE_MS) this.seen.delete(name);
       const rooms = new Map([...this.seen.values()].map((r) => [r.room, r]));
       for (const r of this.rooms.values()) if (r.players > 0 && !rooms.has(r.name)) rooms.set(r.name, { room: r.name, players: r.players, people: r.players, agents: r.agents ?? 0, ai: r.ai ?? 0, at: r.at });
       for (const [name, until] of this.closed) if (until > now && !rooms.has(name)) rooms.set(name, { room: name, players: 0, people: 0, at: now, closedUntil: until });
@@ -311,7 +314,7 @@ export class Lobby {
     }
     if (url.pathname === '/now') {
       let players = 0;
-      for (const [name, r] of this.live) { if (Date.now() - r.at > 180_000) this.live.delete(name); else players += r.players; }
+      for (const [name, r] of this.live) { if (Date.now() - r.at > PRESENCE_MS) this.live.delete(name); else players += r.players; }
       return json({ players, rooms: this.live.size, peak: this.peak.day === today() ? { players: this.peak.players, room: this.peak.room } : { players: 0, room: 0 } });
     }
     return json({ error: 'not found' }, 404);

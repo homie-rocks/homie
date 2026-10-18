@@ -1447,8 +1447,8 @@ export class Table {
     // People for the stats: seated sockets that are not house QA (players is what the Lobby matches strangers by).
     let people = 0;
     for (const c of room.clients.values()) if (c.helloed && c.seat !== null && !c.agent && !c.conn?.qa) people += 1;
-    // On a change, and once a minute while anybody is here (so the Lobby's "playing now" forgets a room that died).
-    if (players === this.lastReport && people === this.lastPeople && agents === this.lastAgents && ai === this.lastAi && (!players || Date.now() - (this.lastReportAt ?? 0) < 60_000)) return;
+    // On a change, and every two and a half minutes while anybody is here. That is longer than Durable Object eviction, so an occupied room's lobby shard hibernates between heartbeats, and shorter than the presence window, so "playing now" does not drop a live room.
+    if (players === this.lastReport && people === this.lastPeople && agents === this.lastAgents && ai === this.lastAi && (!players || Date.now() - (this.lastReportAt ?? 0) < 150_000)) return;
     this.lastReport = players;
     this.lastPeople = people;
     this.lastAgents = agents;
