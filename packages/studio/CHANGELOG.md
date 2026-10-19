@@ -21,6 +21,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 **Plugin 0.58.3**
 
+Play concept previews without a duplicate banner covering the game.
+
 ### Fixed
 
 - Concept previews label the outer page once, without injecting a second banner over embedded game and app controls. No-index headers remain on every response.
