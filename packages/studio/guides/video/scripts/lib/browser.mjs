@@ -85,3 +85,21 @@ export async function htmlToPng(root, html, out, { width, height }) {
   } finally { await close(); }
   return out;
 }
+
+/** Optional CDP endpoint for a browser in the cloud (Cloudflare Browser Run, CI): HOMIE_BROWSER_WS_ENDPOINT.
+ * https://developers.cloudflare.com/browser-run/cdp/puppeteer/ — each connection is its own browser session. */
+export function remoteBrowserEndpoint(env = process.env) {
+  if (!env.HOMIE_BROWSER_WS_ENDPOINT) return null;
+  const endpoint = new URL(env.HOMIE_BROWSER_WS_ENDPOINT);
+  if (!['ws:', 'wss:'].includes(endpoint.protocol) || endpoint.username || endpoint.password) {
+    throw new Error('HOMIE_BROWSER_WS_ENDPOINT must be a WebSocket URL without embedded credentials');
+  }
+  return endpoint.href;
+}
+
+/** Puppeteer's own CDP connection when a cloud browser is set; otherwise the usual local launch. */
+export function launchChrome(puppeteer, options, { env = process.env } = {}) {
+  const browserWSEndpoint = remoteBrowserEndpoint(env);
+  if (!browserWSEndpoint) return puppeteer.launch(options);
+  return puppeteer.connect({ browserWSEndpoint, protocolTimeout: options.protocolTimeout ?? 180_000, defaultViewport: null });
+}

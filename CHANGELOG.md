@@ -19,7 +19,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [0.58.11] - 2026-10-19
 
-**Plugin 0.58.4**
+**Plugin 0.58.5**
 
 Host a studio on Workers for Platforms with a private preview, check it with a browser in the cloud, and prepare a studio for a move with an owner-controlled read-only switch.
 
