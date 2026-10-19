@@ -10,3 +10,5 @@ Start here for a falling-block puzzle. It already plays: preserve the working me
 Build and repair the exact diagnostic before adding more. A file write replaces its entire contents; use targeted edits for small repairs. After an interrupted edit, read the file before continuing.
 
 Exercise left/right, rotation, soft and hard drop on keyboard and with real touchscreen taps. Play two independent wells, clear a row, top out, finish/restart a round and join a bot's seat. Inspect computer, phone and sideways-phone frames. A green movement probe or compiler alone does not prove a board game plays.
+
+The room uses `rest: "quiet"`: gravity and the round clock keep running while a connected person watches. Do not use the movement starters' away-from-keyboard `idle` pause for this continuous falling-block game. Empty rooms still stop normally.

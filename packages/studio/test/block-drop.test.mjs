@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PKG, loadGame } from './rules-kit.mjs';
+import { PKG, loadGame, fakeClock } from './rules-kit.mjs';
 const scratch = mkdtempSync(join(tmpdir(), 'homie-block-drop-'));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 let loaded;
@@ -57,4 +57,22 @@ test('a person taking a bot seat receives a fresh playable well', async () => {
   assert.equal(core.character(0).fields.dead, false);
   assert.equal(core.character(0).fields.score, 0);
   assert.equal(core.stats.errors, 0, core.stats.lastError);
+});
+
+test('watching a falling piece keeps the round running, but leaving pauses the empty room', async () => {
+  const { L } = await setup(), dir = join(PKG, 'starters/block-drop');
+  const game = JSON.parse(readFileSync(join(dir, 'game.json')));
+  const compiled = L.R.compileRules(L.def, { map: L.R.compileMap(JSON.parse(readFileSync(join(dir, 'map/main.json')))), settings: L.R.roomSettings(game.room).settings, seats: 4 });
+  const clock = fakeClock(), sent = [];
+  const host = L.H.createHost({ game: 'block-drop', compiled, clock, random: () => 0.4, onRest: () => {}, send: m => sent.push(m) });
+  try {
+    host.frame({ t: 'join', peer: { id: 'watching-person', seat: 0, occ: 1, rest: true }, rest: true });
+    clock.advance(70000);
+    assert.equal(host.resting, false, 'a connected player can watch without freezing gravity');
+    clock.advance(55000);
+    assert.ok(sent.some(m => m.t === 'round' && m.round?.phase === 'over'), 'the round finishes without further input');
+    host.frame({ t: 'leave', seat: 0 });
+    assert.equal(host.people, 0);
+    assert.equal(host.paused, true, 'empty rooms still stop');
+  } finally { host.stop(); }
 });
