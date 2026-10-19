@@ -25,7 +25,7 @@ function tone(hz: number, seconds = 0.055, volume = 0.055): void {
   if (!audio || audio.state !== 'running' || muted) return;
   const o = audio.createOscillator(), gain = audio.createGain();
   o.type = 'triangle'; o.frequency.value = hz;
-  gain.gain.setValueAtTime(volume, audio.currentTime);
+  gain.gain.setValueAtTime(volume * 3, audio.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + seconds);
   o.connect(gain).connect(audio.destination); o.start(); o.stop(audio.currentTime + seconds);
 }
@@ -52,7 +52,15 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('[data-action]
     if (action === 'drop') drop = true;
     if (action === 'audio') { muted = !muted; button.textContent = muted ? '×♪' : '♪'; button.setAttribute('aria-pressed', String(!muted)); }
   });
-  const release = (): void => { button.classList.remove('pressed'); if (action === 'left' || action === 'right') touchDx = 0; if (action === 'soft') soft = false; };
+  button.addEventListener('pointermove', e => {
+    if (!button.hasPointerCapture(e.pointerId) || !['left','right','soft'].includes(action ?? '')) return;
+    const target = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLButtonElement>('[data-action]');
+    const next = target?.dataset.action;
+    touchDx = next === 'left' ? -1 : next === 'right' ? 1 : 0; soft = next === 'soft';
+    for (const control of document.querySelectorAll<HTMLButtonElement>('[data-action]'))
+      control.classList.toggle('pressed', control === target && ['left','right','soft'].includes(next ?? ''));
+  });
+  const release = (): void => { for (const control of document.querySelectorAll('[data-action]')) control.classList.remove('pressed'); if (['left','right','soft'].includes(action ?? '')) { touchDx = 0; soft = false; } };
   button.addEventListener('pointerup', release); button.addEventListener('pointercancel', release);
   // Keyboard activation for focused native buttons; pointer input is handled above.
   button.addEventListener('click', e => { if (e.detail === 0) { unlock(); if (action === 'rotate') rotate = true; if (action === 'drop') drop = true; } });
@@ -91,15 +99,15 @@ function frame(): void {
   if (audio?.state === 'running' && now >= nextNote) { const hz = melody[note++ % melody.length]; if (hz) tone(hz, 0.21, 0.075); nextNote = now + 250; }
   room.input({ dx: touchDx || (keys.has('ArrowRight') || keys.has('KeyD') ? 1 : 0) - (keys.has('ArrowLeft') || keys.has('KeyA') ? 1 : 0), soft: soft || keys.has('ArrowDown') || keys.has('KeyS'), rotate, drop }); rotate = false; drop = false;
   const bg = g.createRadialGradient(w * 0.5, h * 0.3, 10, w * 0.5, h * 0.5, Math.max(w, h)); bg.addColorStop(0, '#172747'); bg.addColorStop(1, '#060b16'); g.fillStyle = bg; g.fillRect(0, 0, w, h);
-  text(document.title.toUpperCase(), 20, 31, 18, '#eef6ff');
+  text(document.title.toUpperCase(), 20, 61, 18, '#eef6ff');
   const round = room.round;
-  text(round?.phase === 'over' ? `Next round in ${Math.ceil(round.secondsLeft)}` : round ? `${Math.ceil(round.secondsLeft)}s` : 'Joining…', 20, 51, 12);
+  text(round?.phase === 'over' ? `Next round in ${Math.ceil(round.secondsLeft)}` : round ? `${Math.ceil(round.secondsLeft)}s` : 'Joining…', 20, 80, 12);
   const boards: Board[] = []; room.each('board', b => boards.push(b));
   const me = room.me; const focus = me ?? boards[0];
   if (focus) {
-    const compact = w < 640, top = 82, bottom = 94;
+    const compact = w < 640, landscape = w >= 640 && h <= 460, top = landscape ? 58 : 108, bottom = compact ? 174 : landscape ? 18 : 110;
     const s = Math.max(5, Math.min(32, (h - top - bottom) / 20, (w - (compact ? 116 : 330)) / 10));
-    const total = 10 * s + 98 + (!compact && boards.length > 1 ? 150 : 0);
+    const total = 10 * s + 98 + (!compact && !landscape && boards.length > 1 ? 150 : 0);
     const x = Math.max(12, (w - total) / 2), y = top;
     const roster = room.roster.find(r => r.seat === focus.seat);
     text(me ? 'YOUR WELL' : (roster?.name ?? 'WATCHING'), x, y - 13, 11, '#7aeee1');
@@ -111,7 +119,7 @@ function frame(): void {
     text('SCORE', side, y + 110, 10); text(String(focus.score), side, y + 136, 21, '#f5f8ff');
     if (h >= 350) { text('LINES', side, y + 170, 10); text(String(focus.lines), side, y + 194, 19, '#f5f8ff'); }
     if (20 * s > 260) { text('LEVEL', side, y + 230, 10); text(String(1 + Math.floor(focus.lines / 10)), side, y + 254, 19, '#f5f8ff'); }
-    if (!compact) {
+    if (!compact && !landscape) {
       let ry = y;
       for (const rival of boards.filter(b => b.id !== focus.id).slice(0, 3)) {
         const mini = Math.min(6, s * 0.25), rx = side + 112;
@@ -120,7 +128,25 @@ function frame(): void {
         well(rival, rx, ry, mini, false); text(String(rival.score), rx + 10 * mini + 9, ry + 14, 12, '#eef6ff'); ry += 20 * mini + 38;
       }
     }
-    if (round?.phase === 'over') text('ROUND COMPLETE', x, y + 20 * s + 24, 12, '#ffd75b');
+    const ranked = boards.slice().sort((a, b) => b.score - a.score || a.seat - b.seat);
+    const nameOf = (b: Board): string => { const r = room.roster.find(r => r.seat === b.seat); return b.id === me?.id ? 'YOU' : `${r?.driver === 'bot' ? 'BOT ' : ''}${r?.name ?? 'Player'}`; };
+    const rank = ranked.findIndex(b => b.id === focus.id) + 1;
+    if (compact) {
+      text(`RANK ${rank}/${ranked.length} · LEADER ${ranked[0]?.score ?? 0}`, 16, h - 155, 12, '#7aeee1');
+      ranked.slice(0, 4).forEach((b, i) => text(`${i + 1}. ${nameOf(b).slice(0, 12)}  ${b.score}`, 16 + (i % 2) * (w / 2), h - 132 + Math.floor(i / 2) * 19, 11, b.id === me?.id ? '#f5f8ff' : '#a7b8d5'));
+    } else if (landscape) {
+      text(`RANK ${rank}/${ranked.length}`, side + 112, y + 142, 12, '#7aeee1');
+      ranked.slice(0, 4).forEach((b, i) => text(`${i + 1}. ${nameOf(b).slice(0, 10)} ${b.score}`, side + 112, y + 15 + i * 24, 12, b.id === me?.id ? '#f5f8ff' : '#a7b8d5'));
+    }
+    if (round?.phase === 'over') {
+      const results = round.results?.length ? round.results : ranked.map((b, i) => ({ name: nameOf(b), score: b.score, seat: b.seat, place: i + 1 }));
+      const pw = Math.min(340, w - 32), ph = 110 + results.length * 27, px = (w - pw) / 2, py = Math.max(42, (h - ph) / 2);
+      g.fillStyle = '#081329f5'; g.fillRect(px, py, pw, ph); g.strokeStyle = '#71e9e0'; g.strokeRect(px, py, pw, ph);
+      text(`${results[0]?.name ?? 'Player'} WINS`, px + 16, py + 30, 18, '#ffd75b');
+      text('FINAL SCORES', px + 16, py + 55, 11);
+      results.forEach((r, i) => text(`${r.place}. ${r.name.slice(0, 18)}${r.seat === me?.seat ? ' (YOU)' : ''}  ${r.score}`, px + 16, py + 82 + i * 27, 13, '#f5f8ff'));
+      text(`Next round in ${Math.ceil(round.secondsLeft)}s`, px + 16, py + ph - 15, 11);
+    }
   } else text('Finding your seat…', Math.max(20, w / 2 - 70), h / 2, 15);
   requestAnimationFrame(frame);
 }

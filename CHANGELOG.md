@@ -21,10 +21,11 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 **Plugin 0.58.3**
 
-Play concept previews without a duplicate banner covering the game.
+Play falling-block games with visible standings, round winners and controls that follow a sliding thumb.
 
 ### Fixed
 
+- Block Drop shows a live leaderboard on phones and ranked round results, keeps its controls above the room chip, enlarges the landscape well, and follows a thumb sliding between directional buttons. Its synthesized audio is more audible.
 - Concept previews label the outer page once, without injecting a second banner over embedded game and app controls. No-index headers remain on every response.
 
 ## [0.58.7] - 2026-10-19
