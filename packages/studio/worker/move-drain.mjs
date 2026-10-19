@@ -1,17 +1,24 @@
 import {LOBBY_SHARDS} from './lobby-shards.mjs';
 export const DRAIN_KEY='studio_move_drain';
-/** The drain flag, read in the same batch as the request's metadata revision (request-db.mjs), so an admission costs no extra D1 request. */
-export const DRAIN_QUERY="SELECT value FROM meta WHERE key='studio_move_drain'";
-export async function drainSince(env){
+/** How long an isolate trusts its last reading of the drain flag. A move's census waits minutes after the drain
+ * starts (drainStatus), so an admission a few seconds late is still counted; steady seats and sockets cost no D1 read. */
+export const DRAIN_TTL_MS=5000;
+const readings=new WeakMap();
+export async function drainSince(env,{now=Date.now(),fresh=false}={}){
  if(!env.DB)return null;
- const row=await env.DB.prepare(DRAIN_QUERY).first();
- const at=Number(row?.value);return Number.isSafeInteger(at)&&at>0?at:null;
+ const cached=readings.get(env.DB);
+ if(!fresh&&cached&&now-cached.at<DRAIN_TTL_MS)return cached.since;
+ const db=env.DB.withSession?env.DB.withSession('first-primary'):env.DB;
+ const row=await db.prepare('SELECT value FROM meta WHERE key=?1').bind(DRAIN_KEY).first();
+ const at=Number(row?.value),since=Number.isSafeInteger(at)&&at>0?at:null;
+ readings.set(env.DB,{at:now,since});
+ return since;
 }
 export function isAdmission(request){const path=new URL(request.url).pathname;return request.headers.get('upgrade')?.toLowerCase()==='websocket'||/\/api\/(lobby|agents)(\/|$)/.test(path);}
 export const drainResponse=()=>Response.json({ok:false,error:'moving',message:'This studio is moving. Existing rooms can finish; please join again shortly.'},{status:503,headers:{'retry-after':'30','cache-control':'no-store'}});
 /** Read every shard directly: cached public summaries exclude private games and hide outages. */
 export async function drainStatus(env,cat,{now=Date.now()}={}){
- const since=await drainSince(env);if(!since)return {draining:false,drained:false};
+ const since=await drainSince(env,{fresh:true});if(!since)return {draining:false,drained:false};
  let clients=0,pending=0,rooms=0;
  for(const game of cat.games??[]){
   const names=new Set();

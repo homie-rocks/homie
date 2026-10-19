@@ -1,5 +1,4 @@
 import {LIVE_ROOMS_QUERY} from './lobby-summary.mjs';
-import {DRAIN_QUERY} from './move-drain.mjs';
 export const METADATA_REVISION=Symbol('metadata revision');
 export const ORIGINAL_DB=Symbol('original database');
 export const MUTATIONS=Symbol('request mutations');
@@ -16,7 +15,7 @@ export function requestDatabase(DB, request, state={mutated:false}, binding=data
  // this session may use replicas at or beyond that bookmark. This also meets
  // any bookmark returned by an earlier request without trusting stale auth.
  if(DB===binding&&typeof DB.withSession==='function')DB=DB.withSession('first-primary');
- let revision,records,rows,liveRooms,drain;
+ let revision,records,rows,liveRooms;
  const prefetchRooms=state.summaries&&/^\/(?:api\/(?:rooms|games)|\.well-known\/homie-studio\.json)?\/?$/.test(new URL(request.url).pathname);
  const url=new URL(request.url),match=request.method==='GET'&&/^\/([a-z0-9][a-z0-9-]{0,39})\/api\/app\/records\/([a-z][a-z0-9-]{0,39})(?:\/([A-Za-z0-9_-]{1,64}))?$/.exec(url.pathname);
  const recordQuery=match&&(match[3]?'SELECT id, value, version, updated_at FROM app_records WHERE app = ?1 AND collection = ?2 AND id = ?3':'SELECT id, value, version, updated_at FROM app_records WHERE app = ?1 AND collection = ?2 ORDER BY updated_at, id');
@@ -27,15 +26,14 @@ export function requestDatabase(DB, request, state={mutated:false}, binding=data
   // another request changes metadata while this request is awaiting D1.
   const queries=[...metadataQueries];
   const cold=!cached;
-  const statements=[query,DB.prepare(DRAIN_QUERY),...(cold?queries.map(sql=>DB.prepare(sql)):[])];
+  const statements=[query,...(cold?queries.map(sql=>DB.prepare(sql)):[])];
   if(recordQuery)statements.push(DB.prepare(recordQuery).bind(...match.slice(1).filter(x=>x!==undefined)));
   if(prefetchRooms)statements.push(DB.prepare(LIVE_ROOMS_QUERY));
   const result=await DB.batch(statements);
   if(prefetchRooms)liveRooms=result.at(-1);
   let version=result[0].results?.[0]?.value??null;
-  drain=result[1];
   if(recordQuery)records=result.at(-1);
-  if(cold)rows=new Map(queries.map((sql,i)=>[sql,result[i+2]]));
+  if(cold)rows=new Map(queries.map((sql,i)=>[sql,result[i+1]]));
   else if(cached.version===version)rows=cached.rows;
   else {
    const refreshed=await DB.batch([query,...queries.map(sql=>DB.prepare(sql))]);
@@ -50,13 +48,12 @@ export function requestDatabase(DB, request, state={mutated:false}, binding=data
   const original=()=>{const stmt=DB.prepare(sql);return args.length?stmt.bind(...args):stmt;};
   const read=async()=>{
    if(sql===LIVE_ROOMS_QUERY&&prefetchRooms){await stamp();return liveRooms;}
-   if(sql===DRAIN_QUERY){await stamp();return drain;}
    if(sql===recordQuery&&JSON.stringify(args)===JSON.stringify(match.slice(1).filter(x=>x!==undefined))){await stamp();return records;}
    if(!metadataQueries.has(sql))return original().all();
    await stamp();
    return rows.get(sql);
   };
-  return {bind:(...args)=>prepare(sql,args),first:async column=>{writing(sql);if(!metadataQueries.has(sql)&&sql!==recordQuery&&sql!==DRAIN_QUERY)return original().first(column);const row=(await read()).results?.[0]??null;return column&&row?row[column]:row;},all:()=>{writing(sql);return read();},run:()=>{writing(sql);return original().run();},raw:(...args)=>{writing(sql);return original().raw(...args);},_original:original,_sql:sql};
+  return {bind:(...args)=>prepare(sql,args),first:async column=>{writing(sql);if(!metadataQueries.has(sql)&&sql!==recordQuery)return original().first(column);const row=(await read()).results?.[0]??null;return column&&row?row[column]:row;},all:()=>{writing(sql);return read();},run:()=>{writing(sql);return original().run();},raw:(...args)=>{writing(sql);return original().raw(...args);},_original:original,_sql:sql};
  };
  const methods={[METADATA_REVISION]:stamp,[ORIGINAL_DB]:binding,get [MUTATIONS](){return state.mutated;},get [MUTATION_VERSION](){return state.version??0;},prepare,batch:statements=>{for(const s of statements)writing(s._sql??'UPDATE');return DB.batch(statements.map(s=>s._original?.()??s));},exec:(sql,...args)=>{writing(sql);return binding.exec(sql,...args);},withSession:(...args)=>requestDatabase(binding.withSession(...args),request,state,binding)};
  return new Proxy(methods,{get(target,key){if(key in target)return target[key];const value=DB[key];return typeof value==='function'?value.bind(DB):value;}});
