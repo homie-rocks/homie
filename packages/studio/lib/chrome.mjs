@@ -135,3 +135,24 @@ export async function measureFrames(page, ms = 2000) {
     ]);
   } catch { return { fps: null, renderer: null }; }
 }
+
+/** Optional CDP endpoint for CI and cloud browsers, including Cloudflare Browser Run.
+ * Each connection must acquire its own browser session; the caller closes it as usual.
+ * Cloudflare: https://developers.cloudflare.com/browser-run/cdp/puppeteer/
+ */
+export function remoteBrowserEndpoint(env = process.env) {
+  if (!env.HOMIE_BROWSER_WS_ENDPOINT) return null;
+  const endpoint = new URL(env.HOMIE_BROWSER_WS_ENDPOINT);
+  if (!['ws:', 'wss:'].includes(endpoint.protocol) || endpoint.username || endpoint.password) {
+    throw new Error('HOMIE_BROWSER_WS_ENDPOINT must be a WebSocket URL without embedded credentials');
+  }
+  return endpoint.href;
+}
+
+/** Puppeteer's own CDP connection; local checks keep their normal Chrome launch. */
+export function launchChrome(puppeteer, options, { env = process.env } = {}) {
+  const browserWSEndpoint = remoteBrowserEndpoint(env);
+  if (!browserWSEndpoint) return puppeteer.launch(options);
+  return puppeteer.connect({ browserWSEndpoint, protocolTimeout: options.protocolTimeout ?? 180_000,
+    defaultViewport: null });
+}

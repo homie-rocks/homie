@@ -33,7 +33,7 @@ import { readAppNeeds, proveAppNeeds, saveAppNeeds, needSteps, primaryNeedSurfac
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { cpus, loadavg, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SOFTWARE_GL, chromeArgs, findChrome, measureFrames, noChrome } from './chrome.mjs';
+import { SOFTWARE_GL, chromeArgs, findChrome, measureFrames, noChrome, remoteBrowserEndpoint, launchChrome } from './chrome.mjs';
 import { reachSite, siteRefusal } from './net.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -156,7 +156,7 @@ export async function check({ webglFailure = false, isolate = true, root = null,
     } catch(error) {return {ok:false,command:'check',kind:'app',why:error.message};}
   }
   const chrome = findChrome();
-  if (!chrome) return { ok: false, command: 'check', why: noChrome() };
+  if (!chrome && !remoteBrowserEndpoint()) return { ok: false, command: 'check', why: noChrome() };
   let puppeteer;
   try { puppeteer = (await import('puppeteer-core')).default; } catch { return { ok: false, command: 'check', why: 'puppeteer-core is not installed (it comes with @homie-rocks/studio; run npm install)' }; }
   if (appMeta) return checkApp({ webglFailure, isolate, root, url: base, game, meta: appMeta, shots, log, report, puppeteer, chrome });
@@ -193,7 +193,7 @@ export async function check({ webglFailure = false, isolate = true, root = null,
     for (const kind of kinds) {
       const profile = mkdtempSync(join(tmpdir(), 'homie-studio-check-'));
       profiles.push(profile);
-      const browser = await puppeteer.launch({
+      const browser = await launchChrome(puppeteer, {
         executablePath: chrome, headless: true, userDataDir: profile, timeout: LAUNCH_TIMEOUT_MS, protocolTimeout: 180_000,
         args: [...chromeArgs(), '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check'],
       });
@@ -394,7 +394,7 @@ export async function checkApp({ webglFailure = false, isolate = true, root = nu
       }
       return remoteCookies.get(key);
     };
-    if(baseline || plan?.needs.some(n=>[...needSteps(n.steps),...(n.assertions??[])].some(i=>i.surface))) browser = await puppeteer.launch({ executablePath: chrome, headless: true, userDataDir: profile, timeout: LAUNCH_TIMEOUT_MS, args: chromeArgs() });
+    if(baseline || plan?.needs.some(n=>[...needSteps(n.steps),...(n.assertions??[])].some(i=>i.surface))) browser = await launchChrome(puppeteer, { executablePath: chrome, headless: true, userDataDir: profile, timeout: LAUNCH_TIMEOUT_MS, args: chromeArgs() });
     const openSurface = async (name, role) => {
       const dimensions={wall:[1280,720],phone:[390,844],'phone-two':[390,844],tablet:[1024,768],staff:[1024,768],kiosk:[1080,1920]};
       if(!dimensions[name])throw new Error(`Unknown needs surface ${name}`);

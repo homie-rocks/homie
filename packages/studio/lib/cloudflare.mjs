@@ -1,3 +1,4 @@
+import {dispatchTarget,dispatchArgs,targetConfig} from './dispatch-target.mjs';
 import {ensureStudioSigningKey} from './studios-keys.mjs';
 import {redactText} from './redact.mjs';
 import {enableReadReplication} from './read-replication.mjs';
@@ -73,10 +74,12 @@ export function wranglerBin(root) {
 }
 
 /** Wrangler from the studio's own node_modules, using Cloudflare's own sign-in. */
-export function runner(root, env) {
+export function runner(root, env, { preview = false } = {}) {
   const bin = wranglerBin(root);
+  const target = dispatchTarget(readStudio(root), { preview });
   if (!bin) throw new Error('Wrangler is not installed in this studio yet: run `npm install` in the studio folder first');
   return (args, { cwd = workerDir(root), input, timeout = 10 * 60_000 } = {}) => {
+    args = dispatchArgs(args, target, target && targetConfig(root, target));
     const dev = join(workerDir(root), '.wrangler', 'homie-dev.wrangler.json');
     if (args.includes('--local') && !args.includes('--config') && existsSync(dev)) args = [...args, '--config', dev, '--persist-to', join(workerDir(root), '.wrangler', 'state')];
     const res = spawnSync(bin, args, {
@@ -278,8 +281,12 @@ export async function deploy(root, opts = {}) {
   try { return await deployLocked(root, opts); } finally { process.off('exit', onExit); lock.release(); }
 }
 
-async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRoute = false } = {}) {
+async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRoute = false, preview = false } = {}) {
   const studio = readStudio(root);
+  if (dispatchTarget(studio, { preview })) {
+    await build(root, { log, deploy: true });
+    return ciDeploy(root, { log, preview });
+  }
   const cf = { r2: null, created: [], ...studio.cloudflare };
   const created = new Set(cf.created ?? []);
   // A wildcard or catch-all route in the studio's own config would hand other hostnames of the zone to this Worker:
@@ -636,8 +643,9 @@ export function configNames(root) {
  * nothing back (a CI checkout is thrown away). On the very first deploy the database may not exist yet: Wrangler
  * creates the one the binding names while it deploys, and the migrations run right after.
  */
-export async function ciDeploy(root, { log = () => {}, wrangler = null } = {}) {
-  const w = wrangler ?? runner(root, {});
+export async function ciDeploy(root, { log = () => {}, wrangler = null, preview = false } = {}) {
+  const target = dispatchTarget(readStudio(root), { preview });
+  const w = wrangler ?? runner(root, {}, { preview });
   refreshWorkerConfig(root);
   const names = configNames(root);
   const steps = [];
@@ -648,7 +656,7 @@ export async function ciDeploy(root, { log = () => {}, wrangler = null } = {}) {
   try {await ensureBackgroundQueues(root,w);} catch(error) {return refuse(error.message);}
   const apply = () => w(['d1', 'migrations', 'apply', names.binding, '--remote']);
   let migrate = apply();
-  const first = migrate.code !== 0 && /not found|could(?:n't| not) find|does not exist|no database|database_id/i.test(migrate.out);
+  const first = !target && migrate.code !== 0 && /not found|could(?:n't| not) find|does not exist|no database|database_id/i.test(migrate.out);
   if (migrate.code !== 0 && !first) return refuse(`D1 migrations failed: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
   if (!first) step('D1 migrations applied');
   const register=()=>w(['d1','execute',names.binding,'--remote','--command',functionDeploymentSQL(root)]);
@@ -680,8 +688,9 @@ export async function ciDeploy(root, { log = () => {}, wrangler = null } = {}) {
   // The live address, from what Wrangler printed (a custom domain in studio.json wins).
   const workersDev = /https:\/\/[a-z0-9.-]+\.workers\.dev/i.exec(dep.out)?.[0] ?? null;
   let url = null;
-  try { url = siteUrl(root) ?? workersDev; } catch { url = workersDev; }
-  const claim = url ? await warmClaim(url) : null;
+  try { url = target ? `https://${target.domain}` : siteUrl(root) ?? workersDev; } catch { url = workersDev; }
+  // A private preview is never claimed in the directory.
+  const claim = url && !target?.preview ? await warmClaim(url) : null;
   step(claim ? (listedHere(root,{site:url})?'the site is listed':'the site is claimed, not listed') : 'no directory claim yet (the site claims itself when the directory first reads it)');
   let games = [];
   try { games = JSON.parse(readFileSync(join(root, 'site', 'dist', 'games.json'), 'utf8')).games.map((g) => g.id); } catch { games = []; }

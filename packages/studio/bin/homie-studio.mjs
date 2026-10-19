@@ -840,7 +840,7 @@ function print(result) {
  */
 const OUTWARD_FLAGS = {
   publish: ['homie', 'site', 'before'],
-  deploy: ['plan', 'ci', 'homie', 'own-route'],
+  deploy: ['plan', 'ci', 'homie', 'own-route', 'preview'],
   'storage add': [],
   'drain': ['url'],
   'read-only': ['url'],
@@ -1073,7 +1073,7 @@ async function main() {
   // Cloudflare's Workers Builds runs `npm run deploy` with WORKERS_CI=1 (and its own token for this one account).
   if (cmd === 'deploy' && (process.env.WORKERS_CI === '1' || flags.has('ci'))) return tracked(root, 'deploy', () => ciDeploy(root, { log }), 'deploy');
   // What the deploy means for standalone copies already made (a changed netplay version), read before it runs.
-  if (cmd === 'deploy') { const copies = standaloneDeployNotes(root); return tracked(root, 'deploy', async () => { const r = await deploy(root, { log, homie: flags.get('homie'), ownRoute: flags.has('own-route') }); return r?.ok ? { ...r, standalone: copies } : r; }, 'deploy'); }
+  if (cmd === 'deploy') { const copies = standaloneDeployNotes(root); return tracked(root, 'deploy', async () => { const r = await deploy(root, { log, homie: flags.get('homie'), ownRoute: flags.has('own-route'), preview: flags.has('preview') }); return r?.ok ? { ...r, standalone: copies } : r; }, 'deploy'); }
   if (cmd === 'storage' && sub === 'add') return storageAdd(root, { log });
   if (cmd === 'storage') {
     const cf = readStudio(root).cloudflare ?? {};

@@ -737,7 +737,7 @@ test('a command that changes something outside this computer stops at a flag it 
     'events webhook': ['add', 'bookings', 'https://receiver.example/events'],
     'function new': ['example'], 'function fire': ['order.paid'], 'function replay':['example'], 'function runs': [], 'functions runs': [],
     'tool new': ['example'], 'tool list': [], 'tool call': ['example'],
-    publish: [], deploy: [], 'storage add': [], 'read-only': ['on'], 'media put': ['notes.txt'], 'media move': [], 'setup attach': ['hs_made_up'], handoff: ['hb_made_up'],
+    publish: [], deploy: [], drain: ['on'], 'storage add': [], 'read-only': ['on'], 'media put': ['notes.txt'], 'media move': [], 'setup attach': ['hs_made_up'], handoff: ['hb_made_up'],
     'players owner': [], 'stats key': [], 'stats link': [], 'stats revoke': [], 'stats share': ['off'],
     'office link': [], 'office key': [], 'office announce': ['back', 'soon'], 'office invite': ['crown-thief'], 'office launch': ['crown-thief', 'public'],
     'office kick': ['crown-thief', 'room-1', 'p1'], 'office mute': ['crown-thief', 'room-1', 'p1'], 'office close': ['crown-thief', 'room-1'], 'office revoke': [],
