@@ -1,9 +1,5 @@
 # Changelog
 
-## 0.58.8
-
-- Concept previews label the outer page once, without injecting a second banner over embedded game and app controls. No-index headers remain on every response.
-
 What changed in each release of Homie's open parts, newest first:
 
 - **`@homie-rocks/studio`**: the `homie-studio` command, your studio's site Worker, its multiplayer rooms (the
@@ -20,6 +16,14 @@ things and a patch (0.19.1) fixes or polishes them.
 To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homie." It runs
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
+
+## [0.58.8] - 2026-10-19
+
+**Plugin 0.58.3**
+
+### Fixed
+
+- Concept previews label the outer page once, without injecting a second banner over embedded game and app controls. No-index headers remain on every response.
 
 ## [0.58.7] - 2026-10-19
 

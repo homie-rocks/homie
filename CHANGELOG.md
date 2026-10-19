@@ -17,6 +17,14 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.8] - 2026-10-19
+
+**Plugin 0.58.3**
+
+### Fixed
+
+- Concept previews label the outer page once, without injecting a second banner over embedded game and app controls. No-index headers remain on every response.
+
 ## [0.58.7] - 2026-10-19
 
 **Plugin 0.58.3**
