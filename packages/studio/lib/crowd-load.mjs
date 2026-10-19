@@ -7,6 +7,7 @@ import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { performance, monitorEventLoopDelay } from 'node:perf_hooks';
 import puppeteer from 'puppeteer-core';
+import { launchChrome } from './chrome.mjs';
 import { Histogram } from './crowd-worker.mjs';
 const opts = {};
 const args = process.argv.slice(2);
@@ -180,7 +181,7 @@ function makeWorker(index) {
 async function chromeWindow(i) {
   const profile = await mkdtemp(`${tmpdir()}/crowd-load-`);
   profiles.push(profile);
-  const browser = await puppeteer.launch({
+  const browser = await launchChrome(puppeteer, {
     executablePath:
       opts.chrome ??
       process.env.CHROME_PATH ??

@@ -653,7 +653,8 @@ export async function ciDeploy(root, { log = () => {}, wrangler = null, preview 
   const refuse = (why, out) => ({ ok: false, command: 'deploy', ci: true, ...(explainCloudflare(out) ?? { why }), steps });
   if (!existsSync(join(root, 'site', 'dist', 'games.json'))) return { ok: false, command: 'deploy', ci: true, why: 'nothing is built: the build command is `npm run build` (homie-studio build), and it runs before this', steps };
   for (const added of ensureMigrations(root)) step(`added ${added} (${migrationWord(added)})`);
-  try {await ensureBackgroundQueues(root,w);} catch(error) {return refuse(error.message);}
+  // A platform target's queues are the platform's (lib/dispatch-target.mjs).
+  if (!target) { try {await ensureBackgroundQueues(root,w);} catch(error) {return refuse(error.message);} }
   const apply = () => w(['d1', 'migrations', 'apply', names.binding, '--remote']);
   let migrate = apply();
   const first = !target && migrate.code !== 0 && /not found|could(?:n't| not) find|does not exist|no database|database_id/i.test(migrate.out);

@@ -153,6 +153,8 @@ export function remoteBrowserEndpoint(env = process.env) {
 export function launchChrome(puppeteer, options, { env = process.env } = {}) {
   const browserWSEndpoint = remoteBrowserEndpoint(env);
   if (!browserWSEndpoint) return puppeteer.launch(options);
+  // A cloud browser has no window: the size a local launch asks for with --window-size becomes the page's viewport.
+  const size = (options.args ?? []).map((a) => /^--window-size=(\d+),(\d+)$/.exec(a)).find(Boolean);
   return puppeteer.connect({ browserWSEndpoint, protocolTimeout: options.protocolTimeout ?? 180_000,
-    defaultViewport: null });
+    defaultViewport: size ? { width: Number(size[1]), height: Number(size[2]) } : null });
 }

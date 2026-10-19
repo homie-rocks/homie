@@ -49,7 +49,7 @@ import { cpus, loadavg, tmpdir, totalmem } from 'node:os';
 import { basename, join, relative, resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { bundleOf, gameDigest } from './build.mjs';
-import { SOFTWARE_GL, chromeArgs, findChrome, noChrome } from './chrome.mjs';
+import { SOFTWARE_GL, chromeArgs, findChrome, noChrome, launchChrome, remoteBrowserEndpoint } from './chrome.mjs';
 import { CUT_OFF, LAUNCH_TIMEOUT_MS, arrivalFacts, linkOf } from './check.mjs';
 import { reachSite, siteRefusal } from './net.mjs';
 import { judge, judgePaired, round, summarize } from './perf-stats.mjs';
@@ -211,7 +211,7 @@ async function openPlayer(puppeteer, chrome, device, playUrl, label, log, cpu) {
   const rate = device === 'phone' ? cpu : dev.cpu;
   const profileDir = mkdtempSync(join(tmpdir(), 'homie-studio-perf-'));
   const vp = dev.viewport;
-  const browser = await puppeteer.launch({
+  const browser = await launchChrome(puppeteer, {
     executablePath: chrome, headless: true, userDataDir: profileDir, timeout: LAUNCH_TIMEOUT_MS, protocolTimeout: 180_000,
     args: [...chromeArgs(), '--mute-audio', '--autoplay-policy=no-user-gesture-required', `--window-size=${vp.width},${vp.height}`, '--no-first-run', '--no-default-browser-check', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--force-color-profile=srgb', '--enable-precise-memory-info'],
   });
@@ -548,7 +548,7 @@ export async function perfRun({ root = null, url, game, devices = ['computer', '
   const bad = devices.filter((d) => !PERF_DEVICES[d]);
   if (bad.length) return { ok: false, command: 'perf', why: `unknown device ${bad.join(', ')} (computer, phone)` };
   const chrome = findChrome();
-  if (!chrome) return { ok: false, command: 'perf', why: noChrome() };
+  if (!chrome && !remoteBrowserEndpoint()) return { ok: false, command: 'perf', why: noChrome() };
   let puppeteer;
   try { puppeteer = (await import('puppeteer-core')).default; } catch { return { ok: false, command: 'perf', why: 'puppeteer-core is not installed (it comes with @homie-rocks/studio; run npm install)' }; }
   // One preflight from this process (lib/net.mjs `reachSite`): a name Node cannot look up, or no connection, is said as

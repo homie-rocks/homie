@@ -23,7 +23,7 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { chromeArgs, findChrome, noChrome, SOFTWARE_GL } from './chrome.mjs';
+import { chromeArgs, findChrome, noChrome, SOFTWARE_GL, launchChrome, remoteBrowserEndpoint } from './chrome.mjs';
 import { labDir, startLabServer } from './lab.mjs';
 import { isRulesGame, listExperiences as listGames } from './studio.mjs';
 
@@ -109,7 +109,7 @@ export async function labCheck(root, id, { take = null, today = 'HEAD', device =
   const game = id ?? (games.length === 1 ? games[0].id : null);
   if (!game || !games.some((g) => g.id === game)) return { ok: false, command: 'lab check', why: `name the game: homie-studio lab check <${games.map((g) => g.id).join('|') || 'id'}>` };
   const chrome = findChrome();
-  if (!chrome) return { ok: false, command: 'lab check', why: noChrome() };
+  if (!chrome && !remoteBrowserEndpoint()) return { ok: false, command: 'lab check', why: noChrome() };
   let puppeteer;
   try { puppeteer = (await import('puppeteer-core')).default; } catch { return { ok: false, command: 'lab check', why: 'puppeteer-core is not installed (it comes with @homie-rocks/studio; run npm install)' }; }
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -117,7 +117,7 @@ export async function labCheck(root, id, { take = null, today = 'HEAD', device =
   mkdirSync(dir, { recursive: true });
   const server = await startLabServer(root, { port: 0, today, watchFiles: false, log: () => {} });
   let browser;
-  try { browser = await puppeteer.launch({
+  try { browser = await launchChrome(puppeteer, {
     executablePath: chrome, headless: true, timeout: 150_000, protocolTimeout: 240_000,
     args: [...chromeArgs(), '--mute-audio', '--window-size=1600,1000', '--no-first-run', '--no-default-browser-check', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--force-color-profile=srgb'],
   }); } catch (error) { await server.close(); throw error; }

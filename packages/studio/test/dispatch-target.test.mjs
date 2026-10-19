@@ -8,7 +8,7 @@ const db='0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0',previewDb='1f1e2d3c-4b5a-6978-87
 const studio={cloudflare:{dispatchNamespace:'studios',worker:'my-studio',d1Id:db,domain:'my.example.com',preview:{worker:'my-studio-preview',d1Id:previewDb,domain:'preview-my.example.com'}}};
 function site() {
  const root=mkdtempSync(join(tmpdir(),'dispatch-target-'));
- writeFileSync(join(root,'wrangler.jsonc'),'// generated\n'+JSON.stringify({$schema:'x',name:'my-studio',main:'worker/index.mjs',assets:{directory:'site/dist'},routes:[{pattern:'my.example.com',custom_domain:true}],workers_dev:true,d1_databases:[{binding:'DB',database_name:'my',database_id:db,migrations_dir:'migrations'}]}));
+ writeFileSync(join(root,'wrangler.jsonc'),'// generated\n'+JSON.stringify({$schema:'x',name:'my-studio',main:'worker/index.mjs',assets:{directory:'site/dist'},routes:[{pattern:'my.example.com',custom_domain:true}],workers_dev:true,triggers:{crons:['*/5 * * * *']},queues:{producers:[{binding:'BG',queue:'my-studio-background'}]},d1_databases:[{binding:'DB',database_name:'my',database_id:db,migrations_dir:'migrations'}]}));
  return root;
 }
 test('production and preview targets point the generated Wrangler config at their own Worker and database',()=>{
@@ -20,7 +20,7 @@ test('production and preview targets point the generated Wrangler config at thei
  assert.equal(json.d1_databases[0].database_id,previewDb);
  assert.equal(json.main,join(root,'worker/index.mjs'));
  assert.equal(json.d1_databases[0].migrations_dir,join(root,'migrations'));
- assert.equal(json.routes,undefined);assert.equal(json.workers_dev,undefined);
+ for(const key of ['routes','workers_dev','triggers','queues'])assert.equal(json[key],undefined,key);
  assert.deepEqual(dispatchArgs(['deploy','entry.mjs'],preview,file),['deploy','entry.mjs','--config',file,'--dispatch-namespace','studios']);
  assert.deepEqual(dispatchArgs(['d1','migrations','apply','DB','--remote'],preview,file),['d1','migrations','apply','DB','--remote','--config',file]);
  assert.deepEqual(dispatchArgs(['d1','execute','DB','--local'],preview,file),['d1','execute','DB','--local']);

@@ -33,7 +33,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chromeArgs, findChrome, isLoopbackUrl, noChrome } from './chrome.mjs';
+import { chromeArgs, findChrome, isLoopbackUrl, noChrome, launchChrome, remoteBrowserEndpoint } from './chrome.mjs';
 import { reachSite, siteRefusal } from './net.mjs';
 
 const GPU = [
@@ -245,7 +245,7 @@ async function chrome(puppeteer, kind, exe) {
   const dir = mkdtempSync(join(tmpdir(), 'homie-port-check-'));
   const vp = kind === 'phone' ? { width: 412, height: 915 } : kind === 'tv' ? { width: 1280, height: 720 } : { width: 1280, height: 800 };
   // 150 s for Chrome to start: on a loaded computer a cold start has taken over a minute.
-  const browser = await puppeteer.launch({ executablePath: exe, headless: true, userDataDir: dir, timeout: 150_000, protocolTimeout: 120_000, args: [...GPU, `--window-size=${vp.width},${vp.height}`] });
+  const browser = await launchChrome(puppeteer, { executablePath: exe, headless: true, userDataDir: dir, timeout: 150_000, protocolTimeout: 120_000, args: [...GPU, `--window-size=${vp.width},${vp.height}`] });
   const page = (await browser.pages())[0] ?? await browser.newPage();
   if (kind === 'phone') await page.emulate({ viewport: { ...vp, deviceScaleFactor: 2.625, isMobile: true, hasTouch: true }, userAgent: `${ANDROID_UA} ${TAG}` });
   else { await page.setViewport({ ...vp, deviceScaleFactor: 1 }); await page.setUserAgent(`${await browser.userAgent()} ${TAG}`); }
@@ -501,7 +501,7 @@ export async function portCheck({ url, game, root, only = null, shots = null, lo
   const base = String(url).replace(/\/+$/, '');
   const want = new Set((only ? String(only).split(',') : ALL).map((s) => s.trim()).filter(Boolean));
   const exe = findChrome();
-  if (!exe) return { ok: false, command: 'port check', why: noChrome() };
+  if (!exe && !remoteBrowserEndpoint()) return { ok: false, command: 'port check', why: noChrome() };
   const req = createRequire(join(root ?? process.cwd(), 'package.json'));
   let puppeteer;
   try { puppeteer = (await import('puppeteer-core')).default; } catch { try { puppeteer = req('puppeteer-core'); } catch { return { ok: false, command: 'port check', why: 'puppeteer-core is missing (it comes with @homie-rocks/studio: npm install)' }; } }

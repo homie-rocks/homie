@@ -41,7 +41,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bundleOf, gameDigest } from './build.mjs';
 import { arrivalReadiness, LAUNCH_TIMEOUT_MS } from './check.mjs';
-import { SOFTWARE_GL, chromeArgs, findChrome, noChrome } from './chrome.mjs';
+import { SOFTWARE_GL, chromeArgs, findChrome, noChrome, launchChrome, remoteBrowserEndpoint } from './chrome.mjs';
 import { reachSite, siteRefusal } from './net.mjs';
 import { previewServer } from './preview.mjs';
 
@@ -153,7 +153,7 @@ async function open(puppeteer, chrome, device, url, profiles, browsers, { previe
   const profile = mkdtempSync(join(tmpdir(), 'homie-studio-shoot-'));
   profiles.push(profile);
   const vp = SHOOT_DEVICES[device];
-  const browser = await puppeteer.launch({
+  const browser = await launchChrome(puppeteer, {
     executablePath: chrome, headless: true, userDataDir: profile, timeout: LAUNCH_TIMEOUT_MS, protocolTimeout: 180_000,
     args: [...chromeArgs(), '--mute-audio', '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check', `--window-size=${vp.width},${vp.height}`, '--hide-scrollbars', '--force-color-profile=srgb'],
   });
@@ -191,7 +191,7 @@ export async function shoot({ url, game, frames = 60, fps = 30, device = 'comput
   if (!(Number.isInteger(frames) && frames >= 1 && frames <= 1800)) return { ok: false, command: 'shoot', why: '--frames 1..1800' };
   if (!(fps >= 1 && fps <= 120)) return { ok: false, command: 'shoot', why: '--fps 1..120' };
   const chrome = findChrome();
-  if (!chrome) return { ok: false, command: 'shoot', why: noChrome() };
+  if (!chrome && !remoteBrowserEndpoint()) return { ok: false, command: 'shoot', why: noChrome() };
   let puppeteer;
   try { puppeteer = (await import('puppeteer-core')).default; } catch { return { ok: false, command: 'shoot', why: 'puppeteer-core is not installed (it comes with @homie-rocks/studio; run npm install)' }; }
   // --preview: this command serves the one built game itself (no Wrangler, no rooms) and shoots that page.

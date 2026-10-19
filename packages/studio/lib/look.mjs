@@ -10,7 +10,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chromeArgs, findChrome, noChrome } from './chrome.mjs';
+import { chromeArgs, findChrome, noChrome, launchChrome, remoteBrowserEndpoint } from './chrome.mjs';
 
 
 export const LOOK_DEVICES = {
@@ -25,14 +25,14 @@ const nameOf = (path) => path.replace(/^\/+|\/+$/g, '').replace(/[^a-z0-9]+/gi, 
 export async function look({ url, paths, shots, devices = Object.keys(LOOK_DEVICES), log = () => {} }) {
   if (!url) return { ok: false, command: 'look', why: 'give --url (the local dev address or the live site)' };
   const chrome = findChrome();
-  if (!chrome) return { ok: false, command: 'look', why: noChrome() };
+  if (!chrome && !remoteBrowserEndpoint()) return { ok: false, command: 'look', why: noChrome() };
   let puppeteer;
   try { puppeteer = (await import('puppeteer-core')).default; } catch { return { ok: false, command: 'look', why: 'puppeteer-core is not installed (it comes with @homie-rocks/studio; run npm install)' }; }
   const base = String(url).replace(/\/+$/, '');
   mkdirSync(shots, { recursive: true });
   const profile = mkdtempSync(join(tmpdir(), 'homie-studio-look-'));
   // 150 s for Chrome to start: on a loaded computer a cold start has taken over a minute.
-  const browser = await puppeteer.launch({
+  const browser = await launchChrome(puppeteer, {
     executablePath: chrome, headless: true, userDataDir: profile, timeout: 150_000, protocolTimeout: 180_000,
     args: [...chromeArgs(), '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check'],
   });

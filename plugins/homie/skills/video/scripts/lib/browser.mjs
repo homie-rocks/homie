@@ -56,12 +56,12 @@ export function loadPuppeteer(root) {
 /** Launch; returns { browser, close } where close() also deletes the throwaway profile. */
 export async function launch(root, { width = 1920, height = 1080, extra = [] } = {}) {
   const exe = chromePath();
-  if (!exe) throw new Error('no Chrome found (set CHROME_PATH to a Chrome or Chromium; on Linux, `npx --no-install homie-studio chrome install` in a studio fetches Chrome for Testing)');
+  if (!exe && !remoteBrowserEndpoint()) throw new Error('no Chrome found (set CHROME_PATH to a Chrome or Chromium; on Linux, `npx --no-install homie-studio chrome install` in a studio fetches Chrome for Testing)');
   const puppeteer = loadPuppeteer(root);
   if (!puppeteer) throw new Error('puppeteer-core is not installed (it comes with @homie-rocks/studio: run npm install in the studio)');
   const profile = mkdtempSync(join(tmpdir(), 'homie-video-'));
   // 150 s for Chrome to start: on a loaded computer a cold start has taken over a minute.
-  const browser = await puppeteer.launch({
+  const browser = await launchChrome(puppeteer, {
     executablePath: exe, headless: true, userDataDir: profile, timeout: 150_000, protocolTimeout: 180_000,
     args: [...GPU_FLAGS, `--window-size=${width},${height}`, '--hide-scrollbars', '--no-first-run', '--no-default-browser-check', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--force-color-profile=srgb', ...extra],
   });
@@ -101,5 +101,8 @@ export function remoteBrowserEndpoint(env = process.env) {
 export function launchChrome(puppeteer, options, { env = process.env } = {}) {
   const browserWSEndpoint = remoteBrowserEndpoint(env);
   if (!browserWSEndpoint) return puppeteer.launch(options);
-  return puppeteer.connect({ browserWSEndpoint, protocolTimeout: options.protocolTimeout ?? 180_000, defaultViewport: null });
+  // A cloud browser has no window: the size a local launch asks for with --window-size becomes the page's viewport.
+  const size = (options.args ?? []).map((a) => /^--window-size=(\d+),(\d+)$/.exec(a)).find(Boolean);
+  return puppeteer.connect({ browserWSEndpoint, protocolTimeout: options.protocolTimeout ?? 180_000,
+    defaultViewport: size ? { width: Number(size[1]), height: Number(size[2]) } : null });
 }

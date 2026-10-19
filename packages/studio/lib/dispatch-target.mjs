@@ -33,8 +33,9 @@ export function targetConfig(root,target) {
   if(json.assets?.directory)json.assets.directory=abs(json.assets.directory);
   if(!json.d1_databases?.length)throw Error('The studio has no D1 database in wrangler.jsonc');
   json.d1_databases=json.d1_databases.map((d,i)=>({...d,...(i===0?{database_id:target.d1Id}:{}),...(d.migrations_dir?{migrations_dir:abs(d.migrations_dir)}:{})}));
-  // The platform routes its own hostnames; a dispatch Worker has neither routes nor workers.dev.
-  for(const key of ['route','routes','workers_dev','preview_urls'])delete json[key];
+  // The platform routes its hostnames, runs its scheduled ticks and owns its queues: a dispatch Worker has no
+  // routes, workers.dev, cron triggers or queue bindings of its own.
+  for(const key of ['route','routes','workers_dev','preview_urls','triggers','queues'])delete json[key];
   const file=join(base,'.wrangler',target.preview?'homie-preview.wrangler.json':'homie-target.wrangler.json');
   mkdirSync(dirname(file),{recursive:true});
   const temp=`${file}.${process.pid}.tmp`;writeFileSync(temp,`${JSON.stringify(json,null,2)}\n`);renameSync(temp,file);

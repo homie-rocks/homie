@@ -15,7 +15,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chromeArgs, findChrome, noChrome } from './chrome.mjs';
+import { chromeArgs, findChrome, noChrome, launchChrome, remoteBrowserEndpoint } from './chrome.mjs';
 import { PACKAGE_ROOT } from './studio.mjs';
 
 let bundled = null;
@@ -50,12 +50,12 @@ export function saveDataUrl(url, file) { const { bytes } = dataUrlBytes(url); wr
  */
 export async function withRenderer(fn, { log = () => {} } = {}) {
   const chrome = findChrome();
-  if (!chrome) throw new Error(noChrome());
+  if (!chrome && !remoteBrowserEndpoint()) throw new Error(noChrome());
   let puppeteer;
   try { puppeteer = (await import('puppeteer-core')).default; } catch { throw new Error('puppeteer-core is not installed (it comes with @homie-rocks/studio: npm install)'); }
   const script = await renderScript();
   const profile = mkdtempSync(join(tmpdir(), 'homie-render-'));
-  const browser = await puppeteer.launch({ executablePath: chrome, headless: true, userDataDir: profile, timeout: 150_000, protocolTimeout: 300_000, args: [...chromeArgs(), '--no-first-run', '--no-default-browser-check', '--hide-scrollbars'] });
+  const browser = await launchChrome(puppeteer, { executablePath: chrome, headless: true, userDataDir: profile, timeout: 150_000, protocolTimeout: 300_000, args: [...chromeArgs(), '--no-first-run', '--no-default-browser-check', '--hide-scrollbars'] });
   try {
     const page = await browser.newPage();
     const errors = [];
