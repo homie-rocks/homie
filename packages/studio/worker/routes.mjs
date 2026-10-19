@@ -34,6 +34,8 @@ import { ldScript, studioNode } from './schema.mjs';
 import { licenseOf } from './license.mjs';
 import { isPartsPath, partsRoutes, withPartsBand } from './parts.mjs';
 import { GAME_ID, POST_SLUG, BROWSER_KEY, json, sellingShop, availableShellShop, postsOf, directoryOf, claimOf, named, roomsOf, MEDIA_SLUG, assetWithRange, mediaObject, ASSET_CACHE, heldInR2, mediaRow, chatWho, reportAllowed, notAHomie, gameDocument, gameAsset, shareDaily, mediaBeat, studioTools, serverLive, weekOf, fallback } from './runtime-support.mjs';
+/** Rooms whose admission row (move-drain.mjs) this isolate already wrote. */
+const REGISTERED_ROOMS = new Set();
 export default async function route(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -645,7 +647,9 @@ export default async function route(request, env, ctx) {
       const badge = pid ? await roomBadge(env, cat, pid, { kids: pol.kids }) : null;
       // Keep an admission registry independent of expiring lobby reports. A later move
       // must inspect even a quiet named room and its durable outboxes.
-      if(env.DB&&!isReadOnly(env))await env.DB.prepare("INSERT OR IGNORE INTO meta(key,value) VALUES(?1,'1')").bind('move-room:'+game+':'+room).run();
+      // Once per room in this isolate: the row is idempotent, so later sockets to the same room cost no D1 write.
+      const roomKey='move-room:'+game+':'+room;
+      if(env.DB&&!isReadOnly(env)&&!REGISTERED_ROOMS.has(roomKey)){await env.DB.prepare("INSERT OR IGNORE INTO meta(key,value) VALUES(?1,'1')").bind(roomKey).run();REGISTERED_ROOMS.add(roomKey);}
       const stub = sub === '__net' ? gateFor(env, game, room, max, b) : env.TABLE.get(env.TABLE.idFromName(`${game}/${room}`));
       // Revision 9 (NETPLAY.md sections 22 and 23): the build that is live now (`cur`, always said, empty when the game
       // names none), the build this socket's page was served with (`gv`, from the socket's own address), and the game's

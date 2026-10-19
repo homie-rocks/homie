@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-// node_modules/three/src/constants.js
+// ../../node_modules/three/src/constants.js
 var NeverDepth = 0;
 var AlwaysDepth = 1;
 var LessDepth = 2;
@@ -14,7 +14,7 @@ var GreaterEqualDepth = 5;
 var GreaterDepth = 6;
 var NotEqualDepth = 7;
 
-// node_modules/three/src/utils.js
+// ../../node_modules/three/src/utils.js
 var _setConsoleFunction = null;
 function enhanceLogMessage(params) {
   const message = params[0];
@@ -53,14 +53,14 @@ var ReversedDepthFuncs = {
   [GreaterEqualDepth]: LessEqualDepth
 };
 
-// node_modules/three/src/math/MathUtils.js
+// ../../node_modules/three/src/math/MathUtils.js
 var DEG2RAD = Math.PI / 180;
 var RAD2DEG = 180 / Math.PI;
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-// node_modules/three/src/math/Quaternion.js
+// ../../node_modules/three/src/math/Quaternion.js
 var Quaternion = class {
   /**
    * Constructs a new quaternion.
@@ -679,7 +679,7 @@ var Quaternion = class {
   }
 };
 
-// node_modules/three/src/math/Vector3.js
+// ../../node_modules/three/src/math/Vector3.js
 var Vector3 = class _Vector3 {
   static {
     _Vector3.prototype.isVector3 = true;
@@ -1589,7 +1589,7 @@ var Vector3 = class _Vector3 {
 var _vector = /* @__PURE__ */ new Vector3();
 var _quaternion = /* @__PURE__ */ new Quaternion();
 
-// node_modules/three/src/renderers/shaders/ShaderLib/meshphong.glsl.js
+// ../../node_modules/three/src/renderers/shaders/ShaderLib/meshphong.glsl.js
 var vertex = (
   /* glsl */
   `
@@ -1724,7 +1724,7 @@ void main() {
 `
 );
 
-// node_modules/three/src/renderers/shaders/ShaderChunk/lights_pars_begin.glsl.js
+// ../../node_modules/three/src/renderers/shaders/ShaderChunk/lights_pars_begin.glsl.js
 var lights_pars_begin_glsl_default = (
   /* glsl */
   `

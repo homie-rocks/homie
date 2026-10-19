@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {drainStatus,drainSince,isAdmission} from '../worker/move-drain.mjs';
-const env=(clients=0,pending=0)=>({DB:{prepare:()=>({bind:()=>({first:async()=>({value:'1000'}),all:async()=>({results:[]})})})},LOBBY:{idFromName:s=>s,get:()=>({fetch:async()=>Response.json({rooms:[{name:'private-room'}]})})},TABLE:{idFromName:s=>s,get:()=>({fetch:async()=>Response.json({clients,pending})})}});
+const env=(clients=0,pending=0)=>({DB:{prepare:()=>({first:async()=>({value:'1000'}),bind:()=>({first:async()=>({value:'1000'}),all:async()=>({results:[]})})})},LOBBY:{idFromName:s=>s,get:()=>({fetch:async()=>Response.json({rooms:[{name:'private-room'}]})})},TABLE:{idFromName:s=>s,get:()=>({fetch:async()=>Response.json({clients,pending})})}});
 test('drain waits for existing clients, pending records, and in-flight admissions to settle',async()=>{
  const cat={games:[{id:'private-game'}]};
  assert.equal((await drainStatus(env(),cat,{now:2000})).drained,false);

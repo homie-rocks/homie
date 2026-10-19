@@ -67,7 +67,6 @@ export default {
   },
   async fetch(request, env, ctx) {
     env=managedMedia(env);
-    if(isAdmission(request)&&await drainSince(env))return drainResponse();
     const staticPath=new URL(request.url).pathname;
     if(['GET','HEAD'].includes(request.method)&&staticPath==='/_homie/site.js')return finish(await route(request,env,ctx),staticPath);
     env=await loadShopLinks(env,new URL(request.url).origin);
@@ -79,6 +78,8 @@ export default {
     if(access==='refuse')return appRecords?appCors(request,readOnlyResponse()):readOnlyResponse();
     let refusedWrite=false;
     env={...env,DB:requestDatabase(env.DB,request,{mutated:false,summaries:Boolean(env.BACKGROUND)})};
+    // A studio that is moving admits no new seat or socket (worker/move-drain.mjs). Its read rides the request's metadata batch.
+    if(isAdmission(request)&&await drainSince(env))return drainResponse();
     if(access==='read')env={...env,DB:readOnlyDatabase(env.DB,()=>{refusedWrite=true;})};
     if(env.HOMIE_CONCEPT==='1' && url.pathname==='/robots.txt')return new Response('User-agent: *\nDisallow: /\n',{headers:{'content-type':'text/plain','x-robots-tag':'noindex, nofollow'}});
     if(env.HOMIE_CONCEPT==='1' && url.pathname==='/.well-known/homie-studio.json')return json({ok:false,error:'concept-unlisted'},404,{'x-robots-tag':'noindex, nofollow'});

@@ -1,9 +1,10 @@
 import {LOBBY_SHARDS} from './lobby-shards.mjs';
 export const DRAIN_KEY='studio_move_drain';
+/** The drain flag, read in the same batch as the request's metadata revision (request-db.mjs), so an admission costs no extra D1 request. */
+export const DRAIN_QUERY="SELECT value FROM meta WHERE key='studio_move_drain'";
 export async function drainSince(env){
  if(!env.DB)return null;
- const db=env.DB.withSession?env.DB.withSession('first-primary'):env.DB;
- const row=await db.prepare('SELECT value FROM meta WHERE key=?1').bind(DRAIN_KEY).first();
+ const row=await env.DB.prepare(DRAIN_QUERY).first();
  const at=Number(row?.value);return Number.isSafeInteger(at)&&at>0?at:null;
 }
 export function isAdmission(request){const path=new URL(request.url).pathname;return request.headers.get('upgrade')?.toLowerCase()==='websocket'||/\/api\/(lobby|agents)(\/|$)/.test(path);}
