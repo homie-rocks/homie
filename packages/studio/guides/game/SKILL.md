@@ -46,6 +46,8 @@ Cloudflare or physical-phone capacity guarantees.
 ## Start it
 
 - **Look for pieces before writing them.** Games build on each other by sharing parts: a creature from one game,
+  Search by system (touch controls, feedback, sound, scoring, title and results UI, rooms), not only by genre. Add a fitting result with `part_add` before implementing a replacement; import and use it in the game. A starter or npm package is not a catalog search. Record part version, source game/studio, licence and integration in CODEX **Built from**, or the search and concrete gap if nothing fits. In managed studios these same tools work; wait for the committed preview through `build_progress` after adding a part.
+
   a level from another, a bot brain from a third. For each system the game needs (camera, movement, bots, pickups,
   effects, sound, UI, environment), before writing it from scratch:
   - check the `@homie-rocks/*` packages (npm) for the general mechanism: camera, input, audio, effects;

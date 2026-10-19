@@ -1,3 +1,7 @@
+# 0.58.9
+
+Rules can import registered studio parts, including the re-export modules produced by part_new. Every dependency receives the existing deterministic rules checks, and filesystem escapes are refused. Game guides now require finding, adding and actually using fitting parts before writing replacements.
+
 # Changelog
 
 What changed in each release of Homie's open parts, newest first:

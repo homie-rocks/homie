@@ -6,6 +6,8 @@ A rules game has `src/rules.ts`, `src/move.ts`, `src/view.ts`, `game.json`,
 from the same package. Import `move` into the rules. Pictures and controls belong in
 view.ts; shared movement belongs in move.ts; all game decisions belong in rules.ts.
 
+Rules may import a deterministic part already added to this studio with `@parts/<host>/<id>` (or an own part with `@parts/<id>`). The re-export created by `part_new` works too. Every imported module is checked by the same rules guard; browser-only audio, UI and control parts belong in the view. Parts cannot import arbitrary files outside this game and registered parts.
+
 ```ts
 import { defineRules, f } from '@homie-rocks/studio/rules';
 import { move } from './move';

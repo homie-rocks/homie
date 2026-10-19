@@ -38,12 +38,14 @@
  * code written to attack: no rules from outside the studio run on its server.
  */
 import { parse } from '@babel/parser';
+import { listOwnParts, readOrigins, vendorDir } from './parts.mjs';
+import { partsPlugin, resolvePartImport } from './parts-build.mjs';
 import babelTraverse from '@babel/traverse';
 import * as babelGenerator from '@babel/generator';
 import * as t from '@babel/types';
 import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping';
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 
 const traverse = babelTraverse.default ?? babelTraverse;
 const generate = babelGenerator.generate ?? babelGenerator.default;
@@ -190,7 +192,7 @@ const isTarget = (path) => (path.parentPath.isAssignmentExpression() && path.par
  *             and nothing is rewritten
  * Returns { code, problems }.
  */
-export function guardSource(code, { file = 'rules.js', map = null, linked = false } = {}) {
+export function guardSource(code, { file = 'rules.js', map = null, linked = false, checkedImports = false } = {}) {
   const problems = [];
   const tracer = map ? new TraceMap(typeof map === 'string' ? JSON.parse(map) : map) : null;
   const lineOf = (node) => {
@@ -240,12 +242,12 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
     if (t.isImportDeclaration(st)) {
       const from = st.source.value;
       if (from === RULES_MODULE || (linked && from === GUARD_MODULE)) { for (const s of st.specifiers) homie.add(s.local.name); continue; }
-      if (/^\.\.?\//.test(from) && !linked) { for (const s of st.specifiers) own.add(s.local.name); continue; }
+      if ((/^\.\.?\//.test(from) || from.startsWith('@parts/')) && !linked) { for (const s of st.specifiers) own.add(s.local.name); continue; }
       bad(st, `rules import only ${RULES_MODULE} and the game's own files, not "${from}"`);
       continue;
     }
     const decl = t.isExportNamedDeclaration(st) || t.isExportDefaultDeclaration(st) ? st.declaration : st;
-    if (t.isExportAllDeclaration(st) || (t.isExportNamedDeclaration(st) && !st.declaration)) { if (st.source) bad(st, 'rules export their own declarations, not another file\'s'); continue; }
+    if (t.isExportAllDeclaration(st) || (t.isExportNamedDeclaration(st) && !st.declaration)) { if (st.source && (!checkedImports || linked || !/^\.\.?\//.test(st.source.value) && !st.source.value.startsWith('@parts/'))) bad(st, 'rules export their own declarations, or re-export checked local files or parts'); continue; }
     if (t.isFunctionDeclaration(decl)) continue;
     if (t.isVariableDeclaration(decl)) {
       // Removing types turns `export default <expression>` into a `var` that is exported as the default: that one is the module's own.
@@ -719,11 +721,22 @@ export async function guardFiles(esbuild, root, gameDir, entry) {
   const problems = [];
   const todo = [entry];
   const sites = {};
+  const canonical = p => existsSync(p) ? realpathSync(p) : resolve(p);
+  const inside = (dir, file) => { const rel = relative(canonical(dir), canonical(file)); return rel === '' || (!rel.startsWith('..') && !rel.startsWith('/')); };
+  const origins = readOrigins(root);
+  const game = basename(gameDir);
+  const vendors = Object.entries(origins.parts).filter(([, entry]) => {
+    const purchase = entry.purchases?.[game] ?? entry.purchase;
+    return purchase?.scope !== 'game' || purchase.game === game;
+  }).map(([ref]) => vendorDir(root, ref));
+  const partDirs = [...listOwnParts(root).filter(p => p.part).map(p => p.dir), ...vendors]
+    .filter(p => inside(root, p) && existsSync(join(p, 'part.json')));
+  const allowed = file => inside(gameDir, file) || partDirs.some(dir => inside(dir, file));
   while (todo.length) {
     const file = todo.pop();
     if (files.has(file)) continue;
     const shown = relative(root, file).split('\\').join('/');
-    if (relative(gameDir, file).startsWith('..')) { problems.push({ file: shown, line: 0, message: 'rules import only files of their own game' }); files.set(file, null); continue; }
+    if (!allowed(file)) { problems.push({ file: shown, line: 0, message: 'rules import only files of their own game' }); files.set(file, null); continue; }
     let stripped;
     try { stripped = await esbuild.transform(readFileSync(file, 'utf8'), { loader: /\.ts$/.test(file) ? 'ts' : 'js', format: 'esm', target: 'es2022', sourcemap: 'external', sourcefile: shown }); } catch (error) {
       const first = error.errors?.[0];
@@ -744,15 +757,20 @@ export async function guardFiles(esbuild, root, gameDir, entry) {
         }
       },
     });
-    const res = guardSource(stripped.code, { file: shown, map: stripped.map });
+    const res = guardSource(stripped.code, { file: shown, map: stripped.map, checkedImports: true });
     problems.push(...res.problems);
     files.set(file, res.code);
-    for (const m of stripped.code.matchAll(/^\s*import\s[^'"]*['"](\.\.?\/[^'"]+)['"]/gm)) {
-      const next = resolveOwn(file, m[1]);
-      const line = original.program.body.find(n => n.type === 'ImportDeclaration' && n.source.value === m[1])?.loc?.start.line ?? 1;
-      if (next && relative(gameDir,next).startsWith('..')) problems.push({file:shown,line,message:'rules import only files of their own game'});
+    const module = parse(stripped.code, { sourceType: 'module' });
+    for (const declaration of module.program.body) {
+      if (!['ImportDeclaration', 'ExportAllDeclaration', 'ExportNamedDeclaration'].includes(declaration.type) || !declaration.source) continue;
+      const spec = declaration.source.value;
+      if (!/^\.\.?\//.test(spec) && !spec.startsWith('@parts/')) continue;
+      const resolved = spec.startsWith('@parts/') ? resolvePartImport(root, spec, origins) : { path: resolveOwn(file, spec) };
+      const next = resolved.path;
+      const line = original.program.body.find(n => n.source?.value === spec)?.loc?.start.line ?? 1;
+      if (next && !allowed(next)) problems.push({file:shown,line,message:'rules import only files of their own game or registered parts'});
       else if (next) todo.push(next);
-      else problems.push({ file: shown, line, message: `"${m[1]}" is not a file of this game` });
+      else problems.push({file:shown,line,message:resolved.error ?? `"${spec}" is not a file of this game or a registered part`});
     }
   }
   return { files, problems, sites };
@@ -787,7 +805,7 @@ export async function guardRules(esbuild, root, gameDir, { entry = join(gameDir,
   if (problems.length) return { ok: false, code: null, problems, files };
   let linked;
   try {
-    linked = await esbuild.build({ entryPoints: [entry], bundle: true, format: 'esm', target: 'es2022', write: false, absWorkingDir: root, logLevel: 'silent', external: [RULES_MODULE, GUARD_MODULE], plugins: [guardedPlugin(files)], legalComments: 'none' });
+    linked = await esbuild.build({ entryPoints: [entry], bundle: true, format: 'esm', target: 'es2022', write: false, absWorkingDir: root, logLevel: 'silent', external: [RULES_MODULE, GUARD_MODULE], plugins: [partsPlugin(root, basename(gameDir)), guardedPlugin(files)], legalComments: 'none' });
   } catch (error) {
     const first = error.errors?.[0];
     return { ok: false, code: null, files, problems: [{ file: first?.location?.file ?? relative(root, entry), line: first?.location?.line ?? 0, message: `the rules did not link: ${first?.text ?? error.message}` }] };
