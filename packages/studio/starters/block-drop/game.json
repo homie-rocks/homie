@@ -1,0 +1,7 @@
+{
+ "id":"block-drop","name":"Block Drop","blurb":"Seven shapes. One well. Stack, rotate and clear lines before the clock runs out.",
+ "players":{"min":1,"max":4},"entry":"src/view.ts","room":{"host":"server","rest":"idle"},
+ "playtest":{"primary":{"label":"hard drop","computer":{"key":"Space"},"phone":{"selector":"[data-action=drop]"}}},
+ "screen":{"share":{"desk":"top-right","phone":"top-right"},"chat":{"lines":"sheet-only"}},
+ "landing":{"pitch":"Find the gap. Make the line.","about":"A falling-block puzzle with a separate well for every player. Seven-piece bags, ghost pieces, wall kicks and line-clear scoring. Play with a friend or a bot in two-minute rounds.","howToPlay":["Move and rotate each falling shape into a gap.","Fill a horizontal row to clear it. Clear four at once for the biggest score.","Use the ghost outline to aim a hard drop. Keep your stack below the top."],"controls":{"phone":"Tap the arrows to move, ↻ to rotate and DROP to place the piece.","computer":"Left/right to move, up to rotate, down for soft drop and space for hard drop.","tv":"Watch every well; each player uses their own phone."},"credits":[{"role":"Starter","name":"Homie · Block Drop"}]}
+}

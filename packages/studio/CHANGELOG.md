@@ -17,6 +17,30 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.7] - 2026-10-19
+
+**Plugin 0.58.3**
+
+A falling-block starter gives board-game requests a working mechanic to build on.
+
+### Added
+
+- `block-drop`: separate 10×20 wells, seven-piece bags, rotation and wall kicks, ghost pieces, line clears, keyboard and touch controls, procedural audio, bots and two-minute server rounds. A newcomer taking a bot seat gets a fresh well.
+- Regressions for independent player input, hard drops, line clearing, save/restore and bot-seat takeover.
+
+### Changed
+
+- Game guides and starter discovery point falling-block requests to Block Drop. They explain stationary anchors, player `seat`, room events and exact-location compiler repairs.
+- Editing guidance distinguishes a complete-file write from a targeted repair and explains recovery after an interrupted write.
+
+### Fixed
+
+- The late-join owner test retains its seat, round, roster, replication and clock checks for stationary games, but marks body steering N/A instead of falsely failing it. Actual board controls still need a directed play trial.
+
+### Upgrade notes
+
+- Existing games are unchanged. New falling-block games can use `game new <id> --from block-drop`.
+
 ## [0.58.6] - 2026-10-18
 
 **Plugin 0.58.2**

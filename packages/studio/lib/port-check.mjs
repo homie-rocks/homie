@@ -717,7 +717,7 @@ export async function portCheck({ url, game, root, only = null, shots = null, lo
             const clockSkew = ic?.round && ib3?.round ? Math.abs(ic.round.leftMs - ib3.round.leftMs) : null;
             // The joiner must steer its body at once, not only hold a seat: a short press moves it.
             let steers = null;
-            if (ic?.v !== 'board' && oc.ok) {
+            if (ic?.v !== 'board' && ic?.movement !== 'stationary' && oc.ok) {
               await focusGame(C);
               const keysC = ic?.keys ?? { right: 'ArrowRight', left: 'ArrowLeft' };
               const r0 = (await rowsSince(C, 0)).filter(finite).pop();
@@ -729,7 +729,7 @@ export async function portCheck({ url, game, root, only = null, shots = null, lo
             }
             await shot(C, 'late-joiner');
             const ok = oc.ok && ic?.seat !== null && ic?.round && ib3?.round && ic.round.n === ib3.round.n && humans >= 2 && tookBot && snapIn > 5 && (clockSkew === null || clockSkew < 2500) && steers !== false;
-            row('late-join', Boolean(ok), { seatedMs: oc.ms, sinceJoinMs: Date.now() - joinAt, role: ic?.role, seat: ic?.seat, round: ic?.round, hostRound: ib3?.round, humans, bodies: slots.length, bodiesBefore: before.length, tookBot, steers, snapHzIn: snapIn, clockSkewMs: clockSkew,
+            row('late-join', Boolean(ok), { seatedMs: oc.ms, sinceJoinMs: Date.now() - joinAt, role: ic?.role, seat: ic?.seat, round: ic?.round, hostRound: ib3?.round, humans, bodies: slots.length, bodiesBefore: before.length, tookBot, steers, ...(ic?.movement === 'stationary' ? { steeringApplicable: false, steeringNote: 'Stationary player anchors: movement is N/A. Late-join admission and replication are checked here; exercise the actual board/turn controls separately.' } : {}), snapHzIn: snapIn, clockSkewMs: clockSkew,
               why: !oc.ok ? oc.why : ic?.round?.n !== ib3?.round?.n ? 'the late joiner is in a different round' : humans < 2 ? 'the late joiner is not one of the people in the roster' : !tookBot ? 'the late joiner added a body instead of taking a bot\'s place' : steers === false ? 'the late joiner has a seat but its keys do not move its body' : snapIn <= 5 ? 'no world is flowing to the late joiner' : clockSkew !== null && clockSkew >= 2500 ? `the late joiner's clock is ${clockSkew} ms off the host's` : undefined });
             collect(C); await close(C);
           }
