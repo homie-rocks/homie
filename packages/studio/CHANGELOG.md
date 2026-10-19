@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.58.8
+
+- Concept previews label the outer page once, without injecting a second banner over embedded game and app controls. No-index headers remain on every response.
+
 What changed in each release of Homie's open parts, newest first:
 
 - **`@homie-rocks/studio`**: the `homie-studio` command, your studio's site Worker, its multiplayer rooms (the

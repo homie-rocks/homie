@@ -99,7 +99,9 @@ export default {
     if(env.HOMIE_CONCEPT==='1' && res.status!==101) {
       const headers=new Headers(res.headers);headers.set('x-robots-tag','noindex, nofollow');
       let body=res.body;
-      if(/text\/html/i.test(headers.get('content-type')??'')) {
+      // The outer page labels the whole preview. Repeating that overlay in an
+      // embedded game/app obscures its HUD and counts as the game's own UI.
+      if(request.headers.get('sec-fetch-dest')!=='iframe' && /text\/html/i.test(headers.get('content-type')??'')) {
         const html=await res.text(),banner='<aside role="status" style="position:fixed;z-index:2147483647;top:0;left:0;right:0;text-align:center;background:#ffda44;color:#171717;padding:6px;font:bold 14px system-ui;pointer-events:none">TEST / CONCEPT</aside>';
         body=/<body[^>]*>/i.test(html)?html.replace(/<body[^>]*>/i,m=>m+banner):banner+html;
         headers.delete('content-length');
