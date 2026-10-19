@@ -165,6 +165,17 @@ A room nobody is playing rests, and the next touch wakes it with that input stil
 - Rebuild your games. Set `room.rest` to `"never"` (or `restSeconds` to 0) for a turn timer or a show that must keep
   going while people are present. A lasting world never rests.
 
+### Added
+
+- A studio can be hosted by a git host instead of the owner's own Cloudflare. `homie-studio hosted connect <git url>` signs this computer in once in the browser with the host's own OAuth (discovered from the Git remote by the published standards, no key to copy), clones the studio and makes the toolkit Git's credential helper for that remote only. studio.json's new `hosting` block says so: `deploy` (and the studio_deploy tool) push main and the host builds a private preview, `publish` (and studio_publish) ask the host to put it live, and cloudflare_login and storage refuse with the reason. See [packages/studio/docs/hosted.md](packages/studio/docs/hosted.md).
+- `homie-studio git-credential`: Git's credential protocol for those hosts. Tokens are kept in `~/.homie/secrets/git-oauth/` (mode 0600), refresh themselves, and never appear in a URL, a remote or Git config.
+- A host in front of a studio can serve it to one viewer under a path of its own (the `homie-link-base` request header). The shared room link, the television's join code, the landing's phone code, the game frame and its room sockets then start with it. A private preview uses this so that phones scanning the code join the room, and so that the game frame, which runs at an opaque origin and sends no cookie, loads and connects.
+
+### Security
+
+- A hosted studio's `deploy` pushes only to the clone's own remote, and its sign-in token goes only to the resource it was issued for (RFC 8707). A `hosting` block in studio.json that names anything else is refused before anything is pushed or sent.
+- Git's credential helper for a hosted studio runs the studio's own installed toolkit, falling back to npx only before `npm ci`.
+
 ## [0.58.0] - 2026-10-16
 
 **Plugin 0.58.0**

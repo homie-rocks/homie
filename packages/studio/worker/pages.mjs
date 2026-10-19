@@ -107,7 +107,7 @@ export function sharePlaces(value) {
  * the edge (game.json `screen.share`, per device: sharePlaces) opens Invite, Big screen and the room code; nothing
  * covers the middle of the screen or a thumb.
  */
-export function playPage(cat, g, { test = false, embed = false, origin = '', preview = false, screen = false, joinUrl = null, qr = null, local = false, room = null, ticket = null, owner = false, launch = 'public', server = null, acct = false, member = false, shop = null } = {}) {
+export function playPage(cat, g, { test = false, embed = false, origin = '', linkBase = '', preview = false, screen = false, joinUrl = null, qr = null, local = false, room = null, ticket = null, owner = false, launch = 'public', server = null, acct = false, member = false, shop = null } = {}) {
   const shopControl = Boolean(shop && !screen && g.screen?.shop !== false);
   const accent = cat?.studio?.theme?.accent ?? '#ffcf5a';
   const corner = (name, fallback) => (['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(g.screen?.[name]) ? g.screen[name] : fallback);
@@ -199,7 +199,7 @@ ${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${shop ? SHO
   // game.json "agents": { "vote": "game" } draws its own vote card; false turns the vote off (section 17).
   const vote = g.agents?.vote === 'game' || g.agents?.vote === false ? g.agents.vote : 'shell';
   // The address's switches the game's frame is handed (NETPLAY.md section 24): the defaults and the game's own names.
-  const boot = { ...(g.kind === 'app' ? { kind: 'app', test, appWords: appWords(g) } : {}), embed, game: g.id, name: g.name, screen: Boolean(screen), share: places, params: playParams(g), paramValue: PARAM_VALUE, prefs: PREFS_LIMITS, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}), sh: shellKey(g), ...(owner ? { owner: true, launch } : {}), ...(srv ? { server: srv } : {}), vote, skills: SKILLS.map((k) => ({ level: k.level, name: k.name, card: k.card })), words: POLICY_WORDS, kidsLine: KIDS_LINE, ...(shop ? { shop } : {}) };
+  const boot = { ...(g.kind === 'app' ? { kind: 'app', test, appWords: appWords(g) } : {}), embed, game: g.id, name: g.name, screen: Boolean(screen), share: places, params: playParams(g), paramValue: PARAM_VALUE, prefs: PREFS_LIMITS, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}), ...(linkBase ? { linkBase } : {}), sh: shellKey(g), ...(owner ? { owner: true, launch } : {}), ...(srv ? { server: srv } : {}), vote, skills: SKILLS.map((k) => ({ level: k.level, name: k.name, card: k.card })), words: POLICY_WORDS, kidsLine: KIDS_LINE, ...(shop ? { shop } : {}) };
   // game.json "screen": { "join": "top-left" | "top-right" | "bottom-left" | "bottom-right" } keeps the card off the game's own HUD.
   const joinCorner = corner('join', 'bottom-right');
   const first = places.desk;
@@ -474,7 +474,8 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
   }
   function shareReady(room) {
     if (!ui) return;
-    var link = location.origin + '/' + boot.game + (boot.kind === 'app' ? '/open?room=' : '/play?room=') + encodeURIComponent(room);
+    // The host's path for this viewer (a private preview's room pass, worker/link-base.mjs) starts every shared link.
+    var link = location.origin + (boot.linkBase || '') + '/' + boot.game + (boot.kind === 'app' ? '/open?room=' : '/play?room=') + encodeURIComponent(room);
     state.link = link;
     ui.querySelector('[data-room-code]').textContent = labelOf(room) + (boot.embed ? ' \u00b7 Site' : '');
     ui.querySelector('[data-room-label]').textContent = labelOf(room);
@@ -541,7 +542,7 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
       (boot.params || ['debug', 'q', 'touchdebug', 'cam', 'view']).forEach(function (k) { var v = params.get(k); if (v !== null && okValue.test(v)) q.set(k, v); });
       // This page keeps net.prefs for the frame (section 24).
       q.set('pf', '1');
-      return '/' + boot.game + '/__game/?' + q.toString();
+      return (boot.linkBase || '') + '/' + boot.game + '/__game/?' + q.toString();
     }
     state.params = {};
     (boot.params || []).forEach(function (k) { var v = params.get(k); if (v !== null && new RegExp(boot.paramValue || '^$').test(v)) state.params[k] = v; });
@@ -728,7 +729,7 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
     if (state.notice) return;
     var ws;
     var extra = '&b=' + encodeURIComponent(roomKey) + (boot.t ? '&t=' + encodeURIComponent(boot.t) : '');
-    try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/' + boot.game + '/__watch?room=' + encodeURIComponent(room) + extra); }
+    try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + (boot.linkBase || '') + '/' + boot.game + '/__watch?room=' + encodeURIComponent(room) + extra); }
     catch (e) { setTimeout(function () { watch(room); }, 2000); return; }
     state.watchSocket = ws;
     // Room chat (section 19) speaks on this socket: lines, reactions and what the room keeps of the last minutes.
@@ -1164,10 +1165,10 @@ const OWNER_JS = String.raw`(function () {
  * watchers see the whole room only. A private or invite-only game is watched only by whoever may play it (the door
  * is the play door's). Every name a player typed is set with textContent.
  */
-export function watchPage(cat, g, { test = false, origin = '', room = null, ticket = null, policy = 'follow', owner = false, acct = false, member = false } = {}) {
+export function watchPage(cat, g, { test = false, origin = '', linkBase = '', room = null, ticket = null, policy = 'follow', owner = false, acct = false, member = false } = {}) {
   const accent = cat?.studio?.theme?.accent ?? '#ffcf5a';
   const hot = /^#[0-9a-f]{3,8}$/i.test(accent) ? accent : '#ffcf5a';
-  const boot = { ...(g.kind === 'app' ? { kind: 'app', test, screen: true, role: g.surfaces?.wall, params: playParams(g) } : {}), game: g.id, name: g.name, policy, palette: NET_PALETTE, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}) };
+  const boot = { ...(g.kind === 'app' ? { kind: 'app', test, screen: true, role: g.surfaces?.wall, params: playParams(g) } : {}), game: g.id, name: g.name, policy, palette: NET_PALETTE, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}), ...(linkBase ? { linkBase } : {}) };
   const css = `:root{--hot:${hot}}${WATCH_CSS}${CHAT_CSS}${g.kind === 'app' ? '.dock{display:none}' : ''}`;
   return layoutless(`Watch ${g.name}`, `
 <header class="wtop" data-top>
@@ -1350,8 +1351,8 @@ const WATCH_JS = String.raw`${BUILD_RETRY_JS}(function () {
     if (boot.t) q.set('t', boot.t);
     if (params.get('debug') === '1') q.set('debug', '1');
     ['cam', 'view'].forEach(function (k) { var v = params.get(k); if (v && /^[A-Za-z0-9_-]{1,16}$/.test(v)) q.set(k, v); });
-    frame.src = '/' + boot.game + '/__game/?' + q.toString();
-    var updating = buildRetry(function () { frame.src = '/' + boot.game + '/__game/?' + q.toString(); }, function (text) { var el = q1('[data-update]'); if (el) { el.textContent = text; el.hidden = !text; } });
+    frame.src = (boot.linkBase || '') + '/' + boot.game + '/__game/?' + q.toString();
+    var updating = buildRetry(function () { frame.src = (boot.linkBase || '') + '/' + boot.game + '/__game/?' + q.toString(); }, function (text) { var el = q1('[data-update]'); if (el) { el.textContent = text; el.hidden = !text; } });
     frame.addEventListener('load', updating.loaded);
     frame.addEventListener('error', updating.failed);
     addEventListener('message', function (ev) {
@@ -1399,7 +1400,7 @@ const WATCH_JS = String.raw`${BUILD_RETRY_JS}(function () {
     if (state.notice && state.notice.final) return;
     var ws;
     var extra = '&b=' + encodeURIComponent(roomKey) + (boot.t ? '&t=' + encodeURIComponent(boot.t) : '');
-    try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/' + boot.game + '/__watch?room=' + encodeURIComponent(room) + extra); }
+    try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + (boot.linkBase || '') + '/' + boot.game + '/__watch?room=' + encodeURIComponent(room) + extra); }
     catch (e) { setTimeout(function () { watch(room); }, 2000); return; }
     state.socket = ws;
     // Room chat (section 19): a watcher reads the room's chat and sends what the room's rules let a watcher send.

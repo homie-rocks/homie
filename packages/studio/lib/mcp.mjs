@@ -42,6 +42,8 @@ For a custom domain already on Cloudflare, studio_domain prepares the exact host
 
 If studio_scaffold finds an earlier folder of the studio's name that is not a studio, ask the person whether to fold its premise in (studio_fold), and remove it only with a second yes.
 
+A studio a git host keeps and builds (its studio.json has hosting.git, set by homie-studio hosted connect): never use cloudflare_login or deploy it to the person's own Cloudflare. studio_deploy pushes main to the host, which builds a private preview; studio_publish asks the host to put it live, and the host may wait for the owner's own approval. When the host's MCP server is connected too, its tools are the authority for builds, previews and publishing.
+
 A studio made elsewhere (on a phone, with Deploy to Cloudflare, so it lives on GitHub): studio_open with its repo clones it into the studios folder with this computer's own GitHub sign-in; github_login signs the computer in with GitHub's one-time code. Never ask for a token.
 
 Give preview and finished-site links in your reply (the cards have their own buttons). Open provider authorization flows when needed; the person signs in and approves, while you handle configuration.
