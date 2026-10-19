@@ -17,6 +17,20 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.9] - 2026-10-19
+
+**Plugin 0.58.3**
+
+Build games from shared parts while keeping server rules deterministic.
+
+### Fixed
+
+- Rules can import registered studio parts and the re-exports created by `part_new`. Every dependency receives the existing rules checks, including filesystem boundary checks.
+
+### Changed
+
+- Game guides require finding, adding and actually using fitting parts before writing replacements, with source credits and concrete gaps recorded in Built from.
+
 ## [0.58.8] - 2026-10-19
 
 **Plugin 0.58.3**
