@@ -1,3 +1,4 @@
+import {drainStatus} from './move-drain.mjs';
 import {lobbyFor} from './lobby-shards.mjs';
 /** Route dispatch; large interfaces and tool runtimes load at their own entry points. */
 import {customRoute} from './custom-routes.mjs';
@@ -157,6 +158,7 @@ export default async function route(request, env, ctx) {
       ...(shopOf(cat)?.open ? { shop: { open: true, till: shopOf(cat).till, currency: shopOf(cat).currency, page: `${url.origin}/shop/` } } : {}),
     }, 200, { 'access-control-allow-origin': '*' });
   }
+  if (path === '/api/move-status' && read) return json(await drainStatus(env,await getAll()),200,{'cache-control':'no-store'});
   if (path === '/api/games') {
     const cat = await getCat();
     // readOnly: the owner's switch (worker/read-only.mjs), here so a tool can check it without sending a write.
@@ -641,6 +643,9 @@ export default async function route(request, env, ctx) {
       // one; none on a kids server, none for an AI or a watcher.
       const pid = !ag && !w && sub === '__net' ? parts.find((x) => x.startsWith('p-'))?.slice(2) : null;
       const badge = pid ? await roomBadge(env, cat, pid, { kids: pol.kids }) : null;
+      // Keep an admission registry independent of expiring lobby reports. A later move
+      // must inspect even a quiet named room and its durable outboxes.
+      if(env.DB&&!isReadOnly(env))await env.DB.prepare("INSERT OR IGNORE INTO meta(key,value) VALUES(?1,'1')").bind('move-room:'+game+':'+room).run();
       const stub = sub === '__net' ? gateFor(env, game, room, max, b) : env.TABLE.get(env.TABLE.idFromName(`${game}/${room}`));
       // Revision 9 (NETPLAY.md sections 22 and 23): the build that is live now (`cur`, always said, empty when the game
       // names none), the build this socket's page was served with (`gv`, from the socket's own address), and the game's

@@ -17,6 +17,22 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.10] - 2026-10-19
+
+**Plugin 0.58.4**
+
+Prepare a studio for a move with an owner-controlled read-only switch.
+
+### Added
+
+- `homie-studio drain on|off|status` pauses new room admissions without deploying or closing existing sockets. A move waits for empty rooms and delivered records before freezing the source.
+- Managed media bindings preserve streamed media, range requests and large player saves.
+- A read-only switch for a studio: `homie-studio read-only on|off|status` (and the local MCP tool `studio_read_only`) freezes the live studio for a few minutes, for a move to another host or maintenance, without losing anything. It sets the Worker secret `STUDIO_READ_ONLY` with the studio's own Cloudflare sign-in, as a new Worker version. While on, changes answer 503 with `Retry-After` and `x-studio-read-only: 1`; pages, games, live rooms and the Stripe webhook keep working, D1 takes no other write, room records wait in each room, scheduled and queued work waits, and `/api/games` reports `readOnly`.
+
+### Fixed
+
+- Standalone apps can read an app-record write's read-only refusal; other write routes remain restricted to the studio's own origin.
+
 ## [0.58.9] - 2026-10-19
 
 **Plugin 0.58.3**
@@ -181,7 +197,6 @@ A room nobody is playing rests, and the next touch wakes it with that input stil
 
 ### Added
 
-- A read-only switch for a studio: `homie-studio read-only on|off|status` (and the local MCP tool `studio_read_only`) freezes the live studio for a few minutes, for a move to another host or maintenance, without losing anything. It sets the Worker secret `STUDIO_READ_ONLY` with the studio's own Cloudflare sign-in, live in seconds with no deploy. While on, changes answer 503 with `Retry-After` and `x-studio-read-only: 1`; pages, games, live rooms and the Stripe webhook keep working, D1 takes no other write, room records wait in each room, scheduled and queued work waits, and `/api/games` reports `readOnly`.
 
 ## [0.58.0] - 2026-10-16
 

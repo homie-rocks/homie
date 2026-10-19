@@ -129,3 +129,12 @@ test('read-only on|off|status sets and clears the STUDIO_READ_ONLY Worker secret
   assert.equal(again.ok,true);assert.equal(again.already,true,'turning it off twice changes nothing');
   await assert.rejects(readOnlyCommand(root,'maybe',opts),/on, off or status/);
 });
+
+ test('read-only refusal is readable by standalone apps only for app records',async()=>{
+  for(const path of ['/tunes/api/app/records/notes','/api/player/delete']) {
+    const r=await call(studioEnv({STUDIO_READ_ONLY:'1'}),path,{method:'POST',headers:{origin:'capacitor://localhost'}});
+    assert.equal(r.status,503);
+    assert.equal(r.headers.get('access-control-allow-origin'),path.includes('/app/records/')?'capacitor://localhost':null);
+    assert.equal(r.headers.get('access-control-allow-credentials'),null);
+  }
+ });

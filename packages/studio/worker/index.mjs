@@ -1,3 +1,5 @@
+import {drainSince,isAdmission,drainResponse} from './move-drain.mjs';
+import {managedMedia} from './managed-media.mjs';
 /** Studio Worker event boundaries and public toolkit exports. */
 import { catalogue } from './catalogue.mjs';
 import {trackBackground,requestDatabase,MUTATION_VERSION} from './request-db.mjs';
@@ -64,13 +66,17 @@ export default {
     await Promise.all([maintenance,analytics]);
   },
   async fetch(request, env, ctx) {
+    env=managedMedia(env);
+    if(isAdmission(request)&&await drainSince(env))return drainResponse();
     const staticPath=new URL(request.url).pathname;
     if(['GET','HEAD'].includes(request.method)&&staticPath==='/_homie/site.js')return finish(await route(request,env,ctx),staticPath);
     env=await loadShopLinks(env,new URL(request.url).origin);
     const url = new URL(request.url);
+    const appRecords = isAppOrigin(request) && /^\/[^/]+\/api\/app\/records\//.test(url.pathname);
+
     // Read-only (worker/read-only.mjs): a change is refused before anything runs; a read gets a D1 that refuses writes.
     const readOnly=isReadOnly(env),access=readOnly?readOnlyAccess(request,url.pathname):'write';
-    if(access==='refuse')return isAppOrigin(request)&&/^\/[^/]+\/api\/app\/records\//.test(url.pathname)?appCors(request,readOnlyResponse()):readOnlyResponse();
+    if(access==='refuse')return appRecords?appCors(request,readOnlyResponse()):readOnlyResponse();
     let refusedWrite=false;
     env={...env,DB:requestDatabase(env.DB,request,{mutated:false,summaries:Boolean(env.BACKGROUND)})};
     if(access==='read')env={...env,DB:readOnlyDatabase(env.DB,()=>{refusedWrite=true;})};
@@ -95,7 +101,6 @@ export default {
     const requestCtx=background.context;
     // A standalone copy's Lobby call (worker/standalone.mjs): every answer to it can be read by the app's page, an
     // unknown game's 404 and a failure included, so the app can say why it plays offline. No other address is opened.
-    const appRecords = isAppOrigin(request) && /^\/[^/]+\/api\/app\/records\//.test(url.pathname);
     if (appRecords && request.method === 'OPTIONS') return appCors(request, new Response(null, { status: 204, headers: { 'access-control-allow-methods': 'GET, POST, PUT, DELETE', 'access-control-allow-headers': 'content-type' } }));
     const appLobby = isAppOrigin(request) && /^\/[^/]+\/api\/lobby\/?$/.test(url.pathname);
     let res;

@@ -1089,6 +1089,13 @@ export class Table {
     }
     // The back office (worker/office.mjs), from the studio's Worker only: the room as its owner sees it, and the
     // owner's signed controls, which this room verifies before it applies one (NETPLAY.md section 15).
+    if (url.pathname === '/__move-status') {
+      await this.flushRoundRecords();await this.flushFunctionEvents();
+      const sql=this.ctx.storage.sql;
+      let pending=0;
+      for(const name of ['round_outbox','function_outbox'])if(sql?.exec("SELECT name FROM sqlite_master WHERE name=?",name).toArray().length)pending+=Number(sql.exec('SELECT COUNT(*) AS n FROM '+name).toArray()[0].n);
+      return json({clients:room.live().length,pending});
+    }
     if (url.pathname === '/__facts') return json({ ...room.officeFacts(), gates: [...(this.gateMetrics?.values() ?? [])], durability: this.storageHealth ?? { ok: true }, ...(this.house ? { brains: this.house.facts() } : {}) });
     // A chat line as the room keeps it (section 19), for a report: the Worker files the room's own copy, never a reporter's.
     if (url.pathname === '/__chat') {

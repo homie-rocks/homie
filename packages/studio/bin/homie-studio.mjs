@@ -535,6 +535,9 @@ function print(result) {
         ...(result.parts && partsPlanLines(result.parts).length ? ['', ...partsPlanLines(result.parts)] : []),
         ...(result.standalone?.length ? ['', ...result.standalone] : []));
       break;
+    case 'drain on':
+    case 'drain off':
+    case 'drain status':
     case 'read-only on':
     case 'read-only off':
     case 'read-only status':
@@ -839,6 +842,7 @@ const OUTWARD_FLAGS = {
   publish: ['homie', 'site', 'before'],
   deploy: ['plan', 'ci', 'homie', 'own-route'],
   'storage add': [],
+  'drain': ['url'],
   'read-only': ['url'],
   'media put': ['as'],
   'media move': ['dry-run', 'plan', 'verify'],
@@ -928,6 +932,7 @@ async function main() {
   if (['build', 'check', 'upgrade'].includes(cmd)) {
     for (const line of (await import('../lib/authoring-guides.mjs')).authoringWords({ kind: ['app', 'business', 'cause'].includes(readStudio(root).kind) || listExperiences(root).some(g => g.kind === 'app') ? 'app' : 'game' })) process.stderr.write(`${line}\n`);
   }
+  if (cmd === 'drain') return (await import('../lib/move-drain.mjs')).drainCommand(root, sub ?? 'status', { url: flags.get('url') ?? null });
   if (cmd === 'read-only') return (await import('../lib/read-only.mjs')).readOnlyCommand(root, sub ?? 'status', { url: flags.get('url') ?? null });
   if (cmd === 'events') return (await import('../lib/events-cli.mjs')).eventsCommand(root, sub, positional, flags, { log });
   if (cmd === 'function' || cmd === 'functions') return (await import('../lib/functions-cli.mjs')).functionCommand(root, sub, positional, flags, { log });
