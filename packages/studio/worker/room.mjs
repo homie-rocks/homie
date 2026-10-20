@@ -379,6 +379,8 @@ export class NetRoom {
     // The results name every AI as AI, whatever the host's game says (section 17).
     const round = retime && this.lastRound?.n === m.round.n && this.lastRound?.phase === m.round.phase ? { ...m.round, ...(this.lastRound.results ? { results: this.lastRound.results } : {}) } : Array.isArray(m.round.results) ? { ...m.round, results: this.labelResults(m.round.results) } : m.round;
     const wasLive = this.lastRound && this.lastRound.phase === 'live' ? Number(this.lastRound.n) : null;
+    // When the results went up: a studio move's drain lets them be seen before it ends an idle room (move-drain.mjs).
+    if (round.phase === 'over' && !(this.lastRound?.phase === 'over' && this.lastRound.n === round.n)) this.roundOverAt = this.now();
     this.lastRound = round;
     // The round a launch change waits for is over: everyone sees its results for a moment, then the room re-gates.
     if (this.regate && round.phase === 'over' && (this.regate.roundN === null || Number(round.n) >= this.regate.roundN)) this.regate.until = Math.min(this.regate.until, this.now() + 5000);

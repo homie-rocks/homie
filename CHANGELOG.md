@@ -17,6 +17,16 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.15] - 2026-10-20
+
+**Plugin 0.58.9**
+
+A tab left open in a lobby no longer holds a studio move's drain.
+
+### Fixed
+
+- A tab left open in a lobby no longer holds a studio move's drain. Once `homie-studio drain on` has run for 5 minutes, a room still waiting in its lobby (no round started, or the last round over and its results seen) is ended: the people in it are told "This studio is moving. Please join again shortly." and their pages do not knock on the paused door again. A room with a round in progress still plays until it finishes, and a room whose results are not yet saved is never ended. `homie-studio drain status` says how many rooms it ended this way (`idleLobbiesEnded`), so you can see why the drain finished.
+
 ## [0.58.14] - 2026-10-20
 
 **Plugin 0.58.8**
