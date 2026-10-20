@@ -32,6 +32,7 @@ import { newStudio, slugify } from './scaffold.mjs';
 import { repoFromUrl, studioRepo } from './repo.mjs';
 import { GAME_ID, PACKAGE_ROOT, findStudio, isRulesGame, listExperiences as listGames, readLocal, readStudio, siteUrl } from './studio.mjs';
 import { runningDev } from './dev.mjs';
+import { dispatchTarget } from './dispatch-target.mjs';
 import { deployWords } from './deploy-state.mjs';
 import { partsForListing, publishBefore, publishesSoFar } from './directory.mjs';
 import { STUDIO_VERSION } from './version.mjs';
@@ -443,7 +444,7 @@ async function startRun(ctx, root, { kind, game, title, steps }) {
   const run = { kind, title, state: 'running', ...(await feedForRun(ctx, root, { id: game ?? null, title })), jobs: [] };
   ctx.runs.set(run.build, run);
   const next = (i) => {
-    if (i >= steps.length) { run.state = 'passed'; endRun(root, run, 'passed', `${title}: done.`); if (kind !== 'deploy') ctx.note(root).checked = true; return; }
+    if (i >= steps.length) { run.state = 'passed'; endRun(root, run, 'passed', `${title}: done.`); if (kind === 'check' || kind === 'playtest') ctx.note(root).checked = true; return; }
     const step = steps[i];
     const job = cliJob(root, step.label, step.args, {
       onEnd: (j) => {
@@ -459,7 +460,30 @@ async function startRun(ctx, root, { kind, game, title, steps }) {
   return buildCard(ctx, root, feedFor(root, run.build));
 }
 
+/**
+ * WHERE "HERE" IS, FOR A HOST AWAY FROM THE PERSON'S SCREEN. A platform that runs this toolkit for the person in a
+ * workspace of its own (Homie Managed's studio workspace, a cloud dev box) has no browser beside it that can open
+ * this computer's addresses. It names the address its studio's private preview is reachable at, HOMIE_PREVIEW_URL,
+ * and the studio's studio.json names that preview's Workers for Platforms target (cloudflare.preview). Then the
+ * studio's site "here" is that preview: preview_run puts the build there (deploy --preview), and check and playtest
+ * open it after doing the same. Without both, nothing changes: the site runs on this computer.
+ */
+export function hostedPreview(root, env = process.env) {
+  const raw = String(env.HOMIE_PREVIEW_URL ?? '').trim();
+  if (!raw) return null;
+  let url;
+  try { url = new URL(raw); } catch { return null; }
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) return null;
+  try { if (!dispatchTarget(readStudio(root), { preview: true })) return null; } catch { return null; }
+  return url.href.replace(/\/+$/, '');
+}
+
+/** The step that puts the studio's current build on its hosted preview (a deploy --preview builds first). */
+const PREVIEW_STEP = { label: 'the build on the private preview', args: ['deploy', '--preview'] };
+
 async function devUrl(ctx, root, port) {
+  const hosted = hostedPreview(root);
+  if (hosted) return hosted;
   const dev = devOf(root);
   if (dev) return dev.url;
   const r = await startDev(ctx, root, port);
@@ -1062,6 +1086,18 @@ export function toolDefs(ctx, avail = {}) {
       run: async (a) => {
         const root = ctx.root(a.studio);
         const need = needsInstall(ctx, root); if (need) return need;
+        const hosted = hostedPreview(root);
+        if (hosted) {
+          const games = listGames(root);
+          const g = a.game ? games.find((x) => x.id === a.game) : games[0];
+          const card = await startRun(ctx, root, { kind: 'preview', game: g?.id ?? null, title: `${readStudio(root).name ?? 'The studio'}: private preview`, steps: [PREVIEW_STEP] });
+          const lines = [
+            `The studio's site runs on its private preview, not on this computer: the build is going there now (the card follows it). When it is done: ${hosted}/${games.length ? '' : ' (the home page: "First game coming soon")'}`,
+            ...games.map((x) => `  ${x.name ?? x.id}: ${hosted}/${x.id}/play`),
+            g ? `The person opens ${hosted}/${g.id}/play on two screens (a computer and a phone): two players, one room. Give them the address; do not open a browser for them.` : 'Give the person the address; do not open a browser for them.',
+          ];
+          return { ...card, content: [{ type: 'text', text: lines.join('\n') }, ...(card.content ?? [])] };
+        }
         let url = devOf(root)?.url ?? null;
         let slow = false;
         if (!url) { const r = await startDev(ctx, root, a.port); if (r.error) return fail(r.error); url = r.url; slow = Boolean(r.slow); }
@@ -1081,6 +1117,8 @@ export function toolDefs(ctx, avail = {}) {
       annotations: { title: 'Stop the site here', ...RW },
       run: async (a) => {
         const root = ctx.root(a.studio);
+        const hosted = hostedPreview(root);
+        if (hosted) return ok(`Nothing runs on this computer to stop: the studio's private preview (${hosted}/) stays as it is until the next build is put there.`, { kind: 'preview', stopped: [], hosted });
         const r = await cli(ctx, root, 'dev --stop', ['dev', '--stop'], { wait: 20_000 });
         // What a server stopped another way left behind is cleaned up and said (lib/dev.mjs).
         const note = r.result?.why && (r.result?.stale || r.result?.stopped?.length) ? ` ${r.result.why[0].toUpperCase()}${r.result.why.slice(1)}.` : '';
@@ -1099,8 +1137,10 @@ export function toolDefs(ctx, avail = {}) {
         const game = a.game ?? (games.length === 1 ? games[0].id : null);
         if (!game) return fail(games.length ? `which game? ${games.map((g) => g.id).join(', ')}` : 'there is no game to check yet');
         const url = a.url ? String(a.url) : await devUrl(ctx, root);
+        const hosted = !a.url && hostedPreview(root);
         return startRun(ctx, root, { kind: 'check', game, title: `${games.find((g) => g.id === game)?.name ?? game}: ${games.find((g) => g.id === game)?.kind === 'app' ? 'multi-screen' : 'two-browser'} check`, steps: [
           ...(games.some((g) => g.id === game && isRulesGame(g)) ? [{ label: 'rules build check', args: ['build', game] }] : []),
+          ...(hosted ? [PREVIEW_STEP] : []),
           { label: 'two-browser check', args: ['check', game, '--url', url, '--shots', join('.checks', game)] },
         ] });
       },
@@ -1117,9 +1157,11 @@ export function toolDefs(ctx, avail = {}) {
         const game = a.game ?? (games.length === 1 ? games[0].id : null);
         if (!game) return fail(games.length ? `which game? ${games.map((g) => g.id).join(', ')}` : 'there is no game to playtest yet');
         const url = a.url ? String(a.url) : await devUrl(ctx, root);
+        const hosted = !a.url && hostedPreview(root);
         const shots = join('.checks', `${game}-look`);
         return startRun(ctx, root, { kind: 'playtest', game, title: `${games.find((g) => g.id === game)?.name ?? game}: playtest`, steps: [
           ...(games.some((g) => g.id === game && isRulesGame(g)) ? [{ label: 'rules build check', args: ['build', game] }] : []),
+          ...(hosted ? [PREVIEW_STEP] : []),
           { label: 'two-browser check', args: ['check', game, '--url', url, '--shots', join('.checks', game)] },
           { label: 'pictures on a computer and a phone', soft: true, args: ['look', `/${game}/`, `/${game}/${games.find((g) => g.id === game)?.kind === 'app' ? 'open' : 'play'}`, '--url', url, '--only', 'computer,phone', '--shots', shots],
             // The first screen of each page first (a whole page is a tall picture): what a person sees on arrival.
