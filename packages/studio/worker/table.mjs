@@ -1,4 +1,5 @@
 import {lobbyFor} from './lobby-shards.mjs';
+import {DRAIN_IDLE_MS,MOVING_MESSAGE,drainSince,idleLobby} from './move-drain.mjs';
 import {relayStream} from './relay-channel.mjs';
 import {roomSessions,restoreRoomFields} from './room-sessions.mjs';
 import {idleChatSnapshot,restoreIdleChat,readIdleChat,writeIdleChat,expireIdleChat} from './idle-chat.mjs';
@@ -523,6 +524,26 @@ export class Table {
     }
     room.emptySince = Date.now();
     room.forget();
+    this.report();
+  }
+
+  /**
+   * A studio move's drain ends a room left waiting in its lobby (no round running, no record waiting; the caller
+   * checked both). Its people are told the studio is moving, as a final word, so no page knocks on the paused door,
+   * and the room forgets everything, as an empty one does.
+   */
+  endForMove(room) {
+    const people = room.live().length;
+    if (this.hostRt) this.finishRoom('moving'); else this.tellLobby({ ended: true });
+    for (const c of [...room.clients.values()]) {
+      if (c.helloed) room.error(c, 'room-over', MOVING_MESSAGE);
+      room.clients.delete(c.id);
+      try { c.conn.close(1000, 'room-over'); } catch { /* gone */ }
+    }
+    room.emptySince = Date.now();
+    room.forget();
+    if (this.house) this.house.sync();
+    this.say({ ev: 'move-idle-ended', people });
     this.report();
   }
 
@@ -1090,11 +1111,24 @@ export class Table {
     // The back office (worker/office.mjs), from the studio's Worker only: the room as its owner sees it, and the
     // owner's signed controls, which this room verifies before it applies one (NETPLAY.md section 15).
     if (url.pathname === '/__move-status') {
-      await this.flushRoundRecords();await this.flushFunctionEvents();
       const sql=this.ctx.storage.sql;
-      let pending=0;
-      for(const name of ['round_outbox','function_outbox'])if(sql?.exec("SELECT name FROM sqlite_master WHERE name=?",name).toArray().length)pending+=Number(sql.exec('SELECT COUNT(*) AS n FROM '+name).toArray()[0].n);
-      return json({clients:room.live().length,pending});
+      const pendingNow=async()=>{
+        await this.flushRoundRecords();await this.flushFunctionEvents();
+        let n=0;
+        for(const name of ['round_outbox','function_outbox'])if(sql?.exec("SELECT name FROM sqlite_master WHERE name=?",name).toArray().length)n+=Number(sql.exec('SELECT COUNT(*) AS n FROM '+name).toArray()[0].n);
+        return n;
+      };
+      let pending=await pendingNow();
+      // The drain's deadline for a room left waiting in its lobby (worker/move-drain.mjs). The drain itself is read
+      // here, not taken from the request, and the room remembers which drain ended it so every census counts it.
+      const since=Number(url.searchParams.get('since'));
+      let idleEnded=Number.isSafeInteger(since)&&since>0&&await this.ctx.storage.get('move-idle-ended')===since;
+      if(!idleEnded&&!pending&&room.live().length&&!this.isPersistent()&&idleLobby(room,Date.now())&&Date.now()-since>=DRAIN_IDLE_MS&&await drainSince(this.env,{fresh:true})===since){
+        await this.ctx.storage.put('move-idle-ended',since);
+        this.endForMove(room);idleEnded=true;
+        pending=await pendingNow();
+      }
+      return json({clients:room.live().length,pending,idleEnded});
     }
     if (url.pathname === '/__facts') return json({ ...room.officeFacts(), gates: [...(this.gateMetrics?.values() ?? [])], durability: this.storageHealth ?? { ok: true }, ...(this.house ? { brains: this.house.facts() } : {}) });
     // A chat line as the room keeps it (section 19), for a report: the Worker files the room's own copy, never a reporter's.

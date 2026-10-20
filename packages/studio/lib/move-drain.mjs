@@ -14,5 +14,6 @@ export async function drainCommand(root,action,{run=null,fetchFn=fetch,url=null}
  if(!response.ok)throw Error('Room drain is unmeasured; keep the source running');
  const status=await response.json();
  if(typeof status.draining!=='boolean'||typeof status.drained!=='boolean')throw Error('Upgrade and deploy the toolkit before draining');
- return {ok:true,command:'drain '+action,...status,message:status.drained?'All measured rooms are empty and their pending records are delivered. The source can now be made read-only.':status.draining?'Existing rooms keep playing. New admissions are paused. Run homie-studio drain status until drained is true before freezing or changing hosts.':'Room admissions are open.'};
+ const ended=status.idleLobbiesEnded?` ${status.idleLobbiesEnded===1?'1 room was':status.idleLobbiesEnded+' rooms were'} ended while waiting in a lobby with no round running; ${status.idleLobbiesEnded===1?'its':'their'} people were told the studio is moving and to join again shortly.`:'';
+ return {ok:true,command:'drain '+action,...status,message:status.drained?'All measured rooms are empty and their pending records are delivered.'+ended+' The source can now be made read-only.':status.draining?'Existing rooms keep playing. New admissions are paused. A room still waiting in its lobby 5 minutes after the drain began is ended, and its people are told the studio is moving.'+ended+' Run homie-studio drain status until drained is true before freezing or changing hosts.':'Room admissions are open.'};
 }
