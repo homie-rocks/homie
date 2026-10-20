@@ -48,5 +48,5 @@ test('in a hosted workspace the host-bound tools are not offered and the instruc
   assert.equal(here[1].instructions, INSTRUCTIONS);
   assert.equal(hosted[1].instructions, hostedInstructions());
   assert.match(hosted[1].instructions, /workspace the studio's host made for it/);
-  assert.doesNotMatch(hosted[1].instructions, /setup_status|cloudflare_login|studio_open|game_lab|game_standalone|studio_domain/);
+  assert.doesNotMatch(hosted[1].instructions, /setup_status|cloudflare_login|studio_open|game_lab|game_standalone|studio_domain|asset_make|own fal account|Open provider authorization/);
 });

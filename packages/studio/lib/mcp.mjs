@@ -66,7 +66,11 @@ export function hostedInstructions(text = INSTRUCTIONS) {
   const paragraphs = text.split('\n');
   const at = paragraphs.findIndex((p) => HOSTED_DROPS[0].test(p));
   const kept = paragraphs.map((p, i) => (i === at ? HOSTED_INSTRUCTIONS : HOSTED_DROPS.some((d) => d.test(p)) ? null : p)).filter((p) => p !== null);
-  return kept.join('\n').replace(/\n{3,}/g, '\n\n');
+  // The host holds the studio's accounts, and the person's own provider accounts are not here.
+  return kept.join('\n')
+    .replace(/ Open provider authorization flows when needed; the person signs in and approves, while you handle configuration\./, '')
+    .replace(/ asset_make makes a prop on the person's own fal account only after they agreed to its price;/, '')
+    .replace(/\n{3,}/g, '\n\n');
 }
 /** What the server tells the model as it connects: the checklist, and in the Claude desktop app what it asks the person. */
 export const instructionsFor = ({ desktop = false, hosted = false } = {}) => { const base = hosted ? hostedInstructions() : INSTRUCTIONS; return desktop ? `${base}\n\n${DESKTOP_APPROVALS}` : base; };

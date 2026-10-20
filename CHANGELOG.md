@@ -17,6 +17,14 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.14] - 2026-10-20
+
+**Plugin 0.58.8**
+
+A hosted workspace no longer offers the tools that need the person's own fal or Stripe account (asset_make,
+character_make, stripe_shop_plan, stripe_bookings_sync), and its instructions no longer promise them or provider
+sign-ins.
+
 ## [0.58.13] - 2026-10-20
 
 **Plugin 0.58.7**
