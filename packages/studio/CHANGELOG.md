@@ -21,9 +21,11 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 **Plugin 0.58.8**
 
-A hosted workspace no longer offers the tools that need the person's own fal or Stripe account (asset_make,
-character_make, stripe_shop_plan, stripe_bookings_sync), and its instructions no longer promise them or provider
-sign-ins.
+A hosted workspace no longer offers the tools that need the person's own fal or Stripe account.
+
+### Changed
+
+- In a hosted workspace, the local MCP server does not offer `asset_make`, `character_make`, `stripe_shop_plan` or `stripe_bookings_sync`, which generate on the person's own fal account or set up the shop on their own Stripe account, and its instructions no longer promise them or ask the person to sign in to providers there.
 
 ## [0.58.13] - 2026-10-20
 
