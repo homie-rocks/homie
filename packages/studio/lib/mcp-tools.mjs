@@ -478,6 +478,14 @@ export function hostedPreview(root, env = process.env) {
   return url.href.replace(/\/+$/, '');
 }
 
+/**
+ * A hosted workspace (HOMIE_PREVIEW_URL named by the host): the studio is already made and online with the host,
+ * and its sign-ins, domains, payments and webhooks are the host's, so the tools that set up or sign in this
+ * computer, change the studio's own Cloudflare account, or build for another platform are not offered there.
+ */
+export const HOSTED_OFF = Object.freeze(['setup_prepare', 'setup_status', 'studio_scaffold', 'studio_fold', 'studio_open', 'github_login', 'cloudflare_login', 'stripe_login', 'stripe_webhook', 'studio_domain', 'studio_read_only', 'studio_events_webhook', 'game_lab', 'game_standalone']);
+export const hostedHere = (env = process.env) => Boolean(String(env.HOMIE_PREVIEW_URL ?? '').trim());
+
 /** The step that puts the studio's current build on its hosted preview (a deploy --preview builds first). */
 const PREVIEW_STEP = { label: 'the build on the private preview', args: ['deploy', '--preview'] };
 
@@ -1593,7 +1601,7 @@ export function toolDefs(ctx, avail = {}) {
   // Every tool says whose it is: a Claude app may also have the Homie house app's own MCP server (its room and TV
   // tools), a different server with different tools.
   for (const t of tools) if (!t.description.startsWith('Homie Studio')) t.description = `Homie Studio: ${t.description}`;
-  return tools;
+  return hostedHere() ? tools.filter((t) => !HOSTED_OFF.includes(t.name)) : tools;
 }
 
 /** Local processing availability only; provider connections belong to the AI host. */

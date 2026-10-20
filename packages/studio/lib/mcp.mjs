@@ -23,7 +23,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PACKAGE_ROOT } from './studio.mjs';
-import { DESKTOP_APPROVALS, StudioContext, UI, availability, inDesktopApp, toolDefs } from './mcp-tools.mjs';
+import { DESKTOP_APPROVALS, StudioContext, UI, availability, hostedHere, inDesktopApp, toolDefs } from './mcp-tools.mjs';
 import { stopAllJobs, toolPath } from './jobs.mjs';
 import { shrinkPictureData } from './pictures.mjs';
 import { STUDIO_VERSION } from './version.mjs';
@@ -56,8 +56,20 @@ Telling Homie (homie_feedback): when the person is stuck, confused or frustrated
 
 Long work (npm install, check, playtest, deploy, renders) runs in the background: the tool answers at once with a card that follows it, and build_progress or studio_job reads where it is. studio_guide has Homie's full guide for each job (game, plan, port, playtest, publish, music, sound, art, video). Never put a key or password in a file or the chat. If Homie's homie.rocks connector is connected too, its tools of the same names say what to run; these run it.`;
 
+/**
+ * In a hosted workspace (mcp-tools.mjs hostedHere), the paragraphs about this computer's setup, sign-ins, the
+ * person's own domain, payments setup, the Game Lab and standalone builds give way to one about the host.
+ */
+export const HOSTED_INSTRUCTIONS = 'This toolkit runs in a workspace the studio\'s host made for it, away from the person\'s screen: the studio is already made and online with the host, and its sign-ins, domains, payments and webhooks are the host\'s, so the tools for those are not offered here. Build the requested thing and check it. preview_run puts the build on the studio\'s private preview and gives its link; check and playtest run there with a browser in the cloud. Only when going live was requested, studio_deploy puts it live (the host decides who may).';
+const HOSTED_DROPS = [/^Run setup_status /, /^Show progress briefly/, /^For a shop, /, /^For a custom domain /, /^If studio_scaffold finds /, /^A studio made elsewhere /, /^To make one mechanic /, /^A game as an app of its own /];
+export function hostedInstructions(text = INSTRUCTIONS) {
+  const paragraphs = text.split('\n');
+  const at = paragraphs.findIndex((p) => HOSTED_DROPS[0].test(p));
+  const kept = paragraphs.map((p, i) => (i === at ? HOSTED_INSTRUCTIONS : HOSTED_DROPS.some((d) => d.test(p)) ? null : p)).filter((p) => p !== null);
+  return kept.join('\n').replace(/\n{3,}/g, '\n\n');
+}
 /** What the server tells the model as it connects: the checklist, and in the Claude desktop app what it asks the person. */
-export const instructionsFor = ({ desktop = false } = {}) => (desktop ? `${INSTRUCTIONS}\n\n${DESKTOP_APPROVALS}` : INSTRUCTIONS);
+export const instructionsFor = ({ desktop = false, hosted = false } = {}) => { const base = hosted ? hostedInstructions() : INSTRUCTIONS; return desktop ? `${base}\n\n${DESKTOP_APPROVALS}` : base; };
 
 const CARD_FILES = { [UI.setup]: 'setup.js', [UI.build]: 'build.js', [UI.studio]: 'studio.js', [UI.codex]: 'codex.js', [UI.lab]: 'lab.js', [UI.style]: 'style.js', [UI.decision]: 'decision.js', [UI.cast]: 'cast.js', [UI.lineup]: 'lineup.js', [UI.rights]: 'rights.js', [UI.animation]: 'animation.js', [UI.feedback]: 'feedback.js' };
 const CARD_TITLES = { [UI.setup]: 'Studio setup', [UI.build]: 'Build progress', [UI.studio]: 'Studio', [UI.codex]: 'Game Codex', [UI.lab]: 'Game Lab', [UI.style]: 'Style board', [UI.decision]: 'Look decision', [UI.cast]: 'Cast', [UI.lineup]: 'Lineup', [UI.rights]: 'Rights', [UI.animation]: 'Clips', [UI.feedback]: 'Tell Homie' };
@@ -173,7 +185,7 @@ export async function serveMcp({ studios = null, skills = null, cwd = process.cw
             protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
             capabilities: { tools: { listChanged: true }, resources: { listChanged: false }, prompts: { listChanged: false } },
             serverInfo: { name: 'homie-studio', title: 'Homie Studio', version: STUDIO_VERSION },
-            instructions: instructionsFor({ desktop: ctx.desktop }),
+            instructions: instructionsFor({ desktop: ctx.desktop, hosted: hostedHere() }),
           });
         }
         case 'ping': return reply({});

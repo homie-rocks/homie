@@ -17,6 +17,20 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.13] - 2026-10-20
+
+**Plugin 0.58.7**
+
+A hosted workspace offers only the tools that work there, and a build put on the private preview no longer ends the check it is part of.
+
+### Changed
+
+- In a hosted workspace (`HOMIE_PREVIEW_URL` named by the host), the local MCP server does not offer the tools that set up or sign in this computer, change the studio's own Cloudflare account or build for another platform (setup, scaffold and open, the GitHub, Cloudflare and Stripe sign-ins, the Stripe webhook, domains, the read-only switch, event webhooks, the Game Lab and standalone builds): the studio is already made and online with its host, whose sign-ins, domains and payments those are. Its instructions say so in place of the paragraphs about them.
+
+### Fixed
+
+- `deploy --preview` inside a check or playtest no longer ends that run's progress feed as passed before the check and the pictures have run; its stage says the build is on the private preview, not live.
+
 ## [0.58.12] - 2026-10-20
 
 **Plugin 0.58.6**

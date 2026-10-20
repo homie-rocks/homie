@@ -1273,11 +1273,12 @@ async function tracked(root, stage, run, command) {
   }
   if (!result?.ok) { feed.stage(stage, 'failed', result?.why ?? 'failed'); return result; }
   const note = stage === 'build' ? `Built ${(result.games ?? []).map((g) => `${g.id} (${Math.round(g.bytes / 1024)} KB)`).join(', ') || 'the site'}`
-    : stage === 'deploy' ? `Live: ${result.url ?? 'deployed'}`
+    : stage === 'deploy' ? `${flags.has('preview') ? 'On the private preview' : 'Live'}: ${result.url ?? 'deployed'}`
       : result.command === 'port check' ? `${result.passed.length} passed${result.skipped.length ? `, ${result.skipped.length} skipped` : ''} in ${Math.round(result.totalMs / 1000)} s`
         : result.kind === 'app' ? `App ${result.game ?? ''}: wall and two phones, shared action and reconnect passed` : `Room ${result.room}: round ${result.round?.n} finished with ${result.round?.humans} people in ${Math.round(result.totalMs / 1000)} s`;
   feed.stage(stage, 'done', note);
-  if (stage === 'deploy') {
+  // A build put on the private preview is not live: the run it is part of (a check, a playtest) carries on.
+  if (stage === 'deploy' && !flags.has('preview')) {
     const doc = feed.doc;
     const game = (result.games ?? []).find((g) => g.id === doc.id) ?? (result.games ?? [])[0];
     if (game?.play) feed.preview({ url: game.play });
