@@ -70,12 +70,13 @@ function studio(name) {
 }
 
 /** A stand-in Cloudflare account: every call is logged; `deploy` answers what Wrangler prints (or `deployOut`). */
-function account(dir, { deployOut = null, deployCode = 0 } = {}) {
+function account(dir, { deployOut = null, deployCode = 0, migrateOut = null } = {}) {
   const bin = join(dir, 'node_modules', '.bin');
   const state = join(dir, '.fake-cf');
   mkdirSync(bin, { recursive: true });
   mkdirSync(state, { recursive: true });
   if (deployOut) writeFileSync(join(state, 'deploy-out'), deployOut);
+  if (migrateOut) writeFileSync(join(state, 'migrate-out'), migrateOut);
   writeFileSync(join(bin, 'wrangler'), `#!/bin/sh
 S=${state}
 echo "$*" >> $S/calls
@@ -86,6 +87,7 @@ case "$1" in
   d1) case "$2" in
         list) if [ -f $S/db ]; then echo '[{"uuid":"22222222-2222-2222-2222-222222222222","name":"test-studio-db"}]'; else echo '[]'; fi;;
         create) touch $S/db; echo '"database_id": "22222222-2222-2222-2222-222222222222"';;
+        migrations) if [ -f $S/migrate-out ]; then cat $S/migrate-out >&2; exit 1; fi; echo ok;;
         *) echo ok;;
       esac;;
   auth) if [ -f $S/signed-in ]; then echo '{"type":"oauth","token":"stand-in"}'; else echo 'not signed in' >&2; exit 1; fi;;
@@ -1139,6 +1141,51 @@ test('explicit publish opts an unlisted studio in without an extra deploy', asyn
  assert.ok(cf.calls().some(call=>call.includes('homie_claim:https://publish-choice.example')));
  assert.equal(readStudio(dir).homie.directory,'https://homie.rocks');
  assert.equal(requests.at(-1)[0],'https://homie.rocks/api/studio/publish');
+});
+
+// Wrangler 4's own output for a deploy that binds the studio's background queue and then fails for another reason:
+// the bindings table names the Queue, and Cloudflare answers the request it refused with its own code.
+const BOUND='Total Upload: 412.20 KiB / gzip: 88.31 KiB\nYour Worker has access to the following bindings:\nBinding                                     Resource\nenv.BACKGROUND (test-studio-background)     Queue\nenv.BACKGROUND_DLQ (test-studio-background-dlq)   Queue\nenv.DB (test-studio-db)                     D1 Database\n\n';
+const FOOTER='\n\nIf you think this is a bug, please open an issue at: https://github.com/cloudflare/workers-sdk/issues/new/choose\n\n\n🪵  Logs were written to "/home/studio/.config/.wrangler/logs/wrangler-2026-10-20_23-29-39_115.log"\n';
+const refused=(resource,error)=>`✘ [ERROR] A request to the Cloudflare API (${resource}) failed.\n\n  ${error}${FOOTER}`;
+
+test('a failed deploy that binds a queue says Wrangler\'s own error, and only a refused Queues request asks for Queues > Edit',async()=>{
+ const {ciDeploy}=await import('../lib/cloudflare.mjs');
+ const failures={
+  'the assets upload':BOUND+refused('/accounts/acc1/workers/assets/upload?base64=true','The assets upload failed [code: 5021]'),
+  'the script upload, refused for authentication':BOUND+refused('/accounts/acc1/workers/scripts/test-studio/versions','Authentication error [code: 10000]')+'📎 It looks like you are authenticating Wrangler via a custom API token set in an environment variable.\nPlease ensure it has the correct permissions for this operation.\n',
+ };
+ for(const [what,out] of Object.entries(failures)){
+  const dir=studio('bound-queue-'+what.split(' ')[1]);account(dir,{deployOut:out,deployCode:1});
+  const local=await deploy(dir),ci=await ciDeploy(dir,{wrangler:args=>args[0]==='deploy'?{code:1,out}:{code:0,out:'ok'}});
+  for(const r of [local,ci]){
+   assert.equal(r.ok,false);assert.equal(r.needs,undefined,what);
+   assert.match(r.why,/^wrangler deploy failed: ✘ \[ERROR\] A request to the Cloudflare API/,what);
+   assert.match(r.why,what.includes('assets')?/The assets upload failed \[code: 5021\]/:/workers\/scripts\/test-studio\/versions\) failed\.\n\n  Authentication error \[code: 10000\]/,what);
+  }
+ }
+ const queues=BOUND+refused('/accounts/acc1/queues?page=1&name=test-studio-background','Authentication error [code: 10000]');
+ const dir=studio('bound-queue-refused');account(dir,{deployOut:queues,deployCode:1});
+ const local=await deploy(dir),ci=await ciDeploy(dir,{wrangler:args=>args[0]==='deploy'?{code:1,out:queues}:{code:0,out:'ok'}});
+ for(const r of [local,ci]){assert.equal(r.needs,'queues-permission');assert.match(r.why,/Account > Queues > Edit/);}
+});
+
+test('a database call hosting refuses says hosting\'s reason, not only that the migrations failed',async()=>{
+ const {ciDeploy}=await import('../lib/cloudflare.mjs');
+ // Managed hosting's boundary answers a routine's write to the live database with a Cloudflare API error
+ // ({success:false,errors:[{code:4093,message}]}, HTTP 403); Wrangler prints it inside its migration progress.
+ const reason='A routine does not publish the live site: the owner does. Put the build on the preview and say so in your summary.';
+ const out='Migrations to be applied:\n┌──────────────────┐\n│ name             │\n├──────────────────┤\n│ 0007_rooms.sql   │\n└──────────────────┘\n🌀 Executing on remote database DB (22222222-2222-2222-2222-222222222222):\n'+
+  refused('/accounts/acc1/d1/database/22222222-2222-2222-2222-222222222222/query',`${reason} [code: 4093]`);
+ const dir=studio('refused-migration');account(dir,{migrateOut:out});
+ const local=await deploy(dir);
+ const ci=await ciDeploy(dir,{wrangler:args=>args[0]==='d1'&&args[1]==='migrations'?{code:1,out}:{code:0,out:'ok'}});
+ for(const r of [local,ci]){
+  assert.equal(r.ok,false);
+  assert.ok(r.why.startsWith('D1 migrations failed: ✘ [ERROR] A request to the Cloudflare API (/accounts/acc1/d1/database/'),r.why);
+  assert.ok(r.why.includes(`${reason} [code: 4093]`),r.why);
+ }
+ assert.ok(!ci.steps.some(s=>/^deployed/.test(s.what)),'nothing was deployed after the refusal');
 });
 
 test('local and CI deploy preserve the consumer error above Wrangler footer lines',async()=>{

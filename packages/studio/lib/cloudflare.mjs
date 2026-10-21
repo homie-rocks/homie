@@ -57,11 +57,25 @@ import { LOCAL_STATE, configPath, domainOrigin, isRulesGame, isWorkersDev, layou
 const ANSI = /\u001b\[[0-9;]*m/g;
 
 /** Keep Wrangler's error and its context; progress/footer lines must not hide it. */
-export function wranglerDeployError(out) {
+export function wranglerError(out) {
   const clean = redactText(String(out ?? '').replace(ANSI, '')).text;
   const error = clean.search(/(?:^|\n)[^\n]*\[ERROR\]/);
   return (error >= 0 ? clean.slice(error) : clean).trim();
 }
+
+/**
+ * Each Cloudflare API request Wrangler reports as failed, with the codes Cloudflare answered it with. Wrangler prints
+ * "[ERROR] A request to the Cloudflare API (/accounts/<id>/queues?name=…) failed." and then each of Cloudflare's errors
+ * as "<message> [code: <n>]" (workers-utils cfetch throwFetchError).
+ */
+export function failedRequests(out) {
+  const text = String(out ?? '').replace(ANSI, '');
+  return [...text.matchAll(/\[ERROR\] A request to the Cloudflare API \(([^)\s]+)\) failed\.([\s\S]*?)(?=\n[^\n]*\[ERROR\]|$)/g)]
+    .map(([, resource, notes]) => ({ resource, codes: [...notes.matchAll(/\[code: (\d+)\]/g)].map((m) => Number(m[1])) }));
+}
+// The codes Wrangler itself treats as an authentication error (wrangler's AUTHENTICATION_ERROR_CODES): a token
+// without the permission the request needs is answered with 10000, "Authentication error".
+const AUTH_CODES = new Set([9106, 10000]);
 
 export function experienceAddresses(root, id, url) {
   const app = listGames(root).find(g => g.id === id)?.kind === 'app';
@@ -132,7 +146,9 @@ function parseJson(text) {
 export function explainCloudflare(out, accountId = null) {
   const text = String(out ?? '');
   const dash = accountId ? `https://dash.cloudflare.com/${accountId}` : 'https://dash.cloudflare.com';
-  if (/queue.*(?:permission|authentication|forbidden|unauthori)|(?:permission|authentication|forbidden|unauthori).*queue/is.test(text)) {
+  // Only a Queues API request Cloudflare refused for authentication: a failed deploy that merely binds a queue keeps
+  // Wrangler's own error.
+  if (failedRequests(text).some((r) => /\/accounts\/[^/]+\/queues(?:[/?]|$)/.test(r.resource) && r.codes.some((c) => AUTH_CODES.has(c)))) {
     return {needs:'queues-permission',why:'The deployment token needs Account > Queues > Edit on this account. Update the CI/Workers Builds token permissions, then retry deploy.'};
   }
   if (/(?:cron|schedule).*?(?:limit|maximum|exceed)|(?:limit|maximum|exceed).*?(?:cron|schedule)/i.test(text)) {
@@ -388,7 +404,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
     if (exists.code === 0) {
       return { ok: false, command: 'deploy', why: `A Worker named "${cf.worker}" already exists on this Cloudflare account and this studio did not create it, so nothing was deployed. Pick another name in studio.json (cloudflare.worker) and site/wrangler.jsonc (name).` };
     }
-    if (!/10007|does not exist/i.test(exists.out)) return refuse(`could not check the Worker name: ${exists.out.trim().split('\n').slice(-3).join(' ')}`, exists.out);
+    if (!/10007|does not exist/i.test(exists.out)) return refuse(`could not check the Worker name: ${wranglerError(exists.out)}`, exists.out);
   }
 
   // D1.
@@ -401,7 +417,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   if (!db) {
     const made = w(['d1', 'create', cf.d1]);
     const id = /"?database_id"?\s*[:=]\s*"([0-9a-f-]{36})"/.exec(made.out)?.[1];
-    if (made.code !== 0 || !id) return refuse(`could not create the D1 database "${cf.d1}": ${made.out.trim().split('\n').slice(-4).join(' ')}`, made.out);
+    if (made.code !== 0 || !id) return refuse(`could not create the D1 database "${cf.d1}": ${wranglerError(made.out)}`, made.out);
     db = { name: cf.d1, uuid: id };
     remember(`d1:${cf.d1}`);
     step(`created D1 ${cf.d1}`);
@@ -431,11 +447,11 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   for (const added of ensureMigrations(root)) step(`added ${added} (${migrationWord(added)})`);
   try {await ensureBackgroundQueues(root,w,{accountId,...(fetchFn?{fetchFn}:{})});for(const key of readStudio(root).cloudflare.created??[])created.add(key);} catch(error) {return refuse(error.message);}
   const migrate = w(['d1', 'migrations', 'apply', cf.d1, '--remote']);
-  if (migrate.code !== 0) return refuse(`D1 migrations failed: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
+  if (migrate.code !== 0) return refuse(`D1 migrations failed: ${wranglerError(migrate.out)}`, migrate.out);
   try {const replication=await enableReadReplication(root,w,{accountId,databaseId:db.uuid,...(fetchFn?{fetchFn}:{})});step(replication.enabled?'D1 read replication enabled':`D1 uses the primary: ${replication.reason}`);} catch(error) {step(`D1 uses the primary: ${error.message}`);}
   step('D1 migrations applied');
   const subscriptions=w(['d1','execute',cf.d1,'--remote','--command',(await import('./functions-build.mjs')).functionDeploymentSQL(root)]);
-  if(subscriptions.code!==0)return refuse('Could not register studio functions',subscriptions.out);
+  if(subscriptions.code!==0)return refuse(`Could not register studio functions: ${wranglerError(subscriptions.out)}`,subscriptions.out);
 
   const started = Date.now();
   let dep = w(['deploy', ...(workerEntry(root) ? [workerEntry(root)] : []), ...repoVar(root)]);
@@ -447,7 +463,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
     step(address.created ? 'registered the account’s workers.dev address automatically' : 'kept the account’s existing workers.dev address');
     dep = w(['deploy', ...(workerEntry(root) ? [workerEntry(root)] : []), ...repoVar(root)]);
   }
-  if (dep.code !== 0) return refuse(`wrangler deploy failed: ${wranglerDeployError(dep.out)}`, dep.out);
+  if (dep.code !== 0) return refuse(`wrangler deploy failed: ${wranglerError(dep.out)}`, dep.out);
   try{await ensureStudioSigningKey(readStudio(root),w);}catch(error){return refuse(error.message);}
   if (paidReleases(root).length) {
     const bin = wranglerBin(root);
@@ -658,11 +674,11 @@ export async function ciDeploy(root, { log = () => {}, wrangler = null, preview 
   const apply = () => w(['d1', 'migrations', 'apply', names.binding, '--remote']);
   let migrate = apply();
   const first = !target && migrate.code !== 0 && /not found|could(?:n't| not) find|does not exist|no database|database_id/i.test(migrate.out);
-  if (migrate.code !== 0 && !first) return refuse(`D1 migrations failed: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
+  if (migrate.code !== 0 && !first) return refuse(`D1 migrations failed: ${wranglerError(migrate.out)}`, migrate.out);
   if (!first) step('D1 migrations applied');
   const register=()=>w(['d1','execute',names.binding,'--remote','--command',functionDeploymentSQL(root)]);
   const {functionDeploymentSQL}=await import('./functions-build.mjs');
-  if(!first) {const registered=register();if(registered.code!==0)return refuse('Could not register studio functions',registered.out);}
+  if(!first) {const registered=register();if(registered.code!==0)return refuse(`Could not register studio functions: ${wranglerError(registered.out)}`,registered.out);}
   step(`Cron triggers: ${(readConfig(root)?.triggers?.crons??[]).join('; ')||'none (remove toolkit triggers)'}`);
   // Workers AI (0.17.0): bound only when a server's AI guides think with it. The checkout is thrown away after.
   if (!first && needsWorkersAi(root, w, names.binding)) {
@@ -674,16 +690,16 @@ export async function ciDeploy(root, { log = () => {}, wrangler = null, preview 
   }
   const started = Date.now();
   const dep = w(['deploy', ...(workerEntry(root) ? [workerEntry(root)] : []), ...repoVar(root)]);
-  if (dep.code !== 0) return refuse(`wrangler deploy failed: ${wranglerDeployError(dep.out)}`, dep.out);
+  if (dep.code !== 0) return refuse(`wrangler deploy failed: ${wranglerError(dep.out)}`, dep.out);
   try{await ensureStudioSigningKey(readStudio(root),w);}catch(error){return refuse(error.message);}
   step(`deployed ${names.worker ?? 'the Worker'} in ${Math.round((Date.now() - started) / 1000)} s`);
   const repo = repoOf(root);
   step(repo ? `the live site knows its GitHub repository (${repo}), for the Claude app's hand-off` : 'no GitHub repository found here (no HOMIE_REPO, studio.json "github" or git remote): the Claude app\'s card asks the person which it is');
   if (first) {
     migrate = apply();
-    if (migrate.code !== 0) return refuse(`D1 migrations failed after the first deploy: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
+    if (migrate.code !== 0) return refuse(`D1 migrations failed after the first deploy: ${wranglerError(migrate.out)}`, migrate.out);
     step('D1 migrations applied (the database was created with this first deploy)');
-    const registered=register();if(registered.code!==0)return refuse('Could not register studio functions',registered.out);
+    const registered=register();if(registered.code!==0)return refuse(`Could not register studio functions: ${wranglerError(registered.out)}`,registered.out);
   }
   try {const replication=await enableReadReplication(root,w);step(replication.enabled?'D1 read replication enabled':`D1 uses the primary: ${replication.reason}`);} catch(error) {step(`D1 uses the primary: ${error.message}`);}
   // The live address, from what Wrangler printed (a custom domain in studio.json wins).
@@ -735,7 +751,7 @@ export async function storageAdd(root, { log = () => {} } = {}) {
   const buckets = w(['r2', 'bucket', 'list']);
   if (buckets.code !== 0) {
     if (/enable R2|R2 is not enabled|10042|purchase|subscription|payment/i.test(buckets.out)) return enable;
-    return { ok: false, command: 'storage add', ...(explainCloudflare(buckets.out, accountId) ?? { why: `could not list R2 buckets: ${buckets.out.trim().split('\n').slice(-3).join(' ')}` }) };
+    return { ok: false, command: 'storage add', ...(explainCloudflare(buckets.out, accountId) ?? { why: `could not list R2 buckets: ${wranglerError(buckets.out)}` }) };
   }
   const names = [...buckets.out.matchAll(/^name:\s+(\S+)/gm)].map((m) => m[1]);
   if (names.includes(bucket)) {
@@ -744,7 +760,7 @@ export async function storageAdd(root, { log = () => {} } = {}) {
   const made = w(['r2', 'bucket', 'create', bucket]);
   if (made.code !== 0) {
     if (/enable R2|R2 is not enabled|10042|purchase|subscription|payment/i.test(made.out)) return enable;
-    return { ok: false, command: 'storage add', why: `could not create the R2 bucket "${bucket}": ${made.out.trim().split('\n').slice(-4).join(' ')}` };
+    return { ok: false, command: 'storage add', why: `could not create the R2 bucket "${bucket}": ${wranglerError(made.out)}` };
   }
   created.add(`r2:${bucket}`);
   const next = { ...readStudio(root), cloudflare: { ...readStudio(root).cloudflare, accountId, r2: bucket, created: [...created].sort() } };
@@ -844,7 +860,7 @@ export async function mediaMove(root, { paths = null, dryRun = false, verify = f
     // Where the file is meanwhile: on the site when it fits; a bigger one keeps an older R2 copy, or waits.
     const meanwhile = r.bytes <= MAX_ASSET_BYTES ? ' It stays on the site.' : r.held ? ' Its page keeps playing the older copy in R2.' : ' At this size the site cannot carry it, so its page waits until it is in R2.';
     if (put.code !== 0) {
-      failed.push({ path: r.path, bytes: r.bytes, why: `${explainCloudflare(put.out, account)?.why ?? `the upload failed: ${put.out.trim().split('\n').slice(-3).join(' ')}`}${meanwhile}` });
+      failed.push({ path: r.path, bytes: r.bytes, why: `${explainCloudflare(put.out, account)?.why ?? `the upload failed: ${wranglerError(put.out)}`}${meanwhile}` });
       continue;
     }
     const got = await hashRemote(bin, `${bucket}/${key}`, opts);

@@ -17,6 +17,17 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.16] - 2026-10-21
+
+**Plugin 0.58.10**
+
+A failed deploy says what Cloudflare or the host actually refused.
+
+### Fixed
+
+- A failed deploy whose Worker uses a queue no longer says the token needs Account > Queues > Edit unless Cloudflare refused a Queues request for authentication. Any other failure, an asset upload for one, now shows Wrangler's own error.
+- When the host refuses a database call during a deploy, the reason it gives (for example "A routine does not publish the live site: the owner does.") now shows after "D1 migrations failed" instead of being cut off by Wrangler's closing lines. The same goes for creating the database and registering the studio's functions.
+
 ## [0.58.15] - 2026-10-20
 
 **Plugin 0.58.9**
