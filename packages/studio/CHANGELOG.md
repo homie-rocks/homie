@@ -17,6 +17,16 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.19] - 2026-10-21
+
+**Plugin 0.58.13**
+
+A platform that runs a studio's scheduled ticks can use the worker's own cron parser.
+
+### Added
+
+- `@homie-rocks/studio/worker/schedule` exports the worker's own cron parser (`parseSchedule`, `nextDue`), Cloudflare's five-field UTC dialect, so a platform that runs a dispatch Worker's scheduled ticks schedules them as the studio's Cron Triggers would fire.
+
 ## [0.58.18] - 2026-10-21
 
 **Plugin 0.58.12**

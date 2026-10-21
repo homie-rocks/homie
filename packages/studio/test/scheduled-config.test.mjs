@@ -68,3 +68,9 @@ test('Cloudflare UTC expressions match lists, ranges, steps, names and calendar 
  else {for(const path of required)assert.ok(actual.includes(path),path);if(Array.isArray(custom))for(const path of custom)assert.ok(actual.includes(path));}
  }
  });
+
+test('a platform that ticks a dispatch Worker imports the same cron parser from the package',async()=>{
+ const exported=await import('@homie-rocks/studio/worker/schedule');
+ assert.equal(exported.parseSchedule,parseSchedule);assert.equal(exported.nextDue,nextDue);
+ assert.equal(exported.nextDue('17 * * * *',Date.parse('2026-10-21T20:17:00Z')),Date.parse('2026-10-21T21:17:00Z'));
+});
