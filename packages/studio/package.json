@@ -85,7 +85,10 @@
       "default": "./apps/apps.ts"
     },
     "./worker/selling": "./worker/selling/index.mjs",
-    "./worker/schedule": "./worker/function-schedule.mjs",
+    "./worker/schedule": {
+      "types": "./worker/function-schedule.d.ts",
+      "default": "./worker/function-schedule.mjs"
+    },
     "./tools": {
       "types": "./tools/tools.ts",
       "default": "./tools/tools.ts"

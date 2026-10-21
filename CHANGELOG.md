@@ -25,7 +25,7 @@ A platform that runs a studio's scheduled ticks can use the worker's own cron pa
 
 ### Added
 
-- `@homie-rocks/studio/worker/schedule` exports the worker's own cron parser (`parseSchedule`, `nextDue`), Cloudflare's five-field UTC dialect, so a platform that runs a dispatch Worker's scheduled ticks schedules them as the studio's Cron Triggers would fire.
+- `@homie-rocks/studio/worker/schedule` exports the worker's own cron parser (`parseSchedule`, `nextDue`, with its types), Cloudflare's five-field UTC dialect, so a platform that runs a dispatch Worker's scheduled ticks schedules them as the studio's Cron Triggers would fire.
 
 ## [0.58.18] - 2026-10-21
 
