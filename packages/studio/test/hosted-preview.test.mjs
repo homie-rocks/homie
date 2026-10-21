@@ -1,5 +1,5 @@
 /**
- * A host that runs the toolkit away from the person's screen (Homie Managed's studio workspace) names where its
+ * A host that runs the toolkit away from the person's screen (a hosted studio workspace) names where its
  * studio's private preview is reachable: HOMIE_PREVIEW_URL. With a preview target in studio.json, "here" is that
  * preview; without either, the site runs on this computer as it always has.
  */

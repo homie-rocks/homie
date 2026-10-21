@@ -1172,9 +1172,9 @@ test('a failed deploy that binds a queue says Wrangler\'s own error, and only a 
 
 test('a database call hosting refuses says hosting\'s reason, not only that the migrations failed',async()=>{
  const {ciDeploy}=await import('../lib/cloudflare.mjs');
- // Managed hosting's boundary answers a routine's write to the live database with a Cloudflare API error
+ // A hosting platform's boundary answers a routine's write to the live database with a Cloudflare API error
  // ({success:false,errors:[{code:4093,message}]}, HTTP 403); Wrangler prints it inside its migration progress.
- const reason='A routine does not publish the live site: the owner does. Put the build on the preview and say so in your summary.';
+ const reason='This deploy may not write to the live database. Put the build on the preview instead.';
  const out='Migrations to be applied:\n┌──────────────────┐\n│ name             │\n├──────────────────┤\n│ 0007_rooms.sql   │\n└──────────────────┘\n🌀 Executing on remote database DB (22222222-2222-2222-2222-222222222222):\n'+
   refused('/accounts/acc1/d1/database/22222222-2222-2222-2222-222222222222/query',`${reason} [code: 4093]`);
  const dir=studio('refused-migration');account(dir,{migrateOut:out});

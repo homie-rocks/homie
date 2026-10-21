@@ -1,5 +1,5 @@
 import {drainSince,isAdmission,drainResponse} from './move-drain.mjs';
-import {managedMedia} from './managed-media.mjs';
+import {hostMedia} from './host-media.mjs';
 /** Studio Worker event boundaries and public toolkit exports. */
 import { catalogue } from './catalogue.mjs';
 import {trackBackground,requestDatabase,MUTATION_VERSION} from './request-db.mjs';
@@ -66,7 +66,7 @@ export default {
     await Promise.all([maintenance,analytics]);
   },
   async fetch(request, env, ctx) {
-    env=managedMedia(env);
+    env=hostMedia(env);
     if(isAdmission(request)&&await drainSince(env))return drainResponse();
     const staticPath=new URL(request.url).pathname;
     if(['GET','HEAD'].includes(request.method)&&staticPath==='/_homie/site.js')return finish(await route(request,env,ctx),staticPath);

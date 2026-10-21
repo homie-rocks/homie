@@ -1,4 +1,4 @@
-/** Hydrate the R2-compatible metadata returned by the studio-scoped managed binding.
+/** Hydrate the R2-compatible metadata returned by the studio-scoped media binding its host provides (HOMIE_MEDIA).
  * Streams cross RPC without buffering songs, videos or saves in the Worker heap. */
 function object(value) {
  if(!value)return null;
@@ -9,7 +9,7 @@ function object(value) {
   json:()=>new Response(value.body).json(),
  };
 }
-export function managedMedia(env) {
+export function hostMedia(env) {
  if(!env.HOMIE_MEDIA)return env;
  const binding=env.HOMIE_MEDIA;
  return {...env,MEDIA:{get:async(key,options)=>object(await binding.get(key,options)),head:async key=>object(await binding.head(key)),put:async(key,body,options)=>object(await binding.put(key,body,options)),delete:keys=>binding.delete(keys)}};

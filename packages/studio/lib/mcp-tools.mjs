@@ -462,7 +462,7 @@ async function startRun(ctx, root, { kind, game, title, steps }) {
 
 /**
  * WHERE "HERE" IS, FOR A HOST AWAY FROM THE PERSON'S SCREEN. A platform that runs this toolkit for the person in a
- * workspace of its own (Homie Managed's studio workspace, a cloud dev box) has no browser beside it that can open
+ * workspace of its own (a hosted studio workspace or a cloud dev box) has no browser beside it that can open
  * this computer's addresses. It names the address its studio's private preview is reachable at, HOMIE_PREVIEW_URL,
  * and the studio's studio.json names that preview's Workers for Platforms target (cloudflare.preview). Then the
  * studio's site "here" is that preview: preview_run puts the build there (deploy --preview), and check and playtest

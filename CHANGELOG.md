@@ -17,6 +17,16 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.18] - 2026-10-21
+
+**Plugin 0.58.12**
+
+Docs and tool descriptions describe the toolkit as it is today.
+
+### Changed
+
+- Docs and tool descriptions describe the toolkit as it is today. The worker's adapter for a media binding a studio's host provides (`HOMIE_MEDIA`) is `worker/host-media.mjs`; it behaves as before.
+
 ## [0.58.16] - 2026-10-21
 
 **Plugin 0.58.10**
@@ -26,7 +36,7 @@ A failed deploy says what Cloudflare or the host actually refused.
 ### Fixed
 
 - A failed deploy whose Worker uses a queue no longer says the token needs Account > Queues > Edit unless Cloudflare refused a Queues request for authentication. Any other failure, an asset upload for one, now shows Wrangler's own error.
-- When the host refuses a database call during a deploy, the reason it gives (for example "A routine does not publish the live site: the owner does.") now shows after "D1 migrations failed" instead of being cut off by Wrangler's closing lines. The same goes for creating the database and registering the studio's functions.
+- When the host refuses a database call during a deploy, the reason it gives (for example that this deploy may not write to the live database) now shows after "D1 migrations failed" instead of being cut off by Wrangler's closing lines. The same goes for creating the database and registering the studio's functions.
 
 ## [0.58.15] - 2026-10-20
 
@@ -71,7 +81,7 @@ Every browser the toolkit opens can be a cloud browser, and a studio worked on a
 ### Added
 
 - Every command and skill that opens a browser (check, playtest, look, perf, shoot, lab check, port check, crowd load, 3D renders, art captures and video takes) can use a browser in the cloud (in 0.58.11 only check and the playtest script could): with `HOMIE_BROWSER_WS_ENDPOINT` set to a CDP WebSocket address (Cloudflare Browser Run, for example), they connect to it instead of starting Chrome on this computer. A platform target leaves queues and cron triggers to the platform.
-- A host that runs the toolkit away from the person's screen (Homie Managed's studio workspace, a cloud dev box) can name the address of the studio's private preview in `HOMIE_PREVIEW_URL`. For a studio whose studio.json has a preview target (`cloudflare.preview`), the local MCP server's `preview_run` then puts the build there (`deploy --preview`) and gives that address, `check` and `playtest` put the current build there and open it, and `preview_stop` has nothing to stop. Without it, the site runs on this computer as before.
+- A host that runs the toolkit away from the person's screen (a hosted studio workspace or a cloud dev box) can name the address of the studio's private preview in `HOMIE_PREVIEW_URL`. For a studio whose studio.json has a preview target (`cloudflare.preview`), the local MCP server's `preview_run` then puts the build there (`deploy --preview`) and gives that address, `check` and `playtest` put the current build there and open it, and `preview_stop` has nothing to stop. Without it, the site runs on this computer as before.
 
 ## [0.58.11] - 2026-10-19
 
@@ -81,10 +91,10 @@ Host a studio on Workers for Platforms with a private preview, check it with a b
 
 ### Added
 
-- A studio can deploy to a Workers for Platforms dispatch namespace: `cloudflare.dispatchNamespace`, `worker`, `d1Id` and `domain` in studio.json name the preprovisioned Worker, and `homie-studio deploy` sends the build there with Wrangler's own `--dispatch-namespace`. `cloudflare.preview` names a second Worker and database, and `homie-studio deploy --preview` sends the same build to it. A platform that hosts studios this way (Homie Managed) enforces the target at its API boundary.
+- A studio can deploy to a Workers for Platforms dispatch namespace: `cloudflare.dispatchNamespace`, `worker`, `d1Id` and `domain` in studio.json name the preprovisioned Worker, and `homie-studio deploy` sends the build there with Wrangler's own `--dispatch-namespace`. `cloudflare.preview` names a second Worker and database, and `homie-studio deploy --preview` sends the same build to it. A platform that deploys studios this way enforces the target at its own API boundary.
 - `homie-studio check` and the playtest script can use a browser in the cloud: with `HOMIE_BROWSER_WS_ENDPOINT` set to a CDP WebSocket address (Cloudflare Browser Run, for example), they connect to it instead of starting Chrome on this computer.
 - `homie-studio drain on|off|status` pauses new room admissions without deploying or closing existing sockets. A move waits for empty rooms and delivered records before freezing the source.
-- Managed media bindings preserve streamed media, range requests and large player saves.
+- A media binding the studio's host provides (`HOMIE_MEDIA`) preserves streamed media, range requests and large player saves.
 - A read-only switch for a studio: `homie-studio read-only on|off|status` (and the local MCP tool `studio_read_only`) freezes the live studio for a few minutes, for a move to another host or maintenance, without losing anything. It sets the Worker secret `STUDIO_READ_ONLY` with the studio's own Cloudflare sign-in, as a new Worker version. While on, changes answer 503 with `Retry-After` and `x-studio-read-only: 1`; pages, games, live rooms and the Stripe webhook keep working, D1 takes no other write, room records wait in each room, scheduled and queued work waits, and `/api/games` reports `readOnly`.
 
 ### Fixed
