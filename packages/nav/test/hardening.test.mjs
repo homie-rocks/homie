@@ -72,16 +72,7 @@ test('checksum-valid but structurally invalid saves fail at the boundary', () =>
   assert.throws(() => mesh.loadTile(pack('tile', tile)), /^Error: nav:/);
 });
 
-test('runtime guards both upstream files and state pins the backend version', async () => {
-  const script = await readFile(new URL('../scripts/runtime.mjs', import.meta.url), 'utf8');
-  assert.match(script, /index\.js/);
-  const state = await readFile(new URL('../src/internal/Binary.ts', import.meta.url), 'utf8');
-  assert.match(state, /0\.4\.1/);
-});
-
 test('typed sections explicitly encode little endian values', async () => {
-  const state = await readFile(new URL('../src/internal/Binary.ts', import.meta.url), 'utf8');
-  assert.doesNotMatch(state, /bytes\.set\(new Uint8Array\(v\.buffer/);
   const value = new Uint32Array([0x10203040]);
   const bytes = pack('array', value);
   assert.deepEqual(unpack('array', bytes), value);

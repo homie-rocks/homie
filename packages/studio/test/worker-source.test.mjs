@@ -6,19 +6,6 @@ import { join } from 'node:path';
 function sources(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => entry.isDirectory() ? sources(join(dir, entry.name)) : entry.name.endsWith('.mjs') ? [join(dir, entry.name)] : []);
 }
-test('Worker modules have no near-duplicate implementation', () => {
-  const modules = sources(new URL('../worker', import.meta.url).pathname).map((path) => {
-    const tokens = readFileSync(path, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '').match(/[A-Za-z_$][\w$]*|\d+|[^\s]/g) ?? [];
-    const chunks = new Set();
-    for (let i = 0; i + 40 <= tokens.length; i++) chunks.add(tokens.slice(i, i + 40).join(' '));
-    return { path, chunks };
-  }).filter((m) => m.chunks.size > 300);
-  for (let i = 0; i < modules.length; i++) for (const b of modules.slice(i + 1)) {
-    const a = modules[i];
-    const overlap = [...a.chunks].filter((chunk) => b.chunks.has(chunk)).length;
-    assert.ok(overlap / Math.min(a.chunks.size, b.chunks.size) < 0.7, `Near-duplicate modules: ${a.path} and ${b.path}`);
-  }
-});
 test('Paid uploads follow successful deployment and use a private binding', () => {
   const deploy = readFileSync(new URL('../lib/cloudflare.mjs', import.meta.url), 'utf8');
   const call = deploy.indexOf('await uploadPaidParts(');

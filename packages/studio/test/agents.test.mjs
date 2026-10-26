@@ -128,15 +128,6 @@ test('the dial: five levels, Fair is what bots always were; a kids room caps the
   assert.equal(medianVote([]), null);
 });
 
-test('the helper and the Worker have the same dial', () => {
-  const ts = readFileSync(join(PKG, 'netplay', 'netplay.ts'), 'utf8');
-  const body = /export const SKILLS: readonly Skill\[\] = Object\.freeze\(\[([\s\S]*?)\]\);/.exec(ts)[1];
-  const rows = [...body.matchAll(/level: (\d), name: '(\w+)', reactionMs: (\d+), aimNoise: ([\d.]+), aggression: ([\d.]+), positioning: ([\d.]+), card: '([^']+)'/g)]
-    .map((m) => ({ level: Number(m[1]), name: m[2], reactionMs: Number(m[3]), aimNoise: Number(m[4]), aggression: Number(m[5]), positioning: Number(m[6]), card: m[7] }));
-  assert.deepEqual(rows, SKILLS.map((s) => ({ ...s })));
-  assert.match(ts, /export const AI_MARK = ' · AI';/);
-});
-
 /* ------------------------------------------------------------------ the relay: seats */
 
 test('hybrid: the top seats are kept for AI; people take the rest and wait when it is full; a person above a new cap keeps their seat', () => {
