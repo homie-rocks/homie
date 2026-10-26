@@ -44,8 +44,8 @@ const inCI = process.env.GITHUB_ACTIONS === 'true';
 const fail = (msg) => { process.stderr.write(`publish: ${msg}\n`); process.exit(1); };
 const npm = (argv, opts = {}) => spawnSync('npm', argv, { cwd: ROOT, encoding: 'utf8', ...opts });
 
-if (!CHECK && !DRY && (!process.env.GITHUB_SHA || process.env.HOMIE_FULL_SUITE_SHA !== process.env.GITHUB_SHA)) {
-  fail('publication requires the full-suite gate on this exact GITHUB_SHA');
+if (!CHECK && !DRY && (!process.env.GITHUB_SHA || process.env.HOMIE_CHECKED_SHA !== process.env.GITHUB_SHA)) {
+  fail('publication requires the build and smoke check on this exact GITHUB_SHA (HOMIE_CHECKED_SHA)');
 }
 
 // 1. The packages, and the rules.

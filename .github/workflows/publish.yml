@@ -4,11 +4,12 @@
 #
 # A release is a tag named release-*, pushed directly or made with a GitHub release:
 #   git tag release-2026-10-01 && git push origin release-2026-10-01
-# The job runs the full suite on the exact commit, builds, checks packaging, then publishes
-# each package whose package.json version is not on npm yet, in dependency order
+# The job installs and builds the exact commit, runs a seconds-long smoke check (the CLI
+# starts and prints its version), checks packaging, then publishes each package whose package.json version is not on npm yet, in dependency order
 # (scripts/publish.mjs). Versions already on npm are skipped, so re-running a release
 # is safe. A studio version with no section in CHANGELOG.md is refused before anything
-# is published, and the tag's GitHub release gets that section as its notes. A package
+# is published. Tests do not run here: the merge queue (homie-prod-ci) checks every change
+# before it reaches main, and the heavier suites run there or locally. The tag's GitHub release gets that section as its notes. A package
 # that is not on npm at all is published once by a maintainer
 # (scripts/first-publish.sh), because trusted publishing only adds versions.
 #
@@ -22,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       dry-run:
-        description: Verify CI and packaging without publishing or attaching a release
+        description: Verify the build and packaging without publishing or attaching a release
         type: boolean
         required: true
         default: true
@@ -33,16 +34,10 @@ on:
 
 permissions:
   contents: read
-  checks: read
-  actions: read
   id-token: write # trusted publishing and provenance
 
 jobs:
-  full-suite:
-    uses: ./.github/workflows/nightly.yml
-
   publish:
-    needs: full-suite
     if: github.event_name != 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/release-')
     runs-on: ubuntu-latest
     timeout-minutes: 8
@@ -52,13 +47,16 @@ jobs:
     environment: npm
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-      - uses: ./.github/actions/ci-setup
-        with:
-          node: 24
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 24
+          cache: npm
           registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - name: Build (workspace sources first, then tsc)
+        run: npm run prepare --workspaces --if-present && npm run build
+      - name: Smoke check (the CLI starts and prints its version)
+        run: node packages/studio/bin/homie-studio.mjs --help > "$RUNNER_TEMP/help.txt" && head -1 "$RUNNER_TEMP/help.txt"
       - name: npm 11 (trusted publishing needs 11.5.1 or later)
         run: npm install -g npm@11
       - name: CHANGELOG.md has this studio version's section
@@ -67,23 +65,25 @@ jobs:
         run: node scripts/publish.mjs --check
       - name: Publish
         env:
-          HOMIE_FULL_SUITE_SHA: ${{ github.sha }}
+          HOMIE_CHECKED_SHA: ${{ github.sha }}
         run: node scripts/publish.mjs
 
   dry-run:
-    needs: full-suite
     if: github.event_name == 'workflow_dispatch' && inputs.dry-run
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-      - uses: ./.github/actions/ci-setup
-        with:
-          node: 24
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 24
+          cache: npm
           registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - name: Build (workspace sources first, then tsc)
+        run: npm run prepare --workspaces --if-present && npm run build
+      - name: Smoke check (the CLI starts and prints its version)
+        run: node packages/studio/bin/homie-studio.mjs --help > "$RUNNER_TEMP/help.txt" && head -1 "$RUNNER_TEMP/help.txt"
       - name: npm 11 (same toolchain as publishing)
         run: npm install -g npm@11
       - run: node scripts/changelog.mjs --check
@@ -124,7 +124,6 @@ jobs:
           gh release upload "$TAG" "desktop/dist/homie-studio-$v.mcpb" desktop/dist/homie-studio.mcpb --clobber
 
   queue-watchdog:
-    needs: full-suite
     if: github.event_name != 'workflow_dispatch'
     name: Fail a release stuck waiting for a runner or environment
     runs-on: ubuntu-latest

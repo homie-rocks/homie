@@ -15,8 +15,8 @@ apps and games pick up a release by pinning its new version, like any studio.
 Before you open one:
 
 - run `npm ci && npm test`; `npm run test:plugin` and `npm run validate` if you changed
-  the plugin or a marketplace file. The full suite runs again, on Node 22 and 24, before
-  every release;
+  the plugin or a marketplace file. The merge queue checks the change again before it
+  reaches main; a release only builds and publishes;
 - keep the change small, and say what you saw: the command you ran and what it printed;
 - an engine package's public modules are its API: a change that breaks a caller needs a
   new minor version while the packages are 0.x, and the packages that depend on it pin
@@ -146,6 +146,6 @@ By making a contribution to this project, I certify that:
     this project or the open source license(s) involved.
 ```
 
-The full suite is split into duration-balanced shards. To reproduce one, run `npm ci`,
+The package tests can be split into duration-balanced shards. To run one, run `npm ci`,
 `npm run build`, then `node scripts/ci-shards.mjs 0 --full`; `node scripts/ci-shards.mjs --list`
 prints the allocation. Long paced experiments stay in `npm run test:rules:extended`.

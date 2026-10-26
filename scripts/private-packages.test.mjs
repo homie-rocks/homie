@@ -28,11 +28,11 @@ test('the actual CI publisher releases studio without looking up or publishing p
       for (const file of ['LICENSE', 'NOTICE']) writeFileSync(join(dir, folder, file), 'fixture');
     }
     writeFileSync(join(dir, 'bin/npm'), `#!${process.execPath}\nconst a=process.argv.slice(2), fs=require('node:fs');fs.appendFileSync('calls',JSON.stringify(a)+'\\n');if(a[0]==='view'){if(a[1]==='@homie-rocks/studio')console.log('"98.0.0"');else{console.error('E404');process.exitCode=1;}}else if(a[0]==='publish'){fs.appendFileSync('published',a[a.indexOf('--workspace')+1]+'\\n');}else throw Error('Unexpected npm '+a);\n`, { mode: 0o755 });
-    const env = { ...process.env, PATH: join(dir, 'bin') + delimiter + process.env.PATH, GITHUB_ACTIONS: 'true', GITHUB_SHA: 'a'.repeat(40), HOMIE_FULL_SUITE_SHA: 'a'.repeat(40) };
+    const env = { ...process.env, PATH: join(dir, 'bin') + delimiter + process.env.PATH, GITHUB_ACTIONS: 'true', GITHUB_SHA: 'a'.repeat(40), HOMIE_CHECKED_SHA: 'a'.repeat(40) };
     for (const gate of ['', 'b'.repeat(40)]) {
-      const refused = spawnSync(process.execPath, ['scripts/publish.mjs'], { cwd: dir, env: { ...env, HOMIE_FULL_SUITE_SHA: gate }, encoding: 'utf8' });
+      const refused = spawnSync(process.execPath, ['scripts/publish.mjs'], { cwd: dir, env: { ...env, HOMIE_CHECKED_SHA: gate }, encoding: 'utf8' });
       assert.notEqual(refused.status, 0);
-      assert.equal(existsSync(join(dir, 'calls')), false, 'no registry access before the full-suite gate');
+      assert.equal(existsSync(join(dir, 'calls')), false, 'no registry access before the checked-commit gate');
     }
     const result = spawnSync(process.execPath, ['scripts/publish.mjs'], { cwd: dir, env, encoding: 'utf8' });
     assert.equal(result.status, 0, result.stdout + result.stderr);
