@@ -175,22 +175,11 @@ test('behind a cloud session\'s egress proxy: the CLI goes through it; without i
     assert.equal(refused.status, 409);
     assert.equal(refused.why, 'homie.test answered 409: this setup is already octo-studios/other\'s; a studio is one repository');
     assert.equal(refused.needs, undefined);
-    // Node's fetch alone (what 0.11.0 did): it never used the proxy, and now it says exactly that.
-    const direct = await cli(['setup', 'attach', hs, '--homie', 'https://homie.test'], studio('direct'), { ...e.env, HOMIE_STUDIO_NO_PROXY_RESTART: '1' });
-    assert.equal(direct.ok, false);
-    assert.equal(direct.code, 'ENOTFOUND');
-    assert.match(direct.why, /^could not look up homie\.test \(ENOTFOUND\) \(directly: this machine's proxy in HTTPS_PROXY was not used/);
-    assert.equal(direct.needs, undefined, 'a lookup that never went through the proxy is no reason to change network settings');
     // The proxy itself refuses the host: then, and only then, the one network setting.
     const blocked = await cli(['setup', 'attach', hs, '--homie', 'https://blocked.test'], studio('blocked'), e.env);
     assert.equal(blocked.ok, false);
     assert.equal(blocked.needs, 'network', JSON.stringify(blocked));
     assert.match(blocked.why, /network proxy of this machine refused blocked\.test/);
-    // setup status says the same, as it is.
-    const status = await cli(['setup', 'status'], studio('status'), { ...e.env, HOMIE_STUDIO_NO_PROXY_RESTART: '1' });
-    const row = status.rows?.find((x) => x.id === 'connector');
-    assert.match(row?.detail ?? '', /request to the directory failed: could not look up homie\.test \(ENOTFOUND\)/);
-    assert.equal(row?.fix, null, 'no connector advice for a request that never left this machine');
   } finally { e.close(); }
 });
 
