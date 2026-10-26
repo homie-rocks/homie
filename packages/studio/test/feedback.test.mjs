@@ -279,7 +279,7 @@ test('homie_feedback: no is final for the session, and nothing is sent', async (
   } finally { await s.close(); await d.close(); }
 });
 
-test('the Tell Homie card in a browser: Send sends the shown note once; Edit rewords it; Don\'t send sends nothing', { skip: !findChrome() && 'no Chrome on this machine' }, async () => {
+test('the Tell Homie card in a browser: Send sends the shown note once; Edit rewords it; Don\'t send sends nothing', { skip: (!process.env.HOMIE_TEST_HEAVY && 'browser test: npm run test:heavy') || (!findChrome() && 'no Chrome on this machine') }, async () => {
   const d = await directory();
   studio('lanterns', { directoryUrl: d.url });
   const s = await server(['--studios', join(scratch, 'studios'), '--homie', d.url]);

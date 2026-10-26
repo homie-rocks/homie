@@ -36,14 +36,15 @@
   "scripts": {
     "build": "tsc --build",
     "test": "npm run build && node --test --test-concurrency=1 packages/*/test/*.test.mjs scripts/*.test.mjs",
+    "test:heavy": "npm run build && HOMIE_TEST_HEAVY=1 node --test --test-concurrency=1 packages/*/test/*.test.mjs packages/*/test/*.heavy.mjs scripts/*.test.mjs",
     "test:plugin": "node --test plugins/homie/test/*.test.mjs",
-    "test:rules:extended": "RULES_EXTENDED=1 node --test --test-concurrency=1 packages/studio/test/rules-corpus.test.mjs packages/studio/test/rules-protocol-corpus.test.mjs packages/studio/test/rules-author-requests.test.mjs packages/studio/test/rules-boundaries.test.mjs packages/studio/test/rules-repeatability.test.mjs packages/studio/test/rules-prediction-chrome.test.mjs packages/studio/test/rules-3d-prediction-chrome.test.mjs packages/studio/test/rules-interest.test.mjs packages/studio/test/rules-traffic-chrome.test.mjs packages/studio/test/rules-crowd-extended.mjs packages/studio/test/rules-cloud-extended.mjs packages/studio/test/gates-workerd.test.mjs packages/studio/test/lasting-worlds.test.mjs packages/studio/test/lasting-worlds-workerd.test.mjs",
+    "test:rules:extended": "RULES_EXTENDED=1 node --test --test-concurrency=1 packages/studio/test/rules-corpus.heavy.mjs packages/studio/test/rules-protocol-corpus.heavy.mjs packages/studio/test/rules-author-requests.heavy.mjs packages/studio/test/rules-boundaries.heavy.mjs packages/studio/test/rules-repeatability.heavy.mjs packages/studio/test/rules-prediction-chrome.heavy.mjs packages/studio/test/rules-3d-prediction-chrome.heavy.mjs packages/studio/test/rules-interest.test.mjs packages/studio/test/rules-traffic-chrome.heavy.mjs packages/studio/test/rules-crowd-extended.mjs packages/studio/test/rules-cloud-extended.mjs packages/studio/test/gates-workerd.test.mjs packages/studio/test/lasting-worlds.test.mjs packages/studio/test/lasting-worlds-workerd.test.mjs",
     "test:crowd": "RULES_EXTENDED=1 node --test packages/studio/test/rules-cloud-extended.mjs",
     "test:mod": "claude plugin test plugins/homie",
     "validate": "claude plugin validate . && claude plugin validate plugins/homie",
     "release:check": "node scripts/publish.mjs --check",
-    "test:rooms:updates": "HOMIE_ROOMS_PAGE_SOAK=1 node --test packages/studio/test/rooms-pages.test.mjs",
-    "test:physics:full": "npm run build && PHYSICS_FULL=1 node --max-old-space-size=1536 --test --test-concurrency=1 packages/physics/test/*.test.mjs"
+    "test:rooms:updates": "HOMIE_ROOMS_PAGE_SOAK=1 node --test packages/studio/test/rooms-pages.heavy.mjs",
+    "test:physics:full": "npm run build && PHYSICS_FULL=1 node --max-old-space-size=1536 --test --test-concurrency=1 packages/physics/test/*.test.mjs packages/physics/test/*.heavy.mjs"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",

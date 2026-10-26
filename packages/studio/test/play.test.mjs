@@ -218,7 +218,7 @@ test('local development: the TV view and the landing never put this computer\'s 
   assert.match(html, /Deploy to share/);
 });
 
-test('a game with an art direction: the play page\'s pills wear its paper and text (games.json ui), like its own HUD', async () => {
+test('a game with an art direction: the play page\'s pills wear its paper and text (games.json ui), like its own HUD', { skip: !process.env.HOMIE_TEST_HEAVY && 'browser test: npm run test:heavy' }, async () => {
   const {default:puppeteer}=await import('puppeteer-core');
   const {findChrome,chromeArgs}=await import('../lib/chrome.mjs');
   const browser=await puppeteer.launch({executablePath:findChrome(),headless:true,args:chromeArgs()});
