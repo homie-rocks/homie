@@ -17,6 +17,16 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.20] - 2026-10-26
+
+**Plugin 0.58.14**
+
+An upgrade keeps a studio's game routes when nothing has been built yet.
+
+### Fixed
+
+- `homie-studio upgrade` in a fresh checkout (no `site/dist`, as on a new machine or a hosting platform's clone) no longer rewrites `wrangler.jsonc` without the studio's game routes (`/<game>`, `/<game>/*` and the static-asset exclusions). Without build output the Worker config keeps the routes the last build wrote; the next build still sets them from the games it finds.
+
 ## [0.58.19] - 2026-10-21
 
 **Plugin 0.58.13**
