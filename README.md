@@ -1,24 +1,18 @@
 # Homie
 
-Make games and apps with Homie's engine packages, animated characters, sound, music and
-video skills. Play from a post on X. Your AI builds and checks the result, publishes it on
-your own Cloudflare, and connects your own Stripe with one browser approval. Open source.
+Homie is a set of open-source tools that let an AI build and run a **studio**: a website
+with games, apps, music and video, deployed to the owner's own Cloudflare account. You ask
+your AI for what you want in plain words; it uses Homie to make it, check it in real
+browsers and put it online.
 
-Ask: *"Make a game for my pub and put it online."* Your AI chooses the technical and design
-details; you can change them by asking. Cloudflare opens for your approval when it is time
-to go live. Listing on homie.rocks is optional. Homie for studios is in beta.
-
-The source of this repository is Cloudflare Artifacts (`homie-prod/homie`). This GitHub
-repository is a read-only mirror of `main`, so issues and stars stay here. npm publish
-stays on GitHub Actions, which is what signs provenance.
-
-Apps live beside games in `apps/`: **one transforming screen, its roles, and its parts**. They use the same engines, live rooms and standalone builds, with lasting records and staff permissions. Ask for a welcome board, repair queue or customer app; no rounds or scores are required. [Build an app](packages/studio/apps/APPS.md).
-
+It starts with games. The longer-term direction is commerce between AIs, where a
+customer's AI and a business's AI (or two businesses' AIs) can find each other's studios
+and do business through the same tools.
 
 ## Install
 
-Ask your AI to install Homie from `homie-rocks/homie`. The commands below are for your AI;
-you do not open a terminal. Approve the host’s plugin prompt, then ask for your live outcome.
+Homie works as a plugin for AI coding apps, or as an MCP server for any MCP client. Your AI
+can run these commands for you.
 
 **Claude Code**
 
@@ -26,12 +20,8 @@ you do not open a terminal. Approve the host’s plugin prompt, then ask for you
 /plugin install homie --marketplace homie-rocks/homie
 ```
 
-One line, inside a session (Claude Code 2.1.275 or later): it asks you to confirm the marketplace, then opens
-the plugin's details, where you pick a scope. From a terminal it is two commands,
-`claude plugin marketplace add homie-rocks/homie`, then `claude plugin install homie@homie` (the terminal's
-`install` takes no `--marketplace`). Claude Code then says "9 userConfig options not yet set": those
-are the Homie mod's nine switches, every one optional and already at its default, so nothing is left
-to do (`/plugin configure homie@homie` changes one).
+From a terminal: `claude plugin marketplace add homie-rocks/homie`, then
+`claude plugin install homie@homie`.
 
 **Codex**
 
@@ -40,18 +30,8 @@ codex plugin marketplace add homie-rocks/homie
 codex plugin add homie@homie
 ```
 
-Or run `/plugins` in Codex and install Homie from the Homie marketplace. Start a new
-session afterwards so the skills and tools load, and open `/hooks` to trust Homie's three hooks. They
-hold an edit to a protected file, a deploy, a Cloudflare change, spending past the budget and a model
-download until you answer `proceed <code>`, and they take secrets out of what Codex reads. Codex runs no
-plugin's hooks until you trust them, and says nothing when it skips them: the setup status has a row,
-"Homie's holds: on" or "off", and a first reply says so when they are off (the plugin README's "Homie's
-holds in Codex" says what they cover).
-
-If Codex already has another MCP server named `homie` (`codex mcp list`), that one keeps the name and the
-plugin's connector does not load. The setup status says so, and `codex mcp add homie-rocks --url
-https://homie.rocks/mcp` adds Homie's connector under its own name. A session makes a studio without the
-connector either way, with the studio's own commands.
+Start a new session afterwards, and open `/hooks` to trust Homie's hooks (Codex skips a
+plugin's hooks until you do).
 
 **Grok**
 
@@ -59,296 +39,81 @@ connector either way, with the studio's own commands.
 grok plugin install homie-rocks/homie#plugins/homie
 ```
 
-Grok shows where the plugin comes from and asks whether to trust it (`--trust` on the same command says yes
-ahead of time): its skills, its MCP server and its hooks load only once you do. Then start a new session and
-ask for a studio. Checked on Grok Build 1.0.41, where `grok plugin validate` reads the manifest as valid
-(the skills, the hooks and the MCP server). Homie is not in xAI's own plugin list, so it does not show up in
-a search there: install it from this repository, as above.
+Trust the plugin when asked, then start a new session.
 
-The plugin is `plugins/homie` (`.grok-plugin/plugin.json`, the same skills and MCP server). **Homie's holds
-run in Grok once you trust the plugin** (`--trust` on the install command, or yes when Grok asks). The plugin
-ships the same hooks for Grok (`hooks/grok.json`) as for Codex: a deploy, a protected edit or a paid call past
-the budget comes back refused with a short code, and your own `proceed <code>` lets it through once; secrets
-are taken out of what Grok reads. `homie-studio setup status --client grok` says whether they ran just now
-("Homie's holds: on"); while it says off, Homie's skill tells Grok to ask you itself. There is no Cloudflare connector
-in Grok: approving Cloudflare in the browser (`npx wrangler login` on a computer) is still your step.
+**Any MCP client** (Claude app, Grok chat and others): add a custom connector with the
+address `https://homie.rocks/mcp`.
 
-Grok Bot (the desktop app) does not show Homie in its plugin list: tell it to read
-https://homie.rocks/install.md and install Homie, then ask for a studio. Checked 2026-10-04: from that one
-message it installed Homie on its own computer, made a studio, built a game and passed the two-browser check,
-then asked for the Cloudflare approval. In Grok chat the Homie connector is the same address,
-`https://homie.rocks/mcp` (grok.com/connectors, New Connector, Custom). A Grok Bot that has the studio folder
-checks the repository in with `npx --no-install homie-studio setup attach <hs_…> --client grok`, which does
-not need Claude's GitHub app; that hand-off we have not run end to end ourselves.
+**Claude desktop app:** the Homie Desktop Extension (`desktop/`) runs the toolkit locally.
+Download it from <https://homie.rocks/make/studio/desktop/>.
 
-Then ask for a studio. The plugin adds twenty-one skills (`studio-setup`, `plan`, `parallel`, `game`, `parts`, `port`, `publish`, `office`, `servers`, `shop`, `sound`, `music`, `art`, `style`, `models`, `animate`, `video`, `playtest`, `perf`, `lab`, `standalone`) and connects the Homie MCP server at
-`https://homie.rocks/mcp`, which has creator tools only: set up a studio, make a game, make an
-existing single-player web game multiplayer, preview it, deploy it, and list it.
-Your AI installs Node.js and the studio’s dependencies when needed.
+**Command line:** `npx -y @homie-rocks/studio --help` lists the `homie-studio` commands.
+`homie-studio mcp` runs the same toolkit as a local MCP server over stdio.
 
-Your AI checks setup, installs missing tools, makes the studio, builds your request and
-checks it in real browsers. There is no mandatory demo or planning interview. A studio can
-hold games, apps, music and video. Ask for changes in the same chat.
+Then ask for something, for example *"Make a game for my pub and put it online."*
+Cloudflare asks for your approval before anything goes live.
 
+## Core concepts
 
-## In the Claude desktop app: one chat
+- **Studio:** a folder with a `studio.json`, and the site it deploys to your Cloudflare
+  account (a Worker, a D1 database and Durable Objects for live rooms). You own it and pay
+  Cloudflare directly, if at all; the free plan is enough to start.
+- **Parts:** reusable pieces that studios share or sell, such as a creature, a level
+  generator, a chase camera or an audio pack. Each part has its own licence and
+  attribution. Browse them at <https://homie.rocks/parts/>.
+- **Tools:** the plugin's skills and MCP tools, plus the `homie-studio` CLI. Your AI uses
+  them to set up a studio, build, check, preview, deploy and list its work. The engine
+  packages (`@homie-rocks/*` on npm) are what the games are built on.
 
-On a computer, **Homie for Claude Desktop** (a Desktop Extension, [`desktop/`](desktop/)) gives the plain Claude
-app Homie's tools and cards in the same chat: no terminal, no second session. Install it once (download the
-`.mcpb` from https://homie.rocks/studio/desktop/ and double-click it, or drag it into Claude's window), choose the
-folder your studios live in, and ask:
-*"set up a game studio called Night Owls"*. The chat makes the studio on your computer, plans your game with you,
-builds it, runs the two-browser check, and puts it online on your own Cloudflare, with the setup, build progress,
-studio and Game Codex cards in the conversation. Claude asks before it uses each Homie Studio tool: choose
-**Always allow**, so a build runs without a click at every step, and if a step ever sits on a spinner with nothing
-to click, a request is waiting out of sight (press ⌘ Return, or Ctrl+Enter on Windows, or scroll the chat).
-Underneath it is `homie-studio mcp`, the toolkit as a local MCP server, which any MCP client can run.
+The core stays small and general. Anything specific to one kind of business belongs in a
+part, not in the toolkit.
 
-## From the Claude app on a phone, with no terminal
+## Docs
 
-In the Claude app (claude.ai, the desktop app or the phone),
-[add Homie as a connector](https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Homie&connectorUrl=https%3A%2F%2Fhomie.rocks%2Fmcp):
-the link opens "Add custom connector" with Homie filled in, and you confirm. By hand it is Settings →
-Connectors → Add custom connector → `https://homie.rocks/mcp`. Then ask for a
-studio. Its cards do the rest, and every approval is one tap on the provider's own page:
+- Getting started: <https://homie.rocks/make/studio/> and <https://homie.rocks/install.md>
+- Help: <https://homie.rocks/help/>
+- Release notes: <https://homie.rocks/make/studio/changelog/> and [CHANGELOG.md](CHANGELOG.md)
+- Parts catalog: <https://homie.rocks/parts/>
+- Studio directory: <https://homie.rocks/studios/>
+- In this repository: [plugin](plugins/homie/README.md), [studio toolkit](packages/studio/),
+  [netplay contract](packages/studio/netplay/NETPLAY.md), [parts rules](packages/studio/parts/PARTS.md),
+  and each engine package's own README under [`packages/`](packages/).
 
-1. **The setup card** has three buttons: *Make the studio on Cloudflare* (the Deploy to
-   Cloudflare button below: your GitHub gets the studio's repository, your Cloudflare its
-   Worker, database and rooms, and Workers Builds deploys every push), *Let Claude work in
-   it* (Claude's GitHub app, for that one repository), and an optional media provider. It
-   follows the studio as it comes up.
-2. **"Build it" cards** on a new game or a port open a Claude Code session on the
-   studio's repository with ONE short line, *"Continue building Night Owls: build hb_…"*. The
-   session fetches the brief itself (`homie-studio handoff`, as the studio's `HANDOFF.md` says).
-   The chat opens the build first, so its progress card (stages, checks going green, a picture,
-   spend and Stop) is on screen before the session starts.
-3. **The pull request card**: the change goes out as a pull request with its own Preview.
-   *Publish* opens it in GitHub, where your merge is the approval; Workers Builds deploys
-   it, and the card says when it is live.
-
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/homie-rocks/homie/tree/main/template)
-
-Claude Code cloud sessions need a Pro, Max, Team or Enterprise plan; on the Free plan the
-cards work and your own computer does the building. A cloud session's default network reaches
-homie.rocks. If the progress card ever stops updating in a cloud session, the session's network
-may be blocking homie.rocks: the toolkit says so, and names the setting.
-
-## What the studio deploys to your Cloudflare
-
-`npm run deploy` in a studio runs Wrangler under **your** Cloudflare login and creates,
-the studio's own resources. Your AI shows the deploy plan and its costs before publishing:
-
-| Resource | Name | What it does |
-| --- | --- | --- |
-| Worker | `<studio>` | The studio's pages (Home, Games, Music, Videos, Rooms, Posts and their feeds), each game's landing and play shell, the game files, `/api/games`, `/api/rooms`, `/.well-known/homie-studio.json` for the directory, and `/robots.txt`, `/sitemap.xml`, `/llms.txt` for search engines and AI agents (`packages/studio/site/SITE.md`). |
-| Durable Object `Table` | one per room | The netplay relay (`worker/room.mjs`): seats, host election, snapshots, keyed state, checkpoints. It also runs server-hosted game rules. |
-| Durable Object `Lobby` | one per game | Puts strangers who press Play into the same public room, and opens the next room when one is full. |
-| D1 database | `<studio>-db` | The directory claim and every finished round. |
-| Workers AI binding | `AI` | Only when a game's players may type (room chat's review, Cloudflare's Clef decision model) or a server's AI guides think with it; within the free allocation (10,000 neurons a day) by default. |
-
-From 0.10.0 the Worker's config (`wrangler.jsonc`) sits at the studio's root, so Cloudflare's
-**Workers Builds** can deploy it from GitHub: `npm run build` and `npm run deploy` on the
-production branch, and `npx wrangler preview` on every other branch, which gets a Preview
-URL and its own rooms (a Durable Object namespace of its own). The live site claims itself
-in the homie.rocks directory the first time the directory reads it.
-
-Both Durable Objects are SQLite-backed. There is no
-R2 bucket: a studio needs none to run. Deploy never uses a Worker, database or bucket that
-it did not create, and it records what it created in `studio.json`. Cloudflare's free
-plan has daily limits (100,000 Worker requests; D1 reads 5 million rows and writes 100,000);
-past them, requests fail until 00:00 UTC and nothing is charged. Anything you choose to
-pay Cloudflare for, you pay them directly, and homie.rocks never hosts your games.
-`packages/studio/netplay/NETPLAY.md` (section 11) estimates what a busy room costs.
-
-**Storage, later and only if you want it.** Songs, videos and big art go to the studio's
-storage, not to git: `npx --no-install homie-studio storage add` makes an R2 bucket
-(`<studio>-media`, bound as `MEDIA`, served at `/media/<key>`), then `deploy` binds it and
-`homie-studio media put <file>` uploads. Cloudflare asks for a payment method before R2
-works, even inside its free tier (10 GB-month), so `storage add` stops with the dashboard
-link, and creates nothing, until you turn R2 on.
-
-## The game engine
-
-The packages Homie's own games are built on are here too, as `@homie-rocks/*` on npm
-under the same license. Each is ESM with TypeScript types, built for a plain Vite game
-(or any bundler), and there is no barrel file: a game imports the module it needs,
-`@homie-rocks/<package>/<Module>.js`.
-
-| Package | What it is |
-| --- | --- |
-| `@homie-rocks/arcade` | Seats and phone controllers, game-facing. |
-| `@homie-rocks/input` | Controllers, keyboard, touch and the controls screen: what a stick reads. |
-| `@homie-rocks/camera` | Analytic springs, the lens and the frame solver. |
-| `@homie-rocks/render` | GPU-ready before the first frame: texture budget, materials, pipeline, shader pre-warm. |
-| `@homie-rocks/postfx` | The frame clock, capture protocol and the grade (tone curve, aberration, vignette, grain). |
-| `@homie-rocks/fx` | Pooled screen-space effects: trails, rings, plumes, shimmer, effect lights. |
-| `@homie-rocks/audio` | The DSP substrate: an output chain that cannot clip, noise, reverb, envelopes, voices. |
-| `@homie-rocks/ui` | Screen-space primitives with no renderer dependency. |
-| `@homie-rocks/loop` | The frame loop: freeze gate, render-failure and resolution ladders, context restore. |
-| `@homie-rocks/diagnostics` | Whether a frame has a picture in it, and the watchdog that acts when it does not. |
-| `@homie-rocks/device` | What the hardware is (touch, handheld, panel size) and validated stored preferences. |
-| `@homie-rocks/bus` | A typed, synchronous event bus. |
-| `@homie-rocks/scores` | Scores and leaderboards. |
-| `@homie-rocks/noise`, `geom`, `heightfield`, `scatter`, `props`, `brush`, `ui-world` | Procedural fields, geometry, terrain, placement, scenery, box worlds, world-to-panel maths. |
-| `@homie-rocks/nav` | Tiled navigation meshes, restorable fixed-step crowds, runtime obstacles and grid paths for games and apps. |
-| `@homie-rocks/physics` | Optional deterministic rigid bodies, characters, terrain and complete saves. Rules games can opt into a baked GLB collision world. |
-| `@homie-rocks/walk`, `film` | A body on two legs (contact, coyote time, jump buffer, slopes); shot timelines and deterministic capture. |
-
-Every package's own README says what it does, what it needs, and how to import it.
-
-**Pin exact versions.** `npm install --save-exact`, so a game rebuilt months later is the
-same game; the packages pin each other exactly for the same reason. They share one copy
-of `three` as a peer dependency (0.185.1); TypeScript games also add `@types/three` at
-the same version. Two copies of three.js in one page are two `instanceof` worlds, and the
-symptom is an object that renders as nothing with no error.
-
-## What stays at homie.rocks
-
-These parts are shared between studios. They run at homie.rocks and are not in this
-repository:
-
-- **The directory** of studios and games (<https://homie.rocks/studios/>), in beta. It
-  lists a studio's games after the studio's site serves the claim the directory gave it,
-  so nobody can list games under someone else's site. It stores the site's address, the
-  studio's name, and each game's, song's and video's name, blurb, link and cover address;
-  never code, media files or keys.
-  Names and blurbs are plain text without links, a studio lists at most 12 games, the
-  directory and the MCP server are rate limited per address and per studio, every listing
-  has a Report link, and only the directory's owner (never an AI) can unlist or take down
-  a listing.
-- **The Homie MCP server** the plugin connects to.
-- **Notes to Homie** (`homie_feedback`, the mod's `/feedback`): a short note a person saw word for word and said
-  yes to, kept privately with the website's feedback. It holds the note's kind, words, step, the studio's and
-  plugin's versions and the app, and a reply address only when typed; never files, logs or keys
-  ([privacy](https://homie.rocks/privacy/)).
-
-homie.rocks itself and Homie's own games (their
-code, art, music and names) are not open source; the engine they are built on is.
-
-## Known issues
-
-The friends beta, as of this version:
-
-- **Music and video pages serve files up to 25 MiB each** from the site itself (the skills
-  keep their deliveries under that). Bigger files need storage (`storage add`, then
-  `media put`).
-- **ElevenLabs' credit balance can lag a render by a minute.** The music skill counts the
-  quote against your budget until the account shows the real number (`reconcile`).
-- **fal spend is priced, not billed.** The video skill prices each call from fal's own
-  pricing API before making it; what fal bills is in your fal dashboard.
-- **A new Cloudflare account verifies its email address** before it can run a Worker;
-  `deploy` says so (Cloudflare's error 10034) and waits for you.
-- **Storage needs a payment method on the Cloudflare account** (Cloudflare's rule for R2).
-  Games never need storage.
-- **Every request to a studio's site runs its Worker**, so page loads and game files count
-  toward the free plan's 100,000 requests a day. A busy studio can reach it.
-- **The checks need Chrome.** `homie-studio check` and `port check` drive two headless
-  Chrome browsers (set `CHROME_PATH` if it is not in the usual place, and on Windows); the iPhone row of
-  `port check` needs Playwright's WebKit and is skipped without it.
-- **Start a new session after installing** the plugin in Codex or Grok, so its skills and tools
-  load. The approval and publish cards (MCP Apps) show only in apps that support them;
-  elsewhere the same answer comes as text with a link.
-- **Another MCP server named `homie`** in Codex's or Grok's own configuration keeps that name, and the
-  plugin's connector then does not load. `homie-studio setup status --client codex` (or `grok`) says so
-  and gives the command that adds Homie's connector under its own name; a studio is made without it meanwhile.
-- **The Homie MCP server allows about 60 requests a minute per address**, and the
-  directory about 10 writes a minute per address and per studio. An agent that loops
-  gets "too many requests" and should wait a minute.
-
-Something else? [Open an issue](https://github.com/homie-rocks/homie/issues/new/choose):
-a bug, a port request or a question. Or tell Claude: it can send the people who make Homie a short note,
-which you see word for word and send only with your yes.
-
-## This repository
-
-This is where Homie's open parts are developed: the plugin, `@homie-rocks/studio` and
-the engine packages. Every change lands here as a pull request, and a `release-*` tag
-publishes the packages to npm. Homie's own apps, homie.rocks and Homie's games use them
-from npm, pinned exactly, like any studio.
+## Repository layout
 
 | Path | What it is |
 | --- | --- |
-| `.claude-plugin/marketplace.json` | The plugin marketplace for Claude Code. |
-| `.agents/plugins/marketplace.json` | The plugin marketplace for Codex. |
-| `plugins/homie/` | The Homie plugin: its skills, its MCP server configuration and its tests. |
-| `packages/studio/` | `@homie-rocks/studio`: the `homie-studio` CLI, the studio's site Worker, the netplay contract (`netplay/NETPLAY.md`), its game helper (`@homie-rocks/studio/netplay`), the relay (`worker/room.mjs`) and the Gem Rush starter. |
-| `packages/<engine package>/` | The game engine packages above, one folder each. |
-| `desktop/`, `scripts/desktop.mjs` | Homie for Claude Desktop: the Desktop Extension (`.mcpb`) around `homie-studio mcp`, its manifest, and how it is packed and checked (`node scripts/desktop.mjs --check`). |
-| `CHANGELOG.md`, `scripts/changelog.mjs` | What changed in each `@homie-rocks/studio` version and the plugin beside it. npm ships a copy in the package, every GitHub release's notes are its version's section, and CI checks that a version bump comes with one. |
-| `scripts/publish.mjs`, `.github/workflows/publish.yml`, `scripts/first-publish.sh` | How the packages reach npm: trusted publishing on a `release-*` tag, with provenance. |
-| `.github/workflows/ci.yml` | CI: every package's tests on Node 22 and 24, and the plugin's tests with `claude plugin validate`. |
+| `plugins/homie/` | The plugin: skills, MCP server configuration, hooks and tests. |
+| `packages/studio/` | `@homie-rocks/studio`: the `homie-studio` CLI, the studio site Worker, netplay and the starters. |
+| `packages/<name>/` | The engine packages (`@homie-rocks/render`, `audio`, `physics` and others). |
+| `template/` | The starting studio. |
+| `desktop/` | The Desktop Extension for the Claude desktop app. |
+| `.claude-plugin/`, `.agents/plugins/` | Plugin marketplaces for Claude Code and Codex. |
 
 ## Develop
 
-Node.js 22 or later. The media skills' tests need ffmpeg, and two of them Chrome.
+Node.js 22 or later. Some media tests need ffmpeg, and the browser checks need Chrome.
 
 ```sh
-npm ci                # every workspace: packages/studio and the engine packages
-npm run build         # tsc --build: each engine package after the packages it references
-npm test              # the build, then every package's tests and the repository's own
-npm run test:plugin   # the plugin's skills, against stand-ins for their providers (no account, no money)
-npm run validate      # claude plugin validate: the marketplace and the plugin
-npm run release:check # what a release would publish, and whether a package changed since its version shipped
+npm ci
+npm run build          # tsc --build
+npm test               # build, then every package's tests
+npm run test:plugin    # the plugin's skills, against stand-ins (no accounts, no money)
+npm run release:check  # what a release would publish
 ```
 
-**Workspaces.** `packages/studio` and every engine package are npm workspaces, so a
-package imports another by its published name (`@homie-rocks/render/caps.js`) and gets
-this checkout's copy, and a game or a studio you link to this checkout does too. The
-packages pin each other exactly: when one changes, the packages that depend on it pin
-its new version.
+Releases go to npm from the `release-*` tag through GitHub Actions
+([publish.yml](.github/workflows/publish.yml)), with trusted publishing and provenance.
 
-**Tests.** Each engine package's `test/` holds `package.test.mjs`, the contract every
-package keeps (`scripts/test/engine-package.mjs`): its name and licence, its exports map,
-every module built and loading in Node by the package's own name, and every import
-declared and pinned. Behaviour tests go beside it as `packages/<name>/test/*.test.mjs`
-(`node:test`). `packages/studio/test` runs the CLI, the site Worker, the relay and the
-Lobby against stand-ins for Wrangler and Cloudflare. `plugins/homie/test` runs the media
-skills against stand-ins for ElevenLabs and fal, and checks the plugin's manifests agree.
+## Contributing
 
-**The dev relay.** Public rooms run in the studio's own Worker: the `Table` Durable
-Object is the netplay relay (`packages/studio/worker/room.mjs`) and the `Lobby` puts
-strangers in the same room. `homie-studio dev` runs all of it on your computer with
-Wrangler's local mode, with no Cloudflare account. To try a change to the studio, the
-relay or the starter, point a scratch studio at this checkout:
+Issues and pull requests are welcome here on GitHub. This repository is a mirror: the
+source of truth is a Cloudflare Artifacts repository, and a maintainer lands accepted
+changes there, keeping you as the author. Sign off your commits (`git commit -s`);
+[CONTRIBUTING.md](CONTRIBUTING.md) has the details. Report security problems privately as
+[SECURITY.md](SECURITY.md) describes.
 
-```sh
-node packages/studio/bin/homie-studio.mjs new ../scratch-studio --name "Scratch" --no-install
-cd ../scratch-studio
-npm install && npm install -D ../homie/packages/studio   # this checkout's @homie-rocks/studio, linked
-npx homie-studio game new crown-thief --from gem-rush --name "Crown Thief"
-npx homie-studio dev          # the site, the relay and the Lobby at http://127.0.0.1:8787
-npx homie-studio check crown-thief --url http://127.0.0.1:8787   # two browsers share a room and finish a round
-npx homie-studio dev --stop   # this studio's dev server only
-```
+## Licence
 
-(`../homie` is this checkout.) Open `http://127.0.0.1:8787/crown-thief/` in two browser
-windows, or a computer and a phone on the same network, to play against yourself.
-New games use server rules in `src/rules.ts`, shared movement in `src/move.ts`, and browser presentation in `src/view.ts`. The [game skill](plugins/homie/skills/game/SKILL.md) and its [rules reference](plugins/homie/skills/game/RULES.md) teach the authoring contract. Browser hosting remains available for offline, local and private play; existing netplay games keep working.
-
-**Releasing.** A published version never changes. Give each package you changed a new
-`version` (and bump the exact pins of the packages that depend on it). A new
-`@homie-rocks/studio` version gets its section at the top of [CHANGELOG.md](CHANGELOG.md),
-written for the people who make studios (Added, Changed, Fixed, Upgrade notes), then
-`node scripts/changelog.mjs --sync` copies it into the package; CI fails a pull request
-that moves the version without one, and says what to write. Merge, then tag:
-
-```sh
-git tag release-YYYY-MM-DD && git push origin release-YYYY-MM-DD
-```
-
-`.github/workflows/publish.yml` builds and tests the tagged commit, checks the
-changelog, then publishes every package whose version is not on npm yet, with provenance;
-it refuses a package that changed since its version was published. The tag's GitHub
-release gets the version's CHANGELOG.md section as its notes, and Homie for Claude
-Desktop's `.mcpb` attached. A package that is not on npm at all is published
-once by a maintainer with `scripts/first-publish.sh`, because trusted publishing can only
-add versions to a package that exists.
-
-Contributions come in under Apache-2.0 with a DCO sign-off (`git commit -s`), and no
-CLA, from people under their own names: [CONTRIBUTING.md](CONTRIBUTING.md) says how a
-change gets in and how a maintainer merges it. To report a
-vulnerability, see [SECURITY.md](SECURITY.md).
-
-## License
-
-Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). Copyright 2026 1243116 B.C. Ltd.
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). The names "Homie" and
+"homie.rocks" are not covered by the licence. Copyright 2026 1243116 B.C. Ltd.

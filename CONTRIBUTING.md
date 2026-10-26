@@ -6,15 +6,17 @@ way, under their own name: you, the maintainers, and whoever presses the merge b
 
 ## How a change gets in
 
-This repository is where Homie's open parts are developed. A pull request is reviewed
-and merged here, and ships to npm with the next release (a `release-*` tag). Homie's own
+This GitHub repository is a read-only mirror of `main` from Homie's source repository on
+Cloudflare Artifacts. Open issues and pull requests here: a maintainer reviews a pull
+request and lands it in the source repository, where the checks run, and it reaches this
+mirror and ships to npm with the next release (a `release-*` tag). Homie's own
 apps and games pick up a release by pinning its new version, like any studio.
 
 Before you open one:
 
 - run `npm ci && npm test`; `npm run test:plugin` and `npm run validate` if you changed
-  the plugin or a marketplace file. CI runs all of them, on Node 22
-  and 24, and a pull request merges when they pass;
+  the plugin or a marketplace file. The full suite runs again, on Node 22 and 24, before
+  every release;
 - keep the change small, and say what you saw: the command you ran and what it printed;
 - an engine package's public modules are its API: a change that breaks a caller needs a
   new minor version while the packages are 0.x, and the packages that depend on it pin
@@ -25,8 +27,8 @@ Before you open one:
 - **a version bump needs a changelog section.** A pull request that moves
   `@homie-rocks/studio`'s version adds that version's section to the top of
   [CHANGELOG.md](CHANGELOG.md), in plain words for the people who make studios, then
-  runs `node scripts/changelog.mjs --sync` (npm ships a copy in the package). CI's
-  changelog check says exactly what is missing and gives the text to write: the new
+  runs `node scripts/changelog.mjs --sync` (npm ships a copy in the package).
+  `node scripts/changelog.mjs --check` says exactly what is missing and gives the text to write: the new
   section, and, once the version before yours has its release tag, the line that links
   that tag from its section;
 - the netplay wire protocol is versioned: a change that a v1 client cannot ignore needs
@@ -80,21 +82,11 @@ issue.
 
 ## How maintainers merge
 
-A maintainer reviews your pull request and merges it once CI and the DCO check pass:
-
-- with GitHub's **Squash and merge**, so a pull request is one commit on `main`. You are
-  that commit's author. Its message is your commits' messages, sign-offs included;
-  anyone else who authored a commit in the pull request is named as `Co-authored-by`;
-  and the maintainer who merges is signed off under their own name (this repository
-  requires a sign-off on every commit made on github.com, the merge button's included).
-  A pull request of one commit keeps that commit's title and message as you wrote them.
-  With more than one, the pull request's title becomes the commit's first line, so give
-  it the title you want `main` to carry; the maintainer reads it before confirming;
-- or with **Rebase and merge**, when the commits are worth keeping one by one: they land
-  as you wrote them, each with its own sign-off;
-- never with a merge commit. That method is switched off here;
-- a maintainer's own change comes in the same way: a pull request, the same checks, and
-  their own name on the commit.
+A maintainer reviews your pull request and, once its tests pass and every commit is
+signed off, lands it on `main` in the source repository through its merge queue. You stay
+the author of your commits, with your sign-offs, and the change appears here when the
+mirror next updates; the pull request is then closed with a link to the commit. A
+maintainer's own change goes through the same queue and the same checks.
 
 ## License: inbound = outbound
 
@@ -154,4 +146,6 @@ By making a contribution to this project, I certify that:
     this project or the open source license(s) involved.
 ```
 
-CI targets a wall clock of at most 15 minutes, including docs-only pull requests: every package test runs on Node 22 in twenty isolated, duration-balanced shards; Node 24 also checks package contracts, installs, MCP, payments and native/runtime integration in twelve shards. To reproduce one shard, run `npm ci`, `npm run build`, then `node scripts/ci-shards.mjs 0` (indices 0–19), or add `--compat` for a Node 24 shard (0–11). Chrome and the same optional service prerequisites as the full suite are needed for browser/service cases. `node scripts/ci-shards.mjs --list` prints the exact allocation. Download the run's `timings-node22-*` artifacts and run `node scripts/ci-shards.mjs --rebalance path/to/full-*.json` to update the committed timing weights (add `--compat` with the Node 24 artifacts for its separate weights). Each shard also checks its actual elapsed test time against eight minutes, after running every assigned file, and fails the required Packages gate if it exceeds that budget. The eleven-minute hard watchdog remains unchanged. A green rerun alone is not a timing fix: use first-attempt measurements, investigate failed or timed-out files rather than treating their cutoff as a weight, and split long files or rebalance before merging. The timing artifacts include per-file seconds and elapsed shard time; logs print `SHARD_DURATION`. New test files are discovered automatically and cannot disappear from the suite because they lack a timing entry. Long paced experiments remain in `npm run test:rules:extended`; CI does not move release tests there. A release requires all five Actions gates from one successful CI run on its exact commit, then repeats the changelog and packaging checks, without repeating the suite. DCO remains the independent sign-off check on pull requests.
+The full suite is split into duration-balanced shards. To reproduce one, run `npm ci`,
+`npm run build`, then `node scripts/ci-shards.mjs 0 --full`; `node scripts/ci-shards.mjs --list`
+prints the allocation. Long paced experiments stay in `npm run test:rules:extended`.

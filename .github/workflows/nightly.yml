@@ -1,9 +1,7 @@
-# Complete coverage on main nightly, on demand, and before every release.
+# The full suite publish.yml runs on the tagged commit before it publishes. It has no
+# trigger of its own: day-to-day checks and the merge queue run on homie-prod-ci.
 name: Full suite
 on:
-  schedule:
-    - cron: '23 8 * * *'
-  workflow_dispatch:
   workflow_call:
 
 permissions:

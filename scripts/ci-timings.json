@@ -335,7 +335,6 @@
     "packages/studio/test/delivery-recovery.test.mjs": 0.5,
     "packages/studio/test/private-scaffold.test.mjs": 1.9,
     "packages/studio/test/stripe-permissions.test.mjs": 0.8,
-    "scripts/ci-events.test.mjs": 0.2,
     "packages/studio/test/capacity-example.test.mjs": 0.2,
     "packages/studio/test/official-media.test.mjs": 0.5,
     "packages/studio/test/selling-evidence.test.mjs": 0.2,
