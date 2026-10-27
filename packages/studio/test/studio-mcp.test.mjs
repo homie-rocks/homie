@@ -82,6 +82,19 @@ test('remote seats cannot cross connections and revoked seats close before anoth
  }finally{DB.sql.close();}
 });
 
+test('a signed-in guest\'s AI sits as a guest under its own name; the owner\'s stays the studio\'s',async()=>{
+ const {roomSeat}=await import('../worker/mcp-room.mjs');const DB=database();
+ try{
+  DB.sql.exec("INSERT INTO mcp_connections VALUES('g-1','guest','client',1,0);INSERT INTO mcp_connections VALUES('o-1','owner','client',1,0)");
+  const sat=[];
+  const room={clients:new Map(),agentsAllowed:()=>true,attach(conn){const id=sat.length;sat.push(conn.agent);this.clients.set(id,{agent:conn.agent,seat:id,name:conn.agent.name});return {id,onMessage(){},onClose(){}};}};
+  const table={env:{DB},game:'pub',readVocab:async()=>{}};
+  await roomSeat(table,room,{args:{connection:'g-1',person:'guest',owner:false,name:'Maya\'s Claude',operation:'sit'}});
+  await roomSeat(table,room,{args:{connection:'o-1',person:'owner',owner:true,name:'Studio AI',operation:'sit'}});
+  assert.deepEqual(sat.map(a=>[a.by,a.name]),[['guest','Maya\'s Claude'],['studio','Studio AI']]);
+ }finally{DB.sql.close();}
+});
+
 test('remote MCP still refuses humans-only rooms, even to the studio owner',async()=>{
  const {remoteSeat}=await import('../worker/mcp-room.mjs');const DB=database();
  try{

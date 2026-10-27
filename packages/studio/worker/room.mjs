@@ -985,8 +985,9 @@ export class NetRoom {
     }
     let full = false;
     if (c.want === 'play' && !this.seatClient(c, resumeToken)) {
-      // The studio's own house guide (a loopback) makes way for an AI with a pass (the owner's Claude, say).
-      const house = c.agent && !c.conn.loopback ? this.live().find((o) => o.agent && o.conn.loopback && o.seat !== null) : null;
+      // The studio's own house guide (a loopback) makes way for the owner's AI (their Claude, say). A guest's AI waits
+      // for a free seat like anyone else: the guide the owner placed stays seated.
+      const house = c.agent && c.agent.by !== 'guest' && !c.conn.loopback ? this.live().find((o) => o.agent && o.conn.loopback && o.seat !== null) : null;
       if (house) {
         const seat = house.seat;
         this.error(house, 'agent-yield', 'an AI with a pass took this seat');

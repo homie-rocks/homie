@@ -27,7 +27,7 @@ export async function remoteSeat(env,cat,caller,op,args) {
     const joined=await lobbyFor(env,meta.id).fetch(`https://lobby/join?max=${max}&server=${serverId}&agent=1&ai=${policy.aiSeats+policy.guides}`,{method:'POST'});room=(await joined.json()).room;
   }
   if(!/^[A-Za-z0-9_-]{1,32}$/.test(room??''))throw new Error('No room with people; an AI never starts a room');
-  const ctl=await signControl(env,{op:'mcp-seat',game:meta.id,room,args:{...args,operation:op,connection:caller.connection,person:caller.id,name:caller.name??'Studio AI'}});
+  const ctl=await signControl(env,{op:'mcp-seat',game:meta.id,room,args:{...args,operation:op,connection:caller.connection,person:caller.id,owner:Boolean(caller.owner),name:caller.name??(caller.owner?'Studio AI':'Guest AI')}});
   const response=await env.TABLE.get(env.TABLE.idFromName(`${meta.id}/${room}`)).fetch(`https://table/__mcp?game=${meta.id}&room=${room}&max=${max}`,{method:'POST',body:JSON.stringify(ctl)});
   const result=await response.json();if(!response.ok)throw new Error(result.error??'room refused');return {...result,game:meta.id,room};
 }
@@ -42,7 +42,8 @@ export async function roomSeat(table,room,ctl) {
     for(const [id,old] of seats)if(old.closed)seats.delete(id);
     await table.readVocab(table.game);
     seat={closed:false,frames:[]};
-    const conn={ip:null,player:a.person,via:'p-'+a.person,agent:{pass:a.connection.replaceAll('-','').slice(0,16),role:'guide',hands:'host',by:'studio',name:a.name},send:text=>{seat.frames.push(JSON.parse(text));if(seat.frames.length>20)seat.frames.shift();},close:()=>{seat.closed=true;},buffered:()=>0};
+    // Labelled like a pass AI (agentFacts): the owner's own AI is the studio's, a signed-in guest's is its own.
+    const conn={ip:null,player:a.person,via:'p-'+a.person,agent:{pass:a.connection.replaceAll('-','').slice(0,16),role:'guide',hands:'host',by:a.owner?'studio':'guest',name:a.name},send:text=>{seat.frames.push(JSON.parse(text));if(seat.frames.length>20)seat.frames.shift();},close:()=>{seat.closed=true;},buffered:()=>0};
     seat.handle=room.attach(conn);seats.set(a.connection,seat);
     seat.handle.onMessage(JSON.stringify({t:'hello',v:1,rev:7,want:'play',canHost:false,agent:{hands:'host',role:'guide'}}));
   }
