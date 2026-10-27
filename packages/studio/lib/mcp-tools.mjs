@@ -26,7 +26,8 @@ import { renderCodex, newCodex } from './codex.mjs';
 import { demoGames, formatDemo } from './demo.mjs';
 import { formatStatus, setupStatus } from './doctor.mjs';
 import { editStudioFile, listFiles, readStudioFile, searchStudio, writeStudioFile } from './files.mjs';
-import { cliJob, findNode, getJob, installJob, installed, jobView, runningJobs, startJob, toolEnv, waitJob, which } from './jobs.mjs';
+import { cliJob, cliOf, findNode, getJob, installJob, installed, jobView, runningJobs, startJob, stepJobs, toolEnv, waitJob, which } from './jobs.mjs';
+import { endFeed } from './job-runner.mjs';
 import { Feed, currentId, publicFeed, readFeed, startProgress } from './progress.mjs';
 import { newStudio, slugify } from './scaffold.mjs';
 import { repoFromUrl, studioRepo } from './repo.mjs';
@@ -177,6 +178,13 @@ async function cli(ctx, root, label, args, { wait = ctx.waitMs, onEnd = null, cl
   const job = cliJob(root, label, args, { onEnd, ...(bin ? { cli: bin } : {}) });
   const ended = await waitJob(job, wait);
   return { ended, job, result: job.result };
+}
+
+/** Where a job an earlier server started may be: the studios, and where a clone or a sign-in runs. */
+function jobRoots(ctx) {
+  let studios = [];
+  try { studios = ctx.studios().map((s) => s.root); } catch { /* none */ }
+  return [ctx.current, ...studios, ctx.studiosDir, homedir()];
 }
 
 function stillRunning(job, what) {
@@ -404,13 +412,7 @@ async function feedForRun(ctx, root, { id, title }) {
 
 function endRun(root, run, state, note) {
   if (!run.auto) return;
-  try {
-    const feed = new Feed(root, run.build);
-    const doc = feed.doc;
-    if (!doc || doc.state !== 'running') return;
-    feed.change((d) => { for (const s of d.stages) if (s.state === 'pending') s.state = 'skipped'; });
-    feed.end(state, note);
-  } catch { /* the feed stays as it was */ }
+  endFeed(Feed, root, run.build, state, note);
 }
 
 function buildCard(ctx, root, found) {
@@ -439,23 +441,30 @@ function buildCard(ctx, root, found) {
   return ok(runLine ? `${runLine}\n${text}` : text, { kind: 'build', build: found.id, feed, jobs, run: runView, now: new Date().toISOString() });
 }
 
-/** Start a check / playtest / deploy: its feed first, then the work, and the card at once. */
+/**
+ * Start a check / playtest / deploy: its feed first, then the work, and the card at once. The steps run as one job
+ * (lib/jobs.mjs), which outlives this server and ends the feed itself; while this server is here it also keeps the
+ * run's own words (run.state, run.why, run.look) for the card.
+ */
 async function startRun(ctx, root, { kind, game, title, steps }) {
-  const run = { kind, title, state: 'running', ...(await feedForRun(ctx, root, { id: game ?? null, title })), jobs: [] };
+  const run = { kind, title, state: 'running', ...(await feedForRun(ctx, root, { id: game ?? null, title })), job: null };
+  Object.defineProperty(run, 'jobs', { get: () => (run.job ? stepJobs(run.job) : []) });
   ctx.runs.set(run.build, run);
-  const next = (i) => {
-    if (i >= steps.length) { run.state = 'passed'; endRun(root, run, 'passed', `${title}: done.`); if (kind === 'check' || kind === 'playtest') ctx.note(root).checked = true; return; }
-    const step = steps[i];
-    const job = cliJob(root, step.label, step.args, {
-      onEnd: (j) => {
-        step.after?.(j, run);
-        if (j.code !== 0 && !step.soft) { run.state = 'failed'; run.why = `${step.label}: ${whyOf(j)}`; endRun(root, run, 'failed', run.why); return; }
-        next(i + 1);
-      },
-    });
-    run.jobs.push(job);
-  };
-  next(0);
+  const node = findNode();
+  if (!node) throw new Error('Node.js is missing. AI: call setup_prepare, then retry this tool.');
+  run.job = startJob({
+    root, label: title, cmd: node.bin, json: true, env: toolEnv(),
+    steps: steps.map((step) => ({ label: step.label, args: [cliOf(root), ...step.args, '--json'], json: true, soft: step.soft })),
+    feed: run.auto ? { build: run.build, title } : null,
+    onEnd: (job) => {
+      const done = stepJobs(job);
+      done.forEach((j, n) => { try { steps[n]?.after?.(j, run); } catch { /* the run's result stands */ } });
+      const failed = done.find((j, n) => j.code !== 0 && !steps[n]?.soft);
+      if (failed || job.code !== 0) { run.state = 'failed'; run.why = failed ? `${failed.label}: ${whyOf(failed)}` : job.why ?? `exited with ${job.code}`; endRun(root, run, 'failed', run.why); return; }
+      run.state = 'passed'; endRun(root, run, 'passed', `${title}: done.`);
+      if (kind === 'check' || kind === 'playtest') ctx.note(root).checked = true;
+    },
+  });
   await new Promise((r) => setTimeout(r, 1500));
   return buildCard(ctx, root, feedFor(root, run.build));
 }
@@ -1090,7 +1099,7 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'preview_run', title: 'Run the site here',
-      description: 'Run the studio\'s whole site on this computer (pages, public rooms, the database) and give the addresses to open: the home page, and each game\'s Play page. Two browser tabs on a game are two players in the same room. It keeps running until preview_stop (or the app quits).',
+      description: 'Run the studio\'s whole site on this computer (pages, public rooms, the database) and give the addresses to open: the home page, and each game\'s Play page. Two browser tabs on a game are two players in the same room. It keeps running until preview_stop.',
       inputSchema: { type: 'object', properties: { game: str('Optional: the game to give the Play address of'), port: { type: 'number', description: 'Optional port (default: 8787, or the next free one)' }, ...STUDIO_ARG } },
       annotations: { title: 'Run the site here', ...RW },
       run: async (a) => {
@@ -1255,7 +1264,7 @@ export function toolDefs(ctx, avail = {}) {
       inputSchema:{type:'object',properties:{...STUDIO_ARG,live:{type:'boolean'},renew:{type:'boolean'}}},
       annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:true},
       run:async a=>{
-        const job=cliJob(ctx.root(a.studio),'Private Stripe webhook',['shop','webhook',...(a.live?['--live']:[]),...(a.renew?['--renew']:[])],{cli:join(PACKAGE_ROOT,'bin','homie-studio.mjs'),keep:false});
+        const job=cliJob(ctx.root(a.studio),'Private Stripe webhook',['shop','webhook',...(a.live?['--live']:[]),...(a.renew?['--renew']:[])],{cli:join(PACKAGE_ROOT,'bin','homie-studio.mjs')});
         await waitJob(job,Math.min(ctx.waitMs,1000));
         return ok('Follow studio_job. Its events contain any required Stripe pairing; a saved login needs no new approval.',{kind:'job',...jobView(job)});
       },
@@ -1269,7 +1278,7 @@ export function toolDefs(ctx, avail = {}) {
         const root=ctx.root(a.studio);
         mkdirSync(join(root,'.studio'),{recursive:true});
         writeFileSync(join(root,'.studio','booking-slots.json'),JSON.stringify(a.slots,null,2));
-        const job=cliJob(root,'Sync Stripe booking links',['shop','connect',...(a.live?['--live']:[])],{cli:join(PACKAGE_ROOT,'bin','homie-studio.mjs'),keep:false});
+        const job=cliJob(root,'Sync Stripe booking links',['shop','connect',...(a.live?['--live']:[])],{cli:join(PACKAGE_ROOT,'bin','homie-studio.mjs')});
         await waitJob(job,Math.min(ctx.waitMs,1000));
         return ok('Booking link sync started. Check studio_job for completion.',{kind:'job',...jobView(job)});
       },
@@ -1282,7 +1291,7 @@ export function toolDefs(ctx, avail = {}) {
       run: async (a) => {
         const root = ctx.root(a.studio);
         const args = ['shop', 'connect', ...(a.live ? ['--live'] : []), ...(a.renew ? ['--renew'] : [])];
-        const job = cliJob(root, 'Stripe connection', args, { cli: join(PACKAGE_ROOT, 'bin', 'homie-studio.mjs'), keep: false });
+        const job = cliJob(root, 'Stripe connection', args, { cli: join(PACKAGE_ROOT, 'bin', 'homie-studio.mjs') });
         const ended = await waitJob(job, Math.min(ctx.waitMs, 1000));
         ctx.status = null;
         if (ended && job.code !== 0) return fail(whyOf(job), { kind: 'job', ...jobView(job) });
@@ -1298,7 +1307,7 @@ export function toolDefs(ctx, avail = {}) {
         const root = ctx.root(a.studio);
         const need = needsInstall(ctx, root); if (need) return need;
         const bin = join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'wrangler.cmd' : 'wrangler');
-        const job = startJob({ root, label: 'Cloudflare sign-in (wrangler login)', cmd: bin, args: ['login'], keep: false });
+        const job = startJob({ root, label: 'Cloudflare sign-in (wrangler login)', cmd: bin, args: ['login'] });
         const ended = await waitJob(job, Math.min(ctx.waitMs, 40_000));
         ctx.status = null;
         if (!ended) return ok(`Cloudflare opened in the browser: approve it there (job ${job.id}). setup_status says when it is done.`, { kind: 'job', ...jobView(job) });
@@ -1461,8 +1470,9 @@ export function toolDefs(ctx, avail = {}) {
       inputSchema: { type: 'object', properties: { job: str('The job id (j_…)') }, required: ['job'] },
       annotations: { title: 'A job', ...RO },
       run: async (a) => {
-        const job = getJob(a.job);
-        if (!job) return fail(`no job ${a.job} (jobs end with the app; build_progress shows a build)`);
+        // A job outlives the server that started it: one an earlier server started is read from its studio.
+        const job = getJob(a.job, { roots: jobRoots(ctx) });
+        if (!job) return fail(`no job ${a.job} in these studios (build_progress shows a build)`);
         await waitJob(job, Math.min(ctx.waitMs, 30_000));
         const v = jobView(job, { lines: 20 });
         if (job.endedAt) ctx.status = null;
