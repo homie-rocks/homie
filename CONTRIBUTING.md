@@ -14,8 +14,9 @@ apps and games pick up a release by pinning its new version, like any studio.
 
 Before you open one:
 
-- run `npm ci && npm test`; `npm run test:plugin` and `npm run validate` if you changed
-  the plugin or a marketplace file. The merge queue checks the change again before it
+- run `npm ci && npm test` (the fast set); add `npm run test:heavy` if you touched
+  browser, media or rules-prediction code; `npm run test:plugin` and `npm run validate`
+  if you changed the plugin or a marketplace file. The merge queue checks the change again before it
   reaches main; a release only builds and publishes;
 - keep the change small, and say what you saw: the command you ran and what it printed;
 - an engine package's public modules are its API: a change that breaks a caller needs a
@@ -35,23 +36,22 @@ Before you open one:
   `v: 2` (see `packages/studio/netplay/NETPLAY.md`);
 - never put a key, token or password in an issue, a pull request or a test.
 
-The rules prediction release gate includes the full delay/loss/host matrix on virtual
-time and four real-Chrome smoke cases (about two minutes). The three moved starters
-add 54 virtual delay/loss/seed cases and three real-Chrome canvas smokes (about
-80 seconds). Their original eighteen real-time network cases run only in the
-extended suite. Chrome/Node tick-for-tick replay comparisons remain in the gate
-with virtual clocks, since they check cross-runtime agreement. Run
+`npm test` runs only the fast `*.test.mjs` files. The rules prediction checks that
+need real Chrome (`rules-prediction-chrome.heavy.mjs`,
+`rules-3d-prediction-chrome.heavy.mjs`, `rules-traffic-chrome.heavy.mjs`) are heavy
+tests: `CHROME_PATH=/path/to/chrome npm run test:heavy` runs their smoke cases with
+the rest of the heavy set. Chrome/Node tick-for-tick replay comparisons use virtual
+clocks, since they check cross-runtime agreement. Run
 `CHROME_PATH=/path/to/chrome npm run test:rules:extended` for the full real-time
 Chrome soak as well as the extended rules corpus. It also includes the full
 real-time traffic matrix, repeated browser handovers and the long 300-client
-spatial-delivery workload. The normal gate keeps two traffic handover cases for
-actual tab visibility and socket closure; rate/seed correctness uses virtual time. A focused repeated measurement is:
+spatial-delivery workload. A focused repeated measurement is:
 
 ```sh
 CHROME_PATH=/path/to/chrome ROOMS_FEEL_FILTER=60-browser ROOMS_FEEL_DELAY=300 \
 ROOMS_FEEL_LOSS=.1 ROOMS_FEEL_REPEATS=30 ROOMS_FEEL_CPU=6 \
 ROOMS_FEEL_RECEIPT=/tmp/prediction.json \
-node --test packages/studio/test/rules-prediction-chrome.test.mjs
+node --test packages/studio/test/rules-prediction-chrome.heavy.mjs
 ```
 
 `ROOMS_FEEL_CPU` sets Chrome's CPU slowdown for both pages; omit it for normal speed.
@@ -146,6 +146,6 @@ By making a contribution to this project, I certify that:
     this project or the open source license(s) involved.
 ```
 
-The package tests can be split into duration-balanced shards. To run one, run `npm ci`,
-`npm run build`, then `node scripts/ci-shards.mjs 0 --full`; `node scripts/ci-shards.mjs --list`
-prints the allocation. Long paced experiments stay in `npm run test:rules:extended`.
+`npm test` runs the fast set; `npm run test:heavy` adds the `*.heavy.mjs` files
+(browser, media and long-running checks) with `HOMIE_TEST_HEAVY=1`. Long paced
+experiments stay in `npm run test:rules:extended`.

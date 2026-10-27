@@ -503,7 +503,8 @@ From the repository root:
 ```sh
 npm ci
 npm run build
-CHROME_PATH=/path/to/chrome npm test
+npm test                                   # fast samples
+CHROME_PATH=/path/to/chrome npm run test:heavy  # adds runtime.heavy.mjs (workerd, Chrome, JSC)
 npm audit
 node --max-old-space-size=1536 packages/physics/scripts/cpu-profile.mjs
 CHROME_PATH=/path/to/chrome node --max-old-space-size=1536 packages/physics/scripts/studio-trial.mjs
@@ -518,7 +519,7 @@ studio and stops its server and browser afterwards.
 The measured scene had a 2,000 m floor, stairs, one character and 20 dynamic
 props: Chrome produced 60.00 fps over 599 measured frame intervals, 16.70 ms p95
 frame time and 0.60 ms p95 physics wall time, with no page errors (load 9.0).
-The runtime tests exercise workerd, a studio-built Chrome game and JavaScriptCore
+The runtime tests (`runtime.heavy.mjs`, run by `npm run test:heavy`) exercise workerd, a studio-built Chrome game and JavaScriptCore
 (on macOS, or via `JSC_PATH`), including a sample of the independent restore attack.
 Performance scripts report measurements; CPU tables are not timing assertions.
 

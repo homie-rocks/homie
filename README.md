@@ -47,7 +47,15 @@ address `https://homie.rocks/mcp`.
 **Claude desktop app:** the Homie Desktop Extension (`desktop/`) runs the toolkit locally.
 Download it from <https://homie.rocks/make/studio/desktop/>.
 
-**Command line:** `npx -y @homie-rocks/studio --help` lists the `homie-studio` commands.
+**Command line:** make a studio and open it locally:
+
+```sh
+npx -y @homie-rocks/studio@0.58.20 new ./my-studio --name "My Studio"
+cd my-studio && npm run dev
+```
+
+The site opens at http://127.0.0.1:8787/. `npx -y @homie-rocks/studio@0.58.20 --help`
+lists every command; inside a studio, run them as `npx --no-install homie-studio <command>`.
 `homie-studio mcp` runs the same toolkit as a local MCP server over stdio.
 
 Then ask for something, for example *"Make a game for my pub and put it online."*
@@ -92,12 +100,14 @@ part, not in the toolkit.
 
 ## Develop
 
-Node.js 22 or later. Some media tests need ffmpeg, and the browser checks need Chrome.
+Node.js 22 or later. The heavy set needs Chrome for its browser checks and ffmpeg for
+some media tests; the default set needs neither.
 
 ```sh
 npm ci
 npm run build          # tsc --build
-npm test               # build, then every package's tests
+npm test               # build, then the fast tests (*.test.mjs)
+npm run test:heavy     # opt-in: adds the heavy and browser tests (*.heavy.mjs)
 npm run test:plugin    # the plugin's skills, against stand-ins (no accounts, no money)
 npm run release:check  # what a release would publish
 ```

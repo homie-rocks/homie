@@ -1221,7 +1221,7 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'studio_deploy', title: 'Put the studio online',
-      description: 'Put the studio\'s site online on the studio\'s OWN Cloudflare account: one Worker, one D1 database and two Durable Objects, with its own resources. Call it with plan: true first and tell the person in two or three lines what it creates and costs. If Cloudflare is not signed in, cloudflare_login opens it in their browser to approve once. Runs in the background with the build card.',
+      description: 'Put the studio\'s site online on the studio\'s OWN Cloudflare account: one Worker (with its Durable Objects and two Queues) and one D1 database, with its own resources. Call it with plan: true first and tell the person in two or three lines what it creates and costs. If Cloudflare is not signed in, cloudflare_login opens it in their browser to approve once. Runs in the background with the build card.',
       inputSchema: { type: 'object', properties: { plan: { type: 'boolean', description: 'Only say what it will create and what it costs; change nothing' }, ownRoute: { type: 'boolean', description: 'Only after the plan or a deploy warned that another site\'s route on the studio\'s custom domain covers its hostname, and the person agreed: add the studio\'s own exact-host route (the one line the warning gives) and deploy. It never edits or removes any other route' }, ...STUDIO_ARG } },
       annotations: { title: 'Put the studio online', readOnlyHint: false, destructiveHint: false, openWorldHint: true }, _meta: ui(UI.build),
       run: async (a) => {

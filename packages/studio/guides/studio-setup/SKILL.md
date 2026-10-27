@@ -280,7 +280,7 @@ Music, Videos, Rooms and Posts, each once the studio has something in it, in the
 1. `npx wrangler whoami` in the studio folder. Not signed in: run `npx wrangler login` and tell the
    person in one line that Cloudflare opened in their browser and they should approve it (their own account). That is their only step. Never ask for or write an API key.
 2. Before the first deploy, `npx --no-install homie-studio deploy --plan`, and tell them its gist in two
-   or three lines: the resources (one Worker, one D1 database, two Durable Objects; no R2), the cost
+   or three lines: the resources (one Worker with its Durable Objects and two Queues, one D1 database; no R2), the cost
    (on your account), and what the directory stores. Then go on.
 3. `npm run deploy`. It creates the Worker and the D1 database named in `studio.json`, applies
    migrations, deploys, and reads the live site once, which makes the site claim itself in the

@@ -778,7 +778,7 @@ export function studioFiles({ name, slug, homie, template = false, kind = 'game'
     stats: { share: false },
   };
   const pkg = {
-    name: `${slug}-studio`,
+    name: /(^|-)studio$/.test(slug) ? slug : `${slug}-studio`, // "Playtest Studio" stays playtest-studio, not playtest-studio-studio
     private: true,
     type: 'module',
     scripts: { dev: 'homie-studio dev', build: 'homie-studio build', deploy: 'homie-studio deploy', check: 'homie-studio check', studio: 'homie-studio' },
@@ -1167,6 +1167,7 @@ export function newStudio(folder, { name, homie, slug: askedSlug, install = true
     writeFileSync(path, content);
     wrote.push(rel);
   }
+  wrote.sort(); // migrations (and every other file) in name order
   let git = 'already inside a git repository';
   if (!insideGit(dir)) {
     try { execFileSync('git', ['init', '-q'], { cwd: dir, stdio: 'ignore' }); git = 'initialised'; wrote.push('.git/'); } catch { git = 'git not found'; }
@@ -1196,7 +1197,7 @@ export function newStudio(folder, { name, homie, slug: askedSlug, install = true
     'only when the person asks for a game: start from a rules starter and implement the requested mechanic: npx --no-install homie-studio game new <id> --from gem-rush --name "<Game Name>"',
     'npm run dev   (the home page, "first game coming soon", at http://127.0.0.1:8787/; with a game: npx --no-install homie-studio check <id> --url http://127.0.0.1:8787)',
     'when the owner asks to publish: npm run deploy   (then studio_publish, or: npx --no-install homie-studio publish)',
-  ], online: 'Going online creates one Worker, one D1 database and two Durable Objects on your own Cloudflare account: free plan, no payment method, no R2. `npx --no-install homie-studio deploy --plan` says exactly what, and changes nothing.' };
+  ], online: 'Going online creates one Worker (with its Durable Objects and two Queues) and one D1 database on your own Cloudflare account: free plan, no payment method, no R2. `npx --no-install homie-studio deploy --plan` says exactly what, and changes nothing.' };
 }
 
 export const _test = { relative };

@@ -891,7 +891,7 @@ function unknownFlags(words, given) {
 async function main() {
   const [cmd, sub] = positional;
   if (!cmd || cmd === 'help' || flags.has('help')) {
-    const text = readFileSync(new URL(import.meta.url), 'utf8').split('*/')[0].split('\n').slice(1).map((l) => l.replace(/^ \* ?/, '')).join('\n');
+    const text = readFileSync(new URL(import.meta.url), 'utf8').split('*/')[0].split('\n').slice(1).filter((l) => l.trim() !== '/**').map((l) => l.replace(/^ \* ?/, '')).join('\n');
     process.stdout.write(`homie-studio ${STUDIO_VERSION}\n${text}\n`);
     return { ok: true, command: 'help' };
   }
