@@ -12,6 +12,8 @@
  *
  *   node scripts/studio-template-history.mjs            this checkout's template, as its package.json version
  *   node scripts/studio-template-history.mjs --git      also every commit that changed lib/scaffold.mjs, and every release tag
+ *   node scripts/studio-template-history.mjs --check    write nothing; exit 1, naming each entry, when the file is not
+ *                                                       what a run would write
  *
  * Run it whenever the template's text changes (a test fails until it has), and keep
  * every older version's entry: a studio made on it may still be upgraded.
@@ -24,11 +26,15 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PKG = join(ROOT, 'packages', 'studio');
-const OUT = join(PKG, 'lib', 'template-history.json');
+const at = process.argv.indexOf('--history');
+const OUT = at > 0 && process.argv[at + 1] ? process.argv[at + 1] : join(PKG, 'lib', 'template-history.json');
+const CHECK = process.argv.includes('--check');
 const { STAND_IN, namedPrint, templatePrint } = await import(pathToFileURL(join(PKG, 'lib', 'upgrade.mjs')));
 
 let history = { v: 1, versions: {} };
-try { history = JSON.parse(readFileSync(OUT, 'utf8')); } catch { /* a first run */ }
+let before = '';
+try { before = readFileSync(OUT, 'utf8'); history = JSON.parse(before); } catch { /* a first run */ }
+const was = JSON.parse(JSON.stringify(history.versions));
 
 async function printOf(dir) {
   const version = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).version;
@@ -79,5 +85,22 @@ if (process.argv.includes('--git')) {
 const { version, print, named } = await printOf(PKG);
 add(version, print, named);
 const sorted = Object.fromEntries(Object.entries(history.versions).sort(([a], [b]) => a.localeCompare(b, 'en', { numeric: true })));
-writeFileSync(OUT, `${JSON.stringify({ v: 1, about: 'Fingerprints of every studio template version (scripts/studio-template-history.mjs): homie-studio upgrade replaces a file or an AGENTS.md section only when it is exactly one of these. A version\'s named entries are for a studio the template itself names (lib/upgrade.mjs NAMED_IN_TEMPLATE), as that studio reads them.', versions: sorted }, null, 1)}\n`);
-process.stderr.write(`wrote ${OUT.slice(ROOT.length + 1)} (${Object.keys(sorted).join(', ')})\n`);
+const text = `${JSON.stringify({ v: 1, about: 'Fingerprints of every studio template version (scripts/studio-template-history.mjs): homie-studio upgrade replaces a file or an AGENTS.md section only when it is exactly one of these. A version\'s named entries are for a studio the template itself names (lib/upgrade.mjs NAMED_IN_TEMPLATE), as that studio reads them.', versions: sorted }, null, 1)}\n`;
+if (CHECK) {
+  // A template edited without this run leaves a studio made from it unrecognised: its untouched text would be kept as
+  // its own by every later upgrade. Say which entries are behind, and write nothing.
+  if (text === before) process.exit(0);
+  const behind = [];
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  for (const [v, entry] of Object.entries(sorted)) {
+    const old = was[v];
+    if (!old) { behind.push(`${v}: missing`); continue; }
+    for (const [f, h] of Object.entries(entry.files ?? {})) if (!same(old.files?.[f], h)) behind.push(`${v}: ${f}`);
+    for (const [s, h] of Object.entries(entry.sections?.['AGENTS.md'] ?? {})) if (!same(old.sections?.['AGENTS.md']?.[s], h)) behind.push(`${v}: AGENTS.md "${s}"`);
+    for (const [name, n] of Object.entries(entry.named ?? {})) if (!same(old.named?.[name], n)) behind.push(`${v}: as ${name} reads it`);
+  }
+  process.stderr.write(`${OUT.startsWith(ROOT) ? OUT.slice(ROOT.length + 1) : OUT} is behind this checkout's template (run node scripts/studio-template-history.mjs):\n${(behind.length ? behind : ['its layout']).map((b) => `  ${b}`).join('\n')}\n`);
+  process.exit(1);
+}
+writeFileSync(OUT, text);
+process.stderr.write(`wrote ${OUT.startsWith(ROOT) ? OUT.slice(ROOT.length + 1) : OUT} (${Object.keys(sorted).join(', ')})\n`);
