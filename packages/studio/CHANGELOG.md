@@ -28,6 +28,8 @@ A check, a playtest, a deploy or the site on your computer keeps going when the 
 ### Fixed
 
 - Long jobs (a check, a playtest, a deploy, an npm install, `preview_run`'s site, a sign-in or a Stripe webhook) run under a small supervisor of their own, with their state in `.studio/mcp/<job>.json`. They outlive the MCP server that started them, so a host that runs the server once per tool call, or quitting Claude Desktop, no longer stops them; `studio_job` reads a job an earlier server started, and a job whose process is gone is reported as failed, never as still running. The site keeps running until `preview_stop`. A finished job's files are removed a day later, when the next job starts in that studio.
+- A studio made from 0.58.20 is recognised again by `homie-studio upgrade`: the template history now knows the five AGENTS.md sections (Apps, Commands, Making games, Servers and AI seats, Selling things) as 0.58.20 shipped them, so their untouched text is upgraded instead of being kept as the studio's own. Packing the toolkit now fails if the template history is behind its template (`scripts/studio-template-history.mjs --check`).
+- The toolkit's own `npm test`, run from `packages/studio` on a fresh install, builds the workspace first and no longer depends on the working directory, so the collision, round-idle and selling-bundle tests run there as they do from the repo root.
 
 ## [0.58.20] - 2026-10-26
 

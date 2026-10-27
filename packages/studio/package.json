@@ -184,7 +184,7 @@
   "scripts": {
     "pretest": "tsc --build ../../tsconfig.json",
     "test": "node --test --test-concurrency=2 --test-timeout=1800000 test/*.test.mjs",
-    "prepack": "node lib/build-identity.mjs --check && node ../../scripts/authoring-guides.mjs --check"
+    "prepack": "node lib/build-identity.mjs --check && node ../../scripts/authoring-guides.mjs --check && node ../../scripts/studio-template-history.mjs --check"
   },
   "peerDependencies": {
     "@homie-rocks/physics": "0.1.2"
