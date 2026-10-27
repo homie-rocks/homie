@@ -43,7 +43,7 @@ Cloudflare creates DNS and TLS during deploy with the existing sign-in.
 
 ## Apps: one screen, roles and parts
 
-Plan apps with the same Codex mechanism as games: `codex new <id> --kind app` writes `apps/<id>/CODEX.md`. Read the packaged plan, app and playtest guides. Preserve the person’s words, scene, people, offers and testable needs; build that scene with engines, style, parts and media, then prove each need on wall and phone. Starters are plumbing, not completion.
+Plan apps with the same Codex mechanism as games: `codex new <id> --kind app` writes `apps/<id>/CODEX.md`. Read the packaged plan, app and playtest guides. Preserve the person’s words, scene, people, offers and testable needs; build that scene with engines, style, parts and media. Starters are plumbing, not completion.
 
 An app lives in `apps/<id>/app.json` and `src/`. Make one with `homie-studio app new <id>` (or `app_make`). Use the Homie plugin's `app` skill for businesses, venues, causes and customer apps. No game demo, rounds, scores, bots or mandatory fun: build what the person needs with the fewest human steps.
 
@@ -51,7 +51,7 @@ An app is ONE screen that morphs with context: camera moves, panels unfold, its 
 
 Declare roles, surfaces, words and lasting record collections in app.json. Netplay's host is not a staff permission. Use `@homie-rocks/studio/apps` for authorized lasting records and `@homie-rocks/studio/links` for ticket links, QR and HTTP-safe IDs. Staff use private role links plus existing account grants; keep private records out of public collections. Look for engine mechanisms and shared parts before writing a component. Credit licences; sharing is optional and separate from selling.
 
-Your studio also serves MCP at `/mcp`. Staff connect their own AI with their existing account and one browser approval; never ask them for a key. Add business actions with `homie-studio tool new <name> --app <id>`, keep their declared role narrow, and reuse the app's existing record IDs, field formats and versions. Customers can browse and buy through this same endpoint, and tools may declare a price using the studio's existing payments. Add event handlers with `homie-studio function new <name> --event order.paid`; read `node_modules/@homie-rocks/studio/functions/FUNCTIONS.md`. Test owner, staff and public calls locally. Read `node_modules/@homie-rocks/studio/tools/TOOLS.md` and the Homie plugin's `tools` skill.
+Your studio also serves MCP at `/mcp`. Staff connect their own AI with their existing account and one browser approval; never ask them for a key. Add business actions with `homie-studio tool new <name> --app <id>`, keep their declared role narrow, and reuse the app's existing record IDs, field formats and versions. Customers can browse and buy through this same endpoint, and tools may declare a price using the studio's existing payments. Add event handlers with `homie-studio function new <name> --event order.paid`; read `node_modules/@homie-rocks/studio/functions/FUNCTIONS.md`. Read `node_modules/@homie-rocks/studio/tools/TOOLS.md` and the Homie plugin's `tools` skill.
 
 Build normally, run `homie-studio dev --lan`, then `homie-studio check <id> --url <origin>`: the app check proves an actual action across a wall and two phones plus reconnect. The public screen is `/<id>/open`, the wall `/<id>/tv`. Customer apps use the same `standalone` build for desktop/iOS/Android; its existing sign-in and store limitations still apply. See `node_modules/@homie-rocks/studio/apps/APPS.md`.
 
@@ -118,7 +118,7 @@ studio's pinned copy, never a registry lookup of the bare name.
   bucket on the studio's own Cloudflare account. Cloudflare asks for a payment method on the account
   before R2 works, so this is a separate step the person agrees to; nothing else needs it. R2 has no
   egress fees; storage is free up to 10 GB-month, then US$0.015 per GB-month.
-- `npx --no-install homie-studio media move` (`--dry-run` first) — with storage, the big files of
+- `npx --no-install homie-studio media move` — with storage, the big files of
   published songs and videos (over 1 MiB, or left out of git; studio.json `media.r2Over` changes the
   size) go to R2: each is uploaded, read back and checked by SHA-256, and only then does the site stop
   carrying it; it keeps its address, and the file stays in this folder. Every `npm run deploy` does
@@ -231,8 +231,7 @@ studio's pinned copy, never a registry lookup of the bare name.
   the game's own: on a phone it raises copy/paste and the thumb's touch is lost. Call
   `guardGestures({ touch: 'canvas, [data-action]' })` from `@homie-rocks/studio/netplay` once, early: no
   selection, no callout, no pan or pinch on the gameplay surfaces; text fields, links and ordinary buttons keep the
-  browser's own behaviour (`NETPLAY.md` section 24). Try it with a real thumb on a real phone: emulated touch
-  does not raise the callout.
+  browser's own behaviour (`NETPLAY.md` section 24). Emulated touch does not raise the callout.
 - **The frame has no storage of its own.** The game runs in a sandboxed frame without `allow-same-origin` (a
   stranger's game must never read this site's storage or the owner's session), so `localStorage` throws inside it.
   A setting or a personal best goes in `net.prefs` (`net.prefs.string('quality', 'high')`, `net.prefs.number('volume', 0.8, { min: 0, max: 1 })` after `await net.prefs.ready`: the typed readers give your fallback for a missing key, never a null that turns into 0,
@@ -346,7 +345,7 @@ studio's pinned copy, never a registry lookup of the bare name.
 - **A server** is a named, lasting pool of rooms for one game, with its own policy and door. Strangers are matched
   only inside one server. Every game's `pub-N` rooms are its `public` server (Quick play), so old links keep
   working. A server's page is `/<id>/s/<server>/`; its rooms are `s-<server>-<n>`; `/<id>/servers/` lists them.
-- **Policies:** `open` (anyone; an AI with an agent pass may sit, always marked AI), `humans-only` (no AI of any
+- **Policies:** `open` (anyone; an AI may sit, always marked AI), `humans-only` (no AI of any
   kind; the game's bots are off unless `--bots fill`), `hybrid` (N seats in every room are AI companions),
   `beginner` (accounts under 30 days, AI guides, quick lines only, optionally `--kids`: handles only, the AI's
   level at most 3). **Doors:** `open`, `accounts` (a passkey account) or `invite` (`office invite` with
@@ -364,8 +363,9 @@ studio's pinned copy, never a registry lookup of the bare name.
   snippet is in `NETPLAY.md` section 17; `BotBrain` from the port kit reads it with a rebuild), and declare
   `caps: ['skill', 'agents']` in `createNetplay` (rules rooms provide the agent runtime). A build
   from before 0.16.0 still plays on every server; the office says it predates servers until it is rebuilt.
-- **Agent passes:** `npx --no-install homie-studio agents pass <id> --label Claude [--server <server>]` gives an
-  AI its way into a seat (shown once; `agents revoke <pass>` ends it). It sits with `POST /<id>/api/agent`
+- **An AI in a seat:** a signed-in person's own AI sits through this studio's `/mcp` (`agent_sit`), and the
+  owner's own through the local MCP's `agent_sit`. For an AI with no MCP connection,
+  `npx --no-install homie-studio agents pass <id> --label Claude [--server <server>]` gives it a seat (shown once; `agents revoke <pass>` ends it). It sits with `POST /<id>/api/agent`
   (Bearer pass), only in a room with people in it, and never on a humans-only server.
 - **AI guides that talk (0.17.0):** a beginner server's guides get a brain. A game's own words for them are
   `games/<id>/agents.json` (its vocabulary: goals, lines, the asks a player taps; the build checks it), and
@@ -381,7 +381,7 @@ studio's pinned copy, never a registry lookup of the bare name.
   picks among the vocabulary's goals, values and lines; it never writes text; about 9 neurons a decision).
   `agents try <id> --view <file> [--ask …] [--model …]` shows what the brain would decide in one moment. Under
   `npm run dev`, Clef on this computer (Ollama with `clef-flash`) runs the guides, chat review and game
-  decisions for free when it is here; **never download it without the person's yes** (`ollama pull clef-flash` is
+  decisions for free when it is here; pull it only when the person wants Clef, and say its size in one line (`ollama pull clef-flash` is
   about 11 GB). A game whose game.json says `"decide": true` may ask `net.decide(state, questions, { floor })`
   on the host (`NETPLAY.md` section 20): per beat or per turn, never per frame.
 
@@ -408,7 +408,7 @@ where it sells and for Stripe's terms. Homie takes no cut.
   The Worker stores only links and a signing secret; buying needs no API key or running AI.
   Rerun `shop connect` after shop.json changes; use `shop connect --renew` if approval needs renewal.
   Verify a test purchase, signed webhook, item grant, and a refund in Stripe or through the connected AI.
-  Never ask a person for a key. An existing Worker key selects the fuller cart/cap/refund path;
+  An existing Worker key selects the fuller cart/cap/refund path;
   explain it only when those features are requested. Never silently choose `--manual`. Live only on request.
   A lost webhook stays pending: ask Stripe to resend it. Free orders need no Stripe.
   Never create secret-returning webhooks through conversation MCP tools; connect captures secrets privately.

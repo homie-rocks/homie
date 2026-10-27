@@ -15,7 +15,7 @@
  *   io.exists(path) → boolean          io.read(path) → text (throws when missing)
  *   io.stat(path, { resolve }) → { kind, size, realPath?, mtimeMs }
  *   io.list(dir) → [{ name, kind }]    io.run(argv, { cwd, timeoutMs }) → { exitCode, stdout }
- *   io.fetchJson(url) → value | null  (only Ollama's model list on this computer, before a Clef download)
+ *   io.fetchJson(url) → value | null  (only Ollama's model list on this computer, for a Clef download's line)
  * `io.run` is asked only for `git -C <studio>` (read-only) and a media skill's own `--dry-run` (free). Nothing here
  * writes a file, reads a key, the keychain or the environment, or approves anything.
  */
@@ -217,8 +217,8 @@ export function claudeEditOf(tool, input) {
 const BIG_FILE = 5 * 1024 * 1024;
 
 /**
- * A `git add` or `git commit` in a studio that would put a file over 5 MB under games/ into git: refused, naming each
- * file and its size. What gets staged is read from git itself (read-only): the index for a commit, `status` for a
+ * A `git add` or `git commit` in a studio that would put a file over 5 MB under games/ into git: a warning (it still
+ * runs), naming each file and its size, with where big files go. What gets staged is read from git itself (read-only): the index for a commit, `status` for a
  * folder or `-A`; the sizes from the files.
  */
 export async function bigFilesDecision(io, ctx, stages) {
@@ -276,7 +276,7 @@ export async function bigFilesDecision(io, ctx, stages) {
   }
   if (!big.size) return null;
   const named = [...big.values()].map((b) => `${b.rel} (${(b.size / 1024 / 1024).toFixed(1)} MB)`);
-  return { deny: `Not run: ${named.join(', ')} ${big.size === 1 ? 'is' : 'are'} over 5 MB under games/, and a studio keeps big files out of git. Big files go to the studio's R2 (homie-studio storage add, then media move); raw models stay in art/<slug>/raw/ (git-ignored); a shipped model is made phone-sized with homie-studio assets optimise.` };
+  return { note: `${named.join(', ')} ${big.size === 1 ? 'is' : 'are'} over 5 MB under games/: a studio keeps big files out of git. Big files go to the studio's R2 (homie-studio storage add, then media move); raw models stay in art/<slug>/raw/ (git-ignored); a shipped model is made phone-sized with homie-studio assets optimise.` };
 }
 
 /* ------------------------------------------------------------------ deploys */
@@ -528,10 +528,9 @@ export function ollamaBase(host) {
 }
 
 /**
- * A Clef model downloaded through Ollama (lib/commands.mjs says which): held until the person says Proceed, with its
- * size. Homie never downloads a model by itself. `ollama run` downloads only a model Ollama does not have, so it goes
- * through when Ollama's own list on this computer (GET /api/tags, loopback only) already has that model; a pull is
- * always held (it fetches a newer copy when there is one).
+ * A Clef model downloaded through Ollama (lib/commands.mjs says which): it runs, with one line saying its size. `ollama
+ * run` downloads only a model Ollama does not have, so it says nothing when Ollama's own list on this computer
+ * (GET /api/tags, loopback only) already has that model.
  */
 export async function modelPullDecision(io, pull) {
   const base = ollamaBase(pull.host);
@@ -540,31 +539,7 @@ export async function modelPullDecision(io, pull) {
   const want = `${pull.model}:${pull.tag ?? 'latest'}`;
   const have = names ? names.includes(want) || (!pull.tag && names.includes(pull.model)) : false;
   if (pull.verb === 'run' && have) return null;
-  const here = have ? 'already on this computer: a pull fetches a newer copy when there is one' : names ? 'not on this computer yet' : 'Ollama did not say (not running, or not on its usual port)';
-  return {
-    hold: {
-      kind: 'model',
-      question: `Download ${pull.model} (${pull.size}) to this computer with Ollama?`,
-      title: `Download ${pull.model}, ${pull.size.replace(/^about /, '~')}`,
-      lines: [
-        { k: 'Size', v: `${pull.size} on this computer's disk`, style: { color: 'yellow', bold: true } },
-        { k: 'Model', v: `${pull.ref} (Clef, ${pull.params})` },
-        { k: 'Here', v: here },
-      ],
-      detail: {
-        lines: [
-          { k: 'Size', v: `${pull.size}, downloaded to this computer's disk`, style: { color: 'yellow', bold: true } },
-          { k: 'Model', v: `${pull.ref}: Cloudflare's Clef decision model, the ${pull.params}, through Ollama` },
-          { k: 'Here', v: here },
-          { k: 'Call', v: String(pull.text ?? '').slice(0, 300) },
-          'Homie never downloads a model by itself: the person says yes to the size first. Without it, AI guides and game decisions under dev play from the game\'s script, and the deployed studio still thinks with its own Workers AI.',
-          'Proceed lets this one download through. Cancel stops it here.',
-        ],
-      },
-      no: `The person said no to downloading ${pull.model} (${pull.size}). Do not retry it unless they ask for it; under dev the guides and game decisions play from the game's script without it.`,
-      nobody: `This downloads ${pull.model} (${pull.size}) to this computer and nobody could be asked here, so it did not run. Ask the person first, and say the size.`,
-    },
-  };
+  return { note: `downloading ${pull.model} (${pull.size}) to this computer's disk with Ollama${have ? ' (it is here already: a pull fetches a newer copy when there is one)' : ''}.` };
 }
 
 /* ------------------------------------------------------------------ one call, in the order both apps check it */
@@ -572,17 +547,21 @@ export async function modelPullDecision(io, pull) {
 /**
  * A shell command line, checked as the mod's Bash guard checks it: big files into git, a production deploy (refused
  * for an unlicensed asset, else held), a change to the Cloudflare account outside the deploy, a paid call, a Clef
- * download. { decision, deploy: { root } | null }: `deploy` is set when the command is a studio's deploy (the mod
+ * download (a line saying its size). { decision, deploy: { root } | null }: `deploy` is set when the command is a studio's deploy (the mod
  * records the commit after it ran), and then nothing after the deploy is checked. `known` is what the caller knows
  * about a deploy (deployFacts), or a function of the deploy's studio folder that gives it.
  */
 export async function shellDecision(io, ctx, command, known = {}) {
   const g = ctx.guards;
   const stages = g.guardFiles ? gitStagesOf(command) : [];
-  if (stages.length) {
-    const big = await bigFilesDecision(io, ctx, stages);
-    if (big) return { decision: big, deploy: null };
-  }
+  // A warning (big files into git) never stops the checks after it: a deploy or a paid call in the same line is still held.
+  const big = stages.length ? await bigFilesDecision(io, ctx, stages) : null;
+  const r = await laterDecision(io, ctx, command, known, g);
+  if (big && (!r.decision || r.decision.note)) r.decision = r.decision?.note ? { note: `${big.note} Also: ${r.decision.note}` } : big;
+  return r;
+}
+
+async function laterDecision(io, ctx, command, known, g) {
   const deploy = g.guardDeploys ? deployOf(command) : null;
   if (deploy) {
     const root = await studioFor(io, ctx, deploy.dir);

@@ -264,7 +264,7 @@ export async function setupStatus({
         : seen ? `off: Homie's hooks last ran in ${name} ${ago(seen.ageMs)} ago, and not for this session's calls`
           : `off: Homie's hooks have not run in ${name} on this computer`,
       ...(seen ? { seen: { at: new Date(seen.at).toISOString(), event: seen.event } } : {}),
-      unlocks: 'a wait for your own "proceed <code>" before a production deploy, an edit to a file the studio protects, a Cloudflare change outside the deploy, a paid call past the budget and a model download; and secrets taken out of what your AI reads',
+      unlocks: 'a wait for your own "proceed <code>" before a production deploy, an edit to a file the studio protects, a Cloudflare change outside the deploy, and a paid call past the budget; and secrets taken out of what your AI reads',
       fix: on ? null : {
         who: 'person',
         say: app === 'codex'

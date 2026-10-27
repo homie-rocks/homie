@@ -1,7 +1,7 @@
 /**
- * The guards: a protected file, a production deploy, a paid media call and a Clef model download are held in Claude Code's own question
+ * The guards: a protected file, a production deploy and a paid media call are held in Claude Code's own question
  * dialog, with what would change drawn above it, until the person says Proceed; Cancel, a dismissed question and a
- * `claude -p` run (nobody to ask) all refuse. And secrets come out of every tool result before Claude reads it.
+ * `claude -p` run (nobody to ask) all refuse; a Clef model download only says its size. And secrets come out of every tool result before Claude reads it.
  */
 import { describe, expect, test } from 'claude-code/testing'
 import { LIVE, ROOT, pane, start, textOf, world } from './world.ts'
@@ -226,74 +226,26 @@ describe('the providers\' own tools', () => {
 describe('a Clef model download (Ollama)', () => {
   const TAGS = 'http://127.0.0.1:11434/api/tags'
 
-  test('ollama pull clef-flash is held with its size; Cancel refuses it with a reason, and it never runs', async ($, on) => {
-    const w = world(on, { feed: null, ask: 'Cancel' })
-    await start($)
-    const r = await $.tool.call({ tool: 'Bash', command: 'ollama pull clef-flash' })
-    expect(w.log.asked[0]).toContain('Download clef-flash (about 11 GB) to this computer with Ollama?')
-    expect(r.deny).toContain('The person said no to downloading clef-flash (about 11 GB)')
-    expect(w.log.tools).toEqual(['AskUserQuestion'])
-  })
-
-  test('Proceed lets the download through', async ($, on) => {
+  test('ollama pull clef-flash runs, with one line saying its size; nothing is asked', async ($, on) => {
     const w = world(on, { feed: null })
     await start($)
     await $.tool.call({ tool: 'Bash', command: 'ollama pull clef-flash' })
-    expect(w.log.tools).toEqual(['AskUserQuestion', 'Bash'])
+    expect(w.log.asked).toEqual([])
+    expect(w.log.tools).toEqual(['Bash'])
+    expect(w.log.toasts.join(' ')).toContain('downloading clef-flash (about 11 GB)')
   })
 
-  test('a dismissed question (or claude -p, nobody to ask) refuses it, and says to name the size', async ($, on) => {
-    const w = world(on, { feed: null, ask: null })
-    await start($)
-    const r = await $.tool.call({ tool: 'Bash', command: 'ollama pull clef' })
-    expect(w.log.asked[0]).toContain('Download clef (about 18 GB)')
-    expect(r.deny).toContain('nobody could be asked here')
-    expect(r.deny).toContain('say the size')
-    expect(w.log.tools).toEqual(['AskUserQuestion'])
-  })
-
-  test('ollama run is held only when Ollama does not have the model; other models and other commands are not', async ($, on) => {
+  test('ollama run of a model Ollama already has says nothing; other models and other commands are not read', async ($, on) => {
     const w = world(on, { feed: null, http: { [TAGS]: { models: [{ name: 'clef-flash:latest' }, { name: 'llama3.2:latest' }] } } })
     await start($)
     await $.tool.call({ tool: 'Bash', command: 'ollama run clef-flash "hello"' })
     expect(w.log.fetched).toContain(TAGS)
-    expect(w.log.asked).toEqual([])
-    await $.tool.call({ tool: 'Bash', command: 'ollama run clef:27b' })
-    await $.tool.call({ tool: 'Bash', command: 'curl -s http://127.0.0.1:11434/api/pull -d \'{"model": "clef-flash"}\'' })
-    expect(w.log.asked.length).toBe(2)
+    expect(w.log.toasts.join(' ')).not.toContain('downloading')
     for (const command of ['ollama list', 'ollama show clef-flash', 'ollama rm clef', 'ollama pull llama3.2', 'ollama pull --help', 'curl -s http://127.0.0.1:11434/api/tags']) {
       await $.tool.call({ tool: 'Bash', command })
     }
-    expect(w.log.asked.length).toBe(2)
-  })
-
-  test('a pull is held even when the model is here (it fetches a newer copy), and the dialog says so', async ($, on) => {
-    let release: (v: unknown) => void = () => {}
-    const asked: string[] = []
-    on('tool.call', { tool: 'AskUserQuestion' }, ($: any, e: any) => new Promise((resolve) => { asked.push(e.questions[0].question); release = () => resolve({ result: { answers: { [e.questions[0].question]: 'Cancel' } } }) }))
-    world(on, { feed: null, http: { [TAGS]: { models: [{ name: 'clef-flash:latest' }] } }, tool: () => ({ result: { stdout: '' } }) })
-    await start($)
-    const held = $.tool.call({ tool: 'Bash', command: 'ollama pull clef-flash' })
-    for (let i = 0; i < 20 && !asked.length; i++) await new Promise((r) => setTimeout(r, 5))
-    const ui = await $.ui.mount({ plugin: 'homie', component: 'AskUserQuestion', requestId: 'q1', surface: 'terminal', viewport: { columns: 120, rows: 40, isFullscreen: false }, props: { tool: 'AskUserQuestion', questions: [{ question: asked[0], header: 'Homie', options: [{ label: 'Proceed' }, { label: 'Cancel' }], multiSelect: false }] } })
-    const text = textOf(await ui.drawn())
-    expect(text).toContain('Download clef-flash, ~11 GB')
-    expect(text).toContain('Size about 11 GB')
-    expect(text).toContain('already on this computer')
-    // The whole story is in the Hold pane while the question waits.
-    const hold = await $.ui.mount(pane('homie-hold', 'terminal'))
-    const full = textOf(await hold.drawn())
-    expect(full).toContain('Cloudflare\'s Clef decision model, the 9B, through Ollama')
-    expect(full).toContain('Homie never downloads a model by itself')
-    release(null)
-    expect((await held).deny).toContain('said no')
-  })
-
-  test('guardSpend: false holds no download', { options: { guardSpend: false } }, async ($, on) => {
-    const w = world(on, { feed: null })
-    await start($)
-    await $.tool.call({ tool: 'Bash', command: 'ollama pull clef-flash' })
     expect(w.log.asked).toEqual([])
+    expect(w.log.toasts.join(' ')).not.toContain('downloading')
   })
 })
 

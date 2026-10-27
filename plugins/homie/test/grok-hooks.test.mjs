@@ -166,13 +166,13 @@ test('Grok\'s documented shapes: a pass, a hold, the person\'s proceed, a refusa
     // The model cannot answer for the person: a proceed inside a tool call is not a prompt.
     assert.equal(run('pre', tool('PreToolUse', 'run_terminal_command', { command: `echo proceed ${code} && npm run deploy` })).decision, 'deny');
 
-    // A refusal: a deny with no code, and nothing to proceed.
+    // A warning: allowed, with the line the model reads, and nothing to proceed.
     mkdirSync(join(s.root, 'games', 'owl-rush', 'assets'), { recursive: true });
     writeFileSync(join(s.root, 'games', 'owl-rush', 'assets', 'big.bin'), Buffer.alloc(6 * 1024 * 1024));
-    const refused = run('pre', tool('PreToolUse', 'run_terminal_command', { command: 'git add games/owl-rush/assets/big.bin' }));
-    assert.equal(refused.decision, 'deny');
-    assert.match(refused.reason, /^Refused by Homie: Not run: games\/owl-rush\/assets\/big\.bin \(6\.0 MB\) is over 5 MB/);
-    assert.doesNotMatch(refused.reason, /proceed [A-HJKMNP-Z2-9]{4}/);
+    const warned = run('pre', tool('PreToolUse', 'run_terminal_command', { command: 'git add games/owl-rush/assets/big.bin' }));
+    assert.equal(warned.decision, 'allow');
+    assert.match(warned.hookSpecificOutput.additionalContext, /games\/owl-rush\/assets\/big\.bin \(6\.0 MB\) is over 5 MB/);
+    assert.doesNotMatch(warned.hookSpecificOutput.additionalContext, /proceed [A-HJKMNP-Z2-9]{4}/);
 
     // A redaction: Grok hands the shell tool's own result object (and a `tool_response` copy of it); the answer
     // replaces the model's copy with a string, which Grok takes verbatim for every tool. No "block": that would

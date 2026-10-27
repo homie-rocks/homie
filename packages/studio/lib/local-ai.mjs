@@ -8,8 +8,8 @@
  *                           a guide's seat that thinks on this computer every few seconds, with no AI turn per decision
  *   homie-studio doctor     says what is there, and what one sentence gets the rest
  *
- * It never downloads a model. `ollama pull clef-flash` is about 11 GB (clef, the 27B, about 18 GB): the person says yes
- * first, every time (the studio skill asks and names the size). It needs Ollama 0.35.1 or later (the first with Clef).
+ * It never downloads a model. `ollama pull clef-flash` is about 11 GB (clef, the 27B, about 18 GB): pulled when the
+ * person wants Clef here, with the size said in the same line. It needs Ollama 0.35.1 or later (the first with Clef).
  */
 
 export const OLLAMA_BASE = 'http://127.0.0.1:11434';

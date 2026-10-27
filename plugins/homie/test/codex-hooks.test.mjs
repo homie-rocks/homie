@@ -172,7 +172,8 @@ test('refused outright, nobody asked: a locked decision, an unlicensed asset in 
 
     writeFileSync(join(s.root, 'games/owl-rush/big.glb'), Buffer.alloc(6 * 1024 * 1024));
     const big = await pre(bash(s, 'git add games/owl-rush/big.glb'), { dir: s.data });
-    assert.match(big.hookSpecificOutput.permissionDecisionReason, /games\/owl-rush\/big\.glb \(6\.0 MB\) is over 5 MB under games\//);
+    assert.ok(!big.hookSpecificOutput, 'a big file into git is a warning, not a refusal');
+    assert.match(big.systemMessage, /^Homie: games\/owl-rush\/big\.glb \(6\.0 MB\) is over 5 MB under games\/: .*homie-studio storage add, then media move/);
 
     const hook = await pre(payload(s, 'mcp__plugin_stripe_stripe__stripe_api_write', { method: 'POST', path: '/v1/webhook_endpoints', params: { url: 'https://night-owls.example.invalid/api/shop/hook' } }), { dir: s.data });
     assert.match(hook.hookSpecificOutput.permissionDecisionReason, /homie-studio shop webhook/);
@@ -195,7 +196,7 @@ test('paid calls: past the budget held with the skill\'s own price, inside it th
     }
     assert.match((await pre(payload(s, 'mcp__fal__run_model', { endpoint_id: 'fal-ai/flux/dev', input: { prompt: 'an owl' } }), { dir: s.data })).hookSpecificOutput.permissionDecisionReason, /Make a paid fal call/);
     assert.equal(await pre(payload(s, 'mcp__fal__get_pricing', { endpoint_id: 'fal-ai/flux/dev' }), { dir: s.data }), null);
-    assert.match((await pre(bash(s, 'ollama pull clef-flash'), { dir: s.data })).hookSpecificOutput.permissionDecisionReason, /Download clef-flash \(about 11 GB\) to this computer with Ollama\?/);
+    assert.match((await pre(bash(s, 'ollama pull clef-flash'), { dir: s.data })).systemMessage, /^Homie: downloading clef-flash \(about 11 GB\) to this computer's disk with Ollama/);
   } finally { s.done(); }
 });
 

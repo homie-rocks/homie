@@ -506,26 +506,29 @@ describe('the raw-file guard (a file over 5 MB under games/ into git)', () => {
     return { exitCode: 0, stdout: '', stderr: '' }
   }
 
-  test('git commit refuses a staged 6 MB file, naming it and its size, with the R2 route', async ($, on) => {
+  test('git commit of a staged 6 MB file runs, with a warning naming it and its size, and the R2 route', async ($, on) => {
     const w = world(on, { feed: null, files, sizes, run: git({ 'diff --cached --name-only -z': 'games/owl-rush/raw/owl-hd.glb\0games/owl-rush/public/models/owl.glb\0' }) })
     await start($)
-    const r = await $.tool.call({ tool: 'Bash', command: 'git commit -m "the owl, in HD"' })
-    expect(r.deny).toContain('games/owl-rush/raw/owl-hd.glb (6.0 MB)')
-    expect(r.deny).not.toContain('owl.glb (')
-    expect(r.deny).toContain('homie-studio storage add, then media move')
-    expect(r.deny).toContain('art/<slug>/raw/ (git-ignored)')
-    expect(r.deny).toContain('homie-studio assets optimise')
-    expect(w.log.tools).toEqual([])
+    await $.tool.call({ tool: 'Bash', command: 'git commit -m "the owl, in HD"' })
+    const said = w.log.toasts.join(' ')
+    expect(said).toContain('games/owl-rush/raw/owl-hd.glb (6.0 MB)')
+    expect(said).not.toContain('owl.glb (')
+    expect(said).toContain('homie-studio storage add, then media move')
+    expect(said).toContain('art/<slug>/raw/ (git-ignored)')
+    expect(said).toContain('homie-studio assets optimise')
+    expect(w.log.tools).toEqual(['Bash'])
     expect(w.log.ran.every((a) => a[0] === 'git' && ['rev-parse', 'diff', 'status'].includes(a[3]))).toBe(true)
   })
 
   test('git add of a named file, of a folder, and -A are read the same way', async ($, on) => {
     const w = world(on, { feed: null, files, sizes, run: git({ 'status --porcelain -z --untracked-files=all': '?? games/owl-rush/raw/owl-hd.glb\0 M games/owl-rush/game.json\0' }) })
     await start($)
-    expect((await $.tool.call({ tool: 'Bash', command: 'git add games/owl-rush/raw/owl-hd.glb' })).deny).toContain('owl-hd.glb (6.0 MB)')
-    expect((await $.tool.call({ tool: 'Bash', command: 'cd games && git add owl-rush' })).deny).toContain('owl-hd.glb (6.0 MB)')
-    expect((await $.tool.call({ tool: 'Bash', command: 'git add -A && git commit -m "all of it"' })).deny).toContain('owl-hd.glb (6.0 MB)')
-    expect(w.log.tools).toEqual([])
+    for (const command of ['git add games/owl-rush/raw/owl-hd.glb', 'cd games && git add owl-rush', 'git add -A && git commit -m "all of it"']) {
+      const before = w.log.toasts.length
+      await $.tool.call({ tool: 'Bash', command })
+      expect(w.log.toasts.slice(before).join(' ')).toContain('owl-hd.glb (6.0 MB)')
+    }
+    expect(w.log.tools).toEqual(['Bash', 'Bash', 'Bash'])
   })
 
   test('small files under games/, and big ones outside it, pass', async ($, on) => {

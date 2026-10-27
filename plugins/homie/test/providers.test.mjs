@@ -145,11 +145,11 @@ test('the Homie mod\'s guards know every provider\'s paid and account-changing t
       assert.equal(paidMcpOf(`mcp__${m.name}__get_pricing`, {}), null, `${m.name}: reading a price is free`);
     }
   }
-  // Ollama costs nothing, but a model is gigabytes on the person's disk: a pull of Clef is held with its size, and the
-  // size the hold names is the one providers.json says.
+  // Ollama costs nothing, but a model is gigabytes on the person's disk: a pull of Clef says its size, and the size
+  // it names is the one providers.json says.
   const pull = modelPullOf('ollama pull clef-flash');
-  assert.equal(pull?.size, 'about 11 GB', 'ollama pull clef-flash is held, with its size');
-  assert.ok(r.ollama.cli.homieUses.includes(`ollama pull clef-flash\` only after the person's yes (${pull.size})`), 'providers.json names the same size');
+  assert.equal(pull?.size, 'about 11 GB', 'ollama pull clef-flash says its size');
+  assert.ok(r.ollama.cli.homieUses.includes(`ollama pull clef-flash\` when the person asked for Clef or AI play, saying its size first (${pull.size})`), 'providers.json names the same size');
   for (const free of [r.ollama.cli.signIn, 'ollama list', 'ollama show clef-flash']) assert.equal(modelPullOf(free), null, `ollama: ${free} is free`);
   for (const m of r.cloudflare.mcp) {
     const del = cloudflareMcpChangeOf(`mcp__plugin_cloudflare_${m.name}__d1_database_delete`, { database_id: 'x' });

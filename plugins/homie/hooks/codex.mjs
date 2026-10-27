@@ -22,7 +22,7 @@ import { deployIntent } from './lib/deploy-intent.mjs';
  *
  * It reads the studio's own files, `git -C <studio>` (read-only), a media skill's own `--dry-run` price (free), the
  * studio's own live site (its games and rooms, before a deploy) and Ollama's model list on this computer (loopback,
- * before a Clef download). It writes only its own holds and deploy record, in the plugin's data folder (PLUGIN_DATA),
+ * before a Clef download, to say its size). It writes only its own holds and deploy record, in the plugin's data folder (PLUGIN_DATA),
  * and a dated mark that the hooks ran (`mark` below), in this user's cache. It never reads a key file or the keychain.
  * Settings: HOMIE_GUARD_FILES, HOMIE_GUARD_DEPLOYS, HOMIE_GUARD_SPEND and HOMIE_REDACT_SECRETS set to "off" (or 0,
  * false, no) turn that part off, like the mod's settings of the same names.

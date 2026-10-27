@@ -250,12 +250,12 @@
         "name": "ollama",
         "install": "https://ollama.com/download (0.35.1 or later, the first with Clef)",
         "signIn": "none",
-        "homieUses": "GET /api/version and /api/tags (detection); POST /v1/systemone (Clef's questions); `ollama pull clef-flash` only after the person's yes (about 11 GB)",
+        "homieUses": "GET /api/version and /api/tags (detection); POST /v1/systemone (Clef's questions); `ollama pull clef-flash` when the person asked for Clef or AI play, saying its size first (about 11 GB)",
         "docs": "https://ollama.com/library/clef-flash"
       },
       "mcp": [],
       "homieKeeps": [
-        "never downloads a model without the person's yes, with the size said first (clef-flash about 11 GB; clef, the 27B, about 18 GB); the Homie mod holds a pull until they say Proceed",
+        "downloads a model only when the person asked for Clef or AI play, with the size said in one line (clef-flash about 11 GB; clef, the 27B, about 18 GB)",
         "only a loopback address (Ollama's own port on this computer, or the loopback port HOMIE_OLLAMA names): a game's state never goes to another machine",
         "the same questions and fixed rules as Workers AI: the vocabulary's ids only, an ask answered the way agents.json says, the game's floor whenever it cannot answer"
       ]

@@ -14,9 +14,9 @@ apps and games pick up a release by pinning its new version, like any studio.
 
 Before you open one:
 
-- run `npm ci && npm test` (the fast set); add `npm run test:heavy` if you touched
-  browser, media or rules-prediction code; `npm run test:plugin` and `npm run validate`
-  if you changed the plugin or a marketplace file. The merge queue checks the change again before it
+- run `npm ci && npm run build`, plus the tests for what you changed (`npm test` is the
+  fast set; `npm run test:heavy` for browser, media or rules-prediction code;
+  `npm run test:plugin` and `npm run validate` for the plugin or a marketplace file). The merge queue checks the change again before it
   reaches main; a release only builds and publishes;
 - keep the change small, and say what you saw: the command you ran and what it printed;
 - an engine package's public modules are its API: a change that breaks a caller needs a

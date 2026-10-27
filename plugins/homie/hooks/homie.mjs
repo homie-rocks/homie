@@ -19,10 +19,11 @@ import { deployIntent } from './lib/deploy-intent.mjs';
  * go, with Send and Don't send, and sends it from here only on Send; a homie_feedback send from Claude waits for the
  * person's own Send in Claude Code's question dialog, with the note's exact words.
  * Guards on tool calls: an edit to a file studio.json "protect" lists, a production deploy, a paid media call past
- * the studio's budget, and a Clef model download through Ollama (about 11 GB) are held with what would change and
- * Proceed / Cancel. Refused outright: a change to a
+ * the studio's budget are held with what would change and Proceed / Cancel. Warned in a toast, and run: a Clef model
+ * download through Ollama (about 11 GB, its size said), and a `git add` or `git commit` that would put a file over
+ * 5 MB under games/ into git. Refused outright: a change to a
  * decision the person locked (games/<id>/codex/decisions.json), a deploy that ships an asset with no allowed licence
- * in a public game, a `git add` or `git commit` that would put a file over 5 MB under games/ into git, and a write
+ * in a public game, and a write
  * through Stripe's MCP whose answer would carry a webhook's signing secret into the conversation. Secrets are taken
  * out of every tool result before Claude reads it.
  *
