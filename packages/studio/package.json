@@ -1,10 +1,24 @@
 {
   "name": "@homie-rocks/studio",
   "version": "0.58.20",
-  "description": "A studio for games, music and video on its own Cloudflare: scaffold, multiplayer starters on the netplay contract, a port toolkit that makes existing single-player web games multiplayer, the site Worker with public rooms (Table/Lobby Durable Objects and D1, all on the free Workers plan, no payment method), a site with the hub's sections (Home, Games, Music, Videos, Rooms, Posts with feeds) in the studio's own look, an epic landing page for every game, big songs and videos in the studio's own R2 once it has storage (uploaded, checked by SHA-256, served at the same addresses), deploy, and the homie.rocks directory.",
+  "description": "Open-source tools that let your AI build and run a multiplayer game studio on its own Cloudflare: an MCP server, multiplayer starters, Workers and Durable Objects.",
   "type": "module",
   "license": "Apache-2.0",
-  "homepage": "https://homie.rocks/studio/",
+  "homepage": "https://homie.rocks/make/studio/",
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "ai-agents",
+    "multiplayer",
+    "multiplayer-games",
+    "game-studio",
+    "game-engine",
+    "cloudflare-workers",
+    "durable-objects",
+    "cloudflare",
+    "netplay",
+    "open-source"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/homie-rocks/homie.git",
