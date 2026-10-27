@@ -15,7 +15,7 @@
  * Nothing here ever runs a shell.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
@@ -99,12 +99,70 @@ export const installed = (root) => existsSync(join(root, 'node_modules', '@homie
 const jobs = new Map();
 const RUNNER = fileURLToPath(new URL('./job-runner.mjs', import.meta.url));
 const JOB_ID = /^j_[a-f0-9]{12}$/;
+/** A finished job's files are kept this long, then removed when a later job starts in the same studio (pruneJobs). */
+export const JOB_KEPT_MS = 24 * 60 * 60_000;
+/** A job whose supervisor never wrote its pid this long after it was started never ran. */
+const NEVER_STARTED_MS = 60_000;
 export { lastJson };
 
 /** Is that process still there? (EPERM: it is, under another user.) */
 export function alive(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try { process.kill(pid, 0); return true; } catch (e) { return e?.code === 'EPERM'; }
+}
+
+/**
+ * Is `pid` still this job's own supervisor, not another process the system gave its number to later? Its command line
+ * names the job's state file (node job-runner.mjs <dir>/<job>.json): read from /proc on Linux, from ps elsewhere (once
+ * every few seconds per job). Where neither can say (Windows, no ps), a live pid is taken as the job's.
+ */
+export function jobAlive(pid, id, job = null) {
+  if (!alive(pid)) return false;
+  if (WIN || !JOB_ID.test(String(id ?? ''))) return true;
+  const now = Date.now();
+  if (job?.seen && job.seen.pid === pid && now - job.seen.at < 5000) return job.seen.ok;
+  let ok = true;
+  try {
+    if (process.platform === 'linux') ok = readFileSync(`/proc/${pid}/cmdline`, 'utf8').includes(`${id}.json`);
+    else {
+      const r = spawnSync('ps', ['-o', 'command=', '-p', String(pid)], { encoding: 'utf8', timeout: 2000, windowsHide: true });
+      if (!r.error) ok = r.status === 0 && r.stdout.includes(`${id}.json`);
+    }
+  } catch { ok = alive(pid); }
+  if (job) job.seen = { pid, at: now, ok };
+  return ok;
+}
+
+/**
+ * Remove the files of this studio's jobs that ended more than JOB_KEPT_MS ago (state, log, output), and of ones whose
+ * process went without an end that long ago; also a left-over file with no state beside it (an older toolkit's log, a
+ * write cut short) that old. Called when a job starts: no process of its own. A running job's files are never touched.
+ */
+export function pruneJobs(dir, now = Date.now()) {
+  let names = [];
+  try { names = readdirSync(dir); } catch { return 0; }
+  const byJob = new Map();
+  for (const n of names) {
+    const m = /^(j_[a-f0-9]{12})(?:\.|$)/.exec(n);
+    if (m) byJob.set(m[1], [...(byJob.get(m[1]) ?? []), n]);
+  }
+  let removed = 0;
+  for (const [id, files] of byJob) {
+    if (jobs.get(id) && !jobs.get(id).endedAt) continue;
+    let old;
+    if (files.includes(`${id}.json`)) {
+      const s = readState(join(dir, `${id}.json`));
+      if (!s) continue;
+      const ended = Date.parse(s.endedAt ?? '');
+      const started = Date.parse(s.startedAt ?? '');
+      old = Number.isFinite(ended) ? now - ended > JOB_KEPT_MS : Number.isFinite(started) && now - started > JOB_KEPT_MS && !jobAlive(s.pid, id);
+    } else {
+      old = files.every((n) => { try { return now - statSync(join(dir, n)).mtimeMs > JOB_KEPT_MS; } catch { return false; } });
+    }
+    if (!old) continue;
+    for (const n of files) try { rmSync(join(dir, n), { force: true }); removed++; } catch { /* next time */ }
+  }
+  return removed;
 }
 
 /** A Node that can run the supervisor: the system's, else this one (the Claude app's own, as plain Node). */
@@ -126,6 +184,7 @@ function jobFrom(file, extra = {}) {
  * Read a job's state file again. A job whose supervisor is gone without having written its end (killed, or the
  * computer restarted) is ended here as failed, and its file says so: no one is handed the id of a dead job as running.
  */
+const now = () => Date.now();
 export function refreshJob(job) {
   if (job.endedAt && job.final) return job;
   const s = readState(job.stateFile);
@@ -136,9 +195,10 @@ export function refreshJob(job) {
     Object.assign(job, { endedAt: s.endedAt, code: s.code, result: s.result ?? null, why: s.why ?? null, final: true });
     return job;
   }
-  if (!job.child && job.pid && !alive(job.pid)) {
+  const neverStarted = !job.child && !job.pid && now() - Date.parse(s.startedAt ?? '') > NEVER_STARTED_MS;
+  if (neverStarted || (!job.child && job.pid && !jobAlive(job.pid, s.id, job))) {
     s.code = 1;
-    s.why = 'the job\'s process ended without finishing (it was stopped, or the computer restarted)';
+    s.why = neverStarted ? 'the job\'s process never started' : 'the job\'s process ended without finishing (it was stopped, or the computer restarted)';
     s.endedAt = new Date().toISOString();
     for (const st of s.steps) if (st.startedAt && !st.endedAt) { st.endedAt = s.endedAt; st.code = 1; try { appendFileSync(st.err, `\n${s.why}\n`); } catch { /* read-only */ } }
     try { writeState(job.stateFile, s); } catch { /* the view below still says it */ }
@@ -159,6 +219,7 @@ export function startJob({ root, label, cmd, args, env = toolEnv(), json = false
   const id = `j_${randomBytes(6).toString('hex')}`;
   const dir = join(root, '.studio', 'mcp');
   mkdirSync(dir, { recursive: true });
+  pruneJobs(dir);
   const base = join(dir, id);
   const log = `${base}.log`;
   const list = (steps ?? [{ label, cmd, args, json }]).map((st, n, all) => {
@@ -288,7 +349,8 @@ export function installJob(root, opts = {}) {
  */
 export function stopAllJobs() {
   for (const job of jobs.values()) {
-    if (job.endedAt || !job.endsWithServer || !alive(job.pid)) continue;
+    // Only its own supervisor's process group: never a process that has the number since.
+    if (job.endedAt || !job.endsWithServer || !jobAlive(job.pid, job.id, job)) continue;
     try { process.kill(WIN ? job.pid : -job.pid, 'SIGTERM'); } catch { try { process.kill(job.pid, 'SIGTERM'); } catch { /* gone */ } }
   }
 }

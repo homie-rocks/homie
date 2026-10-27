@@ -6,12 +6,12 @@
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { alive, getJob, jobView, runningJobs, startJob, stepJobs, stopAllJobs, waitJob } from '../lib/jobs.mjs';
+import { JOB_KEPT_MS, alive, getJob, jobAlive, jobView, pruneJobs, runningJobs, startJob, stepJobs, stopAllJobs, waitJob } from '../lib/jobs.mjs';
 import { endFeed } from '../lib/job-runner.mjs';
 
 const JOBS = fileURLToPath(new URL('../lib/jobs.mjs', import.meta.url));
@@ -203,5 +203,45 @@ test('a run\'s feed is ended by the job itself when the server that started it i
     const doc = readFeed(root, r.build);
     assert.equal(doc.state, 'failed');
     assert.match(JSON.stringify(doc), /no route/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a job whose pid now belongs to another process is told as failed, not running (the pid was reused)', () => {
+  const root = studio();
+  try {
+    const dir = join(root, '.studio', 'mcp');
+    mkdirSync(dir, { recursive: true });
+    const id = 'j_00000000beef';
+    // This test's own process is alive but is not that job's supervisor.
+    writeFileSync(join(dir, `${id}.json`), JSON.stringify({ v: 1, id, label: 'reused', root, args: [], startedAt: new Date().toISOString(), endedAt: null, pid: process.pid, log: join(dir, `${id}.log`), steps: [] }));
+    if (process.platform !== 'win32') assert.equal(jobAlive(process.pid, id), false);
+    const v = lookup(root, id);
+    if (process.platform !== 'win32') assert.equal(v.state, 'failed');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('starting a job removes the files of jobs that ended more than a day ago, and nothing else', async () => {
+  const root = studio();
+  try {
+    const dir = join(root, '.studio', 'mcp');
+    mkdirSync(dir, { recursive: true });
+    const now = Date.now(), old = new Date(now - JOB_KEPT_MS - 60_000).toISOString(), recent = new Date(now - 60_000).toISOString();
+    const put = (id, state, extra = []) => {
+      writeFileSync(join(dir, `${id}.json`), JSON.stringify({ v: 1, id, label: id, root, args: [], log: join(dir, `${id}.log`), steps: [], ...state }));
+      for (const n of [`${id}.log`, ...extra]) writeFileSync(join(dir, n), 'x');
+    };
+    put('j_0000000000a1', { startedAt: old, endedAt: old, code: 0 }, ['j_0000000000a1.0.out', 'j_0000000000a1.0.err']);
+    put('j_0000000000a2', { startedAt: old, endedAt: recent, code: 0 });
+    put('j_0000000000a3', { startedAt: old, endedAt: null, pid: 2 ** 22 + 12345 });
+    writeFileSync(join(dir, 'j_0000000000a4.log'), 'an older toolkit\'s log');
+    utimesSync(join(dir, 'j_0000000000a4.log'), new Date(now - JOB_KEPT_MS - 60_000), new Date(now - JOB_KEPT_MS - 60_000));
+    writeFileSync(join(dir, 'j_0000000000a5.log'), 'a fresh one');
+    writeFileSync(join(dir, 'notes.txt'), 'not a job');
+    const job = startJob({ root, label: 'new', cmd: NODE, args: script('console.log("hi")') });
+    assert.ok(await waitJob(job, 10_000));
+    const left = readdirSync(dir).filter((n) => !n.startsWith(job.id)).sort();
+    assert.deepEqual(left, ['j_0000000000a2.json', 'j_0000000000a2.log', 'j_0000000000a5.log', 'notes.txt']);
+    assert.equal(pruneJobs(dir), 0, 'the new job is kept');
+    assert.ok(existsSync(job.stateFile));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

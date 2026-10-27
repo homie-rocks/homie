@@ -17,6 +17,18 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.21] - Unreleased
+
+<!-- pending-release: renumber before publishing -->
+
+**Plugin 0.58.14**
+
+A check, a playtest, a deploy or the site on your computer keeps going when the app or the AI's connection that started it goes away.
+
+### Fixed
+
+- Long jobs (a check, a playtest, a deploy, an npm install, `preview_run`'s site, a sign-in or a Stripe webhook) run under a small supervisor of their own, with their state in `.studio/mcp/<job>.json`. They outlive the MCP server that started them, so a host that runs the server once per tool call, or quitting Claude Desktop, no longer stops them; `studio_job` reads a job an earlier server started, and a job whose process is gone is reported as failed, never as still running. The site keeps running until `preview_stop`. A finished job's files are removed a day later, when the next job starts in that studio.
+
 ## [0.58.20] - 2026-10-26
 
 **Plugin 0.58.14**
