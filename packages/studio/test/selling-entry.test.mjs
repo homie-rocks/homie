@@ -15,7 +15,8 @@ test('an ordinary studio imports no payment modules or SDKs and schedules analyt
 
 test('the selling bundle uses the shared shop, office and parts implementation once', async () => {
   const built = await build({entryPoints:[new URL('../worker/selling/index.mjs',import.meta.url).pathname],bundle:true,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*'],write:false,metafile:true});
-  const inputs = Object.keys(built.metafile.inputs);
+  // esbuild names inputs relative to the cwd ('worker/index.mjs' from packages/studio), so root each one first.
+  const inputs = Object.keys(built.metafile.inputs).map((path) => `/${path}`);
   for (const file of ['index','shop','office','parts','shop-page','shop-rules','stripe']) {
     assert.equal(inputs.filter((path) => path.endsWith(`/worker/${file}.mjs`)).length,1,file);
     if (file !== 'index') assert.equal(inputs.filter((path) => path.endsWith(`/selling/${file}.mjs`)).length,0,file);
