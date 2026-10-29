@@ -34,7 +34,7 @@ test('app holds and paid bookings consume one atomic capacity budget and enforce
  const results=await Promise.allSettled([a.hold({app:'place',collection:'bookings',slot:'morning',quantity:2,id:'a',expiresAt:Date.now()+60000}),b.hold({app:'place',collection:'bookings',slot:'morning',quantity:2,id:'b',expiresAt:Date.now()+60000})]);
  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
  const first=results[0].status==='fulfilled',id=results[first?0:1].value.id,owner=first?a:b,other=first?b:a;
- await assert.rejects(()=>other.release({id,version:1}),/owner/);
+ await assert.rejects(()=>other.release({id,version:1}),e=>e.code==='hold_not_found');assert.match(id,/^hold_[a-f0-9]{48}$/);
  const confirmed=await owner.confirm({id,version:1});assert.equal(confirmed.state,'confirmed');
  assert.equal(DB.sql.prepare("SELECT SUM(quantity) n FROM shop_bookings WHERE state IN ('held','confirmed')").get().n,2);
  await assert.rejects(()=>owner.release({id,version:1}),/changed/);
@@ -72,7 +72,7 @@ test('guest management secrets stay private and slot availability includes local
  const meta={id:'place',kind:'app',roles:{customer:{signIn:false,can:['read:slots','read:bookings']}},surfaces:{phone:'customer'},records:{persist:true,collections:{slots:{},bookings:{booking:{slots:'slots',item:'ticket'}}}}};
  const api=bookingHolds(env,{id:null}, {games:[meta]}),token='a'.repeat(32);
  const hold=await api.hold({app:'place',collection:'bookings',slot:'morning',quantity:1,id:'one',token,expiresAt:Date.now()+60000});
- await assert.rejects(()=>api.get({id:hold.id,token:'b'.repeat(32)}),/owner/);
+ await assert.rejects(()=>api.get({id:hold.id,token:'b'.repeat(32)}),/No hold/);
  const url=new URL('https://place.test/place/api/app/records/slots');
  const slots=await (await appRecordsRoute(new Request(url),env,meta,url,'api/app/records/slots')).json();assert.equal(slots.records[0].booking.available,1);
  const publicData=JSON.parse(DB.sql.prepare("SELECT value FROM app_records WHERE collection='bookings'").get().value);
@@ -159,4 +159,21 @@ test('resource capacity remains atomic across simultaneous requests and quantity
  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
  assert.throws(()=>DB.sql.exec("UPDATE shop_bookings SET quantity=2 WHERE state='held'"),/resource.*release/);
  assert.equal(DB.sql.prepare("SELECT quantity FROM shop_bookings WHERE state='held'").get().quantity,1);
+});
+
+test('hold ids are hold_ prefixed, keys are per owner, expired holds free capacity, and a token lists only its holds',async t=>{
+ const {bookingHolds}=await import('../worker/booking-holds.mjs');
+ const DB=database(t),env={DB};DB.sql.exec(`INSERT INTO app_records VALUES('place','slots','morning','{"capacity":2}',1,1)`);
+ const cat={games:[{id:'place',kind:'app',records:{collections:{bookings:{booking:{slots:'slots',item:'ticket'}}}}}]};
+ const anon=bookingHolds(env,{id:null},cat),ta='a'.repeat(32),tb='b'.repeat(32),base={app:'place',collection:'bookings',slot:'morning',expiresAt:Date.now()+60000};
+ const a=await anon.hold({...base,id:'morning',token:ta}),b=await anon.hold({...base,id:'morning',token:tb});
+ assert.match(a.id,/^hold_[a-f0-9]{48}$/);assert.notEqual(a.id,b.id,'two guests reusing a slot name as key never collide');
+ assert.equal(a.hold,a.id);assert.equal(a.item,'ticket');assert.equal(a.app,'place');
+ assert.equal((await anon.hold({...base,id:'morning',token:ta})).id,a.id,'same key and token retries');
+ const c=await anon.hold({...base,token:ta}).then(()=>null,e=>e);assert.equal(c.code,'slot_full');
+ assert.deepEqual((await anon.mine({token:ta})).map(h=>h.id),[a.id]);
+ assert.deepEqual((await anon.mine({token:'c'.repeat(32)})),[]);
+ DB.sql.exec(`UPDATE shop_bookings SET hold_until=1 WHERE id='${b.id}'`);
+ const fresh=await anon.hold({...base,token:'c'.repeat(32)});assert.match(fresh.id,/^hold_/,'an expired hold no longer takes a place');
+ assert.equal(DB.sql.prepare(`SELECT state FROM shop_bookings WHERE id='${b.id}'`).get().state,'released');
 });

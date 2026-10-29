@@ -201,13 +201,21 @@ export function builtins(env,cat,origin) {
       return {app,roles,collections:Object.fromEntries(Object.entries(meta.records?.collections??{}).filter(([name])=>collections.has(name)))};
     }),
     tool('studio_availability','List available booking slots and options before studio_book. Returns schema.org Offers with exact booking arguments; availability is a snapshot, and booking rechecks capacity.','public',object({app:str,collection:str,after:str,quantity:{type:'integer',minimum:1},option:str,resource:str,addons:{type:'object',additionalProperties:{type:'integer',minimum:1,maximum:100}}},['app','collection']),async(args,ctx)=>ctx.bookings.availability(args)),
-    tool('studio_book','Reserve a declared booking slot. Accepts slot/time, resource/preferredResource, and addons/addOns as an array or quantity object. Supply a stable id, future expiresAt and a private token for an anonymous booking. Payment is separate.','public',bookingInputSchema,async(input,ctx)=>{
+    tool('studio_book','Reserve a declared booking slot. Accepts slot/time, resource/preferredResource, and addons/addOns as an array or quantity object. Give a future expiresAt and, when anonymous, a private random hex token. The returned data.id (hold_…) is the hold: pass it as hold to venue_booking_*, studio_holds and studio_checkout. Optional id is an idempotency key for retries, not the hold id. Payment is separate.','public',bookingInputSchema,async(input,ctx)=>{
       const args=normalizeBookingArgs(input),meta=cat.games.find(g=>g.id===args.app&&g.kind==='app'),spec=meta?.records?.collections?.[args.collection]?.booking;
       if(!spec)throw Object.assign(new Error('Unknown booking collection'),{name:'StudioOperationError'});
       const minutes=Number.isSafeInteger(spec.holdMinutes)&&spec.holdMinutes>0?Math.min(spec.holdMinutes,1440):15;
       if(!Number.isSafeInteger(args.expiresAt)||args.expiresAt<=Date.now()||args.expiresAt>Date.now()+minutes*60000)throw Object.assign(new Error(`Hold expiry must be within ${minutes} minutes`),{name:'StudioOperationError'});
       await ctx.records({app:args.app,collection:spec.slots,id:args.slot});
       return ctx.bookings.hold(args);
+    }),
+    tool('studio_holds','List your own booking holds (held or confirmed) with the private token you gave studio_book, or release them: release is a hold id from that list, or "all". Only that token\'s holds are ever shown or changed.','public',object({token:{type:'string',pattern:'^[a-f0-9]{32,128}$'},app:str,release:{type:'string',pattern:'^(all|hold_[a-f0-9]{48}|[a-f0-9]{64})$'},all:{type:'boolean',description:'Include ended holds.'}}),async({token,app,release,all},ctx)=>{
+      const holds=await ctx.bookings.mine({token,app,active:!all||Boolean(release)});
+      if(!release)return {holds};
+      const chosen=holds.filter(h=>release==='all'?h.state==='held':h.id===release);
+      if(release!=='all'&&!chosen.length)throw Object.assign(new Error('No active hold with this id for this token'),{name:'StudioOperationError',status:403,code:'hold_not_found'});
+      const released=[];for(const h of chosen)released.push(await ctx.bookings.release({id:h.id,token,version:h.version}));
+      return {released};
     }),
     tool('app_records','List, read, create, update or delete app records with the app role and record version.','public',object({app:str,role:str,collection:{type:'string',pattern:'^[a-z][a-z0-9-]{0,39}$'},id:{type:'string',pattern:'^[A-Za-z0-9_-]{1,64}$',description:'1–64 letters, digits, underscore or hyphen'},operation:{enum:['read','create','update','delete']},data:{type:'object',propertyNames:{pattern:'^[a-z][a-z0-9_]*$'},description:'Field names start with a lowercase letter and use lowercase letters, digits and underscore; discover fields with app_schema.'},version:{type:'integer',minimum:1}},['app','collection']), (args,ctx)=>ctx.records(args)),
   ];

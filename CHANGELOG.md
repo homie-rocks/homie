@@ -17,9 +17,31 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.23] - 2026-10-29
+
+**Plugin 0.58.15**
+
+A booking agent books, finds its hold, pays and cancels with one hold id and a private token, and every refusal comes with a stable error code.
+
+### Changed
+
+- `studio_book` needs no `id`. The returned `data.id` (now `hold_` and 48 hex) is the hold: pass it as `hold` to the Venue desk tools, `studio_holds` and `studio_checkout`. An `id` you still send is an optional idempotency key, scoped to your account or private token, so two guests using the same slot name never collide (that was the `Booking owner required` error). Holds made by earlier versions keep their 64-hex ids and keep working.
+- Every studio MCP tool refusal is an MCP error (`isError`) with `structuredContent` `{kind:'studio-error', error:{code, message, status}}` and a stable `code`, e.g. `hold_not_found`, `slot_full`, `hold_ended`, `invalid_input`, or a closed shop's `closed` with `details.missing`. `studio_checkout` no longer returns a closed shop as success.
+- `studio_checkout` takes top-level `app`, `hold` and `token`, the same as the Venue desk tools, and fills in the booking's line (its service item × quantity). `venue_booking_confirm` (Venue desk 1.0.1), for a venue that takes payment in advance, returns `checkout: {tool:'studio_checkout', arguments, lines}` naming exactly what to call.
+
+### Added
+
+- `studio_holds { token }` lists a guest's own active holds; `release` (a hold id, or `"all"`) releases them. Only that token's holds are ever shown or changed.
+
+### Fixed
+
+- A hold past its expiry no longer takes a place: availability stops counting it, and the next booking on that slot releases it.
+
 ## [0.58.22] - 2026-10-29
 
 **Plugin 0.58.15**
+
+The parts that come with the toolkit, like the Venue desk, add to a studio with no download.
 
 ### Fixed
 

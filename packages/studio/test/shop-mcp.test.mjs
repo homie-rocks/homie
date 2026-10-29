@@ -146,8 +146,8 @@ test('public checkout with verified links names only the private webhook step',a
  const DB={prepare:q=>({first:async()=>sql.prepare(q).get()??null})};
  const env={DB,STRIPE_CHECKOUT_MODE:'links',STRIPE_SHOP_LINKS:JSON.stringify(p.config)};
  const tool=customerTools(env,{shop:readShop(root).shop,games:[]},'https://proof.example').find(t=>t.name==='studio_checkout');
- const result=await tool.handler({lines:[{item:'coffee'}]},{caller:{id:null,owner:false}});
- assert.equal(result.error,'closed');assert.deepEqual(result.missing,['webhook-secret']);assert.match(result.next,/shop webhook/);
+ const error=await tool.handler({lines:[{item:'coffee'}]},{caller:{id:null,owner:false}}).then(()=>null,e=>e);
+ assert.equal(error.code,'closed');assert.deepEqual(error.details.missing,['webhook-secret']);assert.match(error.details.next,/shop webhook/);
 });
 
 test('partial batches resume from responses without account-wide reads or separate default updates',async t=>{

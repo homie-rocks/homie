@@ -13,7 +13,7 @@ export async function bookingAvailability(env,cat,caller,{app,collection,after='
   if(!readable)throw fail('Booking availability unavailable');
  }
  const scope=caller.testScope?`${app}:check:${caller.testScope}`:app;
- const rows=(await env.DB.prepare(`SELECT s.id,s.value,COALESCE((SELECT SUM(b.quantity) FROM shop_bookings b WHERE b.app=s.app AND b.slots=s.collection AND b.slot=s.id AND b.state IN ('held','confirmed')),0) used FROM app_records s WHERE s.app=?1 AND s.collection=?2 AND s.id>?3 ORDER BY s.id LIMIT 51`).bind(scope,spec.slots,after).all()).results;
+ const rows=(await env.DB.prepare(`SELECT s.id,s.value,COALESCE((SELECT SUM(b.quantity) FROM shop_bookings b WHERE b.app=s.app AND b.slots=s.collection AND b.slot=s.id AND (b.state='confirmed' OR b.state='held' AND NOT (b.order_id='hold:'||b.id AND b.hold_until<=?4))),0) used FROM app_records s WHERE s.app=?1 AND s.collection=?2 AND s.id>?3 ORDER BY s.id LIMIT 51`).bind(scope,spec.slots,after,Date.now()).all()).results;
  const snapshot=await resourceSnapshot(env,scope,spec);
  const items=[];
  for(const row of rows.slice(0,50)){

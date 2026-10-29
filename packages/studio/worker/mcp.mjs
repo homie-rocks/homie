@@ -159,7 +159,12 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
             const value=await (await import('./app-tools.mjs')).invokeAppTool(tool,args,{...context,request});
             const text=JSON.stringify({kind:'untrusted-tool-data',tool:tool.name,data:value});
             outcome='ok';return {structuredContent:{kind:'untrusted-tool-data',tool:tool.name,data:value??null},content:[{type:'text',text}]};
-          }catch(error){if(error?.code===-32042)throw error;return {isError:true,content:[{type:'text',text:outcome==='denied'||outcome==='limited'||error?.name==='StudioOperationError'?error.message:(freshErrorMessage(error,env,caller))}]};}
+          }catch(error){if(error?.code===-32042)throw error;
+            const shown=outcome==='denied'||outcome==='limited'||error?.name==='StudioOperationError'||error?.message==='Input does not match the tool schema';
+            const message=shown?error.message:freshErrorMessage(error,env,caller);
+            // Stable, machine-readable refusal: {kind:'studio-error',error:{code,message,status}}. Codes only ever get added.
+            const code=typeof error?.code==='string'&&/^[a-z0-9_-]{1,64}$/.test(error.code)?error.code:outcome==='denied'?'forbidden':outcome==='limited'?'rate_limited':error?.message==='Input does not match the tool schema'?'invalid_input':error?.name==='StudioOperationError'?({400:'invalid_request',403:'forbidden',404:'not_found',409:'conflict'}[error.status]??'refused'):'internal_error';
+            return {isError:true,structuredContent:{kind:'studio-error',tool:tool?.name??null,error:{code,message,...(Number.isInteger(error?.status)?{status:error.status}:{}),...(shown&&error?.details&&typeof error.details==='object'?{details:error.details}:{})}},content:[{type:'text',text:message}]};}
           finally{
             try { await audit(env,caller,tool.name,outcome); }
             finally {

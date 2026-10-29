@@ -17,7 +17,7 @@ const NS = 'venue-desk';
 const TOKEN = {type: 'string', pattern: '^[a-f0-9]{32,128}$', description: 'The private random hex token the caller chose for studio_book (or for this waitlist entry). Keep it; it is the only proof the booking is yours.'};
 const ID = {type: 'string', pattern: '^[A-Za-z0-9_-]{1,64}$'};
 const short = (n) => ({type: 'string', maxLength: n});
-const fail = (message) => Object.assign(new Error(message), {name: 'StudioOperationError'});
+const fail = (message, code = 'invalid_request', status = 400) => Object.assign(new Error(message), {name: 'StudioOperationError', code, status});
 const now = () => Date.now();
 const iso = (ms) => (Number.isFinite(ms) ? new Date(ms).toISOString() : null);
 const clean = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== null && v !== ''));
@@ -90,7 +90,7 @@ const CONTACT = {
   partySize: {type: 'integer', minimum: 1, maximum: 1000}, notes: {...short(1000), description: 'Allergies, accessibility, occasion: the guest\'s words, shown to staff.'},
 };
 async function ownHold(ctx, hold, token) {
-  try { return await ctx.bookings.get(clean({id: hold, token})); } catch { throw fail('No such booking for this token'); }
+  try { return await ctx.bookings.get(clean({id: hold, token})); } catch { throw fail('No hold with this id for this token (pass data.id from studio_book and the same token)', 'hold_not_found', 403); }
 }
 function reservation(h, c, extra = {}) {
   const status = {held: 'ReservationHold', confirmed: 'ReservationConfirmed', released: 'ReservationCancelled', pending: 'ReservationPending'}[h.state] ?? 'ReservationPending';
@@ -100,11 +100,11 @@ function reservation(h, c, extra = {}) {
 export const venueBookingDetails = {
   name: 'venue_booking_details', namespace: NS, audience: 'public',
   description: 'After studio_book: attach the guest\'s contact to the hold (name, email and/or phone, party size, notes). Staff see it; it is never shown publicly. Call again to correct it. Then venue_booking_confirm, or studio_checkout when the venue takes payment in advance.',
-  inputSchema: {type: 'object', properties: {hold: {...ID, description: 'The id given to studio_book.'}, token: TOKEN, ...CONTACT}, required: ['hold', 'name'], additionalProperties: false},
+  inputSchema: {type: 'object', properties: {hold: {...ID, description: 'The hold: data.id returned by studio_book (hold_…).'}, token: TOKEN, ...CONTACT}, required: ['hold', 'name'], additionalProperties: false},
   async handler({hold, token, ...c}, ctx) {
     if (!c.email && !c.phone) throw fail('Give an email or a phone so the venue can reach the guest');
     const h = await ownHold(ctx, hold, token);
-    if (h.state === 'released') throw fail('This hold has ended; book again');
+    if (h.state === 'released') throw fail('This hold has ended; book again', 'hold_ended', 409);
     const prev = await ctx.database.get('booking:' + hold);
     await ctx.database.put('booking:' + hold, {...(prev ?? {}), hold, slot: h.slot, quantity: h.quantity, contact: clean(c), tokenHash: token ? await hash(token) : null, state: h.state, at: prev?.at ?? now(), updatedAt: now()});
     return {ok: true, next: (await info(ctx)).booking?.paymentInAdvance ? 'studio_checkout' : 'venue_booking_confirm', reservation: reservation(h, c)};
@@ -121,8 +121,8 @@ export const venueBookingConfirm = {
     if (!rec?.contact) throw fail('Add the guest\'s contact with venue_booking_details first');
     let h = await ownHold(ctx, hold, token);
     if (h.state === 'confirmed') return {ok: true, already: true, reservation: reservation(h, rec.contact)};
-    if (h.state !== 'held') throw fail('This hold has ended; book again');
-    if (v.booking?.paymentInAdvance) return {ok: false, next: 'studio_checkout', why: 'This venue confirms bookings on payment.', checkoutBooking: {collection: v.booking.collection, slot: h.slot, hold}};
+    if (h.state !== 'held') throw fail('This hold has ended; book again', 'hold_ended', 409);
+    if (v.booking?.paymentInAdvance) return {ok: false, next: 'studio_checkout', why: 'This venue confirms bookings on payment.', checkoutBooking: {collection: v.booking.collection, slot: h.slot, hold}, checkout: clean({tool: 'studio_checkout', arguments: clean({app: h.app, hold, token}), lines: h.item ? [{item: h.item, quantity: h.quantity}] : undefined})};
     h = await ctx.bookings.confirm(clean({id: hold, token, version: h.version}));
     await ctx.database.put('booking:' + hold, {...rec, state: 'confirmed', confirmedAt: now()});
     await log(ctx, {at: now(), what: 'booking.confirmed', hold, slot: h.slot, quantity: h.quantity, name: rec.contact.name});

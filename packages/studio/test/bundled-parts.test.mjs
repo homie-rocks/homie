@@ -28,6 +28,6 @@ test('part_add brings in venue-desk from the installed toolkit; parts_find lists
   const r=await addPart(root,'venue-desk',{fetch:offline,npm,install:false});
   assert.equal(r.ok,true,r.why);
   assert.ok(existsSync(join(root,'parts/_vendor',TOOLKIT_HOST,'venue-desk/part.json')));
-  assert.equal(JSON.parse(readFileSync(join(root,'parts/origins.json'))).parts[`${TOOLKIT_HOST}/venue-desk`].version,'1.0.0');
+  assert.equal(JSON.parse(readFileSync(join(root,'parts/origins.json'))).parts[`${TOOLKIT_HOST}/venue-desk`].version,'1.0.1');
  }finally{rmSync(root,{recursive:true,force:true})}
 });

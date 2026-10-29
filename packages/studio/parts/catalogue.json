@@ -236,7 +236,7 @@
       "id": "venue-desk",
       "name": "Venue desk",
       "kind": "tools",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "summary": "Public venue info (hours, closures, policies, FAQ), booking contact and confirmation on top of studio holds, and a waitlist with an owner outbox. Any venue, schema.org outputs.",
       "license": "Apache-2.0",
       "attribution": "Ryan Campbell — Homie toolkit",
@@ -307,8 +307,8 @@
         },
         {
           "path": "src/index.ts",
-          "sha256": "063876b14067c97c5c5dec4dd9f04dcfa60cfee7ea72e29a347412b5eed5c3b8",
-          "bytes": 19530
+          "sha256": "16622b3ce82ffd38cf1ba9288fd6161da15aba36b63ac43ce55ef6acdd414868",
+          "bytes": 19883
         },
         {
           "path": "tools/venue-booking-cancel.ts",
@@ -367,7 +367,7 @@
         }
       ],
       "cost": {
-        "bytes": 36701
+        "bytes": 37054
       }
     }
   ]
