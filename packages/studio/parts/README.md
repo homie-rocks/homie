@@ -7,6 +7,7 @@ are the standard `part.json` records, also collected in `catalogue.json` for loc
 | --- | --- | --- | --- |
 | [Owner action checklist](owner-action-checklist/README.md) | Consequence-first owner/staff action UI, server integration boundary, optional undo | Owner action checklist / Homie toolkit | Apache-2.0 |
 | [Terrain route map](terrain-route-map/README.md) | Local heightmap coast, draped route, markers and phone/TV camera controls | Terrain route map / Homie toolkit | Apache-2.0 (three.js MIT) |
+| [Venue desk](venue-desk/README.md) | Venue info, booking contact and confirmation, waitlist and owner outbox as studio tools, schema.org outputs | Venue desk / Homie toolkit | Apache-2.0 |
 
 Each folder includes its licence, attribution, AI integration contract, tunables and small
 working preview. Ryan Campbell authored both. To preview locally, serve this directory with

@@ -11,11 +11,11 @@ import {requireSameOrigin} from '../worker/route-auth.mjs';
 const source=new URL('../parts/',import.meta.url).pathname;
 test('parts pack through canonical pipeline, with complete licensed integrity manifests',()=>{
  const root=mkdtempSync(join(tmpdir(),'homie-shared-parts-'));
- try { for(const id of ['owner-action-checklist','terrain-route-map']) {
+ try { for(const id of ['owner-action-checklist','terrain-route-map','venue-desk']) {
   const dir=join(source,id),part=readPart(dir);
   assert.deepEqual(shareProblems(part,{dir}),[]);assert.equal(verifyFiles(dir,part).ok,true);
   cpSync(dir,join(root,'parts',id),{recursive:true});assert.equal(packPart(root,id).ok,true);
- } assert.equal(sharedPartsOf(root).length,2);
+ } assert.equal(sharedPartsOf(root).length,3);
  const catalogue=JSON.parse(readFileSync(join(source,'catalogue.json')));
  assert.deepEqual(catalogue.parts.map(p=>p.id),sharedPartsOf(root).map(p=>p.id));
  } finally {rmSync(root,{recursive:true,force:true});}

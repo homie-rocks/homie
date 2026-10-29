@@ -231,6 +231,144 @@
         "id": "terrain-route-map",
         "studio": "Homie toolkit"
       }
+    },
+    {
+      "id": "venue-desk",
+      "name": "Venue desk",
+      "kind": "tools",
+      "version": "1.0.0",
+      "summary": "Public venue info (hours, closures, policies, FAQ), booking contact and confirmation on top of studio holds, and a waitlist with an owner outbox. Any venue, schema.org outputs.",
+      "license": "Apache-2.0",
+      "attribution": "Ryan Campbell — Homie toolkit",
+      "share": true,
+      "tags": [
+        "venue",
+        "booking",
+        "reservation",
+        "waitlist",
+        "hours",
+        "faq",
+        "schema-org",
+        "tools",
+        "mcp"
+      ],
+      "uses": [
+        "app"
+      ],
+      "entry": "src/index.ts",
+      "preview": {
+        "page": "preview/index.html",
+        "aspect": "4:3",
+        "phoneAspect": "2:3"
+      },
+      "requires": {
+        "packages": {
+          "@homie-rocks/studio": "^0.58.0"
+        }
+      },
+      "provenance": {
+        "source": "original",
+        "notes": "Original code authored for the Homie toolkit."
+      },
+      "contract": {
+        "inputs": {
+          "tools": "Re-export each tool from tools/<name>.ts; see README"
+        },
+        "state": {
+          "authority": "Studio tools own all data in the venue-desk tool namespace; holds stay in ctx.bookings"
+        },
+        "netplay": "local"
+      },
+      "from": {
+        "kind": "app",
+        "id": "venue-desk",
+        "studio": "Homie toolkit"
+      },
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "bytes": 11358
+        },
+        {
+          "path": "NOTICE",
+          "sha256": "de5550bb70ec59421656c648a89fd9b75c8d1d7ae39317262c5e932e1abe0fdd",
+          "bytes": 78
+        },
+        {
+          "path": "README.md",
+          "sha256": "eee6191c6ff2b270dcd9b2d8eac14c41c1a81e6540eba6ea68c9a8ca3084eafe",
+          "bytes": 2923
+        },
+        {
+          "path": "preview/index.html",
+          "sha256": "994a3aab3cfcc8d58d4500dd474fd1bd388b8ca68ccfd518faae0eef3ef10075",
+          "bytes": 950
+        },
+        {
+          "path": "src/index.ts",
+          "sha256": "063876b14067c97c5c5dec4dd9f04dcfa60cfee7ea72e29a347412b5eed5c3b8",
+          "bytes": 19530
+        },
+        {
+          "path": "tools/venue-booking-cancel.ts",
+          "sha256": "573e7c0e441fa584dec936b65c62b0d43ad2872ad5a7376f1f71d8387ab26964",
+          "bytes": 184
+        },
+        {
+          "path": "tools/venue-booking-confirm.ts",
+          "sha256": "926a5ee084855f7f11ab083c4c9ac65f52139998d18377250b6df5de1dd805c2",
+          "bytes": 185
+        },
+        {
+          "path": "tools/venue-booking-details.ts",
+          "sha256": "337c4ce2999c7914713d665ffe953ae3e9835e6bbbe866d82d7cb200c9d4576a",
+          "bytes": 185
+        },
+        {
+          "path": "tools/venue-booking-status.ts",
+          "sha256": "8bb7fccf5f3114758ed48f050a8e67dd1d9f56aa16d64e12b66e29930e6b4c33",
+          "bytes": 184
+        },
+        {
+          "path": "tools/venue-desk.ts",
+          "sha256": "00dc1a1d776ffa45db5c9e9383ed38db64687e0a0c793b5873c741192d720880",
+          "bytes": 175
+        },
+        {
+          "path": "tools/venue-info-set.ts",
+          "sha256": "25470987a92db94e40be7a864495984403dd78427c23c24ea56a3fe880dd2c7f",
+          "bytes": 178
+        },
+        {
+          "path": "tools/venue-info.ts",
+          "sha256": "cde9c5db9c05b289bc3d0a466d7c41d51f840638e3029d3887b1a1a4331c1438",
+          "bytes": 175
+        },
+        {
+          "path": "tools/venue-waitlist-join.ts",
+          "sha256": "562ff05d8838a0495ec38b0de3a7d8c4d39fe2dea4c61aa6ed11b3dac9164be1",
+          "bytes": 183
+        },
+        {
+          "path": "tools/venue-waitlist-offer.ts",
+          "sha256": "adb2ccf20f67aa60c7f6716782f67c55bac0408426bcec7b8ceeb31121614f51",
+          "bytes": 184
+        },
+        {
+          "path": "tools/venue-waitlist-status.ts",
+          "sha256": "2c00100aec0e0bfa04b94fec3eaaa5ad98d473c52dcb740fe4000647fc07fa7c",
+          "bytes": 185
+        },
+        {
+          "path": "tuning.json",
+          "sha256": "f212afabe47c7c0e0321bfb9dda8cf9ae2237fbd9d419c028d607e1c0185ddd1",
+          "bytes": 44
+        }
+      ],
+      "cost": {
+        "bytes": 36701
+      }
     }
   ]
 }
