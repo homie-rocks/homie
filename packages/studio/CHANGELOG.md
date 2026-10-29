@@ -17,6 +17,14 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.22] - 2026-10-29
+
+**Plugin 0.58.15**
+
+### Fixed
+
+- `part_add` and `parts_find` find the parts that come with the toolkit (`parts/catalogue.json`: Venue desk, Owner action checklist, Terrain route map) in the installed toolkit, with no download: `part_add { "part": "venue-desk" }` (or `"homie.rocks/venue-desk"`) copies it in, every file checked against the catalogue's SHA-256, and `parts_find` lists them even when the shared catalogue cannot be reached.
+
 ## [0.58.21] - 2026-10-29
 
 **Plugin 0.58.15**

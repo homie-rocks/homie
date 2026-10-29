@@ -21,6 +21,7 @@ import { priceWords } from "../worker/purchase-pricing.mjs";
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   LIMITS, TUNING_FILE, TUNING_UPSTREAM, assetRecords, checkPart, compareVersions, isVersion, licenceIssues, licenseOfPart, listOwnParts, packPart, packedDir,
   packedVersions, parseRef, partDir, readOrigins, readPart, requiredParts, sha256, shareProblems, syncPartCredits, vendorDir, verifyFiles, writeHashes,
@@ -31,6 +32,45 @@ import { experienceDir, experienceFile, listExperiences as listGames, readStudio
 export const HUB = 'https://homie.rocks';
 const isObj = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 const line = (v, n = 200) => (typeof v === 'string' ? v.replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, n) : '');
+
+/* ------------------------------------------------------------------ the toolkit's own parts */
+
+/**
+ * The parts that come WITH the toolkit (parts/catalogue.json in this package, e.g. venue-desk): found and added from the
+ * installed toolkit, with no network. "venue-desk" alone, or "homie.rocks/venue-desk", names one; every file is checked
+ * against the catalogue's SHA-256 and size exactly as a fetched part's are.
+ */
+export const TOOLKIT_HOST = 'homie.rocks';
+const TOOLKIT_PARTS = fileURLToPath(new URL('../parts/', import.meta.url));
+export function bundledCatalogue() {
+  try {
+    const c = JSON.parse(readFileSync(join(TOOLKIT_PARTS, 'catalogue.json'), 'utf8'));
+    return Array.isArray(c?.parts) ? c.parts.filter((p) => isObj(p) && typeof p.id === 'string' && p.share === true && Array.isArray(p.files)) : [];
+  } catch { return []; }
+}
+/** A bundled part named by `refText`, read and checked; null when it is not one of the toolkit's. */
+export function bundledPart(refText) {
+  const text = String(refText ?? '').trim();
+  const bare = /^([a-z0-9][a-z0-9-]{0,47})(?:@(.{1,60}))?$/.exec(text);
+  const ref = bare ? { host: TOOLKIT_HOST, id: bare[1], version: bare[2] ?? null, ref: `${TOOLKIT_HOST}/${bare[1]}` } : parseRef(text);
+  if (!ref || ref.host !== TOOLKIT_HOST) return null;
+  const part = bundledCatalogue().find((p) => p.id === ref.id);
+  if (!part) return null;
+  if (ref.version && ref.version !== part.version) throw new Error(`The toolkit has ${ref.id} ${part.version}, not ${ref.version}. Upgrade the toolkit for a newer one.`);
+  const shape = checkPart(part);
+  if (!shape.ok) throw new Error(`${ref.ref} ${part.version} is not a part this toolkit can read: ${shape.problems.filter((p) => p.level === 'refuse').map((p) => `${p.field}: ${p.problem}`).slice(0, 3).join('; ')}`);
+  const files = new Map();
+  for (const f of part.files) {
+    const at = join(TOOLKIT_PARTS, part.id, f.path);
+    if (!at.startsWith(join(TOOLKIT_PARTS, part.id) + '/')) throw new Error(`${ref.ref}: ${f.path} is outside the part`);
+    let bytes;
+    try { bytes = readFileSync(at); } catch { throw new Error(`${ref.ref}: ${f.path} is missing from the installed toolkit. Reinstall it (npm ci).`); }
+    if (bytes.length !== f.bytes || sha256(bytes) !== f.sha256) throw new Error(`${ref.ref} ${part.version}: ${f.path} in the installed toolkit is not the file its catalogue describes. Reinstall the toolkit (npm ci).`);
+    files.set(f.path, bytes);
+  }
+  const entry = { ...part, from: { ...(isObj(part.from) ? part.from : {}), studio: 'Homie toolkit' }, studio: { name: 'Homie toolkit' } };
+  return { ref: { ...ref, version: part.version }, part, files, entry, base: baseOf(TOOLKIT_HOST), version: part.version, versions: [part.version], access: null, bundled: true };
+}
 
 /* ------------------------------------------------------------------ the one fetch */
 
@@ -196,7 +236,7 @@ export async function addPart(root, refText, { game = null, fetch, npm = runNpm,
   if (game && !existsSync(experienceFile(root, game))) return fail(`there is no game "${game}" in this studio (${listGames(root).map((g) => g.id).join(', ') || 'it has none yet'})`);
   let got;
   try {
-    got = offline ? await offlinePurchase(root, refText, game) : await fetchPart(refText, { fetch, onPaid: (ref, part, offer) => paidAccess(root, ref, part, { game, quantity, approve, fetch, offer, wallet, walletPay }) });
+    got = offline ? await offlinePurchase(root, refText, game) : bundledPart(refText) ?? await fetchPart(refText, { fetch, onPaid: (ref, part, offer) => paidAccess(root, ref, part, { game, quantity, approve, fetch, offer, wallet, walletPay }) });
     if (got.access) {
       savePurchaseBackup(root, got, got.access, game);
       const c = got.access.claims;
@@ -345,6 +385,10 @@ export async function findParts(root, query = '', { kind = null, tag = null, lic
       if (part) here.push(row({ ...part, from: e.from ?? part.from }, { where: 'here', ref, add: ref, import: part.entry ? `@parts/${ref}` : null, games: e.games ?? [], say: `Already in this studio (${e.version}): import it from '@parts/${ref}'.` }));
     }
   }
+  for (const p of bundledCatalogue()) {
+    const ref = `${TOOLKIT_HOST}/${p.id}`;
+    if (!here.some((h) => h.ref === ref)) here.push(row({ ...p, from: { ...(isObj(p.from) ? p.from : {}), studio: 'Homie toolkit' } }, { where: 'toolkit', ref, add: ref, import: null, say: `Comes with the Homie toolkit (no download): part_add { "part": "${ref}" }.` }));
+  }
   let base = hub;
   if (!base && root) { try { const d = readStudio(root).homie?.directory; base = d === false || d === null ? null : d; } catch { base = null; } }
   base = /^https?:\/\/[a-z0-9.:-]+$/i.test(String(base ?? '')) ? base : HUB;
@@ -353,7 +397,7 @@ export async function findParts(root, query = '', { kind = null, tag = null, lic
   try {
     const index = await getJson(url, { fetch, what: 'the catalogue of shared parts' });
     if (!Array.isArray(index?.parts)) throw new Error(`${url} is not a parts catalogue`);
-    const have = new Set(here.filter((h) => h.where === 'here').map((h) => h.ref));
+    const have = new Set(here.filter((h) => h.where === 'here' || h.where === 'toolkit').map((h) => h.ref));
     found = index.parts.filter((p) => isObj(p) && typeof p.id === 'string' && (typeof p.host === 'string' || typeof p.add === 'string')).map((p) => {
       const ref = parseRef(typeof p.add === 'string' ? p.add : `${p.host}/${p.id}`)?.ref;
       return ref ? row(p, { where: 'hub', ref, add: ref, studio: line(p.studio?.name, 80) || null, page: /^https:\/\//.test(String(p.page ?? '')) ? p.page : null, here: have.has(ref), say: `${p.sale ? `Paid: ${priceWords(p.sale)}. Ask for approval of the exact quote before requesting payment. ` : 'Free. '}Add it: part_add { "part": "${ref}" }.` }) : null;
