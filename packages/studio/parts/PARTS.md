@@ -115,6 +115,33 @@ whose files were changed locally; a part with no licence; credit owed and missin
 share-alike part is pointed out for the person's decision, and a licence the toolkit does not know is said to be
 one to read.
 
+## An agent part
+
+A part of kind `agent` is a template for one of the studio's agents. In the chat, **New agent** lists the studio's
+agent parts; choosing one makes an agent with that name, persona and instructions (its own chat and memory start
+empty). Nothing in it runs: it is words, so it needs no `entry`.
+
+```json
+{
+  "id": "bookings-desk",
+  "name": "Bookings desk",
+  "kind": "agent",
+  "version": "1.0.0",
+  "summary": "Answers booking questions and keeps the calendar tidy.",
+  "agent": {
+    "name": "Bookings",
+    "persona": "Answers booking questions and keeps the calendar tidy.",
+    "instructions": "Check the calendar before promising a time. Ask Homie before changing the site.",
+    "tools": null
+  }
+}
+```
+
+`agent.name` (1 to 40 characters) is required; `persona` (up to 400) and `instructions` (up to 8000) are text;
+`tools` is left out or `null` for every tool, or a list of up to 40 tool names the agent may use. Agents can ask
+each other for help (two hops at most, three asks a turn, never back round a loop). Make one with
+`homie-studio parts new bookings-desk --kind agent`.
+
 ## What a studio's site serves
 
 `sharedPartsOf(studio)` (`lib/parts.mjs`) is the single answer to what a studio shares: its parts with

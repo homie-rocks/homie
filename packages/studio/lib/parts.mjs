@@ -30,7 +30,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, r
 import { dirname, join, relative } from 'node:path';
 
 export const PART_ID = /^[a-z0-9][a-z0-9-]{0,47}$/;
-export const PART_KINDS = Object.freeze(['character', 'rig', 'clips', 'environment', 'effect', 'sound', 'ui', 'mechanic', 'shader', 'level-generator', 'bot-brain', 'audio-pack', 'set-piece', 'quiz', 'menu-board', 'waitlist', 'live-total', 'loop', 'stem', 'track', 'video-intro', 'video-template', 'app', 'music', 'video']);
+export const PART_KINDS = Object.freeze(['character', 'rig', 'clips', 'environment', 'effect', 'sound', 'ui', 'mechanic', 'shader', 'level-generator', 'bot-brain', 'audio-pack', 'set-piece', 'quiz', 'menu-board', 'waitlist', 'live-total', 'loop', 'stem', 'track', 'video-intro', 'video-template', 'app', 'music', 'video', 'agent']);
 export const NETPLAY_KINDS = Object.freeze(['host-authoritative', 'replicated', 'local']);
 export const PROVENANCE = Object.freeze(['original', 'generated', 'imported']);
 export const PIVOTS = Object.freeze(['feet', 'centre', 'base', 'origin']);
@@ -319,6 +319,17 @@ export function checkPart(part, { id = null } = {}) {
     else {
       for (const k of ['inputs', 'state']) if (part.contract[k] !== undefined && !isObj(part.contract[k])) bad(`contract.${k}`, 'it is not an object of name to description', '{ "position": "where the player is, in metres" }');
       if (part.contract.netplay !== undefined && !NETPLAY_KINDS.includes(part.contract.netplay)) bad('contract.netplay', `"${String(part.contract.netplay).slice(0, 40)}" is not a netplay contract`, `one of: ${NETPLAY_KINDS.join(', ')}`);
+    }
+  }
+  // An agent part is a template for a studio agent (the chat's sidebar offers it under New agent): who it is, not code.
+  if (part.kind === 'agent') {
+    const a = part.agent, text = (v, max) => typeof v === 'string' && v.length <= max;
+    if (!isObj(a)) bad('agent', 'an agent part has no agent block', '{ "name": "Bookings", "persona": "what it does, in a line", "instructions": "how it works" }');
+    else {
+      if (!(text(a.name, 40) && a.name.trim())) bad('agent.name', 'it is not a name of 1 to 40 characters', '"Bookings"');
+      if (a.persona !== undefined && !text(a.persona, 400)) bad('agent.persona', 'it is not text of up to 400 characters', 'one line on what the agent does');
+      if (a.instructions !== undefined && !text(a.instructions, 8000)) bad('agent.instructions', 'it is not text of up to 8000 characters', 'how the agent should work');
+      if (a.tools !== undefined && a.tools !== null && !(Array.isArray(a.tools) && a.tools.length <= 40 && a.tools.every((t) => typeof t === 'string' && /^[\w:.-]{1,80}$/.test(t)))) bad('agent.tools', 'it is not a list of up to 40 tool names', 'leave it out to let the agent use every tool');
     }
   }
   if (part.kind === 'mechanic' && !NETPLAY_KINDS.includes(part.contract?.netplay)) warn('contract.netplay', 'a mechanic does not say how it behaves in a room', `${NETPLAY_KINDS.join(', ')}: another game needs to know who decides`);
@@ -646,6 +657,7 @@ export function newPart(root, id, { kind = 'mechanic', name = null, from = null,
     requires: {},
     ...(['character', 'rig', 'clips', 'environment', 'set-piece'].includes(kind) ? { physical: { units: 'metres', scale: 1, pivot: kind === 'environment' || kind === 'set-piece' ? 'origin' : 'feet', collision: null } } : {}),
     ...(['character', 'rig', 'clips'].includes(kind) ? { skeleton: { rig: null, clips: [] } } : {}),
+    ...(kind === 'agent' ? { agent: { name: title, persona: '', instructions: '' } } : {}),
     ...(kind === 'mechanic' || kind === 'bot-brain' ? { contract: { inputs: {}, state: {}, netplay: 'host-authoritative' } } : {}),
     cost: {},
     provenance: { source: 'original', notes: '' },
