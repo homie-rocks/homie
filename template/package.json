@@ -1,5 +1,5 @@
 {
-  "name": "my-studio-studio",
+  "name": "my-studio",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "studio": "homie-studio"
   },
   "devDependencies": {
-    "@homie-rocks/studio": "0.58.20",
+    "@homie-rocks/studio": "0.58.21",
     "typescript": "5.9.3",
     "wrangler": "4.150.0"
   },

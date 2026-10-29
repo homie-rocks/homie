@@ -17,13 +17,15 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
-## [0.58.21] - Unreleased
+## [0.58.21] - 2026-10-29
 
-<!-- pending-release: renumber before publishing -->
-
-**Plugin 0.58.14**
+**Plugin 0.58.15**
 
 A check, a playtest, a deploy or the site on your computer keeps going when the app or the AI's connection that started it goes away.
+
+### Added
+
+- A shared **Venue desk** part (`parts/venue-desk`) for any venue: public `venue_info` (schema.org hours with time zone, holiday exceptions, policies, FAQ, contact), booking contact and confirmation on top of `studio_book` holds (`venue_booking_details`, `venue_booking_confirm`, `venue_booking_status`, `venue_booking_cancel`), a waitlist (`venue_waitlist_join`, `venue_waitlist_status`), and owner tools to edit the info, see the desk and offer a freed slot (`venue_info_set`, `venue_desk`, `venue_waitlist_offer`). Offers go to an outbox; Homie never sends them. Opt in by copying its one-line `tools/` files.
 
 ### Fixed
 
