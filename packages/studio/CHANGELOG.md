@@ -21,6 +21,8 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 **Plugin 0.58.15**
 
+Also released: `@homie-rocks/physics` 0.1.3 (README matches the code; the studio's optional peer pin follows) and `@homie-rocks/nav` 0.1.2 (package metadata), so every published version is exactly what this release packs.
+
 A check, a playtest, a deploy or the site on your computer keeps going when the app or the AI's connection that started it goes away.
 
 ### Added
