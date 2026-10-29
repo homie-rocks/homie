@@ -13,7 +13,7 @@ kilograms. Worlds are right-handed and support Y-up or Z-up.
 Install the published package in a game or app:
 
 ```sh
-npm install --save-exact @homie-rocks/physics@0.1.2
+npm install --save-exact @homie-rocks/physics@0.1.3
 ```
 
 The optional `Three.js` module needs `three@0.185.1`. The core does not import it.

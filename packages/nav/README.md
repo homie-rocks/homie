@@ -11,7 +11,7 @@ Part of Homie's open engine packages. Games and apps can import navigation direc
 ## Install
 
 ```sh
-npm install --save-exact @homie-rocks/nav@0.1.1
+npm install --save-exact @homie-rocks/nav@0.1.2
 # Only for Three.js helpers:
 npm install --save-exact three@0.185.1
 ```

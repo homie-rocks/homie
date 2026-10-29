@@ -187,7 +187,7 @@
     "prepack": "node lib/build-identity.mjs --check && node ../../scripts/authoring-guides.mjs --check && node ../../scripts/studio-template-history.mjs --check"
   },
   "peerDependencies": {
-    "@homie-rocks/physics": "0.1.2"
+    "@homie-rocks/physics": "0.1.3"
   },
   "peerDependenciesMeta": {
     "@homie-rocks/physics": {
