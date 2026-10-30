@@ -9,7 +9,7 @@ import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/st
 test('MCP client reads bookings without a standing event stream; current role checks still hold',{timeout:30000},async()=>{
  const bundled=await build({stdin:{resolveDir:new URL('../worker/',import.meta.url).pathname,contents:`
   import worker,{Lobby} from './index.mjs';export {Lobby};
-  const cat={studio:{name:'Bookings'},games:[{id:'cafe',kind:'app',roles:{customer:{can:['create:bookings']},staff:{signIn:true,can:['read:bookings','delete:bookings']}},records:{persist:true,collections:{bookings:{fields:{name:{type:'string'}}},private:{fields:{name:{type:'string'}}}}}}]};
+  const cat={studio:{name:'Bookings'},games:[{id:'cafe',kind:'app',roles:{customer:{can:['create:bookings']},staff:{signIn:true,can:['read:bookings','update:bookings','delete:bookings']}},records:{persist:true,collections:{bookings:{fields:{name:{type:'string'},note:{type:'string'}}},private:{fields:{name:{type:'string'}}}}}}]};
   export default {fetch(req,env,ctx){
     env.ASSETS={fetch:async()=>Response.json(cat)};
     // Test fixture identities stand in for OAuthProvider's verified props.
@@ -51,6 +51,13 @@ test('MCP client reads bookings without a standing event stream; current role ch
   const conflict=await tool(null,'app_records',{app:'cafe',collection:'bookings',id:'first',operation:'create',data:{name:'Again'}});
   assert.equal(conflict.result.isError,true);assert.match(conflict.result.content[0].text,/record changed or already exists; reload/);
   assert.doesNotMatch(conflict.result.content[0].text,/Tool failed/);
+  // The owner patches one field without a version; the rest of the record is kept.
+  const patched=await tool('owner','app_records',{app:'cafe',collection:'bookings',id:'second',operation:'update',data:{note:'replied'}});
+  assert.equal(patched.result.isError,undefined,JSON.stringify(patched));
+  const kept=JSON.parse((await db.prepare("SELECT value FROM app_records WHERE id='second'").first()).value);
+  assert.equal(kept.note,'replied');assert.ok(kept.name);
+  const versionless=await tool('staff','app_records',{app:'cafe',role:'staff',collection:'bookings',id:'second',operation:'update',data:{note:'x'}});
+  assert.equal(versionless.result.isError,true);
   const removed=await tool('staff','app_records',{app:'cafe',role:'staff',collection:'bookings',id:'first',operation:'delete',version:1});
   assert.equal(removed.result.isError,undefined);assert.equal(await db.prepare("SELECT id FROM app_records WHERE id='first'").first(),null);
   await db.prepare("INSERT INTO player_emails(player,email,verified_at,added_at) VALUES('staff','staff@example.test',1,1)").run();

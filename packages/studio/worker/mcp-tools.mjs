@@ -55,6 +55,13 @@ export function services(env, cat, origin, caller, namespace, definition = {}) {
       candidates.sort((a,b)=>Number(b[1].signIn===true)-Number(a[1].signIn===true)||(b[1].can?.length??0)-(a[1].can?.length??0)||a[0].localeCompare(b[0]));
       role=candidates[0]?.[0];
     }
+    // update is a patch over the record as it is now; the owner may omit version to change the current record.
+    if(operation==='update'||(operation==='delete'&&version===undefined)){
+      const current=(await records({app,role,collection,id,operation:'read'})).records?.[0];
+      if(!current)throw Object.assign(new Error(`No ${collection} record ${id}.`),{name:'StudioOperationError'});
+      if(version===undefined){if(!caller.owner)throw Object.assign(new Error('Pass the record version you read.'),{name:'StudioOperationError'});version=current.version}
+      if(operation==='update')data={...current.data,...(data??{})};
+    }
     const url = new URL(`/${app}/api/app/records/${collection}${id ? '/'+id : ''}`,origin);if(role)url.searchParams.set('role',role);
     const method = {read:'GET',create:'POST',update:'PUT',delete:'DELETE'}[operation];if (!method) throw new Error('unsupported operation');
     const request = withToolIdentity(new Request(url,{method,headers:{origin,'content-type':'application/json'},...(method==='GET'?{}:{body:JSON.stringify({data,version})})}),caller);
@@ -234,7 +241,7 @@ export function builtins(env,cat,origin) {
       const released=[];for(const h of chosen)released.push(await ctx.bookings.release({id:h.id,token,version:h.version}));
       return {released};
     }),
-    tool('app_records','List, read, create, update or delete app records with the app role and record version.','public',object({app:str,role:str,collection:{type:'string',pattern:'^[a-z][a-z0-9-]{0,39}$'},id:{type:'string',pattern:'^[A-Za-z0-9_-]{1,64}$',description:'1–64 letters, digits, underscore or hyphen'},operation:{enum:['read','create','update','delete']},data:{type:'object',propertyNames:{pattern:'^[a-z][a-z0-9_]*$'},description:'Field names start with a lowercase letter and use lowercase letters, digits and underscore; discover fields with app_schema.'},version:{type:'integer',minimum:1}},['app','collection']), (args,ctx)=>ctx.records(args)),
+    tool('app_records','List, read, create, update or delete app records. update changes only the fields you pass (the rest are kept); version is the record version you read, and the studio owner may leave it out to change the current record.','public',object({app:str,role:str,collection:{type:'string',pattern:'^[a-z][a-z0-9-]{0,39}$'},id:{type:'string',pattern:'^[A-Za-z0-9_-]{1,64}$',description:'1–64 letters, digits, underscore or hyphen'},operation:{enum:['read','create','update','delete']},data:{type:'object',propertyNames:{pattern:'^[a-z][a-z0-9_]*$'},description:'Field names start with a lowercase letter and use lowercase letters, digits and underscore; discover fields with app_schema.'},version:{type:'integer',minimum:1}},['app','collection']), (args,ctx)=>ctx.records(args)),
   ];
   for(const [name,path,description] of [
     ['room_announce','announce','Announce to a room.'],['room_kick','kick','Ask the owner to remove a player.'],['room_mute','mute','Ask the owner to mute a player.'],['room_close','close','Ask the owner to close a room.'],['studio_game','game','Ask the owner to change game access or room size.'],['shop_refund','shop/refund','Ask the owner to refund an order.'],
