@@ -23,7 +23,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 MCP tool results never carry session cookies.
 
-### Security
+### Fixed
 
 - `studio_checkout`, `studio_cart` and `studio_purchase` no longer return `account.cookies` (the guest `studio_player` session cookie) to the MCP caller. A guest cart still returns `account.player`. Every MCP tool result, protocol result and error detail is now scrubbed of cookies, Set-Cookie values and session tokens. The website and HTTP routes still set their own cookies as before.
 
