@@ -17,6 +17,16 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.25] - 2026-10-29
+
+**Plugin 0.58.15**
+
+A booking checkout the payment provider refuses now says why.
+
+### Fixed
+
+- Booking checkout (`studio_checkout`): when the payment provider answers with an error (`state: 'error'`), the guest and the agent see the provider's own short reason instead of "Stripe did not answer".
+
 ## [0.58.24] - 2026-10-29
 
 **Plugin 0.58.15**
