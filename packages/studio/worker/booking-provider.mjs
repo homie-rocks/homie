@@ -1,4 +1,5 @@
 import { hasStripeKey } from './shop-links.mjs';
+import { StripeError } from './stripe.mjs';
 /**
  * A HOSTED BOOKING CHECKOUT PROVIDER (0.58.24). A host may bind HOMIE_PAYMENTS, a service that opens Stripe Checkout
  * for a studio's bookings on the host's own Stripe account (Homie's managed hosting does, in Stripe test mode, for
@@ -22,6 +23,8 @@ export async function providerOpen(env) {
 /** Opens the session through the provider and remembers that this order belongs to it. */
 export async function providerCheckout(env, orderId, params) {
   const session = await env.HOMIE_PAYMENTS.bookingCheckout(JSON.parse(JSON.stringify(params)));
+  // A provider that heard Stripe say no answers { state: 'error', message, status, code }: show Stripe's reason.
+  if (session?.state === 'error') throw new StripeError(Number.isInteger(session.status) ? session.status : 502, { error: { message: String(session.message ?? 'Stripe rejected the checkout').slice(0, 300), code: String(session.code ?? 'stripe').slice(0, 60) } });
   if (session?.state === 'rejected') throw Object.assign(new Error('The checkout is not open for this studio'), { code: 'closed' });
   if (typeof session?.id !== 'string' || !/^cs_(test|live)_[A-Za-z0-9]+$/.test(session.id)) throw new Error('The payment provider answered without a session');
   await env.DB.prepare('INSERT OR REPLACE INTO meta(key,value) VALUES(?1,?2)').bind(META(orderId), JSON.stringify({ session: session.id, livemode: session.livemode === true })).run();
