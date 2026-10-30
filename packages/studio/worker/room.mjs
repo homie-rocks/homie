@@ -29,7 +29,7 @@ export class NetRoom {
    *   each stamped `at` (ISO time) with its room; never a token, a ticket, a browser key or a frame's contents
    */
   constructor({
-    code, rules = false, tickHz = 20, maxPlayers = 8, maxScreens = 16, perIp = 12, stallMs = 1500, silentMs = 2500, idleMs = 10_000,
+    code, rules = false, tickHz = 20, maxPlayers = 8, lowerable = true, maxScreens = 16, perIp = 12, stallMs = 1500, silentMs = 2500, idleMs = 10_000,
     holdMs = 60_000, forgetMs = 60_000, persistMs = 30_000, store = null, now = Date.now, log = () => {},
     rates = null, agentsAloneMs = AGENTS_ALONE_MS, voteMs = VOTE.ms, voteCooldownMs = VOTE.cooldownMs, autoVoteMs = VOTE.autoMs,
   }) {
@@ -61,6 +61,8 @@ export class NetRoom {
     this.rules = rules === true;
     this.tickHz = tickHz;
     this.seatCap = maxPlayers;
+    // A room strangers are matched into (a pool room: pub-N, s-<id>-<n>) keeps its seats: only a named room's first visitor may lower them.
+    this.lowerable = lowerable;
     this.maxPlayers = maxPlayers;
     this.maxScreens = maxScreens;
     this.perIp = perIp;
@@ -675,10 +677,13 @@ export class NetRoom {
     // (speech, chat, reactions) keeps its pace, and so does every room a player's own browser hosts, where the
     // caps are what stands between that phone and the rest of the room.
     const social = t === 'say' || t === 'react' || t === 'ev' && SPEECH.test(kind ?? '');
-    const preset = this.server && !social ? null : t === 'ev' ? EV_RATES[view ? (c.seat === null ? 'screen' : 'replica') : this.roleOf(c)] : (RATES[t] ?? RATES.other);
-    const limit = this.rates?.[t] ?? preset;
+    // A type the relay does not know shares the "other" bucket: a socket that invents a new type for every
+    // message must not get a fresh allowance (and a fresh map entry) each time.
+    const bucket = Object.hasOwn(RATES, t) || (this.rates && Object.hasOwn(this.rates, t)) ? t : 'other';
+    const preset = this.server && !social ? null : t === 'ev' ? EV_RATES[view ? (c.seat === null ? 'screen' : 'replica') : this.roleOf(c)] : (RATES[bucket] ?? RATES.other);
+    const limit = (this.rates && Object.hasOwn(this.rates, bucket) ? this.rates[bucket] : undefined) ?? preset;
     if (!(Number.isFinite(limit) && limit > 0)) return true;
-    const rateKey = view ? `${t}:view` : t;
+    const rateKey = view ? `${bucket}:view` : bucket;
     const list = c.rates.get(rateKey) ?? [];
     while (list.length && list[0] <= now - 1000) list.shift();
     c.rates.set(rateKey, list);
@@ -969,7 +974,7 @@ export class NetRoom {
     c.typed = c.agent || this.policy.kids ? '' : typeof m.name === 'string' ? stripAi(m.name.replace(/\s+/g, ' ').trim()).slice(0, 24) : '';
     if (Array.isArray(m.caps)) for (const k of m.caps) if (CAPS.includes(k)) c.caps.add(k);
     // The manifest's player count, from the first visitor of an empty room (the site's Table reads the manifest).
-    if (!this.server && !this.rules && Number.isInteger(m.max) && !this.seats.size && !live.length) { this.askedMax = m.max; this.maxPlayers = Math.max(1, Math.min(this.seatCap, m.max)); }
+    if (this.lowerable && !this.server && !this.rules && Number.isInteger(m.max) && !this.seats.size && !live.length) { this.askedMax = m.max; this.maxPlayers = Math.max(1, Math.min(this.seatCap, m.max)); }
     this.reapSeats(now);
     // The verified pass names one AI. Reopening its socket resumes that seat and replaces the old socket.
     const agentStay = c.agent?.pass ? [...this.seats.values()].find(s => s.agent?.pass === c.agent.pass) : null;
@@ -1761,7 +1766,7 @@ export class NetRoom {
   restore(saved, graceMs = 3000) {
     const now = this.now();
     if (!saved || saved.v !== NET_VERSION || !(now - Number(saved.savedAt) < 120_000)) return false;
-    if (!this.server && !this.rules && saved.hosted !== 'server' && Number.isInteger(saved.maxPlayers)) this.maxPlayers = Math.max(1, Math.min(this.seatCap, saved.maxPlayers));
+    if (this.lowerable && !this.server && !this.rules && saved.hosted !== 'server' && Number.isInteger(saved.maxPlayers)) this.maxPlayers = Math.max(1, Math.min(this.seatCap, saved.maxPlayers));
     if (Number.isFinite(saved.openedAt) && saved.openedAt > 0) this.openedAt = saved.openedAt;
     for (const [seat, token, name, agent, occ, since] of saved.seats ?? []) this.seats.set(seat, { token, name, since: saved.durable && Number.isFinite(since) ? since : now, present: false, agent: agent && typeof agent === 'object' ? agent : null, ...(Number.isInteger(occ) ? { occ } : {}) });
     // A stay's number is never given twice while a checkpoint may still name it.

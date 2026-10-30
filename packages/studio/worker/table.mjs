@@ -137,6 +137,7 @@ export class Table {
     this.room = new NetRoom({
       code,
       maxPlayers: max,
+      lowerable: !pooledRoom(code),
       perIp: perAddress(max),
       store: {
         save: (o) => {

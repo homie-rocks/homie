@@ -268,8 +268,8 @@ code.
   `netplay.maxPlayers`, or a `netplay.json` beside game.json or in the game's build
   (`maxPlayers` or `players.max`), else game.json's `players.max`, else 8. **A room holds
   chosen by the studio** (`players.max`). `homie-studio build` writes the number into the catalogue and
-  the site's Table takes it from there; the first visitor of an empty room may lower it
-  (`hello.max`), never raise it.
+  the site's Table takes it from there; the first visitor of an empty named room may lower it
+  (`hello.max`), never raise it; a public room (`pub-N`, `s-<id>-<n>`) always keeps the studio's number.
 - **A dropped seat is held 60 s** for its token, which covers a reload or a network blip.
   **A visitor who is present beats one who left:** when no seat is free, the relay
   reclaims the seat that has been absent longest. Visitors who leave can never lock a
