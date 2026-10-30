@@ -10,7 +10,7 @@
     "studio": "homie-studio"
   },
   "devDependencies": {
-    "@homie-rocks/studio": "0.58.28",
+    "@homie-rocks/studio": "0.58.29",
     "typescript": "5.9.3",
     "wrangler": "4.150.0"
   },

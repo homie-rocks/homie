@@ -17,6 +17,31 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.29] - 2026-10-30
+
+**Plugin 0.58.15**
+
+Every studio tool now says whether it only reads or changes things, using the standard MCP tool annotations, so
+your AI client (Claude, Cursor, Grok Bot, your studio's Homie chat) asks you exactly when its own approval settings
+say to.
+
+### Added
+
+- Every built-in studio tool carries accurate MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`,
+  `openWorldHint`). Reads such as `studio_info`, `studio_stats`, `app_schema` and `studio_office_read` are marked
+  read-only; `app_records`, `studio_office_action` and `room_close` are marked destructive.
+- Your own tools (`defineTool`) take `annotations` and pass them to every AI client. `homie-studio tool new` writes
+  `readOnlyHint: true`, and tools/TOOLS.md says to set them accurately.
+
+### Changed
+
+- The README says `/mcp` and `/mcp/auth` are for outside AIs; the studio's own Homie chat never needs them.
+
+### Upgrade notes
+
+- Set `annotations` on your own tools: `readOnlyHint: true` on every tool that only reads. A tool without it is
+  treated as one that changes the studio.
+
 ## [0.58.28] - 2026-10-30
 
 **Plugin 0.58.15**

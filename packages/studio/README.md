@@ -127,6 +127,11 @@ overwriting the matching studio’s edits. Office links sign in directly and ret
 
 For signed-in staff AI connectors use `/mcp/auth`; it returns a 401 OAuth discovery
 challenge without a token. `/mcp` continues to serve public tools anonymously.
+These addresses are for outside AIs. The studio's own Homie chat is already inside the
+studio and never needs them. Every tool carries standard MCP annotations
+(`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`); the connecting
+client's own approval settings decide when a person confirms. Set them on your own tools
+(see tools/TOOLS.md).
 
 ## The site: the hub's shape, and a landing for every game
 

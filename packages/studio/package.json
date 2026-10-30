@@ -1,6 +1,6 @@
 {
   "name": "@homie-rocks/studio",
-  "version": "0.58.28",
+  "version": "0.58.29",
   "description": "Open-source tools that let your AI build and run a multiplayer game studio on its own Cloudflare: an MCP server, multiplayer starters, Workers and Durable Objects.",
   "type": "module",
   "license": "Apache-2.0",

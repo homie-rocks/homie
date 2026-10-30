@@ -114,6 +114,23 @@ export function services(env, cat, origin, caller, namespace, definition = {}) {
     async ai(model,input){if((!caller.owner&&!cat.studio?.mcp?.aiTools?.includes(definition.name))||!env.AI)throw new Error('Workers AI unavailable');return env.AI.run(model,input);},
   });
 }
+// Standard MCP annotations (spec defaults: readOnlyHint false, destructiveHint true,
+// idempotentHint false, openWorldHint true). Clients decide human approval from them.
+const READ={readOnlyHint:true,openWorldHint:false};
+const WRITE={readOnlyHint:false,destructiveHint:false,openWorldHint:false};
+const DESTROY={readOnlyHint:false,destructiveHint:true,openWorldHint:false};
+export const ANNOTATIONS=Object.freeze({
+  studio_info:READ,studio_office:READ,studio_shop:READ,studio_players:READ,studio_stats:READ,studio_posts:READ,studio_parts:READ,app_schema:READ,
+  studio_availability:READ,studio_events_read:READ,studio_events_webhook_status:READ,studio_function_runs:READ,studio_office_read:READ,
+  studio_catalogue:READ,studio_my_orders:READ,agent_look:READ,
+  studio_check_session:{...WRITE,idempotentHint:false},studio_events_clear:DESTROY,studio_events_webhook_test:{...WRITE,openWorldHint:true},
+  studio_function_replay:WRITE,studio_schedule_fire:WRITE,studio_function_fire:WRITE,app_role:{...WRITE,idempotentHint:true},
+  studio_book:WRITE,studio_holds:DESTROY,app_records:DESTROY,studio_office_action:DESTROY,
+  room_announce:{...WRITE,openWorldHint:true},room_kick:DESTROY,room_mute:WRITE,room_close:DESTROY,studio_game:WRITE,shop_refund:{...DESTROY,openWorldHint:true},
+  agent_sit:WRITE,agent_act:WRITE,agent_speak:{...WRITE,openWorldHint:true},agent_stand:WRITE,
+  studio_cart:WRITE,studio_checkout:{...WRITE,openWorldHint:true},studio_purchase:{...WRITE,openWorldHint:true},
+  studio_customer_refund:{...WRITE,openWorldHint:true},studio_purchase_refund:{...WRITE,openWorldHint:true},
+});
 export function builtins(env,cat,origin) {
   const tool=(name,description,audience,inputSchema,handler)=>({name,description,audience,inputSchema,handler});
   const tools=[
@@ -228,5 +245,6 @@ export function builtins(env,cat,origin) {
   tools.push(tool('studio_office_action','Use an existing office control. Destructive changes return a browser confirmation for the owner.','owner',object({operation:{enum:actions},action:{type:'object'}},['operation','action']),({operation,action},ctx)=>ctx.office('/_studio/api/'+operation,action)));
   for (const op of ['sit','look','act','speak','stand']) tools.push(tool('agent_'+op, 'A marked AI guide: '+op+'. Room policy and declared vocabulary apply.', 'signed-in', object({game:str,role:str,server:str,room:str,goal:str,line:str,args:{type:'object'}},['game']), async (args,ctx)=>(await import('./mcp-room.mjs')).remoteSeat(env,cat,ctx.caller,op,args)));
   tools.push(...selling.customerTools(env,cat,origin));
+  for(const tool of tools)if(!tool.annotations&&ANNOTATIONS[tool.name])tool.annotations=ANNOTATIONS[tool.name];
   return tools.map(tool => tool.name==='studio_function_runs'?tool:({...tool, delegateOffice:Object.hasOwn(cat.studio?.mcp?.audiences??{},tool.name), audience: cat.studio?.mcp?.audiences?.[tool.name] ?? tool.audience}));
 }

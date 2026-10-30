@@ -177,7 +177,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
             }
           }
         };
-        s.registerTool(tool.name,{description:tool.description,inputSchema:fromJsonSchema(schema,validator)},handler);
+        s.registerTool(tool.name,{description:tool.description,inputSchema:fromJsonSchema(schema,validator),...(tool.annotations?{annotations:tool.annotations}:{})},handler);
         dispatch.set(tool.name,{schema,handler});
       }
       // Payment binding errors are JSON-RPC errors, not tool failures. The SDK's

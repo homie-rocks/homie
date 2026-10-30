@@ -48,6 +48,12 @@ export interface StudioTool<Input = Record<string, unknown>> {
   description: string;
   audience: Audience;
   inputSchema: Record<string, unknown>;
+  /**
+   * Standard MCP tool annotations. Set them accurately: callers (Claude, Cursor, Grok Bot,
+   * the owner's own Homie) decide human approval from them. Set `readOnlyHint: true` on
+   * every tool that only reads; a tool without it is treated as one that changes the studio.
+   */
+  annotations?: { title?: string; readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean };
   /** Price in currency minor units; uses the studio purchase settlement and refund path. */
   price?: { amount: number; currency: string; refund?: string; refundWindowDays?: number; taxCode?: string; automaticTax?: boolean; taxBehavior?: 'inclusive' | 'exclusive' | 'unspecified' };
   /** Tools sharing an explicitly named namespace share only this studio's tool data. */

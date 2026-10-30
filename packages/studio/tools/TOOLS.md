@@ -23,6 +23,7 @@ export default defineTool<{ message: string }>({
   name: 'tonight_special',
   description: "Set tonight's special on the taproom wall",
   audience: { app: 'taproom', role: 'staff' },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   inputSchema: {
     type: 'object',
     properties: { message: { type: 'string', maxLength: 200 } },
@@ -37,6 +38,13 @@ export default defineTool<{ message: string }>({
 ```
 
 Use the built-in `app_schema` to discover record fields, valid values and your available roles before a remote record change.
+
+Always set standard MCP `annotations`, accurately. Set `readOnlyHint: true` on every
+tool that only reads; without it a tool is treated as one that changes the studio. On a
+change, set `destructiveHint` (deletes or overwrites), `idempotentHint` (safe to repeat)
+and `openWorldHint` (reaches people or services outside the studio). Homie has no
+proposal or confirmation step of its own: each AI client (Claude, Cursor, Grok Bot, the
+owner's Homie chat) asks its person for approval from these hints and its own settings.
 
 Choose `owner`, `signed-in`, `public` or an explicit `{ app, role }` audience. Never
 choose public just to avoid sign-in. The server checks this on every invocation;
