@@ -17,6 +17,16 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.24] - 2026-10-29
+
+**Plugin 0.58.15**
+
+A studio Homie approved for test payments takes booking payments in Stripe TEST mode.
+
+### Added
+
+- Booking checkout (`studio_checkout`, Venue desk `venue_booking_confirm`) opens a Stripe TEST Checkout page on Homie's sandbox account when the studio's `HOMIE_PAYMENTS` binding says test payments are open (the owner asks Talk to Homie, the Homie Team approves). Paying with a Stripe test card confirms the booking. Every other studio's booking checkout stays `closed`; no real money moves.
+
 ## [0.58.23] - 2026-10-29
 
 **Plugin 0.58.15**
