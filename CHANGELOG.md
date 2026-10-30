@@ -17,6 +17,26 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.28] - 2026-10-30
+
+**Plugin 0.58.15**
+
+Security fix for the multiplayer rooms (GHSA-px89-jm6h-gwww, medium). Thanks to @bmoconnor1969-ai for the report,
+the fixes and the tests.
+
+### Fixed
+
+- A visitor who sends a different made-up message type each time is now paced and then disconnected for flooding,
+  like any other flood. Before, each new type got its own allowance, so the socket was never slowed down and the
+  room's memory grew with every message.
+- A public room (`pub-N`, or a server's `s-<id>-<n>`) now keeps the studio's seat count. Before, its first visitor
+  could send `hello.max: 1` and turn everyone after them into a spectator. A named room (`?room=`) still lets its
+  first visitor lower the count, as NETPLAY.md says.
+
+### Upgrade notes
+
+- Upgrade studios that run multiplayer games: "Upgrade my studio to the newest Homie."
+
 ## [0.58.27] - 2026-10-30
 
 **Plugin 0.58.15**
