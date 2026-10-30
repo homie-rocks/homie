@@ -3,6 +3,7 @@ import {loadAndAllocateResources} from './booking-resources.mjs';
 import {normalizeBookingArgs} from './booking-options.mjs';
 import {BOOKINGS_MIGRATION} from './booking-store.mjs';
 import {linkConfig,hasStripeKey} from './shop-links.mjs';
+import {syncProviderOrder} from './booking-provider.mjs';
 export const BOOKING_HOLDS_MIGRATION_FILE='0029_booking_holds.sql';
 export const BOOKING_HOLDS_MIGRATION=`
 ALTER TABLE shop_bookings ADD COLUMN paid_at INTEGER;
@@ -62,7 +63,7 @@ export function bookingHolds(env,caller,cat){
   const changed=await env.DB.prepare(`UPDATE shop_bookings SET state=?2,version=version+1,updated_at=?3 WHERE id=?1 AND version=?4 AND state IN ('held','confirmed') AND (?2='released' OR hold_until>?3) RETURNING *`).bind(row.id,state,Date.now(),args.version).first();
   if(!changed)throw refusal('Booking changed or expired; reload',409,'hold_changed_or_expired');return result(changed);
  };
- return Object.freeze({
+ const holds=Object.freeze({
   calendar({app,...options}){const meta=cat.games.find(g=>g.id===app&&g.kind==='app');if(!meta)throw refusal('Unknown app');return calendarSlots({timeZone:meta.timeZone,...options});},
   async hold(input){
    const args=normalizeBookingArgs(input);
@@ -107,9 +108,18 @@ export function bookingHolds(env,caller,cat){
    if(token!==undefined&&!(typeof token==='string'&&/^[a-f0-9]{32,128}$/.test(token)))throw refusal('Invalid private booking token',400,'invalid_token');
    if(!token&&!caller.id)throw refusal('Pass the private token you gave studio_book',400,'token_required');
    const rows=(await env.DB.prepare(`SELECT * FROM shop_bookings WHERE (${token?'token_hash=?1':'actor=?1'}) AND (?2 IS NULL OR app=?2 OR app LIKE ?2||':check:%') AND (?3=0 OR (state='confirmed' OR state='held' AND hold_until>?4)) ORDER BY updated_at DESC LIMIT 50`).bind(token?await hash(token):caller.id,app??null,active?1:0,Date.now()).all()).results??[];
-   return rows.filter(r=>!caller.testScope||r.app.endsWith(':check:'+caller.testScope)).map(result);
+   const own=rows.filter(r=>!caller.testScope||r.app.endsWith(':check:'+caller.testScope));
+   let synced=false;
+   for(const r of own.filter(r=>r.state==='held'&&typeof r.order_id==='string'&&r.order_id.startsWith('ord_')).slice(0,3))synced=await syncProviderOrder(env,cat,r.order_id)||synced;
+   if(synced)return holds.mine({token,app,active});
+   return own.map(result);
   },
-  async get(args){return result(await ownedHold(env,caller,args));},
+  async get(args){
+   let row=await ownedHold(env,caller,args);
+   // A booking paid through the host's checkout provider is recorded when its owner next looks (booking-provider.mjs).
+   if(row.state==='held'&&typeof row.order_id==='string'&&row.order_id.startsWith('ord_')&&await syncProviderOrder(env,cat,row.order_id))row=await ownedHold(env,caller,args);
+   return result(row);
+  },
   confirm:args=>change(args,'confirmed'),release:args=>change(args,'released'),
   async releaseExpired({app,collection,now=Date.now()}){
    if(!caller.owner)throw refusal('Owner or scheduled function required');
@@ -118,6 +128,7 @@ export function bookingHolds(env,caller,cat){
    const r=await env.DB.prepare("UPDATE shop_bookings SET state='released',version=version+1,updated_at=?3 WHERE app=?1 AND collection=?2 AND order_id='hold:'||id AND state='held' AND hold_until<=?3").bind(scope,collection,now).run();return {released:r.meta.changes};
   }
  });
+ return holds;
 }
 /** Used in the same transaction as the order reservation. A second checkout cannot claim the hold. */
 export function claimHoldStatement(env,{hold,app,collection,slots,slot,quantity,order,now=Date.now()}){

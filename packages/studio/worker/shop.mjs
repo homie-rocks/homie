@@ -6,6 +6,7 @@ import { bindSubscription, subscriptionEvent, subscriptionPortal } from './shop-
 import { bookingStatement } from './booking-store.mjs';
 import { paymentRefunds } from './shop-refunds.mjs';
 import { selling } from './extensions.mjs';
+import { providerOpen, providerCheckout } from './booking-provider.mjs';
 /**
  * THE SHOP (@homie-rocks/studio 0.24.0): a studio sells with ITS OWN Stripe account (shop/SHOP.md is the guide).
  * The studio is the seller; homie.rocks never sees, holds or moves its money, and Homie takes no cut.
@@ -514,9 +515,10 @@ export async function reconcileOrders(env, shop, player = null, { expireOpen = f
 }
 
 /** Make the order row, then Stripe's Checkout Session. Returns { order, url } or a refusal Response. */
-async function startCheckout(env, url, cat, shop, item, { player, game, amount, parent = false, lines = null, reference = null, booking = null, requestAt = Date.now() }) {
+async function startCheckout(env, url, cat, shop, item, { player, game, amount, parent = false, lines = null, reference = null, booking = null, requestAt = Date.now(), provider = false }) {
   lines ??= [{ item, amount, quantity: 1 }];
-  const keyless = (amount > 0 || lines.some(l => l.item.interval)) && !hasStripeKey(env);
+  if (provider && (!booking || lines.some(l => l.item.interval))) provider = false;
+  const keyless = (amount > 0 || lines.some(l => l.item.interval)) && !hasStripeKey(env) && !provider;
   const config=linkConfig(env);
   if(booking?.hold&&keyless)return {error:fail(409,'booking','A held slot needs session checkout; keyless payment links cannot claim it.')};
   if(booking && amount===0 && !hasStripeKey(env) && config?.slots?.some(l=>l.app===game&&l.slots===booking.slots&&l.slot===booking.slot))return {error:fail(409,'booking','Publish a separate local slot for a free booking; it cannot share a paid Stripe capacity budget.')};
@@ -595,9 +597,9 @@ async function startCheckout(env, url, cat, shop, item, { player, game, amount, 
     try {
       const checkoutParams = params();
       if (booking) await env.DB.prepare('INSERT INTO meta(key,value) VALUES(?1,?2)').bind(`booking-checkout:${order.id}`, JSON.stringify(checkoutParams)).run();
-      session = await createCheckoutSession(env, checkoutParams, { idempotencyKey: `checkout-${order.id}` });
+      session = provider ? await providerCheckout(env, order.id, checkoutParams) : await createCheckoutSession(env, checkoutParams, { idempotencyKey: `checkout-${order.id}` });
     } catch (error) {
-      if (!useCatalog || !isMissingProduct(error)) throw error;
+      if (provider || !useCatalog || !isMissingProduct(error)) throw error;
       for (const line of lines) line.product = null;
       session = await createCheckoutSession(env, params(), { idempotencyKey: `checkout-${order.id}-inline` });
     }
@@ -634,7 +636,9 @@ async function buyRoute(request, env, url, cat, shop, ready, ctx, requestAt) {
   const reference = b.body.reference ?? null;
   if (reference !== null && (typeof reference !== 'string' || !reference.trim() || /[\u0000-\u001f\u007f]/.test(reference))) return fail(400, 'reference', 'reference must be a nonempty string without control characters');
   const freeOnly = (b.body.lines ?? [{ item: b.body.item }]).every?.((l) => shop.items.some((i) => i.id === l?.item && i.price === 0 && !i.interval));
-  if (!ready.ready && !(freeOnly && ready.missing.every((m) => ['payment-links', 'webhook-secret', 'fuller-checkout'].includes(m)))) return fail(503, 'closed', 'The shop is not open yet.', { missing: ready.missing, next: ready.next, migration: ready.migration });
+  // A host's booking checkout provider (booking-provider.mjs) takes the place of the studio's own Stripe setup, for bookings only.
+  const provider = b.body.booking !== undefined && !ready.ready && ready.missing.every((m) => ['payment-links', 'webhook-secret', 'fuller-checkout', 'stripe-key'].includes(m)) && await providerOpen(env);
+  if (!ready.ready && !provider && !(freeOnly && ready.missing.every((m) => ['payment-links', 'webhook-secret', 'fuller-checkout'].includes(m)))) return fail(503, 'closed', 'The shop is not open yet.', { missing: ready.missing, next: ready.next, migration: ready.migration });
   const requested = b.body.lines ?? [{ item: b.body.item, quantity: b.body.quantity ?? 1, amount: b.body.amount }];
   // Stripe's documented limit, not a studio policy: https://docs.stripe.com/api/checkout/sessions/create#line_items
   if (!Array.isArray(requested) || !requested.length || requested.length > 100) return fail(400, 'stripe-lines', 'Stripe Checkout takes between 1 and 100 lines.');
@@ -694,7 +698,7 @@ async function buyRoute(request, env, url, cat, shop, ready, ctx, requestAt) {
       }catch{return fail(403,'booking','Booking owner required');}
     }
   }
-  const r = await startCheckout(env, url, cat, shop, item, { player, game, amount, lines, reference, booking, requestAt });
+  const r = await startCheckout(env, url, cat, shop, item, { player, game, amount, lines, reference, booking, requestAt, provider: provider && !!booking });
   const response = r.error ?? json({ ok: true, order: r.order.id, url: r.url, ...(booking ? { booking: booking.hold??r.order.id } : {}) });
   if (!r.error && !r.reconciled && ctx?.waitUntil) ctx.waitUntil(reconcileOrders(env, shop, player.id).catch((error) => logOrderError(env, r.order.id, error)));
   for (const cookie of cookies) response.headers.append('set-cookie', cookie);
