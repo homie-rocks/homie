@@ -51,6 +51,7 @@ import { MAX_ASSET_BYTES, R2_COST, mediaPlan, r2OverOf, recordMove, sha256File, 
 import { whyFailed } from './net.mjs';
 import { repoOf } from './repo.mjs';
 import { keptRoutes, readConfig, readZoneRoutes, routesOf, shadowedDomain, wideRouteRefusal, zoneFinding } from './routes.mjs';
+import { reconcileBeforeApply } from './migration-ledger.mjs';
 import { ensureLocalIgnored, ensureMigrations, migrationWord } from './scaffold.mjs';
 import { LOCAL_STATE, configPath, domainOrigin, isRulesGame, isWorkersDev, layoutOf, listExperiences as listGames, readLocal, readStudio, siteUrl, workerDir, writeLocal, writeStudio } from './studio.mjs';
 
@@ -446,6 +447,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   if (routes) step(`kept the studio's own route${routes.length === 1 ? '' : 's'} in wrangler.jsonc: ${routes.map((r) => r.pattern).join(', ')}`);
   for (const added of ensureMigrations(root)) step(`added ${added} (${migrationWord(added)})`);
   try {await ensureBackgroundQueues(root,w,{accountId,...(fetchFn?{fetchFn}:{})});for(const key of readStudio(root).cloudflare.created??[])created.add(key);} catch(error) {return refuse(error.message);}
+  await reconcileBeforeApply(root, w, cf.d1, { step });
   const migrate = w(['d1', 'migrations', 'apply', cf.d1, '--remote']);
   if (migrate.code !== 0) return refuse(`D1 migrations failed: ${wranglerError(migrate.out)}`, migrate.out);
   try {const replication=await enableReadReplication(root,w,{accountId,databaseId:db.uuid,...(fetchFn?{fetchFn}:{})});step(replication.enabled?'D1 read replication enabled':`D1 uses the primary: ${replication.reason}`);} catch(error) {step(`D1 uses the primary: ${error.message}`);}
@@ -672,6 +674,7 @@ export async function ciDeploy(root, { log = () => {}, wrangler = null, preview 
   // A platform target's queues are the platform's (lib/dispatch-target.mjs).
   if (!target) { try {await ensureBackgroundQueues(root,w);} catch(error) {return refuse(error.message);} }
   const apply = () => w(['d1', 'migrations', 'apply', names.binding, '--remote']);
+  await reconcileBeforeApply(root, w, names.binding, { step });
   let migrate = apply();
   const first = !target && migrate.code !== 0 && /not found|could(?:n't| not) find|does not exist|no database|database_id/i.test(migrate.out);
   if (migrate.code !== 0 && !first) return refuse(`D1 migrations failed: ${wranglerError(migrate.out)}`, migrate.out);

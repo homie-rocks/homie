@@ -17,6 +17,16 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.27] - 2026-10-30
+
+**Plugin 0.58.15**
+
+A deploy no longer stops on "duplicate column" when the database already has the schema its migrations make.
+
+### Fixed
+
+- `homie-studio deploy` (local and CI, preview and live): when the D1 database already has the tables, columns, indexes and triggers of migration files that its ledger (`d1_migrations`) does not list, as after a database was made from the studio's schema in one go, those files are recorded as applied before `wrangler d1 migrations apply` runs, instead of being replayed and failing with `duplicate column name` (for example `server` from `0006_studio_servers.sql` or `expires_at` from `0010`). What each file makes is read by running the studio's own migrations on an empty in-memory SQLite and comparing `PRAGMA table_info` and `sqlite_master` before and after each file, not by reading the SQL. A file is only recorded when everything it adds is already in the live database; a file that only changes data, a file that is half there, and every file after it run as before. If the check cannot run, the deploy applies migrations exactly as it did.
+
 ## [0.58.26] - 2026-10-29
 
 **Plugin 0.58.15**
