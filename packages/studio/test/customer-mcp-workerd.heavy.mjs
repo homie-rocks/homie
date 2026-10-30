@@ -59,9 +59,8 @@ test('outside customer uses /mcp for catalogue, cart, standard payment, priced t
   const fired=await r.db.prepare("SELECT value FROM tool_data WHERE namespace='function:paid-order' AND key=?1").bind('purchase_orders:'+result.order+':paid').first();assert.equal(JSON.parse(fired.value).order,result.order);
   const cart=await client.callTool({name:'studio_cart',arguments:{lines:[{item:'coffee',quantity:2}]}});assert.equal(cart.isError,undefined,JSON.stringify(cart));const offer=JSON.parse(cart.content[0].text).data;
   const bought=await client.callTool({name:'studio_purchase',arguments:{kind:offer.kind,resource:offer.resource,version:offer.version,offerVersion:offer.offerVersion,buyer:'c'.repeat(64),claim:'d'.repeat(64)}});assert.equal(bought.isError,undefined,JSON.stringify(bought));
-  const cookie=offer.account.cookies[0].split(';')[0];
-  const mine=await r.fetcher(origin+'/api/shop/mine',{headers:{cookie}});assert.equal(mine.status,200);assert.match(await mine.text(),/coffee/);
-  const order=JSON.parse(bought.content[0].text).order;assert.ok(order);assert.equal((await r.db.prepare('SELECT status FROM shop_orders WHERE id=?1').bind(order).first()).status,'paid');
+  assert.equal(JSON.stringify(offer).match(/studio_player=|cookies/),null,'no session cookies in MCP results');
+  const order=JSON.parse(bought.content[0].text).order;assert.equal((await r.db.prepare('SELECT player FROM shop_orders WHERE id=?1').bind(order).first()).player,offer.account.player.id);assert.ok(order);assert.equal((await r.db.prepare('SELECT status FROM shop_orders WHERE id=?1').bind(order).first()).status,'paid');
   assert.equal((await r.db.prepare('SELECT quantity FROM shop_entitlement_lines WHERE order_id=?1').bind(order).first()).quantity,2);
   assert.equal(charges,2);
   const payment=(await r.db.prepare('SELECT payment FROM purchase_orders WHERE id=?1').bind(order).first()).payment;
@@ -87,7 +86,7 @@ test('a person approves a priced service on the studio Stripe checkout and the A
  }finally{await client.close();await r.mf.dispose();await w.close();}
 });
 
-test('claim and web refunds share tip and used-item policy; guest quotes return usable sessions before charging',{timeout:120000},async()=>{
+test('claim and web refunds share tip and used-item policy; guest quotes bind an account before charging and return no session cookies',{timeout:120000},async()=>{
  const w=await world('customer-refund-policy',{key:LIVE_KEY,shop:{v:1,till:'stripe',currency:'usd',refundDays:14,guestBuyersPerAddressPerHour:3,policy:{refundUsedItems:false},items:[{id:'coins',name:'Coins',kind:'supporter',price:400,gives:['coins']},{id:'tip',name:'Tip',kind:'tip',price:100}]}});
  await configureMachine(w,{profile:'profile_test'});const r=await runtime(w),client=new Client({name:'refund-test',version:'1'});
  try{
@@ -95,12 +94,12 @@ test('claim and web refunds share tip and used-item policy; guest quotes return 
   McpClient.wrap(client,{methods:[stripe.charge({paymentMethod:'pm_card',createToken:async()=>{const token='spt_refund_'+ ++charges;w.st.spts.set(token,{max:10000,currency:'usd'});return token;}})]});
   for(const [i,item] of ['tip','coins','coins'].entries()){
     const quoted=await client.callTool({name:'studio_cart',arguments:{lines:[{item}]}});assert.equal(quoted.isError,undefined,JSON.stringify(quoted));const offer=JSON.parse(quoted.content[0].text).data;
-    assert.ok(offer.account.cookies.length);assert.ok(await r.db.prepare('SELECT id FROM players WHERE id=?1').bind(offer.account.player.id).first());
+    assert.equal(JSON.stringify(offer).match(/studio_player=|cookies/),null,'no session cookies in MCP results');assert.ok(await r.db.prepare('SELECT id FROM players WHERE id=?1').bind(offer.account.player.id).first());
     const claim=String(i+1).repeat(64),buyer=String(i+4).repeat(64);
     const result=await client.callTool({name:'studio_purchase',arguments:{kind:offer.kind,resource:offer.resource,version:offer.version,offerVersion:offer.offerVersion,claim,buyer}});assert.equal(result.isError,undefined,JSON.stringify(result));const order=JSON.parse(result.content[0].text).order;
-    const cookie=offer.account.cookies[0].split(';')[0];const mine=await r.fetcher(origin+'/api/shop/mine',{headers:{cookie}});assert.equal(mine.status,200);assert.match(await mine.text(),new RegExp(order));
+    assert.equal((await r.db.prepare('SELECT player FROM shop_orders WHERE id=?1').bind(order).first()).player,offer.account.player.id);const cookie='studio_player=none';
     if(i===1)await r.db.prepare('UPDATE entitlements SET used_at=?2 WHERE order_id=?1').bind(order,Date.now()).run();
-    if(i<2){const web=await r.fetcher(origin+'/api/shop/refund',{method:'POST',headers:{origin,cookie,'content-type':'application/json'},body:JSON.stringify({order})});assert.equal(web.status,403,await web.clone().text());const claimRefund=await r.post('/api/purchases/refund',{},claim);assert.equal(claimRefund.status,403,await claimRefund.clone().text());if(i===1){w.cat.shop.policy={...w.cat.shop.policy,refundUsedItems:true};await (await r.mf.getR2Bucket('STATIC')).put('/games.json',JSON.stringify(w.cat));const allowed=await r.post('/api/purchases/refund',{},claim);assert.equal(allowed.status,200,await allowed.clone().text());assert.equal((await allowed.json()).ok,true,'studio explicitly allows used-item refunds');}}
+    if(i<2){const web=await r.fetcher(origin+'/api/shop/refund',{method:'POST',headers:{origin,cookie,'content-type':'application/json'},body:JSON.stringify({order})});assert.equal(web.status,401,'an MCP guest has no web session to refund with');const claimRefund=await r.post('/api/purchases/refund',{},claim);assert.equal(claimRefund.status,403,await claimRefund.clone().text());if(i===1){w.cat.shop.policy={...w.cat.shop.policy,refundUsedItems:true};await (await r.mf.getR2Bucket('STATIC')).put('/games.json',JSON.stringify(w.cat));const allowed=await r.post('/api/purchases/refund',{},claim);assert.equal(allowed.status,200,await allowed.clone().text());assert.equal((await allowed.json()).ok,true,'studio explicitly allows used-item refunds');}}
     else {const refund=await r.post('/api/purchases/refund',{},claim);assert.equal(refund.status,200,await refund.clone().text());assert.equal((await refund.json()).ok,true);}
   }
   const blocked=await client.callTool({name:'studio_cart',arguments:{lines:[{item:'coins'}]}});assert.equal(blocked.isError,true);assert.equal(charges,3,'opted-in guest refusal happens before any payment');
@@ -128,7 +127,7 @@ test('hosted cart checkout binds the account from the quote and returns grants t
   const checkout=await client.callTool({name:'studio_purchase',arguments:{kind:offer.kind,resource:offer.resource,version:offer.version,offerVersion:offer.offerVersion,buyer:'a'.repeat(64),claim:'b'.repeat(64),checkout:true}});assert.equal(checkout.isError,undefined,JSON.stringify(checkout));
   const row=await r.db.prepare('SELECT player FROM shop_orders').first();assert.equal(row.player,offer.account.player.id);assert.equal((await r.db.prepare('SELECT COUNT(*) n FROM players').first()).n,1);
   const session=[...w.st.sessions.values()].at(-1);const hook=await r.event('checkout.session.completed',w.st.complete(session.id));assert.equal(hook.status,200,await hook.clone().text());
-  const mine=await r.fetcher(origin+'/api/shop/mine',{headers:{cookie:offer.account.cookies[0].split(';')[0]}});assert.match(await mine.text(),/coffee/);
+  assert.equal(JSON.stringify(offer).match(/studio_player=|cookies/),null,'no session cookies in MCP results');assert.equal((await r.db.prepare('SELECT status FROM shop_orders').first()).status,'paid');
  }finally{await client.close();await r.mf.dispose();await w.close();}
 });
 

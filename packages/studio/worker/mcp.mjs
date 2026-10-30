@@ -1,5 +1,6 @@
 import {studioOrigin} from './studios-client.mjs';
 import {studioToken,studioCaller,setStudioPolicy,studioRegistration} from './studios-auth.mjs';
+import {withoutSessionMaterial,resultWithoutSessionMaterial} from './mcp-result-safety.mjs';
 import {tokenCaller,toolInScope} from './connector-token.mjs';
 import {eventMethods,eventsCapability} from './mcp-events-wire.mjs';
 import {eventsRequest} from './mcp-events.mjs';
@@ -154,9 +155,10 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
             if(!toolInScope(fresh,tool.name)||!await allowed(tool.audience,fresh,env)){outcome='denied';throw new Error('Permission denied');}
             try{await rate(fresh);}catch(error){outcome='limited';throw error;}
             const context=services(env,cat,origin,fresh,(tool.namespace??tool.name)+(fresh.testScope?':check:'+fresh.testScope:''),tool);
-            if(tool.price) {const result=await selling.paidTool(env,cat,origin,tool,args,context,extra);outcome=result.isError?'error':'ok';return result;}
-            if(tool.protocol) {const result=await tool.handler(args,{...context,paymentExtra:extra});outcome=result.isError?'error':'ok';return result;}
-            const value=await (await import('./app-tools.mjs')).invokeAppTool(tool,args,{...context,request});
+            if(tool.price) {const result=resultWithoutSessionMaterial(await selling.paidTool(env,cat,origin,tool,args,context,extra));outcome=result.isError?'error':'ok';return result;}
+            if(tool.protocol) {const result=resultWithoutSessionMaterial(await tool.handler(args,{...context,paymentExtra:extra}));outcome=result.isError?'error':'ok';return result;}
+            // No tool result carries cookies or session tokens back to the MCP caller.
+            const value=withoutSessionMaterial(await (await import('./app-tools.mjs')).invokeAppTool(tool,args,{...context,request}));
             const text=JSON.stringify({kind:'untrusted-tool-data',tool:tool.name,data:value});
             outcome='ok';return {structuredContent:{kind:'untrusted-tool-data',tool:tool.name,data:value??null},content:[{type:'text',text}]};
           }catch(error){if(error?.code===-32042)throw error;
@@ -164,7 +166,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
             const message=shown?error.message:freshErrorMessage(error,env,caller);
             // Stable, machine-readable refusal: {kind:'studio-error',error:{code,message,status}}. Codes only ever get added.
             const code=typeof error?.code==='string'&&/^[a-z0-9_-]{1,64}$/.test(error.code)?error.code:outcome==='denied'?'forbidden':outcome==='limited'?'rate_limited':error?.message==='Input does not match the tool schema'?'invalid_input':error?.name==='StudioOperationError'?({400:'invalid_request',403:'forbidden',404:'not_found',409:'conflict'}[error.status]??'refused'):'internal_error';
-            return {isError:true,structuredContent:{kind:'studio-error',tool:tool?.name??null,error:{code,message,...(Number.isInteger(error?.status)?{status:error.status}:{}),...(shown&&error?.details&&typeof error.details==='object'?{details:error.details}:{})}},content:[{type:'text',text:message}]};}
+            return {isError:true,structuredContent:{kind:'studio-error',tool:tool?.name??null,error:{code,message,...(Number.isInteger(error?.status)?{status:error.status}:{}),...(shown&&error?.details&&typeof error.details==='object'?{details:withoutSessionMaterial(error.details)}:{})}},content:[{type:'text',text:message}]};}
           finally{
             try { await audit(env,caller,tool.name,outcome); }
             finally {

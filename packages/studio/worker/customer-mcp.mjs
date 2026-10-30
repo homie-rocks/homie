@@ -11,6 +11,7 @@ import {shopRoutes} from './shop.mjs';
 import {object} from './mcp-tools.mjs';
 import {withToolIdentity} from './tool-identity.mjs';
 import {digest} from './purchase-crypto.mjs';
+import {withoutSessionMaterial} from './mcp-result-safety.mjs';
 const str={type:'string'};
 const cartSchema=object({lines:{type:'array',minItems:1,items:object({item:str,quantity:{type:'integer',minimum:1},amount:{type:'integer',minimum:0}},['item'])},game:str},['lines']);
 export async function customerShop(env,cat,origin,caller,path,args) {
@@ -18,14 +19,13 @@ export async function customerShop(env,cat,origin,caller,path,args) {
   const request=withToolIdentity(new Request(url,{method:post?'POST':'GET',headers:{origin,'content-type':'application/json'},...(post?{body:JSON.stringify(args)}:{})}),caller);
   const response=await shopRoutes(request,env,{},url,{catalogueOf:async()=>cat});
   if(!response)return {ok:false,error:'Shop unavailable'};
-  const data=await response.json();
-  const cookies=response.headers.getSetCookie?.()??[response.headers.get('set-cookie')].filter(Boolean);
-  return {...data,...(cookies.length?{account:{cookies}}:{})};
+  // Any Set-Cookie on the internal response stays here: an MCP caller never receives session cookies.
+  return withoutSessionMaterial(await response.json());
 }
 export function customerTools(env,cat,origin) {
   return [
     {name:'studio_catalogue',description:'Browse the public shop, paid parts and app goods. Prices use the studio’s currency minor units.',audience:'public',inputSchema:object(),handler:async(_args,ctx)=>({shop:await customerShop(env,cat,origin,ctx.caller,'/api/shop'),resources:await listOffers(env,origin)})},
-    {name:'studio_cart',description:'Quote a cart for agent payment. Retain the returned private account cookies to use guest purchases. Approve this immutable offerVersion before purchase.',audience:'public',inputSchema:cartSchema,handler:(args,ctx)=>quoteCart(env,cat,origin,ctx.caller,args,ctx.request)},
+    {name:'studio_cart',description:'Quote a cart for agent payment. A guest cart gets its own pre-payment account (account.player); no session cookies are returned. Approve this immutable offerVersion before purchase.',audience:'public',inputSchema:cartSchema,handler:(args,ctx)=>quoteCart(env,cat,origin,ctx.caller,args,ctx.request)},
     {name:'studio_checkout',description:'Open the studio’s Stripe checkout for a person to approve; returns url. For a booking pass the same top-level app, hold (data.id from studio_book) and token as the venue tools: the line (the booking\'s service item × its quantity) is filled in. For goods pass lines from studio_catalogue. Uses the same cart, account, order and refund as the website.',audience:'public',inputSchema:{type:'object',properties:{...cartSchema.properties,reference:str,app:str,hold:{type:'string',pattern:'^(hold_[a-f0-9]{48}|[a-f0-9]{64})$'},token:{type:'string',pattern:'^[a-f0-9]{32,128}$'},booking:object({collection:str,slot:str,hold:str,token:str},['collection','slot'])},additionalProperties:false},handler:async(args,ctx)=>{
       const coded=(code,message,status=400)=>Object.assign(new Error(message),{name:'StudioOperationError',status,code});
       const {app,hold,token,...rest}=args;let body=rest;
