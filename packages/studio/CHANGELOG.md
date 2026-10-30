@@ -17,6 +17,16 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.26] - 2026-10-29
+
+**Plugin 0.58.15**
+
+MCP tool results never carry session cookies.
+
+### Security
+
+- `studio_checkout`, `studio_cart` and `studio_purchase` no longer return `account.cookies` (the guest `studio_player` session cookie) to the MCP caller. A guest cart still returns `account.player`. Every MCP tool result, protocol result and error detail is now scrubbed of cookies, Set-Cookie values and session tokens. The website and HTTP routes still set their own cookies as before.
+
 ## [0.58.25] - 2026-10-29
 
 **Plugin 0.58.15**
