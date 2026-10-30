@@ -1312,8 +1312,9 @@ async function api(request, env, url, cat) {
     if (!o) return json({ ok: false, error: 'order', message: 'No such order (homie-studio shop orders lists them).' }, 404);
     Object.assign(action, { item: o.item, amount: Number(o.amount), currency: o.currency });
   }
-  // An office key (the owner's AI) only ASKS for what takes something away; the owner confirms with one tap.
-  if (who === 'office' && await needsAsk(env, cat, action)) {
+  // A static office key only ASKS for what takes something away; the owner's own MCP tool call acts directly
+  // (approval is the owner's client's, from the tool's standard annotations).
+  if (who === 'office' && !toolIdentity(request)?.owner && await needsAsk(env, cat, action)) {
     if (op === 'kick' || op === 'mute') {
       const found = await nameIn(env, cat, action);
       if (!found) return json({ ok: false, error: 'no-player', message: 'Nobody is in that seat of that room now (studio_office lists who is).' }, 404);

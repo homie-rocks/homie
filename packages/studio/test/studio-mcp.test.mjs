@@ -10,7 +10,7 @@ test('authorization follows account changes, staff grants and revocation',async(
 test('per-caller limits and audit omit supplied arguments and credentials',async()=>{const DB=database(),env={DB};try{assert.equal(await rateLimit(env,'a',1),true);assert.equal(await rateLimit(env,'a',1),false);assert.equal(await rateLimit(env,'b',1),true);await audit(env,{id:'a',client:'client',token:'never-store'},'example','denied');const row=DB.sql.prepare('SELECT * FROM mcp_audit').get();assert.equal(row.person,'a');assert.equal(row.outcome,'denied');assert.ok(!JSON.stringify(row).includes('never-store'));}finally{DB.sql.close();}});
 test('HTTP headers cannot forge trusted tool authority',()=>{const request=new Request('https://studio.test',{headers:{'x-homie-owner':'true',authorization:'Bearer owner'}});assert.equal(toolIdentity(request),null);withToolIdentity(request,{id:'owner',owner:true});assert.equal(toolIdentity(request).owner,true);assert.equal(toolIdentity(request.clone()),null);});
 
-test('remote owner controls use the office confirmation path',async()=>{
+test('the owner\'s own tool call acts directly, with no office confirmation',async()=>{
  const {OFFICE_MIGRATION}=await import('../worker/office-schema.mjs');
  const {officeRoutes}=await import('../worker/office.mjs');
  const DB=database();try{
@@ -18,7 +18,7 @@ test('remote owner controls use the office confirmation path',async()=>{
   const url=new URL('https://studio.test/_studio/api/game');
   const req=withToolIdentity(new Request(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({game:'game',launch:'private'})}),{id:'owner',owner:true});
   const result=await officeRoutes(req,env,url,{catalogueOf:async()=>({studio:{name:'Test'},games:[{id:'game',name:'Game'}]})});
-  assert.equal(result.status,202);const body=await result.json();assert.equal(body.needs,'owner');assert.match(body.ask.confirm,/\/_studio\/confirm\//);
+  const body=await result.json();assert.notEqual(result.status,202);assert.notEqual(body.needs,'owner');assert.equal(body.ok,true,JSON.stringify(body));
  }finally{DB.sql.close();}
 });
 
