@@ -17,6 +17,21 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.58.30] - 2026-10-31
+
+**Plugin 0.58.16**
+
+Your own AI can now mark a lead or booking done in one call, and your own office controls act when you ask.
+
+### Changed
+
+- `app_records` update changes only the fields you pass and keeps the rest, so `{status: "replied"}` is enough.
+  The studio owner may leave out `version` to change the record as it is now; anyone else still passes the version
+  they read.
+- `studio_office_action` from the studio owner's own tool call acts directly; it no longer returns a browser
+  confirmation. Approval is your AI client's, from the tool's standard annotations (it is marked destructive).
+  A static office key still only asks.
+
 ## [0.58.29] - 2026-10-30
 
 **Plugin 0.58.15**
