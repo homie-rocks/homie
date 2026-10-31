@@ -1315,6 +1315,7 @@ export function toolDefs(ctx, avail = {}) {
       },
     },
     {
+      // Not destructive: this only lists the studio in the directory; the host's same-named studio_publish puts work live and is destructive.
       name: 'studio_publish', title: 'List the studio in the Homie directory',
       description: 'List a deployed studio\'s games, songs and videos in the homie.rocks directory, with their Play links (at most 12 games per studio in the beta). The beta also caps how many times a studio may publish in a day: the answer says how many are left when the directory gives the number, and before: true publishes nothing: it asks the directory how many are left and whether the site is listed (a read), and says so plainly when the directory cannot be reached.',
       inputSchema: { type: 'object', properties: { site: str('Optional: the live site address (default: the one deploy got)'), before: { type: 'boolean', description: 'Publish nothing: ask the directory (a read) whether this site is listed and how many publishes are left today, and say the parts\' licence lines. When the directory cannot be reached it says so, with what this computer has sent today' }, ...STUDIO_ARG } },
